@@ -107,7 +107,7 @@ jobs:
 
       # The web app's two gates. build-web.sh copies in the wire's TypeScript
       # and folds its decoders from it (scripts/wire.sh: generated from
-      # app/core/src/wire.rs, so the browser's declarations and the server's
+      # app/api/src/wire.rs, so the browser's declarations and the server's
       # are ONE declaration), runs tsc over web/src AND web/test,
       # refuses any source that parses markup out of a string, and writes the
       # bundle; web-test.sh runs the pure modules under node's test runner (the

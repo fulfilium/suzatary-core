@@ -94,7 +94,7 @@ pub fn offer_withdrawn(
 }
 
 /// What a tapped [`Act::Restore`] applies: the changes of the card the secretary withdrew.
-pub(crate) fn withdrawn(
+pub fn withdrawn(
     inbox: &dyn Prodrome<InboxEvent>,
     card: &ProposalRef,
 ) -> Result<Changeset, Refusal> {

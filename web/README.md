@@ -10,7 +10,7 @@ the laws no test can check, and `docs/TS-STYLE.md` its layout rules.
   loads `src/boot.ts`, which loads `src/main.ts`; `src/sw.ts` is the service worker, which keeps
   the shell and nothing else.
 - The page talks to the box only through the routes `src/wire/api.ts` names; the wire types and
-  their decoders are generated from `app/core/src/wire.rs` by `scripts/wire.sh`.
+  their decoders are generated from `app/api/src/wire.rs` by `scripts/wire.sh`.
 
 ## Depends on
 

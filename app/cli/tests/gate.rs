@@ -1,6 +1,6 @@
 //! Identity at the door, over a real socket: the gate's wiring in front of every route, reading
 //! `ConnectInfo` and refusing in the documented shape (the decision itself is pinned in
-//! `app/core/src/gate.rs`).
+//! `app/api/src/gate.rs`).
 //!
 //! The whois cache is process-wide (see `common`'s header), so [`common::v4`] always resolves
 //! to [`PEER`], and [`common::v6`] is kept for a dead daemon, an `Err` the cache never stores.
@@ -159,7 +159,7 @@ fn the_local_shell_resolves_like_any_peer() {
 #[test]
 fn a_request_through_a_proxy_is_refused() {
     let base = start(true);
-    for header in suzatary_core::gate::PROXY_HEADERS {
+    for header in suzatary_api::gate::PROXY_HEADERS {
         let mut response = common::agent()
             .get(&format!("{base}/api/chain"))
             .header(header, "100.64.0.1")

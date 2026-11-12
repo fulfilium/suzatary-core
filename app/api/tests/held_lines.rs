@@ -604,7 +604,7 @@ fn skeleton(held: &InMemory) -> Outlines {
             .iter()
             .map(|(name, object)| {
                 let sent =
-                    serde_json::to_string(&suzatary_core::routes::skeleton_node(name, object))
+                    serde_json::to_string(&suzatary_api::routes::skeleton_node(name, object))
                         .expect("prints");
                 Parsed::of(serde_json::from_str(&sent).expect("reads back")).expect("a node")
             })

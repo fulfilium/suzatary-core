@@ -28,7 +28,7 @@ a sentence here.
 - **The tab's own state**: registers, each declared once with its tier in
   `web/src/app/registers.ts`.
 - **The wire**: types and decoders generated into `web/src/wire/generated/`
-  from `app/core/src/wire.rs` by `scripts/wire.sh`; `web/src/wire/api.ts`
+  from `app/api/src/wire.rs` by `scripts/wire.sh`; `web/src/wire/api.ts`
   names each route once.
 
 ## 2. The doors
@@ -67,7 +67,7 @@ is a finding, never a vector to refresh.
 - **Fulfillment**: `web/test/wasm.test.ts` drives the core's wasm under node
   against the Prodrome's frozen conformance vectors and this chain.
 - **`app/core/tests/web/`**: read by both sides. A file a Rust test writes
-  (most, by `app/core/tests/web_vectors.rs`) is written only under
+  (most, by `app/api/tests/web_vectors.rs`) is written only under
   `SUZATARY_WRITE_VECTORS=1`, in the same change as the Rust that moves it;
   otherwise that test recomputes it and compares the committed bytes.
   `closed-world.json` is written by hand.

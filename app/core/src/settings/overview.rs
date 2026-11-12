@@ -920,7 +920,7 @@ fn notifications(declared: &Declared<'_>, connected: &Connected<'_>) -> Overview
                 Slot::Channel(channel),
                 needing(
                     line(channel.as_str(), None, standing),
-                    crate::notify::channel_secrets(channel)
+                    crate::connect::channel_secrets(channel)
                         .into_iter()
                         .map(secret),
                 ),
@@ -983,6 +983,17 @@ fn completed(titles: &[String]) -> String {
     }
 }
 
+/// A calendar of two links, `PLUGIN_ICS_HOME` and `PLUGIN_ICS_WORK`: test support.
+#[cfg(any(test, feature = "nothing"))]
+#[must_use]
+pub fn calendar() -> Manifest {
+    toml::from_str(
+        "name = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\
+         credentials = [\"PLUGIN_ICS_HOME\", \"PLUGIN_ICS_WORK\"]\n",
+    )
+    .expect("a manifest")
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::collections::BTreeMap;
@@ -992,11 +1003,6 @@ pub(crate) mod tests {
     use super::*;
     use crate::mail::account::{MailAccount, MsImap, Proton, Sync};
     use crate::mail::sync_report::{AccountSync, SyncReport};
-
-    /// A calendar of two links, `PLUGIN_ICS_HOME` and `PLUGIN_ICS_WORK`.
-    pub(crate) fn calendar() -> Manifest {
-        manifest("ics", &["HOME", "WORK"])
-    }
 
     fn manifest(name: &str, links: &[&str]) -> Manifest {
         let credentials = links

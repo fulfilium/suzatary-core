@@ -382,13 +382,13 @@ pub(crate) enum Told {
 #[serde(untagged)]
 pub enum Body {
     Empty {},
-    Key(suzatary_core::wire::KeyAsked),
-    Pair(suzatary_core::wire::Pairing),
+    Key(suzatary_api::wire::KeyAsked),
+    Pair(suzatary_api::wire::Pairing),
     /// `POST /api/secretary/conversations` and `…/title`.
-    Titling(suzatary_core::wire::Titling),
-    Upload(suzatary_core::wire::Uploading),
+    Titling(suzatary_api::wire::Titling),
+    Upload(suzatary_api::wire::Uploading),
     /// `POST /api/<chain>/author`: an event the box prints and appends nothing of.
-    Author(suzatary_core::wire::Authoring),
+    Author(suzatary_api::wire::Authoring),
     /// `POST /api/<chain>/todo/<id>/build`, which reads no field.
     Build {},
 }
@@ -461,15 +461,15 @@ pub(crate) enum Local {
 pub struct LocalAnswers {
     device: Option<crate::settings::Device>,
     proposals: crate::waiting::InboxRead,
-    decisions: suzatary_core::wire::FoldPayload,
+    decisions: suzatary_api::wire::FoldPayload,
     conversations: suzatary_core::wire::topics::ConversationsPayload,
     search: suzatary_core::wire::topics::SearchPayload,
     stream: crate::secretary::StreamRead,
     window: crate::conversation::Windowed,
-    cards: suzatary_core::wire::DrawnPayload,
+    cards: suzatary_api::wire::DrawnPayload,
     fold: Option<crate::held::Folded>,
     unsent: crate::held::Unsents,
-    waiting: Option<suzatary_core::wire::WaitingPayload>,
+    waiting: Option<suzatary_api::wire::WaitingPayload>,
     #[ts(type = "unknown")]
     kept: serde_json::Value,
     intents: crate::intents::Intents,

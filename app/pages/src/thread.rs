@@ -1,7 +1,7 @@
 //! One mail thread, oldest first, with only the newest open. Bodies are text.
 
 use serde::Deserialize;
-use suzatary_core::wire::{MailPage, ThreadPayload};
+use suzatary_api::wire::{MailPage, ThreadPayload};
 use ts_rs::TS;
 use viewtree::Attr::{Class, Href, Open};
 use viewtree::kit::para;

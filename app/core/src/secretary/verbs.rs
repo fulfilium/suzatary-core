@@ -141,7 +141,7 @@ pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
 ///
 /// # Errors
 /// A `revises` naming no open proposal, or a store's failure to append.
-pub(crate) fn propose(
+pub fn propose(
     caps: &Secretary<'_>,
     chains: &[super::Bound<'_>],
     id: &ConversationId,

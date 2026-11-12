@@ -51,11 +51,12 @@ pub mod file_search;
 pub mod filed;
 pub mod fixes;
 pub mod found;
-mod gate;
+pub mod gate;
 pub mod google_sign_in;
 pub mod held_lines;
 pub mod held_replica;
 pub mod holder;
+pub mod husks;
 pub mod inbox;
 pub mod inbox_event;
 #[cfg(feature = "wasm")]
@@ -100,7 +101,6 @@ pub mod request;
 pub mod rescrub;
 pub mod responded;
 pub mod review;
-pub mod routes;
 pub mod rules;
 pub mod salted_text;
 pub mod scrubbed_under;
@@ -631,7 +631,7 @@ pub fn run(
 }
 
 /// Which chain a call is about: absent means the first, an unknown name is refused.
-pub(crate) fn bound_of<'a>(
+pub fn bound_of<'a>(
     chains: &'a [Bound<'a>],
     named: Option<&str>,
 ) -> Result<&'a Bound<'a>, Refusal> {

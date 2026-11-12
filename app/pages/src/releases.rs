@@ -1,9 +1,9 @@
 //! The releases the project chain reads, as a part of About.
 
+use suzatary_api::wire::{ReleaseItem, ReleaseRow, ReleasesPayload};
 use suzatary_core::release::{Lot, Named, Place};
 use suzatary_core::wire::cards::HeldTodo;
 use suzatary_core::wire::todo::Fulfillment;
-use suzatary_core::wire::{ReleaseItem, ReleaseRow, ReleasesPayload};
 use viewtree::Attr::{Class, Data};
 use viewtree::kit::Reading;
 use viewtree::{Node, view};

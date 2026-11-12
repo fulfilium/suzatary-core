@@ -432,7 +432,7 @@ pub(crate) struct Notify {
     pub(crate) channels: Vec<suzatary_core::connect::Channel>,
     /// The Firebase project's number the box hands the Android portal at pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) fcm_sender: Option<suzatary_core::portal::Sender>,
+    pub(crate) fcm_sender: Option<suzatary_api::portal::Sender>,
 }
 
 /// A value the file spells as one string, read through its own constructor.

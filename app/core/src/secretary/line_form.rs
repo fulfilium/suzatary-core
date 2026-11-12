@@ -330,3 +330,15 @@ fn step_of(form: StepForm) -> Result<Step, String> {
 fn key_name(bytes: &Name) -> Result<KeyName, String> {
     KeyName::new(hex::encode(bytes)).map_err(|e| e.to_string())
 }
+
+/// A line's header, what a fold reads of it without its words: its husk's is its own.
+#[must_use]
+pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
+    NodeHeader::Line {
+        conversation: line.conversation().as_str().to_owned(),
+        at: prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(line.at())),
+        kind: line.shape().name().to_owned(),
+        keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
+        step: Step::of(line.shape()),
+    }
+}

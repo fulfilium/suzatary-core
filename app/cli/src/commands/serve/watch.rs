@@ -2,10 +2,11 @@
 
 use std::collections::BTreeSet;
 
+use suzatary_api::routes;
+use suzatary_api::server::Server;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::server::Server;
-use suzatary_core::{notify, routes, view};
+use suzatary_core::{notify, view};
 
 use super::watched::{Pace, Watched};
 

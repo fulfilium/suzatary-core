@@ -8,7 +8,7 @@
 # `testkit` is a dev-dependency of `io` and `cli`: the programs their tests run.
 [workspace]
 resolver = "3"
-members = ["base", "core", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the binary reads `app/release.toml` at
@@ -34,6 +34,7 @@ prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium
 prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "a0e99598eb61866c447f386dcb75557b0520dad4" }
 suzatary-base = { path = "base" }
 suzatary-core = { path = "core" }
+suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }
 suzatary-plugin = { path = "plugin" }
 # The evaluator's time type; "serde" because a changeset act's `Priority::Deadline` is stored

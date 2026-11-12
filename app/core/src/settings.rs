@@ -14,8 +14,8 @@ pub use declaration::Declaration;
 pub use help::{Help, Page, Words};
 
 /// The name the tests' deployments store their model's credential under.
-#[cfg(test)]
-pub(crate) const MODEL_TOKEN: &str = "MODEL_TOKEN";
+#[cfg(any(test, feature = "nothing"))]
+pub const MODEL_TOKEN: &str = "MODEL_TOKEN";
 
 /// The data repository's push token, scoped to that repository, never the code's.
 pub const DATA_PUSH_TOKEN: &str = "SUZATARY_DATA_PUSH_TOKEN";
@@ -70,7 +70,7 @@ impl Settables {
         let model = (model.to_owned(), Declaration::Model);
         let routine = coding.map(|_| (connect::ROUTINE_TOKEN.to_owned(), Declaration::Coding));
         let notified = channels.into_iter().flat_map(|channel| {
-            crate::notify::channel_secrets(channel)
+            crate::connect::channel_secrets(channel)
                 .into_iter()
                 .map(move |secret| (secret.to_owned(), Declaration::Channel(channel)))
         });

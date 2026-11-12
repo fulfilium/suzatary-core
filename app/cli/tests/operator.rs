@@ -110,7 +110,7 @@ fn an_operators_tap_on_a_card_that_sends_is_refused() {
             index: 0,
         },
         "",
-        &suzatary_core::secretary::routes::TapAnswer::Plain,
+        &suzatary_api::secretary::routes::TapAnswer::Plain,
     )
     .expect_err("the operator does not send");
     let said = format!("{refused:#}");

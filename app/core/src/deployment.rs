@@ -3,7 +3,7 @@
 //!
 //! Only what is true of the box lives here (the tailnet door, the vocabulary, the URL); the
 //! trust policy and roster belong to each chain ([`suzatary_base::chains::ChainPolicy`]). The rules the
-//! fields carry are applied in [`crate::gate`].
+//! fields carry are applied in `suzatary_api::gate`.
 
 use std::collections::{BTreeMap, BTreeSet};
 

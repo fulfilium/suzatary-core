@@ -411,7 +411,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/core/src/leak.rs", "docs"),
     ("app/base/src/repo_ids.rs", "docs"),
     ("app/core/tests/act_literal.rs", "docs"),
-    ("app/core/tests/web_vectors.rs", "docs"),
+    ("app/api/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
     ("app/cli/tests/support/fixture.rs", "memory"),
@@ -2282,7 +2282,7 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 }
 
 /// The crates the core's library is cut into; a new one joins with its `flake.nix` lines.
-const LIBRARY_CRATES: [&str; 2] = ["app/base", "app/core"];
+const LIBRARY_CRATES: [&str; 3] = ["app/base", "app/core", "app/api"];
 
 /// Whether `rel` is a test file of one of the library's crates.
 fn a_library_test(rel: &str) -> bool {
@@ -2602,7 +2602,8 @@ fn merge_gate_a_release_reruns_only_what_reads_it() {
 fn merge_gate_the_generated_wire_imports_only_the_wire() {
     let mut sources = Vec::new();
     files_under(&repo().join("app/core/src/wire"), &mut sources);
-    sources.push(repo().join("app/core/src/wire.rs"));
+    files_under(&repo().join("app/api/src/wire"), &mut sources);
+    sources.push(repo().join("app/api/src/wire.rs"));
     let mut imports = Vec::new();
     for file in sources
         .iter()

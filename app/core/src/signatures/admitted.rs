@@ -14,7 +14,7 @@ pub enum Admitted {
     Local,
     /// This box's own node on a request that names the deployment's root key and an actor some
     /// login writes as: the box's operator at its terminal. The gate does not prove the claim;
-    /// the door proves the root's signature before any write ([`crate::gate::writer_of`]), and [`crate::gate::actor_of`]
+    /// the door proves the root's signature before any write (`suzatary_api::gate::writer_of`), and `suzatary_api::gate::actor_of`
     /// refuses it, so a read route never takes an actor from it.
     Operator(Actor),
 }

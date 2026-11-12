@@ -1,4 +1,4 @@
-use suzatary_core::wire::{Declarations, exported};
+use suzatary_api::wire::{Declarations, exported};
 use ts_rs::TypeVisitor;
 use viewtree::Runtime;
 
@@ -58,7 +58,7 @@ fn generates_the_pages_boundary_types() {
         "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
     );
     out.push_str("\nexport ");
-    out.push_str(suzatary_core::wire::SPEC_NODE);
+    out.push_str(suzatary_api::wire::SPEC_NODE);
     out.push('\n');
     exported(&mut out, d.out);
     out.push_str(&viewtree::patch::typescript());

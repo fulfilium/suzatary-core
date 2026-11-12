@@ -12,11 +12,11 @@ use std::cell::OnceCell;
 
 use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
+use suzatary_api::wire::StorePayload;
 use suzatary_core::replica::held::Node as _;
 use suzatary_core::replica::objects::{self, Answer, Move, Object, Objects, Refusal};
 use suzatary_core::secretary::object_stores;
 use suzatary_core::snapshot;
-use suzatary_core::wire::StorePayload;
 use suzatary_core::wire::lines::ReceiptPayload;
 use wasm_bindgen::JsError;
 

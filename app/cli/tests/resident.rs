@@ -213,7 +213,7 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
         .take(256)
         .collect();
     let window: Vec<&String> = window.into_iter().collect();
-    for hashes in window.chunks(suzatary_core::query::MOST_HASHES) {
+    for hashes in window.chunks(suzatary_api::query::MOST_HASHES) {
         let joined: Vec<&str> = hashes.iter().map(|hash| hash.as_str()).collect();
         get(
             base,

@@ -188,7 +188,7 @@ impl Params for Card {
 /// [`Refusal::forbidden`] for a browser whose login maps to no actor or another actor than the
 /// one who tapped, and [`Refusal::not_found`] when the card holds no consent open.
 pub fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
-    let by = suzatary_core::gate::actor_of(&call.state.deployment, &call.admitted)?;
+    let by = suzatary_api::gate::actor_of(&call.state.deployment, &call.admitted)?;
     let table = call.state.consenting.table();
     let Some(begun) = table.begun(&call.params.0) else {
         return Err(Refusal::not_found(
@@ -213,7 +213,7 @@ pub fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
 /// already, or closed by a restart. None of them reads a code.
 pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> {
     let state = &call.state;
-    let by = suzatary_core::gate::actor_of(&state.deployment, &call.admitted)?;
+    let by = suzatary_api::gate::actor_of(&state.deployment, &call.admitted)?;
     let consenting = &state.consenting;
     let now = state.first.caps.secretary.clock.now();
     let taken = consenting.table().take(

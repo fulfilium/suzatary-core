@@ -3,38 +3,42 @@
 //!
 //! The bounds are the point: a route that cannot name a capability cannot use it.
 
-use crate::secretary::conversations;
 use std::collections::BTreeMap;
+use suzatary_core::secretary::conversations;
 
-use crate::believed::{Believed, records};
-use crate::record::{Node, TodoEvent};
 use chrono::NaiveDate;
 use prodrome_core::fpl;
 use prodrome_core::observe::Observation;
 use prodrome_core::policy::Untrusted;
+use suzatary_core::believed::{Believed, records};
+use suzatary_core::record::{Node, TodoEvent};
 
-use crate::chain_set::ChainSet;
+use suzatary_core::chain_set::ChainSet;
 
-use crate::deployment::Deployment;
-use crate::mail::mailbox::{Mailbox, Query};
-use crate::render::Render;
-use crate::secretary::answers::Answers;
-use crate::secretary::briefings::Briefings;
-use crate::secretary::step::Step;
-use crate::store::Prodrome;
-use crate::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
-use crate::wire::lines::{
-    Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
-    SkeletonNode, SkeletonPayload, StoredObject,
-};
-use crate::wire::store::SinceRead;
-use crate::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
-use crate::{mail, query, reading};
-use crate::{view, wire};
+use crate::query;
+use crate::wire;
 use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
+use suzatary_core::deployment::Deployment;
+use suzatary_core::mail::mailbox::{Mailbox, Query};
+use suzatary_core::render::Render;
+use suzatary_core::secretary::answers::Answers;
+use suzatary_core::secretary::briefings::Briefings;
+use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
+use suzatary_core::secretary::line_form::line_header;
+use suzatary_core::secretary::step::Step;
+use suzatary_core::store::Prodrome;
+use suzatary_core::view;
+use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
+use suzatary_core::wire::lines::{
+    Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
+    SkeletonNode, SkeletonPayload, StoredObject,
+};
+use suzatary_core::wire::store::SinceRead;
+use suzatary_core::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
+use suzatary_core::{mail, reading};
 
 /// Every head, sorted: what a replica compares against and asks `since=` by, with no one of
 /// them picked, since no writer needs a single head.
@@ -123,9 +127,9 @@ fn rows<'s>(
     set: &'s ChainSet<'_>,
     name: &ChainName,
 ) -> Answered<(
-    std::collections::BTreeMap<prodrome_core::event::Hash, &'s crate::record::Envelope>,
-    &'s [crate::record::Node],
-    Vec<crate::record::Entry>,
+    std::collections::BTreeMap<prodrome_core::event::Hash, &'s suzatary_core::record::Envelope>,
+    &'s [suzatary_core::record::Node],
+    Vec<suzatary_core::record::Entry>,
 )> {
     let held = set.held(name).map_err(not_a_member)?;
     let rows = set.entries(name).map_err(not_a_member)?;
@@ -139,9 +143,9 @@ fn rows<'s>(
 }
 
 /// A chain the set could not read, as a refusal: one it does not hold is not found.
-fn not_a_member(failure: crate::chain_set::NotAMember) -> Refusal {
+fn not_a_member(failure: suzatary_core::chain_set::NotAMember) -> Refusal {
     match failure {
-        crate::chain_set::NotAMember::Absent(_) => Refusal::not_found(failure.to_string()),
+        suzatary_core::chain_set::NotAMember::Absent(_) => Refusal::not_found(failure.to_string()),
         other => Refusal::internal(other.to_string()),
     }
 }
@@ -172,7 +176,7 @@ pub fn todo(
     zone: suzatary_base::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
-    builder: Option<&crate::connect::RoutineId>,
+    builder: Option<&suzatary_core::connect::RoutineId>,
 ) -> Answered<wire::TodoPayload> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let id = todo_id(id)?;
@@ -253,15 +257,16 @@ pub fn tree(
 /// Every day the assistant has saved a briefing for, newest first.
 pub fn briefings(
     briefings: &dyn Briefings,
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
 ) -> Answered<wire::BriefingsPayload> {
     let saved = briefings
         .all()
         .map_err(|e| Refusal::internal(e.to_string()))?;
-    let mut briefs: Vec<crate::secretary::briefs::Brief> = conversations::list(conversations)?
-        .iter()
-        .flat_map(crate::secretary::briefs::briefs)
-        .collect();
+    let mut briefs: Vec<suzatary_core::secretary::briefs::Brief> =
+        conversations::list(conversations)?
+            .iter()
+            .flat_map(suzatary_core::secretary::briefs::briefs)
+            .collect();
     briefs.sort_by(|a, b| b.date.cmp(&a.date).then(b.turn.cmp(&a.turn)));
     Ok(wire::BriefingsPayload {
         briefs: briefs
@@ -271,8 +276,8 @@ pub fn briefings(
                 date: brief.date.to_string(),
                 conversation: brief.conversation.as_str().to_owned(),
                 turn: u32::try_from(brief.turn).unwrap_or(u32::MAX),
-                title: crate::secretary::briefs::headline(&brief.text),
-                words: u32::try_from(crate::secretary::briefs::words(&brief.text))
+                title: suzatary_core::secretary::briefs::headline(&brief.text),
+                words: u32::try_from(suzatary_core::secretary::briefs::words(&brief.text))
                     .unwrap_or(u32::MAX),
                 text: brief.text,
             })
@@ -305,13 +310,13 @@ fn briefing_title(source: &str, day: NaiveDate) -> String {
 pub fn briefing(
     briefings: &dyn Briefings,
     render: &dyn Render,
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
     answers: &dyn Answers,
     day: NaiveDate,
 ) -> Answered<wire::BriefingPayload> {
     let brief = conversations::list(conversations)?
         .iter()
-        .flat_map(crate::secretary::briefs::briefs)
+        .flat_map(suzatary_core::secretary::briefs::briefs)
         .filter(|brief| brief.date == day)
         .max_by_key(|brief| brief.turn);
     if let Some(brief) = brief {
@@ -320,7 +325,7 @@ pub fn briefing(
             day: wire::BriefingDay::Brief {
                 conversation: brief.conversation.as_str().to_owned(),
                 turn: u32::try_from(brief.turn).unwrap_or(u32::MAX),
-                blocks: crate::secretary::readings::blocks_of(answers, &brief.text),
+                blocks: suzatary_core::secretary::readings::blocks_of(answers, &brief.text),
                 text: brief.text,
             },
         });
@@ -439,7 +444,7 @@ pub fn message(
     let id = check_mail_id(id)?;
     let found = match mail.message(id) {
         Ok(found) => found,
-        Err(crate::mail_error::MailError::Absent { .. }) => {
+        Err(suzatary_core::mail_error::MailError::Absent { .. }) => {
             return Err(Refusal::not_found(gone(chain, set, id)?));
         }
         Err(other) => return Err(Refusal::internal(other.to_string())),
@@ -463,7 +468,7 @@ fn gone(chain: &ChainPolicy, set: &ChainSet<'_>, id: &str) -> Result<String, Ref
                 mail::sourced_from(cited, id) || mail::sourced_from(id, cited)
             })
     });
-    Ok(crate::mail::gone::Gone {
+    Ok(suzatary_core::mail::gone::Gone {
         subject: source.map(|source| source.subject.as_str()),
         sender: source.map(|source| source.sender.as_str()),
     }
@@ -481,9 +486,9 @@ pub fn thread(
 ) -> Answered<wire::ThreadPayload> {
     let id = check_thread_id(id)?;
     let found = mail.thread(id, limit).map_err(|e| match e {
-        crate::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
+        suzatary_core::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
             "{}: conversation {}",
-            crate::mail::gone::SAID,
+            suzatary_core::mail::gone::SAID,
             shown(id)
         )),
         other => Refusal::internal(other.to_string()),
@@ -491,7 +496,7 @@ pub fn thread(
     if found.is_empty() {
         return Err(Refusal::not_found(format!(
             "{}: conversation {}",
-            crate::mail::gone::SAID,
+            suzatary_core::mail::gone::SAID,
             shown(id)
         )));
     }
@@ -546,7 +551,7 @@ pub fn now(clock: &dyn Clock) -> Datetime {
 #[derive(Clone, Copy)]
 pub struct Books<'a> {
     /// Each store's epoch.
-    pub epochs: &'a crate::epoch::Epochs,
+    pub epochs: &'a suzatary_core::epoch::Epochs,
     /// Each store's recorded frontiers.
     pub frontiers: &'a prodrome_core::store::frontier::Frontiers,
 }
@@ -606,7 +611,7 @@ impl Cut {
 ///
 /// # Errors
 /// The store's own, and the books'.
-pub fn store_objects_since<E: crate::stores::Store>(
+pub fn store_objects_since<E: suzatary_core::stores::Store>(
     store: &dyn Prodrome<E>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
@@ -618,7 +623,7 @@ pub fn store_objects_since<E: crate::stores::Store>(
 
 /// [`store_objects_since`], with the names of the objects it sends and the graph it read them
 /// from.
-fn store_answer<E: crate::stores::Store>(
+fn store_answer<E: suzatary_core::stores::Store>(
     store: &dyn Prodrome<E>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
@@ -627,7 +632,7 @@ fn store_answer<E: crate::stores::Store>(
 ) -> Answered<(
     wire::StorePayload,
     Vec<prodrome_core::event::Hash>,
-    std::sync::Arc<crate::store::Graph<E>>,
+    std::sync::Arc<suzatary_core::store::Graph<E>>,
 )> {
     let Pulled {
         snapshot,
@@ -774,14 +779,14 @@ impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
 /// Each line as its skeleton node, weighed by its bytes on the wire.
 struct Nodes;
 
-impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
+impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     type Item = SkeletonNode;
     const WEIGHTS: &'static str = "weights of nodes";
 
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
+        envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
     ) -> (SkeletonNode, usize) {
         // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
         let node = node_of(name, envelope, 0);
@@ -792,7 +797,7 @@ impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
     fn weigh(
         &self,
         name: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
+        envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
     ) -> usize {
         weight(&node_of(name, envelope, 0))
     }
@@ -820,7 +825,7 @@ where
 {
     let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
         let graph = store.graph()?;
-        let seen = crate::epoch::Seen {
+        let seen = suzatary_core::epoch::Seen {
             geneses: names(graph.geneses()).into_iter().collect(),
             heads: names(graph.heads()).into_iter().collect(),
             held: std::sync::Arc::clone(graph.names()),
@@ -828,7 +833,7 @@ where
         let lacking = books
             .frontiers
             .answer(key, since, graph.dag())
-            .map_err(crate::store::StoreError::from)?;
+            .map_err(suzatary_core::store::StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
@@ -865,7 +870,7 @@ where
         let frontier = frontier_of(
             &lacking
                 .record(piece.sent.len())
-                .map_err(crate::store::StoreError::from)?,
+                .map_err(suzatary_core::store::StoreError::from)?,
         );
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
@@ -886,7 +891,7 @@ where
 struct Pulled<E: prodrome_core::schema::Schema, T> {
     snapshot: Snapshot,
     piece: Piece<T>,
-    graph: std::sync::Arc<crate::store::Graph<E>>,
+    graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
 }
 
 /// Whether the store of record knew the frontier a pull named.
@@ -912,7 +917,7 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier 
 /// # Errors
 /// The stores' own.
 pub fn lines_skeleton(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
@@ -975,7 +980,7 @@ pub fn lines_skeleton(
 /// print and not its reprint, so a tab that batches its asks by these sizes never asks for more
 /// than one answer carries.
 fn held_sizes(
-    lines: &dyn Prodrome<crate::secretary::line_event::LineEvent>,
+    lines: &dyn Prodrome<suzatary_core::secretary::line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],
     nodes: Vec<SkeletonNode>,
 ) -> Answered<Vec<SkeletonNode>> {
@@ -996,49 +1001,11 @@ fn held_sizes(
         .collect()
 }
 
-/// What the lines of `graph` retire of their keys, kept in the graph.
-fn retired(
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
-) -> std::sync::Arc<crate::secretary::transcript::Retired> {
-    graph.reading("retired", |graph| {
-        crate::secretary::transcript::Retired::of(graph.objects())
-    })
-}
-
-/// The key of every slot the lines named `sent` name, by name, but a key `retired` says is dead,
-/// erased or superseded by a reseal the box opens.
-fn keys_of(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
-    retired: &crate::secretary::transcript::Retired,
-    sent: &[prodrome_core::event::Hash],
-) -> Answered<BTreeMap<String, String>> {
-    let reads = conversations.reads();
-    let slots = |name: &crate::secretary::locked_text::KeyName| reads.key(name);
-    let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
-    let mut keys = BTreeMap::new();
-    for name in sent
-        .iter()
-        .filter_map(line)
-        .flat_map(|sent| sent.keys().map(move |key| (sent.conversation(), key)))
-        .filter(|(id, name)| !retired.retires(id, name, line, &slots))
-        .map(|(_, name)| name)
-    {
-        if let Some(key) = conversations.keys.get(name)? {
-            keys.insert(
-                name.as_str().to_owned(),
-                crate::secretary::key_ring::spelled(&key),
-            );
-        }
-    }
-    Ok(keys)
-}
-
 /// One line's node: its name, what it rests on, its literal's size, and its header.
 #[must_use]
 pub fn skeleton_node(
     name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
+    envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
 ) -> SkeletonNode {
     node_of(
         name,
@@ -1050,7 +1017,7 @@ pub fn skeleton_node(
 /// One line's node, sized `size`.
 fn node_of(
     name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
+    envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
     size: usize,
 ) -> SkeletonNode {
     let header = match envelope.event() {
@@ -1067,18 +1034,6 @@ fn node_of(
             .collect(),
         size,
         header,
-    }
-}
-
-/// A line's header, what a fold reads of it without its words: its husk's is its own.
-#[must_use]
-pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
-    NodeHeader::Line {
-        conversation: line.conversation().as_str().to_owned(),
-        at: fpl::iso(fpl::instant_of(line.at())),
-        kind: line.shape().name().to_owned(),
-        keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
-        step: Step::of(line.shape()),
     }
 }
 
@@ -1183,7 +1138,7 @@ pub fn content<E: prodrome_core::schema::Schema>(
 /// line with one live slot and one dead slot is sent whole, so the dead slot's sealed bytes go
 /// with it: a husk of some slots alone could be checked against nothing.
 pub fn lines_content(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
     hashes: &query::Hashes,
 ) -> Answered<wire::ContentPayload> {
     let graph = conversations.lines.graph()?;
@@ -1192,39 +1147,11 @@ pub fn lines_content(
     answer(conversations.lines, &graph, hashes, &printed)
 }
 
-/// The printed husk of each line of `names` with words no key the box sends opens.
-pub fn husks(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
-    names: &[prodrome_core::event::Hash],
-) -> Answered<BTreeMap<prodrome_core::event::Hash, String>> {
-    let sent = keys_of(conversations, graph, &retired(graph), names)?;
-    Ok(husked(graph, &sent, names))
-}
-
-/// [`husks`] of `names`, given `sent`, the keys [`keys_of`] sends of them.
-fn husked(
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
-    sent: &BTreeMap<String, String>,
-    names: &[prodrome_core::event::Hash],
-) -> BTreeMap<prodrome_core::event::Hash, String> {
-    names
-        .iter()
-        .filter_map(|name| {
-            let line = graph.dag().get(name)?.event()?;
-            if line.keys().any(|key| sent.contains_key(key.as_str())) {
-                return None;
-            }
-            Some((name.clone(), line.husk()?.print()))
-        })
-        .collect()
-}
-
 /// Each object `hashes` names that `graph`, the store's history read once for this question,
 /// holds: its husk where `husks` holds one, else its literal read by its name.
 fn answer<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
-    graph: &crate::store::Graph<E>,
+    graph: &suzatary_core::store::Graph<E>,
     hashes: &query::Hashes,
     husks: &BTreeMap<prodrome_core::event::Hash, String>,
 ) -> Answered<wire::ContentPayload> {
@@ -1281,12 +1208,12 @@ fn answer<E: prodrome_core::schema::Schema>(
 /// A store that does not read, a chain the set does not hold, and lines the fold refuses: no
 /// count is better than a wrong one.
 pub fn waiting(
-    inbox: &crate::secretary::inbox::Fold,
-    conversations: crate::secretary::conversations::ReadConversations<'_>,
+    inbox: &suzatary_core::secretary::inbox::Fold,
+    conversations: suzatary_core::secretary::conversations::ReadConversations<'_>,
     set: &ChainSet<'_>,
     chains: &[ChainName],
 ) -> Answered<wire::WaitingPayload> {
-    let proposals = crate::secretary::readings::waiting(inbox, set).len();
+    let proposals = suzatary_core::secretary::readings::waiting(inbox, set).len();
     let mut decisions = 0usize;
     for chain in chains {
         let (by_hash, _, rows) = rows(set, chain)?;
@@ -1295,16 +1222,18 @@ pub fn waiting(
             .filter(|row| {
                 view::content_of(row, &by_hash).is_some_and(|record| {
                     record.payload.is_decision()
-                        && EntryState::from(crate::believed::one_outcome(row.outcome()))
+                        && EntryState::from(suzatary_core::believed::one_outcome(row.outcome()))
                             == EntryState::Open
                 })
             })
             .count();
     }
     let mut unplaced = BTreeMap::new();
-    for (id, read) in conversations.fold(crate::secretary::held_lines::HeldLines::transcripts)? {
+    for (id, read) in
+        conversations.fold(suzatary_core::secretary::held_lines::HeldLines::transcripts)?
+    {
         let read = read.map_err(|refused| Refusal::internal(refused.to_string()))?;
-        let lines = crate::secretary::readings::unplaced(&read.stored().lines(inbox));
+        let lines = suzatary_core::secretary::readings::unplaced(&read.stored().lines(inbox));
         if !lines.is_empty() {
             unplaced.insert(id.as_str().to_owned(), lines);
         }
@@ -1327,7 +1256,10 @@ pub fn receive_objects(
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
-) -> Answered<(ReceiptPayload, Vec<crate::secretary::act_lines::ActLine>)> {
+) -> Answered<(
+    ReceiptPayload,
+    Vec<suzatary_core::secretary::act_lines::ActLine>,
+)> {
     let Posted {
         objects: posted,
         since,
@@ -1340,8 +1272,8 @@ pub fn receive_objects(
     }
     let _held = store.locked()?;
     let objects = store.objects()?;
-    let outcome = crate::sync::receive(
-        &crate::sync::Objects::of(&objects),
+    let outcome = suzatary_core::sync::receive(
+        &suzatary_core::sync::Objects::of(&objects),
         posted,
         actor,
         &chain.root,
@@ -1350,8 +1282,11 @@ pub fn receive_objects(
         .taken
         .iter()
         .filter_map(|(_, literal)| {
-            prodrome_core::event::parse_envelope(&crate::record::TodoVocabulary::default(), literal)
-                .ok()
+            prodrome_core::event::parse_envelope(
+                &suzatary_core::record::TodoVocabulary::default(),
+                literal,
+            )
+            .ok()
         })
         .filter_map(|envelope| envelope.event().cloned())
         .collect();
@@ -1364,10 +1299,12 @@ pub fn receive_objects(
     } else {
         std::sync::Arc::default()
     };
-    let heard =
-        crate::secretary::act_lines::heard_from_objects(&taken, actor, &chain.name, &|posted| {
-            crate::todos::current(&shown, posted.at, posted.todo.as_str())
-        });
+    let heard = suzatary_core::secretary::act_lines::heard_from_objects(
+        &taken,
+        actor,
+        &chain.name,
+        &|posted| suzatary_core::todos::current(&shown, posted.at, posted.todo.as_str()),
+    );
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
     let fresh: Vec<suzatary_base::escape::Escaped> = taken
@@ -1406,7 +1343,7 @@ pub struct Posted<'a> {
 ///
 /// # Errors
 /// More than `MAX_POSTED` objects, or the store not read or not written.
-pub fn receive_changes<E: crate::stores::Store>(
+pub fn receive_changes<E: suzatary_core::stores::Store>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
@@ -1427,7 +1364,7 @@ where
     }
     let _held = store.locked()?;
     let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
-    let outcome = crate::sync::receive_changes::<E>(&held, posted, actor);
+    let outcome = suzatary_core::sync::receive_changes::<E>(&held, posted, actor);
     store.accept(&outcome.taken)?;
     let key = format!("store/{}", E::KIND.name());
     receipt(store, &outcome, (&key, since, frontiers))
@@ -1438,7 +1375,7 @@ where
 /// took or already held, with all they rest on.
 fn receipt<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
-    outcome: &crate::sync::Outcome,
+    outcome: &suzatary_core::sync::Outcome,
     (key, since, frontiers): (
         &str,
         &prodrome_core::store::frontier::Since,
@@ -1449,7 +1386,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
     let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
     let lacking = frontiers
         .answer(key, since, &dag)
-        .map_err(crate::store::StoreError::from)?;
+        .map_err(suzatary_core::store::StoreError::from)?;
     let read = since_read(lacking.reached());
     let posted = outcome
         .taken
@@ -1460,7 +1397,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
     let frontier = frontier_of(
         &lacking
             .record_with(posted)
-            .map_err(crate::store::StoreError::from)?,
+            .map_err(suzatary_core::store::StoreError::from)?,
     );
     Ok(ReceiptPayload {
         since: read,
@@ -1498,9 +1435,9 @@ fn receipt<E: prodrome_core::schema::Schema>(
 /// # Errors
 /// The plan's chain held and not read.
 pub fn about(
-    released: Option<&crate::release::Released>,
+    released: Option<&suzatary_core::release::Released>,
     build: &str,
-    plan: &crate::release::Plan,
+    plan: &suzatary_core::release::Plan,
     set: &ChainSet<'_>,
 ) -> Answered<AboutPayload> {
     let completes = released.map_or(&[][..], |r| r.completes.as_slice());
@@ -1522,7 +1459,7 @@ pub fn about(
 /// release's todos are shown, looked up on the chain rather than stored with the release.
 /// `None` where the set does not hold that chain.
 fn held_todos(
-    plan: &crate::release::Plan,
+    plan: &suzatary_core::release::Plan,
     set: &ChainSet<'_>,
     todos: &[prodrome_core::event::TodoId],
 ) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
@@ -1530,7 +1467,7 @@ fn held_todos(
         .map_err(|e| Refusal::internal(e.to_string()))?;
     match set.held(&name) {
         Ok(_) => {}
-        Err(crate::chain_set::NotAMember::Absent(_)) => return Ok(None),
+        Err(suzatary_core::chain_set::NotAMember::Absent(_)) => return Ok(None),
         Err(failure) => return Err(not_a_member(failure)),
     }
     let (by_hash, _, rows) = rows(set, &name)?;
@@ -1564,17 +1501,17 @@ fn held_todos(
 /// # Errors
 /// The chain held and not read.
 pub fn releases(
-    plan: &crate::release::Plan,
+    plan: &suzatary_core::release::Plan,
     set: &ChainSet<'_>,
 ) -> Answered<wire::ReleasesPayload> {
     let name = suzatary_base::chains::ChainName::new(plan.chain())
         .map_err(|e| Refusal::internal(e.to_string()))?;
     let held = match set.held(&name) {
         Ok(held) => held,
-        Err(crate::chain_set::NotAMember::Absent(_)) => {
+        Err(suzatary_core::chain_set::NotAMember::Absent(_)) => {
             return Ok(wire::ReleasesPayload {
                 chain: plan.chain().to_owned(),
-                reads: crate::release::Counted {
+                reads: suzatary_core::release::Counted {
                     major: plan.base(),
                     minor: 0,
                 }
@@ -1587,9 +1524,9 @@ pub fn releases(
     let current = Believed::of(held.nodes, set.at(), held.untrusted)
         .map_err(|e| Refusal::internal(e.to_string()))?
         .specs;
-    let reading = crate::release::Reading::of(
+    let reading = suzatary_core::release::Reading::of(
         plan,
-        crate::release::binding(held.nodes, held.untrusted),
+        suzatary_core::release::binding(held.nodes, held.untrusted),
         set.at(),
         &current,
     );
@@ -1636,7 +1573,7 @@ pub fn releases(
 pub fn me(
     deployment: &Deployment,
     chain: &ChainPolicy,
-    admitted: &crate::signatures::Admitted,
+    admitted: &suzatary_core::signatures::Admitted,
 ) -> wire::MePayload {
     let login = admitted.login();
     wire::MePayload {
@@ -1680,7 +1617,7 @@ pub fn author(
         wire::Authoring::Update(update) => {
             let wire::UpdateTodo { todo, patch, note } = &**update;
             let id = todo_id(todo)?.to_owned();
-            let Some(before) = crate::todos::current(&nodes, at, &id) else {
+            let Some(before) = suzatary_core::todos::current(&nodes, at, &id) else {
                 return Err(Refusal::not_found(format!(
                     "no todo with id {} on the chain",
                     shown(&id)
@@ -1688,7 +1625,7 @@ pub fn author(
             };
             capped_patch(patch)?;
             let known: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
-            let event = crate::authoring::update_todo(
+            let event = suzatary_core::authoring::update_todo(
                 &before,
                 patch,
                 suzatary_base::zone::Moment {
@@ -1704,13 +1641,13 @@ pub fn author(
         }
         wire::Authoring::Confirm(wire::ConfirmTodo { todo, note }) => {
             let id = todo_id(todo)?.to_owned();
-            let Some(before) = crate::todos::current(&nodes, at, &id) else {
+            let Some(before) = suzatary_core::todos::current(&nodes, at, &id) else {
                 return Err(Refusal::not_found(format!(
                     "the chain holds no content for todo {}",
                     shown(&id)
                 )));
             };
-            let event = crate::authoring::confirm_todo(
+            let event = suzatary_core::authoring::confirm_todo(
                 &before,
                 at,
                 actor.as_str(),
@@ -1722,13 +1659,15 @@ pub fn author(
         wire::Authoring::Undo(todo) => {
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
-            let event = crate::authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+            let event =
+                suzatary_core::authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
         wire::Authoring::Redo(todo) => {
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
-            let event = crate::authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+            let event =
+                suzatary_core::authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
     };
@@ -1777,7 +1716,10 @@ fn add(
         .map(|e| e.todo().as_str().to_owned())
         .collect();
     let todo = match &new.id {
-        None => crate::authoring::fresh_id(&crate::authoring::slug(&fields.body)?, &taken)?,
+        None => suzatary_core::authoring::fresh_id(
+            &suzatary_core::authoring::slug(&fields.body)?,
+            &taken,
+        )?,
         Some(named) => {
             let named = todo_id(named)?.to_owned();
             if taken.contains(&named) {
@@ -1789,7 +1731,7 @@ fn add(
             named
         }
     };
-    let new_todo = crate::authoring::NewTodo {
+    let new_todo = suzatary_core::authoring::NewTodo {
         todo: todo.clone(),
         fields,
         source: None,
@@ -1800,10 +1742,11 @@ fn add(
             at,
             zone: deployment.zone,
         };
-        let event = crate::authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
+        let event =
+            suzatary_core::authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
         return Ok((todo, event, None));
     };
-    let Some(record) = crate::todos::current(nodes, at, todo_id(parent)?) else {
+    let Some(record) = suzatary_core::todos::current(nodes, at, todo_id(parent)?) else {
         return Err(Refusal::not_found(format!(
             "no todo with id {} on the chain to be a parent",
             shown(parent)
@@ -1811,7 +1754,7 @@ fn add(
     };
     let believed =
         Believed::of(nodes, at, &chain.untrusted).map_err(|e| Refusal::internal(e.to_string()))?;
-    let (event, revision) = crate::authoring::build_subtodo(
+    let (event, revision) = suzatary_core::authoring::build_subtodo(
         &new_todo,
         &record,
         &believed.linkable(),
@@ -1841,7 +1784,7 @@ pub(crate) const MAX_WAITING_ON_CHARS: usize = 500;
 pub(crate) const MAX_SUBTODOS: usize = 200;
 
 /// A change's prose within the caps a new todo's has.
-fn capped_patch(patch: &crate::todo::TodoPatch) -> Result<(), Refusal> {
+fn capped_patch(patch: &suzatary_core::todo::TodoPatch) -> Result<(), Refusal> {
     for (name, text, cap) in [
         ("body", &patch.body, MAX_BODY_CHARS),
         ("detail", &patch.detail, MAX_DETAIL_CHARS),
@@ -1897,16 +1840,16 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
 /// store answered (`asked`) and what the box's registers say of it now.
 #[must_use]
 pub fn overview(
-    declared: &crate::settings::overview::Declared<'_>,
-    asked: &crate::settings::overview::Asked,
-    registers: crate::settings::overview::Registers<'_>,
-    asking: &[crate::settings::overview::Asking],
+    declared: &suzatary_core::settings::overview::Declared<'_>,
+    asked: &suzatary_core::settings::overview::Asked,
+    registers: suzatary_core::settings::overview::Registers<'_>,
+    asking: &[suzatary_core::settings::overview::Asking],
 ) -> Overview {
-    crate::settings::overview::overview(declared, &asked.observed(registers)).wire(
+    suzatary_core::settings::overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
         suzatary_base::conversation_id::SETUP.as_str().to_owned(),
-        crate::connect::offered(declared.channels)
+        suzatary_core::connect::offered(declared.channels)
             .into_iter()
             .map(|template| Offer {
                 template: template.id.as_str().to_owned(),
@@ -1920,7 +1863,7 @@ pub fn overview(
 /// `GET /api/calendar/<date>`: a week of the owner's calendars from that day, as Typst's HTML
 /// and as plain text.
 pub fn calendar(
-    calendar: &dyn crate::calendar::effect::Calendar,
+    calendar: &dyn suzatary_core::calendar::effect::Calendar,
     render: &dyn Render,
     from: NaiveDate,
 ) -> Answered<wire::CalendarPayload> {
@@ -1931,9 +1874,9 @@ pub fn calendar(
     Ok(wire::CalendarPayload {
         from: from.to_string(),
         days: DAYS,
-        text: crate::reading::calendar_text(&days),
-        rich: crate::rendering::CALENDAR
-            .call(&crate::reading::calendar(&days))
+        text: suzatary_core::reading::calendar_text(&days),
+        rich: suzatary_core::rendering::CALENDAR
+            .call(&suzatary_core::reading::calendar(&days))
             .ok()
             .and_then(|page| render.page(&page).ok())
             .map(|html| html.as_str().to_owned()),
@@ -1943,7 +1886,7 @@ pub fn calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secrets::SecretState;
+    use suzatary_core::secrets::SecretState;
 
     /// A value the fake's store reads as locked: it holds the name and cannot say what it is.
     const LOCKED: &str = "<the store is locked>";
@@ -1951,11 +1894,11 @@ mod tests {
     /// A fake `Secrets` holding real-shaped values, so a leak would show.
     struct FakeSecrets {
         values: BTreeMap<String, String>,
-        grants: BTreeMap<String, crate::secrets::MailGrants>,
+        grants: BTreeMap<String, suzatary_core::secrets::MailGrants>,
     }
 
-    impl crate::secrets::Secrets for FakeSecrets {
-        fn secret_state(&self, settable: &crate::settings::Settable) -> SecretState {
+    impl suzatary_core::secrets::Secrets for FakeSecrets {
+        fn secret_state(&self, settable: &suzatary_core::settings::Settable) -> SecretState {
             match self.values.get(settable.name()).map(String::as_str) {
                 Some(LOCKED) => SecretState::Locked,
                 Some(_) => SecretState::Set,
@@ -1965,16 +1908,19 @@ mod tests {
 
         fn mail_grants(
             &self,
-            account: &crate::mail::account::MailAccount,
-        ) -> crate::secrets::MailGrants {
+            account: &suzatary_core::mail::account::MailAccount,
+        ) -> suzatary_core::secrets::MailGrants {
             self.grants
                 .get(account.email.as_str())
                 .copied()
                 .unwrap_or_default()
         }
 
-        fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {
-            crate::google::Held::NotSignedIn
+        fn google_grant(
+            &self,
+            _: &suzatary_core::mail::address::EmailAddress,
+        ) -> suzatary_core::google::Held {
+            suzatary_core::google::Held::NotSignedIn
         }
     }
 
@@ -2009,12 +1955,12 @@ mod tests {
 
     /// A store that counts the lookups it gives no answer to, each a wait for the timeout.
     struct Counting<'a>(
-        &'a dyn crate::secrets::Secrets,
+        &'a dyn suzatary_core::secrets::Secrets,
         std::sync::atomic::AtomicUsize,
     );
 
-    impl crate::secrets::Secrets for Counting<'_> {
-        fn secret_state(&self, settable: &crate::settings::Settable) -> SecretState {
+    impl suzatary_core::secrets::Secrets for Counting<'_> {
+        fn secret_state(&self, settable: &suzatary_core::settings::Settable) -> SecretState {
             let state = self.0.secret_state(settable);
             if matches!(state, SecretState::Locked | SecretState::Failed) {
                 self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -2024,15 +1970,15 @@ mod tests {
 
         fn mail_grants(
             &self,
-            account: &crate::mail::account::MailAccount,
-        ) -> crate::secrets::MailGrants {
+            account: &suzatary_core::mail::account::MailAccount,
+        ) -> suzatary_core::secrets::MailGrants {
             self.0.mail_grants(account)
         }
 
         fn google_grant(
             &self,
-            account: &crate::mail::address::EmailAddress,
-        ) -> crate::google::Held {
+            account: &suzatary_core::mail::address::EmailAddress,
+        ) -> suzatary_core::google::Held {
             self.0.google_grant(account)
         }
     }
@@ -2044,29 +1990,30 @@ mod tests {
     /// calendar of two links and one chain.
     struct Instance {
         deployment: Deployment,
-        settables: crate::settings::Settables,
-        channels: Vec<crate::connect::Channel>,
-        accounts: crate::mail::account::Roster,
-        jobs: Vec<crate::settings::overview::ModelJob>,
-        plugins: Vec<crate::plugin::Manifest>,
-        build: crate::settings::overview::Build,
+        settables: suzatary_core::settings::Settables,
+        channels: Vec<suzatary_core::connect::Channel>,
+        accounts: suzatary_core::mail::account::Roster,
+        jobs: Vec<suzatary_core::settings::overview::ModelJob>,
+        plugins: Vec<suzatary_core::plugin::Manifest>,
+        build: suzatary_core::settings::overview::Build,
     }
 
     impl Instance {
         fn new() -> Self {
-            let channels = crate::connect::Channel::ALL.to_vec();
-            let plugins = vec![crate::settings::overview::tests::calendar()];
-            let account = |email: &str, sync| crate::mail::account::MailAccount {
-                email: crate::mail::account_email::AccountEmail::new(email)
+            let channels = suzatary_core::connect::Channel::ALL.to_vec();
+            let plugins = vec![suzatary_core::settings::overview::calendar()];
+            let account = |email: &str, sync| suzatary_core::mail::account::MailAccount {
+                email: suzatary_core::mail::account_email::AccountEmail::new(email)
                     .expect("a lower-case address"),
                 subdir: email.replace(['@', '.'], "-"),
                 sync,
             };
-            let ms = crate::mail::account::Sync::MsImap(crate::mail::account::MsImap {
-                authority: crate::mail::account::Authority::Organizations,
-                inbox_folders: crate::mail::folders::Folders::inbox(),
-                sent_folder: "Sent Items".to_owned(),
-            });
+            let ms =
+                suzatary_core::mail::account::Sync::MsImap(suzatary_core::mail::account::MsImap {
+                    authority: suzatary_core::mail::account::Authority::Organizations,
+                    inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                    sent_folder: "Sent Items".to_owned(),
+                });
             let chain = ChainPolicy {
                 name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([
@@ -2076,7 +2023,7 @@ mod tests {
                     .map(|name| prodrome_core::event::Actor::new(name).expect("an actor"))
                     .into_iter()
                     .collect(),
-                root: crate::cast::keys::root(),
+                root: suzatary_core::cast::keys::root(),
             };
             Self {
                 deployment: Deployment {
@@ -2088,28 +2035,31 @@ mod tests {
                     coding: None,
                     zone: suzatary_base::zone::Zone::UTC,
                 },
-                settables: crate::settings::Settables::derive(
-                    crate::settings::MODEL_TOKEN,
+                settables: suzatary_core::settings::Settables::derive(
+                    suzatary_core::settings::MODEL_TOKEN,
                     channels.iter().copied(),
                     None,
                     &plugins,
                 ),
-                accounts: crate::mail::account::Roster::new(vec![
-                    account("ada@example.test", crate::mail::account::Sync::Gmail),
+                accounts: suzatary_core::mail::account::Roster::new(vec![
+                    account(
+                        "ada@example.test",
+                        suzatary_core::mail::account::Sync::Gmail,
+                    ),
                     account("ada@university.example", ms),
                 ])
                 .expect("a roster"),
-                jobs: vec![crate::settings::overview::ModelJob {
+                jobs: vec![suzatary_core::settings::overview::ModelJob {
                     label: "Chat".to_owned(),
                     detail: "Chat, reviews and titles run a-model.".to_owned(),
-                    calls: crate::settings::overview::Calls::Recorded {
+                    calls: suzatary_core::settings::overview::Calls::Recorded {
                         key: "a-cli/a-model".to_owned(),
-                        credential: crate::settings::MODEL_TOKEN.to_owned(),
+                        credential: suzatary_core::settings::MODEL_TOKEN.to_owned(),
                     },
                 }],
                 channels,
                 plugins,
-                build: crate::settings::overview::Build {
+                build: suzatary_core::settings::overview::Build {
                     version: "dev".to_owned(),
                     revision: "dev".to_owned(),
                     completed: Vec::new(),
@@ -2117,8 +2067,8 @@ mod tests {
             }
         }
 
-        fn overview(&self, secrets: &dyn crate::secrets::Secrets) -> Overview {
-            let declared = crate::settings::overview::Declared {
+        fn overview(&self, secrets: &dyn suzatary_core::secrets::Secrets) -> Overview {
+            let declared = suzatary_core::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,
                 channels: &self.channels,
@@ -2126,31 +2076,33 @@ mod tests {
                 jobs: &self.jobs,
                 plugins: &self.plugins,
                 drive: &[],
-                storage: &crate::settings::overview::Storage {
+                storage: &suzatary_core::settings::overview::Storage {
                     root: "/srv/data".to_owned(),
-                    pushed: crate::settings::remote::Remote::parse("git@example.test:ada/data.git")
-                        .map_or(
-                            crate::settings::remote::Pushed::Nowhere,
-                            crate::settings::remote::Pushed::To,
-                        ),
+                    pushed: suzatary_core::settings::remote::Remote::parse(
+                        "git@example.test:ada/data.git",
+                    )
+                    .map_or(
+                        suzatary_core::settings::remote::Pushed::Nowhere,
+                        suzatary_core::settings::remote::Pushed::To,
+                    ),
                 },
                 build: &self.build,
-                reach: &crate::connect::PLAIN,
+                reach: &suzatary_core::connect::PLAIN,
             };
             let calendar = BTreeMap::from([(
-                crate::health::plugin::PluginName::parse("ics").expect("a name"),
-                crate::settings::overview::Store::Calendar,
+                suzatary_core::health::plugin::PluginName::parse("ics").expect("a name"),
+                suzatary_core::settings::overview::Store::Calendar,
             )]);
             overview(
                 &declared,
-                &crate::settings::overview::Asked::of(
+                &suzatary_core::settings::overview::Asked::of(
                     secrets,
                     &self.settables,
                     self.accounts.accounts(),
                 ),
-                crate::settings::overview::Registers {
-                    health: &crate::health::Healths::default(),
-                    answered: &crate::health::Healths::default(),
+                suzatary_core::settings::overview::Registers {
+                    health: &suzatary_core::health::Healths::default(),
+                    answered: &suzatary_core::health::Healths::default(),
                     plugins: &calendar,
                     pushes: None,
                 },
@@ -2169,7 +2121,10 @@ mod tests {
         }
     }
 
-    fn group(page: &Overview, which: crate::connect::Group) -> &[crate::wire::cards::OverviewLine] {
+    fn group(
+        page: &Overview,
+        which: suzatary_core::connect::Group,
+    ) -> &[suzatary_core::wire::cards::OverviewLine] {
         &page
             .groups
             .iter()
@@ -2195,12 +2150,12 @@ mod tests {
         let counting = Counting(&locked, std::sync::atomic::AtomicUsize::new(0));
         let page = instance.overview(&counting);
         assert_eq!(counting.1.load(std::sync::atomic::Ordering::SeqCst), 1);
-        let models = group(&page, crate::connect::Group::Models);
+        let models = group(&page, suzatary_core::connect::Group::Models);
         let chat = models
             .iter()
             .find(|line| line.key == "job:Chat")
             .expect("the model's line");
-        assert_eq!(chat.standing, crate::connect::Standing::Locked);
+        assert_eq!(chat.standing, suzatary_core::connect::Standing::Locked);
     }
 
     /// No resolved value, and no secret's stored name, is drawn: names travel only where a card

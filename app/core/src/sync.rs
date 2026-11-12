@@ -12,7 +12,7 @@
 //! 2. **A parent nobody holds** after this batch, which would leave a store whose `verify` fails;
 //!    a `Change` rests on its genesis as well as its deps, so an unheld genesis is one too.
 //! 3. **An event naming another actor** than the one the gate resolved
-//!    ([`crate::gate::actor_of`]); an eventless `Woven` asserts no fact and is allowed from anyone.
+//!    (`suzatary_api::gate::actor_of`); an eventless `Woven` asserts no fact and is allowed from anyone.
 //!    A replica's `Change` carries its event, so it is held to the rule like a `Sealed`.
 //! 4. **An object resting on a refused one**, (2) applied transitively: one bad object stops
 //!    everything under it, so a refusal is shown to a person rather than retried.

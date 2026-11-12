@@ -366,7 +366,7 @@ fn a_hash_outside_the_store_is_refused_as_an_unknown_one() {
 #[test]
 fn a_content_question_is_bounded() {
     let base = writing("stores-content-bound");
-    let names: Vec<String> = (0..=suzatary_core::query::MOST_HASHES)
+    let names: Vec<String> = (0..=suzatary_api::query::MOST_HASHES)
         .map(|n| format!("{n:064x}"))
         .collect();
     let at = |hashes: &str| content(&format!("{base}/api/stores/lines/content?hashes={hashes}"));
@@ -387,7 +387,7 @@ fn a_content_question_is_bounded() {
         "no hashes at all"
     );
     assert_eq!(
-        at(&names[..suzatary_core::query::MOST_HASHES].join(",")).0,
+        at(&names[..suzatary_api::query::MOST_HASHES].join(",")).0,
         404,
         "sixty-four names are a question, of objects this store does not hold"
     );
@@ -416,7 +416,7 @@ fn a_chain_s_objects_are_asked_for_by_hash() {
         })
         .collect();
     held.sort_unstable();
-    held.truncate(suzatary_core::query::MOST_HASHES);
+    held.truncate(suzatary_api::query::MOST_HASHES);
     let names: Vec<&str> = held.iter().map(|(name, _)| *name).collect();
     for path in ["/api", &format!("/api/{name}")] {
         let (status, cache, body) =

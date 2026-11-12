@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use suzatary_api::wire::{Uploaded, Uploading};
 use suzatary_base::reference::Reference;
 use suzatary_core::wire::topics::{AttachmentRow, TurnRow};
-use suzatary_core::wire::{Uploaded, Uploading};
 use ts_rs::TS;
 use viewtree::Attr::{
     Accept, AriaLabel, Class, Data, Disabled, Hidden, Multiple, Placeholder, Rows, Title, Type,

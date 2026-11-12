@@ -1,7 +1,7 @@
 //! A week of the owner's calendars, drawn by Typst on the box; every title is a stranger's words.
 
 use serde::Deserialize;
-use suzatary_core::wire::CalendarPayload;
+use suzatary_api::wire::CalendarPayload;
 use ts_rs::TS;
 use viewtree::{Node, view};
 

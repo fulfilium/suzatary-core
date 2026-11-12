@@ -110,7 +110,7 @@ fn serving_answering(
     // own connection's; a scene about them swaps this back.
     let base = with(
         common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
-            .effects(|effects| suzatary_core::server::Server {
+            .effects(|effects| suzatary_api::server::Server {
                 secretary: suzatary_core::secretary::Secretary {
                     secrets: &GitHubHeld,
                     ..effects.secretary

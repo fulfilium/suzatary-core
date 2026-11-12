@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use suzatary_api::secretary::routes::Post;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::conversation::round::Ending;
@@ -14,7 +15,6 @@ use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::attached::Checked;
 use suzatary_core::secretary::proposal::Draft;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::routes::Post;
 
 use crate::instance::Instance;
 
@@ -381,7 +381,7 @@ impl Acting {
     }
 }
 
-impl suzatary_core::secretary::routes::Perform for Acting {
+impl suzatary_api::secretary::routes::Perform for Acting {
     fn begin(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,

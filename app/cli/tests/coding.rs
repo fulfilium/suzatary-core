@@ -291,7 +291,7 @@ fn an_operators_tap_starts_a_session() {
         &operator,
         &card,
         "",
-        &suzatary_core::secretary::routes::TapAnswer::Plain,
+        &suzatary_api::secretary::routes::TapAnswer::Plain,
     )
     .expect("the operator taps");
     let proposal = &tapped.conversation["proposals"][0];
@@ -790,7 +790,7 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
         conversation,
         index: 0,
     };
-    let plain = suzatary_core::secretary::routes::TapAnswer::Plain;
+    let plain = suzatary_api::secretary::routes::TapAnswer::Plain;
     let tapped = tap::tap(&operator, &card(old.clone()), "", &plain).expect("the operator taps");
     assert_eq!(tapped.conversation["proposals"][0]["state"], "acted");
     let conversations = || fakes.conversations.conversations();

@@ -89,7 +89,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                     .with_context(|| format!("registering the key on {}", chain.policy.name))?;
             }
             println!("trusted {} for {actor} on every chain", key.as_str());
-            let withdrawn = suzatary_core::secretary::routes::withdraw_trusted(
+            let withdrawn = suzatary_api::secretary::routes::withdraw_trusted(
                 &instance.inbox_store(),
                 &store_of(instance.first()),
                 &keys.root().public(),

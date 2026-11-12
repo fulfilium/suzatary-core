@@ -6,10 +6,10 @@ use std::net::IpAddr;
 
 use prodrome_core::event::Actor;
 
-use crate::deployment::Deployment;
-use crate::signatures::Admitted;
 use suzatary_base::capability::{Peer, Whois, WhoisError};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_core::deployment::Deployment;
+use suzatary_core::signatures::Admitted;
 
 /// The headers a proxy writes. A request carrying one came through something that is not its
 /// peer, so the socket's address names the proxy and whois would answer for the wrong party.
@@ -224,7 +224,7 @@ mod tests {
                 name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([actor("triage")]),
                 roster: BTreeSet::from([actor("ada"), actor("triage")]),
-                root: crate::cast::keys::root(),
+                root: suzatary_core::cast::keys::root(),
             }])
             .expect("one chain"),
             categories: BTreeMap::from([("home".to_owned(), 3)]),
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn this_box_is_its_operator_only_by_the_root_key_and_a_writers_actor() {
         let deployed = deployment();
-        let root = crate::cast::keys::root();
+        let root = suzatary_core::cast::keys::root();
         let claiming = |key: &str, actor: &str, peer: &str| {
             super::admit(
                 &Daemon,

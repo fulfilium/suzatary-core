@@ -21,11 +21,11 @@ use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::{fpl, view as folds};
 use sha2::{Digest, Sha256};
+use suzatary_api::routes;
+use suzatary_api::server::Server;
 use suzatary_base::capability::Datetime;
 use suzatary_core::record::EventStore;
-use suzatary_core::routes;
 use suzatary_core::secretary::Secretary;
-use suzatary_core::server::Server;
 use suzatary_core::store::Reads as _;
 use suzatary_io::render::Typst;
 
@@ -169,7 +169,7 @@ fn fold_breakdown() {
         .expect("route answers")
     });
     println!(
-        "full route  (suzatary_core::routes::fold, memo warm): min {:.3} ms  mean {:.3} ms  ({} entries)",
+        "full route  (suzatary_api::routes::fold, memo warm): min {:.3} ms  mean {:.3} ms  ({} entries)",
         min_ms(&full_times),
         mean_ms(&full_times),
         payload.entries.len()
@@ -238,7 +238,7 @@ fn chain_breakdown() {
         routes::chain(&bench.fakes.chain, &chain).expect("route answers")
     });
     println!(
-        "full route  (suzatary_core::routes::chain, memo warm): min {:.3} ms  mean {:.3} ms  ({} links)",
+        "full route  (suzatary_api::routes::chain, memo warm): min {:.3} ms  mean {:.3} ms  ({} links)",
         min_ms(&full_times),
         mean_ms(&full_times),
         payload.links.len()

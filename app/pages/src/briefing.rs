@@ -1,7 +1,7 @@
 //! One day's briefing, rendered by the box: the secretary's brief, or the saved Typst file.
 
 use serde::Deserialize;
-use suzatary_core::wire::{BriefingDay, BriefingPayload};
+use suzatary_api::wire::{BriefingDay, BriefingPayload};
 use ts_rs::TS;
 use viewtree::kit::para;
 use viewtree::{Node, view};

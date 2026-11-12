@@ -4137,6 +4137,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "suzatary-api",
  "suzatary-base",
  "suzatary-core",
  "suzatary-io",
@@ -4150,6 +4151,25 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ureq",
+]
+
+[[package]]
+name = "suzatary-api"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "prodrome-core",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "suzatary-api",
+ "suzatary-base",
+ "suzatary-core",
+ "thiserror",
+ "tracing",
+ "ts-rs",
 ]
 
 [[package]]
@@ -4248,6 +4268,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "suzatary-api",
  "suzatary-base",
  "suzatary-core",
  "ts-rs",
@@ -4309,6 +4330,7 @@ dependencies = [
  "prodrome-wasm-exports",
  "serde",
  "serde_json",
+ "suzatary-api",
  "suzatary-base",
  "suzatary-core",
  "wasm-bindgen",

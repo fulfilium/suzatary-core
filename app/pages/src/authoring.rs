@@ -1,7 +1,7 @@
 //! The one path every edit of a todo takes: the box prints the event (`POST /api/<chain>/author`)
 //! and appends nothing, and the page that asked seals what it printed onto the chain's replica.
 
-use suzatary_core::wire::{AuthoredPayload, Authoring};
+use suzatary_api::wire::{AuthoredPayload, Authoring};
 
 use crate::places::Question;
 use crate::runtime::{Act, Answer, Body, Effect, Secret, Told, answered};

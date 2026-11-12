@@ -9,7 +9,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 
 /// What a rule sees of one waiting card.
-pub(crate) enum Seen {
+pub enum Seen {
     /// Done another way, in the box's words.
     Done(String),
     /// Still to do, or not this rule's card.
@@ -28,7 +28,7 @@ pub struct Swept {
 }
 
 /// Close every waiting card that `seen` finds done another way.
-pub(crate) fn sweep(
+pub fn sweep(
     inbox: &dyn Prodrome<InboxEvent>,
     at: Datetime,
     mut seen: impl FnMut(&Proposal) -> Result<Seen, Refusal>,

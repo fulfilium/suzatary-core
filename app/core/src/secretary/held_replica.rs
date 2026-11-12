@@ -265,7 +265,7 @@ impl HeldReplica {
                     .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
                 let husk = crate::secretary::line_event::Husk::read(&text)
                     .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
-                if crate::routes::line_header(husk.line()) != node.header {
+                if crate::secretary::line_form::line_header(husk.line()) != node.header {
                     return Err(NotItsHusk::Header(shown));
                 }
                 if husk

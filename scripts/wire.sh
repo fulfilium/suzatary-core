@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generates the browser's wire into web/src/wire/generated/ (git-ignored): wire.ts (the types of
-# app/core/src/wire.rs and wire/, via ts-rs), payload.ts (their decoders) and pages.ts (each
+# app/api/src/wire.rs and core's wire/, via ts-rs), payload.ts (their decoders) and pages.ts (each
 # page's host contract). The wire is declared once, in Rust.
 #
 # `$SUZATARY_WIRE_TS` names a directory holding them already (`nix build .#suzatary-web-ts`);
@@ -18,8 +18,8 @@ if [[ -n "${SUZATARY_WIRE_TS:-}" ]]; then
 else
   wire_dir="$(mktemp -d)"
   trap 'rm -rf "$wire_dir"' EXIT
-  echo "==> generating the wire's TypeScript (cargo test -p suzatary-core; no .#suzatary-web-ts supplied)"
-  if ! ( cd app && TS_RS_EXPORT_DIR="$wire_dir" cargo test -p suzatary-core --lib -- wire::tests::generates &&
+  echo "==> generating the wire's TypeScript (cargo test -p suzatary-api; no .#suzatary-web-ts supplied)"
+  if ! ( cd app && TS_RS_EXPORT_DIR="$wire_dir" cargo test -p suzatary-api --lib -- wire::tests::generates &&
     TS_RS_EXPORT_DIR="$wire_dir" cargo test -p suzatary-pages --test boundary -- generates ) >&2; then
     echo "wire.sh: generating wire.ts failed — run inside 'nix develop .#triage', or set SUZATARY_WIRE_TS" >&2
     exit 1

@@ -17,6 +17,9 @@ use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
+use suzatary_api::routes;
+use suzatary_api::secretary::routes::{self as secretary_routes, Cards};
+use suzatary_api::server::Server;
 use suzatary_base::capability::Entropy;
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime};
@@ -30,7 +33,6 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::render::{Html, Render};
-use suzatary_core::routes;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::about;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -42,12 +44,10 @@ use suzatary_core::secretary::model::{Model, ModelError, Turn};
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::routes::{self as secretary_routes, Cards};
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::stamp::stamp;
 use suzatary_core::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::transcript;
-use suzatary_core::server::Server;
 use suzatary_core::store::{
     InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
@@ -55,8 +55,7 @@ use suzatary_core::wire::topics as wire;
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("web")
+        .join("../core/tests/web")
         .join(file)
 }
 
@@ -734,7 +733,7 @@ struct FoldAnswer {
     count: usize,
 }
 
-fn fold_answer(payload: &suzatary_core::wire::FoldPayload) -> FoldAnswer {
+fn fold_answer(payload: &suzatary_api::wire::FoldPayload) -> FoldAnswer {
     let mut open: Vec<&suzatary_core::wire::todo::Entry> = payload
         .entries
         .iter()
@@ -768,7 +767,7 @@ struct ChainAnswer {
     order: Vec<String>,
 }
 
-fn chain_answer(payload: &suzatary_core::wire::ChainPayload) -> ChainAnswer {
+fn chain_answer(payload: &suzatary_api::wire::ChainPayload) -> ChainAnswer {
     ChainAnswer {
         verify: payload.verify.clone(),
         order: payload.links.iter().map(|link| link.hash.clone()).collect(),
@@ -1874,17 +1873,17 @@ fn the_replicas_vector_is_what_the_box_answers() {
 
 /// The lines' whole skeleton, as its route answers a replica holding nothing.
 fn skeleton_of(bundle: &Bundle) -> suzatary_core::wire::lines::SkeletonPayload {
-    suzatary_core::routes::lines_skeleton(
+    suzatary_api::routes::lines_skeleton(
         bundle.conversations.conversations(),
         &prodrome_core::store::frontier::Since::Nothing,
-        suzatary_core::routes::Books {
+        suzatary_api::routes::Books {
             epochs: &suzatary_core::epoch::Epochs::remembered(),
             frontiers: &prodrome_core::store::frontier::Frontiers::remembered(
                 prodrome_core::store::frontier::KEPT,
             ),
         },
         bundle.at,
-        suzatary_core::routes::Cut::Whole,
+        suzatary_api::routes::Cut::Whole,
     )
     .expect("the skeleton reads")
 }
@@ -1976,8 +1975,7 @@ impl Samples {
     fn add<T: Serialize + ts_rs::TS>(&mut self, values: impl IntoIterator<Item = T>) {
         for value in values {
             let value = serde_json::to_value(&value).expect("an answer serialises");
-            let maps =
-                suzatary_core::wire::maps(&T::name(), &value).expect("an answer has a shape");
+            let maps = suzatary_api::wire::maps(&T::name(), &value).expect("an answer has a shape");
             self.0
                 .entry(T::name())
                 .or_default()
@@ -2078,14 +2076,14 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([fold]);
     samples.add(
         [
-            suzatary_core::wire::TreeBy::Category,
-            suzatary_core::wire::TreeBy::Urgency,
-            suzatary_core::wire::TreeBy::Flat,
+            suzatary_api::wire::TreeBy::Category,
+            suzatary_api::wire::TreeBy::Urgency,
+            suzatary_api::wire::TreeBy::Flat,
         ]
         .map(|by| routes::tree(&policy, &set, by).expect("a tree")),
     );
     samples.add([routes::tip(&bundle).expect("the tip")]);
-    samples.add([suzatary_core::wire::TipFrame {
+    samples.add([suzatary_api::wire::TipFrame {
         heads: heads.clone(),
     }]);
     let (epochs, frontiers) = (
@@ -2136,10 +2134,10 @@ fn the_answers_vector_holds_every_answer() {
         .collect();
     names.sort_unstable();
     let hashes =
-        suzatary_core::query::Hashes::parse(Some(&names.join(","))).expect("the lines' names");
+        suzatary_api::query::Hashes::parse(Some(&names.join(","))).expect("the lines' names");
     samples.add([routes::content(&lines.lines, &hashes).expect("the lines' content")]);
     samples.add([skeleton]);
-    samples.add([suzatary_core::wire::WaitingPayload {
+    samples.add([suzatary_api::wire::WaitingPayload {
         count: 2,
         unplaced: std::collections::BTreeMap::from([(
             "2026-11-10-a".to_owned(),
@@ -2171,7 +2169,7 @@ fn the_answers_vector_holds_every_answer() {
             },
         ],
     }]);
-    samples.add([suzatary_core::wire::MePayload {
+    samples.add([suzatary_api::wire::MePayload {
         login: CAST.owner.email.to_owned(),
         actor: Some(CAST.owner.actor.to_owned()),
         chains: vec!["life".to_owned()],
@@ -2211,17 +2209,17 @@ fn the_answers_vector_holds_every_answer() {
         ],
     }]);
     let item =
-        |todo: &str, title: &str, state, value, lot, named| suzatary_core::wire::ReleaseItem {
+        |todo: &str, title: &str, state, value, lot, named| suzatary_api::wire::ReleaseItem {
             todo: todo.to_owned(),
             held: held(todo, title, state, value),
             lot,
             named,
         };
-    samples.add([suzatary_core::wire::ReleasesPayload {
+    samples.add([suzatary_api::wire::ReleasesPayload {
         chain: "suzatary".to_owned(),
         reads: "1.0".to_owned(),
         releases: vec![
-            suzatary_core::wire::ReleaseRow {
+            suzatary_api::wire::ReleaseRow {
                 todo: "suzatarytwo".to_owned(),
                 held: held(
                     "suzatarytwo",
@@ -2275,7 +2273,7 @@ fn the_answers_vector_holds_every_answer() {
                     ),
                 ],
             },
-            suzatary_core::wire::ReleaseRow {
+            suzatary_api::wire::ReleaseRow {
                 todo: "suzatarytwoone".to_owned(),
                 held: None,
                 version: "2.1".to_owned(),
@@ -2285,7 +2283,7 @@ fn the_answers_vector_holds_every_answer() {
             },
         ],
     }]);
-    samples.add([suzatary_core::wire::AuthoredPayload {
+    samples.add([suzatary_api::wire::AuthoredPayload {
         todo: CAST.todos.agents.id.to_owned(),
         event: "Created(...)".to_owned(),
         revision: None,
@@ -2295,11 +2293,11 @@ fn the_answers_vector_holds_every_answer() {
         devices: 1,
     }]);
     samples.add([
-        suzatary_core::wire::PortalPayload {
-            push: suzatary_core::wire::PortalPush::None,
+        suzatary_api::wire::PortalPayload {
+            push: suzatary_api::wire::PortalPush::None,
         },
-        suzatary_core::wire::PortalPayload {
-            push: suzatary_core::wire::PortalPush::Fcm {
+        suzatary_api::wire::PortalPayload {
+            push: suzatary_api::wire::PortalPush::Fcm {
                 sender: "100000000000".to_owned(),
             },
         },
@@ -2370,7 +2368,7 @@ fn the_answers_vector_holds_every_answer() {
     let rows: Vec<suzatary_core::wire::inbox::ProposedObject> =
         std::iter::once(object).chain(others).collect();
     // A triage card's changeset, every row kind drawn, so the tab decodes each.
-    samples.add([suzatary_core::wire::DrawnPayload {
+    samples.add([suzatary_api::wire::DrawnPayload {
         title: "Setup".to_owned(),
         proposals: vec![wire::ProposalRow {
             index: 0,
@@ -2432,9 +2430,9 @@ fn the_answers_vector_holds_every_answer() {
         objects
             .iter()
             .map(|(name, object)| {
-                suzatary_core::secretary::outlines::Parsed::of(
-                    suzatary_core::routes::skeleton_node(name, object),
-                )
+                suzatary_core::secretary::outlines::Parsed::of(suzatary_api::routes::skeleton_node(
+                    name, object,
+                ))
                 .expect("a node")
             })
             .collect(),
@@ -2522,7 +2520,7 @@ fn the_answers_vector_holds_every_answer() {
         conversations
             .into_iter()
             .chain([attaching])
-            .map(|conversation| suzatary_core::wire::SayPayload { conversation }),
+            .map(|conversation| suzatary_api::wire::SayPayload { conversation }),
     );
     samples.add([wire::MemoryPayload {
         facts: vec![
@@ -2595,23 +2593,23 @@ fn the_answers_vector_holds_every_answer() {
         }],
     }]);
     samples.add([
-        suzatary_core::wire::Frame::State {
+        suzatary_api::wire::Frame::State {
             state: ConversationState::Thinking,
         },
-        suzatary_core::wire::Frame::Delta {
+        suzatary_api::wire::Frame::Delta {
             text: "Hel".to_owned(),
         },
-        suzatary_core::wire::Frame::Turn,
-        suzatary_core::wire::Frame::Working {
+        suzatary_api::wire::Frame::Turn,
+        suzatary_api::wire::Frame::Working {
             verb: "context".to_owned(),
         },
-        suzatary_core::wire::Frame::Block {
+        suzatary_api::wire::Frame::Block {
             n: 0,
             sha: "d".repeat(64),
             source: "= Plan".to_owned(),
         },
     ]);
-    samples.add([suzatary_core::wire::BlockRender {
+    samples.add([suzatary_api::wire::BlockRender {
         html: "<h2>Plan</h2>".to_owned(),
         key: suzatary_core::rendering::ANSWER
             .key(&suzatary_base::answer::Renderable::of("= Plan"))
@@ -2619,15 +2617,15 @@ fn the_answers_vector_holds_every_answer() {
     }]);
     samples.add([row(1)]);
     samples.add([
-        suzatary_core::wire::RevealPayload::Shown {
+        suzatary_api::wire::RevealPayload::Shown {
             value: "000-12-3456".to_owned(),
         },
-        suzatary_core::wire::RevealPayload::Gone,
-        suzatary_core::wire::RevealPayload::NotKept,
+        suzatary_api::wire::RevealPayload::Gone,
+        suzatary_api::wire::RevealPayload::NotKept,
     ]);
     samples.add([
-        suzatary_core::wire::Uploaded::Kept { file: row(2) },
-        suzatary_core::wire::Uploaded::Sensitive {
+        suzatary_api::wire::Uploaded::Kept { file: row(2) },
+        suzatary_api::wire::Uploaded::Sensitive {
             why: "it names a tax number".to_owned(),
             folder: "Private".to_owned(),
         },
@@ -2639,13 +2637,13 @@ fn the_answers_vector_holds_every_answer() {
         kind: suzatary_base::answer::Kind::Heading,
         html: Some("<h2>Plan</h2>".to_owned()),
     };
-    samples.add([suzatary_core::wire::BriefingsPayload {
-        briefings: vec![suzatary_core::wire::BriefingRow {
+    samples.add([suzatary_api::wire::BriefingsPayload {
+        briefings: vec![suzatary_api::wire::BriefingRow {
             date: "2026-09-02".to_owned(),
             title: "Tuesday".to_owned(),
             words: 120,
         }],
-        briefs: vec![suzatary_core::wire::BriefRow {
+        briefs: vec![suzatary_api::wire::BriefRow {
             date: "2026-09-02".to_owned(),
             conversation: deed.to_string(),
             turn: 1,
@@ -2655,30 +2653,30 @@ fn the_answers_vector_holds_every_answer() {
         }],
     }]);
     samples.add([
-        suzatary_core::wire::BriefingPayload {
+        suzatary_api::wire::BriefingPayload {
             date: "2026-09-02".to_owned(),
-            day: suzatary_core::wire::BriefingDay::Brief {
+            day: suzatary_api::wire::BriefingDay::Brief {
                 conversation: deed.to_string(),
                 turn: 1,
                 text: "= Plan".to_owned(),
                 blocks: vec![block],
             },
         },
-        suzatary_core::wire::BriefingPayload {
+        suzatary_api::wire::BriefingPayload {
             date: "2026-09-01".to_owned(),
-            day: suzatary_core::wire::BriefingDay::Saved {
+            day: suzatary_api::wire::BriefingDay::Saved {
                 source: "= Monday".to_owned(),
                 rich: None,
             },
         },
     ]);
-    samples.add([suzatary_core::wire::CalendarPayload {
+    samples.add([suzatary_api::wire::CalendarPayload {
         from: "2026-09-02".to_owned(),
         days: 7,
         text: "Nothing booked".to_owned(),
         rich: None,
     }]);
-    samples.add([suzatary_core::wire::InboxPayload {
+    samples.add([suzatary_api::wire::InboxPayload {
         accounts: vec![CAST.owner.email.to_owned()],
         messages: [
             suzatary_core::mail::Disposed::Undecided,
@@ -2694,7 +2692,7 @@ fn the_answers_vector_holds_every_answer() {
         .chain([mail_row()])
         .collect(),
     }]);
-    samples.add([suzatary_core::wire::MailSearchPayload {
+    samples.add([suzatary_api::wire::MailSearchPayload {
         q: "from:counsel".to_owned(),
         accounts: Vec::new(),
         messages: vec![mail_row()],
@@ -2714,9 +2712,9 @@ fn the_answers_vector_holds_every_answer() {
         })
         .collect(),
     }]);
-    samples.add([suzatary_core::wire::ThreadPayload {
+    samples.add([suzatary_api::wire::ThreadPayload {
         thread: "000000000000c3fb".to_owned(),
-        messages: vec![suzatary_core::wire::MailPage {
+        messages: vec![suzatary_api::wire::MailPage {
             message: suzatary_core::mail::MailMessage {
                 row: mail_row(),
                 thread: "000000000000c3fb".to_owned(),
@@ -2834,22 +2832,22 @@ fn the_answers_vector_holds_every_answer() {
     // The browser's module's own answers: the verifier's, with every arm of its walk and of
     // what it found, and who wrote each object, with every arm of its proof.
     let verdict =
-        |hash: &str, walk: suzatary_core::wire::Walk, condition: suzatary_core::wire::Condition| {
-            suzatary_core::wire::ObjectVerdict {
+        |hash: &str, walk: suzatary_api::wire::Walk, condition: suzatary_api::wire::Condition| {
+            suzatary_api::wire::ObjectVerdict {
                 hash: hash.to_owned(),
                 computed: hash.to_owned(),
                 hash_ok: true,
                 walk,
                 condition,
                 holds: if hash.starts_with('a') {
-                    suzatary_core::wire::Verified::Event {
+                    suzatary_api::wire::Verified::Event {
                         kind: "Created".to_owned(),
                         todo: CAST.todos.agents.id.to_owned(),
                         actor: "owner".to_owned(),
                         at: "2026-09-02T12:00:00".to_owned(),
                     }
                 } else {
-                    suzatary_core::wire::Verified::Envelope {
+                    suzatary_api::wire::Verified::Envelope {
                         kind: "Woven".to_owned(),
                     }
                 },
@@ -2858,31 +2856,31 @@ fn the_answers_vector_holds_every_answer() {
     let tip = "a".repeat(64);
     let stray = "b".repeat(64);
     samples.add([
-        suzatary_core::wire::VerifiedPayload {
+        suzatary_api::wire::VerifiedPayload {
             tips: vec![tip.clone()],
             objects: vec![verdict(
                 &tip,
-                suzatary_core::wire::Walk::Reached { depth: 0 },
-                suzatary_core::wire::Condition::Clean,
+                suzatary_api::wire::Walk::Reached { depth: 0 },
+                suzatary_api::wire::Condition::Clean,
             )],
             walked: 1,
             verified: 1,
             genesis: vec![tip.clone()],
             linearisation: vec![tip.clone()],
-            found: suzatary_core::wire::Found::of(Vec::new()),
+            found: suzatary_api::wire::Found::of(Vec::new()),
         },
-        suzatary_core::wire::VerifiedPayload {
+        suzatary_api::wire::VerifiedPayload {
             tips: vec![tip.clone()],
             objects: vec![
                 verdict(
                     &tip,
-                    suzatary_core::wire::Walk::Reached { depth: 0 },
-                    suzatary_core::wire::Condition::Clean,
+                    suzatary_api::wire::Walk::Reached { depth: 0 },
+                    suzatary_api::wire::Condition::Clean,
                 ),
                 verdict(
                     &stray,
-                    suzatary_core::wire::Walk::Unreached,
-                    suzatary_core::wire::Condition::Flawed {
+                    suzatary_api::wire::Walk::Unreached,
+                    suzatary_api::wire::Condition::Flawed {
                         problem: "not reachable from any head by its parents".to_owned(),
                     },
                 ),
@@ -2891,31 +2889,31 @@ fn the_answers_vector_holds_every_answer() {
             verified: 2,
             genesis: vec![tip.clone()],
             linearisation: vec![tip.clone(), stray.clone()],
-            found: suzatary_core::wire::Found::of(vec![format!(
+            found: suzatary_api::wire::Found::of(vec![format!(
                 "object {stray} is not reachable from any head"
             )]),
         },
     ]);
     samples.add([
-        suzatary_core::wire::ProvenanceRow {
+        suzatary_api::wire::ProvenanceRow {
             hash: tip.clone(),
-            proof: suzatary_core::wire::Proof::Proven {
+            proof: suzatary_api::wire::Proof::Proven {
                 key: "c".repeat(64),
             },
             said: "signed by the key cccccccc".to_owned(),
         },
-        suzatary_core::wire::ProvenanceRow {
+        suzatary_api::wire::ProvenanceRow {
             hash: tip.clone(),
-            proof: suzatary_core::wire::Proof::Predates,
+            proof: suzatary_api::wire::Proof::Predates,
             said: "written before signatures".to_owned(),
         },
-        suzatary_core::wire::ProvenanceRow {
+        suzatary_api::wire::ProvenanceRow {
             hash: stray.clone(),
-            proof: suzatary_core::wire::Proof::Unproven,
+            proof: suzatary_api::wire::Proof::Unproven,
             said: "not proven: no key signs it".to_owned(),
         },
     ]);
-    samples.add([suzatary_core::wire::SignedObject {
+    samples.add([suzatary_api::wire::SignedObject {
         hash: tip.clone(),
         text: format!(
             "Signed(object='{stray}', key='{}', signature='')",
@@ -2923,18 +2921,18 @@ fn the_answers_vector_holds_every_answer() {
         ),
     }]);
     samples.add([
-        suzatary_core::wire::StoreFrame {
-            store: suzatary_core::wire::StoreName::Lines,
+        suzatary_api::wire::StoreFrame {
+            store: suzatary_api::wire::StoreName::Lines,
             heads: vec![tip.clone()],
         },
-        suzatary_core::wire::StoreFrame {
-            store: suzatary_core::wire::StoreName::TopicAliases,
+        suzatary_api::wire::StoreFrame {
+            store: suzatary_api::wire::StoreName::TopicAliases,
             heads: Vec::new(),
         },
     ]);
 
-    samples.add([suzatary_core::wire::RecordPayload {
-        summaries: vec![suzatary_core::wire::RecordSummary {
+    samples.add([suzatary_api::wire::RecordPayload {
+        summaries: vec![suzatary_api::wire::RecordSummary {
             node: "a".repeat(64),
             handle: "0+16".to_owned(),
             lines: 16,
@@ -2943,7 +2941,7 @@ fn the_answers_vector_holds_every_answer() {
     }]);
 
     let names: std::collections::BTreeSet<String> =
-        suzatary_core::wire::answer_names().into_iter().collect();
+        suzatary_api::wire::answer_names().into_iter().collect();
     let covered: std::collections::BTreeSet<String> = samples.0.keys().cloned().collect();
     assert_eq!(
         covered, names,

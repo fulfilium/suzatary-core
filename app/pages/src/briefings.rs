@@ -1,6 +1,6 @@
 //! Briefings: the secretary's morning briefs, newest first, and the files saved before them.
 
-use suzatary_core::wire::BriefingsPayload;
+use suzatary_api::wire::BriefingsPayload;
 use viewtree::{Node, view};
 
 use crate::chrome::{Masthead, empty, link};

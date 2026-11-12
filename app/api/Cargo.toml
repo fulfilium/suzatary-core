@@ -1,0 +1,39 @@
+[package]
+name = "suzatary-api"
+description = "Suzatary's routes, gate and wire, over suzatary-core (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_api"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+regex.workspace = true
+base64.workspace = true
+chrono.workspace = true
+
+[features]
+nothing = ["suzatary-core/nothing"]
+
+[dev-dependencies]
+suzatary-api = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

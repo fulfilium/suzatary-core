@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
+use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::conversation::round::Ending;
@@ -18,7 +19,6 @@ use suzatary_core::secretary::model::{Halt, Sessions, Turn};
 use suzatary_core::secretary::rules::{Conversational, RULES};
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::secretary::{self, transcript};
-use suzatary_core::wire;
 use tokio::sync::{broadcast, mpsc};
 
 use super::State;
@@ -263,7 +263,7 @@ impl Workers {
     /// round; the store's failures.
     pub fn stop(
         &self,
-        caps: &suzatary_core::server::Server<'_>,
+        caps: &suzatary_api::server::Server<'_>,
         id: &ConversationId,
         by: prodrome_core::event::Actor,
     ) -> Result<(), Refusal> {

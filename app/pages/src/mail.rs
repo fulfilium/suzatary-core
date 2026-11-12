@@ -2,8 +2,8 @@
 //! badge, never a filter, so what it dismissed stays visible. Every string from mail is text.
 
 use serde::{Deserialize, Serialize};
+use suzatary_api::wire::InboxPayload;
 use suzatary_core::mail::MailRow;
-use suzatary_core::wire::InboxPayload;
 use suzatary_core::wire::triage::{MailWatch, WatchOn, WatchesPayload};
 use ts_rs::TS;
 use viewtree::Attr::{

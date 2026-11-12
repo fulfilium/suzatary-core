@@ -1,9 +1,9 @@
-use crate::agent::Agent;
-use crate::notify::Notify;
-use crate::secretary::Secretary;
-use crate::secretary::answers::Answers;
-use crate::secretary::model::Sessions;
 use suzatary_base::capability::Whois;
+use suzatary_core::agent::Agent;
+use suzatary_core::notify::Notify;
+use suzatary_core::secretary::Secretary;
+use suzatary_core::secretary::answers::Answers;
+use suzatary_core::secretary::model::Sessions;
 
 /// What the serving process supplies: the secretary's effects, since it runs the
 /// secretary, plus peers and phones. Nothing here sends mail; only a route holding
@@ -19,7 +19,7 @@ pub struct Server<'a> {
     /// Typst, for a model's answer blocks.
     pub answers: &'a dyn Answers,
     /// The phones that asked to be woken.
-    pub devices: &'a dyn crate::store::Log<String, crate::devices::Device>,
+    pub devices: &'a dyn suzatary_core::store::Log<String, suzatary_core::devices::Device>,
     /// The session-holding model, when there is one.
     pub sessions: &'a dyn Sessions,
 }
@@ -35,8 +35,8 @@ impl<'a> Server<'a> {
 #[cfg(test)]
 mod tests {
     use super::Server;
-    use crate::agent::Agent;
-    use crate::secretary::Secretary;
+    use suzatary_core::agent::Agent;
+    use suzatary_core::secretary::Secretary;
 
     /// Each record is exactly these effects, so widening a role's authority is an edit here too.
     #[test]

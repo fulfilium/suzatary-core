@@ -13,9 +13,9 @@ use axum::extract::{ConnectInfo, Request, State as AxumState};
 use axum::http::uri::{Authority, Uri};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use suzatary_api::gate::{self, Door, Knock, Named};
 use suzatary_base::capability::{Peer, Whois, WhoisError};
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_core::gate::{self, Door, Knock, Named};
 use suzatary_core::signatures::Admitted;
 
 use super::State;
@@ -80,7 +80,7 @@ pub fn door(app_url: &str) -> Option<Door> {
 ///
 /// # Errors
 /// Either refusal, naming `app_url`.
-pub fn door_at(app_url: &str, at: SocketAddr) -> anyhow::Result<suzatary_core::gate::Door> {
+pub fn door_at(app_url: &str, at: SocketAddr) -> anyhow::Result<suzatary_api::gate::Door> {
     let door = door(app_url).with_context(|| {
         format!(
             "[web] app_url {} names no http or https host for the gate to answer at",

@@ -20,6 +20,7 @@ prodrome_core.workspace = true
 prodrome-wasm-exports.workspace = true
 suzatary-base.workspace = true
 suzatary-core = { workspace = true, features = ["wasm"] }
+suzatary-api.workspace = true
 # The EXACT patch of the flake's `wasm-bindgen-cli_0_2_127`, as
 # prodrome-wasm-exports pins it: the generator and the runtime negotiate over a
 # schema version compiled into both.

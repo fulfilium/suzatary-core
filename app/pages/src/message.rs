@@ -1,7 +1,7 @@
 //! One message: its body as text (mail is never markup here), its links, headers and todos.
 
 use serde::Deserialize;
-use suzatary_core::wire::MailPage;
+use suzatary_api::wire::MailPage;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Href, Title};
 use viewtree::kit::para;

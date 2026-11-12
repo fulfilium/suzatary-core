@@ -2045,8 +2045,7 @@ mod tests {
             "{forgot:?}"
         );
 
-        let inbox =
-            suzatary_core::routes::inbox(&mailbox, None, 50, None).expect("the inbox reads");
+        let inbox = suzatary_api::routes::inbox(&mailbox, None, 50, None).expect("the inbox reads");
         assert!(inbox.messages.is_empty(), "{:?}", inbox.messages);
         assert!(
             matches!(mailbox.message(id), Err(MailError::Absent { .. })),

@@ -7,10 +7,10 @@ use suzatary_io::present::Present as _;
 
 use axum::Json;
 use prodrome_core::store::Replica as _;
+use suzatary_api::routes;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::calendar::Occurrence;
 use suzatary_core::health::plugin::PluginName;
-use suzatary_core::routes;
 use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
 };

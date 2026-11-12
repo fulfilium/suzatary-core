@@ -416,7 +416,7 @@ fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
 }
 
 /// Proposal `index`, with the session its tap started.
-pub(crate) fn drawn(
+pub fn drawn(
     stored: &Stored,
     index: usize,
     standing: &Standing,
@@ -500,15 +500,16 @@ fn about_window(
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Place {
+pub struct Place {
     pub(crate) index: usize,
     pub(crate) queued: bool,
     pub(crate) attempt: wire::Attempt,
 }
 
 impl Place {
-    #[cfg(test)]
-    pub(crate) fn at(index: usize) -> Self {
+    #[cfg(any(test, feature = "nothing"))]
+    #[must_use]
+    pub fn at(index: usize) -> Self {
         Self {
             index,
             queued: false,
@@ -517,7 +518,7 @@ impl Place {
     }
 }
 
-pub(crate) fn turn<A: Answers + ?Sized>(
+pub fn turn<A: Answers + ?Sized>(
     answers: &A,
     said: &Said,
     place: Place,
@@ -625,7 +626,7 @@ fn erased(
 }
 
 /// A block the closed world refuses stays its text.
-pub(crate) fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
+pub fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
     suzatary_base::answer::blocks(text)
         .into_iter()
         .map(|block| wire::BlockRow {
@@ -1041,7 +1042,7 @@ fn forward_on_wire(forward: &Forward) -> ProposedAct {
     }
 }
 
-pub(crate) fn proposal(
+pub fn proposal(
     index: usize,
     standing: &Standing,
     draws: &dyn Draw,

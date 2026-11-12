@@ -654,7 +654,7 @@ proptest! {
             .expect("objects")
             .iter()
             .map(|(name, object)| {
-                let sent = serde_json::to_string(&suzatary_core::routes::skeleton_node(name, object)).expect("prints");
+                let sent = serde_json::to_string(&suzatary_api::routes::skeleton_node(name, object)).expect("prints");
                 Parsed::of(serde_json::from_str(&sent).expect("reads back")).expect("a node")
             })
             .collect();
@@ -1124,7 +1124,7 @@ fn describe(entries: &[Entry]) {
 }
 
 /// Not a law: the numbers in the stage-2 report. Run in release with
-/// `cargo test --release -p suzatary-core --test all transcript:: -- --ignored --nocapture`.
+/// `cargo test --release -p suzatary-api --test all transcript:: -- --ignored --nocapture`.
 ///
 /// One store holds every conversation, so its size is the live total: 35 conversations of 100
 /// lines of the live shape, about the 3,472 lines measured on the box. All but the last ten

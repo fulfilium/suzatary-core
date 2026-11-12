@@ -104,7 +104,7 @@ pub struct Instance {
     /// The channels `[notify]` names. `None` is no push, and no push secret is resolved.
     pub notify: Option<NonEmpty<Channel>>,
     /// What the box answers the Android portal at pairing.
-    pub portal: suzatary_core::portal::Portal,
+    pub portal: suzatary_api::portal::Portal,
     pub plugins: Plugins,
 }
 
@@ -465,7 +465,7 @@ impl Instance {
         let (notify, sender) = file.notify.map_or((None, None), |section| {
             (NonEmpty::of(section.channels), section.fcm_sender)
         });
-        let portal = suzatary_core::portal::Portal::of(notify.as_ref(), sender);
+        let portal = suzatary_api::portal::Portal::of(notify.as_ref(), sender);
         let plugins = plugins_of(path, &data, file.cache.as_deref(), file.plugins)?;
         let secretary = file.secretary.rooted(&code, &data);
         let repos = match &coding {

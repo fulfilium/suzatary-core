@@ -377,6 +377,34 @@ impl TemplateId {
     }
 }
 
+/// The secret names `channel` needs: its template's steps.
+#[must_use]
+pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {
+    use crate::connect::{SecretName, StepShape};
+    channel
+        .template()
+        .template()
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            StepShape::Secret {
+                name: SecretName::Fixed(secret),
+                ..
+            } => Some(*secret),
+            StepShape::Secret {
+                name: SecretName::Link,
+                ..
+            }
+            | StepShape::DeviceCode
+            | StepShape::SendingConsent
+            | StepShape::GoogleClient
+            | StepShape::AuthCode
+            | StepShape::SignIn
+            | StepShape::Terminal { .. } => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

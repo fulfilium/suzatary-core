@@ -2,7 +2,7 @@
 //! releases the project chain reads.
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::wire::ReleasesPayload;
+use suzatary_api::wire::ReleasesPayload;
 use suzatary_core::wire::cards::AboutPayload;
 use ts_rs::TS;
 use viewtree::kit::{Reading, para};

@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, HashMap};
 use axum::extract::{RawPathParams, State as AxumState};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::store::StoreError;
-use suzatary_core::wire;
 
 use super::State;
 use super::params::Asked;

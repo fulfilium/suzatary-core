@@ -4,11 +4,11 @@
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
+use suzatary_api::server::Server;
+use suzatary_api::wire::StoreName;
+use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::server::Server;
 use suzatary_core::store::StoreError;
-use suzatary_core::wire::StoreName;
-use suzatary_core::{query, routes, wire};
 
 use super::Chained;
 use super::call::Call;
@@ -129,7 +129,7 @@ impl Params for Written {
 /// actor the request was proven for.
 pub fn take(
     call: &Call<prodrome_core::event::Actor, Written, Literals>,
-) -> Result<Json<wire::lines::ReceiptPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::lines::ReceiptPayload>, Refusal> {
     let topics = call.state.first.caps.secretary.topics;
     let (posted, actor, frontiers) = (&call.body.posted(), &call.guard, &call.state.frontiers);
     match call.params {
@@ -151,7 +151,7 @@ impl Params for LinesSince {
 /// `GET /api/stores/lines/skeleton?since=<frontier>`: what the replica lacks, without literals.
 pub fn skeleton(
     call: &Call<Reader, LinesSince, ()>,
-) -> Result<Json<wire::lines::SkeletonPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::lines::SkeletonPayload>, Refusal> {
     let caps = call.state.first.caps;
     routes::lines_skeleton(
         caps.secretary.conversations,

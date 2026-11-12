@@ -316,7 +316,7 @@ enum Binds {
 
 /// The door line: a mismatch is an alarm only where the port compared is the one `serve` will
 /// bind; in a shell it says what the unit binds and what a hand-run `serve` would.
-fn door_said(door: Option<suzatary_core::gate::Door>, binds: Binds) -> String {
+fn door_said(door: Option<suzatary_api::gate::Door>, binds: Binds) -> String {
     match (door, binds) {
         (None, _) => "none: the gate cannot read app_url, and serve will not start".to_owned(),
         (Some(door), Binds::Unit(port) | Binds::Shell(port)) if door.port() == port => {

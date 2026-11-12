@@ -395,7 +395,7 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
     );
     assert_eq!(
         by_tap,
-        vec!["app/core/src/secretary/routes.rs".to_owned()],
+        vec!["app/api/src/secretary/routes.rs".to_owned()],
         "given_by_tap callers"
     );
 }
@@ -438,7 +438,16 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     let mut forgetting: Vec<String> = Vec::new();
     let mut revoking: Vec<String> = Vec::new();
     // The cli's test support holds the fixture, compiled into the dev binary.
-    for crate_dir in ["core", "io", "cli", "plugin", "wasm", "cli/tests/support"] {
+    for crate_dir in [
+        "base",
+        "core",
+        "api",
+        "io",
+        "cli",
+        "plugin",
+        "wasm",
+        "cli/tests/support",
+    ] {
         let root = app.join(crate_dir);
         let mut walk = vec![if crate_dir.contains("tests") {
             root
@@ -484,10 +493,10 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         editing,
         [
+            "api/src/secretary/routes.rs",
             "cli/src/commands/serve/google.rs",
             "cli/src/commands/serve/proposals.rs",
             "cli/tests/support/fixture.rs",
-            "core/src/secretary/routes.rs",
         ],
         "callers of the connection edits"
     );
@@ -495,9 +504,9 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         forgetting,
         [
+            "api/src/secretary/routes.rs",
             "cli/src/commands/serve/mail_cache.rs",
             "cli/tests/support/fixture.rs",
-            "core/src/secretary/routes.rs",
         ],
         "callers of the mail delete"
     );

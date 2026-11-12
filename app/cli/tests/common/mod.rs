@@ -488,7 +488,7 @@ fn dialled(
     deploying: Deployment,
     this_box: Vec<IpAddr>,
     address: SocketAddr,
-) -> (Chained, Arc<Deployment>, suzatary_core::gate::Door) {
+) -> (Chained, Arc<Deployment>, suzatary_api::gate::Door) {
     let whois: &'static dyn Whois = if this_box.is_empty() {
         record.whois
     } else {
@@ -1510,7 +1510,7 @@ impl ActRecorder {
     }
 }
 
-impl suzatary_core::secretary::routes::Perform for ActRecorder {
+impl suzatary_api::secretary::routes::Perform for ActRecorder {
     fn begin(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
@@ -1539,7 +1539,7 @@ pub struct SignsIn {
     signing: Arc<serve::sign_ins::SignIns>,
 }
 
-impl suzatary_core::secretary::routes::Perform for SignsIn {
+impl suzatary_api::secretary::routes::Perform for SignsIn {
     fn begin(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
@@ -1987,7 +1987,7 @@ impl SettingsFixture {
     }
 }
 
-impl suzatary_core::secretary::routes::Post for Recorder {
+impl suzatary_api::secretary::routes::Post for Recorder {
     fn send(
         &self,
         draft: &suzatary_core::secretary::proposal::Draft,
@@ -2021,7 +2021,7 @@ pub struct FailsFirst {
     sent: Arc<Recorder>,
 }
 
-impl suzatary_core::secretary::routes::Post for FailsFirst {
+impl suzatary_api::secretary::routes::Post for FailsFirst {
     fn send(
         &self,
         draft: &suzatary_core::secretary::proposal::Draft,
@@ -2530,8 +2530,8 @@ impl Fakes {
         }
     }
 
-    pub fn server(&self) -> suzatary_core::server::Server<'_> {
-        suzatary_core::server::Server {
+    pub fn server(&self) -> suzatary_api::server::Server<'_> {
+        suzatary_api::server::Server {
             secretary: self.secretary(),
             whois: &self.whois,
             notify: &self.notify,
@@ -2865,7 +2865,7 @@ impl suzatary_core::settings::Verify for VerifyRecorder {
 }
 
 /// The record a started server serves.
-type Effects = suzatary_core::server::Server<'static>;
+type Effects = suzatary_api::server::Server<'static>;
 
 /// A change a scene makes to the fakes' record.
 type Swap = dyn FnOnce(Effects) -> Effects;
@@ -3170,7 +3170,7 @@ impl Server {
                 .map_or_else(serve::Workers::new, serve::Workers::with_idle),
         );
         let (sent, acts) = (Arc::new(Recorder::new()), Arc::new(ActRecorder::new()));
-        let postman: Arc<dyn suzatary_core::secretary::routes::Post + Send + Sync> =
+        let postman: Arc<dyn suzatary_api::secretary::routes::Post + Send + Sync> =
             Arc::new(FailsFirst {
                 failures: Mutex::new(self.failures.into()),
                 sent: Arc::clone(&sent),
@@ -3355,7 +3355,7 @@ fn performer(
     ),
     firing: suzatary_cli::commands::coding::Firing,
     google: Arc<suzatary_io::google::Grants>,
-) -> Arc<dyn suzatary_core::secretary::routes::Perform + Send + Sync> {
+) -> Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync> {
     use suzatary_cli::commands::coding::Coder;
     use suzatary_cli::commands::secretary::Acting;
     match chosen {
@@ -4044,14 +4044,14 @@ pub fn held_lines(base: &str) -> suzatary_core::secretary::held_replica::HeldRep
     .expect("the skeleton reads");
     let lacking = replica.lacking(&suzatary_core::secretary::outlines::Scope::Whole);
     for ask in
-        suzatary_core::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
+        suzatary_api::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
     {
         let mut answer = get(&format!(
             "{base}/api/stores/lines/content?hashes={}",
             ask.join(",")
         ));
         assert_eq!(status(&answer), 200, "the lines' content answers");
-        let content: suzatary_core::wire::ContentPayload =
+        let content: suzatary_api::wire::ContentPayload =
             serde_json::from_value(body_json(&mut answer)).expect("a content answer");
         replica
             .take(content.objects)
@@ -4094,13 +4094,13 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
             .find_map(|(name, value)| (*name == key).then_some(*value))
     };
     let window = suzatary_core::secretary::readings::Window {
-        before: suzatary_core::query::turn_before(asked("before")).expect("a before"),
-        limit: suzatary_core::query::turn_limit(
+        before: suzatary_api::query::turn_before(asked("before")).expect("a before"),
+        limit: suzatary_api::query::turn_limit(
             asked("limit"),
             suzatary_core::secretary::readings::DEFAULT_TURN_WINDOW,
         )
         .expect("a limit"),
-        about: suzatary_core::query::about(asked("about")).expect("an about"),
+        about: suzatary_api::query::about(asked("about")).expect("an about"),
     };
     let (inbox, conversations) = replicas(base);
     let stored = conversations

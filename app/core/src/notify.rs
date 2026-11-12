@@ -85,34 +85,6 @@ fn is_decision(record: &crate::record::Authored) -> bool {
     record.payload.is_decision()
 }
 
-/// The secret names `channel` needs: its template's steps.
-#[must_use]
-pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {
-    use crate::connect::{SecretName, StepShape};
-    channel
-        .template()
-        .template()
-        .steps
-        .iter()
-        .filter_map(|step| match step {
-            StepShape::Secret {
-                name: SecretName::Fixed(secret),
-                ..
-            } => Some(*secret),
-            StepShape::Secret {
-                name: SecretName::Link,
-                ..
-            }
-            | StepShape::DeviceCode
-            | StepShape::SendingConsent
-            | StepShape::GoogleClient
-            | StepShape::AuthCode
-            | StepShape::SignIn
-            | StepShape::Terminal { .. } => None,
-        })
-        .collect()
-}
-
 /// How often the watcher looks at the tip.
 pub const POLL_SECONDS: u64 = 30;
 /// How many seconds of stillness before one push summarises what moved.

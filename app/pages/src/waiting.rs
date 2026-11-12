@@ -5,13 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::NaiveDate;
 use serde::Deserialize;
+use suzatary_api::wire::{DrawnPayload, FoldPayload, WaitingPayload};
 use suzatary_base::reference::Reference;
 use suzatary_core::secretary::store::Unheld;
 use suzatary_core::wire::todo::{Block, Entry, EntryState};
 use suzatary_core::wire::topics::{
     InboxProposal, InboxProposalsPayload, InboxState, ProposalRow, UnplacedProposal,
 };
-use suzatary_core::wire::{DrawnPayload, FoldPayload, WaitingPayload};
 use ts_rs::TS;
 use viewtree::kit::Reading;
 

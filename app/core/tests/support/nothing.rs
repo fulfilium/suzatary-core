@@ -22,7 +22,6 @@ use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::briefings::{BriefingError, Briefings};
 use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use crate::secrets::{MailGrants, Secrets};
-use crate::server::Server;
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 use crate::weather::{Weather, WeatherError};
 use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
@@ -127,21 +126,6 @@ impl Secretary<'static> {
             tapped: &Nothing,
             configuration: &Nothing,
             watches: &Nothing,
-        }
-    }
-}
-
-impl Server<'static> {
-    /// The server's record, every field inert.
-    #[must_use]
-    pub fn nothing() -> Self {
-        Server {
-            secretary: Secretary::nothing(),
-            whois: &Nothing,
-            notify: &Nothing,
-            answers: &Nothing,
-            devices: &Nothing,
-            sessions: &Nothing,
         }
     }
 }

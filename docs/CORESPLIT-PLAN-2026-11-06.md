@@ -205,6 +205,28 @@ plus one line in `routes.rs`. If that case is not clearly faster, the order is b
 table. If it is, the rest go bottom-up from `record`, and `secretary` comes off the top once 29a
 has removed the edges into it.
 
+**PR 12 (api).**
+- **First:** `line_header` and `husks` move into the lines' cut. The layer guard now reads a file up
+  to its `#[cfg(test)]` module, not to its first `#[cfg(test)]` item. That found `settings ->
+  notify`, which `channel_secrets` moving into `connect` removes.
+- **Then `app/api`:** it takes `clienterror`, `gate`, `portal`, `query`, `routes`,
+  `secretary/routes`, `server` and wire.rs's 71 types, with the generator and six integration
+  tests.
+- **`stores` stays in core under the api cut,** because the store's `InMemory` takes its hold from
+  `Store`. The store crate's PR settles that.
+
+Measured with `cargo check --workspace --all-targets`, one line edited, the second run of each:
+
+| one-line edit in | before | after |
+|---|---|---|
+| `routes.rs` | 42.7 s | 23.2 s |
+| `secretary` | 44.3 s | 39.4 s |
+| base | 41.5 s | 40.5 s |
+
+An edit in `routes.rs` now rechecks `api` (about 2 s) and the CLI, not core. Core's library check
+fell from 17.3 to 15.1 s. The rest goes bottom-up from `record`, and `secretary` comes off the
+top once 29a has removed the edges into it.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

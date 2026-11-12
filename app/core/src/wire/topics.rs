@@ -396,3 +396,37 @@ pub struct ConversationsPayload {
     /// Newest first.
     pub conversations: Vec<ConversationRow>,
 }
+
+impl From<&crate::attachment::Attachment> for AttachmentRow {
+    fn from(attachment: &crate::attachment::Attachment) -> Self {
+        Self {
+            id: attachment.id.to_string(),
+            media_type: attachment.media_type.as_str().to_owned(),
+            name: attachment.name.clone().unwrap_or_default(),
+            private: attachment
+                .private
+                .as_ref()
+                .map(|copy| copy.path.to_string())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+impl From<&crate::secretary::words::Gone> for TurnGone {
+    fn from(gone: &crate::secretary::words::Gone) -> Self {
+        use crate::secretary::erasure::Erasure;
+        use crate::secretary::words::Gone;
+        match gone {
+            Gone::Erased {
+                erasure: Erasure::Asked { by },
+            } => Self::Asked {
+                by: by.as_str().to_owned(),
+            },
+            Gone::Erased {
+                erasure: Erasure::Forgot { fact },
+            } => Self::Forgot { fact: *fact },
+            Gone::Missing => Self::Missing,
+            Gone::Withheld => Self::Withheld,
+        }
+    }
+}

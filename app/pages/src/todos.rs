@@ -6,11 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use suzatary_api::wire::{Authoring, BriefingsPayload, NewTodo};
 use suzatary_base::tree::Tree;
 use suzatary_core::todo::{Price, TodoFields};
 use suzatary_core::wire::cards::Overview;
 use suzatary_core::wire::todo::{Entry, Fulfillment};
-use suzatary_core::wire::{Authoring, BriefingsPayload, NewTodo};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaControls, AriaCurrent, AriaExpanded, AriaLabel, AriaPressed, Class, Data, Disabled,
@@ -1354,7 +1354,7 @@ impl Model {
                 Vec::new()
             }
             Hold::Waiting => {
-                self.waiting = match read::<Option<suzatary_core::wire::WaitingPayload>>(reading) {
+                self.waiting = match read::<Option<suzatary_api::wire::WaitingPayload>>(reading) {
                     Reading::Val { v: Some(v) } => v.count,
                     Reading::Val { v: None } | Reading::Loading | Reading::Error { .. } => 0,
                 };

@@ -78,9 +78,20 @@ fn cut_of<'a>(module: &str, owner: &'a BTreeMap<String, String>) -> Option<&'a S
         .find_map(|n| owner.get(&parts[..n].join("/")))
 }
 
-/// The text before the file's own `#[cfg(test)]`, with `//` comments gone.
+/// The text before the file's `#[cfg(test)]` module, with `//` comments gone: a `#[cfg(test)]` on
+/// one item does not end the production code.
 fn production(text: &str) -> String {
-    let before = text.find("\n#[cfg(test)]").map_or(text, |at| &text[..at]);
+    let before = text
+        .match_indices("\n#[cfg(test)]\n")
+        .find(|(at, _)| {
+            let item = text[at + "\n#[cfg(test)]\n".len()..].trim_start();
+            let item = item
+                .strip_prefix("pub(crate) ")
+                .or_else(|| item.strip_prefix("pub "))
+                .unwrap_or(item);
+            item.starts_with("mod ")
+        })
+        .map_or(text, |(at, _)| &text[..at]);
     before
         .lines()
         .map(|line| {

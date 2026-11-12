@@ -35,7 +35,7 @@ app/target/
 # 724 MB of one, app/target-master/, on 2026-09-29).
 app/target-*/
 
-# The wire's TypeScript, generated from app/core/src/wire.rs by
+# The wire's TypeScript, generated from app/api/src/wire.rs by
 # `nix build .#suzatary-wire-ts` and copied in by scripts/build-web.sh. Output,
 # not source — committing it would be a second declaration of the wire,
 # kept in step by hand.

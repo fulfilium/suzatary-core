@@ -5,20 +5,12 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
-    # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §2). It was
-    # `prodrome/` in this tree until 2026-09-09; it is
-    # https://github.com/fulfilium/prodrome now, public under MIT OR Apache-2.0,
-    # and this repository takes it the way it takes any other dependency.
+    # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §2), public under MIT OR Apache-2.0.
     #
-    # PINNED TO A COMMIT, and to the SAME commit `app/Cargo.toml` names. The
-    # binary links the crate through cargo and the browser fetches the wasm
-    # through this input, and if the two shas ever parted the page and the
-    # server would be two readings of one spec — which is the seam §1 exists to
-    # forbid. Moving the pin is THREE places in one commit: this url (with
-    # `flake.lock`), the `rev` in `app/Cargo.toml`, and `app/Cargo.lock`'s
-    # `source` (and the crate's version with it). It was four until crane
-    # (2026-09-13): the `outputHashes` entry that vendored the checkout by hash
-    # is gone, because crane fetches a git dependency at the lock's own rev.
+    # PINNED TO A COMMIT, the SAME one `app/Cargo.toml` names: the binary links the crate and
+    # the browser fetches the wasm from this input, and two shas would be two readings of one
+    # spec. Moving the pin is three places in one commit: this url (with `flake.lock`), the
+    # `rev`s in `app/Cargo.toml`, and `app/Cargo.lock`.
     prodrome.url = "github:fulfilium/prodrome/a0e99598eb61866c447f386dcb75557b0520dad4";
     # One nixpkgs in the closure. The Prodrome's own
     # flake pins its own — that is what its CI builds against — but the two
@@ -31,16 +23,9 @@
     # Its Typst package's look, the same design system as ours (below).
     prodrome.inputs.typst-design.follows = "typst-design";
 
-    # THE RUST BUILD IS CRANE (2026-09-13; the owner: "there are tools to enable
-    # nix caching in github CI … this is important to fix"). Before it, six
-    # derivations here each compiled the whole workspace — every dependency,
-    # from scratch, inside their own sandbox — so a CI run was about eighty
-    # minutes of building tokio, axum and rustls over and over, and the store
-    # cache never held what the next run needed because any edit under app/
-    # changed all six hashes. crane splits the dependencies into one
-    # derivation keyed on Cargo.lock alone (`cargoArtifacts` below), which the
-    # store cache carries across runs, and every build after it compiles the
-    # four workspace crates and nothing else.
+    # THE RUST BUILD IS CRANE: the dependencies are one derivation keyed on Cargo.lock alone
+    # (`cargoArtifacts` below), which the store cache carries across runs, so every build after
+    # it compiles the workspace crates and nothing else.
     crane.url = "github:ipetkov/crane";
 
     # THE LOOK, AS AN INPUT: the owner's design system, the one source of
@@ -52,14 +37,8 @@
     typst-design.url = "github:bmabsout/typst-design/79d9dbafcd6457f269c3cd8b6f88c0ac27e35851";
     typst-design.inputs.nixpkgs.follows = "nixpkgs";
 
-    # THE JUNK CHURN SEED'S TWO SOURCES (the owner, 2026-09-27: "the right way
-    # is to use one of those lists of spam websites that are available on
-    # GitHub as the seed + ours"). `flake = false`: neither is a flake, so
-    # each resolves to a plain fetched tree, locked by hash in `flake.lock`
-    # exactly like any other input, and bumped by the same
-    # `update-flake-lock.yml` (`nix flake update` touches every input
-    # uniformly). `suzatary-junk-seed` below is the one reader of both; see
-    # its own comment for the files it reads and why.
+    # THE JUNK CHURN SEED'S TWO SOURCES: public spam-domain lists. `flake = false`: each is a
+    # plain tree, locked by hash in `flake.lock` like any input. `suzatary-junk-seed` reads both.
     disposable-email-domains = {
       url = "github:disposable-email-domains/disposable-email-domains";
       flake = false;
@@ -187,14 +166,9 @@
         # Prodrome is the database it is built on — one direction (§1, §2).
         # =====================================================================
 
-        # THE SOURCE IS ONE TREE NOW, AND STILL NOT THE REPOSITORY. It was two
-        # until the split (§8.8): `app/core` reached `../prodrome/core` by path,
-        # so the sandbox had to hold that directory too. The database arrives
-        # through cargo's git fetch and this vendoring below, so the fileset is
-        # `app/` and the three files its tests read — and nothing else.
-        # Narrowed with `fileset` rather than handed `./.`, so a briefing, a
-        # commit or a rendered document does not change this derivation's hash,
-        # and so `target/` never reaches the store.
+        # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ, NOT THE REPOSITORY: a `fileset`, so a
+        # briefing, a commit or a document does not change this hash, and `target/` never
+        # reaches the store.
         appSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -203,6 +177,7 @@
             ./app/cli
             ./app/core
             ./app/base
+            ./app/api
             ./app/io
             ./app/plugin
             ./app/plugin-fence
@@ -216,59 +191,25 @@
             # The site vouches for the Android app, and a test pins the file
             # that says so; the sandbox has to hold it to run that test.
             ./web/static/.well-known/assetlinks.json
-            # THE SAMPLE, NOT THE DEPLOYMENT (docs/DATASPLIT-PLAN-2026-09-14.md
-            # §3/§7 commit 3): `instance.toml` and `mbsyncrc` are this box's
-            # data now, so a build sandbox is handed neither. `tests/init.rs`
-            # pins `instance.sample.toml` as `suzatary init`'s own output, and
-            # the tests that used to read the real `instance.toml`/`mbsyncrc`
-            # for the `Patterns`↔`inbox_folders` invariant now locate this
-            # box's own deployment through `Instance::locate` and skip when
-            # it is absent — which it is, here.
+            # THE SAMPLE, NOT THE DEPLOYMENT: `tests/init.rs` pins it as `suzatary init`'s output;
+            # the tests that read this box's deployment skip when it is absent, as it is here.
             ./instance.sample.toml
           ];
         };
 
-        # THE BUILD STAMP TRACKS `appSrc`, NOT THE WHOLE TREE
-        # (`todo:suzatary/resolvecopiestree`, 2026-09-21). The comment above
-        # is true of `appSrc`'s OWN hash, but `suzatary-app` below used to
-        # stamp `SUZATARY_BUILD` with `self.shortRev`/`self.dirtyShortRev` —
-        # the WHOLE repository's HEAD — so a triage pass's own commit (one
-        # object under `events-*/`, `HEAD`) or a docs edit changed that
-        # stamp, and with it `.#suzatary`'s drvPath: a chain write forced a
-        # full release recompile of three crates (measured over 10 minutes),
-        # of a binary whose OWN source had not moved a byte. `appSrc`'s store
-        # path is already a pure hash of exactly the files this binary reads
-        # (`lib.fileset.toSource` above); its hash prefix is the stamp
-        # instead, so `build` on `GET /api/about` changes exactly when the
-        # binary's own inputs do — never on a chain write, a briefing or a
-        # doc. This RETIRES the promise `appVersionName` still makes below
-        # ("the same short rev the APK's version name carries, so a phone
-        # and a box can be compared by eye"): an APK's version and this
-        # field no longer name the same git commit. That comparison cost a
-        # full release rebuild on every chain write, which nobody asked for
-        # at that price. If it is needed again, `appVersionName` would have
-        # to move to this same scheme rather than this field moving back to
-        # git's.
+        # THE BUILD STAMP TRACKS `appSrc`, NOT THE WHOLE TREE: its store path is a hash of exactly
+        # the files the binary reads, so `build` on `GET /api/about` changes when the binary's
+        # inputs do, never on a chain write or a doc. An APK's version still names a git commit,
+        # so the two are no longer compared by eye.
         appSrcBuild = builtins.substring 0 8 (builtins.baseNameOf (toString appSrc));
 
         # `cargoRoot` is where the lockfile lives and `buildAndTestSubdir` is
         # where cargo runs; both are `app`, because the source root is the
         # repository and the workspace is one level in.
         #
-        # ONE DEPENDENCY BUILD, SHARED BY EVERY DERIVATION BELOW (crane,
-        # 2026-09-13). `cargoArtifacts` is the workspace's dependencies compiled
-        # once against a dummy copy of the crates, so its hash moves only when
-        # `app/Cargo.lock` or the toolchain does — never when a line of this
-        # application changes. The release, the fixture, the two checks and the
-        # two generators all start from it and compile the three workspace
-        # crates and nothing else. On a fresh store that is one dependency build
-        # instead of six; on CI's restored store it is none.
-        #
-        # THE ONE GIT DEPENDENCY IS VENDORED FROM THE LOCK. crane fetches a
-        # `git+…` dependency at the rev the lockfile names, so moving the
-        # Prodrome pin is now THREE places — `app/Cargo.toml`'s `rev`,
-        # `app/Cargo.lock`, and `inputs.prodrome.url` above (with `flake.lock`)
-        # — where it used to be four with an `outputHashes` entry here.
+        # ONE DEPENDENCY BUILD, SHARED BY EVERY DERIVATION BELOW: `cargoArtifacts` is the
+        # dependencies compiled against a dummy copy of the crates, so its hash moves only with
+        # `app/Cargo.lock` or the toolchain. The git dependency is vendored at the lock's rev.
         #
         # THE WORKSPACE IS ONE LEVEL IN, so cargo is told where the manifest is
         # and where to put `target/`: crane restores the dependency artifacts
@@ -325,12 +266,15 @@
           ./app/wasm/Cargo.toml
           ./app/core/Cargo.toml
           ./app/base/Cargo.toml
+          ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
+          ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
           ./app/core/tests/support
           ./app/base/tests/support
+          ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
@@ -350,13 +294,8 @@
         });
         coreCrate = args: craneLib.buildPackage (coreArgs // { cargoArtifacts = suzatary-core-deps; } // args);
 
-        # `nix build .#suzatary-bin` — the one binary (§2). Pure: the dependency
-        # tree is vendored from app/Cargo.lock, nothing here reaches the
-        # network, and there is no OpenSSL to link against (rustls, §2).
-        # `doCheck` is OFF here since 2026-09-13: the laws are
-        # `checks.suzatary-core`, which `nix flake check` and CI build from the
-        # same `cargoArtifacts`, and running them a second time inside the
-        # release was a third of CI's hour for a verdict already taken.
+        # `nix build .#suzatary-bin`, the one binary: vendored from app/Cargo.lock, offline, no
+        # OpenSSL. `doCheck` is off: the laws are `checks.suzatary-core`, from the same artifacts.
         #
         # IT DOES NOT READ THE RELEASE: no attribute here names `app/release.toml`, and
         # `appSrc` does not hold it, so a train's release commit leaves this derivation
@@ -459,8 +398,10 @@
                 ./app/wasm/Cargo.toml
                 ./app/core/Cargo.toml
                 ./app/base/Cargo.toml
+                ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
+                ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
               ] ++ crates);
@@ -552,6 +493,7 @@
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
+              ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -600,6 +542,7 @@
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
+              ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -632,25 +575,11 @@
         # only when a Typst view is first drawn. `SIZES` prints raw and brotli bytes.
         suzatary-typst-wasm = prodrome.packages.${system}.prodrome-typst-wasm;
 
-        # THE FRONTEND'S WIRE TYPES, GENERATED (§2, last bullet; §6.6).
-        #
-        # `cargo test -p suzatary-core` writes `wire.ts` from the Rust
-        # declarations when `TS_RS_EXPORT_DIR` is set — ts-rs's export-on-test,
-        # aimed at $out — and `payload.ts`, the decoders folded from it. A
-        # DERIVATION rather than a step inside scripts/build-web.sh for the
-        # reason suzatary-wasm is a derivation: that script is a bundler, Nix
-        # is the build, and a frontend build that shelled out to cargo would
-        # need a toolchain and a crates.io fetch in the one shell that is meant
-        # to need neither.
-        #
-        # IT AND THE VECTORS BELOW ARE BUILT FROM THE CORE ALONE (2026-10-10). On
-        # `appSrc` with the release `cargoArtifacts`, each compiled every dependency
-        # again in cargo's own profiles (nine minutes on the gate's 4 cores), twice a
-        # gate: the private tree's and the public one's, whose `appSrc` differs by
-        # the live pins it leaves out. `coreSrc` is the manifests, `app/core` and the
-        # one file its tests include from beside it, so both trees give one
-        # derivation, rebuilt only when the core moves; `suzatary-core-deps` is their
-        # dependencies in cargo's own dev and test profiles, keyed on the lock.
+        # THE FRONTEND'S WIRE TYPES, GENERATED: `cargo test -p suzatary-api` writes `wire.ts` and
+        # `payload.ts` when `TS_RS_EXPORT_DIR` is set. A derivation, so the frontend's shell needs no
+        # toolchain. It and the vectors below build from `coreSrc` alone (the manifests and the
+        # model crates), so the private tree and the public one give one derivation, rebuilt only
+        # when those crates move.
         suzatary-wire-ts = coreCrate {
           pname = "suzatary-wire-ts";
           doCheck = false;
@@ -660,7 +589,7 @@
           buildPhase = ''
             runHook preBuild
             mkdir -p $out
-            TS_RS_EXPORT_DIR=$out cargo test --offline -p suzatary-core --lib -- wire::tests::generates
+            TS_RS_EXPORT_DIR=$out cargo test --offline -p suzatary-api --lib -- wire::tests::generates
             runHook postBuild
           '';
           installPhase = ''
@@ -702,34 +631,11 @@
           paths = [ suzatary-wire-ts suzatary-pages-ts ];
         };
 
-        # THE FRONTEND BUNDLE, AS A BUILD (`todo:suzatary/servedisabuild`,
-        # 2026-09-20). Before this, `instance.toml`'s `dist` named `web/dist` —
-        # a gitignored DIRECTORY in the dev checkout, which is how a rebuild
-        # during code review overwrote the bundle a running server was serving
-        # and broke every page for two days: the binary cannot be clobbered
-        # because it is content-addressed (`.#suzatary`, resolved by
-        # `scripts/app-bin.sh`) and the bundle could be, because it was a
-        # folder. Same doctrine as the binary and the document, applied to the
-        # one build artefact that had not received it yet.
-        #
-        # THIS RUNS THE SAME `scripts/build-web.sh` A DEV LOOP RUNS — not a
-        # second bundler invocation with different flags. That script already
-        # takes its every impure input as an env var (`SUZATARY_PRODROME_WASM`,
-        # `SUZATARY_WIRE_TS`) and already copies out of the read-only store and
-        # `chmod u+w`s what it copies, because `serve-web.sh` was already
-        # handing it `SUZATARY_WIRE_TS` from a store path before this — so
-        # nothing in the script changed to make it buildable in a sandbox; a
-        # derivation is one more caller supplying the same two variables and
-        # reading `web/dist` back out. The innerHTML
-        # doors and the `as` cast ceiling run unconditionally inside that
-        # script, with no `--dev`-only skip, so they gate THIS build exactly as
-        # they gate a dev one: a violation fails `nix build .#suzatary-web`,
-        # not only `scripts/web-test.sh`.
-        #
-        # A PLAIN `stdenv.mkDerivation`, not `appCrate`: this compiles no Rust
-        # at all (the wire's TypeScript arrives already generated, from
-        # `suzatary-wire-ts`), so it needs esbuild/tsc/node on `PATH` and
-        # nothing from `cargoArtifacts`.
+        # THE FRONTEND BUNDLE, AS A BUILD: content-addressed like the binary, so a rebuild in a dev
+        # checkout cannot overwrite the bundle a running server serves. It runs the same
+        # `scripts/build-web.sh` a dev loop runs, whose innerHTML doors and `as` cast ceiling gate
+        # this build too. A plain `stdenv.mkDerivation`: it compiles no Rust, so it needs
+        # esbuild, tsc and node, and nothing from `cargoArtifacts`.
         suzatary-web = pkgs.stdenv.mkDerivation {
           pname = "suzatary-web";
           version = "0";
@@ -816,31 +722,13 @@
           meta.description = "fpl/series conformance vectors, regenerated from prodrome's own literal grammar for web/test/wasm.test.ts";
         };
 
-        # `nix build .#suzatary-junk-seed` — THE MONTHLY JUNK SWEEP'S CHURN
-        # SEED (the CLAUDE history's grep point: 2026-09-27, "the right way
-        # is to use one of those lists of spam websites that are available on
-        # GitHub as the seed + ours"). Normalises two maintained public lists —
-        # `disposable-email-domains`'s single file, and four of
-        # `blocklistproject/Lists`' `alt-version/*-nl.txt` files, each `#`
-        # comments then domains, one per line (checked against the fetched
-        # source, 2026-09-27) — into ONE sorted, deduplicated `domains.txt`
-        # plus a `sources.txt` naming each source's rev and the count it
-        # contributed. `SUZATARY_JUNK_SEED` (`nix/nixos-module.nix`'s
-        # `junkSeed` option) points a deployment at this derivation's
-        # `domains.txt`; the binary reads it fresh each time a digest runs
-        # (`suzatary_io::junk::OutlookJunk::churn`), never resolving or
-        # holding it here. NO NETWORK AT RUNTIME: both sources are fetched by
-        # the flake input mechanism at evaluation time, locked by hash in
-        # `flake.lock`, and this build reads them from the store like any
-        # other input.
-        #
-        # `cargo run --example junk_seed`, the same shape as
-        # `suzatary-vector-json` above: a pure Rust reader
-        # (`app/core/examples/junk_seed.rs`, over
-        # `suzatary_core::mail::junk::normalize_seed_file`) rather than a shell
-        # pipeline, so the ONE normaliser a digest's own runtime types trust is
-        # exactly the one this build ran, and it is unit-tested in
-        # `app/core/src/mail/junk.rs` like anything else in that crate.
+        # `nix build .#suzatary-junk-seed`: THE MONTHLY JUNK SWEEP'S CHURN SEED. It normalises the
+        # two public lists above into one sorted, deduplicated `domains.txt`, plus a `sources.txt`
+        # naming each source's rev and count. `SUZATARY_JUNK_SEED` (`nix/nixos-module.nix`) points
+        # a deployment at it, and the binary reads it fresh at each digest. No network at run
+        # time: both sources are flake inputs, locked by hash. It runs `cargo run --example
+        # junk_seed` over `suzatary_core::mail::junk::normalize_seed_file`, so the build and the
+        # digest share one tested normaliser.
         suzatary-junk-seed = appCrate {
           pname = "suzatary-junk-seed";
           doCheck = false;

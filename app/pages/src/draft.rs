@@ -104,7 +104,7 @@ fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
                 effects.push(Effect::Post {
                     ask: Ask::Open,
                     path: "/api/secretary/conversations".to_owned(),
-                    body: Body::Titling(suzatary_core::wire::Titling {
+                    body: Body::Titling(suzatary_api::wire::Titling {
                         title: m.name.clone(),
                     }),
                 });

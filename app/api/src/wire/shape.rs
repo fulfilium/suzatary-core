@@ -365,7 +365,7 @@ pub fn maps<'a>(
 }
 
 const DECODERS_HEADER: &str = "\
-// GENERATED FROM app/core/src/wire.rs BY `cargo test -p suzatary-core`, beside wire.ts.
+// GENERATED FROM app/api/src/wire.rs BY `cargo test -p suzatary-api`, beside wire.ts.
 // DO NOT EDIT: each decoder is its type's fold (`suzatary_core::wire::shape`), so a wire
 // change is one edit, in the Rust; tsc checks every decoder against the type it was read from.
 

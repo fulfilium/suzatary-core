@@ -40,7 +40,7 @@ pub fn census(conversations: Conversations<'_>, large: usize) -> Result<Census, 
     let graph = conversations.lines.graph()?;
     let names: Vec<_> = graph.objects().map(|(name, _)| name.clone()).collect();
     let sizes = conversations.lines.sizes(&names)?;
-    let husks = crate::routes::husks(conversations, &graph, &names)?;
+    let husks = crate::secretary::husks::husks(conversations, &graph, &names)?;
     let mut census = Census::default();
     for (name, bytes) in names
         .iter()

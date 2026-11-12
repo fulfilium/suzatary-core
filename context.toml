@@ -154,6 +154,13 @@ name = "core"
 path = "app/core"
 shape = "crate"
 depends = ["base", "prodrome-core", "prodrome-wasm-exports"]
+scripts = []
+
+[[unit]]
+name = "api"
+path = "app/api"
+shape = "crate"
+depends = ["base", "core", "prodrome-core"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
@@ -174,14 +181,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["base", "core", "io", "plugin", "prodrome-core"]
+depends = ["api", "base", "core", "io", "plugin", "prodrome-core"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["base", "core", "prodrome-core", "prodrome-wasm-exports"]
+depends = ["api", "base", "core", "prodrome-core", "prodrome-wasm-exports"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]
@@ -195,7 +202,7 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["base", "core", "prodrome-core", "viewtree"]
+depends = ["api", "base", "core", "prodrome-core", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]
@@ -225,12 +232,12 @@ path = "web"
 shape = "web"
 # The modules the page and the service worker load; their exports are the web unit's interface.
 entries = ["web/src/boot.ts", "web/src/main.ts", "web/src/sw.ts", "web/src/typst/worker.ts", "web/src/prodrome/worker.ts"]
-depends = ["core", "pages", "prodrome-typst-wasm", "typst-design", "viewtree", "wasm"]
+depends = ["api", "pages", "prodrome-typst-wasm", "typst-design", "viewtree", "wasm"]
 scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh", "scripts/web-static.sh", "scripts/web-test.sh", "scripts/web-e2e.sh", "scripts/wire.sh", "scripts/gen-tokens.mjs", "scripts/typst-packages.mjs"]
 
 [unit.witnesses]
-"wire/generated/wire" = "core"
-"wire/generated/payload" = "core"
+"wire/generated/wire" = "api"
+"wire/generated/payload" = "api"
 "wire/generated/pages" = "pages"
 "views_bg.wasm" = "pages"
 "prodrome_bg.wasm" = "wasm"

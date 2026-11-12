@@ -102,7 +102,7 @@ It depends on core and viewtree. Start at `lib.rs` and `runtime.rs`.
 **web** (`web/`). The frontend: TypeScript, one esbuild bundle, no framework, no npm. It owns
 the shell (`src/app/`, `src/shell/`), the replicas' sync (`src/prodrome/`), the painter of the
 pages' patches (`src/painter/`), the DOM door (`src/view/dom.ts`) and the one door for Typst's
-HTML (`src/rich.ts`). Its wire types and decoders are generated from `app/core/src/wire.rs`
+HTML (`src/rich.ts`). Its wire types and decoders are generated from `app/api/src/wire.rs`
 (`src/wire/generated/`). It depends on core, wasm, pages, viewtree, `prodrome-typst-wasm` and
 the design system `typst-design`. Start at its `README.md`, `src/main.ts` and `src/app/app.ts`;
 `docs/WEB-SPEC.md` holds its doors and the laws no test checks.
@@ -196,7 +196,7 @@ change is wrong, not the mechanism.
   decoration's `every_row_renders_verified`.
 - The browser has three doors: the DOM (`web/src/view/dom.ts`), Typst's HTML through
   `web/src/rich.ts`, and the generated decoders. Held by `scripts/web-static.sh`.
-- Every wire type is declared once, in `app/core/src/wire.rs`; the TypeScript is generated.
+- Every wire type is declared once, in `app/api/src/wire.rs`; the TypeScript is generated.
   `scripts/wire.sh` writes it into `web/src/wire/generated/`, which git ignores, and the type
   check reads the page against it.
 - Every identity number is redacted before a model sees it. Held by the redaction laws in

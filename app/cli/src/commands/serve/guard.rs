@@ -3,9 +3,9 @@
 use axum::http::HeaderMap;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
+use suzatary_api::gate::{actor_of, writer_of};
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::gate::{actor_of, writer_of};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::signatures::Admitted;
 use suzatary_core::signatures::Tap;
@@ -251,7 +251,7 @@ impl Guarded for Reporter {
         _: &ActHeaders<'_>,
         (): &(),
     ) -> Result<Self, Refusal> {
-        use suzatary_core::clienterror::Verdict;
+        use suzatary_api::clienterror::Verdict;
         let Some(login) = admitted.login().cloned() else {
             return Err(Refusal::forbidden(
                 "a report must come from a named tailnet peer",

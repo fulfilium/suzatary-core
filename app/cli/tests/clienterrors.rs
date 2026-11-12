@@ -39,7 +39,7 @@ fn a_writers_report_is_taken_and_answered_with_nothing() {
 fn a_report_over_the_cap_is_refused() {
     let base = writer("clienterrors-cap");
     let mut body = report();
-    body["stack"] = serde_json::json!("x".repeat(suzatary_core::clienterror::MAX_BODY_BYTES));
+    body["stack"] = serde_json::json!("x".repeat(suzatary_api::clienterror::MAX_BODY_BYTES));
     let response = common::act(&format!("{base}/api/client-errors"), &body);
     assert_eq!(common::status(&response), 400);
 }
@@ -47,7 +47,7 @@ fn a_report_over_the_cap_is_refused() {
 #[test]
 fn a_login_past_its_budget_is_told_429() {
     let base = writer("clienterrors-budget");
-    let most = suzatary_core::clienterror::BUDGET.most;
+    let most = suzatary_api::clienterror::BUDGET.most;
     for n in 0..most {
         let response = common::act(&format!("{base}/api/client-errors"), &report());
         assert_eq!(common::status(&response), 204, "report {n}");

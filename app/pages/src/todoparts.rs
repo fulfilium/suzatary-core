@@ -284,15 +284,15 @@ pub(crate) fn begin<H, A, S>(
                 secret: crate::runtime::Secret::None,
                 told: crate::runtime::Told::Answered,
             },
-            Spelled::ByTheBox => printed(suzatary_core::wire::Authoring::Confirm(
-                suzatary_core::wire::ConfirmTodo {
+            Spelled::ByTheBox => printed(suzatary_api::wire::Authoring::Confirm(
+                suzatary_api::wire::ConfirmTodo {
                     todo: todo.to_owned(),
                     note,
                 },
             )),
         },
-        Acting::Undo => printed(suzatary_core::wire::Authoring::Undo(todo.to_owned())),
-        Acting::Redo => printed(suzatary_core::wire::Authoring::Redo(todo.to_owned())),
+        Acting::Undo => printed(suzatary_api::wire::Authoring::Undo(todo.to_owned())),
+        Acting::Redo => printed(suzatary_api::wire::Authoring::Redo(todo.to_owned())),
     }
 }
 

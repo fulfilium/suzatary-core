@@ -2,9 +2,9 @@
 //! the owner's words a conversation is told, each with Wrong.
 
 use serde::{Deserialize, Serialize};
+use suzatary_api::wire::{RecordPayload, RecordSummary};
 use suzatary_core::secretary::memory::{FactId, Kind};
 use suzatary_core::wire::topics::{FactRow, FactSaid, MemoryPayload, SaidOn};
-use suzatary_core::wire::{RecordPayload, RecordSummary};
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Disabled, Type};
 use viewtree::kit::{Reading, para};

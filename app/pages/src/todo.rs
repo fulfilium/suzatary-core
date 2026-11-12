@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use suzatary_api::wire::{Authoring, TodoPayload, UpdateTodo};
 use suzatary_base::escape::{Escaped, unescape_markup};
 use suzatary_base::reference::TodoRef;
 use suzatary_core::todo::{Cycle, Patch, TodoPatch};
@@ -12,7 +13,6 @@ use suzatary_core::wire::todo::{
     Authored, AuthoredSource, Entry, FieldChange, Holds, Link, Neighbour, Reverses,
 };
 use suzatary_core::wire::topics::{ConversationPayload, InboxState};
-use suzatary_core::wire::{Authoring, TodoPayload, UpdateTodo};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Checked, Class, Data, Disabled, For, Href, Id, Open, Role, Title, Type,

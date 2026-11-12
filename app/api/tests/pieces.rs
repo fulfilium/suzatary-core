@@ -13,8 +13,8 @@ use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 
 use prodrome_core::store::frontier::{Frontiers, Since, Token};
+use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::InMemory;
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::line_event::LineEvent;
@@ -324,7 +324,7 @@ fn fetched(
     routes::asks(nodes.iter().map(|(hash, size)| (hash.as_str(), *size)))
         .into_iter()
         .flat_map(|ask| {
-            let hashes = suzatary_core::query::Hashes::parse(Some(&ask.join(","))).expect("a set");
+            let hashes = suzatary_api::query::Hashes::parse(Some(&ask.join(","))).expect("a set");
             routes::lines_content(lines, &hashes).expect("held").objects
         })
         .map(|object| match &object {
@@ -466,7 +466,7 @@ fn a_content_answer_never_changes() {
         .into_iter()
         .collect::<Vec<_>>()
         .join(",");
-    let hashes = suzatary_core::query::Hashes::parse(Some(&asked)).expect("a set");
+    let hashes = suzatary_api::query::Hashes::parse(Some(&asked)).expect("a set");
     let before = routes::content(&store.lines.lines, &hashes).expect("held");
     for write in [
         Write::Said {
@@ -505,7 +505,7 @@ fn another_store_s_hash_is_refused_as_an_unknown_one_is() {
     let elsewhere = elsewhere.first().expect("a head").as_str().to_owned();
     let nowhere = "0".repeat(64);
     let refused = |hash: &str| {
-        let hashes = suzatary_core::query::Hashes::parse(Some(hash)).expect("a set");
+        let hashes = suzatary_api::query::Hashes::parse(Some(hash)).expect("a set");
         let refusal = routes::content(&ours.lines.lines, &hashes).expect_err("not ours");
         (refusal.status(), refusal.message().replace(hash, "<hash>"))
     };
@@ -538,7 +538,7 @@ fn the_content_bound_holds() {
         total < routes::MOST_CONTENT_BYTES,
         "the store fits one answer"
     );
-    let all = suzatary_core::query::Hashes::parse(Some(&names.join(","))).expect("a set");
+    let all = suzatary_api::query::Hashes::parse(Some(&names.join(","))).expect("a set");
     assert_eq!(
         routes::content(&store.lines.lines, &all)
             .expect("under the bound")
@@ -558,7 +558,7 @@ fn the_content_bound_holds() {
             prodrome_core::event::canonical_envelope(object).len() > routes::MOST_CONTENT_BYTES
         })
         .expect("the large line");
-    let alone = suzatary_core::query::Hashes::parse(Some(large.as_str())).expect("a set");
+    let alone = suzatary_api::query::Hashes::parse(Some(large.as_str())).expect("a set");
     assert_eq!(
         routes::content(&store.lines.lines, &alone)
             .expect("one object is answered")
@@ -568,7 +568,7 @@ fn the_content_bound_holds() {
     );
     let mut two = [large.as_str(), names[0]];
     two.sort_unstable();
-    let two = suzatary_core::query::Hashes::parse(Some(&two.join(","))).expect("a set");
+    let two = suzatary_api::query::Hashes::parse(Some(&two.join(","))).expect("a set");
     assert_eq!(
         routes::content(&store.lines.lines, &two)
             .expect_err("past the bound")
@@ -850,7 +850,9 @@ fn the_prune_census_counts_what_is_husked_and_writes_nothing() {
         suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
     let graph = store.lines.lines.graph().expect("reads");
     let names: Vec<Hash> = before.iter().map(|(name, _)| name.clone()).collect();
-    let husked = routes::husks(store.lines.conversations(), &graph, &names).expect("husks");
+    let husked =
+        suzatary_core::secretary::husks::husks(store.lines.conversations(), &graph, &names)
+            .expect("husks");
     assert_eq!(census.all.objects, before.len());
     assert_eq!(census.dead.objects, husked.len());
     assert!(

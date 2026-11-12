@@ -4,10 +4,10 @@
 
 use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
 use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
-use suzatary_core::signatures::{Enrolment, Trust};
-use suzatary_core::wire::{
+use suzatary_api::wire::{
     Condition, Found, ObjectVerdict, ProvenanceRow, SignedObject, Verified, VerifiedPayload, Walk,
 };
+use suzatary_core::signatures::{Enrolment, Trust};
 use wasm_bindgen::prelude::*;
 
 use crate::{Event, Todos, json as printed_json, refused};

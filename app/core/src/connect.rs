@@ -28,4 +28,4 @@ pub use routine::{Coding, NotARoutine, ROUTINE_TOKEN, RoutineId};
 pub use seen::{Checked, Seen};
 pub use standing::Standing;
 pub use step::{SecretName, Step, StepShape};
-pub use template::{AccountKind, Channel, Fragment, Table, Template, TemplateId};
+pub use template::{AccountKind, Channel, Fragment, Table, Template, TemplateId, channel_secrets};

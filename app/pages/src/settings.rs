@@ -3,9 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
+use suzatary_api::wire;
 use suzatary_core::connect::{Group, Standing};
 use suzatary_core::health::Failure;
-use suzatary_core::wire;
 use suzatary_core::wire::cards::{Offer, Overview, OverviewGroup, OverviewLine};
 use ts_rs::TS;
 use viewtree::Attr::{

@@ -2,15 +2,15 @@
 
 use axum::Json;
 use prodrome_core::event::{Actor, TodoId};
+use suzatary_api::routes;
+use suzatary_api::{query, wire};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::DEFAULT;
 use suzatary_base::reference::TodoRef;
 use suzatary_base::refusal::{Refusal, Status};
-use suzatary_core::routes;
 use suzatary_core::secretary::act_lines::{self, ActLine};
 use suzatary_core::signatures::Seat;
 use suzatary_core::signatures::Tap;
-use suzatary_core::{query, wire};
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -196,10 +196,10 @@ pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, 
 /// coding-session card that serves it; only his tap on that card fires a session.
 pub fn build(
     call: &Call<Tap, TodoRef, ()>,
-) -> Result<Json<wire::topics::ConversationPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::topics::ConversationPayload>, Refusal> {
     call.state
         .with_cards(|caps, cards| {
-            suzatary_core::secretary::routes::build(caps, &call.guard, cards, &call.params)
+            suzatary_api::secretary::routes::build(caps, &call.guard, cards, &call.params)
         })
         .map(Json)
 }
@@ -226,7 +226,7 @@ pub fn me(call: &Call<Reader, (), ()>) -> Json<wire::MePayload> {
 /// `GET …/objects?since=<frontier>`: what this replica does not hold.
 pub fn objects(
     call: &Call<Reader, Since, ()>,
-) -> Result<Json<wire::lines::ObjectsPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::lines::ObjectsPayload>, Refusal> {
     routes::objects_since(
         call.chain.caps.secretary.chain,
         &call.chain.policy,
@@ -240,7 +240,7 @@ pub fn objects(
 /// `POST …/objects`: a replica handing its objects over, sealed as the gate's actor.
 pub fn take_objects(
     call: &Call<Poster, (), Literals>,
-) -> Result<Json<wire::lines::ReceiptPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::lines::ReceiptPayload>, Refusal> {
     let caps = call.chain.caps;
     // A note's line is stamped by the todos it names as they stood before the post.
     let before = call.state.chains_read();

@@ -5,10 +5,11 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
 use prodrome_core::event::Actor;
+use suzatary_api::clienterror::{MAX_BODY_BYTES, Report, Sent};
+use suzatary_api::{routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::clienterror::{MAX_BODY_BYTES, Report, Sent};
+use suzatary_core::devices;
 use suzatary_core::release::Plan;
-use suzatary_core::{devices, routes, wire};
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -34,7 +35,7 @@ impl Params for Day {
     }
 }
 
-impl Body for wire::signatures::Registering {
+impl Body for suzatary_core::wire::signatures::Registering {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -91,7 +92,9 @@ pub fn presence(call: &Call<Mapped, (), ()>) -> StatusCode {
 }
 
 /// `GET /api/about`: the version and build this process is.
-pub fn about(call: &Call<Reader, (), ()>) -> Result<Json<wire::cards::AboutPayload>, Refusal> {
+pub fn about(
+    call: &Call<Reader, (), ()>,
+) -> Result<Json<suzatary_core::wire::cards::AboutPayload>, Refusal> {
     let now = call.chain.caps.secretary.clock.now();
     call.state
         .stamp
@@ -119,8 +122,8 @@ pub fn client_errors(call: &Call<Reporter, (), Report>) -> StatusCode {
 
 /// `POST /api/act/device`: the phone saying "wake me here"; nothing on the chain.
 pub fn device(
-    call: &Call<Actor, (), wire::signatures::Registering>,
-) -> Result<Json<wire::signatures::DevicePayload>, Refusal> {
+    call: &Call<Actor, (), suzatary_core::wire::signatures::Registering>,
+) -> Result<Json<suzatary_core::wire::signatures::DevicePayload>, Refusal> {
     let caps = call.chain.caps;
     devices::register_device(caps.devices, caps.secretary.clock, &call.body, &call.guard).map(Json)
 }
@@ -151,7 +154,7 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
         ));
     }
     let caps = call.state.first.caps;
-    let index = suzatary_core::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
+    let index = suzatary_api::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
     call.state.heard(&suzatary_base::conversation_id::DEFAULT);
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
@@ -206,7 +209,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
                 device.as_str()
             );
             let caps = state.first.caps;
-            match suzatary_core::secretary::routes::withdraw_trusted(
+            match suzatary_api::secretary::routes::withdraw_trusted(
                 caps.secretary.inbox,
                 caps.secretary.chain,
                 &keys.root().public(),

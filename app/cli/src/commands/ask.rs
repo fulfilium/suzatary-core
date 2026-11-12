@@ -7,11 +7,11 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
+use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::stamp::Stamp;
 use suzatary_core::secretary::store::ConversationState;
-use suzatary_core::wire;
 
 use super::call::Operator;
 use super::serve::route::Method;
