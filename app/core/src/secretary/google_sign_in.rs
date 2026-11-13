@@ -13,13 +13,16 @@ use crate::mail::oauth::OauthError;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::responded::{Done, Performed, Tried};
 
-/// Long enough to read Google's page and its one warning.
+/// How long a consent stays open from the tap that began it. The bound is on a drawn state and its
+/// verifier, held in memory and taken once by the actor who tapped: it closes a consent link left
+/// in a browser's history. It counts from the tap, the moment the card's "open until" names, so
+/// it covers a box slow to answer the tap and an owner reading Google's warning pages.
 #[must_use]
 pub fn lasts() -> chrono::Duration {
     chrono::Duration::minutes(LASTS_MINUTES)
 }
 
-pub(crate) const LASTS_MINUTES: i64 = 10;
+pub(crate) const LASTS_MINUTES: i64 = 30;
 
 /// One open consent. Its `Debug` redacts the link, which carries the state in the clear.
 #[derive(Clone, PartialEq, Eq)]
@@ -359,6 +362,30 @@ mod tests {
         assert!(open.begun(&card(3)).is_some());
         assert_eq!(open.lapse(at(11)), vec![card(3)]);
         assert_eq!(open.begun(&card(3)), None);
+    }
+
+    /// A consent counts from its tap: a box that answers the tap two minutes late and an owner
+    /// who then reads Google's warning pages for twenty minutes still finish it; it lapses at its
+    /// bound, never before.
+    #[test]
+    fn a_consent_outlasts_a_slow_answer_and_a_slow_reader() {
+        let tapped = at(0);
+        let (state, begun) = begun(1, "ada");
+        let begun = Begun {
+            until: tapped + lasts(),
+            ..begun
+        };
+        let ada = Actor::new("ada").expect("an actor");
+        let mut open = Open::default();
+        open.open(state.clone(), begun.clone());
+        let back = tapped + chrono::Duration::minutes(2) + chrono::Duration::minutes(20);
+        assert!(matches!(open.take(&state, &ada, back), Taken::Yours(_)));
+        let mut open = Open::default();
+        open.open(state.clone(), begun);
+        assert!(matches!(
+            open.take(&state, &ada, tapped + lasts()),
+            Taken::Lapsed(_)
+        ));
     }
 
     /// Nothing a consent's `Debug` prints holds its state or its verifier.

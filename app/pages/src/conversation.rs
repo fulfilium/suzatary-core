@@ -1252,7 +1252,8 @@ fn erase(m: &Model, t: &TurnRow) -> Node<Msg> {
     let idle = || view! { Button "act act-erase" {Type => "button"} @click(Msg::Erasing(Some(t.index))) ["Erase"] };
     let parts = match shown {
         Shown::Pending | Shown::Taken => vec![chrome::inline_wait()],
-        Shown::Failed { e, .. } => vec![para("problem", e), idle()],
+        Shown::Refused { e } => vec![para("problem", e), idle()],
+        Shown::Unanswered { e } => vec![para("problem", crate::card::unanswered(&e)), idle()],
         Shown::Absent if m.erasing == Some(t.index) => vec![
             view! { Span "proposalconfirm" [format!("Erase these words for good? {}", Erasure::for_good())] },
             view! { Button "act act-erase confirming" {Type => "button"} @click(Msg::Erase(t.index)) ["Erase"] },

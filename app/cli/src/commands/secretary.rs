@@ -2043,7 +2043,6 @@ fn unasked(
     }
 }
 
-/// `suzatary secretary brief`.
 fn brief(
     instance: &Instance,
     title: &str,
@@ -2351,7 +2350,6 @@ fn paused(
     std::process::exit(PAUSED);
 }
 
-/// `suzatary secretary sweep --dry-run`.
 fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
     let chains = wired.bound();
@@ -2414,7 +2412,6 @@ pub fn swept_or_failed<T>(
     })
 }
 
-/// `suzatary secretary sweep`.
 fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
     let chains = wired.bound();

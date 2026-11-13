@@ -13,25 +13,19 @@ use super::tree::Tree;
 pub enum Finding {
     /// A unit's USE is over `budget.use`, or over its ratchet plus the allowance.
     OverUse {
-        /// The unit.
         unit: String,
-        /// Its USE.
         tokens: u64,
         /// The most it may be.
         limit: u64,
     },
     /// The reading set is over the ratchet plus the allowance.
     Grown {
-        /// The reading set.
         reading: u64,
-        /// The ratchet.
         ratchet: u64,
-        /// The allowance.
         allowance: u64,
     },
     /// A unit's `depends` is not what its manifest and witnesses show.
     Depends {
-        /// The unit.
         unit: String,
         /// Named in `depends` and not shown.
         unshown: BTreeSet<String>,
@@ -44,20 +38,15 @@ pub enum Finding {
         member: String,
     },
     /// A crate unit whose directory is no workspace member.
-    NoMember {
-        /// The unit.
-        unit: String,
-    },
+    NoMember { unit: String },
     /// A file the plan names that the tree does not hold.
     Missing {
         /// The unit or library that names it.
         by: String,
-        /// The file.
         path: String,
     },
     /// An external library's recorded revision is not the one its file pins.
     Unpinned {
-        /// The library.
         external: String,
         /// The file that should hold the revision.
         file: String,

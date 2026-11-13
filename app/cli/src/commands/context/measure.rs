@@ -30,9 +30,7 @@ pub struct Figures {
 /// One unit as measured.
 #[derive(Debug, Clone)]
 pub struct Measured {
-    /// Its name.
     pub name: String,
-    /// Its measures.
     pub figures: Figures,
     /// The files of its USE, and the part of each read.
     pub use_files: Reading,
@@ -85,9 +83,7 @@ struct Parts<'a> {
     source: Vec<(&'a str, &'a str)>,
     /// The tests inside source files, and the code of the test directories.
     tests: Vec<(&'a str, &'a str)>,
-    /// The test directories' other files.
     fixtures: Vec<(&'a str, &'a str)>,
-    /// `README.md`, when the unit has one.
     readme: Option<(&'a str, &'a str)>,
 }
 

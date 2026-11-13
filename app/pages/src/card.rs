@@ -630,14 +630,21 @@ const fn tap(note: String, always: bool) -> Answering {
     }
 }
 
-fn asked_line<M>(shown: &Shown, lost_words: &str) -> Option<Node<M>> {
+/// What a card says of a tap whose answer never came: the box may have performed it, so the card
+/// never says it was not done; its next reading of the card says what the box did.
+pub(crate) fn unanswered(e: &str) -> String {
+    format!(
+        "No answer yet ({e}): the box may have done it, and this card says what it did once it \
+         reads it again. Asking again never does it twice."
+    )
+}
+
+fn asked_line<M>(shown: &Shown) -> Option<Node<M>> {
     match shown {
         Shown::Absent => None,
         Shown::Pending | Shown::Taken => Some(crate::chrome::inline_wait()),
-        Shown::Failed { e, lost: true } => {
-            Some(view! { Span "problem" [format!("No answer ({e}){lost_words}")] })
-        }
-        Shown::Failed { e, lost: false } => Some(view! { Span "problem" [e.as_str()] }),
+        Shown::Unanswered { e } => Some(view! { Span "problem" [unanswered(e)] }),
+        Shown::Refused { e } => Some(view! { Span "problem" [e.as_str()] }),
     }
 }
 
@@ -779,15 +786,20 @@ fn coding(s: &CodingSession, shown: &Shown, ui: &Ui, key: &Key, writes: bool) ->
     };
     let controls: Option<Vec<Node<Ev>>> = (writes && droppable).then(|| match shown {
         Shown::Pending | Shown::Taken => vec![crate::chrome::inline_wait()],
-        Shown::Failed { e, lost } => vec![
-            view! { Span "problem" [if *lost { format!("No answer ({e}); asking again never does it twice.") } else { e.clone() }] },
-            idle(),
-        ],
-        Shown::Absent if ui.step == (Step::Saying { verb: "drop".to_owned() }) => vec![
-            reason(key, ui, "Why not? (done by hand, wrong task…)"),
-            button("act act-drop confirming", "Dismiss", Ev::Drop),
-            button("act act-keep", "Keep", Ev::Close),
-        ],
+        Shown::Unanswered { e } => vec![view! { Span "problem" [unanswered(e)] }, idle()],
+        Shown::Refused { e } => vec![view! { Span "problem" [e.as_str()] }, idle()],
+        Shown::Absent
+            if ui.step
+                == (Step::Saying {
+                    verb: "drop".to_owned(),
+                }) =>
+        {
+            vec![
+                reason(key, ui, "Why not? (done by hand, wrong task…)"),
+                button("act act-drop confirming", "Dismiss", Ev::Drop),
+                button("act act-keep", "Keep", Ev::Close),
+            ]
+        }
         Shown::Absent => vec![idle()],
     });
     view! { Section {Class => format!("codingsession codingsession-{state}"), Data("session") => id} [
@@ -866,12 +878,7 @@ fn idle(
     shown: &Shown,
     reply: Option<&Node<Ev>>,
 ) -> Vec<Node<Ev>> {
-    let mut v: Vec<Node<Ev>> = asked_line(
-        shown,
-        ", and it was not done. Trying again never does it twice.",
-    )
-    .into_iter()
-    .collect();
+    let mut v: Vec<Node<Ev>> = asked_line(shown).into_iter().collect();
     v.extend(
         performing
             .iter()
@@ -901,10 +908,7 @@ fn acts(
     let writes = matches!(d.reach, Reach::Writes);
     if !answerable(row.state) {
         let checking = (row.state == ProposalState::Unknown && writes).then(|| {
-            let line = asked_line(
-                shown,
-                ", and it was not done. Trying again never does it twice.",
-            );
+            let line = asked_line(shown);
             if shown.waits() {
                 vec![line]
             } else {
@@ -919,7 +923,7 @@ fn acts(
     } else if !writes {
         Some(readonly(d))
     } else if shown.waits() {
-        Some(view! { Div "proposalact-row" [asked_line(shown, ""), reply.cloned()] })
+        Some(view! { Div "proposalact-row" [asked_line(shown), reply.cloned()] })
     } else {
         let performing: &[CardAnswer] = if card.problem.is_empty() {
             &card.answers
@@ -1208,4 +1212,69 @@ pub(crate) fn taken(a: &Answer) -> bool {
             ..
         })
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A row of the sign-in card at `state`, with `outcome`.
+    fn row(state: &str, outcome: &str) -> ProposalRow {
+        serde_json::from_value(serde_json::json!({
+            "index": 0,
+            "act": {"kind": "auth", "account": "ada@example.test", "sentence": "Sign in."},
+            "why": "Because", "sources": ["todo:life/renewcard"], "at": "2026-11-13T09:00:00",
+            "state": state, "outcome": outcome, "tries": 0, "turn": 1, "coding": null,
+            "announced": null, "revises": null,
+            "card": {"title": "Sign in", "by": {"kind": "setup"}, "sentence": "Sign in.",
+                "fields": [], "body": "", "rows": [], "files": [], "problem": "",
+                "answers": [], "uncertain": "", "check": "", "failed": "Not done",
+                "readonly": "", "link": null}
+        }))
+        .expect("a row")
+    }
+
+    /// A tap whose answer never came is never said not to be done, since the box may still
+    /// perform it; the card's next reading, once the box's state moved, says what it did.
+    #[test]
+    fn a_tap_whose_answer_was_lost_is_said_by_the_card_s_next_reading() {
+        let line = asked_line::<()>(&Shown::Unanswered {
+            e: "signal timed out".to_owned(),
+        })
+        .expect("a line");
+        let seen = format!("{:?}", viewtree::dom::fresh(&line));
+        assert!(seen.contains("may have done it"), "{seen}");
+        assert!(!seen.contains("not done"), "{seen}");
+
+        let key = Key {
+            conversation: "setup".to_owned(),
+            index: 0,
+        };
+        let standing = row("standing", "");
+        let mut cards = Cards::default();
+        let then = Then {
+            after: After::toast("sign-in started"),
+            yes: true,
+        };
+        let lost = cards.answered(
+            &key,
+            &signature(&standing),
+            &then,
+            Answer::Done {
+                body: serde_json::json!({"type": "Answered", "answer": {"type": "Lost", "e": "signal timed out"}, "held": true}),
+            },
+        );
+        assert!(
+            lost.is_empty(),
+            "nothing is said before the card reads again"
+        );
+        let started = row("started", "started at 09:00, open until 09:30");
+        assert_eq!(
+            cards.settled(|_| Some(&started)),
+            vec![Out::Toast(
+                "Running: started at 09:00, open until 09:30".to_owned()
+            )]
+        );
+        assert!(cards.settled(|_| Some(&started)).is_empty(), "said once");
+    }
 }

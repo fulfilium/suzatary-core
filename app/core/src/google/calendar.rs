@@ -50,7 +50,6 @@ pub enum Unread {
 /// One calendar the account lists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listed {
-    /// Google's id for it.
     pub id: String,
     /// Whether it is the account's own.
     pub primary: bool,
@@ -292,9 +291,7 @@ impl EventTitle {
 /// An event to write to the account's own calendar, on a tap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewEvent {
-    /// What it is.
     pub title: EventTitle,
-    /// When.
     pub when: When,
     /// Where, `""` for nowhere in particular.
     pub place: String,
@@ -399,6 +396,20 @@ pub fn insert_body(event: &NewEvent) -> serde_json::Value {
         body["location"] = serde_json::Value::String(event.place.clone());
     }
     body
+}
+
+/// Whether the box may read and write an account's Google calendar: a Google account's always,
+/// its failures its health; any other account's exactly while its grant holds the calendars,
+/// however its mail is read, since the calendar is a fact about the grant and the mail is not.
+#[must_use]
+pub fn reads_calendars(sync: &crate::mail::account::Sync, held: &super::Held) -> bool {
+    use crate::mail::account::Sync;
+    let granted =
+        matches!(held, super::Held::Signed(parts) if parts.contains(super::Scope::Calendar));
+    match sync {
+        Sync::Google => true,
+        Sync::Gmail | Sync::MsImap(_) | Sync::Proton(_) => granted,
+    }
 }
 
 #[cfg(test)]

@@ -31,7 +31,7 @@ mod scope;
 pub use calendar::{
     ACTOR, CALENDARS, Calendars, EVENTS, Listed, MAX_ANSWER, NewEvent, SCHEMA, Unread,
     calendar_name, events_url, insert_body, insert_url, list_url, read_calendars, read_events,
-    window,
+    reads_calendars, window,
 };
 pub use client::{CLIENT_ID, CLIENT_SECRET, Client, ClientId, ClientSecret};
 pub use flow::{

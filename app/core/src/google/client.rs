@@ -59,9 +59,7 @@ impl ClientSecret {
 /// The client: its id, and its secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Client {
-    /// Its id.
     pub id: ClientId,
-    /// Its secret.
     pub secret: ClientSecret,
 }
 

@@ -209,10 +209,8 @@ impl Google {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grant {
     pub account: EmailAddress,
-    /// The box's client.
     pub client: Client,
     pub refresh: RefreshToken,
-    /// The parts Google granted it.
     pub parts: suzatary_core::google::Scopes,
 }
 
@@ -333,6 +331,17 @@ impl Grants {
     #[must_use]
     pub fn google(&self) -> &Google {
         &self.google
+    }
+
+    /// Whether `account` holds a grant, and its parts; a lost client or no grant is none.
+    ///
+    /// # Errors
+    /// The secret store's.
+    pub fn held(&self, account: &EmailAddress) -> Result<suzatary_core::google::Held, SecretError> {
+        Ok(match Grant::read(self.store.as_ref(), account)? {
+            Kept::Grant(grant) => suzatary_core::google::Held::Signed(grant.parts),
+            Kept::NoClient | Kept::NotSignedIn(_) => suzatary_core::google::Held::NotSignedIn,
+        })
     }
 
     /// The grant kept for `account`, proved by minting a token from it.

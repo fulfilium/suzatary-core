@@ -69,19 +69,12 @@ impl Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ratios {
-    /// Rust.
     pub rust: f64,
-    /// TypeScript.
     pub typescript: f64,
-    /// Markdown.
     pub markdown: f64,
-    /// Shell.
     pub shell: f64,
-    /// Nix.
     pub nix: f64,
-    /// TOML.
     pub toml: f64,
-    /// Typst.
     pub typst: f64,
     /// Every other text file.
     pub other: f64,

@@ -435,7 +435,6 @@ fn on_the_roster(chain: &ChainDir, actor: &str) -> anyhow::Result<()> {
     bail!("actor must be one of {roster:?}, got {actor:?}")
 }
 
-/// `suzatary todo add <id> --body … --rationale …`.
 fn add(
     instance: &Instance,
     chain: &ChainDir,
@@ -520,7 +519,6 @@ fn add(
     appended(&store, &chain.policy.untrusted, &mut preview, written, now)
 }
 
-/// `suzatary todo update <id> --priority … --rationale …`.
 fn update(
     instance: &Instance,
     chain: &ChainDir,

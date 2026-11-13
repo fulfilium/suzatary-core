@@ -1,6 +1,4 @@
-//! A prodrome's objects on disk, as an interpreter of [`Prodrome`]: the chains, the agent's
-//! replicas, the inbox, the conversations, the memory's history, the digest's, the recorded
-//! decisions, the two topic stores and each plugin's store.
+//! A prodrome's objects on disk, every store's, as an interpreter of [`Prodrome`].
 //!
 //! Around `EventStore` this keeps a memo keyed by the whole head set (a set of heads names one
 //! set of objects in one order), and the store's hold: `EventStore::append` takes an `flock`

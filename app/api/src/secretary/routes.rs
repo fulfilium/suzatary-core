@@ -2042,30 +2042,29 @@ fn forwarded(
     }
 }
 
-/// Whether `account`'s calendar may be written; else the first step the box owes.
+/// Whether `account`'s Google calendar may be written (`google::reads_calendars`); else the first
+/// step the box owes, or why no step gives it: an address the instance file does not declare is
+/// no account of this box, so no grant would make the event its own.
 fn google_account(
     edits: &dyn Edits,
     (secrets, settables): (&dyn Secrets, &Settables),
     account: &suzatary_core::mail::address::EmailAddress,
 ) -> Result<(), Tried> {
-    use suzatary_core::mail::account::Sync;
     let declared = edits.declared().map_err(|failed| Tried::NotSent {
         reason: format!("nothing was written: the instance file does not read ({failed})"),
     })?;
-    let calendar = || {
-        matches!(
-            secrets.google_grant(account),
-            suzatary_core::google::Held::Signed(parts) if parts.contains(suzatary_core::google::Scope::Calendar)
-        )
+    let Some(declared) = declared
+        .accounts
+        .iter()
+        .find(|held| held.email.is(account.as_str()))
+    else {
+        return Err(Tried::Refused {
+            reason: format!(
+                "nothing was written: {account} is no account the instance file declares"
+            ),
+        });
     };
-    if declared.accounts.iter().any(|held| {
-        held.email.is(account.as_str())
-            && match held.sync {
-                Sync::Google => true,
-                Sync::Gmail => calendar(),
-                Sync::MsImap(_) | Sync::Proton(_) => false,
-            }
-    }) {
+    if suzatary_core::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
         Ok(())
     } else if google_client_kept(secrets, settables).is_set() {
         Err(Tried::Lacks(suzatary_core::mail::lacking::Lacking::Grant {

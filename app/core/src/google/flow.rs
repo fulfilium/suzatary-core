@@ -31,8 +31,7 @@ impl Endpoints {
         }
     }
 
-    /// The same paths under `base`, a fake Google a test serves; the deployment's wiring names
-    /// [`Endpoints::google`] alone.
+    /// The same paths under `base`, a fake Google a test serves.
     #[must_use]
     pub fn at(base: &str) -> Self {
         let base = base.trim_end_matches('/');
@@ -114,15 +113,9 @@ impl Code {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Callback {
     /// The owner consented.
-    Code {
-        /// The state Google handed back.
-        state: State,
-        /// The code to exchange.
-        code: Code,
-    },
+    Code { state: State, code: Code },
     /// The owner declined, or Google refused the request.
     Refused {
-        /// The state Google handed back.
         state: State,
         /// Google's `error`, which is no secret.
         error: String,
@@ -226,7 +219,6 @@ impl RefreshToken {
 /// A grant, read: what to keep, what Google says it granted, and the account it was given for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exchanged {
-    /// The refresh token to keep.
     pub refresh: RefreshToken,
     /// The parts it holds, which may be fewer than were asked for.
     pub granted: BTreeSet<Scope>,
@@ -315,7 +307,6 @@ pub fn refresh(endpoints: &Endpoints, client: &Client, token: &RefreshToken) -> 
 pub struct AccessToken {
     /// The token, for an API's `Authorization` header alone.
     pub token: Secret,
-    /// How long it is good for.
     pub expires_in_seconds: u64,
 }
 
@@ -378,15 +369,12 @@ fn refusal(answered: &Answered) -> Option<OauthError> {
     }
 }
 
-/// A grant as the secret store keeps it: its refresh token, and the parts Google said it holds,
-/// so the box can ask for a part it lacks alone. Printed on one line, as a secret store keeps a
-/// value: the parts, by comma, a space, and the token, which holds no space; read back only
-/// whole.
+/// A grant as the secret store keeps it, on one line: its parts by comma, a space, and its
+/// refresh token; read back only whole.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeptGrant {
     /// The parts it holds; the mail always, since a grant without it is never kept.
     pub parts: Scopes,
-    /// Its refresh token.
     pub refresh: RefreshToken,
 }
 

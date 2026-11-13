@@ -903,14 +903,47 @@ fn an_event_is_written_only_by_its_tapped_card() {
     );
 }
 
-/// A calendar card that lacks its grant is fixed from the card: its button files the box's card
-/// that gives what it lacked and performs it by the same tap. With no client kept, that is the
-/// client's card; with one, the account's sign-in with Google for its calendars alone, whose
-/// callback writes the event under the fix tap's consent and lands on the card's conversation.
-/// A lieer account keeps its mail where it was: the grant holds the calendars alone and the
-/// account's sync is as it was. A callback whose state the box never drew writes nothing.
+/// A calendar card that lacks its grant is fixed from the card, however the account's mail is
+/// read: its button files the box's card that gives what it lacked and performs it by the same
+/// tap. With no client kept, that is the client's card; with one, the account's sign-in with
+/// Google for its calendars alone, whose callback writes the event under the fix tap's consent
+/// and lands on the card's conversation. The account's mail stays where it was read: the grant
+/// holds the calendars alone and its sync is as it was. A forged callback writes nothing.
 #[test]
-fn a_card_that_lacks_a_grant_is_fixed_from_its_button() {
+fn a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button() {
+    fixed_from_its_button("google-fix", &Sync::Gmail);
+}
+
+/// [`a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button`], for an account whose mail is
+/// read by IMAP from Microsoft: its calendar is Google's all the same.
+#[test]
+fn a_microsoft_card_that_lacks_a_grant_is_fixed_from_its_button() {
+    fixed_from_its_button(
+        "google-fix-ms",
+        &Sync::MsImap(suzatary_core::mail::account::MsImap {
+            authority: suzatary_core::mail::account::Authority::Organizations,
+            inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+            sent_folder: "Sent Items".to_owned(),
+        }),
+    );
+}
+
+/// The same, for an account whose mail Proton's Bridge reads.
+#[test]
+fn a_proton_card_that_lacks_a_grant_is_fixed_from_its_button() {
+    fixed_from_its_button(
+        "google-fix-proton",
+        &Sync::Proton(suzatary_core::mail::account::Proton {
+            channel: "proton-all".to_owned(),
+            smtp_user: ADA.to_owned(),
+            send_addresses: vec![ADA.to_owned()],
+            inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+        }),
+    );
+}
+
+/// The one-tap scene for an account of `sync`, served as `tag`.
+fn fixed_from_its_button(tag: &str, sync: &Sync) {
     let model = common::FakeModel::saying_owned([
         format!(
             r#"{{"say": "Here is the event.", "calls": [{{"verb": "propose_act", "args": {{
@@ -921,7 +954,7 @@ fn a_card_that_lacks_a_grant_is_fixed_from_its_button() {
         ),
         r#"{"say": "Proposed. Tap it to add it."}"#.to_owned(),
     ]);
-    let serving = serving_as("google-fix", Some(model), Sync::Gmail);
+    let serving = serving_as(tag, Some(model), sync.clone());
     let base = &serving.base;
     let id = event_proposed(base);
     let tap_event = |body: &serde_json::Value| {
@@ -1008,9 +1041,63 @@ fn a_card_that_lacks_a_grant_is_fixed_from_its_button() {
         suzatary_core::settings::Configuration::declared(serving.edits.as_ref())
             .expect("the recorder reads")
             .accounts,
-        vec![account(Sync::Gmail)],
+        vec![account(sync.clone())],
         "a calendar fix leaves the account's sync as it was"
     );
+    calendars_are_read(&serving, sync);
+}
+
+/// An account of `sync` holding a calendar grant has its calendars read through it, its store
+/// written and its health recorded, while its mail stays where it was read; an account holding
+/// no grant is not read at all.
+fn calendars_are_read(serving: &Serving, sync: &Sync) {
+    let grants = suzatary_io::google::Grants::new(
+        suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&serving.fake.base)),
+        Arc::clone(&serving.secrets) as _,
+    );
+    let unsigned = MailAccount {
+        email: suzatary_core::mail::account_email::AccountEmail::new("bo@example.test")
+            .expect("a lower-case address"),
+        subdir: "bo-at-example-test".to_owned(),
+        sync: Sync::Gmail,
+    };
+    let root =
+        std::env::temp_dir().join(format!("suzatary-lieer-calendars-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
+    let (lines, healths, stored) = suzatary_cli::commands::google::read_calendars(
+        &[account(sync.clone()), unsigned],
+        &grants,
+        |account| root.join(&account.subdir),
+        at,
+    );
+    assert!(stored, "{lines:?}");
+    assert_eq!(
+        lines.len(),
+        1,
+        "only the account holding a calendar grant: {lines:?}"
+    );
+    assert!(
+        lines[0].starts_with(&format!("google {ADA}: ")),
+        "{lines:?}"
+    );
+    assert!(lines[0].contains("occurrences read"), "{lines:?}");
+    let key = suzatary_core::health::SourceKey::GoogleCalendar(
+        suzatary_core::mail::account_email::AccountEmail::folded(&ada()),
+    );
+    assert!(healths.health(&key).is_some(), "its calendars' health");
+    assert!(
+        root.join("ada-at-example-test").exists(),
+        "its store is written"
+    );
+    assert_eq!(
+        suzatary_core::settings::Configuration::declared(serving.edits.as_ref())
+            .expect("the recorder reads")
+            .accounts,
+        vec![account(sync.clone())],
+        "its mail stays where it was read"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// `propose_act` is clean (`taint`): no answer it gives, filed or refused, holds words from

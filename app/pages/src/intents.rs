@@ -28,10 +28,13 @@ pub(crate) enum Shown {
     Pending,
     /// Taken, and not yet read back.
     Taken,
-    Failed {
+    /// The box answered no: nothing was done.
+    Refused {
         e: String,
-        /// No answer came: it may or may not have reached the box.
-        lost: bool,
+    },
+    /// No answer came: the box may or may not have done it, and its next reading says which.
+    Unanswered {
+        e: String,
     },
 }
 
@@ -58,14 +61,8 @@ impl Intents {
                 _ if i.retracted || holds(&i.act) => Shown::Absent,
                 None => Shown::Pending,
                 Some(Said::Taken) => Shown::Taken,
-                Some(Said::Refused { e }) => Shown::Failed {
-                    e: e.clone(),
-                    lost: false,
-                },
-                Some(Said::Lost { e }) => Shown::Failed {
-                    e: e.clone(),
-                    lost: true,
-                },
+                Some(Said::Refused { e }) => Shown::Refused { e: e.clone() },
+                Some(Said::Lost { e }) => Shown::Unanswered { e: e.clone() },
             })
             .find(|s| *s != Shown::Absent)
             .unwrap_or(Shown::Absent)

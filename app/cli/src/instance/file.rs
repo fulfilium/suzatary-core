@@ -165,7 +165,6 @@ impl Serving {
 /// `[mail]`: where the mail and its bookkeeping live, and whose it is.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mail {
-    /// The maildir root.
     pub root: PathBuf,
     /// The triage state file, the sole dedup authority.
     pub state: PathBuf,

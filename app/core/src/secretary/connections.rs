@@ -227,16 +227,14 @@ fn read_through<'a>(
         })
 }
 
-/// Whether `account` is declared signed in with Google and its grant holds its calendars.
+/// Whether the box reads `account`'s calendars (`google::reads_calendars`) through a grant that
+/// holds them.
 fn reads_calendars(declared: &Declared, secrets: &dyn Secrets, account: &EmailAddress) -> bool {
-    declared
-        .accounts
-        .iter()
-        .any(|held| held.email.as_str() == account.as_str() && matches!(held.sync, Sync::Google))
-        && matches!(
-            secrets.google_grant(account),
-            Held::Signed(parts) if parts.contains(Scope::Calendar)
-        )
+    let held = secrets.google_grant(account);
+    declared.accounts.iter().any(|declared| {
+        declared.email.as_str() == account.as_str()
+            && crate::google::reads_calendars(&declared.sync, &held)
+    }) && matches!(held, Held::Signed(parts) if parts.contains(Scope::Calendar))
 }
 
 /// The declared link a card of the box's rests on, and the card its sources name for it.

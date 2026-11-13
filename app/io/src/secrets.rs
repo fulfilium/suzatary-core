@@ -383,11 +383,9 @@ impl suzatary_core::settings::Writes for Secretspec {
     }
 }
 
-/// The file the store reads a deployment's names from: the code root's own `secretspec.toml`
-/// (`base`, read-only), extended by a file in `dir` declaring every derived name `base` does not.
-///
-/// Each file is named by the digest of its text and never rewritten, so a stale process writes
-/// beside a newer file, never over it: no writer drops a name another declared.
+/// The file the store reads a deployment's names from: the code root's `secretspec.toml`,
+/// extended by a file in `dir` declaring every derived name it does not. Each file is named by
+/// its text's digest and never rewritten, so no writer drops a name another declared.
 #[derive(Debug, Clone)]
 pub struct Declared {
     base: Base,

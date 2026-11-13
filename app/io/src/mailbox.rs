@@ -152,8 +152,6 @@ impl Notmuch {
         parse_id_array(&raw)
     }
 
-    /// Every message `query` matches, folded by content hash, each hash recorded in
-    /// [`located::Located`] before it is answered so every printed hash resolves.
     /// The kinds of held value the text layers of `message`'s PDF attachments name.
     fn attached_kinds(
         &self,

@@ -133,7 +133,7 @@ impl Instance {
             .join("store")
     }
 
-    /// Every store the calendar reads: each declared plugin's, and each Google account's.
+    /// Every store the calendar reads: each declared plugin's, and each account's Google calendar's.
     #[must_use]
     pub fn calendar_stores(&self) -> Vec<PathBuf> {
         let google = self
@@ -141,7 +141,8 @@ impl Instance {
             .accounts
             .accounts()
             .iter()
-            .filter(|account| matches!(account.sync, suzatary_core::mail::account::Sync::Google))
+            // An account's store is written only once a grant holding its calendars has read
+            // it, and an unwritten store reads as no occurrences.
             .map(|account| self.google_calendar(account));
         self.plugins.stores().into_iter().chain(google).collect()
     }

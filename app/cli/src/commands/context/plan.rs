@@ -15,18 +15,14 @@ pub const FILE: &str = "context.toml";
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
-    /// The budgets.
     pub budget: Budget,
-    /// The recorded reading set.
     pub ratchet: Ratchet,
-    /// How tokens are counted.
     pub tokens: Tokens,
     /// What the repository's reading set holds beside the units.
     pub repository: Repository,
     /// The units, in the file's order.
     #[serde(rename = "unit")]
     pub units: Vec<Unit>,
-    /// The libraries from outside the repository.
     #[serde(rename = "external")]
     pub externals: Vec<External>,
 }
@@ -35,12 +31,9 @@ pub struct Plan {
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Budget {
-    /// One unit's USE.
     #[serde(rename = "use")]
     pub use_: u64,
-    /// One unit's DEVELOP.
     pub develop: u64,
-    /// One unit's tests.
     pub tests: u64,
     /// How far a change may grow the reading set past the ratchet.
     pub allowance: u64,
@@ -50,7 +43,6 @@ pub struct Budget {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ratchet {
-    /// The repository's reading set.
     pub reading: u64,
     /// The USE of each unit over `budget.use`; a unit absent here is held to the budget.
     #[serde(rename = "use", default)]
@@ -73,7 +65,6 @@ impl Ratchet {
 pub struct Tokens {
     /// The instant of the last calibration, in UTC.
     pub calibrated: String,
-    /// The ratios.
     pub ratio: Ratios,
     /// The files the ratios were measured over.
     pub sample: Vec<Sample>,
@@ -85,7 +76,6 @@ pub struct Tokens {
 pub struct Sample {
     /// Its path from the repository's root.
     pub path: String,
-    /// Its characters when it was counted.
     pub characters: u64,
     /// Its tokens as the model counted them.
     pub tokens: u64,
@@ -145,7 +135,6 @@ pub enum Shape {
 pub struct External {
     /// Its name, as `depends` spells it: a crate's package name.
     pub name: String,
-    /// Its repository.
     pub source: String,
     /// The revision this repository pins.
     pub rev: String,
@@ -153,7 +142,6 @@ pub struct External {
     pub pinned_in: String,
     /// Its directory inside its repository; empty for the root.
     pub path: String,
-    /// What kind of library it is.
     pub shape: ExternalShape,
     /// Its USE, in tokens, as last measured.
     #[serde(rename = "use")]

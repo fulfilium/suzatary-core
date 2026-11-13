@@ -90,17 +90,12 @@ impl Settables {
             .fold(Self::default(), Self::join)
     }
 
-    /// The Google client and each Google account's grant, each asked for by its own card.
+    /// The Google client and each account's grant, each asked for by its own card: any account
+    /// may hold a grant for its Google calendar, however its mail is read.
     #[must_use]
     pub fn google(accounts: &[crate::mail::account::MailAccount]) -> Self {
         let addresses: Vec<&crate::mail::address::EmailAddress> = accounts
             .iter()
-            .filter(|account| {
-                matches!(
-                    account.sync,
-                    crate::mail::account::Sync::Google | crate::mail::account::Sync::Gmail
-                )
-            })
             .map(|account| account.email.address())
             .collect();
         let client = addresses.first().map(|_| {

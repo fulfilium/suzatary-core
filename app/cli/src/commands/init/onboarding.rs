@@ -107,7 +107,6 @@ pub struct Person {
     pub name: String,
     /// The city `suzatary weather` forecasts; empty for none.
     pub city: String,
-    /// Their time zone, by name.
     pub zone: suzatary_base::zone::Zone,
 }
 
@@ -135,7 +134,6 @@ pub enum Provider {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     pub command: String,
-    /// Why, in a few words.
     pub why: &'static str,
 }
 

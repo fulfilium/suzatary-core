@@ -516,13 +516,11 @@ pub enum Mode<'a> {
     Stateless { system: &'a ForModel },
     /// [`SessionModel::open`]: start a session under an id the box minted.
     Open {
-        /// The id `--session-id` names.
         session_id: &'a SessionId,
         system: &'a ForModel,
     },
     /// [`SessionModel::resume`]: continue one.
     Resume {
-        /// The id `--resume` names.
         session_id: &'a SessionId,
         system: &'a ForModel,
     },

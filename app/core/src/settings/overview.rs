@@ -737,14 +737,8 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                             .standing(Group::Mail, account.email.as_str(), checked)
                             .join(read),
                     ),
-                    // A lieer account's move onto the sign-in asks for the client too.
-                    matches!(
-                        account.sync,
-                        crate::mail::account::Sync::Google | crate::mail::account::Sync::Gmail
-                    )
-                    .then_some(Need::GoogleClient)
-                    .into_iter()
-                    .chain([
+                    // Any account's Google calendar signs in through the box's one client.
+                    [Need::GoogleClient].into_iter().chain([
                         Need::MailSignIn(account.email.to_string()),
                         Need::MailSending(account.email.to_string()),
                         removal(Group::Mail, account.email.as_str()),

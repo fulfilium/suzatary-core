@@ -647,16 +647,12 @@ pub fn idle_watches(instance: &Instance) -> Vec<&str> {
         .collect()
 }
 
-/// One scope-prefixed line per state change.
 fn log(scope: &str, message: &str) {
     eprintln!("mail idle: {scope}: {message}");
 }
 
-/// `suzatary mail idle`: one read-only IMAP session per Microsoft account, blocking on
-/// `IDLE`, and the debounce they wake.
-///
-/// Every thread runs forever, so the first to end ends the process with an error, and systemd
-/// restarts the whole watch.
+/// `suzatary mail idle`: one read-only IMAP session per Microsoft account, and their debounce.
+/// The first thread to end ends the process, and systemd restarts the whole watch.
 fn idle_run(instance: &Instance) -> anyhow::Result<()> {
     let roster = &instance.mail.accounts;
     let accounts: Vec<(AccountName, MailAccount)> = roster
@@ -731,7 +727,7 @@ fn first_to_end(jobs: Vec<(String, Job)>) -> Option<String> {
 
 /// One account's connection, held open and reconnected forever; every transition is
 /// decided by the core's tested `idle::after`, never here. Its lines name it by `name`, never by
-/// its address, and quote a failure as an [`Excerpt`].
+/// its address.
 fn account_loop(
     name: AccountName,
     account: &MailAccount,

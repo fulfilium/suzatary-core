@@ -401,7 +401,6 @@ enum Commit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequest {
     pub number: u64,
-    /// Its page.
     pub url: String,
 }
 

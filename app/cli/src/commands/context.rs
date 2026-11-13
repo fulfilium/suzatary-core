@@ -1,7 +1,6 @@
 //! `suzatary context`: how many tokens an agent reads to use and to develop each unit of the
-//! repository, against the budgets of `context.toml`; `record` lowers the ratchet, `external`
-//! measures a pinned library, and `calibrate` measures the token ratios with Claude's tokenizer.
-//! `scripts/context.sh` runs it, and `app/cli/tests/guards/context.rs` enforces it.
+//! repository, against the budgets of `context.toml`. `scripts/context.sh` runs it, and
+//! `app/cli/tests/guards/context.rs` enforces it.
 
 pub mod finding;
 pub mod interface;
@@ -64,17 +63,9 @@ enum Act {
 #[derive(Debug)]
 pub enum Base {
     /// The merge base with `origin/master`.
-    Measured {
-        /// Its commit.
-        rev: String,
-        /// Its measures.
-        report: Report,
-    },
+    Measured { rev: String, report: Report },
     /// No `origin/master` to compare with.
-    Absent {
-        /// Why.
-        why: String,
-    },
+    Absent { why: String },
 }
 
 impl Base {
@@ -234,13 +225,9 @@ enum Budgeted {
 /// A unit's figure that is over its budget.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Over {
-    /// The unit.
     unit: String,
-    /// The figure.
     figure: Budgeted,
-    /// The figure's tokens.
     tokens: u64,
-    /// The budget it is over.
     budget: u64,
 }
 

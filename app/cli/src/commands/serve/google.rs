@@ -64,15 +64,14 @@ impl Consenting {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// `Google`, `Gmail` (read by lieer) or `None` for any other sync.
+    /// How `account` syncs its mail, or `None` for an account the instance does not declare.
     fn declared(&self, account: &EmailAddress) -> Result<Option<Strategy>, String> {
         let declared = self.edits.declared().map_err(|failed| failed.to_string())?;
         Ok(declared
             .accounts
             .iter()
             .find(|held| held.email.is(account.as_str()))
-            .map(|held| held.sync.clone())
-            .filter(|sync| matches!(sync, Strategy::Google | Strategy::Gmail)))
+            .map(|held| held.sync.clone()))
     }
 }
 
@@ -95,7 +94,7 @@ impl google_sign_in::Consents for Consenting {
             Ok(Some(_)) => {}
             Ok(None) => {
                 return not_sent(format!(
-                    "{account} is not a Google account the instance file declares"
+                    "{account} is not an account the instance file declares"
                 ));
             }
             Err(failed) => return not_sent(format!("the instance file does not read: {failed}")),

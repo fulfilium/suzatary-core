@@ -132,7 +132,6 @@ pub struct Paths {
     /// The compactor's CLI configuration, apart from the box user's, so no user-level
     /// `CLAUDE.md` or settings reach it.
     pub compactor_config: PathBuf,
-    /// The Proton Drive CLI.
     pub drive_cli: PathBuf,
     /// Where a Drive download lands for the length of one read.
     pub drive_scratch: PathBuf,
