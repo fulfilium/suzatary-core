@@ -1978,9 +1978,9 @@ pub fn calendar(
     Ok(wire::CalendarPayload {
         from: from.to_string(),
         days: DAYS,
-        text: suzatary_core::reading::calendar_text(&days),
+        text: suzatary_core::calendar::page::calendar_text(&days),
         rich: suzatary_core::rendering::CALENDAR
-            .call(&suzatary_core::reading::calendar(&days))
+            .call(&suzatary_core::calendar::page::calendar(&days))
             .ok()
             .and_then(|page| render.page(&page).ok())
             .map(|html| html.as_str().to_owned()),

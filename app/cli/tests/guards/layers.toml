@@ -9,7 +9,6 @@ order = ["store", "signatures", "todo", "held", "memory", "mail", "health", "tri
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
 allowed = [
-  { from = "reading", to = "calendar" },
   { from = "secretary/build", to = "secretary" },
   { from = "secretary/erasure", to = "secretary/holder" },
   { from = "secretary/filed", to = "secretary" },
