@@ -377,7 +377,7 @@ pub fn conversation(
             })
             .collect(),
         unplaced: unplaced(&lines),
-        state: crate::secretary::state(stored),
+        state: crate::secretary::store::state(stored),
         first,
         total,
         again: stored.rewind(crate::secretary::store::Rewind::Edit).ok(),
@@ -459,7 +459,7 @@ fn last_line(stored: &Stored) -> String {
         .find_map(|(_, said)| match &said.turn {
             Turn::Person { text, .. } => text.lines().map(str::trim).find(|line| !line.is_empty()),
             Turn::Model { text, calls } if calls.is_empty() => {
-                crate::secretary::typst_prose_line(text)
+                crate::secretary::title::typst_prose_line(text)
                     .or_else(|| text.lines().map(str::trim).find(|line| !line.is_empty()))
             }
             Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => None,

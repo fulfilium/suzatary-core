@@ -68,7 +68,7 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
 /// # Errors
 /// [`crate::secretary::store::NotATitle`] when nothing is left.
 pub(crate) fn from_answer(say: &str) -> Result<Title, crate::secretary::store::NotATitle> {
-    let line = crate::secretary::typst_prose_line(say).unwrap_or("");
+    let line = typst_prose_line(say).unwrap_or("");
     let bare = line
         .trim_matches(|c: char| matches!(c, '"' | '\'' | '“' | '”' | '‘' | '’' | '`'))
         .trim_end_matches(['.', ':'])
@@ -160,6 +160,29 @@ fn titled(
         },
     )?;
     conversations::read(conversations, id)
+}
+
+/// The first line of typst `text` that reads as prose.
+pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let leading = line.chars().next();
+        let mut candidate = line
+            .trim_start_matches(['=', '-', '+', '*', '_', '/', ' '])
+            .trim();
+        if let Some(mark @ ('*' | '_')) = leading
+            && let Some(rest) = candidate.strip_suffix(mark)
+        {
+            candidate = rest.trim();
+        }
+        if !candidate.is_empty() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

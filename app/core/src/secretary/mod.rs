@@ -187,29 +187,6 @@ pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::notify::Push> 
     })
 }
 
-/// The first line of typst `text` that reads as prose.
-pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
-    for raw in text.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let leading = line.chars().next();
-        let mut candidate = line
-            .trim_start_matches(['=', '-', '+', '*', '_', '/', ' '])
-            .trim();
-        if let Some(mark @ ('*' | '_')) = leading
-            && let Some(rest) = candidate.strip_suffix(mark)
-        {
-            candidate = rest.trim();
-        }
-        if !candidate.is_empty() {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
 /// A question as [`converse`] takes it.
 #[derive(Debug, Clone, Copy)]
 pub struct Saying<'a> {

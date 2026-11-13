@@ -271,9 +271,9 @@ The line is now 620,000 (613,000 on x86_64). Earlier cuts cost several hundred b
 11.0k. The one item the cuts above call while it is `pub(crate)`, `todo::fields::plain_kind`,
 becomes `pub` first.
 
-**The `reading -> calendar` edge**, which the `todo` cut needed gone, is gone: the calendar's page
-is drawn in `calendar::page`, beside the days it reads. It went first while the feature trains on
-`store/` landed; PR 14 waits for them.
+**While PR 14 waits** for the feature trains on `store/`, three edges went: `reading -> calendar`
+(the calendar's page is drawn in `calendar::page`), and `readings` and `title -> secretary`
+(`typst_prose_line` is `title`'s; `state` is named at `store`, not through the re-export).
 
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned

@@ -19,8 +19,6 @@ allowed = [
   { from = "secretary/opened", to = "secretary/digest" },
   { from = "secretary/opened", to = "secretary/held_lines" },
   { from = "secretary/opened", to = "secretary/line_event" },
-  { from = "secretary/readings", to = "secretary" },
-  { from = "secretary/title", to = "secretary" },
   { from = "secretary/undo", to = "secretary" },
 ]
 
