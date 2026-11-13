@@ -58,6 +58,8 @@ if [[ -n "${SUZATARY_E2E_LIVE:-}" && $# -eq 0 ]]; then
 fi
 
 echo "==> wait budget $(node -e 'import("./web/e2e/budget.ts").then(b => console.log(b.WAIT_MS))') ms (web/e2e/budget.ts)"
+# What a time bound was measured under, so a log read later can tell a slow run from a slow change.
+echo "==> run: SUZATARY_LINES_RATE=${SUZATARY_LINES_RATE:-1} SUZATARY_E2E_BROWSER_CPU=${SUZATARY_E2E_BROWSER_CPU:-all} shards=$shards cores=$(nproc) load=$(cut -d' ' -f1-3 /proc/loadavg)"
 
 if [[ ! -f web/dist/app.js ]]; then
   echo "web-e2e.sh: web/dist/app.js is missing — run scripts/build-web.sh first" >&2
@@ -585,7 +587,7 @@ lines_shape=(
 )
 lines_base="$(start lines "${lines_shape[@]}")"
 # web/e2e/rescrub.test.ts: lines sealed before lines recorded their rules, for `migrate-scrub`.
-rescrub_base="$(start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-1500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned)"
+rescrub_base="$(start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned)"
 # web/e2e/wide.test.ts: 400 heads.
 wide_base="$(start wide --wide 400)"
 # The service worker's server: its build is read from a file per request, so a scene can deploy

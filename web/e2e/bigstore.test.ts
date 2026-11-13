@@ -71,17 +71,29 @@ const placed = `(performance.getEntriesByName(${JSON.stringify(marks.PLACED)}).a
 const quiet = (drawn: number): string =>
   `(() => { const l = window.__long.at(-1); return performance.now() - Math.max(${drawn}, l === undefined ? 0 : l[0] + l[1]) > ${QUIET_MS} })()`
 
-type Phase = { readonly ms: number; readonly longest: number; readonly tasks: number }
+// A measure the page's own code took (`page:draw`, `painter:step`, `typst:draw`, …), as the browser kept it.
+type Held = { readonly name: string; readonly ms: number; readonly detail: unknown }
+// `within`: the measures inside the longest task, so a log names the code that held the page's thread.
+type Phase = { readonly ms: number; readonly longest: number; readonly tasks: number; readonly within: readonly Held[] }
+
+// The page's measures that overlap the window `[at, at + ms]`, longest first.
+const measuresIn = (at: number, ms: number): string => `performance.getEntriesByType("measure")
+  .filter((m) => m.startTime < ${at + ms} && m.startTime + m.duration > ${at})
+  .sort((a, b) => b.duration - a.duration)
+  .slice(0, 8)
+  .map((m) => ({ name: m.name, ms: Math.round(m.duration), detail: m.detail ?? null }))`
 
 // The long tasks from `from` (now, when absent; the document's start is 0) until `until` holds and the page is quiet,
-// and how long until `until` held.
+// how long until `until` held, and what the page's code measured inside the longest of them.
 const phase = async (until: string, from?: number, timeout = STEP_MS): Promise<Phase> => {
   const since = from ?? (await app.page.evaluate<number>(`performance.now()`))
   await app.page.waitFor(until, { timeout })
   const drawn = await app.page.evaluate<number>(`performance.now()`)
   await app.page.waitFor(quiet(drawn), { timeout })
   const tasks = await app.page.evaluate<[number, number][]>(`window.__long.filter(([at]) => at >= ${since})`)
-  return { ms: Math.round(drawn - since), longest: Math.round(Math.max(0, ...tasks.map(([, d]) => d))), tasks: tasks.length }
+  const longest = tasks.reduce<[number, number] | null>((a, t) => (a === null || t[1] > a[1] ? t : a), null)
+  const within = longest === null ? [] : await app.page.evaluate<Held[]>(measuresIn(longest[0], longest[1]))
+  return { ms: Math.round(drawn - since), longest: Math.round(longest?.[1] ?? 0), tasks: tasks.length, within }
 }
 
 // A load of the app on the todo list, then the stream of conversations and the largest conversation as pages it moves to.
@@ -128,7 +140,8 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
       ["the stream, warm", warm.stream],
       ["a conversation opening, warm", warm.opened],
     ] as const
-    for (const [what, p] of phases) assert.ok(p.longest <= LONGEST_MS, `${what} held the page's thread ${p.longest} ms at once (at most ${LONGEST_MS})`)
+    for (const [what, p] of phases)
+      assert.ok(p.longest <= LONGEST_MS, `${what} held the page's thread ${p.longest} ms at once (at most ${LONGEST_MS}); inside it: ${JSON.stringify(p.within)}`)
   } finally {
     await app.page.throttle(1)
     await unobserve()
@@ -182,7 +195,7 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
-  const drawn = await (async (): Promise<{ readonly ms: number; readonly longest: number; readonly held: readonly string[]; readonly cost: Cost }> => {
+  const drawn = await (async (): Promise<{ readonly ms: number; readonly longest: number; readonly within: readonly Held[]; readonly held: readonly string[]; readonly cost: Cost }> => {
     try {
       await app.page.throttle(RATE)
       await app.page.reload()
@@ -191,16 +204,19 @@ app.scene("a warm load of the conversations draws them from the device, with eve
       const counted = await app.page.inWorker<Pick<Cost, "decoded" | "hashed" | "opened">>("prodromework", DECODED)
       const of = new Set(ids)
       const needed = skeleton.nodes.filter((n) => n.header.node === "structure" || of.has(n.header.conversation ?? "")).length
-      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: { ...counted, needed, all: skeleton.nodes.length } }
+      return { ms: draw.ms, longest: draw.longest, within: draw.within, held: app.page.heldUrls(), cost: { ...counted, needed, all: skeleton.nodes.length } }
     } finally {
       await app.page.throttle(1)
       await release()
       await unobserve()
     }
   })()
-  console.log(JSON.stringify({ ...SHAPE, rate: RATE, warm: drawn.ms, longest: drawn.longest, ...drawn.cost }))
+  console.log(JSON.stringify({ ...SHAPE, rate: RATE, warm: drawn.ms, longest: drawn.longest, within: drawn.within, ...drawn.cost }))
   assert.ok(drawn.ms < wait.MS / 3, `the stream drew ${Math.round(drawn.ms)} ms after the document started (bound ${wait.MS / 3})`)
-  assert.ok(drawn.longest <= LONGEST_MS, `the warm load held the page's thread ${drawn.longest} ms at once (at most ${LONGEST_MS})`)
+  assert.ok(
+    drawn.longest <= LONGEST_MS,
+    `the warm load held the page's thread ${drawn.longest} ms at once (at most ${LONGEST_MS}); inside it: ${JSON.stringify(drawn.within)}`,
+  )
   assert.ok(drawn.cost.decoded <= drawn.cost.needed, `the warm load decoded ${drawn.cost.decoded} prints; its rounds need ${drawn.cost.needed} of ${drawn.cost.all}`)
   assert.equal(drawn.cost.hashed, 0, "every print the warm load read was admitted by its name, so none is hashed again")
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
@@ -258,7 +274,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
     const answered = seen[to]?.[2] ?? -1
     // How many times the page asked for its stream before the first answer.
     const streams = seen.slice(0, to).filter((s) => s[0] === "asked" && s[4] === "Stream").length
-    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, longest: draw.longest, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between), cpu: process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all", worker: phases }))
+    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, longest: draw.longest, within: draw.within, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between), cpu: process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all", worker: phases }))
     assert.deepEqual(named(between.filter((q) => q.lane === "Shell")), [], `the worker answered the shell while the page's stream was owed:\n${JSON.stringify(seen)}`)
     assert.ok(draw.ms < wait.MS / 3, `the stream drew ${draw.ms} ms after the document started (bound ${wait.MS / 3})`)
   }

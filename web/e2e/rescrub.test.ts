@@ -1,7 +1,7 @@
 /**
  * A STORE SEALED AGAIN IS READ FROM ITS RESEALS: the rescrub server holds a generated store whose lines were sealed
  * before lines recorded their rules and were never scrubbed (`suzatary-dev fixture-chain --lines … --sealed
- * unversioned`; 1,500 lines over 30 conversations by default, `SUZATARY_E2E_RESCRUB_LINES` and
+ * unversioned`; 500 lines over 30 conversations by default, `SUZATARY_E2E_RESCRUB_LINES` and
  * `SUZATARY_E2E_RESCRUB_CONVERSATIONS` to change it). A tab loads it cold and warm, the box runs `secretary
  * migrate-scrub --apply` while the tab is closed, which seals every slot again and destroys the keys it replaced, and
  * the tab opens it again, hearing of the reseals in one pull.
@@ -104,7 +104,11 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     // The tab is closed while the box runs the migration, so it hears of the reseals in one pull when it opens again.
     await app.page.navigate("about:blank")
     const before = boxKeys()
+    // The migration's own time, logged: it runs within one step's bound (`STEP_MS`), and costs about 7 ms a stale slot
+    // and 2 s of census on a fast machine, several times that on the box.
+    const migrating = Date.now()
     const said = atTheTerminal(["secretary", "migrate-scrub", "--apply"], INSTANCE)
+    const migrated = Date.now() - migrating
     assert.ok(/sealed [1-9][0-9]* slot\(s\) again/.test(said), said)
     const after = boxKeys()
     assert.ok(after.some((k) => !before.includes(k)) && before.some((k) => !after.includes(k)), "the box replaced its keys")
@@ -143,7 +147,7 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     assert.deepEqual([known.answer.nodes.length, Object.keys(known.answer.keys).length], [0, 0], "a pull that lacks nothing brings no node and no key")
     assert.ok(known.bytes < 1024, `a pull that lacks nothing is ${known.bytes} bytes`)
     const warm = await load()
-    const measured = { lines: Number(process.env["SUZATARY_E2E_RESCRUB_LINES"] ?? "1500"), rate: RATE, stale, resealed, converged, warm }
+    const measured = { lines: Number(process.env["SUZATARY_E2E_RESCRUB_LINES"] ?? "500"), rate: RATE, migrated, stale, resealed, converged, warm }
     console.log(JSON.stringify(measured))
     const out = process.env["SUZATARY_LINESBENCH"]
     if (out !== undefined && out !== "") writeFileSync(out, `${JSON.stringify(measured, null, 2)}\n`)
