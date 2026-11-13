@@ -298,6 +298,15 @@ export namespace linesync {
               fx.told(`epoch/${KEPT}`, excluded.behind(KEPT, held.went_back(a.epoch)))
               fx.bars({ type: "Piece", name: NAME, size: a.size, weight: a.weight })
               await append(held.piece(JSON.stringify(a), JSON.stringify(a.keys), time.now()))
+              // Each piece lands as it comes: the box sends the newest conversation first, each
+              // piece closed under parents, so a reading draws from the first while the rest come.
+              // The landed row is behind the box's heads until the last; only a whole pull says a
+              // conversation is absent. The purge runs first, so no reading reads an owed key.
+              if (a.rest > 0) {
+                await purge()
+                await stepped(held.land())
+                landing.done("Landed")
+              }
             },
             land: async () => {
               await purge()

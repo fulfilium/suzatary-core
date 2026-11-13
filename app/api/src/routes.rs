@@ -750,6 +750,19 @@ trait Sends<E: prodrome_core::schema::Schema> {
         name: &prodrome_core::event::Hash,
         envelope: &prodrome_core::event::Envelope<E>,
     ) -> usize;
+    /// The order to send `lacking` in, as its indices: a linear extension of the causal order,
+    /// so each prefix joined to what the asker holds is closed under parents. The store's linear
+    /// order unless a store says which objects a reader wants first.
+    fn order(
+        &self,
+        _graph: &suzatary_core::store::Graph<E>,
+        lacking: &[(
+            &prodrome_core::event::Hash,
+            &prodrome_core::event::Envelope<E>,
+        )],
+    ) -> Vec<usize> {
+        (0..lacking.len()).collect()
+    }
 }
 
 /// Each object with its literal, weighed by the literal's bytes.
@@ -801,12 +814,95 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     ) -> usize {
         weight(&node_of(name, envelope, 0))
     }
+
+    /// The newest conversation first: conversations by their latest line, latest first, each in
+    /// the store's linear order, every object after the ancestors it lacks; then what is no line.
+    /// So a device draws the conversation it opens to from the first piece.
+    fn order(
+        &self,
+        graph: &suzatary_core::store::Graph<suzatary_core::secretary::line_event::LineEvent>,
+        lacking: &[(
+            &prodrome_core::event::Hash,
+            &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+        )],
+    ) -> Vec<usize> {
+        let latest = graph.reading("latest line of each conversation", |graph| {
+            let mut latest: std::collections::HashMap<
+                suzatary_base::conversation_id::ConversationId,
+                fpl::Instant,
+            > = std::collections::HashMap::new();
+            for (_, envelope) in graph.objects() {
+                if let Some(line) = envelope.event() {
+                    let at = fpl::instant_of(line.at());
+                    latest
+                        .entry(line.conversation().clone())
+                        .and_modify(|was| *was = (*was).max(at))
+                        .or_insert(at);
+                }
+            }
+            latest
+        });
+        let mut wanted: Vec<_> = lacking
+            .iter()
+            .enumerate()
+            .map(|(at, (_, envelope))| {
+                let conversation = envelope
+                    .event()
+                    .map(suzatary_core::secretary::line_event::LineEvent::conversation);
+                let newest = conversation.and_then(|id| latest.get(id)).copied();
+                (std::cmp::Reverse(newest), conversation, at)
+            })
+            .collect();
+        wanted.sort_unstable();
+        closed_order(lacking, wanted.into_iter().map(|(_, _, at)| at))
+    }
+}
+
+/// `wanted`, a permutation of `lacking`'s indices, made a linear extension: each object is sent
+/// after every ancestor of it `lacking` holds, those in `lacking`'s own order, which is one.
+fn closed_order<E>(
+    lacking: &[(
+        &prodrome_core::event::Hash,
+        &prodrome_core::event::Envelope<E>,
+    )],
+    wanted: impl Iterator<Item = usize>,
+) -> Vec<usize> {
+    let at: std::collections::HashMap<&prodrome_core::event::Hash, usize> = lacking
+        .iter()
+        .enumerate()
+        .map(|(at, (name, _))| (*name, at))
+        .collect();
+    let mut sent = vec![false; lacking.len()];
+    let mut order = Vec::with_capacity(lacking.len());
+    for one in wanted {
+        if sent[one] {
+            continue;
+        }
+        let mut before = Vec::new();
+        let mut pending = vec![one];
+        while let Some(next) = pending.pop() {
+            if sent[next] {
+                continue;
+            }
+            sent[next] = true;
+            before.push(next);
+            pending.extend(
+                prodrome_core::event::parents_of(lacking[next].1)
+                    .iter()
+                    .filter_map(|parent| at.get(parent).copied())
+                    .filter(|&parent| !sent[parent]),
+            );
+        }
+        before.sort_unstable();
+        order.extend(before);
+    }
+    order
 }
 
 /// An answer of `store`, read under its epoch's lock so the epoch and the objects are one
 /// snapshot: every head, the prodromes it serves, and what `sends` makes of each object the
-/// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in
-/// linearisation order so a receiver can apply them as they arrive. The frontier the asker holds
+/// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in the
+/// order `sends` gives, a linear extension, so a receiver can apply them as they arrive. The frontier the asker holds
 /// once it has taken the answer is recorded, and named in it. The store is read through the graph
 /// it keeps by its heads, so an answer at heads already read reads no object; one to a `since` at
 /// the store's heads also walks none, and sends nothing.
@@ -845,7 +941,8 @@ where
                 .map(|(name, envelope)| (name.clone(), sends.weigh(name, envelope)))
                 .collect::<std::collections::HashMap<_, _>>()
         });
-        for &(name, envelope) in lacking.lacking() {
+        let order = sends.order(&graph, lacking.lacking());
+        for (name, envelope) in order.into_iter().map(|at| lacking.lacking()[at]) {
             piece.rest += 1;
             if full {
                 piece.size += weights
@@ -867,9 +964,12 @@ where
             piece.size += weight;
         }
         piece.rest -= piece.sent.len();
+        // The pieces are sent in `order`, not as a prefix of the linear order, so the frontier is
+        // what the asker held joined to the closure of what it was sent.
+        let sent: Vec<_> = piece.sent.iter().map(|(name, _)| name.clone()).collect();
         let frontier = frontier_of(
             &lacking
-                .record(piece.sent.len())
+                .record_with(sent)
                 .map_err(suzatary_core::store::StoreError::from)?,
         );
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
@@ -979,6 +1079,10 @@ pub fn lines_skeleton(
 /// Each node, named `names`, sized by the bytes [`content`] sends of it, which are the store's own
 /// print and not its reprint, so a tab that batches its asks by these sizes never asks for more
 /// than one answer carries.
+///
+/// A node the store holds no print of refuses the piece rather than being sized by its reprint.
+/// That holds while every object has its file; a prune of the box's disk that keeps a husk in a
+/// literal's place has to answer this case again.
 fn held_sizes(
     lines: &dyn Prodrome<suzatary_core::secretary::line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],

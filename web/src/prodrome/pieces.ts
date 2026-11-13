@@ -1,7 +1,7 @@
 // A store's pull, a piece at a time. Each piece the box answers is kept beside what the tab holds, at the cost of that
 // piece alone, and the next is asked from the heads they hold together, so a pull cut off keeps every piece that came
-// and the next pull asks only for the rest. What the pieces brought lands once, when the box says nothing is left: it
-// is the one change a page reading the store sees.
+// and the next pull asks only for the rest. What the pieces brought lands when the box says nothing is left; a store
+// whose box sends each piece closed under parents may land each as it is kept (the lines do, in `keep`).
 
 export namespace pieces {
   // How a pull ended: the box said nothing is left and the pieces landed; a piece moved nothing this tab holds, so asking

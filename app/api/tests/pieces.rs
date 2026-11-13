@@ -314,6 +314,176 @@ fn a_fork_then_a_line_is_a_merge() {
     assert_eq!(merges, 1);
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// Newest first: in a pull from nothing, a line comes before a line of a conversation whose
+    /// latest line is later only where it is that line's ancestor. So the newest conversation's
+    /// lines lead the first piece, and a device that lands each piece draws it from the first.
+    #[test]
+    fn law_the_skeleton_sends_the_newest_conversation_first(
+        script in prop::collection::vec(write(), 1..24),
+        budget in 200..4000usize,
+    ) {
+        let mut store = Writer::new();
+        for write in &script {
+            store.apply(write);
+        }
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let books = Books { epochs: &epochs, frontiers: &frontiers };
+        let mut since = Since::Nothing;
+        let mut nodes: Vec<suzatary_core::wire::lines::SkeletonNode> = Vec::new();
+        loop {
+            let piece = routes::lines_skeleton(store.lines.conversations(), &since, books, now(), Cut::Bytes(budget)).expect("a piece");
+            nodes.extend(piece.nodes.clone());
+            if piece.rest == 0 {
+                break;
+            }
+            since = Since::Frontier(Token::parse(&piece.frontier.digest).expect("a digest"));
+        }
+        let line = |node: &suzatary_core::wire::lines::SkeletonNode| match &node.header {
+            suzatary_core::wire::lines::NodeHeader::Line { conversation, at, .. } => Some((conversation.clone(), at.clone())),
+            suzatary_core::wire::lines::NodeHeader::Structure { .. } => None,
+        };
+        let mut latest: BTreeMap<String, String> = BTreeMap::new();
+        for (conversation, at) in nodes.iter().filter_map(line) {
+            let was = latest.entry(conversation).or_default();
+            if at > *was {
+                *was = at;
+            }
+        }
+        let parents: BTreeMap<&str, &[String]> = nodes.iter().map(|node| (node.hash.as_str(), node.parents.as_slice())).collect();
+        let ancestors = |of: &str| -> BTreeSet<String> {
+            let mut found = BTreeSet::new();
+            let mut pending: Vec<String> = parents.get(of).map(|p| p.to_vec()).unwrap_or_default();
+            while let Some(next) = pending.pop() {
+                if found.insert(next.clone()) {
+                    pending.extend(parents.get(next.as_str()).map(|p| p.to_vec()).unwrap_or_default());
+                }
+            }
+            found
+        };
+        for (later_at, later) in nodes.iter().enumerate() {
+            let Some((conversation, _)) = line(later) else { continue };
+            let newest = &latest[&conversation];
+            let under = ancestors(&later.hash);
+            for earlier in &nodes[..later_at] {
+                if let Some((other, _)) = line(earlier) {
+                    prop_assert!(
+                        latest[&other] >= *newest || under.contains(&earlier.hash),
+                        "{} of {} came before {} of the newer {}", earlier.hash, other, later.hash, conversation
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// A replica of the lines pulled piece by piece at `budget` bytes a piece, landing each piece as
+/// it is kept when `each`, else once at the end; after each landing, `landed` is told the names
+/// the landed row reads and whether it reads as behind the box's heads.
+fn landed_by_pieces(
+    store: &Writer,
+    books: Books<'_>,
+    budget: usize,
+    each: bool,
+    mut landed: impl FnMut(&BTreeSet<Hash>, &BTreeMap<Hash, Vec<Hash>>, bool),
+) -> suzatary_core::secretary::held_replica::HeldReplica {
+    use suzatary_core::replica::held::Node as _;
+    let mut replica = suzatary_core::secretary::held_replica::HeldReplica::default();
+    loop {
+        let since = match replica.rows().holding().replica().frontier().digest() {
+            Some(digest) => Since::Frontier(Token::parse(digest.as_str()).expect("a digest")),
+            None => Since::Nothing,
+        };
+        let piece = routes::lines_skeleton(
+            store.lines.conversations(),
+            &since,
+            books,
+            now(),
+            Cut::Bytes(budget),
+        )
+        .expect("a piece");
+        let heads: BTreeSet<Hash> = match &piece.heads {
+            suzatary_core::wire::lines::Heads::These { heads } => heads
+                .iter()
+                .map(|h| Hash::new(h.clone()).expect("a name"))
+                .collect(),
+            suzatary_core::wire::lines::Heads::Held => BTreeSet::new(),
+        };
+        let given = piece
+            .keys
+            .iter()
+            .map(|(name, key)| {
+                (
+                    suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                        .expect("a key name"),
+                    key.clone(),
+                )
+            })
+            .collect();
+        let rest = piece.rest;
+        replica
+            .piece(
+                piece,
+                suzatary_core::secretary::key_ring::KeyRing::of(&given),
+                1,
+            )
+            .expect("a piece");
+        if rest == 0 || each {
+            let _ = replica.land();
+            let read = replica.rows().landed().replica().read();
+            let names: BTreeSet<Hash> = read.nodes().map(|node| node.name().clone()).collect();
+            let parents = read
+                .nodes()
+                .map(|node| (node.name().clone(), node.rests_on().to_vec()))
+                .collect();
+            landed(&names, &parents, read.behind(&heads));
+        }
+        if rest == 0 {
+            return replica;
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    /// Landing each piece as it comes reads as landing once: every landed row is closed under
+    /// parents, reads as behind the box's heads until the last piece lands, and the last landed
+    /// row holds the nodes, the keys and the heads that one landing at the end holds.
+    #[test]
+    fn law_landing_each_piece_reads_as_landing_once(
+        script in prop::collection::vec(write(), 1..24),
+        budget in 200..4000usize,
+    ) {
+        let mut store = Writer::new();
+        for write in &script {
+            store.apply(write);
+        }
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let books = Books { epochs: &epochs, frontiers: &frontiers };
+        let mut landings: Vec<(bool, bool)> = Vec::new();
+        let each = landed_by_pieces(&store, books, budget, true, |names, parents, behind| {
+            let closed = parents.values().flatten().all(|parent| names.contains(parent));
+            landings.push((closed, behind));
+        });
+        let once = landed_by_pieces(&store, books, budget, false, |_, _, _| {});
+        prop_assert!(landings.iter().all(|(closed, _)| *closed), "every landed row is closed under parents");
+        let (last, before) = landings.split_last().expect("a landing");
+        prop_assert!(!last.1, "the last landing reads as the box's heads");
+        prop_assert!(before.iter().all(|(_, behind)| *behind), "each landing before the last reads as behind");
+        let read = |replica: &suzatary_core::secretary::held_replica::HeldReplica| {
+            let row = replica.rows().landed();
+            let read = row.replica().read();
+            let names: BTreeSet<Hash> = read.nodes().map(|node| node.name().clone()).collect();
+            let keys: BTreeSet<String> = row.keys().iter().map(|(name, _)| name.as_str().to_owned()).collect();
+            (names, keys, read.heads())
+        };
+        prop_assert_eq!(read(&each), read(&once));
+    }
+}
+
 /// The content of `hashes`, asked of the lines by hash as a tab would ask: in ascending order, in
 /// answers of at most `query::MOST_HASHES` names and `routes::MOST_CONTENT_BYTES` bytes by the
 /// sizes the skeleton gave, an object larger than that asked for alone.
@@ -342,7 +512,8 @@ proptest! {
     /// and each node's parents are its literal's; the heads, prodromes and epoch are the pull's;
     /// the keys are the whole skeleton's, no erased key among them. A literal is sent only where
     /// a key sent opens a word of it, and a husk only where none does, each sized as the node
-    /// says. Where nothing moved, the objects come in the pull's own order.
+    /// says. Where nothing moved, the objects are the pull's, each its literal, in the skeleton's
+    /// own order, which the parents' check above holds to be a linear extension.
     #[test]
     fn law_the_skeleton_and_the_content_by_hash_are_the_whole_pull(
         script in prop::collection::vec(write(), 1..24),
@@ -443,7 +614,11 @@ proptest! {
                 prop_assert_eq!(keys.get(name), Some(key));
             }
         } else {
-            prop_assert_eq!(&rebuilt, &whole.objects.objects);
+            let by_hash = |objects: &[suzatary_core::wire::lines::StoredObject]| -> BTreeMap<String, String> {
+                objects.iter().map(|o| (o.hash.clone(), o.literal.clone())).collect()
+            };
+            prop_assert_eq!(rebuilt.len(), whole.objects.objects.len());
+            prop_assert_eq!(by_hash(&rebuilt), by_hash(&whole.objects.objects));
             prop_assert_eq!(&keys, &whole_keys);
         }
     }
