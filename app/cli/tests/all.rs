@@ -62,6 +62,8 @@ mod google;
 mod heartbeat;
 #[path = "held.rs"]
 mod held;
+#[path = "husked.rs"]
+mod husked;
 #[path = "init.rs"]
 mod init;
 #[path = "instance.rs"]

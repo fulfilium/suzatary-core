@@ -7,6 +7,7 @@ mod doc;
 mod error;
 mod graph;
 mod hold;
+mod husk;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/in_memory.rs"]
 mod in_memory;
@@ -33,6 +34,7 @@ pub use doc::{Doc, Gets};
 pub use error::StoreError;
 pub use graph::Graph;
 pub use hold::{Hold, InMemoryHold, Once};
+pub use husk::{Husk, HuskObject, Husking, NotAHusk};
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory::InMemory;
 #[cfg(any(test, feature = "nothing"))]

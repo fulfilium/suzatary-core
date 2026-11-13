@@ -26,7 +26,7 @@ use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 use crate::secretary::digest::{Placed, Shape};
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
-use crate::secretary::line_event::{Husk, LineEvent, LineVocabulary};
+use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
@@ -34,6 +34,7 @@ use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Stored};
 use crate::secretary::transcript::{self, Transcript, Write};
 use crate::secretary::words::{Gone, Words};
+use crate::store::Husk;
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
 
@@ -690,14 +691,14 @@ impl<F: Folds> HeldLines<F> {
 
     /// Each line of `names` held as a print, with words, swapped for its husk: what is left of a
     /// line once every key of its words is let go. The husks, with what they rest on.
-    pub fn husk(&mut self, names: &BTreeSet<Hash>) -> Vec<(Hash, Vec<Hash>, Husk)> {
-        let husked: Vec<(Hash, Vec<Hash>, Husk)> = names
+    pub fn husk(&mut self, names: &BTreeSet<Hash>) -> Vec<(Hash, Vec<Hash>, Husk<LineEvent>)> {
+        let husked: Vec<(Hash, Vec<Hash>, Husk<LineEvent>)> = names
             .iter()
             .filter(|name| !self.husks.contains(*name))
             .filter_map(|name| match self.prints.get(name) {
-                Some(Print::Line { line, parents }) => line
-                    .husk()
-                    .map(|husk| (name.clone(), parents.clone(), husk)),
+                Some(Print::Line { line, parents }) => {
+                    Husk::of(&**line).map(|husk| (name.clone(), parents.clone(), husk))
+                }
                 Some(Print::Structure { .. } | Print::Unread(_)) | None => None,
             })
             .collect();
@@ -706,7 +707,7 @@ impl<F: Folds> HeldLines<F> {
     }
 
     /// `husks` held, each in place of its line's print where one is held.
-    pub(crate) fn hold_husks(&mut self, husks: Vec<(Hash, Vec<Hash>, Husk)>) {
+    pub(crate) fn hold_husks(&mut self, husks: Vec<(Hash, Vec<Hash>, Husk<LineEvent>)>) {
         if husks.is_empty() {
             return;
         }
@@ -715,7 +716,7 @@ impl<F: Folds> HeldLines<F> {
         let add = husks
             .into_iter()
             .map(|(name, parents, husk)| {
-                let line = Arc::new(husk.line().clone());
+                let line = Arc::new(husk.event().clone());
                 (name, Print::Line { line, parents })
             })
             .collect();

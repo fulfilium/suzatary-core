@@ -6,6 +6,8 @@
 
 #[path = "drive_port.rs"]
 mod drive_port;
+#[path = "husked.rs"]
+mod husked;
 #[path = "inbox_readings.rs"]
 mod inbox_readings;
 #[path = "inbox_round_trip.rs"]

@@ -15,17 +15,17 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::store::{
-    Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock, append_to, begun,
-};
+use suzatary_core::store::{Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock};
 use suzatary_core::stores::{Kind, Store};
 use suzatary_record::record::Record;
 
 use crate::durable;
+use crate::husked::Husked;
+use crate::object_files::ObjectFiles;
 
-/// A prodrome's objects, behind the memo and its hold.
-pub struct Objects<E: Schema> {
-    events: EventStore<E, Untrusted>,
+/// A prodrome's objects, behind the memo and its hold, kept in `F`.
+pub struct Objects<E: Schema, F = EventStore<E, Untrusted>> {
+    events: F,
     remembered: Mutex<Option<Remembered<E>>>,
     reentrant: Reentrant,
     /// What the store refuses to take, whoever offers it: an appended event, or a received
@@ -45,7 +45,7 @@ struct Remembered<E: Schema> {
     verified: Option<Vec<String>>,
 }
 
-impl<E: Store> std::fmt::Debug for Objects<E> {
+impl<E: Store, F: ObjectFiles<E>> std::fmt::Debug for Objects<E, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Objects")
             .field("kind", &E::KIND)
@@ -101,8 +101,8 @@ impl Objects<Declared> {
     }
 }
 
-impl<E: Schema> Objects<E> {
-    fn new(events: EventStore<E, Untrusted>) -> Self {
+impl<E: Schema, F> Objects<E, F> {
+    fn new(events: F) -> Self {
         Self {
             events,
             remembered: Mutex::new(None),
@@ -112,12 +112,37 @@ impl<E: Schema> Objects<E> {
     }
 
     #[must_use]
-    pub fn inner(&self) -> &EventStore<E, Untrusted> {
+    pub fn inner(&self) -> &F {
         &self.events
     }
 }
 
-impl<E: Store> Objects<E> {
+impl<E: Store<Vocabulary: Default>> Objects<E, Husked<E>>
+where
+    E: suzatary_core::store::Husking,
+{
+    /// The store at `root`, every writer believed, where a name may hold a husk in place of its
+    /// whole.
+    #[must_use]
+    pub fn husked(root: impl Into<std::path::PathBuf>) -> Self {
+        Self::new(Husked::open(root))
+    }
+
+    /// Every whole object `names` names that holds sealed parts replaced by its husk, under the
+    /// store's hold, by the husked store's own `husk`.
+    ///
+    /// # Errors
+    /// [`StoreError::Unwritable`]; what was replaced stays.
+    pub fn husk(
+        &self,
+        names: &std::collections::BTreeSet<Hash>,
+    ) -> Result<crate::husked::LetGo, StoreError> {
+        let _held = self.locked()?;
+        self.events.husk(names).map_err(|e| Self::not_appended(e))
+    }
+}
+
+impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// Its `Genesis` written when it holds nothing, so a replica's first change has a prodrome to
     /// rest on: a replica may not begin one. A begun store stays as it is.
     ///
@@ -178,7 +203,7 @@ impl<E: Store> Objects<E> {
 
 impl WriteLock for durable::Held {}
 
-impl<E: Store> Reads<E> for Objects<E> {
+impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         self.with(|held| {
             held.graph
@@ -260,7 +285,7 @@ impl<E: Store> Reads<E> for Objects<E> {
     fn verify(&self) -> Vec<String> {
         // History beneath the epoch predates signatures: its unsigned writes are not findings.
         let findings = || {
-            let found = self.events.verify();
+            let found = self.events.findings();
             let found = match self.events.dag() {
                 Ok(dag) => suzatary_core::signatures::since_epoch(&dag, found),
                 Err(_) => found,
@@ -272,34 +297,47 @@ impl<E: Store> Reads<E> for Objects<E> {
     }
 }
 
-impl<E: Store> Prodrome<E> for Objects<E> {
+impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
     fn append(&self, event: E) -> Result<Hash, StoreError> {
         if let Some(door) = &self.door {
             door(&event).map_err(|refused| Self::not_appended(refused))?;
         }
-        let name = append_to(&self.events, E::LABEL, event).map_err(|e| Self::not_appended(e))?;
-        Self::wrote(std::slice::from_ref(&name));
-        Ok(name)
+        let mut once = Some(event);
+        let names = self.append_each(&mut || Ok(once.take()))?;
+        names
+            .into_iter()
+            .next()
+            .ok_or_else(|| Self::not_appended("no event was written"))
     }
 
-    /// One decision, which stats every file in `objects/`, for the whole run, not one per event.
+    /// One hold of the store's lock for the whole run, not one per event.
     fn append_each(
         &self,
         next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
     ) -> Result<Vec<Hash>, StoreError> {
-        begun(&self.events, E::LABEL).map_err(|e| Self::not_appended(e))?;
-        let mut decision = self.events.decide().map_err(|e| Self::not_appended(e))?;
         let mut names = Vec::new();
-        let written = std::iter::from_fn(|| next().transpose()).try_for_each(|event| {
-            let event = event?;
-            if let Some(door) = &self.door {
-                door(&event).map_err(|refused| Self::not_appended(refused))?;
-            }
-            names.push(decision.append(event).map_err(|e| Self::not_appended(e))?);
-            Ok(())
-        });
+        let mut refused = None;
+        let written = self.events.append_each(
+            E::LABEL,
+            &mut || {
+                let event = next().map_err(|e| {
+                    let shown = e.to_string();
+                    refused = Some(e);
+                    shown
+                })?;
+                if let (Some(door), Some(event)) = (&self.door, &event) {
+                    door(event)?;
+                }
+                Ok(event)
+            },
+            &mut names,
+        );
         Self::wrote(&names);
-        written.map(|()| names)
+        match (written, refused) {
+            (Ok(()), _) => Ok(names),
+            (Err(_), Some(refused)) => Err(refused),
+            (Err(why), None) => Err(Self::not_appended(why)),
+        }
     }
 
     /// Where the store has a door, every object's event goes through it first, so a refusal

@@ -12,11 +12,12 @@ use crate::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
 use crate::replica::pulling::{Delta, Pulling};
 use crate::replica::row::Row;
 use crate::secretary::key_ring::KeyRing;
-use crate::secretary::line_event::Husk;
+use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KEY_BYTES, KeyName};
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::snapshot::{self, NotASnapshot, Unprinted};
+use crate::store::Husk;
 use crate::wire::lines::{NodeHeader, SkeletonNode};
 
 /// The lines' rows.
@@ -31,7 +32,7 @@ pub struct Husked {
     pub name: Hash,
     pub parents: Vec<Hash>,
     /// The line, its words dropped.
-    pub husk: Husk,
+    pub husk: Husk<LineEvent>,
 }
 
 /// The lines' replica as the device keeps it: the rows, and the husk of every line each key of

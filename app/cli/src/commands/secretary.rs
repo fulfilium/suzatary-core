@@ -1253,7 +1253,8 @@ enum Action {
         action: TopicsAction,
     },
     /// Seal again, under the current redaction rules, every slot whose words passed older rules,
-    /// and destroy the keys they replace: the step every change to the rules is followed by.
+    /// destroy the keys they replace, and keep each line no key opens any more as its husk: the
+    /// step every change to the rules is followed by.
     /// Without `--apply` it says how the lines stand and writes nothing; a second run appends
     /// nothing.
     MigrateScrub {
@@ -1261,14 +1262,22 @@ enum Action {
         #[arg(long)]
         apply: bool,
     },
-    /// What a prune of the lines would let go, written nowhere: every line no key opens a word of
-    /// (a superseded seal, an erased slot), which the box sends as its husk, and the large objects
-    /// it keeps whole, by shape.
+    /// What a prune of the lines lets go: every line no key opens a word of, now or later (each
+    /// key retired and destroyed), and the large objects kept whole, by shape. Without `--apply`
+    /// it writes nothing; with it, each such line is kept as its husk, and a second run writes
+    /// nothing.
     PruneLines {
         /// The bytes past which a kept object is listed as large.
         #[arg(long, default_value_t = 16 * 1024)]
         large: usize,
+        /// Replace each such line by its husk on disk, under the lines' lock.
+        #[arg(long)]
+        apply: bool,
     },
+    /// One line, a fingerprint of each reading of the conversations' stores: every conversation
+    /// as the box reads it, the digest's census, the waiting count, the lines' whole skeleton and
+    /// every line's content answer. Two runs over stores that read the same print the same line.
+    Readings,
     /// The memory's digest of the conversations.
     Digest {
         /// What to read of it.
@@ -1388,7 +1397,10 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Digest {
             action: DigestAction::Census,
         } => census(&instance, &mut std::io::stdout()),
-        Action::PruneLines { large } => prune_lines(&instance, *large, &mut std::io::stdout()),
+        Action::Readings => readings(&instance, &mut std::io::stdout()),
+        Action::PruneLines { large, apply } => {
+            prune_lines(&instance, *large, *apply, &mut std::io::stdout())
+        }
         Action::MigrateScrub { apply } => {
             migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
         }
@@ -1642,14 +1654,15 @@ pub fn carry(
     Ok(count)
 }
 
-/// `prune-lines`: the census, in megabytes, and nothing written.
+/// `prune-lines`: the census, in megabytes, then, with `apply`, each dead line husked.
 pub fn prune_lines(
     instance: &Instance,
     large: usize,
+    apply: bool,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
-    let census =
-        suzatary_core::secretary::prune::census(conversations(instance).conversations(), large)?;
+    let stores = conversations(instance);
+    let census = suzatary_core::secretary::prune::census(stores.conversations(), large)?;
     let mb = |bytes: usize| format!("{}.{} MB", bytes / 1_000_000, bytes % 1_000_000 / 100_000);
     writeln!(
         out,
@@ -1660,9 +1673,15 @@ pub fn prune_lines(
     writeln!(
         out,
         "{} no key opens a word of: {}, {} as husks",
-        census.dead.objects,
-        mb(census.dead.bytes),
+        census.dead.len(),
+        mb(census.dead_bytes),
         mb(census.husks)
+    )?;
+    writeln!(
+        out,
+        "{} sent as husks and kept whole until the sweep destroys a key: {}",
+        census.retired.objects,
+        mb(census.retired.bytes)
     )?;
     writeln!(out, "kept whole and over {large} bytes:")?;
     for (kind, tally) in &census.large {
@@ -1673,7 +1692,67 @@ pub fn prune_lines(
             mb(tally.bytes)
         )?;
     }
-    writeln!(out, "wrote nothing")?;
+    if !apply {
+        writeln!(out, "wrote nothing")?;
+        return Ok(());
+    }
+    husk_dead(&stores, &census.dead, out)
+}
+
+/// Each line of `dead` kept as its husk, and what that let go said.
+fn husk_dead(
+    stores: &suzatary_io::conversations::ConversationStores,
+    dead: &std::collections::BTreeSet<prodrome_core::event::Hash>,
+    out: &mut impl std::io::Write,
+) -> anyhow::Result<()> {
+    let let_go = stores.lines.husk(dead)?;
+    let bytes = let_go.bytes;
+    writeln!(
+        out,
+        "let go {} object(s), {}.{} MB",
+        let_go.objects,
+        bytes / 1_000_000,
+        bytes % 1_000_000 / 100_000
+    )?;
+    Ok(())
+}
+
+/// `readings`: `name=<sha-256>` for each reading, on one line, the lines' readings
+/// ([`suzatary_api::routes::lines_readings`]) beside the digest's census and the waiting count.
+/// Read at one fixed instant, so it is a function of the stores alone.
+pub fn readings(instance: &Instance, out: &mut impl std::io::Write) -> anyhow::Result<()> {
+    use sha2::Digest as _;
+    let refused =
+        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+    let stores = conversations(instance);
+    let conversations = stores.conversations();
+    let at = prodrome_core::literal::Datetime::new(2026, 1, 1, 0, 0, 0, 0)?;
+    let mut digest = Vec::new();
+    census(instance, &mut digest)?;
+    let read = super::chains_read(instance);
+    let chains: Vec<_> = instance
+        .chains
+        .iter()
+        .map(|chain| chain.policy.name.clone())
+        .collect();
+    let inbox = suzatary_core::secretary::inbox::fold(&inbox(instance)).map_err(refused)?;
+    let waiting =
+        suzatary_api::routes::waiting(&inbox, conversations.reads(), &read.set(at), &chains)
+            .map_err(refused)?;
+    let [lines, skeleton, content] =
+        suzatary_api::routes::lines_readings(conversations, at).map_err(refused)?;
+    let read = [
+        lines,
+        ("digest", String::from_utf8(digest)?),
+        ("waiting", serde_json::to_string(&waiting)?),
+        skeleton,
+        content,
+    ];
+    let printed: Vec<String> = read
+        .iter()
+        .map(|(name, text)| format!("{name}={}", hex::encode(sha2::Sha256::digest(text))))
+        .collect();
+    writeln!(out, "{}", printed.join(" "))?;
     Ok(())
 }
 
@@ -1738,6 +1817,8 @@ pub fn migrate_scrub(
         done.resealed,
         done.destroyed
     )?;
+    let dead = suzatary_core::secretary::prune::census(stores.conversations(), usize::MAX)?.dead;
+    husk_dead(&stores, &dead, out)?;
     Ok(Some(done))
 }
 

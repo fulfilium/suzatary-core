@@ -593,7 +593,7 @@ proptest! {
                     prop_assert!(!opens, "{}: husked though a key the pull sends opens it", node.hash);
                     // A node sized before an erasure the store moved by is sized as its literal.
                     prop_assert!(node.size == husk.len() || (moved && node.size == print.len()));
-                    prop_assert_eq!(Some(husk.clone()), line.and_then(LineEvent::husk).map(|h| h.print()));
+                    prop_assert_eq!(Some(husk.clone()), line.and_then(suzatary_core::store::Husk::of).map(|h| h.print()));
                 }
             }
             literals.insert(node.hash.clone(), print);
@@ -1006,10 +1006,11 @@ fn an_erased_line_is_answered_as_its_husk() {
     );
 }
 
-/// The prune's dry run counts the lines no key opens, which the box answers as husks, and writes
-/// nothing.
+/// The prune's dry run counts as dead exactly the husked lines every key of which is retired and
+/// destroyed, the rest of the husked lines as waiting on the sweep, and writes nothing.
 #[test]
-fn the_prune_census_counts_what_is_husked_and_writes_nothing() {
+fn the_prune_census_counts_the_dead_lines_and_writes_nothing() {
+    use suzatary_core::store::Doc as _;
     let mut store = Writer::new();
     store.apply(&Write::Said {
         conversation: 0,
@@ -1021,17 +1022,35 @@ fn the_prune_census_counts_what_is_husked_and_writes_nothing() {
     });
     store.apply(&Write::Erased { conversation: 0 });
     let before = store.lines.lines.objects().expect("reads");
-    let census =
-        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
     let graph = store.lines.lines.graph().expect("reads");
     let names: Vec<Hash> = before.iter().map(|(name, _)| name.clone()).collect();
     let husked =
         suzatary_core::secretary::husks::husks(store.lines.conversations(), &graph, &names)
             .expect("husks");
+    let census =
+        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
     assert_eq!(census.all.objects, before.len());
-    assert_eq!(census.dead.objects, husked.len());
     assert!(
-        census.dead.objects > 0 && census.husks < census.dead.bytes,
+        census.dead.is_empty(),
+        "an erased key is still held: {census:?}"
+    );
+    assert_eq!(census.retired.objects, husked.len(), "{census:?}");
+
+    for name in husked.keys() {
+        let line = graph
+            .dag()
+            .get(name)
+            .and_then(|object| object.event())
+            .expect("a line");
+        for key in line.keys() {
+            store.lines.keys.remove(key).expect("destroyed");
+        }
+    }
+    let census =
+        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
+    assert_eq!(census.dead, husked.keys().cloned().collect::<BTreeSet<_>>());
+    assert!(
+        census.retired.objects == 0 && census.husks < census.dead_bytes,
         "{census:?}"
     );
     assert_eq!(

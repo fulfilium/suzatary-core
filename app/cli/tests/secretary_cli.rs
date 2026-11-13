@@ -1059,11 +1059,37 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
     let done = done.expect("a run");
     assert_eq!((done.resealed, done.destroyed), (3, 4), "{said}");
     let after = line_objects(&instance);
-    assert!(
-        objects.iter().all(|object| after.contains(object)),
-        "the store only grows"
-    );
+    let kept: std::collections::BTreeMap<_, _> = after.iter().cloned().collect();
+    for (name, print) in &objects {
+        let now = kept.get(name).expect("no name is let go");
+        let whole = prodrome_core::event::parse_envelope::<
+            suzatary_core::secretary::line_event::LineEvent,
+        >(&suzatary_core::secretary::line_event::LineVocabulary, print)
+        .expect("a line");
+        let husk = match &whole {
+            prodrome_core::event::Envelope::Change(change) => {
+                suzatary_core::store::HuskObject::of(change).map(|husk| husk.print())
+            }
+            _ => None,
+        };
+        assert!(
+            now == print || Some(now) == husk.as_ref(),
+            "a whole stays, or is its husk"
+        );
+    }
     assert_eq!(after.len(), objects.len() + 3, "one reseal per stale slot");
+    assert!(
+        said.contains("let go 4 object(s)"),
+        "the three replaced seals and the erased slot are kept as husks: {said}"
+    );
+    let stores = instance.conversation_stores();
+    let dead = suzatary_core::secretary::prune::census(stores.conversations(), usize::MAX)
+        .expect("a census")
+        .dead;
+    assert!(
+        dead.is_empty(),
+        "no migration leaves a whole dead copy: {dead:?}"
+    );
     assert_eq!(
         read_lines(&instance, &id),
         before,
@@ -1094,13 +1120,14 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
         "one key per reseal"
     );
 
-    let (done, _) = migrated(&instance, true);
+    let (done, said) = migrated(&instance, true);
     let done = done.expect("a run");
     assert_eq!(
         (done.resealed, done.destroyed),
         (0, 0),
         "a second run appends nothing"
     );
+    assert!(said.contains("let go 0 object(s)"), "{said}");
     assert_eq!(line_objects(&instance), after);
 }
 

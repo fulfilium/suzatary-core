@@ -55,7 +55,7 @@ const INBOX: &str = "inbox";
 
 /// The conversations' lines at their schema, and the keys of their words, pinned in
 /// `tests/stores-changes/` only.
-const LINES: &str = "secretary-lines";
+pub(crate) const LINES: &str = "secretary-lines";
 const LINE_KEYS: &str = "secretary-lines-keys";
 
 /// The memory's history at its schema, and its texts, pinned in `tests/stores-changes/` only.
@@ -125,10 +125,13 @@ impl suzatary_base::capability::Entropy for Counted {
     }
 }
 
+/// The lines' store as the box keeps it.
+pub(crate) type Lines = Objects<LineEvent, suzatary_io::husked::Husked<LineEvent>>;
+
 /// The lines and their keys under `root`.
-fn lines_at(root: &Path) -> (Objects<LineEvent>, suzatary_io::text_keys::TextKeys) {
+pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io::text_keys::TextKeys) {
     (
-        Objects::open(root.join(LINES)),
+        Objects::husked(root.join(LINES)),
         suzatary_io::text_keys::open(root.join(LINE_KEYS)),
     )
 }
@@ -279,7 +282,13 @@ fn begun(root: &Path) -> Objects<suzatary_core::secretary::inbox_event::InboxEve
 }
 
 /// Begin `store` with a genesis labelled `label` and a nonce of zeros, so its names are pinned.
-fn rooted<E: prodrome_core::schema::Schema>(store: &Objects<E>, label: &str) {
+fn rooted<
+    E: suzatary_core::stores::Store<Vocabulary: Clone>,
+    F: suzatary_io::object_files::ObjectFiles<E>,
+>(
+    store: &Objects<E, F>,
+    label: &str,
+) {
     let genesis = prodrome_core::event::Envelope::<E>::Genesis(
         prodrome_core::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
     );
@@ -288,7 +297,13 @@ fn rooted<E: prodrome_core::schema::Schema>(store: &Objects<E>, label: &str) {
         name.clone(),
         prodrome_core::event::canonical_envelope(&genesis),
     )]);
-    store.inner().adopt_objects(&print, &name).expect("begins");
+    prodrome_core::store::EventStore::<E, Untrusted>::at(
+        store.inner().root(),
+        Untrusted::none(),
+        prodrome_core::store::Replica::schema(store.inner()).clone(),
+    )
+    .adopt_objects(&print, &name)
+    .expect("begins");
 }
 
 /// The inbox: one email asked, one asked and dismissed; the first's id, which the morning
@@ -891,7 +906,7 @@ fn ics() -> PluginName {
 }
 
 /// Line `k` of a long conversation: a person's turn on odd lines, a long answer on even ones.
-fn said(k: usize) -> Entry {
+pub(crate) fn said(k: usize) -> Entry {
     Entry::Said {
         at: at(
             9 + u32::try_from(k / 60).expect("few"),
@@ -918,8 +933,8 @@ fn said(k: usize) -> Entry {
 
 /// `conversations` conversations of `per` lines each, from `said`, written into `lines` with
 /// their keys in `keys` in one run; answers the ids and how many slots they hold.
-fn conversations_at_scale(
-    lines: &Objects<LineEvent>,
+pub(crate) fn conversations_at_scale(
+    lines: &Lines,
     keys: &suzatary_io::text_keys::TextKeys,
     conversations: usize,
     per: usize,

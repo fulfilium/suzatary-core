@@ -14,10 +14,23 @@ use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
 
-/// Fsck every store the data push stages. The plugins' stores are cache tier, never pushed,
-/// so they are not checked.
-pub fn run(path: &Path) -> anyhow::Result<()> {
+/// What `suzatary verify` checks.
+#[derive(Debug, clap::Args)]
+pub struct Args {
+    /// Check instead each line this directory holds, `<name>.py` as the last commit held it,
+    /// against the lines' store: the commit held the whole its name hashes, the store keeps that
+    /// whole's husk, and no key opens a word of it, now or later.
+    #[arg(long)]
+    husked: Option<std::path::PathBuf>,
+}
+
+/// Fsck every store the data push stages, or check the lines husked since the last commit. The
+/// plugins' stores are cache tier, never pushed, so they are not checked.
+pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
+    if let Some(was) = &args.husked {
+        return husked(&instance, was);
+    }
     let mut findings: Vec<(String, Vec<String>)> = Vec::new();
     let stores: Vec<_> = instance
         .chains
@@ -68,6 +81,11 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
     let requests =
         suzatary_io::requests::Requests::open(instance.requests(), instance.paths.answers.clone());
     findings.extend(database.verify());
+    let stray = suzatary_core::secretary::prune::stray(conversations.conversations())
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    if let Some((_, lines)) = findings.iter_mut().find(|(what, _)| what == "lines") {
+        lines.extend(stray);
+    }
     findings.push(("requests".to_owned(), requests.verify()));
 
     let roots: BTreeMap<String, PathBuf> = Kind::ALL
@@ -92,4 +110,37 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
         return Ok(());
     }
     bail!("{total} problem(s) across the stores the data push stages")
+}
+
+/// `verify --husked <was>`.
+fn husked(instance: &Instance, was: &Path) -> anyhow::Result<()> {
+    let stores = instance.conversation_stores();
+    let objects =
+        suzatary_io::object_files::ObjectFiles::root(stores.lines.inner()).join("objects");
+    let mut committed = Vec::new();
+    for file in std::fs::read_dir(was)? {
+        let file = file?.path();
+        let name = file
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or_default();
+        committed.push((
+            prodrome_core::event::Hash::new(name)?,
+            std::fs::read(&file)?,
+        ));
+    }
+    let now = |name: &prodrome_core::event::Hash| {
+        std::fs::read(objects.join(format!("{}.py", name.as_str()))).ok()
+    };
+    let findings =
+        suzatary_core::secretary::prune::admitted(stores.conversations(), &committed, now)
+            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    for finding in &findings {
+        println!("husked FAIL — {finding}");
+    }
+    if !findings.is_empty() {
+        bail!("{} line(s) are not the husks of dead lines", findings.len());
+    }
+    println!("husked OK — {} line(s)", committed.len());
+    Ok(())
 }

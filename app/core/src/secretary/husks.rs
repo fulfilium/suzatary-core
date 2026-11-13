@@ -1,7 +1,7 @@
 //! The husk of a line, what the box serves of it once the key that opens its words is not sent:
 //! the lines' own reading, which the routes and the pruning both ask.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use suzatary_base::refusal::Answered;
 
@@ -66,7 +66,38 @@ pub fn husked(
             if line.keys().any(|key| sent.contains_key(key.as_str())) {
                 return None;
             }
-            Some((name.clone(), line.husk()?.print()))
+            Some((name.clone(), crate::store::Husk::of(line)?.print()))
         })
         .collect()
+}
+
+/// Each line of `names` with words that no key opens now or later: every key of them is retired,
+/// erased or superseded by a reseal the box opens, and destroyed. Every one is among [`husks`].
+/// A key store that cannot be read refuses, and one that holds no keys at all leaves a line no
+/// erasure or reseal retires out.
+pub fn dead(
+    conversations: crate::secretary::conversations::Conversations<'_>,
+    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    names: &[prodrome_core::event::Hash],
+) -> Answered<BTreeSet<prodrome_core::event::Hash>> {
+    let retired = retired(graph);
+    let reads = conversations.reads();
+    let slots = |name: &crate::secretary::locked_text::KeyName| reads.key(name);
+    let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
+    let mut dead = BTreeSet::new();
+    'lines: for name in names {
+        let Some(held) = line(name) else { continue };
+        if held.keys().next().is_none() {
+            continue;
+        }
+        for key in held.keys() {
+            if !retired.retires(held.conversation(), key, line, &slots)
+                || conversations.keys.get(key)?.is_some()
+            {
+                continue 'lines;
+            }
+        }
+        dead.insert(name.clone());
+    }
+    Ok(dead)
 }

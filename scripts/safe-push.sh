@@ -97,9 +97,14 @@ if [ "${#STAGE[@]}" -eq 0 ] || [ -z "$(git status --porcelain -- "${STAGE[@]}")"
 fi
 
 # Append-only: objects are only ever added, so any status but '??' or 'A ' under a walked store
-# is a history rewrite and must not be pushed. Every store in WALKED, not just events/.
+# is a history rewrite and must not be pushed. Every store in WALKED, not just events/. The one
+# change admitted besides is a line the lines' store keeps as its husk, which `verify --husked`
+# checks against the whole the last commit held.
+HUSK='^( M|M |MM) secretary-lines/objects/[0-9a-f]{64}\.py$'
 # shellcheck disable=SC2086
-REWRITES=$(git status --porcelain -- $WALKED | grep -vE '^(\?\?|A )' || true)
+CHANGES=$(git status --porcelain -- $WALKED | grep -vE '^(\?\?|A )' || true)
+REWRITES=$(printf '%s\n' "$CHANGES" | grep -vE "^\$|$HUSK" || true)
+HUSKED=$(printf '%s\n' "$CHANGES" | grep -E "$HUSK" | cut -c4- || true)
 if [ -n "$REWRITES" ]; then
   echo "safe-push: APPEND-ONLY VIOLATION under an events objects/ — a modification or" >&2
   echo "  deletion of a chain object is a history rewrite and will not be pushed:" >&2
@@ -109,6 +114,21 @@ fi
 
 # The stores' fsck; any problem aborts.
 app verify
+# A new line is a whole: a husk enters history only in place of the whole a commit held.
+for path in $(git status --porcelain --untracked-files=all -- secretary-lines/objects \
+  | grep -E '^(\?\?|A ) ' | cut -c4-); do
+  name="${path##*/}"
+  if [ "$(sha256sum < "$path" | cut -d' ' -f1)" != "${name%.py}" ]; then
+    echo "safe-push: $path does not hash to its name, and no commit held its whole" >&2
+    exit 1
+  fi
+done
+if [ -n "$HUSKED" ]; then
+  WAS="$(mktemp -d)"
+  for path in $HUSKED; do git cat-file blob "HEAD:$path" > "$WAS/${path##*/}"; done
+  app verify --husked "$WAS"
+  rm -rf "$WAS"
+fi
 
 CHANGED=$(git status --porcelain | awk '{print $2}')
 UNEXPECTED=""

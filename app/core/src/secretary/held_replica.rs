@@ -68,7 +68,7 @@ pub enum NotItsHusk {
     #[error("the box answered a husk for {0}, which names no line this replica reads")]
     Unknown(String),
     #[error("{0}: {1}")]
-    Unread(String, crate::secretary::line_event::NotAHusk),
+    Unread(String, crate::store::NotAHusk),
     #[error("the box's husk for {0} is not the line its node says")]
     Header(String),
     #[error("the box answered a husk for {0}, whose words a live key this replica holds opens")]
@@ -263,16 +263,13 @@ impl HeldReplica {
                             .find(|node| node.hash == shown)
                     })
                     .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
-                let husk = crate::secretary::line_event::Husk::read(&text)
-                    .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
-                if crate::secretary::line_form::line_header(husk.line()) != node.header {
+                let husk =
+                    crate::store::Husk::<crate::secretary::line_event::LineEvent>::read(&text)
+                        .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
+                if crate::secretary::line_form::line_header(husk.event()) != node.header {
                     return Err(NotItsHusk::Header(shown));
                 }
-                if husk
-                    .line()
-                    .keys()
-                    .any(|key| ring.holds(key) && !dead.contains(key))
-                {
+                if husk.opens(|key| ring.holds(key) && !dead.contains(key)) {
                     return Err(NotItsHusk::Opens(shown));
                 }
                 let parents = node
@@ -292,7 +289,7 @@ impl HeldReplica {
         let moved = Moved::These(
             husked
                 .iter()
-                .map(|h| h.husk.line().conversation().clone())
+                .map(|h| h.husk.event().conversation().clone())
                 .collect(),
         );
         // No row moves: the frame's delta forgets nothing, and its husks are the move.

@@ -1987,6 +1987,47 @@ pub fn calendar(
     })
 }
 
+/// Every reading of the lines a prune must leave as it was, each printed: every conversation as
+/// the box reads it, the lines' whole skeleton read from nothing with books of its own at `at`,
+/// and every line's content answer, asked as a device asks ([`asks`]).
+pub fn lines_readings(
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    at: prodrome_core::literal::Datetime,
+) -> Answered<[(&'static str, String); 3]> {
+    let lines = suzatary_core::secretary::conversations::list(conversations)?;
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let skeleton = lines_skeleton(
+        conversations,
+        &prodrome_core::store::frontier::Since::Nothing,
+        Books {
+            epochs: &epochs,
+            frontiers: &frontiers,
+        },
+        at,
+        Cut::Whole,
+    )?;
+    let mut content = Vec::new();
+    let nodes = skeleton
+        .nodes
+        .iter()
+        .map(|node| (node.hash.as_str(), node.size));
+    for names in asks(nodes) {
+        let hashes = crate::query::Hashes::parse(Some(&names.join(",")))?;
+        content.push(lines_content(conversations, &hashes)?);
+    }
+    let json = |value: Result<String, serde_json::Error>| {
+        value.map_err(|failed| Refusal::internal(failed.to_string()))
+    };
+    Ok([
+        ("lines", format!("{lines:?}")),
+        ("skeleton", json(serde_json::to_string(&skeleton))?),
+        ("content", json(serde_json::to_string(&content))?),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

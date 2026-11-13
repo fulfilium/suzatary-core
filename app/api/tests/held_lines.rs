@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use proptest::prelude::*;
 
 use prodrome_core::dag::{Dag, Excluded};
-use prodrome_core::event::{Actor, Hash, canonical_envelope};
+use prodrome_core::event::{Actor, Hash, canonical_envelope, parents_of, parse_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::memo::Counts;
 
@@ -22,7 +22,7 @@ use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::key_ring::{KeyRing, spelled};
-use suzatary_core::secretary::line_event::{Husk, LineEvent, LineVocabulary};
+use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_core::secretary::line_form::{Husked, LineReplica};
 use suzatary_core::secretary::line_shape::LineShape;
 use suzatary_core::secretary::locked_text::KeyName;
@@ -42,6 +42,7 @@ use suzatary_core::snapshot::{from_snapshot, snapshot};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Gets as _};
+use suzatary_core::store::{Husk, HuskObject};
 use suzatary_core::wire::topics as wire;
 
 /// One step of a script: a turn said in a conversation, an erasure of some of its lines, a
@@ -413,7 +414,9 @@ proptest! {
     /// THE HUSK LAW: with some keys let go, every line each key of whose words is gone is swapped
     /// for its husk, and the reading is the same; a husk's print holds no words and reads back as
     /// the husk; a line a slot of which still opens is kept whole; a drop lets no husk go; and the
-    /// device's snapshot of the husks reads back as them.
+    /// device's snapshot of the husks reads back as them. A husk object, what a store keeps under
+    /// the whole's name, reads back as itself, rests where its whole did, is never read as a whole
+    /// nor a whole as it, and dropping its words again changes nothing.
     #[test]
     fn a_line_whose_keys_are_gone_reads_the_same_as_its_husk(
         script in proptest::collection::vec(step(), 1..24),
@@ -444,6 +447,18 @@ proptest! {
             let Ok(envelope) = prodrome_core::dag::decode::<LineEvent>(&vocabulary, name, bytes) else {
                 continue;
             };
+            if let Some(object) = match &envelope {
+                prodrome_core::event::Envelope::Change(change) => HuskObject::of(change),
+                _ => None,
+            } {
+                let print = object.print();
+                prop_assert_eq!(&HuskObject::read(name, &print).expect("reads back"), &object);
+                prop_assert_eq!(parents_of(&object.object()), parents_of(&envelope), "it rests where its whole did");
+                prop_assert!(parse_envelope::<LineEvent>(&vocabulary, &print).is_err(), "a husk is never read as a whole");
+                let whole = std::str::from_utf8(bytes).expect("a print");
+                prop_assert!(HuskObject::<LineEvent>::read(name, whole).is_err(), "a whole is never read as a husk");
+                prop_assert_eq!(Husk::of(object.husk().event()), Some(object.husk().clone()), "dropping twice is dropping once");
+            }
             let Some(line) = envelope.into_event() else { continue };
             let keyed = line.keys().next().is_some();
             prop_assert_eq!(
@@ -455,7 +470,7 @@ proptest! {
         for (name, _, husk) in &husked {
             let print = husk.print();
             prop_assert!(!print.contains("Scrubbed(") && !print.contains("Locked("), "no words in {}", print);
-            prop_assert_eq!(&Husk::read(&print).expect("reads back"), husk);
+            prop_assert_eq!(&Husk::<LineEvent>::read(&print).expect("reads back"), husk);
             prop_assert!(lines.husked(name));
         }
         lines.hold(Vec::new(), &bare.iter().cloned().collect::<Vec<_>>());

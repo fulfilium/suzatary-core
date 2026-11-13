@@ -963,23 +963,14 @@ fn line_of(
     })
 }
 
-/// What a device keeps of a line every key of whose words it let go: the line with each slot's
-/// words dropped, the name of the key they were locked under all that is left of them. It reads as
-/// the line read once its keys are gone, and it is the device's alone: no store's vocabulary reads
-/// a dropped slot, so a husk is never an object.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Husk(LineEvent);
+/// A line every key of whose words is let go is kept as its husk ([`crate::store::Husk`]): each
+/// slot's words dropped, the name of the key they were locked under all that is left of them. No
+/// store's vocabulary reads a dropped slot, so a husk is never read as a whole object.
+impl crate::store::Husking for LineEvent {
+    type Seal = KeyName;
+    type Husks = HuskVocabulary;
 
-/// A husk's print that does not read.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("a husk that does not read: {0}")]
-pub struct NotAHusk(String);
-
-impl LineEvent {
-    /// The line with every slot's words dropped; `None` for a line that holds no words, which
-    /// has nothing to drop.
-    #[must_use]
-    pub fn husk(&self) -> Option<Husk> {
+    fn drop_sealed(&self) -> Option<Self> {
         if self.words.is_empty() {
             return None;
         }
@@ -987,47 +978,33 @@ impl LineEvent {
         for slot in &mut husk.words {
             slot.seal = Seal::Dropped(slot.seal.key().clone());
         }
-        Some(Husk(husk))
-    }
-}
-
-impl Husk {
-    /// The line it reads as.
-    #[must_use]
-    pub fn line(&self) -> &LineEvent {
-        &self.0
+        Some(husk)
     }
 
-    /// Its print: the line's, each slot `Dropped(key, rules)`.
-    #[must_use]
-    pub fn print(&self) -> String {
-        print_literal(&self.0.to_value())
-    }
-
-    /// The husk `text` prints.
-    ///
-    /// # Errors
-    /// [`NotAHusk`] for a print that is no line, or a line any slot of which is not dropped.
-    pub fn read(text: &str) -> Result<Self, NotAHusk> {
-        let value = prodrome_core::literal::parse_literal(text, &HuskVocabulary)
-            .map_err(|e| NotAHusk(e.to_string()))?;
-        let line = line_of(&value, |fields| {
+    fn read_dropped(value: &Value) -> Result<Self, ProdromeError> {
+        let line = line_of(value, |fields| {
             Ok(fields
                 .get::<Vec<DroppedSlot>>("words")?
                 .into_iter()
                 .map(|DroppedSlot(slot)| slot)
                 .collect())
-        })
-        .map_err(|e| NotAHusk(e.to_string()))?;
+        })?;
         if line.words.is_empty() {
-            return Err(NotAHusk("a line with no words has no husk".to_owned()));
+            return Err(ProdromeError::invalid(
+                "a line with no words has no husk".to_owned(),
+            ));
         }
-        Ok(Self(line))
+        Ok(line)
+    }
+
+    fn sealed_under(&self) -> impl Iterator<Item = &KeyName> {
+        self.keys()
     }
 }
 
 /// A husk's whitelist: the lines' constructors and the two dropped slots.
-struct HuskVocabulary;
+#[derive(Debug, Default)]
+pub struct HuskVocabulary;
 
 impl Vocabulary for HuskVocabulary {
     fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {

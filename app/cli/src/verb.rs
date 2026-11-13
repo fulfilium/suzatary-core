@@ -88,7 +88,7 @@ pub enum Verb {
     /// The leak guard's matcher: each line of a tree to publish that names this deployment.
     Leaks(leaks::Args),
     /// Check the store: every object rehashed, every parent present, every head reachable.
-    Verify,
+    Verify(verify::Args),
     /// Print the file `secretspec set <NAME> --file` takes: every secret name this deployment
     /// may set, the code root's own and the ones its tables derive.
     Secretspec,
@@ -137,7 +137,7 @@ impl Verb {
             Verb::Plugin(args) => plugin::run(path, &args),
             Verb::Context(args) => context::run(&args),
             Verb::Leaks(args) => leaks::run(&args),
-            Verb::Verify => verify::run(path),
+            Verb::Verify(args) => verify::run(path, &args),
             Verb::Secretspec => secretspec::run(path),
             Verb::Typeset => typeset::run(),
         }
