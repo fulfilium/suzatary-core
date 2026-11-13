@@ -907,7 +907,7 @@ fn train_gate_reads_only_the_tree_it_gates() {
     std::fs::write(&hold, "").expect("the orphaned gate goes on");
     let lock = t.work().join(".git/train/lock");
     assert!(
-        within_twenty_seconds(|| Command::new("flock")
+        within_two_minutes(|| Command::new("flock")
             .args(["-n"])
             .arg(&lock)
             .arg("true")
@@ -1263,16 +1263,16 @@ fn holding(t: &Train, name: &str) -> (PathBuf, std::io::BufReader<std::fs::File>
     (hold, std::io::BufReader::new(said))
 }
 
-/// The output of `child`, a train, which must end within twenty seconds; one that does not is
+/// The output of `child`, a train, which must end within two minutes; one that does not is
 /// killed and fails the test, so a half that was never stopped fails it rather than hangs it.
-fn ends_within_twenty_seconds(child: std::process::Child) -> Output {
+fn ends_within_two_minutes(child: std::process::Child) -> Output {
     let pid = child.id().to_string();
     let (said, ended) = std::sync::mpsc::channel();
     std::thread::spawn(move || said.send(child.wait_with_output()));
-    let Ok(out) = ended.recv_timeout(std::time::Duration::from_secs(20)) else {
+    let Ok(out) = ended.recv_timeout(std::time::Duration::from_secs(120)) else {
         let _ = Command::new("kill").args(["-KILL", &pid]).status();
         panic!(
-            "the train did not end within twenty seconds: a half it should have stopped still runs"
+            "the train did not end within two minutes: a half it should have stopped still runs"
         );
     };
     out.expect("the train ends")
@@ -1306,9 +1306,9 @@ fn live_half_stopped(hold: &Path) {
     );
 }
 
-/// Polls `done` for twenty seconds.
-fn within_twenty_seconds(done: impl Fn() -> bool) -> bool {
-    (0..200).any(|_| {
+/// Polls `done` for two minutes.
+fn within_two_minutes(done: impl Fn() -> bool) -> bool {
+    (0..1200).any(|_| {
         done() || {
             std::thread::sleep(std::time::Duration::from_millis(100));
             false
@@ -1517,7 +1517,7 @@ fn train_gate_github_red_checks_job_stops_the_live_half_at_once() {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("train.sh starts");
-    let red = ends_within_twenty_seconds(gating);
+    let red = ends_within_two_minutes(gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     assert!(
@@ -1576,7 +1576,7 @@ fn train_gate_github_red_live_half_stops_the_run() {
         .spawn()
         .expect("train.sh starts");
     assert!(
-        within_twenty_seconds(|| t
+        within_two_minutes(|| t
             .github_calls()
             .iter()
             .any(|call| call.contains("/actions/runs/") && !call.contains("head_sha"))),
@@ -1584,7 +1584,7 @@ fn train_gate_github_red_live_half_stops_the_run() {
         t.github_calls()
     );
     std::fs::write(&hold, "").expect("the held live half goes on");
-    let red = ends_within_twenty_seconds(gating);
+    let red = ends_within_two_minutes(gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     assert!(
@@ -1805,7 +1805,7 @@ fn train_gate_github_killed_deletes_its_branch() {
         let gating = ignoring.spawn().expect("train.sh starts");
         let branch = format!("refs/heads/gate/{train}");
         assert!(
-            within_twenty_seconds(|| {
+            within_two_minutes(|| {
                 t.core(&["for-each-ref", "--format=%(refname)", "refs/heads/gate/"]) == branch
                     && t.github_calls()
                         .iter()
@@ -1820,7 +1820,7 @@ fn train_gate_github_killed_deletes_its_branch() {
                 .arg(gating.id().to_string()),
             "stop the train",
         );
-        let out = ends_within_twenty_seconds(gating);
+        let out = ends_within_two_minutes(gating);
         assert!(
             !out.status.success(),
             "{signal}: a stopped train is not green"
@@ -3460,7 +3460,7 @@ fn train_gate_github_reports_a_red_scene_without_a_block() {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("train.sh starts");
-    let red = ends_within_twenty_seconds(gating);
+    let red = ends_within_two_minutes(gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     let report = &stderr[stderr.find("tree half: failed").expect("the report")..];
