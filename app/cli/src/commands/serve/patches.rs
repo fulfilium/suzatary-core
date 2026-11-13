@@ -1,5 +1,6 @@
 //! Hourly, a repository card whose change is already in its default branch closes as done
-//! another way (`secretary::merged_patches`). Nothing is fetched while no such card waits.
+//! another way (`secretary::merged_patches`), and a calendar card whose event has ended as no
+//! longer needed (`secretary::lapsed`). Nothing is fetched while no repository card waits.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,5 +44,21 @@ async fn once(state: &State, mirrors: &Arc<suzatary_io::repos::Mirrors>) {
         }
         Ok(Err(failed)) => tracing::warn!("repository cards: {}", failed.message()),
         Err(panicked) => tracing::warn!("repository cards: {panicked}"),
+    }
+    let caps = state.first.caps;
+    match suzatary_core::secretary::lapsed::sweep(
+        caps.secretary.inbox,
+        state.deployment.zone,
+        caps.secretary.clock.now(),
+    ) {
+        Ok(swept) if !swept.closed.is_empty() => {
+            tracing::info!(
+                closed = swept.closed.len(),
+                "calendar cards: their events ended"
+            );
+            state.notice();
+        }
+        Ok(_) => {}
+        Err(failed) => tracing::warn!("calendar cards: {}", failed.message()),
     }
 }

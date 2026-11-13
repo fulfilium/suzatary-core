@@ -61,7 +61,6 @@ pub struct Census {
 /// Where a slot is: its conversation, its line's instant, its place in the line and its key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Place {
-    /// The conversation.
     pub conversation: ConversationId,
     /// The line's instant.
     pub at: Datetime,

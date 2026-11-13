@@ -86,7 +86,6 @@ pub struct Held {
 pub struct Kept {
     /// The object that wrote it.
     pub object: Hash,
-    /// When.
     pub at: Datetime,
     /// The name of its words in the text store.
     pub text: TextName,
@@ -99,9 +98,7 @@ pub struct Kept {
 /// A forgetting, as its event wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gone {
-    /// When.
     pub at: Datetime,
-    /// Who.
     pub by: Actor,
     /// The memory's version it made.
     pub version: u64,

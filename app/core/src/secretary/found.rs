@@ -7,7 +7,6 @@ use suzatary_base::conversation_id::ConversationId;
 /// A conversation the store holds that does not read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unreadable {
-    /// The conversation.
     pub id: ConversationId,
     /// The reader's words for why.
     pub why: String,

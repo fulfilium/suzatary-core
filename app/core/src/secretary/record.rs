@@ -60,7 +60,6 @@ pub struct Secretary<'a> {
     pub mail: &'a dyn Mailbox,
     /// The repository's gates.
     pub repository: &'a dyn Repository,
-    /// The manuals.
     pub manuals: &'a dyn Manuals,
     /// Typst, for confirmed markup.
     pub render: &'a dyn Render,
@@ -79,9 +78,7 @@ pub struct Secretary<'a> {
     pub decisions: crate::decisions::Decisions<'a>,
     /// The topics on its rounds and notes, box-local: the topic verbs write its suggestions.
     pub topics: crate::secretary::topics::stores::TopicStores<'a>,
-    /// The saved briefings.
     pub briefings: &'a dyn Briefings,
-    /// The day's forecast.
     pub weather: &'a dyn Weather,
     /// The owner's calendars, read-only, in the box's clock: what a plugin learned, whose
     /// titles are other people's words. Meetings are never todos.

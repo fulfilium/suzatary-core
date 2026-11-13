@@ -64,7 +64,6 @@ pub struct Observed<'a> {
 pub struct Failing {
     /// The connection that failed, one the instance's tables hold.
     pub connection: Connection,
-    /// Its class.
     pub class: Failure,
     /// It has not succeeded since this instant.
     pub since: Instant,
@@ -568,6 +567,54 @@ mod tests {
                 .any(|noticed| asked.iter().any(|held| held.proposal == noticed.proposal)),
             "that card"
         );
+    }
+
+    /// The secrets rule and this one ask for a link stored nowhere once between them, however
+    /// many times the box files and whatever class its failure moves to: one card waits, its
+    /// words name no earlier card, and a filing over an unchanged state writes nothing. Their
+    /// join filed a new card and withdrew the old on every filing before 2.1.34.
+    #[test]
+    fn a_missing_link_is_asked_for_by_one_card_however_often_the_box_files() {
+        let mut world = World::new();
+        let inbox_store = InMemory::<InboxEvent>::default();
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let missing = |name: &Settable| name.name().starts_with("PLUGIN_ICS");
+        let failures = [
+            Seen::Refused(401),
+            Seen::Unreached,
+            Seen::Outage,
+            Seen::Refused(404),
+        ];
+        for hour in 1..=24 {
+            world.link(at(hour), outcome(failures[hour as usize % failures.len()]));
+            for _ in 0..3 {
+                let fold = inbox::fold(&inbox_store).expect("reads");
+                let owed = crate::secretary::fixes::owed(&world.settables, missing, &fold)
+                    .join(world.owed(at(hour)));
+                let before = crate::store::Reads::objects(&inbox_store)
+                    .expect("reads")
+                    .len();
+                file(&owed, &inbox_store, &conversations, hour);
+                let after = crate::store::Reads::objects(&inbox_store)
+                    .expect("reads")
+                    .len();
+                if hour > 1 {
+                    assert_eq!(after, before, "hour {hour}: a filing wrote");
+                }
+            }
+            let fold = inbox::fold(&inbox_store).expect("reads");
+            assert_eq!(secrets_filed(&fold), 1, "hour {hour}");
+            let waiting: Vec<_> = fold
+                .objects()
+                .filter(|object| object.reading.open())
+                .filter_map(|object| match &object.asked.proposal {
+                    Proposal::Act(Act::Secret { why, .. }) => Some(why.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(waiting.len(), 1, "hour {hour}");
+            assert!(!waiting[0].contains("proposal:"), "{}", waiting[0]);
+        }
     }
 
     fn outcome(result: Seen) -> Outcome {

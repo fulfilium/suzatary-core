@@ -95,7 +95,11 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
     let fakes = Fakes::new(tag)
         .whois(whois)
         .secrets(Arc::clone(&secrets) as _)
-        .mailbox(common::FakeMailbox::new().with_accounts(vec![ADA.to_owned()]));
+        .mailbox(
+            common::FakeMailbox::new()
+                .with_accounts(vec![ADA.to_owned()])
+                .with_message(MARKED_MAIL, marked_mail()),
+        );
     let fakes = Arc::new(match model {
         Some(model) => fakes.model(model),
         None => fakes,
@@ -120,6 +124,34 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
         edits,
         checks,
         fakes,
+    }
+}
+
+/// Words that stand only in the store's mail and in a card's recorded response, so an answer
+/// that holds them read outside the round.
+const MARKER: &str = "zebra-quartz-marker";
+
+/// The mail message holding [`MARKER`].
+const MARKED_MAIL: &str = "a1b2c3d4e5f6a1b2";
+
+fn marked_mail() -> suzatary_core::mail::MailMessage {
+    suzatary_core::mail::MailMessage {
+        row: suzatary_core::mail::MailRow {
+            hash: MARKED_MAIL.to_owned(),
+            id: "marked@example.test".to_owned(),
+            sender: "someone@example.test".to_owned(),
+            subject: format!("About {MARKER}"),
+            date: None,
+            container: "inbox".to_owned(),
+            account: ADA.to_owned(),
+            disposition: suzatary_core::mail::Disposed::Undecided,
+            held: suzatary_core::held_value::Kinds::empty(),
+        },
+        thread: "000000000000c3fb".to_owned(),
+        headers: Vec::new(),
+        body: format!("Connect {MARKER}@example.test, please."),
+        truncated: false,
+        links: Vec::new(),
     }
 }
 
@@ -768,6 +800,37 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     assert_eq!(days[0].entries.len(), read.len());
 }
 
+/// A conversation opened and asked for the dentist, once the model's calendar card is its first.
+fn event_proposed(base: &str) -> String {
+    let mut opened = common::act(
+        &format!("{base}/api/secretary/conversations"),
+        &serde_json::json!({"title": "The dentist"}),
+    );
+    let id = common::body_json(&mut opened)["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned();
+    let said = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/say"),
+        &serde_json::json!({"say": "put the dentist in my calendar"}),
+    );
+    assert_eq!(
+        common::status(&said),
+        202,
+        "the round goes on after the answer"
+    );
+    let proposed = common::poll_conversation(base, &id, |body| {
+        body["proposals"]
+            .as_array()
+            .is_some_and(|rows| !rows.is_empty())
+    });
+    assert_eq!(
+        proposed["proposals"][0]["act"]["kind"], "calendar_event",
+        "{proposed}"
+    );
+    id
+}
+
 /// An event is written only by its tapped card: proposing it writes nothing, and the tap writes
 /// it once, as the card showed it.
 #[test]
@@ -785,32 +848,7 @@ fn an_event_is_written_only_by_its_tapped_card() {
         r#"{"say": "Understood."}"#.to_owned(),
     ]);
     let serving = serving("google-event", Some(model));
-    let mut opened = common::act(
-        &format!("{}/api/secretary/conversations", serving.base),
-        &serde_json::json!({"title": "The dentist"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
-    let said = common::act(
-        &format!("{}/api/secretary/conversations/{id}/say", serving.base),
-        &serde_json::json!({"say": "put the dentist in my calendar"}),
-    );
-    assert_eq!(
-        common::status(&said),
-        202,
-        "the round goes on after the answer"
-    );
-    let proposed = common::poll_conversation(&serving.base, &id, |body| {
-        body["proposals"]
-            .as_array()
-            .is_some_and(|rows| !rows.is_empty())
-    });
-    assert_eq!(
-        proposed["proposals"][0]["act"]["kind"], "calendar_event",
-        "{proposed}"
-    );
+    let id = event_proposed(&serving.base);
     // Tapped before the box keeps a Google client, the card writes nothing and offers the
     // Google setup, and tapping it again is still allowed.
     let mut early = common::act(
@@ -826,12 +864,13 @@ fn an_event_is_written_only_by_its_tapped_card() {
     assert_eq!(card["state"], "failed", "{early}");
     assert_eq!(
         card["outcome"],
-        "Nothing was done: set up Google in Settings: the box keeps no Google client to ask for \
-         the grant. Then tap Try again."
+        "Nothing was done: the box keeps no Google client, through which every Google account \
+         signs in. Tap Set up Google: its card asks for the client once. Then tap Try again."
     );
     assert_eq!(
         card["card"]["link"],
-        serde_json::json!({"kind": "setup", "label": "Set up Google", "template": "google"})
+        serde_json::json!({"kind": "fix", "label": "Set up Google",
+            "then": {"kind": "place", "href": "#/settings"}})
     );
     assert_eq!(card["card"]["answers"][0]["label"], "Try again");
     // The client and the grant, kept as the cards keep them: a sign-in writes no event.
@@ -861,6 +900,209 @@ fn an_event_is_written_only_by_its_tapped_card() {
             "start": {"dateTime": "2026-10-20T14:00:00Z"},
             "end": {"dateTime": "2026-10-20T14:45:00Z"},
         })]
+    );
+}
+
+/// A calendar card that lacks its grant is fixed from the card: its button files the box's card
+/// that gives what it lacked and performs it by the same tap. With no client kept, that is the
+/// client's card; with one, the account's sign-in with Google for its calendars alone, whose
+/// callback writes the event under the fix tap's consent and lands on the card's conversation.
+/// A lieer account keeps its mail where it was: the grant holds the calendars alone and the
+/// account's sync is as it was. A callback whose state the box never drew writes nothing.
+#[test]
+fn a_card_that_lacks_a_grant_is_fixed_from_its_button() {
+    let model = common::FakeModel::saying_owned([
+        format!(
+            r#"{{"say": "Here is the event.", "calls": [{{"verb": "propose_act", "args": {{
+              "act": "calendar_event", "account": "{ADA}", "title": "Dentist",
+              "start": "2026-10-20T14:00:00Z", "end": "2026-10-20T14:45:00Z",
+              "why": "the owner asked for the appointment in his calendar",
+              "sources": "briefing:2026-10-17"}}}}]}}"#
+        ),
+        r#"{"say": "Proposed. Tap it to add it."}"#.to_owned(),
+    ]);
+    let serving = serving_as("google-fix", Some(model), Sync::Gmail);
+    let base = &serving.base;
+    let id = event_proposed(base);
+    let tap_event = |body: &serde_json::Value| {
+        let mut tapped = common::act(
+            &format!("{base}/api/secretary/conversations/{id}/proposals/0/tap"),
+            body,
+        );
+        assert_eq!(common::status(&tapped), 200);
+        common::body_json(&mut tapped)["proposals"][0].clone()
+    };
+    let fix = serde_json::json!({"fix": true});
+
+    // No client kept: the lack is the client, and its fix stands on Settings.
+    let lacked = tap_event(&serde_json::json!({}));
+    assert_eq!(lacked["state"], "failed", "{lacked}");
+    assert_eq!(
+        lacked["card"]["link"],
+        serde_json::json!({"kind": "fix", "label": "Set up Google",
+            "then": {"kind": "place", "href": "#/settings"}})
+    );
+    tap_event(&fix);
+    let client =
+        card(&setup(base), "google_client", "standing").expect("the fix files the client's card");
+    tap(
+        base,
+        client,
+        &serde_json::json!({ "value": fake_google::client_file(REDIRECT) }),
+    );
+
+    // A client kept: the lack is the account's grant, and its fix the consent.
+    let lacked = tap_event(&serde_json::json!({}));
+    assert_eq!(lacked["card"]["link"]["then"]["kind"], "leave", "{lacked}");
+    let href = lacked["card"]["link"]["then"]["href"]
+        .as_str()
+        .expect("the fix's page")
+        .to_owned();
+    assert_eq!(lacked["card"]["link"]["label"], format!("Connect {ADA}"));
+    assert!(href.starts_with(suzatary_core::google::CONSENT), "{href}");
+    tap_event(&fix);
+    assert!(
+        card(&setup(base), "google_sign_in", "started").is_some(),
+        "the fix tapped the account's sign-in card"
+    );
+    let (status, link) = redirected(&format!("{base}{href}"));
+    assert_eq!(status, 303, "the card's own path opens the consent");
+    for part in [
+        "login_hint=ada%40example.test",
+        "include_granted_scopes=true",
+        "calendar.events.owned",
+    ] {
+        assert!(link.contains(part), "{part} in {link}");
+    }
+    assert!(
+        !link.contains("gmail"),
+        "a calendar asks for no mail: {link}"
+    );
+
+    let path = suzatary_core::google::CALLBACK;
+    let (status, _) = redirected(&format!(
+        "{base}{path}?state={}&code=4%2Fforged",
+        "A".repeat(43)
+    ));
+    assert_eq!(status, 400, "a state the box never drew");
+    assert!(serving.fake.inserted().is_empty(), "and nothing written");
+
+    let (status, back) = redirected(&consented(&serving, &link));
+    assert_eq!(status, 303);
+    assert_eq!(back, format!("/#/secretary/{id}"), "back on the card");
+    assert_eq!(serving.fake.inserted().len(), 1, "the event, once");
+    let after = common::poll_conversation(base, &id, |_| true);
+    assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
+    let kept: Vec<_> = serving
+        .secrets
+        .calls()
+        .into_iter()
+        .filter(|(name, _)| name == GRANT)
+        .collect();
+    assert_eq!(
+        kept,
+        vec![(GRANT.to_owned(), "calendar 1//fake-refresh-1".to_owned())],
+        "the calendars' grant, without the mail"
+    );
+    assert_eq!(
+        suzatary_core::settings::Configuration::declared(serving.edits.as_ref())
+            .expect("the recorder reads")
+            .accounts,
+        vec![account(Sync::Gmail)],
+        "a calendar fix leaves the account's sync as it was"
+    );
+}
+
+/// `propose_act` is clean (`taint`): no answer it gives, filed or refused, holds words from
+/// outside the round. Each refusal it and its filing can answer is driven over a store whose mail
+/// and whose dismissed card hold a marker: a `revises` of the answered card, a `serves` naming no
+/// todo, the same act again, a connect after a reading and a handle no summary has.
+#[test]
+fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
+    let event = |extra: &str| {
+        format!(
+            r#"{{"verb": "propose_act", "args": {{"act": "calendar_event", "account": "{ADA}",
+              "title": "Dentist", "start": "2026-10-20T14:00:00Z", "end": "2026-10-20T14:45:00Z",
+              "why": "the owner asked for it", "sources": "briefing:2026-10-17"{extra}}}}}"#
+        )
+    };
+    let refusals = [
+        event(r#", "revises": 0"#),
+        event(r#", "serves": "todo:life/nosuchtodo""#),
+        event(""),
+        r#"{"verb": "propose_act", "args": {"act": "connect", "template": "no-such-template",
+          "params": [], "why": "a mistake", "sources": ""}}"#
+            .to_owned(),
+        r#"{"verb": "propose_act", "args": {"act": "retract", "handle": "9+9",
+          "why": "a mistake", "sources": "briefing:2026-10-17"}}"#
+            .to_owned(),
+    ];
+    let model = common::FakeModel::saying_owned([
+        format!(
+            r#"{{"say": "Here is the event.", "calls": [{}]}}"#,
+            event("")
+        ),
+        r#"{"say": "Proposed."}"#.to_owned(),
+        format!(
+            r#"{{"say": "Trying.", "calls": [{}]}}"#,
+            refusals.join(", ")
+        ),
+        r#"{"say": "Done."}"#.to_owned(),
+    ]);
+    let serving = serving("google-clean-answers", Some(model));
+    let base = &serving.base;
+    let id = event_proposed(base);
+    let mut dismissed = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/0/dismiss"),
+        &serde_json::json!({ "reason": format!("not {MARKER}") }),
+    );
+    assert_eq!(common::status(&dismissed), 200);
+    let dismissed = common::body_json(&mut dismissed);
+    assert_eq!(
+        dismissed["proposals"][0]["state"], "dismissed",
+        "{dismissed}"
+    );
+
+    let read = common::said(base, &id, "try those");
+    let answers: Vec<&serde_json::Value> = read["turns"]
+        .as_array()
+        .expect("turns")
+        .iter()
+        .filter(|turn| turn["verb"] == "propose_act")
+        .collect();
+    assert_eq!(answers.len(), 1 + refusals.len(), "{read}");
+    for answer in &answers {
+        assert!(!answer["text"].to_string().contains(MARKER), "{answer}");
+    }
+    let revised = &answers[1];
+    assert_eq!(revised["outcome"]["is"], "refused", "{revised}");
+}
+
+/// The setup conversation's opening lists only the steps the box still owes: it asks for the
+/// Google client while none is kept, and never once one is.
+#[test]
+fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
+    let serving = serving("google-opening", None);
+    let opening = || {
+        let mut opened = common::act(
+            &format!("{}/api/secretary/setup/google", serving.base),
+            &serde_json::json!({}),
+        );
+        assert_eq!(common::status(&opened), 200);
+        common::body_json(&mut opened)["turns"][0]["text"]
+            .as_str()
+            .expect("the box's first line")
+            .to_owned()
+    };
+    let client = "make the box's Google Cloud client";
+    let before = opening();
+    assert!(before.contains(client), "{before}");
+    let _ = consent(&serving);
+    let after = opening();
+    assert!(!after.contains(client), "{after}");
+    assert!(
+        after.contains("First, tap the account's Sign in with Google card"),
+        "{after}"
     );
 }
 

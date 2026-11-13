@@ -316,7 +316,7 @@ pub struct StorePayload {
     pub keys: BTreeMap<String, String>,
     /// None when the answer holds all it lacked; else the replica asks again from its heads.
     pub rest: usize,
-    /// The bytes of the literals the replica lacked when it asked, these and the rest.
+    /// The bytes of the literals the replica lacked when it asked.
     pub size: usize,
     /// So `size` less this is what is left.
     pub weight: usize,
@@ -411,6 +411,10 @@ pub struct Tapping {
     #[serde(default)]
     #[ts(optional)]
     pub endorsement: Option<Endorsing>,
+    /// The tap of a card's fix: what its last try lacked is connected, then the card is tried.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub fix: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
@@ -533,7 +537,7 @@ impl<'de> Deserialize<'de> for Yes {
     }
 }
 
-/// `GET /api/portal`: what the Android portal reads from a box before it keeps it as its box.
+/// `GET /api/portal`: what the Android portal reads from a box.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct PortalPayload {
     pub push: PortalPush,
@@ -604,7 +608,7 @@ pub struct MePayload {
     pub zone: String,
 }
 
-/// `POST /api/author`: the authoring without the append; the replica seals the event itself.
+/// `POST /api/author`: the authoring without the append.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct AuthoredPayload {
     pub todo: String,
@@ -625,7 +629,7 @@ pub enum Uploaded {
     },
 }
 
-/// `GET /api/secretary/record`: the summaries a session opening is told, each retractable.
+/// `GET /api/secretary/record`: the summaries a session opening is told.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RecordPayload {
     /// Oldest first.
@@ -650,7 +654,7 @@ pub struct DrawnPayload {
     pub proposals: Vec<ProposalRow>,
 }
 
-/// `GET /api/waiting`: read on the box so a tab need not hold the conversations to show it.
+/// `GET /api/waiting`, read on the box.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WaitingPayload {
     /// Open proposals, open decisions (one per batch they name), and lines no record places.
@@ -815,7 +819,7 @@ pub enum Proof {
     Proven {
         key: String,
     },
-    /// Unsigned and beneath an epoch: written before this deployment signed its objects.
+    /// Unsigned and beneath an epoch.
     Predates,
     /// Not proven, and not earlier than signatures; `said` says why.
     Unproven,
@@ -853,7 +857,7 @@ const HEADER: &str = "\
  * fields a consumer renders generically. */
 export ";
 
-/// Every wire type's TypeScript, in one file, each declared once, what it names before itself.
+/// Every wire type's TypeScript, in one file, each declared once.
 #[must_use]
 pub fn typescript() -> String {
     let mut out = String::from(HEADER);
@@ -918,7 +922,7 @@ fn declared() -> Vec<String> {
     declared.out
 }
 
-/// The roots of the browser's decoders: what a route answers, a stream sends or the module reads.
+/// The roots of the browser's decoders.
 fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<VerifiedPayload>();
     visit.visit::<ProvenanceRow>();
@@ -970,7 +974,7 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<suzatary_core::secretary::phase::Phase>();
 }
 
-/// What a page sends: decoded by the box alone, so the browser has no decoder for one.
+/// What a page sends, decoded by the box alone.
 fn bodies(visit: &mut impl TypeVisitor) {
     visit.visit::<Authoring>();
     visit.visit::<Titling>();

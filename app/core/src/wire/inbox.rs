@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// In prose for somebody deciding, where [`FieldChange`](super::todo::FieldChange) carries the
-/// canonical print as evidence.
+/// A field's change in prose, for somebody deciding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ProposedChange {
     pub field: String,
@@ -150,7 +149,7 @@ pub struct ProposedTodo {
     pub pending_todo: bool,
 }
 
-/// What the box keeps as a connection's cache, which removing it may delete too.
+/// What the box keeps as a connection's cache.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Cached {
@@ -199,7 +198,7 @@ pub enum ProposedAct {
         account: String,
         sentence: String,
     },
-    /// A Microsoft account's consent to send: the device-code sign-in for SMTP alone.
+    /// A Microsoft account's consent to send.
     #[serde(rename = "auth_send")]
     AuthSend {
         /// Verbatim.
@@ -303,7 +302,7 @@ pub enum ProposedAct {
     GoogleSignIn {
         account: String,
         parts: Vec<String>,
-        /// While the sign-in runs, the box's path on to Google's consent page; `null` otherwise.
+        /// While the sign-in runs, the box's path on to Google's consent page.
         consent: Option<String>,
         sentence: String,
     },
@@ -314,18 +313,18 @@ pub enum ProposedAct {
         sentence: String,
     },
     Connect {
-        /// What the owner calls it: `your Work calendar`, an address, a folder.
+        /// What the owner calls it.
         connection: String,
         writes: String,
         steps: Vec<String>,
-        /// The origins its plugin may reach from the start; empty for a connection of no plugin.
+        /// The origins its plugin may reach from the start.
         reach: Vec<String>,
         sentence: String,
     },
     Disconnect {
         connection: String,
         writes: String,
-        /// The secrets its steps stored, in the owner's words: the removal deletes them.
+        /// The secrets its steps stored, which the removal deletes.
         forgets: Vec<String>,
         /// Its wider yes also deletes it.
         cached: Cached,
@@ -344,7 +343,7 @@ pub enum ProposedAct {
         /// The imperative, or what became of the words.
         sentence: String,
     },
-    /// A fact to write in place of the standing facts it `replaces`, from such a round.
+    /// A fact to write in place of the standing facts it `replaces`.
     Consolidate {
         words: RememberWords,
         about: crate::secretary::memory::Kind,
@@ -381,11 +380,11 @@ pub enum RememberWords {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReplacedFact {
     pub id: crate::secretary::memory::FactId,
-    /// `Gone` once the fact no longer stands: forgotten, or replaced by this card's tap.
+    /// `Gone` once the fact no longer stands.
     pub words: RememberWords,
 }
 
-/// The page tags a card by it and folds the setup cards into one Setup row.
+/// Who asked for a card; the page tags the card by it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Asker {
@@ -400,7 +399,7 @@ pub enum Asker {
     Box {},
 }
 
-/// Decided by the box, so the page knows no kinds. The card is the confirmation.
+/// A card, decided by the box, so the page knows no kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Card {
     pub title: String,
@@ -434,8 +433,18 @@ pub enum CardLink {
         /// An https page, or a path on the box itself.
         href: String,
     },
-    /// Begins the setup conversation on a template, through `POST /api/secretary/setup/<template>`.
-    Setup { label: String, template: String },
+    /// The tap of the card's fix, then where it goes on.
+    Fix { label: String, then: FixThen },
+}
+
+/// Where a fix goes on once the box took its tap.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum FixThen {
+    /// A place of the app, as `#/settings`.
+    Place { href: String },
+    /// A path the box serves outside the app, loaded as a document (Google's consent).
+    Leave { href: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -478,7 +487,7 @@ pub enum FileFrom {
     Upload {
         id: String,
     },
-    /// A file the owner allowed once, the copy read into this conversation.
+    /// A file the owner allowed once.
     Kept {},
     Repo {
         /// `owner/name`.
@@ -519,7 +528,7 @@ pub enum Asks {
         question: String,
         yes: String,
     },
-    /// The tap carries this device's signature of the card, a yes only a trusted device can give.
+    /// The tap carries this device's signature of the card.
     Endorse {
         question: String,
         yes: String,

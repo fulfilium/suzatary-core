@@ -328,7 +328,6 @@ pub struct Merge {
 /// A fact forgotten: the id, never the text, whose file is deleted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Forgotten {
-    /// Which fact.
     pub id: FactId,
     pub at: Datetime,
     /// Who: the gate's actor, or `assistant` for the verb.

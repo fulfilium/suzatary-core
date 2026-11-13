@@ -57,9 +57,9 @@ struct Held {
     revoked: bool,
     /// The scopes the person unticks on the consent page.
     unticked: BTreeSet<String>,
-    /// Every scope the account has granted the client, which a consent with
+    /// Every scope each account has granted the client, which a consent of that account with
     /// `include_granted_scopes=true` adds to.
-    granted: BTreeSet<String>,
+    granted: BTreeMap<String, BTreeSet<String>>,
     /// How many events each calendar answers with, whatever `maxResults` asks.
     events: usize,
     exchanges: usize,
@@ -313,8 +313,10 @@ fn consent(stream: TcpStream, request: &Request, held: &mut Held) {
         .map(str::to_owned)
         .collect();
     let scope: BTreeSet<String> = if asked("include_granted_scopes") == "true" {
-        held.granted.extend(ticked);
-        held.granted.clone()
+        let account = held.account.clone();
+        let granted = held.granted.entry(account).or_default();
+        granted.extend(ticked);
+        granted.clone()
     } else {
         ticked
     };

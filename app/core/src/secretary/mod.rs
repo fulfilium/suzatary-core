@@ -49,6 +49,7 @@ pub mod failing;
 pub(crate) mod file_query;
 pub mod file_search;
 pub mod filed;
+pub mod fix;
 pub mod fixes;
 pub mod found;
 pub mod gate;
@@ -65,6 +66,7 @@ pub mod inbox_reading;
 pub mod inbox_registers;
 pub mod indexed_tree;
 pub mod key_ring;
+pub mod lapsed;
 pub mod line_event;
 pub mod line_form;
 pub mod line_shape;
@@ -159,7 +161,7 @@ use verb_answer::VerbAnswer;
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
 pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writer::Assistant;
 
-/// How many rounds one `say` may take; at the limit the transcript says the rounds ran out.
+/// How many rounds one `say` may take.
 pub const MAX_ROUNDS: usize = 8;
 
 /// What one `say` did.
@@ -185,7 +187,7 @@ pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::notify::Push> 
     })
 }
 
-/// The first line of typst `text` that reads as prose; not a typst parser.
+/// The first line of typst `text` that reads as prose.
 pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
     for raw in text.lines() {
         let line = raw.trim();
@@ -208,7 +210,7 @@ pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
     None
 }
 
-/// A question as [`converse`] takes it: the words, what they point at, and who asks them.
+/// A question as [`converse`] takes it.
 #[derive(Debug, Clone, Copy)]
 pub struct Saying<'a> {
     pub text: &'a str,
@@ -225,8 +227,7 @@ pub enum Asker<'a> {
     Box(own_round::OwnRound),
 }
 
-/// Whose own words a [`Saying`] is. Claiming a person's words makes a round clean, so it is the
-/// gate's; only the e2e fixture's scripted round mints one here.
+/// Whose own words a [`Saying`] is; the gate's to claim.
 #[derive(Debug, Clone, Copy)]
 pub struct Speaker<'a>(&'a prodrome_core::event::Actor);
 
@@ -239,8 +240,7 @@ impl Speaker<'_> {
     }
 }
 
-/// One exchange, appended as it happens so a polling page sees turns arrive and a crash leaves
-/// an honest transcript.
+/// One exchange, appended as it happens.
 ///
 /// # Errors
 /// The store's and an unreadable file's; a model that fails ends the round in
@@ -286,8 +286,7 @@ pub fn converse(
     )
 }
 
-/// Answer what waits with the model `pick` names, resuming its session when it holds one; a
-/// stateless turn's reply is dropped if halted. A round with nothing to answer reads no key.
+/// Answer what waits with the model `pick` names.
 ///
 /// # Errors
 /// As [`converse`].
@@ -342,8 +341,7 @@ pub fn answer<'p>(
     )
 }
 
-/// Stop what waits before any round has started on it, as `by`, with the [`Entry::Stopped`] line
-/// that closes everything queued. The caller holds off every round until it returns.
+/// Stop what waits before any round has started on it, as `by`.
 ///
 /// # Errors
 /// [`Refusal::conflict`] when nothing waits; the store's failures.
@@ -391,8 +389,7 @@ pub(crate) fn rounded(
         .transpose()
 }
 
-/// What the last turn pointed at, loaded through the model's own verbs before the loop, spending
-/// no rounds.
+/// What the last turn pointed at, loaded before the loop.
 fn load_references(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -428,7 +425,7 @@ fn load_references(
     Ok(())
 }
 
-/// The call a reference is, for the three arms a verb already answers; `None` for the rest.
+/// The call a reference is; `None` for one no verb answers.
 fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)> {
     let mut args = Map::new();
     match reference {
@@ -455,10 +452,6 @@ fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)>
     }
 }
 
-/// Resolve one reference.
-///
-/// # Errors
-/// Whatever the verb or the store answers.
 fn load(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -600,7 +593,7 @@ pub fn call(
     run(deployment, settables, chains, id, request)
 }
 
-/// Run one call against the chain it named, resolved here because a model picks it per call.
+/// Run one call against the chain it named.
 ///
 /// # Errors
 /// An unknown chain, or whatever the verb refuses.
@@ -661,8 +654,7 @@ pub(crate) fn bound_named<'a>(chains: &'a [Bound<'a>], name: &str) -> Option<&'a
     chains.iter().find(|bound| bound.name == name)
 }
 
-/// Answer a proposal no, with a reason the secretary reads next; a remember card's words go with
-/// it by the sweep, unless a standing fact names them.
+/// Answer a proposal no, with a reason the secretary reads next.
 ///
 /// # Errors
 /// An empty reason, an index nothing proposed, one performed or running, or the stores'.
@@ -720,8 +712,7 @@ pub fn acknowledge(
     read(conversations, &card.conversation)
 }
 
-/// Say in `card`'s conversation what `by` did to it, when the inbox `answered` that it recorded
-/// it; answers whether it did.
+/// Say in `card`'s conversation what `by` did to it; answers whether it did.
 fn heard(
     conversations: crate::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
@@ -752,7 +743,7 @@ fn heard(
     Ok(true)
 }
 
-/// Ask the last round again: its trace and answer are set aside and the worker answers anew.
+/// Ask the last round again.
 ///
 /// # Errors
 /// [`Stored::rewind`]'s refusals and the store's own.
@@ -767,7 +758,7 @@ pub fn regenerate(
     read(conversations, id)
 }
 
-/// Ask the last round again with `said` in place of its question, stamped `stamped`.
+/// Ask the last round again with `said` in place of its question.
 ///
 /// # Errors
 /// [`Stored::rewind`]'s refusals, a last round no question opened, and the store's own.

@@ -34,6 +34,8 @@ mod inbox;
 mod inbox_prices;
 #[path = "inbox_schema.rs"]
 mod inbox_schema;
+#[path = "lapsed.rs"]
+mod lapsed;
 #[path = "laws.rs"]
 mod laws;
 #[path = "line_replica.rs"]

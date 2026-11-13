@@ -85,7 +85,6 @@ pub struct Digest {
 pub struct Candidate {
     /// The object that wrote it.
     pub object: Hash,
-    /// What it says.
     pub said: Written,
 }
 
@@ -109,7 +108,6 @@ pub enum Written {
     Summary(Summary),
     /// No answer fitted a node.
     Unfit {
-        /// The model asked.
         model: ModelName,
         /// The most bytes a line could hold then.
         limit: u32,
@@ -126,13 +124,10 @@ pub enum Written {
 pub struct Summary {
     /// Its words, `None` once deleted or lost.
     words: Option<Line>,
-    /// Their name.
     pub text: TextName,
     /// What it was written from.
     pub over: Vec<Hash>,
-    /// The model that wrote it.
     pub model: ModelName,
-    /// Its length.
     pub bytes: u32,
     /// The node's taint when it was written.
     pub taint: Taint,

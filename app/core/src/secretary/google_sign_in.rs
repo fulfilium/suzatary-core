@@ -1,6 +1,5 @@
 //! The Google consents the box holds open, each begun by a tapped card and bound to the actor who
-//! tapped it. A consent lives in memory alone, so a restart closes every one and no verifier is
-//! ever written down. [`Open`] is pure; the server holds it behind a lock and does the exchange.
+//! tapped it; in memory alone, so no verifier is ever written down.
 
 use crate::secretary::{conversations, transcript};
 use std::collections::BTreeMap;
@@ -20,17 +19,13 @@ pub fn lasts() -> chrono::Duration {
     chrono::Duration::minutes(LASTS_MINUTES)
 }
 
-/// [`lasts`], in minutes.
 pub(crate) const LASTS_MINUTES: i64 = 10;
 
 /// One open consent. Its `Debug` redacts the link, which carries the state in the clear.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Begun {
-    /// The card whose tap began it.
     pub card: ProposalId,
-    /// The account it is for.
     pub account: EmailAddress,
-    /// What it asks for.
     pub scopes: Scopes,
     /// Only a callback from this actor is read.
     pub by: Actor,
@@ -40,10 +35,23 @@ pub struct Begun {
     pub client: Client,
     /// Where Google sends the owner back.
     pub redirect: RedirectUri,
-    /// The consent page's URL.
     pub link: String,
     /// When it lapses, UTC.
     pub until: NaiveDateTime,
+    /// What the callback does beside ending `card`.
+    pub then: Then,
+}
+
+/// What a kept grant is for beside its sign-in card.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Then {
+    /// Nothing: the sign-in card's own tap began the consent.
+    Ended,
+    /// Perform `card` again under the fix tap's `consent`.
+    Retry {
+        card: ProposalId,
+        consent: crate::mail::oauth::Consent,
+    },
 }
 
 impl std::fmt::Debug for Begun {
@@ -58,6 +66,7 @@ impl std::fmt::Debug for Begun {
             .field("redirect", &self.redirect)
             .field("link", &"<redacted>")
             .field("until", &self.until)
+            .field("then", &self.then)
             .finish()
     }
 }
@@ -79,6 +88,15 @@ pub enum Taken {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Open(BTreeMap<State, Begun>);
 
+impl Begun {
+    /// Whether `card` is its sign-in card or the card it performs again.
+    #[must_use]
+    pub fn names(&self, card: &ProposalId) -> bool {
+        self.card == *card
+            || matches!(&self.then, Then::Retry { card: lacked, .. } if lacked == card)
+    }
+}
+
 impl Open {
     /// Closes any consent the same card held, so the earlier link opens nothing.
     pub fn open(&mut self, state: State, begun: Begun) {
@@ -86,19 +104,18 @@ impl Open {
         self.0.insert(state, begun);
     }
 
-    /// Held past its lapse until read or replaced, so a late link reaches the callback, which
-    /// says it lapsed.
+    /// The consent `card` began or is retried by, held past its lapse until read.
     #[must_use]
     pub fn begun(&self, card: &ProposalId) -> Option<&Begun> {
-        self.0.values().find(|begun| begun.card == *card)
+        self.0.values().find(|begun| begun.names(card))
     }
 
     /// The state is closed whatever it finds, so a replayed code finds nothing.
     pub fn take(&mut self, state: &State, by: &Actor, now: NaiveDateTime) -> Taken {
         match self.0.remove(state) {
             None => Taken::Unknown,
-            Some(begun) if now >= begun.until => Taken::Lapsed(begun),
             Some(begun) if begun.by != *by => Taken::NotYours(begun),
+            Some(begun) if now >= begun.until => Taken::Lapsed(begun),
             Some(begun) => Taken::Yours(Box::new(begun)),
         }
     }
@@ -115,6 +132,9 @@ impl Open {
 
 /// In no capability record, so only a tap begins a consent and only the callback finishes one.
 pub trait Consents: Sync {
+    /// The box's callback, if the app's URL allows one.
+    fn redirect(&self) -> Option<&RedirectUri>;
+
     /// Running until it lapses, or why it could not begin.
     fn begin(
         &self,
@@ -123,12 +143,13 @@ pub trait Consents: Sync {
         scopes: &Scopes,
         by: &Actor,
         now: suzatary_base::capability::Datetime,
+        then: Then,
     ) -> Performed;
 }
 
 const AGAIN: &str = "tap Sign in with Google to ask Google again";
 
-/// How the card ends, and the grant to keep; a grant without mail access is not kept.
+/// How the card ends, and the grant to keep, which `keeps` decides.
 #[must_use]
 pub fn exchanged(
     begun: &Begun,
@@ -136,7 +157,7 @@ pub fn exchanged(
 ) -> (Performed, Option<crate::google::KeptGrant>) {
     let read = read.map(|exchanged| {
         let parts = Scopes::of(exchanged.granted.iter().copied())
-            .filter(|parts| parts.contains(Scope::Mail));
+            .filter(|parts| keeps(&begun.scopes, parts));
         (exchanged.refresh, parts)
     });
     match read {
@@ -163,9 +184,14 @@ pub fn exchanged(
         Ok((_, None)) => (
             Performed::Tried(Tried::NotSent {
                 reason: format!(
-                    "Google granted no access to {}'s mail, which you left unticked on its \
-                     page, so nothing was kept; {AGAIN} and tick it",
-                    begun.account
+                    "Google granted no access to {}'s {}, which you left unticked on its page, \
+                     so nothing was kept; {AGAIN} and tick it",
+                    begun.account,
+                    if begun.scopes.contains(Scope::Mail) {
+                        "mail"
+                    } else {
+                        "calendars"
+                    }
                 ),
             }),
             None,
@@ -177,6 +203,12 @@ pub fn exchanged(
             None,
         ),
     }
+}
+
+/// Kept when it holds the mail wherever the consent asked for it, and some part asked for.
+fn keeps(asked: &Scopes, parts: &Scopes) -> bool {
+    (!asked.contains(Scope::Mail) || parts.contains(Scope::Mail))
+        && asked.missing(parts).as_ref() != Some(asked)
 }
 
 /// How a callback that finished no consent ends the card it found.
@@ -291,6 +323,7 @@ mod tests {
                 redirect: RedirectUri::of_app("https://box.example.test").expect("a callback"),
                 link: format!("https://accounts.google.com/o/oauth2/v2/auth?card={card_n}"),
                 until: at(10),
+                then: Then::Ended,
             },
         )
     }
@@ -356,7 +389,7 @@ mod tests {
         assert!(matches!(open.take(&second, &ada, at(1)), Taken::Yours(_)));
     }
 
-    /// A grant without its mail keeps nothing, and one without a part says which to tick.
+    /// A grant lacking what its consent must have keeps nothing; one lacking a part says so.
     #[test]
     fn a_grant_is_kept_only_with_its_mail_and_says_what_was_left_out() {
         let (_, begun) = begun(1, "ada");
@@ -379,5 +412,17 @@ mod tests {
         let (none, kept) = exchanged(&begun, Ok(grant(&[Scope::Calendar])));
         assert!(kept.is_none());
         assert!(matches!(none, Performed::Tried(Tried::NotSent { .. })));
+        let calendar = Begun {
+            scopes: Scopes::of([Scope::Calendar]).expect("a part"),
+            ..begun.clone()
+        };
+        let (_, kept) = exchanged(&calendar, Ok(grant(&[Scope::Calendar])));
+        assert_eq!(kept.map(|kept| kept.parts), Scopes::of([Scope::Calendar]));
+        let (unticked, kept) = exchanged(&calendar, Ok(grant(&[Scope::Mail])));
+        assert!(kept.is_none());
+        assert!(
+            matches!(unticked, Performed::Tried(Tried::NotSent { ref reason }) if reason.contains("calendars")),
+            "{unticked:?}"
+        );
     }
 }

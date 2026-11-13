@@ -55,11 +55,8 @@ impl Conflict {
 /// the send it checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answer {
-    /// The write's name.
     pub name: Hash,
-    /// When it was recorded.
     pub at: Datetime,
-    /// What it said.
     pub response: Responded<Check>,
 }
 

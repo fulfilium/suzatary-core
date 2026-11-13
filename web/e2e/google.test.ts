@@ -17,16 +17,19 @@
  * the account's calendars at once and lands on the Inbox; Settings then says the account synced.
  * The CDP log shows the client's secret only in the tap that carried it, and the grant in no answer.
  *
- * Then the lieer account: the same tap and reply change nothing until its sign-in with Google is
- * kept and has read its mail through the fake's Gmail profile; its Settings line reads as before,
- * lieer's, with the sign-in card on it. Then its sync moves, with no second mail account and no
- * second client card.
+ * Then the lieer account, from a calendar card that lacks its grant (`connectonetap`): one tap on the
+ * card's button goes to the fake's consent for its calendars and back to the card, which the
+ * callback performed again: the event written, a grant for the calendars alone kept, and the
+ * account's sync as it was. Then its move from Settings: the same tap and reply change nothing
+ * until its sign-in with Google is kept and has read its mail through the fake's Gmail profile;
+ * its Settings line reads as before, lieer's, with the sign-in card on it. Then its sync moves,
+ * with no second mail account and no second client card.
  */
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-import { suite, trustThisDevice } from "./harness";
+import { SIGNED_POST, suite, trustThisDevice } from "./harness";
 
 const app = await suite("google");
 
@@ -64,19 +67,27 @@ const lineOf = (account: string): string => `.settingsline[data-line="account:${
  * Settings' Google offer, tapped, and the conversation of its own it opens, answered with `account`; its Connect card
  * tapped there, and Settings opened again, where the box's next cards stand on their lines.
  */
-async function begin(account: string): Promise<void> {
+async function begin(account: string, client: "none" | "kept"): Promise<void> {
   await app.page.navigate(`${GOOGLE}/#/settings`);
   const google = `.settingsoffers[data-group="mail"] .settingsoffer-google`;
   await app.page.waitFor(`document.querySelector('${google}') !== null`, { timeout: 20000 });
   await app.page.click(google);
   await app.page.waitFor(`location.hash.startsWith("#/secretary/") && !location.hash.startsWith("#/secretary/setup")`, { timeout: 20000 });
-  const opening = "Connect a Google account (its mail and calendars). First, make the box's Google Cloud client";
+  // The opening lists the steps this box still owes: the client's only while it keeps none.
+  const opening =
+    client === "none"
+      ? "Connect a Google account (its mail and calendars). First, make the box's Google Cloud client"
+      : "Connect a Google account (its mail and calendars). First, tap the account's Sign in with Google card";
   await app.page.waitFor(`document.body.textContent.includes(${JSON.stringify(opening)})`, { timeout: 20000 });
+  const said = await app.page.evaluate<string>(`document.body.textContent`);
   assert.match(
-    await app.page.evaluate<string>(`document.body.textContent`),
-    /Then tap the account's Sign in with Google card[^.]*\. To begin, reply with its email address[^.]*\. Each step after it stands on its line in Settings/,
+    said,
+    client === "none"
+      ? /Then tap the account's Sign in with Google card[^.]*\. To begin, reply with its email address[^.]*\. Each step after it stands on its line in Settings/
+      : /First, tap the account's Sign in with Google card[^.]*\. To begin, reply with its email address[^.]*\. Each step after it stands on its line in Settings/,
     "the first line says each step and what to reply",
   );
+  if (client === "kept") assert.equal(said.includes("Google Cloud client"), false, "a box that keeps its client is not told to make one");
   await app.page.type(".composebox", account);
   await app.page.click(".composesend");
   const connect = ".proposal.proposal-act-connect:not(.proposal-acted)";
@@ -133,10 +144,10 @@ async function healthy(account: string): Promise<void> {
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${line}.settingsline-failing') !== null`), false);
 }
 
-app.scene("a Google account connects from Settings in one walk, and a lieer account moves onto the same sign-in", async () => {
+app.scene("a Google account connects from Settings in one walk, and a calendar card connects a lieer account's calendars in one tap, and its mail moves from Settings", async () => {
   await trustThisDevice(app.page, GOOGLE, INSTANCE);
 
-  await begin(FRESH);
+  await begin(FRESH, "none");
   assert.match(instance(), /email = "ada@example\.test"[^[]*sync = "google"/, "the tap wrote the account");
 
   // The box's Google Cloud client, asked for once, on Settings: its words are the steps in Google's console.
@@ -163,16 +174,55 @@ app.scene("a Google account connects from Settings in one walk, and a lieer acco
   assert.ok(stored().includes(`GOOGLE_GRANT_ADA_AT_EXAMPLE_TEST=mail,calendar ${REFRESH}`), "the grant is kept under the account's name, with the parts Google granted");
   await healthy(FRESH);
 
-  // The lieer account: the same walk, which moves it only once its grant is kept and has read its mail. Until then its
-  // Settings line reads as before, lieer's, with the sign-in card on it; the client is not asked for again.
+  // The lieer account, from a calendar card that lacks its grant: one tap on the card's button and Google's Allow
+  // (the fake consents at once). The box keeps a grant for the calendars alone, writes the event under the button's
+  // tap, and lands back on the card, which says it was added. No conversation opens, no address is typed, the client
+  // is not asked for again, and the account's mail stays lieer's.
   const accounts = (): number => instance().split("[[mail.accounts]]").length - 1;
   const before = accounts();
+  await app.page.navigate(`${GOOGLE}/#/secretary/default`);
+  await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
+  const id = await app.page.evaluate<string>(
+    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "The dentist"})).then((r) => r.json()).then((j) => j.id)`,
+  );
+  await app.page.navigate(`${GOOGLE}/#/secretary/${id}`);
+  await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  await app.page.type(".composebox", "put the dentist in my calendar");
+  await app.page.click(".composesend");
+  const event = `.proposal.proposal-act-calendar_event[data-conversation="${id}"]`;
+  await app.page.waitFor(`document.querySelector('${event} .act-add') !== null`, { timeout: 20000 });
+  await app.page.click(`${event} .act-add`);
+  await app.page.click(`${event} .act-add.confirming`);
+  const fix = `${event} button.act-fix`;
+  await app.page.waitFor(`document.querySelector('${fix}') !== null`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<string>(`document.querySelector('${fix}').textContent`), `Connect ${LIEER}`);
+  assert.match(
+    await app.page.evaluate<string>(`document.querySelector('${event}').textContent`),
+    /has not let the box write its calendar\. Tap Connect her@example\.invalid, then press Allow on Google's page, and the box adds the event\./,
+    "the card says what it needs and what the tap does",
+  );
+
+  const back = await app.page.captureNetwork(["/api/oauth/google/"]);
+  await app.page.evaluate(`(() => { window.__e2eLeaving = true; return true; })()`);
+  await app.page.click(fix);
+  await app.page.waitFor(
+    `window.__e2eLeaving === undefined && location.origin === ${JSON.stringify(GOOGLE)} && location.hash === "#/secretary/${id}" && document.readyState === "complete"`,
+    { timeout: 20000 },
+  );
+  for (const exchange of await back()) assert.equal(exchange.responseBody.includes(REFRESH), false, `an answer carried the grant: ${exchange.url}`);
+  await app.page.waitFor(`document.querySelector('.proposal.proposal-acted.proposal-act-calendar_event[data-conversation="${id}"]') !== null`, { timeout: 20000 });
+  assert.equal(accounts(), before, "no second mail account");
+  assert.match(stored(), /GOOGLE_GRANT_HER_AT_EXAMPLE_INVALID=calendar /, "a grant for the calendars alone");
+  assert.match(instance(), /email = "her@example\.invalid"[^[]*sync = "gmail"/, "a calendar fix leaves its sync as it was");
+
+  // The lieer account: the same walk, which moves it only once its grant is kept and has read its mail. Until then its
+  // Settings line reads as before, lieer's, with the sign-in card on it; the client is not asked for again.
   const lieer = lineOf(LIEER);
   const lineSays = `[...document.querySelectorAll('${lieer} .settingsmeta, ${lieer} .settingshealth')].map((p) => p.textContent).join(" | ")`;
   await app.page.navigate(`${GOOGLE}/#/settings`);
   await app.page.waitFor(`document.querySelector('${lieer}') !== null && document.querySelector(".settingscards") === null`, { timeout: 20000 });
   const lieerSaid = await app.page.evaluate<string>(lineSays);
-  await begin(LIEER);
+  await begin(LIEER, "kept");
   assert.equal(accounts(), before, "no second mail account");
   assert.match(instance(), /email = "her@example\.invalid"[^[]*sync = "gmail"/, "the Connect tap changed nothing");
   await app.page.waitFor(`document.querySelector('${lieer} .proposal.proposal-act-google_sign_in') !== null`, { timeout: 20000 });

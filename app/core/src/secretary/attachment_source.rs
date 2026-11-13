@@ -24,10 +24,7 @@ pub enum AttachmentSource {
         name: String,
     },
     /// A file in the owner's Drive.
-    Drive {
-        /// Its full path.
-        path: DrivePath,
-    },
+    Drive { path: DrivePath },
     /// A photo or PDF the owner uploaded into a conversation, kept on the box or privately in
     /// his Drive.
     Upload {
@@ -42,9 +39,7 @@ pub enum AttachmentSource {
     },
     /// A file in one of the owner's declared repositories, kept by its digest when proposed.
     Repo {
-        /// The repository.
         repo: RepoName,
-        /// The file.
         path: RepoPath,
         /// The revision as asked (`HEAD`, the default branch, when none was); once recorded, the
         /// commit it resolved to, which resolves to itself, so the source names one file forever.

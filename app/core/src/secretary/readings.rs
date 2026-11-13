@@ -1,5 +1,5 @@
-//! Pure readings of the inbox and the conversations; the box's routes and the tab's module apply
-//! the same functions to the same objects. Anything beyond the two stores comes in as a [`Dress`].
+//! Pure readings of the inbox and the conversations, shared by the box's routes and the tab's
+//! module; anything beyond the two stores comes in as a [`Dress`].
 
 use crate::chain_set::ChainSet;
 
@@ -83,13 +83,13 @@ impl Dress<'static> {
 pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
     fn shown(&self, changeset: &Changeset) -> (Vec<ProposedObject>, String);
-    /// The routine `[coding]` declares, whose page its token's card opens.
+    /// The routine `[coding]` declares.
     fn routine(&self) -> Option<&crate::connect::RoutineId>;
-    /// The secret name of the model's credential, which its card words as the model's sign-in.
+    /// The secret name of the model's credential.
     fn model(&self) -> Option<&str>;
-    /// The origins `plugin` may fetch from now; `None` while no such plugin is declared.
+    /// The origins `plugin` may fetch from now.
     fn origins(&self, plugin: &str) -> Option<Vec<String>>;
-    /// How the person reaches the app at a terminal, which a step's command is spelled in.
+    /// How the person reaches the app at a terminal.
     fn reach(&self) -> &crate::connect::Reach;
     /// In the box's words: a message by sender, subject and date, a file by its source.
     fn source(&self, handle: &crate::held_value::Handle) -> String;
@@ -134,7 +134,6 @@ impl Draw for Undrawn {
 /// What a card says of a held value's message where the reading reads no mail.
 pub const UNREAD_SOURCE: &str = "from a message this reading does not look up";
 
-/// Parsed exactly as the tap parses it.
 fn held_in(body: &str, draws: &dyn Draw) -> HeldIn {
     use crate::held_value::{Reach, Written};
     match Written::parse(body) {
@@ -305,8 +304,7 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
     })
 }
 
-/// One window of a conversation; proposals are filtered by `about` but never windowed, and a
-/// line the inbox cannot place goes in `unplaced`, never dropped.
+/// One window of a conversation; a line the inbox cannot place goes in `unplaced`, never dropped.
 #[must_use]
 pub fn conversation(
     stored: &Stored,
@@ -453,7 +451,6 @@ fn announced(stored: &Stored, index: usize, standing: &Standing) -> Option<Strin
         })
 }
 
-/// The last prose line, never a verb's answer.
 fn last_line(stored: &Stored) -> String {
     let line = stored
         .live()
@@ -478,7 +475,7 @@ pub(crate) fn window(total: usize, before: usize, limit: usize) -> (usize, usize
     (start, end)
 }
 
-/// Filters, then pages. Returns `(selected, first or total_turns, paged length)`.
+/// Returns `(selected, first or total_turns, paged length)`.
 fn about_window(
     spans: &[(usize, usize)],
     touched: &[bool],
@@ -553,7 +550,6 @@ pub fn turn<A: Answers + ?Sized>(
         ),
         // The box's own note is drawn as the box's, never as the owner's.
         Turn::Act { text, references } => row(text, acted_by(said.by.as_ref(), references.clone())),
-        // Each call gets its own verb turn.
         Turn::Model { text, .. } => row(
             text,
             wire::Speaker::Model {
@@ -721,8 +717,7 @@ fn disconnect_on_wire(connection: &crate::connect::Connection, sentence: String)
     }
 }
 
-/// A remember card on the wire: its words and, for a consolidation, each fact it replaces with
-/// that fact's words while it stands.
+/// A remember card on the wire, with each fact a consolidation replaces.
 fn remember_on_wire(
     words: &Words,
     about: crate::secretary::memory::Kind,
@@ -1072,7 +1067,6 @@ pub fn proposal(
                 problem,
             }
         }
-        // The box's own path to the consent the tap opened.
         Proposal::Act(act) => act_on_wire(
             act,
             standing
@@ -1096,7 +1090,11 @@ pub fn proposal(
             &standing.object.asked.proposal,
             &standing.object.asked.asked,
         ),
-        ..crate::secretary::card::at(crate::secretary::card::of(&act), reading)
+        ..crate::secretary::card::at(
+            crate::secretary::card::of(&act),
+            reading,
+            &standing.object.id,
+        )
     };
     wire::ProposalRow {
         index,

@@ -14,15 +14,11 @@ use suzatary_record::todo::{Patch, TodoFields, TodoPatch};
 pub enum Request<'a> {
     /// A new todo, whatever it is priced at.
     Add {
-        /// Its id.
         todo: &'a str,
         /// The action line.
         body: &'a str,
-        /// The block kind.
         kind: &'a str,
-        /// The category.
         category: &'a str,
-        /// The detail.
         detail: &'a str,
         /// The blocker.
         waiting_on: &'a str,
@@ -31,7 +27,6 @@ pub enum Request<'a> {
     },
     /// A change to a todo: the fields it names, and whether it moves the pricing at all.
     Update {
-        /// Which todo.
         todo: &'a str,
         /// A new action line.
         body: &'a Patch<String>,
@@ -53,10 +48,7 @@ pub enum Request<'a> {
         pricing: Pricing,
     },
     /// A new price for a todo, whatever it is.
-    Reprice {
-        /// Which todo.
-        todo: &'a str,
-    },
+    Reprice { todo: &'a str },
     /// An act that carries no pricing, which is its own request.
     Unpriced(&'a Act),
 }

@@ -9,34 +9,34 @@ use prodrome_core::literal::codec::{Constructor, Literal as _, record};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tried {
     /// Nothing was sent.
-    NotSent {
-        /// Why.
-        reason: String,
-    },
+    NotSent { reason: String },
     /// The box lacks a grant the act needs.
     Lacks(crate::mail::lacking::Lacking),
     /// A tap again would meet the same refusal, so none is offered.
-    Refused {
-        /// Why.
-        reason: String,
-    },
+    Refused { reason: String },
     /// Part of the act left the box; a tap again finishes it without repeating that part.
     Unfinished {
-        /// What happened.
         reason: String,
         /// An https page the box builds, never a model's.
         link: String,
     },
     /// A device-code flow was issued and ends by itself.
-    Running {
-        /// As the flow stamped it.
-        began: String,
-        /// When it goes stale.
-        expires_at: String,
-    },
+    Running { began: String, expires_at: String },
 }
 
 impl Tried {
+    /// Why nothing settled, in the card's words; `None` while a flow runs.
+    #[must_use]
+    pub fn said(&self) -> Option<String> {
+        match self {
+            Tried::NotSent { reason }
+            | Tried::Refused { reason }
+            | Tried::Unfinished { reason, .. } => Some(reason.clone()),
+            Tried::Lacks(lacking) => Some(lacking.sentence()),
+            Tried::Running { .. } => None,
+        }
+    }
+
     /// A flow past its code's expiry. An unparsable expiry is never past, so the box refuses
     /// "already running" rather than admit a claim it cannot check.
     #[must_use]
@@ -66,19 +66,12 @@ pub enum Done {
     Applied {
         /// In the order the acts were made.
         objects: Vec<String>,
-        /// Which chain.
         chain: String,
     },
     /// The box's act ran to completion.
-    Acted {
-        /// What happened.
-        what: String,
-    },
+    Acted { what: String },
     /// It may have happened, so it is never performed again.
-    MayHaveGone {
-        /// What the performer knew.
-        reason: String,
-    },
+    MayHaveGone { reason: String },
 }
 
 /// Why a card was taken back before anyone answered it.
@@ -92,10 +85,7 @@ pub enum Withdrawal {
         why: String,
     },
     /// The box saw it done another way.
-    DoneElsewhere {
-        /// What the box saw.
-        what: String,
-    },
+    DoneElsewhere { what: String },
 }
 
 /// What performing a proposal answered.
@@ -149,42 +139,30 @@ impl CheckFields for () {
 
 /// Stored after an event's head.
 pub(crate) const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
-/// Stored.
 pub(crate) const LACKS: Constructor = ("Lacks", &["attempt", "lacking"]);
-/// Stored.
 pub(crate) const REFUSED: Constructor = ("Refused", &["attempt", "reason"]);
-/// Stored.
 pub(crate) const UNFINISHED: Constructor = ("Unfinished", &["attempt", "reason", "link"]);
 /// Stored for [`Tried::Running`].
 pub(crate) const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
 /// Stored.
 pub const SENT: Constructor = ("Sent", &["recipients", "message_id"]);
-/// Stored.
 pub(crate) const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
-/// Stored.
 pub(crate) const ACTED: Constructor = ("Acted", &["what"]);
-/// Stored.
 pub(crate) const MAY_HAVE_GONE: Constructor = ("MayHaveGone", &["reason"]);
 /// Stored, as written.
 pub(crate) const CHECKED: Constructor = ("Checked", &[]);
-/// Stored.
 pub(crate) const DISMISSED: Constructor = ("Dismissed", &["reason"]);
-/// Stored.
 pub(crate) const SUPERSEDED: Constructor = ("Superseded", &[]);
-/// Stored.
 pub(crate) const NO_LONGER_NEEDED: Constructor = ("NoLongerNeeded", &["why"]);
-/// Stored.
 pub(crate) const DONE_ELSEWHERE: Constructor = ("DoneElsewhere", &["what"]);
 
-/// One response. A check holds `C`: nothing as written, and the send it checks once a reading
-/// finds it ([`crate::secretary::inbox::Check`]), so a check of nothing has no reading.
+/// One response; a check holds `C`, the send it checks once a reading finds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Responded<C = ()> {
     /// A try that did not settle it.
     Tried {
         /// One for the first try.
         attempt: u32,
-        /// What it came to.
         tried: Tried,
     },
     /// Performing settled it.

@@ -69,7 +69,6 @@ pub struct ReadMemories<'a> {
     pub history: &'a dyn Reads<MemoryEvent>,
     /// The words of each standing fact and of each remember card.
     pub texts: &'a dyn Gets<TextName, Text<Fact>>,
-    /// The digest.
     pub digests: ReadDigests<'a>,
 }
 

@@ -29,6 +29,8 @@ fn a_repository_card_says_each_stage_in_its_own_words() {
                     .expect("an instant"),
                 response: Responded::Tried { attempt: 1, tried },
             }),
+            &suzatary_core::secretary::inbox::ProposalId::new(format!("p{:032x}", 1))
+                .expect("an id"),
         )
     };
     let reason = || "why".to_owned();

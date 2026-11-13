@@ -5,7 +5,7 @@ use super::{propose, references};
 use crate::secretary::Call;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::verb::Caught;
-use suzatary_base::reference::TodoRef;
+use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::Refusal;
 
 /// The reasons every proposal carries: why, and what it rests on.
@@ -71,6 +71,16 @@ impl FilingArgs {
     /// As [`Reasoned::reasons`].
     pub fn reasons(&self) -> Result<Reasons, Refusal> {
         self.reasoned.reasons()
+    }
+
+    /// The reasons of an act that rests on the owner's own words: `why`, and `round`, the round
+    /// they asked in, as its one source, whatever `sources` names.
+    ///
+    /// # Errors
+    /// [`Refusal::bad_request`] for an empty `why`.
+    pub fn resting_on(&self, round: Reference) -> Result<Reasons, Refusal> {
+        Reasons::new(&self.reasoned.why, vec![round])
+            .map_err(|failed| Refusal::bad_request(failed.to_string()))
     }
 
     /// File `proposal` in the inbox with these reasons, and answer its card's index.

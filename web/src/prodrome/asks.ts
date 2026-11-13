@@ -2,7 +2,7 @@
 // A monotone act is sealed into the tab's own replica; every other is a request the box answers under its lock.
 
 import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
-import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, regenerate, renameConversation, retractSummary, say, stopAnswer, tapProposal } from "../wire/api"
+import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, fixProposal, forgetFact, regenerate, renameConversation, retractSummary, say, stopAnswer, tapProposal } from "../wire/api"
 import { parsed } from "../chat/refs"
 import type vouch from "./vouch"
 import type topics from "./topics"
@@ -16,6 +16,7 @@ export namespace asks {
     | { readonly type: "Dismiss"; readonly reason: string }
     | { readonly type: "Acknowledge" }
     | { readonly type: "Drop"; readonly reason: string }
+    | { readonly type: "Fix" }
   // The box's line for the question is at or past `after`.
   export type Question = {
     readonly conversation: string
@@ -99,6 +100,7 @@ export namespace asks {
     a.type === "Tap" ? tapProposal(c, i, a.note, secret, a.always, a.endorsement)
     : a.type === "Dismiss" ? dismissProposal(c, i, a.reason)
     : a.type === "Acknowledge" ? acknowledgeProposal(c, i)
+    : a.type === "Fix" ? fixProposal(c, i)
     : dropSession(c, i, a.reason)
 
   const asked = (kind: "Say" | "Edit", { conversation: c, text, references, files, after }: Question): Promise<unknown> =>

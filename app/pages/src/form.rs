@@ -106,12 +106,7 @@ pub(crate) enum Pricing {
     /// A fulfillment that does not move, as a ratio.
     Flat(f64),
     /// A decay toward a day: the day and the lead-up in days, as typed.
-    Deadline {
-        /// The day.
-        day: String,
-        /// The lead-up.
-        lead: String,
-    },
+    Deadline { day: String, lead: String },
     /// A cycle restarting at each pass.
     Recur(Cycling),
     /// A cycle on the calendar.
@@ -121,7 +116,6 @@ pub(crate) enum Pricing {
 /// A cycle as typed: how many days it runs, and its two ends as ratios.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Cycling {
-    /// The days, as typed.
     pub(crate) days: String,
     /// Just after a pass.
     pub(crate) from: f64,

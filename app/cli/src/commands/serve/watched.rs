@@ -62,7 +62,6 @@ impl Motion {
 /// One announcement: what each store holds past what was announced of it.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fresh<E, I> {
-    /// The chain's new events.
     pub events: Vec<E>,
     /// The inbox's new events; none when the inbox was not read this round.
     pub inbox: Vec<I>,

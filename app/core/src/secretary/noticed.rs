@@ -23,7 +23,6 @@ pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed
 /// One proposal a reading owes, and why.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Noticed {
-    /// The act.
     pub proposal: Proposal,
     /// Why the reading owes it.
     pub why: String,
@@ -55,7 +54,6 @@ enum Stale {
 pub struct Filed {
     /// Every owed proposal, filed now or before.
     pub owed: Vec<ProposalId>,
-    /// The cards withdrawn.
     pub withdrawn: Vec<ProposalId>,
 }
 

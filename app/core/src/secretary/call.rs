@@ -11,7 +11,6 @@ use suzatary_base::conversation_id::ConversationId;
 pub struct Call<'a> {
     /// The effects, none of which sends.
     pub caps: &'a Secretary<'a>,
-    /// This deployment.
     pub deployment: &'a Deployment,
     /// The secret names the instance declares as of this call, the one live list a secret
     /// card mints its name against.
@@ -20,6 +19,5 @@ pub struct Call<'a> {
     pub chain: &'a ChainPolicy,
     /// Every chain, for the verbs that answer for all of them.
     pub chains: &'a [Bound<'a>],
-    /// The conversation the call is in.
     pub conversation: &'a ConversationId,
 }

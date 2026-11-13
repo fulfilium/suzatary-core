@@ -18,7 +18,10 @@
     },
     "signed": "standing:0:",
     "then": {
-     "done": "allowed",
+     "after": {
+      "done": "allowed",
+      "type": "Toast"
+     },
      "yes": true
     },
     "type": "Act"
@@ -206,7 +209,10 @@
      },
      "signed": "standing:0:",
      "then": {
-      "done": "stored your Work calendar's secret link",
+      "after": {
+       "done": "stored your Work calendar's secret link",
+       "type": "Toast"
+      },
       "yes": true
      },
      "type": "Act"

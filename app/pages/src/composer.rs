@@ -80,7 +80,6 @@ pub enum Ev {
     Picked(Vec<Picked>),
     Detached(String),
     Unfiled(String),
-    /// By the number the file was picked with.
     KeepPrivate(u32),
     Drop(u32),
     KeepMine,

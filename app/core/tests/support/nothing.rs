@@ -689,6 +689,10 @@ static OPENED: std::sync::LazyLock<crate::secretary::opened::Opened> =
     std::sync::LazyLock::new(crate::secretary::opened::Opened::default);
 
 impl crate::secretary::google_sign_in::Consents for Nothing {
+    fn redirect(&self) -> Option<&crate::google::RedirectUri> {
+        None
+    }
+
     fn begin(
         &self,
         _: &crate::secretary::inbox::ProposalId,
@@ -696,6 +700,7 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
         _: &crate::google::Scopes,
         _: &prodrome_core::event::Actor,
         _: suzatary_base::capability::Datetime,
+        _: crate::secretary::google_sign_in::Then,
     ) -> crate::secretary::responded::Performed {
         crate::secretary::responded::Performed::Tried(crate::secretary::responded::Tried::NotSent {
             reason: "nothing opens a sign-in with Google here".to_owned(),

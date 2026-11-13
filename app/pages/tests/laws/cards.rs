@@ -19,7 +19,8 @@ pub(crate) fn proposal(index: usize) -> impl Strategy<Value = Value> {
         prop::sample::select(vec![
             json!(null),
             json!({"kind": "page", "label": "Where to get it", "href": "https://example.test/token"}),
-            json!({"kind": "setup", "label": "Set it up", "template": "microsoft"}),
+            json!({"kind": "fix", "label": "Set up Google", "then": {"kind": "place", "href": "#/settings"}}),
+            json!({"kind": "fix", "label": "Connect me@example.test", "then": {"kind": "leave", "href": "/api/oauth/google/consent/p1"}}),
         ]),
     )
         .prop_map(move |(kind, state, by, problem, link)| {
@@ -111,7 +112,7 @@ pub(crate) fn card_ev() -> impl Strategy<Value = (card::Key, card::Ev)> {
             Just(card::Ev::Dismiss),
             Just(card::Ev::Acknowledge),
             Just(card::Ev::Reply),
-            Just(card::Ev::Setup),
+            Just(card::Ev::Fix),
         ],
     )
         .prop_map(|(c, index, ev)| {

@@ -32,17 +32,9 @@ pub enum LineShape {
         kind: Option<Kind>,
     },
     /// Named. Words: the name.
-    Titled {
-        /// Who named it.
-        by: Namer,
-    },
+    Titled { by: Namer },
     /// Something said. Words: the turn's slots.
-    Said {
-        /// The turn's shape.
-        turn: TurnShape,
-        /// Who stamped it.
-        by: Option<Stamp>,
-    },
+    Said { turn: TurnShape, by: Option<Stamp> },
     /// A proposal made.
     Proposed {
         /// The inbox object.
@@ -52,7 +44,6 @@ pub enum LineShape {
     },
     /// A triage card withdrawn or held. Words: why.
     Reviewed {
-        /// The chain.
         chain: String,
         /// What was reviewed: a card's reference, or an older batch's head.
         batch: String,
@@ -65,47 +56,33 @@ pub enum LineShape {
         standing: usize,
     },
     /// The round stopped.
-    Stopped {
-        /// By whom.
-        by: String,
-    },
+    Stopped { by: String },
     /// Asked again.
     Rewound {
         /// The first turn set aside.
         to: usize,
-        /// By whom.
         by: String,
     },
     /// The memory's version told.
-    MemorySeen {
-        /// The version.
-        version: u64,
-    },
+    MemorySeen { version: u64 },
     /// A session opened.
     Session {
-        /// Its id.
         session: SessionId,
-        /// Its model.
         model: String,
-        /// Its directory.
         cwd: String,
         /// Its surface digest.
         surface: Option<String>,
     },
     /// A turn a session did not hear.
     Unheard {
-        /// The session.
         session: SessionId,
         /// Who said it.
         model: String,
     },
     /// A session kept from turn `from`.
     Kept {
-        /// Its id.
         session: SessionId,
-        /// Its model.
         model: String,
-        /// Its directory.
         cwd: String,
         /// Its surface digest.
         surface: Option<String>,
@@ -113,22 +90,16 @@ pub enum LineShape {
         from: usize,
     },
     /// How the asks send the conversation.
-    Scoped {
-        /// The scope.
-        scope: Scope,
-    },
+    Scoped { scope: Scope },
     /// A coding session moved on. Words: its report, or why it was dropped.
     Coding {
         /// The proposal that started it.
         proposal: usize,
-        /// The session's shape.
         session: CodingShape,
     },
     /// Lines of this conversation whose words were erased, by the names of their keys.
     Erased {
-        /// The keys.
         keys: BTreeSet<KeyName>,
-        /// Why.
         erasure: Erasure,
     },
     /// One slot's words sealed again under the current redaction rules. Words: the slot's.
@@ -146,32 +117,24 @@ pub enum LineShape {
 pub enum CodingShape {
     /// Fired.
     Fired {
-        /// The session.
         id: crate::coding::SessionId,
         /// Where it is watched.
         url: SessionUrl,
-        /// When.
         at: String,
     },
     /// Reported on a branch.
     Reported {
-        /// The session.
         id: crate::coding::SessionId,
-        /// The branch.
         branch: Branch,
     },
     /// Merged.
     Merged {
-        /// The session.
         id: crate::coding::SessionId,
         /// The tip merged.
         sha: CommitId,
     },
     /// Dropped.
-    Dropped {
-        /// The session.
-        id: crate::coding::SessionId,
-    },
+    Dropped { id: crate::coding::SessionId },
 }
 
 impl LineShape {

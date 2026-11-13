@@ -25,8 +25,9 @@ pub struct Revised {
     pub carried: usize,
 }
 
-/// Why proposal `index` may not be withdrawn or revised. Only one nothing completed may: a send
-/// that may have gone is never replaced. `now` judges whether a running flow went stale.
+/// Why proposal `index` may not be withdrawn or revised, by its state and never its recorded
+/// words, which a model would then read (`taint`). Only one nothing completed may: a send that
+/// may have gone is never replaced. `now` judges whether a running flow went stale.
 #[must_use]
 pub fn refused(
     index: usize,
@@ -37,9 +38,9 @@ pub fn refused(
     if let crate::secretary::inbox_reading::Reading::Unreadable(why) = reading {
         return conflict(format!("proposal {index} cannot be read: {why}"));
     }
-    let gone = |reason: &str| {
+    let gone = || {
         conflict(format!(
-            "proposal {index} may have gone through ({reason}); it is never performed again"
+            "proposal {index} may have gone through; it is never performed again"
         ))
     };
     match reading.shown().map(|answer| &answer.response) {
@@ -54,8 +55,7 @@ pub fn refused(
         }) => conflict(format!(
             "proposal {index} waits on the owner's tap; only they can answer it"
         )),
-        Some(Responded::Done(Done::MayHaveGone { reason })) => gone(reason),
-        Some(Responded::Checked(check)) => gone(check.reason()),
+        Some(Responded::Done(Done::MayHaveGone { .. }) | Responded::Checked(_)) => gone(),
         Some(Responded::Tried {
             tried: tried @ Tried::Running { began, expires_at },
             ..
@@ -79,20 +79,18 @@ pub fn refused(
             "proposal {index} was already applied: {} object(s) are on {chain}",
             objects.len()
         )),
-        Some(Responded::Done(Done::Acted { what })) => {
-            conflict(format!("proposal {index} was already performed: {what}"))
+        Some(Responded::Done(Done::Acted { .. })) => {
+            conflict(format!("proposal {index} was already performed"))
         }
-        Some(Responded::Dismissed { reason }) => {
-            conflict(format!("proposal {index} was dismissed ({reason})"))
-        }
+        Some(Responded::Dismissed { .. }) => conflict(format!("proposal {index} was dismissed")),
         Some(Responded::Withdrawn(Withdrawal::Superseded)) => {
             conflict(format!("proposal {index} was replaced by a later one"))
         }
-        Some(Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })) => {
-            conflict(format!("proposal {index} was withdrawn ({why})"))
+        Some(Responded::Withdrawn(Withdrawal::NoLongerNeeded { .. })) => {
+            conflict(format!("proposal {index} was withdrawn"))
         }
-        Some(Responded::Withdrawn(Withdrawal::DoneElsewhere { what })) => {
-            conflict(format!("proposal {index} was done another way ({what})"))
+        Some(Responded::Withdrawn(Withdrawal::DoneElsewhere { .. })) => {
+            conflict(format!("proposal {index} was done another way"))
         }
     }
 }

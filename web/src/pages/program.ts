@@ -316,6 +316,8 @@ export namespace program {
             return void navigator.clipboard.writeText(e.text).then(() => toast("Copied"), (x: unknown) => toast(lo.reason(x)))
           case "Go":
             return address.go(parseRoute(e.href))
+          case "Leave":
+            return address.leave(e.href)
           case "Replace":
             return address.replace(parseRoute(e.href))
           case "Back":

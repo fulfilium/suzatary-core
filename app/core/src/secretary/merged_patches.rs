@@ -5,6 +5,7 @@ use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposal::Proposal;
+use crate::secretary::responded::Withdrawal;
 use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
@@ -20,11 +21,13 @@ pub fn sweep(
             return Ok(Seen::Waits);
         };
         Ok(match repos.merged(repo, patch) {
-            Ok(Some(held)) => Seen::Done(format!(
-                "its change is already in {repo}'s {} at {}, so nothing is left to publish",
-                held.branch,
-                held.tip.short()
-            )),
+            Ok(Some(held)) => Seen::Closed(Withdrawal::DoneElsewhere {
+                what: format!(
+                    "its change is already in {repo}'s {} at {}, so nothing is left to publish",
+                    held.branch,
+                    held.tip.short()
+                ),
+            }),
             Ok(None) => Seen::Waits,
             Err(failure) => Seen::Unread(format!("{repo}: {failure}")),
         })

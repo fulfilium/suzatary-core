@@ -81,10 +81,7 @@ pub enum Hold {
 pub enum Ask {
     Said(Box<Spoken>),
     Round,
-    /// By the title it sent.
-    Rename {
-        title: String,
-    },
+    Rename { title: String },
     Forget(u64),
     Erase,
     Card(card::Asking),
@@ -99,7 +96,6 @@ pub struct Spoken {
     pub text: String,
     pub references: Vec<String>,
     pub files: Vec<String>,
-    /// Whether it edited the last question.
     pub edit: bool,
 }
 
@@ -895,7 +891,6 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
             }
         }
         Windowed::Read { payload } => {
-            // Nothing about the reference: the whole conversation, from now on.
             if about(&m.at).is_some() && !m.fallback && payload.payload.turns.is_empty() {
                 m.fallback = true;
                 m.asked = asking(m, 0);

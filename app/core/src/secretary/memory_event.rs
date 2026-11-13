@@ -62,19 +62,13 @@ pub enum Said {
 pub enum NotAMemoryEvent {
     /// A forgetting numbered at or below the fact it forgets, which was remembered first.
     #[error("fact {fact} cannot be forgotten at version {version}, at or below its own number")]
-    Before {
-        /// The fact.
-        fact: FactId,
-        /// The version.
-        version: u64,
-    },
+    Before { fact: FactId, version: u64 },
     /// A consolidation that replaces nothing.
     #[error("fact {0} consolidates no fact")]
     FromNothing(FactId),
     /// A consolidation naming a source numbered at or above itself, which cannot be earlier.
     #[error("fact {fact} cannot replace fact {replaced}, numbered at or above it")]
     Later {
-        /// The fact.
         fact: FactId,
         /// The source numbered at or above it.
         replaced: FactId,

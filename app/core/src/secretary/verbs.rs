@@ -132,8 +132,6 @@ pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
     }
 }
 
-// Every `propose_*` verb files its act in the inbox as `assistant`; `serves` is kept as data.
-
 /// File `proposal` in the inbox, name it in the conversation, and supersede what it revises.
 ///
 /// The object is filed before the line names it, and an unsupersedable `revises` is refused first;
@@ -173,7 +171,6 @@ pub fn propose(
             revises,
         },
     )?;
-    // The same act asked again answers the card already here, withdrawing nothing.
     let Filed::Drawn(index) = filed else {
         return Ok(filed.index());
     };
@@ -212,7 +209,6 @@ fn withdrawable(
     }
 }
 
-/// A `path` argument, parsed.
 fn drive_path(path: &str) -> Result<suzatary_base::drive_path::DrivePath, Refusal> {
     path.parse()
         .map_err(|failed: suzatary_base::drive_path::DrivePathError| {

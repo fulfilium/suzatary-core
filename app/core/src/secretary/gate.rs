@@ -22,16 +22,13 @@ pub(crate) enum Gate {
     Binds(Origin),
     /// It files a card the owner taps, with its reasons.
     Card,
-    /// The effect does nothing in this round, for this reason.
     Refused(&'static str),
 }
 
-/// Why a round the box opened remembers nothing.
 pub(crate) const NO_OPENER: &str = "this round was not opened by the owner's own words (it is a brief, \
                              a review, a sweep, or a question the box asked), so nothing is \
                              remembered from it; ask them in a round they open";
 
-/// What the gate is asked about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Asked {
     Binds(Binding),
@@ -316,7 +313,7 @@ mod tests {
             let read_something = lines.iter().any(|entry| matches!(
                 entry,
                 Entry::Said { turn: Turn::Tool { verb, .. }, .. }
-                    if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "add_topics" | "revise_topics")
+                    if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "propose_act" | "add_topics" | "revise_topics")
             ));
             for asked in [Binding::Writes.into(), Binding::Remembers.into(), Asked::Publishes] {
                 let gate = Gate::of(asked, &round);

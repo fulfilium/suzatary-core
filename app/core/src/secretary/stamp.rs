@@ -32,7 +32,6 @@ pub enum Stamp {
 /// An actor the gate admitted, and where the request was made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Speaker {
-    /// The actor.
     pub actor: String,
     /// Where it asked from.
     pub seat: Seat,

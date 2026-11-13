@@ -63,7 +63,7 @@ services = ["drive", "plugin", "repos", "repositories", "repository", "usage", "
 google = ["calendar", "google", "url"]
 connect = ["conformance", "connect", "deployment", "secrets", "settings"]
 inbox = ["coding", "content_id", "secretary/act_vocabulary", "secretary/acts", "secretary/card",
-  "secretary/changes", "secretary/decide", "secretary/diff", "secretary/inbox",
+  "secretary/changes", "secretary/decide", "secretary/diff", "secretary/fix", "secretary/inbox",
   "secretary/inbox_event", "secretary/inbox_json", "secretary/inbox_reading",
   "secretary/inbox_registers", "secretary/own_round", "secretary/phase", "secretary/proposal",
   "secretary/proposer", "secretary/responded", "secretary/sending", "secretary/sign_in",
@@ -87,6 +87,7 @@ digest = ["model_name", "secretary/caused", "secretary/compact", "secretary/comp
   "secretary/recollection", "secretary/shown_record", "secretary/told"]
 cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build", "secretary/coding",
   "secretary/connections", "secretary/done_elsewhere", "secretary/failing", "secretary/filed",
+  "secretary/lapsed",
   "secretary/fixes", "secretary/google_sign_in", "secretary/mail_health",
   "secretary/merged_patches", "secretary/noticed", "secretary/request", "secretary/undo",
   "settings/overview", "wire/cards"]

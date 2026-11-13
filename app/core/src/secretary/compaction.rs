@@ -226,14 +226,12 @@ impl<R: Rung> Rule for Compaction<R> {
 pub enum Compacted {
     /// A summary of `node`, recorded as `object`.
     Summarized {
-        /// The node.
         node: Hash,
         /// Its event.
         object: Hash,
     },
     /// No line fitted `node`; recorded as `object`.
     Unfit {
-        /// The node.
         node: Hash,
         /// Its event.
         object: Hash,

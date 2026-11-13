@@ -79,12 +79,11 @@ else
   fixture_bin="$(scripts/app-build.sh --fixture)"
 fi
 
-# Each shard is this script over its own files with its own servers, chains, ports, state,
-# secrets store and browser profiles, so no shard reads what another writes. The run fails if
-# any shard does.
+# Each shard is this script over its own files, servers, chains, ports, state and profiles, so no
+# shard reads what another writes; the run fails if any shard does.
 #
-# Files are dealt longest first to the least-loaded shard, by each file's last measured time in
-# $durations (by size until every file has one). Only the schedule reads that file.
+# Files are dealt longest first to the least-loaded shard, by each file's last time in $durations
+# (by size until every file has one).
 durations="${XDG_CACHE_HOME:-$HOME/.cache}/suzatary/e2e-durations"
 names=("$@")
 if [[ $# -eq 0 ]]; then
@@ -193,8 +192,7 @@ cleanup() {
       journalctl -k --since "-1h" 2>/dev/null | grep -iE "out of memory|killed process" | tail -n 5 | sed 's/^/  kernel: /' || true
     } >&2
   fi
-  # Server logs go beside the failure screenshots the gate uploads; one directory per run, since
-  # the shards share $shots.
+  # Server logs go beside the failure screenshots, one directory per run: the shards share $shots.
   if (( status != 0 )) && [[ -d "$work" ]]; then
     local kept; kept="$shots/servers/$(printf '%s-' "${names[@]}" | head -c 120)$(basename "$work")"
     mkdir -p "$kept"
@@ -335,6 +333,10 @@ cat > "$script" <<'SCRIPT'
     "reply": "{\"say\": \"I will ask to connect it.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"connect\", \"template\": \"google\", \"params\": [\"ada@example.test\"], \"why\": \"Ada asked to connect this Google account.\", \"sources\": \"briefing:2026-09-02\"}}]}"
   },
   {
+    "when": "put the dentist in my calendar",
+    "reply": "{\"say\": \"Here is the event.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"calendar_event\", \"account\": \"her@example.invalid\", \"title\": \"Dentist\", \"start\": \"2026-12-01T14:00:00Z\", \"end\": \"2026-12-01T14:45:00Z\", \"why\": \"Ada asked for it.\", \"sources\": \"briefing:2026-09-02\"}}]}"
+  },
+  {
     "when": "her@example.invalid",
     "reply": "{\"say\": \"I will ask to sign it in with Google.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"connect\", \"template\": \"google\", \"params\": [\"her@example.invalid\"], \"why\": \"Ada asked to connect this Google account.\", \"sources\": \"briefing:2026-09-02\"}}]}"
   },
@@ -422,10 +424,9 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   local login; login="$(node -p "require('$work/$name.json').login")"
   # Every server has its own state directory: writing into this box's would move the live epochs.
   local serve_env=(env "XDG_STATE_HOME=$work/$name/state")
-  # A tapped secret card really runs `secretspec set`, so a `--settings` server gets a `$HOME` and a
-  # dotenv store of its own under `$work`, never this box's real `pass` store and never another
-  # server's: secretspec rewrites a dotenv file in place, unlocked, so two servers writing one store
-  # can leave it unparseable, and every later `set` refused.
+  # A tapped secret card really runs `secretspec set`, so each `--settings` server gets its own
+  # `$HOME` and dotenv store under `$work`, never this box's `pass`: secretspec rewrites a dotenv
+  # file unlocked, so two servers sharing one can leave it unparseable.
   if [[ " $* " == *" --settings "* ]]; then
     local store="$work/$name/secrets-store.env" home="$work/$name/home"
     : >"$store"

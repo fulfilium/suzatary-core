@@ -25,7 +25,6 @@ pub enum Taint {
 }
 
 impl Taint {
-    /// Every taint.
     pub const ALL: [Taint; 2] = [Taint::Clean, Taint::Tainted];
 
     /// The least taint above both.
@@ -50,7 +49,6 @@ impl Taint {
     }
 }
 
-// A taint's literal is its name.
 prodrome_core::word_literal!(Taint: Taint::ALL => |taint| taint.as_str());
 
 /// One turn's class. A verb answer under a name the surface lacks is tainted, and so are a
@@ -85,8 +83,8 @@ fn of_turn(turn: &Turn, stamp: Option<&Stamp>) -> Taint {
     }
 }
 
-/// A `zoom` answer's class: the taint of the node it opened, which the verb read off the digest
-/// and wrote as the answer's own `taint`; anything else reads tainted.
+/// A `zoom` answer's class: the `taint` it wrote for the node it opened; anything else reads
+/// tainted.
 fn zoomed(answer: &str) -> Taint {
     serde_json::from_str::<serde_json::Value>(answer)
         .ok()
@@ -158,7 +156,6 @@ pub fn held(stored: &Stored) -> Taint {
         .fold(Taint::Clean, |held, (_, said)| held.join(turn(said)))
 }
 
-/// Whether `entry` opens a round: a person's or an act's turn.
 fn opens(entry: &Entry) -> bool {
     matches!(
         entry,
@@ -312,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn only_seven_verbs_are_clean() {
+    fn only_eight_verbs_are_clean() {
         let clean: Vec<&str> = VerbName::ALL
             .iter()
             .filter(|verb| verb.powers().taint == Taint::Clean)
@@ -325,6 +322,7 @@ mod tests {
                 "remember",
                 "forget",
                 "consolidate",
+                "propose_act",
                 "weather",
                 "add_topics",
                 "revise_topics"
@@ -397,7 +395,6 @@ mod tests {
         );
     }
 
-    /// A round that reads mail and is answered.
     fn read() -> Vec<Entry> {
         vec![
             said(person("what did the bank say"), Some("ada")),
@@ -413,7 +410,6 @@ mod tests {
         ]
     }
 
-    /// The owner's round that asks to remember.
     fn ask() -> Vec<Entry> {
         vec![
             said(person("remember I moved"), Some("ada")),
@@ -421,7 +417,6 @@ mod tests {
         ]
     }
 
-    /// `n` closed rounds of chat.
     fn chat(n: usize) -> impl Iterator<Item = Entry> {
         (0..n).flat_map(|k| {
             [
@@ -467,7 +462,6 @@ mod tests {
         assert!(tainted(&stored(within)), "in the window: a card");
         let aged: Vec<Entry> = read().into_iter().chain(chat(40)).chain(ask()).collect();
         assert!(!tainted(&stored(aged)), "aged out of the window: written");
-        // `from` is the first turn the opening sent, as the opening recorded it.
         let session_line = |from: usize| Entry::Kept {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
                 .expect("an instant"),

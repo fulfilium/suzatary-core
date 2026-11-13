@@ -161,16 +161,12 @@ pub(crate) enum Question<'a> {
     Releases,
     /// One todo in full.
     Todo {
-        /// The chain.
         chain: &'a str,
-        /// The todo.
         id: &'a str,
     },
     /// The coding session's card that builds a todo filed (a POST).
     Build {
-        /// The chain.
         chain: &'a str,
-        /// The todo.
         id: &'a str,
     },
     /// An event the box prints for a chain and appends nothing of (a POST).

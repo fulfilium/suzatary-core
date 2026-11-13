@@ -22,7 +22,6 @@ pub const BRIEF: &str = "What changed since the last briefing? Call briefing_del
 /// One morning's brief, where it was said.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Brief {
-    /// The conversation it is in.
     pub conversation: ConversationId,
     /// The day it was asked for.
     pub date: NaiveDate,

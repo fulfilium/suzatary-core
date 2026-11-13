@@ -1,5 +1,5 @@
-//! A grant a card's effect needs and the box does not hold: why a tap wrote or sent nothing.
-//! Stored on the try it answers, as one text literal: `<grant>:<account>`, or `google-client`.
+//! A grant a card's effect needs and the box does not hold, stored as `<grant>:<account>` or
+//! `google-client`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -16,15 +16,14 @@ pub enum Lacking {
         /// What it may not do yet.
         grant: Grant,
     },
-    /// The box keeps no Google client, so it can ask Google for no account's grant.
+    /// The box keeps no Google client.
     GoogleClient,
 }
 
 /// One grant an account gives the box, by what it lets the box do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Grant {
-    /// Write the Google account's calendar: a sign-in with Google, which an account the box reads
-    /// through lieer alone has not given.
+    /// Write the Google account's calendar: a sign-in with Google.
     GoogleCalendar,
     /// Send as the Google account: a sign-in with Google.
     GoogleSend,
@@ -50,44 +49,45 @@ impl Grant {
         }
     }
 
-    /// What the grant lets the box do, as a sentence ends with it.
+    /// What the grant lets the box do.
     const fn lets(self) -> &'static str {
         match self {
             Grant::GoogleCalendar => "write its calendar",
             Grant::GoogleSend | Grant::MicrosoftSend => "send its mail",
         }
     }
+
+    /// What the owner does after the button.
+    const fn then(self) -> &'static str {
+        match self {
+            Grant::GoogleCalendar => "press Allow on Google's page, and the box adds the event",
+            Grant::GoogleSend => "press Allow on Google's page, then tap Try again to send",
+            Grant::MicrosoftSend => {
+                "enter the code it shows on Microsoft's page, then tap Try again"
+            }
+        }
+    }
 }
 
-/// The literal of the client's lack.
 const GOOGLE_CLIENT: &str = "google-client";
 
 impl Lacking {
-    /// What the card says: that nothing happened, what to connect and where, and that a tap
-    /// tries again once it is connected.
+    /// What the card says of the lack.
     #[must_use]
     pub fn sentence(&self) -> String {
-        let step = match self {
-            Lacking::Grant {
-                account,
-                grant: grant @ (Grant::GoogleCalendar | Grant::GoogleSend),
-            } => format!(
-                "connect {account} as a Google account in Settings to let the box {}",
-                grant.lets()
+        match self {
+            Lacking::Grant { account, grant } => format!(
+                "Nothing was done: {account} has not let the box {}. Tap {}, then {}.",
+                grant.lets(),
+                self.label(),
+                grant.then()
             ),
-            Lacking::Grant {
-                account,
-                grant: grant @ Grant::MicrosoftSend,
-            } => format!(
-                "sign {account} in again in Settings to let the box {}",
-                grant.lets()
+            Lacking::GoogleClient => format!(
+                "Nothing was done: the box keeps no Google client, through which every Google \
+                 account signs in. Tap {}: its card asks for the client once. Then tap Try again.",
+                self.label()
             ),
-            Lacking::GoogleClient => {
-                "set up Google in Settings: the box keeps no Google client to ask for the grant"
-                    .to_owned()
-            }
-        };
-        format!("Nothing was done: {step}. Then tap Try again.")
+        }
     }
 
     /// What the button that begins the fix says.

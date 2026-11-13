@@ -5,9 +5,7 @@ use crate::secretary::taint::Taint;
 /// What a verb may do to the world, and whether its answer can carry somebody else's words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Powers {
-    /// What it does.
     pub effect: Effect,
-    /// What its answer can carry.
     pub taint: Taint,
 }
 
@@ -22,11 +20,9 @@ pub enum Effect {
     Binds(Binding),
     /// Withdraws one of the triage agent's cards; performing one is the owner's tap alone.
     Settles,
-    /// Starts the timer's own mail sync early: nothing the timer does not reach, and nothing a
-    /// rewind could take back.
+    /// Starts the timer's own mail sync early; a rewind cannot take it back.
     Syncs,
-    /// Searches a mail server for mail older than the routine sync's window and keeps what
-    /// matched on the box, read-only on the server and nothing a rewind could take back.
+    /// Keeps older mail a server search matched, read-only there; a rewind cannot take it back.
     Pulls,
     /// Sets a watch on mail the owner expects, whose only act is a push to the owner's phone.
     Watches,
@@ -63,7 +59,6 @@ macro_rules! verb_names {
             /// Every verb, in the order the model is shown them.
             pub const ALL: &'static [Self] = &[$(Self::$Name),+];
 
-            /// Its name.
             #[must_use]
             pub const fn name(self) -> &'static str {
                 match self {
@@ -116,7 +111,9 @@ verb_names! {
     Record = "record": Binds(Writes);
     ProposeEmail = "propose_email": Proposes;
     ProposeForward = "propose_forward": Proposes;
-    ProposeAct = "propose_act": Proposes;
+    // Its answer holds the model's own arguments, the box's names for them and the instance
+    // file's; a refusal names a card's phase, never its recorded words (`filed::phase_said`).
+    ProposeAct = "propose_act": Proposes, Clean;
     ProposeChanges = "propose_changes": Proposes;
     WithdrawProposal = "withdraw_proposal": Proposes;
     Weather = "weather": Reads, Clean;

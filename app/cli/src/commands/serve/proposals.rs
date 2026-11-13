@@ -1,4 +1,4 @@
-//! Proposals: the inbox of everything proposed, and the owner's answers to one proposal.
+//! Proposals: the inbox, and the owner's answers to one proposal.
 
 use axum::Json;
 use suzatary_api::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
@@ -32,11 +32,10 @@ pub fn drawn(
         .map(Json)
 }
 
-/// The owner's answer to a tap: a line, and at most one of a secret's value, "always allow"
-/// and a device's endorsement.
-pub struct Answer {
-    note: String,
-    answer: TapAnswer,
+/// The owner's answer to a tap: a line and at most one extra, or the tap of the card's fix.
+pub enum Answer {
+    Tap { note: String, answer: TapAnswer },
+    Fix,
 }
 
 impl Params for ProposalRef {
@@ -85,7 +84,15 @@ impl Body for Answer {
             value,
             always,
             endorsement,
+            fix,
         } = tapping;
+        if fix {
+            return if note.is_empty() && value.is_none() && !always && endorsement.is_none() {
+                Ok(Answer::Fix)
+            } else {
+                Err(Refusal::bad_request("a fix's tap carries nothing else"))
+            };
+        }
         let endorsement = endorsement.as_ref().map(endorsement_of).transpose()?;
         let answer = match (value, always, endorsement) {
             (None, false, None) => TapAnswer::Plain,
@@ -98,7 +105,7 @@ impl Body for Answer {
                 ));
             }
         };
-        Ok(Self { note, answer })
+        Ok(Answer::Tap { note, answer })
     }
 }
 
@@ -130,38 +137,36 @@ pub fn tap(
     let state = &call.state;
     let card = &call.params;
     let (id, index) = (&card.conversation, &card.index);
-    let Answer { note, answer } = &call.body;
     let chains = state.chain_stores();
     let started = std::time::Instant::now();
     let edits = Noting::new(state.edits.as_ref());
     let answered = state
         .with_cards(|caps, cards| {
-            secretary_routes::tap(
-                caps,
-                &Effectors {
-                    post: state.postman.as_ref(),
-                    reveal: state.reveal.as_ref(),
-                    performer: state.acting.as_ref(),
-                    secrets: state.secrets.as_ref(),
-                    verify: state.verify.as_ref(),
-                    checks: state.checks.as_ref(),
-                    signing: state.signing.as_ref(),
-                    edits: &edits,
-                    forget: state.forget.as_ref(),
-                    enrolling: state.keys.as_deref().map(|keys| {
-                        suzatary_core::signatures::Enrolling {
-                            chains: &chains,
-                            root: keys.root(),
-                        }
+            let effectors = Effectors {
+                post: state.postman.as_ref(),
+                reveal: state.reveal.as_ref(),
+                performer: state.acting.as_ref(),
+                secrets: state.secrets.as_ref(),
+                verify: state.verify.as_ref(),
+                checks: state.checks.as_ref(),
+                signing: state.signing.as_ref(),
+                edits: &edits,
+                forget: state.forget.as_ref(),
+                enrolling: state
+                    .keys
+                    .as_deref()
+                    .map(|keys| suzatary_core::signatures::Enrolling {
+                        chains: &chains,
+                        root: keys.root(),
                     }),
-                    consents: state.consenting.as_ref(),
-                },
-                &call.guard,
-                cards,
-                card,
-                note,
-                answer,
-            )
+                consents: state.consenting.as_ref(),
+            };
+            match &call.body {
+                Answer::Tap { note, answer } => {
+                    secretary_routes::tap(caps, &effectors, &call.guard, cards, card, note, answer)
+                }
+                Answer::Fix => secretary_routes::fix(caps, &effectors, &call.guard, cards, card),
+            }
         })
         .inspect(|after| {
             state.heard(id);
@@ -268,8 +273,7 @@ pub fn dismiss(
         .map(Json)
 }
 
-/// `POST …/proposals/<n>/acknowledge`: the owner checked Sent for a send that may have gone;
-/// performs nothing and wakes nobody, so a check costs no model round.
+/// `POST …/proposals/<n>/acknowledge`: the owner checked Sent for a send that may have gone.
 pub fn acknowledge(
     call: &Call<Tap, ProposalRef, ()>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {

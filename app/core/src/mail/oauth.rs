@@ -22,9 +22,9 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// Which protocol a token is for: its scope, its token type and its refresh grant's slot.
+/// Which protocol a token is for.
 pub trait Protocol: sealed::Sealed {
-    /// What a successful mint yields; the bounds let [`Minted`] and [`Polled`] derive.
+    /// What a successful mint yields.
     type Token: std::fmt::Debug + Clone + PartialEq + Eq;
 
     /// The Microsoft scope this protocol's tokens are minted under.
@@ -66,23 +66,17 @@ impl Protocol for Smtp {
 }
 
 /// A claim that a human is watching, which the device-code flow requires.
-///
-/// Unattended paths cannot make one, so an expiry there is a refusal naming the verb, not a stall.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Consent(());
 
 impl Consent {
     /// Claim that an operator is at a terminal waiting to type a code.
-    ///
-    /// Called only by `suzatary auth` and by tests.
     #[must_use]
     pub fn given_at_a_terminal() -> Self {
         Self(())
     }
 
-    /// Claim that the owner tapped a proposal, witnessed by the gate-minted [`Tap`].
-    ///
-    /// [`Tap`]: crate::signatures::Tap
+    /// Claim that the owner tapped a proposal, witnessed by a [`crate::signatures::Tap`].
     #[must_use]
     pub fn given_by_tap(_tap: &crate::signatures::Tap) -> Self {
         Self(())
@@ -92,16 +86,14 @@ impl Consent {
 /// One form POST the flow needs performed, as a value rather than a call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormPost {
-    /// Where to post it.
     pub url: String,
-    /// `application/x-www-form-urlencoded` fields, in a fixed order a test can compare.
+    /// `application/x-www-form-urlencoded` fields.
     pub form: Vec<(String, String)>,
 }
 
 /// What a transport read back: the status and the parsed JSON body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answered {
-    /// The HTTP status.
     pub status: u16,
     /// The body, parsed; a non-JSON body is [`OauthError::Unreadable`] before it gets here.
     pub body: serde_json::Value,
@@ -115,28 +107,21 @@ pub enum OauthError {
     Unreadable {
         /// Which step: "device code", "token".
         step: &'static str,
-        /// What was missing or wrong.
         why: String,
     },
     /// The endpoint said no, carried whole because operators search `AADSTS` codes.
     #[error("{code}: {description}")]
     Refused {
-        /// Microsoft's `error` field.
         code: String,
         /// Its `error_description`, or the body when it named none.
         description: String,
     },
     /// A device flow asked for a non-Microsoft account.
     #[error("{email} is not a Microsoft account, so it has no sign-in to run")]
-    NotMicrosoft {
-        /// The account.
-        email: String,
-    },
+    NotMicrosoft { email: String },
 }
 
 /// What a silent access answers: a token, or that a person must sign in, never a prompt.
-///
-/// A sum rather than an error so a caller cannot `?` past a needed login.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Silent<T> {
     /// Minted without asking anybody.
@@ -146,7 +131,7 @@ pub enum Silent<T> {
 }
 
 impl<T> Silent<T> {
-    /// The token, or the needed login as an error, for paths that cannot proceed without one.
+    /// The token, or the needed login as an error.
     ///
     /// # Errors
     /// [`NeedsLogin`].
@@ -165,39 +150,24 @@ pub enum NeedsLogin {
     #[error(
         "no {slot} authorisation for {email} — run `suzatary auth {email} --scope {slot}` at a terminal"
     )]
-    NeverGranted {
-        /// The account.
-        email: String,
-        /// Which protocol's grant is missing.
-        slot: &'static str,
-    },
+    NeverGranted { email: String, slot: &'static str },
     /// Microsoft refused the stored grant in words only a sign-in answers.
     #[error(
         "the {slot} authorisation for {email} has lapsed ({code}: {description}) — run `suzatary auth {email} --scope {slot}` at a terminal"
     )]
     Lapsed {
-        /// The account.
         email: String,
-        /// Which protocol's grant lapsed.
         slot: &'static str,
-        /// Microsoft's `error` field.
         code: String,
-        /// Its `error_description`.
         description: String,
     },
-    /// A Google account holds no grant, or Google refused the one it holds: revoked, or ended
-    /// after 7 days by a client left in Testing (`crate::google`).
+    /// A Google account holds no grant, or Google refused the one it holds.
     #[error(
         "the Google sign-in for {email} is missing or has lapsed ({why}) — sign it in again from \
          its card in the Inbox; a Google client left in Testing ends each sign-in after 7 days, \
          so publish it to In production"
     )]
-    Google {
-        /// The account.
-        email: String,
-        /// What the store or Google said.
-        why: String,
-    },
+    Google { email: String, why: String },
 }
 
 /// Microsoft's `error` codes for a grant only a person can renew.
@@ -208,12 +178,10 @@ const LAPSED: [&str; 4] = [
     "login_required",
 ];
 
-/// The tenant's device-code endpoint.
 fn devicecode_url(authority: Authority) -> String {
     format!("https://login.microsoftonline.com/{authority}/oauth2/v2.0/devicecode")
 }
 
-/// The tenant's token endpoint, shared by the device-flow poll and the refresh grant.
 fn token_url(authority: Authority) -> String {
     format!("https://login.microsoftonline.com/{authority}/oauth2/v2.0/token")
 }
@@ -318,14 +286,11 @@ pub fn poll_request(authority: Authority, code: &DeviceCode) -> FormPost {
     }
 }
 
-/// What a poll answered; `Pending` carries the server's requested wait so `slow_down` is obeyed.
+/// What a poll answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Polled<P: Protocol> {
     /// Nobody has typed the code yet; wait this many seconds and poll again.
-    Pending {
-        /// The interval to use for the next poll.
-        wait_seconds: u64,
-    },
+    Pending { wait_seconds: u64 },
     /// Done: the grant, for this protocol only.
     Granted(Minted<P>),
 }
@@ -378,7 +343,6 @@ pub fn refresh_request<P: Protocol>(authority: Authority, refresh: &Secret) -> F
     }
 }
 
-/// Read a refresh's answer as this protocol's token.
 fn read_refresh<P: Protocol>(answered: &Answered) -> Result<Minted<P>, OauthError> {
     if let Some(refused) = refusal(answered) {
         return Err(refused);
@@ -433,7 +397,6 @@ fn read_grant<P: Protocol>(answered: &Answered) -> Result<Minted<P>, OauthError>
     })
 }
 
-/// Microsoft's `error` field, when the body carries one.
 fn error_code(answered: &Answered) -> Option<String> {
     answered
         .body
@@ -442,9 +405,7 @@ fn error_code(answered: &Answered) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The refusal this answer is, or `None` when it is not one.
-///
-/// A non-2xx with no `error` field is still a refusal, named by its status.
+/// The refusal this answer is; a non-2xx with no `error` field is one, named by its status.
 fn refusal(answered: &Answered) -> Option<OauthError> {
     match error_code(answered) {
         Some(code) => Some(OauthError::Refused {

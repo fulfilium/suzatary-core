@@ -47,7 +47,6 @@ pub enum Said {
         /// What it was written from, in the log's order: each child's line, or the summary of
         /// it that was read.
         over: Vec<Hash>,
-        /// The model that wrote it.
         model: ModelName,
         /// Its words' length in bytes, at most `NODE_BYTES`: what it costs in a view.
         bytes: u32,
@@ -61,7 +60,6 @@ pub enum Said {
     /// from `model`: it stays unsummarized, and this says why. Keyed by both, so another model,
     /// or a larger `NODE_BYTES`, is owed the node again.
     Unfit {
-        /// The model asked.
         model: ModelName,
         /// The most bytes a line could hold when it was asked: `NODE_BYTES` then.
         limit: u32,
@@ -94,9 +92,7 @@ pub enum NotADigestEvent {
 pub struct Attempt {
     /// What it was written from, in the log's order.
     pub over: Vec<Hash>,
-    /// The model that wrote it.
     pub model: ModelName,
-    /// The node's taint.
     pub taint: Taint,
     /// What the node's class is asked beside, whose current asking it is written under.
     pub beside: Beside,

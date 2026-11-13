@@ -9,7 +9,9 @@ use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::settings::Settable;
 use crate::verb::{Caught, Verb};
+use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_base::topic_target::Target;
 
 /// Propose an act the box performs on a tap.
 pub struct ProposeAct;
@@ -39,7 +41,6 @@ pub struct ProposeActArgs {
     filing: FilingArgs,
 }
 
-// The two acts' own arguments are read only by the act that takes them.
 impl Verb for ProposeAct {
     type Surface = SecretarySurface;
     type Args = ProposeActArgs;
@@ -69,9 +70,10 @@ impl Verb for ProposeAct {
         folder you may read), and `ntfy` or `fcm` with `[]` (notifications). The \
         tap writes it into the instance file, and the box then asks on its own \
         cards for each step it needs (a link, a sign-in); never ask for a link or \
-        a key yourself. Something already connected is refused. ⚠️ CALL IT \
-        FIRST: in a round that has read anything but the owner's own words it \
-        is refused.\n\n\
+        a key yourself. Something already connected is refused. Its source is \
+        the round the owner asked in, which the box names itself: `sources` \
+        is not read, and may be `\"\"`. ⚠️ CALL IT FIRST: in a round that has \
+        read anything but the owner's own words it is refused.\n\n\
         `act=\"calendar_event\"` with `account=<a Google account's address>`, \
         `title`, `start` and `end` (both UTC instants `2026-10-20T14:00:00Z`, or \
         both days `2026-10-20`, `end` the day after the last) and an optional \
@@ -85,58 +87,12 @@ impl Verb for ProposeAct {
         takes, and mean the same thing.";
 
     fn run(call: &Call<'_>, args: ProposeActArgs) -> Result<Value, Refusal> {
-        let reasons = args.filing.reasons()?;
-        let act = match args.act.as_str() {
-            "auth" => {
-                let account_text =
-                    args.account.read()?.as_deref().ok_or_else(|| {
-                        Refusal::bad_request("account is required for act=\"auth\"")
-                    })?;
-                let account = EmailAddress::new(account_text)
-                    .map_err(|_| Refusal::bad_request("account must be an email address"))?;
-                let roster = call.caps.mail.accounts();
-                if !roster.iter().any(|known| known == account.as_str()) {
-                    return Err(Refusal::bad_request(format!(
-                        "account must be one of this deployment's accounts ({}), got {}",
-                        roster.join(", "),
-                        shown(account.as_str())
-                    )));
-                }
-                Act::Auth { account }
-            }
-            "secret" => {
-                // A name its own card asks for (the Google client, a sign-in with Google)
-                // is no Secret card's.
-                let settables = &call.settables.restricted(|by| !by.own_card());
-                let name_text =
-                    args.name.read()?.as_deref().ok_or_else(|| {
-                        Refusal::bad_request("name is required for act=\"secret\"")
-                    })?;
-                // A bad name's refusal gives the list's size, not its members, so a guess
-                // learns nothing.
-                let name = Settable::mint(settables, name_text).map_err(|_| {
-                    Refusal::bad_request(format!(
-                        "{} is not one of this deployment's {} declared secret name(s)",
-                        shown(name_text),
-                        settables.names().len()
-                    ))
-                })?;
-                Act::Secret {
-                    name: name.name().to_owned(),
-                    why: reasons.why().to_owned(),
-                }
-            }
-            "connect" => Act::Connect {
-                connection: connect(call, &args)?,
-            },
-            "calendar_event" => calendar_event(call, &args)?,
-            "retract" => retract(call, &args)?,
-            other => {
-                return Err(Refusal::bad_request(format!(
-                    "act must be one of: auth, secret, connect, calendar_event, retract, got {}",
-                    shown(other)
-                )));
-            }
+        let (act, reasons) = if args.act == "connect" {
+            let (connection, round) = connect(call, &args)?;
+            (Act::Connect { connection }, args.filing.resting_on(round)?)
+        } else {
+            let reasons = args.filing.reasons()?;
+            (other(call, &args, &reasons)?, reasons)
         };
         let index = args
             .filing
@@ -147,10 +103,9 @@ impl Verb for ProposeAct {
             "sources": reasons.sources().iter().map(ToString::to_string).collect::<Vec<_>>(),
             "next": "The owner taps it, dismisses it, or leaves it standing; you will see which",
         });
-        // The answer names its kind, and only the field that kind carries.
         let object = answer.as_object_mut().expect("an object literal");
         object.insert("act".to_owned(), json!(act.kind()));
-        let field = match &act {
+        let field = match act {
             Act::Auth { account } => Some(("account", account.as_str().to_owned())),
             Act::Secret { name, .. } => Some(("name", name.clone())),
             Act::Web { request, .. } => Some(("request", request.sentence())),
@@ -182,8 +137,65 @@ impl Verb for ProposeAct {
     }
 }
 
-/// An event for a Google account's own calendar, as `args` spell it; whether the account is a
-/// Google account is the tap's to read, from the instance file as it then stands.
+fn other(
+    call: &Call<'_>,
+    args: &ProposeActArgs,
+    reasons: &crate::secretary::proposal::Reasons,
+) -> Result<Act, Refusal> {
+    Ok(match args.act.as_str() {
+        "auth" => {
+            let account_text = args
+                .account
+                .read()?
+                .as_deref()
+                .ok_or_else(|| Refusal::bad_request("account is required for act=\"auth\""))?;
+            let account = EmailAddress::new(account_text)
+                .map_err(|_| Refusal::bad_request("account must be an email address"))?;
+            let roster = call.caps.mail.accounts();
+            if !roster.iter().any(|known| known == account.as_str()) {
+                return Err(Refusal::bad_request(format!(
+                    "account must be one of this deployment's accounts ({}), got {}",
+                    roster.join(", "),
+                    shown(account.as_str())
+                )));
+            }
+            Act::Auth { account }
+        }
+        "secret" => {
+            // A name its own card asks for (the Google client, a sign-in with Google)
+            // is no Secret card's.
+            let settables = &call.settables.restricted(|by| !by.own_card());
+            let name_text = args
+                .name
+                .read()?
+                .as_deref()
+                .ok_or_else(|| Refusal::bad_request("name is required for act=\"secret\""))?;
+            // A bad name's refusal gives the list's size, not its members, so a guess
+            // learns nothing.
+            let name = Settable::mint(settables, name_text).map_err(|_| {
+                Refusal::bad_request(format!(
+                    "{} is not one of this deployment's {} declared secret name(s)",
+                    shown(name_text),
+                    settables.names().len()
+                ))
+            })?;
+            Act::Secret {
+                name: name.name().to_owned(),
+                why: reasons.why().to_owned(),
+            }
+        }
+        "calendar_event" => calendar_event(call, args)?,
+        "retract" => retract(call, args)?,
+        other => {
+            return Err(Refusal::bad_request(format!(
+                "act must be one of: auth, secret, connect, calendar_event, retract, got {}",
+                shown(other)
+            )));
+        }
+    })
+}
+
+/// An event for an account's own calendar; the tap checks that the account is a Google one.
 fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
     let required = |field: &Caught<Option<String>>, name: &str| -> Result<String, Refusal> {
         field.read()?.clone().ok_or_else(|| {
@@ -239,7 +251,6 @@ fn retract(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
     Ok(Act::Retract { node })
 }
 
-/// What a round has read when a Connect card is refused in it.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \
                             (mail, a todo, a document, the web, a repository or an old answer)";
 
@@ -247,24 +258,33 @@ const READ_OUTSIDE: &str = "this round has read something that is not the owner'
 const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the owner names, never \
                                one learned from what was read";
 
-/// The refusal in a round that read outside the owner's words, or nothing in a clean one.
-fn owners_words_only(call: &Call<'_>, why: &str) -> Result<(), Refusal> {
-    if crate::secretary::taint::tainted(&crate::secretary::conversations::read(
-        call.caps.conversations,
-        call.conversation,
-    )?) {
+/// The round the owner opened with their own words, refused in any other.
+fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
+    let stored = crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
+    if crate::secretary::taint::tainted(&stored) {
         return Err(Refusal::forbidden(format!(
             "{READ_OUTSIDE}, and {why}: say so, and the owner asks again in a round of its own"
         )));
     }
-    Ok(())
+    match crate::secretary::taint::opener(&stored) {
+        Some(crate::secretary::memory::Origin::Turn { conversation, turn }) => {
+            Ok(Reference::Target(Target::Round { conversation, turn }))
+        }
+        Some(crate::secretary::memory::Origin::Tapped { .. }) | None => {
+            Err(Refusal::forbidden(format!(
+                "this round was not opened by the owner's own words, and {why}: the owner asks \
+                 in a round of their own"
+            )))
+        }
+    }
 }
 
-/// The connection `args` names, refused where the instance file already holds it or holds no
-/// table for it, as the tap would refuse it. A round that read anything but the owner's words
-/// proposes none, since an address or a folder could then be an email's.
-fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<crate::connect::Connection, Refusal> {
-    owners_words_only(call, CONNECT_OUTSIDE)?;
+/// The connection `args` names, refused as the tap would refuse it.
+fn connect(
+    call: &Call<'_>,
+    args: &ProposeActArgs,
+) -> Result<(crate::connect::Connection, Reference), Refusal> {
+    let round = owners_round(call, CONNECT_OUTSIDE)?;
     let template = args
         .template
         .read()?
@@ -281,5 +301,5 @@ fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<crate::connect::Con
     declared
         .with(&connection)
         .map_err(|refused| Refusal::bad_request(format!("no card was filed: {refused}")))?;
-    Ok(connection)
+    Ok((connection, round))
 }

@@ -19,13 +19,10 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal as _, headed};
 /// One event about one proposal: who, when, and what was said of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InboxEvent {
-    /// The proposal.
     pub proposal: ProposalId,
     /// When its writer recorded it: data, never an order.
     pub at: Datetime,
-    /// Who.
     pub actor: Actor,
-    /// What.
     pub said: Said,
 }
 

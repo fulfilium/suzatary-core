@@ -73,7 +73,6 @@ const FACT_ORDER: [Kind; 4] = [Kind::Standing, Kind::Preference, Kind::Person, K
 /// leaves those lines out, so the model reads each once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Asking<'a> {
-    /// The conversation.
     pub conversation: &'a ConversationId,
     /// The index of the first turn it is sent.
     pub from: usize,

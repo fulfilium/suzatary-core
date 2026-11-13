@@ -12,7 +12,7 @@ use crate::wire::inbox::{
     RememberWords, ReplacedFact,
 };
 
-/// The Memory page, where every summary a conversation is told stands with its Wrong.
+/// The Memory page.
 pub(crate) const MEMORY_PAGE: &str = "#/secretary/memory";
 
 /// The card for a proposal.
@@ -278,7 +278,6 @@ fn calendar_event(account: &str, event: &str, sentence: &str) -> Card {
     }
 }
 
-/// The device-code sign-in for the SMTP grant alone.
 fn auth_send(account: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -421,14 +420,13 @@ fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
     }
 }
 
-/// The card at its reading: only a yes that is still safe. After a failure that sent nothing,
-/// the main answer becomes Try again, never "Always allow", whose rule predates the failure.
+/// The card `id` at its reading: only a yes that is still safe.
 #[must_use]
-pub fn at(card: Card, reading: &Reading) -> Card {
+pub fn at(card: Card, reading: &Reading, id: &crate::secretary::inbox::ProposalId) -> Card {
     match reading {
         Reading::Standing => card,
         Reading::One(answer) if answer.response.performs() => Card {
-            // A try that stopped partway links where it stands; one lacking a grant, its setup.
+            // A try that stopped partway links where it stands; one lacking a grant, its fix.
             link: answer
                 .response
                 .unfinished()
@@ -437,11 +435,9 @@ pub fn at(card: Card, reading: &Reading) -> Card {
                     href: link.to_owned(),
                 })
                 .or_else(|| {
-                    answer.response.lacking().map(|lacking| CardLink::Setup {
+                    answer.response.lacking().map(|lacking| CardLink::Fix {
                         label: lacking.label(),
-                        template: crate::connect::TemplateId::fixing(lacking)
-                            .as_str()
-                            .to_owned(),
+                        then: crate::secretary::fix::then(lacking, id),
                     })
                 })
                 .or(card.link),
@@ -543,7 +539,7 @@ fn decision(
     }
 }
 
-/// Without its words (deleted or unread) the card has no answer: there is nothing to remember.
+/// Without its words the card has no answer.
 fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, sentence: &str) -> Card {
     let base = card(
         "Remember this?",
@@ -572,8 +568,7 @@ fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, senten
     }
 }
 
-/// Each fact it replaces beside the one it writes, so the owner reads both before he taps;
-/// without its words the card has no answer, as [`remember`].
+/// Each fact it replaces beside the one it writes, so the owner reads both before he taps.
 fn consolidate(
     words: &RememberWords,
     about: crate::secretary::memory::Kind,
@@ -612,7 +607,6 @@ fn consolidate(
     }
 }
 
-/// A fact's words as a card field shows them.
 fn shown(words: &RememberWords) -> &str {
     match words {
         RememberWords::Kept { fact } => fact,
@@ -736,14 +730,13 @@ fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str)
     }
 }
 
-/// Every address a send reaches, so the question the tap confirms leaves none out.
+/// Every address a send reaches.
 struct Envelope<'a> {
     to: &'a [String],
     cc: &'a [String],
 }
 
 impl Envelope<'_> {
-    /// Every recipient, as the question asks it.
     fn named(&self) -> String {
         match self.cc {
             [] => self.to.join(", "),
@@ -862,7 +855,6 @@ fn forward(
     }
 }
 
-/// The defaults every kind shares; `verb` words the read-only line.
 fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card {
     Card {
         title: title.to_owned(),
@@ -995,7 +987,7 @@ fn erase(sentence: &str) -> Card {
     }
 }
 
-/// The summary's words are on the Memory page, where its Wrong answers the same.
+/// The summary's words are on the Memory page.
 fn retract(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -1103,7 +1095,6 @@ fn sign_in_code(url: &str, sentence: &str) -> Card {
     }
 }
 
-/// Asks nothing first unless the caller says so.
 fn answer(verb: &str, label: &str) -> CardAnswer {
     CardAnswer {
         verb: verb.to_owned(),
@@ -1120,7 +1111,6 @@ fn field(label: &str, value: &str) -> CardField {
     }
 }
 
-/// A sentence ("open https://…") as a question ("Open https://…?").
 fn question(sentence: &str) -> String {
     let mut chars = sentence.chars();
     chars.next().map_or_else(String::new, |first| {
@@ -1380,7 +1370,9 @@ mod tests {
                 },
             })
         };
-        let again = at(email.clone(), &tried("auth: 535"));
+        let id =
+            || crate::secretary::inbox::ProposalId::new(format!("p{:032x}", 1)).expect("an id");
+        let again = at(email.clone(), &tried("auth: 535"), &id());
         assert_eq!(again.answers.len(), 1);
         assert_eq!(again.answers[0].label, "Try again");
         assert_eq!(again.answers[0].verb, "send");
@@ -1389,9 +1381,9 @@ mod tests {
             again.uncertain,
             "It may have been sent. Check Sent; it is never sent again."
         );
-        assert_eq!(at(email.clone(), &Reading::Standing), email);
+        assert_eq!(at(email.clone(), &Reading::Standing, &id()), email);
         let unreadable = Reading::Unreadable(crate::secretary::inbox::Unchecked);
-        assert!(at(email.clone(), &unreadable).answers.is_empty());
+        assert!(at(email.clone(), &unreadable, &id()).answers.is_empty());
         for settled in [
             Responded::Done(Done::MayHaveGone {
                 reason: "the connection closed".to_owned(),
@@ -1406,17 +1398,20 @@ mod tests {
             Responded::Withdrawn(crate::secretary::responded::Withdrawal::Superseded),
         ] {
             assert!(
-                at(email.clone(), &one(settled.clone())).answers.is_empty(),
+                at(email.clone(), &one(settled.clone()), &id())
+                    .answers
+                    .is_empty(),
                 "{settled:?}"
             );
         }
         let ruled = at(
             of(&web("any page on gov.uk or its subdomains")),
             &tried("timed out"),
+            &id(),
         );
         assert_eq!(ruled.answers.len(), 1);
         assert!(!widens(&ruled.answers[0]));
-        // A try that lacked a grant offers the setup that gives it, beside Try again.
+        // A try that lacked a grant offers the fix that gives it, beside Try again.
         let lacked = at(
             email.clone(),
             &one(Responded::Tried {
@@ -1427,13 +1422,16 @@ mod tests {
                     grant: crate::mail::lacking::Grant::GoogleCalendar,
                 }),
             }),
+            &id(),
         );
         assert_eq!(lacked.answers[0].label, "Try again");
         assert_eq!(
             lacked.link,
-            Some(CardLink::Setup {
+            Some(CardLink::Fix {
                 label: "Connect me@example.test".to_owned(),
-                template: "google".to_owned(),
+                then: crate::wire::inbox::FixThen::Leave {
+                    href: format!("{}{}", crate::google::CONSENT, id().as_str()),
+                },
             })
         );
     }

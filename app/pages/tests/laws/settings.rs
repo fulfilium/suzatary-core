@@ -156,7 +156,9 @@ fn a_card_tap_answered_asks_the_overview_again() {
                 index: 0,
             },
             then: card::Then {
-                done: "Stored".to_owned(),
+                after: card::After::Toast {
+                    done: "Stored".to_owned(),
+                },
                 yes: false,
             },
             signed: "standing:0:".to_owned(),
@@ -171,6 +173,52 @@ fn a_card_tap_answered_asks_the_overview_again() {
             .iter()
             .any(|e| matches!(e, Effect::Again { path } if path == "/api/overview")),
         "{effects:?}"
+    );
+}
+
+/// A fix's tap answered goes on as its link says: a path the box serves outside the app (Google's
+/// consent) is a document load, never a route of the app, and a place of the app is a route.
+#[test]
+fn a_fix_answered_leaves_the_app_or_goes_to_a_place_as_its_link_says() {
+    let answered = |after: card::After| {
+        let (mut rt, _) = Runtime::<settings::Settings>::start(settings::Flags {
+            context: context(true),
+        });
+        rt.step(settings::Msg::Host(Box::new(Input::Answered {
+            ask: settings::Ask::Card(card::Asking::Act {
+                key: card::Key {
+                    conversation: "default".to_owned(),
+                    index: 0,
+                },
+                then: card::Then { after, yes: true },
+                signed: "failed:1:".to_owned(),
+            }),
+            answer: Answer::Done {
+                body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+            },
+        })))
+        .1
+    };
+    let consent = "/api/oauth/google/consent/p1".to_owned();
+    let left = answered(card::After::Leave {
+        href: consent.clone(),
+    });
+    assert!(
+        left.iter()
+            .any(|e| matches!(e, Effect::Leave { href } if *href == consent)),
+        "{left:?}"
+    );
+    assert!(
+        !left.iter().any(|e| matches!(e, Effect::Go { .. })),
+        "{left:?}"
+    );
+    let went = answered(card::After::Go {
+        href: "#/settings".to_owned(),
+    });
+    assert!(
+        went.iter()
+            .any(|e| matches!(e, Effect::Go { href } if href == "#/settings")),
+        "{went:?}"
     );
 }
 

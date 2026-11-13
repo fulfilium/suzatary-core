@@ -1,6 +1,5 @@
 //! A proposal filed: asked once in the inbox, by its content, and drawn as a card in one
-//! conversation. Every proposer files through the one function here, so every proposal is tapped
-//! by the same route.
+//! conversation. Every proposer files through [`file()`].
 
 use crate::secretary::acts::Act;
 use crate::secretary::changes::Changeset;
@@ -21,10 +20,8 @@ use suzatary_base::refusal::Refusal;
 /// Where a proposal is drawn: its card's index in the conversation it was filed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filed {
-    /// Drawn by this filing.
     Drawn(usize),
-    /// Already drawn there: the same act asked again is the card already here, and nothing was
-    /// written.
+    /// The same act asked again: the card already here, and nothing was written.
     Already(usize),
 }
 
@@ -41,22 +38,17 @@ impl Filed {
 /// What is filed, by whom, in which conversation: everything but the instant and the stores.
 #[derive(Debug, Clone)]
 pub struct Filing<'a> {
-    /// The conversation it is drawn in.
     pub conversation: &'a ConversationId,
-    /// Who asks for it.
     pub proposer: Proposer,
-    /// The act.
     pub proposal: Proposal,
-    /// Why, and on what.
     pub reasons: Reasons,
-    /// The todo it serves.
     pub serves: Option<suzatary_base::reference::TodoRef>,
     /// The card it replaces, recorded on the line.
     pub revises: Option<usize>,
 }
 
-/// File `filing` at `at`: the inbox asked first ([`inbox::ask`], which writes nothing for an act
-/// it holds), then a line naming the object, unless the conversation already draws it.
+/// File `filing` at `at`: ask the inbox, then write a line naming the object unless the
+/// conversation already draws it.
 ///
 /// Under the inbox's hold, taken before the conversations' as the tap takes them, so no other
 /// filing comes between the card's index and its line, or between a coding session and
@@ -127,12 +119,12 @@ pub fn file_held(
         return match inbox::fold(inbox)?.get(&object).map(|asked| &asked.reading) {
             Some(reading) if !matches!(reading, Reading::Standing) => {
                 Err(Refusal::conflict(format!(
-                    "this was asked before, as {}, which reads {reading}; the same act is never \
-                     filed again",
+                    "this was asked before, as {}, which is {}; the same act is never filed again",
                     ProposalRef {
                         conversation: conversation.clone(),
                         index: already
                     },
+                    phase_said(reading),
                 )))
             }
             Some(_) | None => Ok((Filed::Already(already), object)),
@@ -170,18 +162,15 @@ pub struct TriageCards<'a> {
 /// A triage card as filed: the card a tap names, and how many acts it holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carded {
-    /// The card.
     pub card: ProposalRef,
     /// Its acts, the one just asked for last.
     pub acts: usize,
-    /// How this write came to be on it.
     pub how: Carding,
 }
 
 /// How a triage write came to be on its card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Carding {
-    /// A new card.
     New,
     /// A new card holding the open card's acts about the same todo and then this one, which
     /// replaces that card.
@@ -279,9 +268,10 @@ impl<'a> TriageCards<'a> {
         }
         if let Some(answered) = answered_card(&fold, &changeset, &reasons) {
             return Err(Refusal::conflict(format!(
-                "this was asked before, as {}, which reads {}; the same request, whatever its \
+                "this was asked before, as {}, which is {}; the same request, whatever its \
                  price, is filed again only on a source that card did not rest on",
-                answered.asked.asked, answered.reading,
+                answered.asked.asked,
+                phase_said(&answered.reading),
             )));
         }
         let (changeset, reasons, revises) = match open {
@@ -383,7 +373,6 @@ pub fn triage_card(object: &inbox::Object) -> Option<&Changeset> {
     }
 }
 
-/// Every card the triage agent filed, in any reading, with its changeset.
 fn triage_cards(fold: &inbox::Fold) -> impl Iterator<Item = (&inbox::Object, &Changeset)> {
     fold.objects()
         .filter_map(|object| triage_card(object).map(|changeset| (object, changeset)))
@@ -400,21 +389,18 @@ fn open_card<'f>(
     })
 }
 
-/// Whether `act` makes a request `card` already makes.
 fn asked_by(card: &Changeset, act: &crate::secretary::changes::Act) -> bool {
     card.acts()
         .iter()
         .any(|asked| asked.request() == act.request())
 }
 
-/// Whether `card` asks for every act of `changeset`, on the same chain.
 fn asks_for(card: &Changeset, changeset: &Changeset) -> bool {
     card.chain() == changeset.chain() && changeset.acts().iter().all(|act| asked_by(card, act))
 }
 
-/// A card somebody answered (tapped, dismissed or withdrew) that asked for every act of
-/// `changeset` on every source `reasons` names: the same request on the same evidence, which is
-/// never asked again. A source that card did not rest on makes the write a new request.
+/// An answered card that asked for every act of `changeset` on every source `reasons` names:
+/// the same request on the same evidence is never asked again.
 fn answered_card<'f>(
     fold: &'f inbox::Fold,
     changeset: &Changeset,
@@ -432,8 +418,7 @@ fn answered_card<'f>(
         .map(|(object, _)| object)
 }
 
-/// `changeset` joined to the open card `object` holding `standing`: the card's acts, then those of
-/// `changeset` it does not already ask for, with both reasons.
+/// `changeset` joined to the open card `object`, with both reasons.
 fn joined(
     object: &inbox::Object,
     standing: &Changeset,
@@ -470,6 +455,15 @@ fn joined(
     Ok((joined, reasons))
 }
 
+/// A card's state as a refusal says it, never its recorded words, which can hold a server's
+/// reply (`taint`).
+fn phase_said(reading: &Reading) -> String {
+    serde_json::to_value(crate::secretary::readings::state(reading).0)
+        .ok()
+        .and_then(|state| state.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,7 +473,6 @@ mod tests {
         Datetime::new(2026, 10, 27, 9, minute, 0, 0).expect("an instant")
     }
 
-    /// A coding session serving `todo`, filed in `conversation` by `proposer`.
     fn session<'a>(conversation: &'a ConversationId, proposer: Proposer, todo: &str) -> Filing<'a> {
         let serves: suzatary_base::reference::TodoRef = format!("todo:suzatary/{todo}")
             .parse()
@@ -538,7 +531,6 @@ mod tests {
         }
     }
 
-    /// Reasons resting on `sources`, each a briefing's day.
     fn resting_on(sources: &[&str]) -> Reasons {
         Reasons::new(
             "a message asks for it",
@@ -550,7 +542,6 @@ mod tests {
         .expect("reasons")
     }
 
-    /// One triage write of `act` at `at`, every changeset admitted.
     fn filed_triage(
         cards: &TriageCards<'_>,
         at: Datetime,

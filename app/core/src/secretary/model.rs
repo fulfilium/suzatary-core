@@ -73,7 +73,6 @@ pub enum Turn {
 pub struct ToolCall {
     /// The verb's name, read once where the model said it.
     pub verb: ToolName,
-    /// Its arguments.
     pub args: BTreeMap<String, serde_json::Value>,
 }
 

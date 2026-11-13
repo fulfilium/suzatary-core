@@ -99,9 +99,7 @@ pub enum Ask {
 /// Whether a part of the page that opens is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Fold {
-    /// Shut.
     Shut,
-    /// Open.
     Open,
 }
 
@@ -136,7 +134,6 @@ struct Edit {
     said: Option<String>,
 }
 
-/// The edit's panel.
 #[derive(Debug, Clone)]
 enum Editing {
     Shut,
@@ -231,7 +228,6 @@ pub enum Todo {}
 type Fx = Effect<Hold, Ask>;
 
 impl Model {
-    /// The page for `flags`, and what it asks first.
     #[must_use]
     pub(crate) fn open(f: Flags) -> (Model, Vec<Fx>) {
         let m = Model {
@@ -274,7 +270,6 @@ impl Model {
         (m, effects)
     }
 
-    /// The todo it shows.
     #[must_use]
     pub(crate) fn id(&self) -> &str {
         &self.id
@@ -343,7 +338,6 @@ impl Model {
         }]
     }
 
-    /// One step: what the host or the person did.
     pub(crate) fn update(&mut self, msg: Msg) -> Vec<Fx> {
         match msg {
             Msg::Host(input) => self.heard(*input),
@@ -660,7 +654,6 @@ impl Model {
         vec![Effect::Toast { words }]
     }
 
-    /// Whether this tab holds a write of it the box has not taken.
     fn unsent_here(&self) -> bool {
         match &self.unsent {
             Reading::Val { v } => v.todos.contains_key(&self.id),
@@ -718,7 +711,6 @@ impl Model {
         }
     }
 
-    /// The page drawn.
     #[must_use]
     pub(crate) fn view(&self) -> Node<Msg> {
         let offsets = &self.context.offsets;

@@ -90,7 +90,6 @@ pub struct Settings {
     pub live: live::Shared,
     pub models: Arc<models::Models>,
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
-    /// Declares `settables`.
     pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
     pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
     pub data: Arc<std::path::PathBuf>,
@@ -120,7 +119,6 @@ pub struct Inner {
     pub postman: Arc<dyn suzatary_api::secretary::routes::Post + Send + Sync>,
     /// Reached only with a `Tap`.
     pub acting: Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync>,
-    /// Whois answers, per server.
     pub known: Arc<Mutex<gate::Remembering>>,
     pub workers: Arc<Workers>,
     /// Only [`State::reconnected`] writes it.
@@ -138,7 +136,6 @@ pub struct Inner {
     pub reveal: Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>,
     /// Syncs a plugin after a tap.
     pub checks: checks::Checks,
-    /// How the person reaches the app.
     pub reach: Arc<suzatary_core::connect::Reach>,
     /// `None` refuses an upload by name.
     pub uploads: Option<Arc<Uploads>>,
@@ -147,7 +144,6 @@ pub struct Inner {
     /// `None` while the compactor is off.
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
-    /// Error-report budgets per login.
     pub reports: Arc<Mutex<suzatary_api::clienterror::Limiter>>,
     pub stamp: Stamp,
     /// `None` declares no plugin.
@@ -175,18 +171,15 @@ pub struct Inner {
     >,
     /// Reached only by a tapped device card.
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
-    /// Signed requests and answers.
     pub requests: Arc<suzatary_io::requests::Requests>,
     pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
-    /// Whether each model answered.
     pub answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
     /// Reached only with a `Tap`.
     pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
-    /// Tests a model credential.
     pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
     /// Begun only with a `Tap`, finished only by its callback.
     pub consenting: Arc<google::Consenting>,
@@ -196,7 +189,6 @@ pub struct Inner {
     pub secrets_answered: Arc<Mutex<suzatary_core::secrets::SecretAnswers>>,
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
-    /// What `GET /api/portal` answers.
     pub portal: Arc<suzatary_api::portal::Portal>,
 }
 
@@ -557,8 +549,7 @@ impl State {
         locks::read(&self.live).clone()
     }
 
-    /// Swap a reread [`live::Live`] in whole under the lock, after declaring its names to the
-    /// secret store; a failure changes nothing.
+    /// Swap a reread [`live::Live`] in whole under the lock; a failure changes nothing.
     pub fn reconnected(&self, who: &str) {
         let mut live = locks::write(&self.live);
         let read = self.edits.declared().and_then(|declared| {
@@ -695,7 +686,9 @@ impl State {
             heard: heard.as_ref(),
             pushed: &settings::pushed(self),
             now,
-            redirect: self.consenting.redirect(),
+            redirect: suzatary_core::secretary::google_sign_in::Consents::redirect(
+                self.consenting.as_ref(),
+            ),
         };
         match suzatary_core::secretary::noticed::notice(
             &seen,
@@ -929,7 +922,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         .context("declaring this instance's secret names")?;
     // Missing keys leave the server read-only.
     let signers = instance.signers();
-    // The server still reads.
     if let Err(failed) = instance.adopt(&signers).whole() {
         tracing::warn!("{failed:#}");
     }
@@ -973,7 +965,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
             // Never `secretspec.toml`, which names unsettable secrets.
             live: Arc::clone(&serving.live),
             models: Arc::new(models::Models::of(instance)),
-            // The store `secret_resolves` reads.
             secrets: Arc::new(instance.secrets()),
             declares: Arc::new(instance.declarations.clone()),
             edits: Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
@@ -1172,7 +1163,6 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     let peers = match whois_fixture {
         None => daemon_peers(&instance.paths.whois_socket),
         Some(login) => {
-            // A fixture behind a real certificate is reachable.
             if secure {
                 anyhow::bail!("--whois-fixture is test-only and refuses to run with a certificate");
             }
@@ -1205,7 +1195,6 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         #[cfg(feature = "fixture")]
         (scripted, &google),
     );
-    // No compactor.
     #[cfg(feature = "fixture")]
     let fixture = any_fixture || scripted;
     #[cfg(not(feature = "fixture"))]
@@ -1477,7 +1466,7 @@ fn heard(
         })
 }
 
-/// File owed cards now, hourly (a secret, sign-in or model can lapse silently) and on `moved`.
+/// File owed cards now, hourly and on `moved`.
 async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
     let first = state.clone();
     if let Err(join_error) = tokio::task::spawn_blocking(move || first.notice()).await {
@@ -1515,7 +1504,7 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
 
 const INSTANCE_POLL: Duration = Duration::from_secs(1);
 
-/// Reconnect and file when the instance file's bytes move; an unreadable one retries next tick.
+/// Reconnect and file when the instance file's bytes move.
 pub async fn instance_watched(state: State, path: PathBuf) {
     let mut last = tokio::fs::read(&path).await.ok();
     let mut every = tokio::time::interval(INSTANCE_POLL);

@@ -18,10 +18,7 @@ pub const TRIES: u32 = 5;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     /// A line that fits.
-    Fits {
-        /// The summary.
-        line: Line,
-    },
+    Fits { line: Line },
     /// No answer fitted.
     Unfit {
         /// The shortest answer's length, its spaces joined.

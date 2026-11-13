@@ -18,12 +18,7 @@ pub enum SecretName {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepShape {
     /// A secret, with the template's words on what it is and where it is issued.
-    Secret {
-        /// Which.
-        name: SecretName,
-        /// Its words.
-        help: Words,
-    },
+    Secret { name: SecretName, help: Words },
     /// The account's device-code sign-in, to read its mail.
     DeviceCode,
     /// The account's device-code consent to send mail, a grant apart from reading's.
@@ -36,9 +31,7 @@ pub enum StepShape {
     SignIn,
     /// A command at a terminal; `{email}` and `{subdir}` stand for the account's.
     Terminal {
-        /// What to run.
         run: Run<&'static str>,
-        /// Why, in a few words.
         why: &'static str,
     },
 }
@@ -47,38 +40,19 @@ pub enum StepShape {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
     /// Paste a secret into a card's write-only field: the value travels only in the tap.
-    Secret {
-        /// The name it is stored under.
-        name: String,
-        /// The template's words for it.
-        help: Words,
-    },
+    Secret { name: String, help: Words },
     /// Tap the account's sign-in, by the device-code flow, IMAP only.
-    DeviceCode {
-        /// The account.
-        account: EmailAddress,
-    },
+    DeviceCode { account: EmailAddress },
     /// Tap the account's consent to send, by the device-code flow, SMTP only.
-    SendingConsent {
-        /// The account.
-        account: EmailAddress,
-    },
+    SendingConsent { account: EmailAddress },
     /// Make the box's Google Cloud client and paste its downloaded file into the card's field.
     GoogleClient,
     /// Tap the account's sign-in with Google, which reads and sends its mail.
-    AuthCode {
-        /// The account.
-        account: EmailAddress,
-    },
+    AuthCode { account: EmailAddress },
     /// Tap the model's sign-in, which the deployment runs on the box.
     SignIn,
     /// Run a command at a terminal on the box, which only the person can do.
-    Terminal {
-        /// What to run.
-        run: Run<String>,
-        /// Why.
-        why: &'static str,
-    },
+    Terminal { run: Run<String>, why: &'static str },
 }
 
 impl StepShape {
@@ -100,9 +74,8 @@ impl StepShape {
                     .to_owned()
             }
             StepShape::GoogleClient => {
-                "make the box's Google Cloud client, once for every Google account (skip this when \
-                 the box holds one): its card lists each step in the Google Cloud console and \
-                 takes the file Google gives you"
+                "make the box's Google Cloud client, once for every Google account: its card \
+                 lists each step in the Google Cloud console and takes the file Google gives you"
                     .to_owned()
             }
             StepShape::AuthCode => {

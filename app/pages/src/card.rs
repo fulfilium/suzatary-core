@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use suzatary_base::reference::Reference;
 use suzatary_core::wire::inbox::{
-    Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, ProposedAct,
-    ProposedObject,
+    Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, FixThen,
+    ProposedAct, ProposedObject,
 };
 use suzatary_core::wire::topics::{ProposalRow, ProposalState};
 use ts_rs::TS;
@@ -82,8 +82,7 @@ pub enum Step {
     },
 }
 
-/// Whether a value is typed is held for the page alone: the value never leaves its field but in
-/// the tap.
+/// Whether a value is typed; the value never leaves its field but in the tap.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Ui {
     step: Step,
@@ -105,15 +104,34 @@ pub enum Ev {
     Acknowledge,
     Drop,
     Reply,
-    Setup,
+    Fix,
 }
 
 /// A link's card follows a yes by sending the link again.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(rename = "CardThen")]
 pub struct Then {
-    pub done: String,
+    pub after: After,
     pub yes: bool,
+}
+
+/// What the page does once the box took a tap.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+#[ts(rename = "CardAfter")]
+pub enum After {
+    /// Says what was done.
+    Toast { done: String },
+    /// Goes to the place of the app a fix continues on.
+    Go { href: String },
+    /// Leaves the app for the path the box serves a fix's next step on.
+    Leave { href: String },
+}
+
+impl After {
+    fn toast(done: impl Into<String>) -> Self {
+        After::Toast { done: done.into() }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,8 +144,8 @@ pub(crate) enum Out {
     Reply(Key),
     Focus(String),
     Toast(String),
-    Setup(String),
     Go(String),
+    Leave(String),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -138,8 +156,7 @@ pub(crate) struct Cards {
     lost: BTreeMap<Key, String>,
 }
 
-/// What moves when the box records an answer to a proposal: its machine and the session it
-/// started (`asks.signature`).
+/// What moves when the box records an answer to a proposal (`asks.signature`).
 #[must_use]
 pub(crate) fn signature(p: &ProposalRow) -> String {
     format!(
@@ -356,14 +373,14 @@ impl Cards {
         let (ui, out) = match wants(key, row, &was, ev) {
             Wants::Ui(ui) => (ui, Vec::new()),
             Wants::Out(o) => (was.clone(), vec![o]),
-            Wants::Answer(answer, done, secret) => {
+            Wants::Answer(answer, after, secret) => {
                 let yes = matches!(answer, Answering::Tap { .. });
                 let at = Asked {
                     conversation: key.conversation.clone(),
                     index: key.index,
                     from: signature(row),
                 };
-                let then = Then { done, yes };
+                let then = Then { after, yes };
                 (
                     rest,
                     vec![Out::Act(
@@ -431,7 +448,11 @@ impl Cards {
             Ok(Outcome::Answered {
                 answer: Said::Taken,
                 ..
-            }) => vec![Out::Toast(then.done.clone())],
+            }) => vec![match &then.after {
+                After::Toast { done } => Out::Toast(done.clone()),
+                After::Go { href } => Out::Go(href.clone()),
+                After::Leave { href } => Out::Leave(href.clone()),
+            }],
             Ok(Outcome::Answered {
                 answer: Said::Lost { .. },
                 held: true,
@@ -479,7 +500,7 @@ impl Cards {
 enum Wants {
     Ui(Ui),
     Out(Out),
-    Answer(Answering, String, Secret),
+    Answer(Answering, After, Secret),
     Endorse(Out),
 }
 
@@ -495,7 +516,7 @@ fn wants(key: &Key, row: &ProposalRow, ui: &Ui, ev: Ev) -> Wants {
         if r.is_empty() {
             Wants::Out(Out::Focus(key.field("reason")))
         } else {
-            Wants::Answer(answer(r), done.to_owned(), Secret::None)
+            Wants::Answer(answer(r), After::toast(done), Secret::None)
         }
     };
     match ev {
@@ -525,19 +546,28 @@ fn wants(key: &Key, row: &ProposalRow, ui: &Ui, ev: Ev) -> Wants {
         },
         Ev::Dismiss => reason(|reason| Answering::Dismiss { reason }, "dismissed"),
         Ev::Drop => reason(|reason| Answering::Drop { reason }, "Dropped"),
-        Ev::Acknowledge => {
-            Wants::Answer(Answering::Acknowledge, row.card.check.clone(), Secret::None)
-        }
+        Ev::Acknowledge => Wants::Answer(
+            Answering::Acknowledge,
+            After::toast(row.card.check.clone()),
+            Secret::None,
+        ),
         Ev::Reply => Wants::Out(Out::Reply(key.clone())),
-        Ev::Setup => match &row.card.link {
-            Some(CardLink::Setup { template, .. }) => Wants::Out(Out::Setup(template.clone())),
+        Ev::Fix => match &row.card.link {
+            Some(CardLink::Fix { then, .. }) => Wants::Answer(
+                Answering::Fix,
+                match then {
+                    FixThen::Place { href } => After::Go { href: href.clone() },
+                    FixThen::Leave { href } => After::Leave { href: href.clone() },
+                },
+                Secret::None,
+            ),
             Some(CardLink::Page { .. }) | None => Wants::Ui(ui.clone()),
         },
     }
 }
 
 fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
-    let done = a.done.clone();
+    let done = After::toast(a.done.clone());
     let note = ui.text.trim().to_owned();
     match &a.asks {
         Asks::Now => Wants::Answer(tap(String::new(), false), done, Secret::None),
@@ -556,7 +586,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
                 key.clone(),
                 actor.clone(),
                 device.clone(),
-                Then { done, yes: true },
+                Then { after: done, yes: true },
                 note,
                 signature(row),
             )),
@@ -1027,8 +1057,8 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
             CardLink::Page { label, href } => {
                 Some(view! { A "act act-help proposallink" {Href => href} [label.as_str()] })
             }
-            CardLink::Setup { label, .. } => writes.then(|| {
-                view! { Button "act act-setup proposallink" {Type => "button"} @click(Ev::Setup) [label.as_str()] }
+            CardLink::Fix { label, .. } => writes.then(|| {
+                view! { Button "act act-fix proposallink" {Type => "button"} @click(Ev::Fix) [label.as_str()] }
             }),
         }),
         (!card.problem.is_empty()).then(|| {
@@ -1043,11 +1073,6 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
         acts,
     ];
     (attrs, parts.into_iter().flatten().collect())
-}
-
-#[derive(Debug, Deserialize)]
-struct Begun {
-    id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -1066,7 +1091,6 @@ pub enum Asking {
         note: String,
         signed: String,
     },
-    Setup,
 }
 
 pub(crate) fn effects<H, A, S>(
@@ -1116,15 +1140,8 @@ pub(crate) fn effects<H, A, S>(
             Out::Reply(key) => replies.push(key),
             Out::Focus(field) => effects.push(Effect::Focus { field }),
             Out::Toast(words) => effects.push(Effect::Toast { words }),
-            Out::Setup(template) => effects.push(Effect::Post {
-                ask: ask(Asking::Setup),
-                path: format!(
-                    "/api/secretary/setup/{}",
-                    crate::runtime::component(&template)
-                ),
-                body: crate::runtime::Body::Empty {},
-            }),
             Out::Go(href) => effects.push(Effect::Go { href }),
+            Out::Leave(href) => effects.push(Effect::Leave { href }),
         }
     }
     (effects, replies)
@@ -1150,10 +1167,6 @@ impl Cards {
                 note,
                 signed,
             } => Cards::endorsed(&key, signed, note, then, a),
-            Asking::Setup => vec![match answered::<Begun>(a) {
-                Ok(Begun { id }) => Out::Go(Place::conversation(&id).href()),
-                Err(words) => Out::Toast(words),
-            }],
         }
     }
 
@@ -1166,6 +1179,7 @@ impl Cards {
             .iter()
             .find(|a| matches!(a.asks, Asks::Value { .. }))
             .map_or_else(String::new, |a| a.done.clone());
+        let done = After::toast(done);
         Out::Act(
             link.clone(),
             Act::Answer {
@@ -1177,7 +1191,10 @@ impl Cards {
                 answer: tap(String::new(), false),
             },
             Secret::Kept { kept: link.print() },
-            Then { done, yes: false },
+            Then {
+                after: done,
+                yes: false,
+            },
         )
     }
 }

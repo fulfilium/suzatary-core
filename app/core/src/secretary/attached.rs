@@ -25,7 +25,6 @@ pub struct Attached {
     pub name: String,
     /// Its `type/subtype`.
     pub media: String,
-    /// Its size in bytes.
     pub size: u64,
     /// The SHA-256 of its bytes, the same digest a photo is named by.
     pub sha256: AttachmentId,
@@ -63,7 +62,6 @@ pub enum Unattachable {
          nothing was sent"
     )]
     Changed {
-        /// The file.
         name: String,
         /// The recorded digest's first twelve hex digits, as a card prints a hash.
         was: String,

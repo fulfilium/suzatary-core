@@ -1,9 +1,5 @@
 //! The rule over the connections: what each one's standing owes, filed by the box with no model
 //! asked.
-//!
-//! A connection's first unmet step that the box performs on a tap is owed its card, while what it
-//! asks is unmet. A pasted Google calendar link is owed its removal once that account reads its
-//! calendars through its sign-in with Google (`Owed::retiring`).
 
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
@@ -30,12 +26,11 @@ use suzatary_base::refusal::Refusal;
 pub struct Google<'a> {
     /// Whether the box's Google Cloud client is stored, its id and its secret both.
     pub client: SecretState,
-    /// The box's callback, `None` when the app's URL names no origin Google can send back to.
+    /// The box's callback, if the app's URL allows one.
     pub redirect: Option<&'a crate::google::RedirectUri>,
 }
 
-/// The cards the connections owe: each account's sign-in, its consent to send once it reads, and
-/// each grant asked for while its plugin still may not reach the origin.
+/// The cards the connections owe.
 #[must_use]
 pub fn owed(
     declared: &Declared,
@@ -53,10 +48,12 @@ pub fn owed(
             .iter()
             .find(|account| account.email.as_str() == email.as_str())
             .is_some_and(|account| match account.sync {
-                // A lieer account asks only for its move onto the sign-in with Google.
-                Sync::Google | Sync::Gmail => {
-                    matches!(secrets.google_grant(email), Held::Signed(_))
-                }
+                Sync::Google => matches!(secrets.google_grant(email), Held::Signed(_)),
+                // A calendar's grant alone has not moved a lieer account's mail.
+                Sync::Gmail => matches!(
+                    secrets.google_grant(email),
+                    Held::Signed(parts) if parts.contains(Scope::Mail)
+                ),
                 Sync::MsImap(_) | Sync::Proton(_) => secrets.mail_grants(account).imap,
             })
     };
@@ -100,7 +97,7 @@ pub fn owed(
         .filter(|object| object.asked.proposer == Proposer::Box && object.reading.performs())
         .filter_map(|object| {
             unmet(
-                declared,
+                (declared, secrets, google),
                 inbox,
                 &object.asked.proposal,
                 &object.asked.reasons,
@@ -115,12 +112,34 @@ pub fn owed(
 
 /// A card of the box's that a tap asked for, owed while what it asks is unmet.
 fn unmet(
-    declared: &Declared,
+    (declared, secrets, google): (&Declared, &dyn Secrets, Google<'_>),
     inbox: &inbox::Fold,
     proposal: &Proposal,
     reasons: &Reasons,
 ) -> Option<Owed> {
+    let asked = || Owed::one(proposal.clone(), reasons.why());
+    let google_account = |account: Option<&EmailAddress>| {
+        declared.accounts.iter().any(|held| {
+            matches!(held.sync, Sync::Google | Sync::Gmail)
+                && account.is_none_or(|account| held.email.as_str() == account.as_str())
+        })
+    };
     match proposal {
+        Proposal::Act(Act::GoogleClient { .. }) => {
+            (google_account(None) && !google.client.is_set()).then(asked)
+        }
+        Proposal::Act(Act::GoogleSignIn { account, scopes }) => (google_account(Some(account))
+            && match secrets.google_grant(account) {
+                Held::Signed(parts) => scopes.missing(&parts).is_some(),
+                Held::NotSignedIn => true,
+            })
+        .then(asked),
+        Proposal::Act(Act::AuthSend { account }) => declared
+            .accounts
+            .iter()
+            .find(|held| held.email.as_str() == account.as_str())
+            .is_some_and(|held| !secrets.mail_grants(held).smtp)
+            .then(asked),
         Proposal::Act(Act::Disconnect { connection }) => {
             let (link, card) = pasted(declared, inbox, reasons)?;
             (link == *connection).then(|| retiring(link, card))
@@ -142,15 +161,12 @@ fn unmet(
             | Act::CodingSession { .. }
             | Act::Device(_)
             | Act::Auth { .. }
-            | Act::AuthSend { .. }
             | Act::SignIn { .. }
             | Act::SignInCode { .. }
             | Act::UnlockStore { .. }
             | Act::Erase { .. }
             | Act::Retract { .. }
             | Act::Afresh { .. }
-            | Act::GoogleClient { .. }
-            | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }
             | Act::Noise { .. }
             | Act::Restore { .. },
@@ -163,8 +179,7 @@ fn unmet(
     }
 }
 
-/// Each lieer account whose Connect card for a sign-in with Google was tapped: its steps are
-/// owed while the instance still declares it lieer's, which the sign-in's callback changes.
+/// Each lieer account whose Connect card for a sign-in with Google was tapped.
 fn moving<'a>(
     declared: &'a Declared,
     inbox: &'a inbox::Fold,
@@ -249,7 +264,6 @@ fn pasted(
     })
 }
 
-/// The removal of `link`, which the card `pasted` was answered with a Google calendar's link.
 fn retiring(link: Connection, pasted: ProposalRef) -> Owed {
     let why = format!(
         "{} is a Google account's calendar, which the box reads through that account's sign-in \
@@ -259,7 +273,6 @@ fn retiring(link: Connection, pasted: ProposalRef) -> Owed {
     Owed::one(Proposal::Act(Act::Disconnect { connection: link }), why).about(&[pasted.into()])
 }
 
-/// `words` begun with a capital, as a sentence begins.
 fn capitalised(words: &str) -> String {
     let mut chars = words.chars();
     chars.next().map_or_else(String::new, |first| {
@@ -267,7 +280,7 @@ fn capitalised(words: &str) -> String {
     })
 }
 
-/// The box's card for a connection's unmet `step`; `None` for another rule's or a terminal step.
+/// The box's card for a connection's unmet `step`.
 fn card(step: Step, google: Google<'_>, inbox: &inbox::Fold) -> Option<Owed> {
     match step {
         Step::DeviceCode { account } => Some(signing_in(
@@ -311,8 +324,7 @@ fn card(step: Step, google: Google<'_>, inbox: &inbox::Fold) -> Option<Owed> {
     }
 }
 
-/// Each Google account whose grant lacks a part its connection reads: a sign-in card asking for
-/// those parts alone (`include_granted_scopes`).
+/// Each Google account whose grant lacks a part its connection reads: a sign-in card for it.
 fn lacking<'a>(
     declared: &'a Declared,
     secrets: &'a dyn Secrets,
@@ -349,7 +361,6 @@ fn lacking<'a>(
         })
 }
 
-/// An account's sign-in card, its episode beginning when the account was last connected.
 fn signing_in(inbox: &inbox::Fold, act: Act, account: &EmailAddress, why: String) -> Owed {
     let owed = Owed::one(Proposal::Act(act), why);
     match connected(inbox, account) {
@@ -358,8 +369,7 @@ fn signing_in(inbox: &inbox::Fold, act: Act, account: &EmailAddress, why: String
     }
 }
 
-/// When `account` was last connected from a card, so a sign-in card dismissed before is asked
-/// again; `None` for an account written by hand.
+/// When `account` was last connected from a card.
 fn connected(inbox: &inbox::Fold, account: &EmailAddress) -> Option<Datetime> {
     inbox
         .objects()
@@ -379,7 +389,6 @@ fn connected(inbox: &inbox::Fold, account: &EmailAddress) -> Option<Datetime> {
         .max()
 }
 
-/// Whether `plugin` is declared and may not reach `origin`.
 fn outside(declared: &Declared, plugin: &PluginName, origin: &Origin) -> bool {
     declared
         .plugins
@@ -387,7 +396,6 @@ fn outside(declared: &Declared, plugin: &PluginName, origin: &Origin) -> bool {
         .any(|manifest| manifest.name() == plugin && !manifest.allows(origin))
 }
 
-/// Why the box asks to let `plugin` reach `origin`, in the owner's words.
 fn asking(plugin: &PluginName, origin: &Origin) -> String {
     format!(
         "The link is served from {origin}, which {} may not reach yet.",
@@ -395,7 +403,6 @@ fn asking(plugin: &PluginName, origin: &Origin) -> String {
     )
 }
 
-/// Why the box asks to connect `connection`, a Google account whose calendar's link was pasted.
 fn connecting(connection: &crate::connect::Connection) -> String {
     format!(
         "A link to a calendar of {} was pasted, and the box reads a Google account's calendars \
@@ -404,7 +411,7 @@ fn connecting(connection: &crate::connect::Connection) -> String {
     )
 }
 
-/// What a tapped card is filed into: the conversations, the inbox, and the clock that dates it.
+/// What a tapped card is filed into.
 pub type Filer<'a> = (
     Conversations<'a>,
     &'a dyn Prodrome<InboxEvent>,
@@ -428,8 +435,7 @@ pub fn grant(to: Filer<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), 
     )
 }
 
-/// File the box's card asking to connect `connection`, a Google account whose calendar's link
-/// the card `pasted` was tapped with.
+/// File the box's card asking to connect `connection`, a Google account whose calendar was pasted.
 ///
 /// # Errors
 /// The stores' own failures.

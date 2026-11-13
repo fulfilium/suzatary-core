@@ -35,7 +35,6 @@ pub enum TurnShape {
     },
     /// A verb's answer: which verb, how the call ended, each file it handed over.
     Tool {
-        /// The verb.
         verb: ToolName,
         /// How the call ended, a remembered fact's receipt included.
         outcome: Outcome,
@@ -65,7 +64,6 @@ pub struct FileShape {
     pub id: AttachmentId,
     /// What it is.
     pub media: Enclosure,
-    /// Its size in bytes.
     pub size: u64,
 }
 

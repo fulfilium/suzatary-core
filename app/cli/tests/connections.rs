@@ -524,6 +524,56 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
     let _ = std::fs::remove_file(&served.path);
 }
 
+/// A connect the owner asks for in their own words is filed on the first try, its source the
+/// round they asked in, which the model does not name; and so is a second in the same
+/// conversation, after the first card and after a refused proposal, since neither answer reads
+/// anything from outside the round.
+#[test]
+fn a_connect_in_the_owners_words_is_filed_on_the_first_try() {
+    let connect = |label: &str| {
+        format!(
+            r#"{{"say": "I will ask to add it.", "calls": [{{"verb": "propose_act", "args": {{
+              "act": "connect", "template": "ics", "params": ["{label}"],
+              "why": "Ada asked to add the {label} calendar.", "sources": ""}}}}]}}"#
+        )
+    };
+    let served = serving_answering(
+        "connect-first-try",
+        None,
+        Some(common::FakeModel::saying_owned([
+            connect("Work"),
+            r#"{"say": "Proposed."}"#.to_owned(),
+            r#"{"say": "Asked.", "calls": [{"verb": "propose_act", "args": {
+              "act": "connect", "template": "no-such-template", "params": [],
+              "why": "a mistake", "sources": ""}}]}"#
+                .to_owned(),
+            r#"{"say": "That was refused."}"#.to_owned(),
+            connect("Family"),
+            r#"{"say": "Proposed."}"#.to_owned(),
+        ])),
+        |server, _| server,
+    );
+    let base = &served.base;
+    let id = common::opened(base, "Calendars");
+    let cards = |read: &serde_json::Value| read["proposals"].as_array().map_or(0, Vec::len);
+
+    let first = common::said(base, &id, "add my Work calendar");
+    assert_eq!(cards(&first), 1, "filed on the first try: {first}");
+    assert_eq!(
+        first["proposals"][0]["sources"],
+        serde_json::json!([format!("round:{id}/0")]),
+        "its source is the round the owner asked in"
+    );
+    common::said(base, &id, "add something");
+    let second = common::said(base, &id, "add my Family calendar too");
+    assert_eq!(
+        cards(&second),
+        2,
+        "a second connect in the same conversation: {second}"
+    );
+    let _ = std::fs::remove_file(&served.path);
+}
+
 /// A second add is a failed card that wrote nothing, and a connection added and removed leaves
 /// the file byte for byte but for the calendar's plugin, which stays, declared with no link.
 #[test]

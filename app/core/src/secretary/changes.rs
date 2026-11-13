@@ -28,9 +28,7 @@ use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
 pub enum Act {
     /// Author a todo that does not exist yet.
     Add {
-        /// Its id.
         todo: String,
-        /// Everything else.
         #[serde(flatten)]
         fields: TodoFields,
         /// The message, the day and the parent. Left out of the JSON form, which only a model
@@ -40,7 +38,6 @@ pub enum Act {
     },
     /// Change fields on a todo that does.
     Update {
-        /// Which todo.
         todo: String,
         /// What changes. Only what is named.
         #[serde(flatten)]
@@ -48,37 +45,31 @@ pub enum Act {
     },
     /// Close it.
     Complete {
-        /// Which todo.
         todo: String,
         /// What happened, in a sentence. "" for none.
         note: String,
     },
     /// Drop it.
     Cancel {
-        /// Which todo.
         todo: String,
         /// Why, in a sentence. "" for none.
         note: String,
     },
     /// Open it again.
     Reopen {
-        /// Which todo.
         todo: String,
         /// Why, in a sentence. "" for none.
         note: String,
     },
     /// A pass at a recurring todo: done again, and still open.
     Tend {
-        /// Which todo.
         todo: String,
         /// What happened, in a sentence. "" for none.
         note: String,
     },
     /// Move the number, with a fresh reason for it.
     Reprice {
-        /// Which todo.
         todo: String,
-        /// The new price.
         priority: Price,
         /// Why that number now.
         rationale: String,

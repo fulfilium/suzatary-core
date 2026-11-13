@@ -14,7 +14,7 @@ pub enum Gate {
     Writes,
     /// It has an actor, but this device does not write as it yet.
     Reads,
-    /// It names no actor: nothing can be asked of the secretary either.
+    /// It names no actor.
     Views,
 }
 
@@ -24,7 +24,7 @@ pub struct Context {
     pub reach: Reach,
     /// Oldest first, each from the instant it starts.
     pub offsets: Vec<Offset>,
-    /// The tab is 62rem wide or more: a side column is drawn, and a bare Enter sends.
+    /// The tab is 62rem wide or more.
     pub wide: bool,
     /// This deployment's categories, in its order.
     pub categories: Vec<String>,
@@ -35,7 +35,7 @@ pub struct Context {
 #[serde(tag = "type")]
 pub enum Reach {
     Writes,
-    /// The box has not said who it is yet: nothing is drawn.
+    /// The box has not said who it is yet.
     Waits,
     Reads {
         said: String,
@@ -64,7 +64,7 @@ pub enum Effect<H, A, S = Never> {
     Again {
         path: String,
     },
-    /// HTML the box rendered, kept under its block's key; the store refuses a key not naming its source.
+    /// HTML the box rendered, kept under its block's key.
     Rendered {
         pairs: Vec<(String, String)>,
     },
@@ -86,7 +86,7 @@ pub enum Effect<H, A, S = Never> {
         ask: H,
         local: Local,
     },
-    /// Write a register the tab keeps; every page watching it hears the move.
+    /// Write a register the tab keeps.
     Keep {
         register: Register,
         #[ts(type = "unknown")]
@@ -97,12 +97,12 @@ pub enum Effect<H, A, S = Never> {
         ask: S,
         path: String,
     },
-    /// Each key pressed as [`Input::Heard`] with a [`Keyed`]; asked again, the set replaces the last.
+    /// Each key pressed as [`Input::Heard`] with a [`Keyed`].
     Keys {
         ask: S,
         keys: Vec<KeyKind>,
     },
-    /// Pull every store now: what a page does when the box says something was written.
+    /// Pull every store now.
     Sync,
     /// An intent, held until a reading of the replicas holds it, answered once with an `Outcome`.
     Act {
@@ -118,19 +118,16 @@ pub enum Effect<H, A, S = Never> {
         actor: String,
         key: String,
     },
-    /// Answered with the instant in epoch ms, `after` ms from now. A hidden tab's timer runs
-    /// late, and a page shown again is answered at once.
+    /// Answered with the instant in epoch ms, `after` ms from now.
     Timer {
         ask: A,
         after: u32,
     },
-    /// Answered at the next animation frame, so work drawn a slice at a time puts one slice in
-    /// each frame; a hidden tab's slices wait until it is shown.
+    /// Answered at the next animation frame.
     Frame {
         ask: A,
     },
-    /// Focus the field marked `data-field` after this step's patches, caret at the end; nothing
-    /// when none stands or the keyboard is in another field.
+    /// Focus the field marked `data-field` after this step's patches, caret at the end.
     Focus {
         field: String,
     },
@@ -144,6 +141,11 @@ pub enum Effect<H, A, S = Never> {
     Go {
         href: String,
     },
+    /// Leave the app for a path the box serves (Google's consent through the box): a document
+    /// load, never a place of the app.
+    Leave {
+        href: String,
+    },
     /// Go in place of this page, so Back skips it.
     Replace {
         href: String,
@@ -154,7 +156,7 @@ pub enum Effect<H, A, S = Never> {
     Toast {
         words: String,
     },
-    /// A toast with one button, whose press answers `ask` with `null` while the page stands.
+    /// A toast with one button, whose press answers `ask` with `null`.
     Offer {
         words: String,
         label: String,
@@ -173,7 +175,7 @@ pub enum Effect<H, A, S = Never> {
     Mark {
         name: String,
     },
-    /// Tell whoever mounted the page something it shows around it (the panel's toggle).
+    /// Tell whoever mounted the page something it shows around it.
     Tell {
         #[ts(type = "unknown")]
         said: serde_json::Value,
@@ -184,10 +186,9 @@ pub enum Effect<H, A, S = Never> {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Core {
-    /// A chain's reading at an instant, linked through every chain the tab holds (`Read`).
+    /// A chain's reading at an instant (`Read`).
     Reading { chain: String, at: String },
-    /// The list's tree of `members`, grouped `by` (`category`, `urgency` or `flat`), priced
-    /// under `basis` by the core in the worker.
+    /// The list's tree of `members`, grouped `by` (`category`, `urgency` or `flat`).
     Tree {
         basis: Basis,
         members: Vec<Placed>,
@@ -202,7 +203,7 @@ pub(crate) enum Core {
     },
 }
 
-/// A todo the list places: its title, its category, its own worth and its candidate specs.
+/// A todo the list places.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 pub(crate) struct Placed {
     pub(crate) todo: String,
@@ -222,8 +223,7 @@ pub(crate) enum PlacedWorth {
     Unlinked,
 }
 
-/// What prices a term: a reading the worker keeps, or the box's rows, each todo's `Ref` its
-/// row's value at `at`.
+/// What prices a term: a reading the worker keeps, or the box's rows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Basis {
@@ -288,8 +288,7 @@ pub(crate) enum ActName {
 }
 
 impl<H, A, S> Effect<H, A, S> {
-    /// The same effect asked by a page holding the page that asked it: its questions, asks and
-    /// streams named the holder's way.
+    /// The same effect asked by a page holding the page that asked it.
     pub(crate) fn map<H2, A2, S2>(
         self,
         h: impl Fn(H) -> H2,
@@ -334,6 +333,7 @@ impl<H, A, S> Effect<H, A, S> {
             Effect::Scroll { to } => Effect::Scroll { to },
             Effect::Copy { text } => Effect::Copy { text },
             Effect::Go { href } => Effect::Go { href },
+            Effect::Leave { href } => Effect::Leave { href },
             Effect::Replace { href } => Effect::Replace { href },
             Effect::Back { fallback } => Effect::Back { fallback },
             Effect::Toast { words } => Effect::Toast { words },
@@ -364,8 +364,7 @@ pub(crate) enum Scroll {
     Into {
         field: String,
     },
-    /// As far from the end as before this step's patches, so older rows drawn above do not move
-    /// what was being read.
+    /// As far from the end as before this step's patches.
     Keep,
 }
 
@@ -373,8 +372,7 @@ pub(crate) enum Scroll {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 pub(crate) enum Told {
     Answered,
-    /// Once the tab's reading holds it or says the box did not; a lost answer is read as done or
-    /// not this way.
+    /// Once the tab's reading holds it or says the box did not.
     Held,
 }
 
@@ -387,13 +385,13 @@ pub enum Body {
     /// `POST /api/secretary/conversations` and `…/title`.
     Titling(suzatary_api::wire::Titling),
     Upload(suzatary_api::wire::Uploading),
-    /// `POST /api/<chain>/author`: an event the box prints and appends nothing of.
+    /// `POST /api/<chain>/author`: an event the box prints.
     Author(suzatary_api::wire::Authoring),
     /// `POST /api/<chain>/todo/<id>/build`, which reads no field.
     Build {},
 }
 
-/// A reading the tab keeps of its own, which no GET answers; each names the payload it carries.
+/// A reading the tab keeps of its own, which no GET answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Local {
@@ -421,26 +419,25 @@ pub(crate) enum Local {
         id: String,
         window: Window,
     },
-    /// The box's drawing of these proposals of `conversation` (`DrawnPayload`).
+    /// The box's drawing of these proposals (`DrawnPayload`).
     Cards {
         conversation: String,
         indices: Vec<usize>,
     },
-    /// The open chain's rows as the tab's fold holds them (`Folded`), or `null` before one is
-    /// read; watching it asks the box for a fold when the one held is not about now.
+    /// The open chain's rows as the tab's fold holds them (`Folded`), or `null` before one is read.
     Fold,
-    /// What this tab holds of the open chain that the box has not taken (`Unsent`).
+    /// What the box has not taken of this tab's open chain (`Unsent`).
     Unsent,
     /// The box's `WaitingPayload`, `null` before the shell heard it.
     Waiting,
-    /// A register of this device's by its key, any value, `null` before one is kept.
+    /// A register of this device's by its key, `null` before one is kept.
     Kept {
         key: String,
     },
     /// What this tab asked and the replicas do not hold yet (`Intents`).
     Intents,
     Titles,
-    /// A composer's unsent words (`Draft`), synced to the owner's other devices.
+    /// A composer's unsent words (`Draft`).
     Draft {
         /// The conversation, or the new topic's key.
         id: String,
@@ -453,8 +450,7 @@ pub(crate) enum Local {
     Route,
 }
 
-/// What each `Local` reading answers, by its case's name: the host's readings are typed by it,
-/// and a case it leaves out fails the web's type check.
+/// What each `Local` reading answers, by its case's name.
 #[derive(TS)]
 #[ts(rename_all = "PascalCase")]
 #[allow(dead_code)]
@@ -484,8 +480,7 @@ pub struct LocalAnswers {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Register {
-    /// Value `{"type": "Typed", "text"}` as typed, or `{"type": "Settled", "text"}` taking those
-    /// words over a conflict.
+    /// `{"type": "Typed", "text"}`, or `{"type": "Settled", "text"}` over a conflict.
     Draft {
         id: String,
     },
@@ -504,8 +499,7 @@ pub struct Scrolled {
     pub(crate) at: Place,
 }
 
-/// `Page` covers its own placing, content shrinking under the box, and the browser's scroll
-/// anchoring.
+/// Who moved the scroll; `Page` covers everything but the reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Mover {
@@ -572,8 +566,7 @@ pub(crate) enum Act {
         chain: String,
         event: String,
     },
-    /// A todo's lifecycle event, spelled by the tab's core at the instant it is asked, as the
-    /// actor this device writes as, and sealed onto the chain's replica.
+    /// A todo's lifecycle event, spelled by the tab's core and sealed onto the chain's replica.
     Lifecycle {
         chain: String,
         todo: String,
@@ -595,8 +588,7 @@ pub(crate) enum Lifecycle {
     Reopened,
 }
 
-/// A proposal as its card saw it: `from` is its signature then, and any later climb of its
-/// machine holds the answer.
+/// A proposal as its card saw it: `from` is its signature then.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub(crate) struct Asked {
     pub(crate) conversation: String,
@@ -621,6 +613,8 @@ pub(crate) enum Answering {
     Drop {
         reason: String,
     },
+    /// The tap of the card's fix.
+    Fix,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -664,14 +658,12 @@ pub enum TopicWrite {
 #[serde(tag = "type")]
 pub(crate) enum Secret {
     None,
-    /// The field marked `data-field`, read at the act and kept by the tab under `keep` to be sent
-    /// again.
+    /// The field marked `data-field`, read at the act and kept by the tab under `keep`.
     Field {
         field: String,
         keep: String,
     },
-    /// The value kept under `kept`, sent once more and let go; the act is not asked when none is
-    /// kept.
+    /// The value kept under `kept`, sent once more and let go.
     Kept {
         kept: String,
     },
@@ -702,7 +694,7 @@ pub(crate) enum Said {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum Never {}
 
-/// Whether a held question's answer may be behind the box (the tab's `reading.Behind`).
+/// Whether a held question's answer may be behind the box.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 pub struct Behind {
     /// Why the last ask failed, or `None` while one is long on its way.
@@ -771,7 +763,7 @@ pub(crate) fn answered<T: DeserializeOwned>(a: Answer) -> Result<T, String> {
     }
 }
 
-/// `s` as `encodeURIComponent` spells it, so a path the page prints matches the TypeScript's.
+/// `s` as `encodeURIComponent` spells it.
 #[must_use]
 pub(crate) fn component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

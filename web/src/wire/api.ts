@@ -41,7 +41,7 @@ export const ours = (h: heads.Heads): void => {
   ourHeads = heads.of(h);
 };
 
-/** Literals only: the box rehashes each, since a name is what the bytes are, never what a client says. */
+/** Literals only: the box rehashes each. */
 const posted = (path: string, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
   http.act(path, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload);
 
@@ -51,7 +51,7 @@ export const postObjects = (objects: readonly string[], since: string): Promise<
     return receipt;
   });
 
-// Appends nothing: the replica seals the answer. No body names an actor; the box takes it from the gate's peer.
+// Appends nothing: the replica seals the answer; the actor is the gate's peer.
 const author = (body: Authoring): Promise<AuthoredPayload> => http.act(onChain("author"), body, payload.AuthoredPayload);
 
 export const authorConfirm = (todo: string, note = ""): Promise<AuthoredPayload> => author({ confirm: { todo, note } });
@@ -98,9 +98,7 @@ export const renameConversation = (id: string, title: string): Promise<Conversat
 export const eraseTurns = (id: string, turns: readonly number[]): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/erase"), { turns: [...turns] } satisfies Erasing, payload.ConversationPayload);
 
-// The chips travel by value, not inside the sentence: one the box cannot resolve is a 400 rather than a dead link.
-/** 202 with the person's turn; the model runs behind it. `after` is how many turns the asker saw, so the same question
- * asked twice gets the first one's line. */
+/** 202 with the person's turn; the model runs behind it. `after` is how many turns the asker saw. */
 export const say = (
   id: string,
   text: string,
@@ -143,16 +141,14 @@ export const block = (id: string, sha: string): Promise<BlockRender> =>
 export const blockBySource = async (id: string, source: string): Promise<BlockRender> =>
   block(id, [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map((b) => b.toString(16).padStart(2, "0")).join(""));
 
-/** Base64, since the write gate takes JSON only; a `say` then names the id. `private` sends a file the box held back
- * to the owner's Drive, not the box. */
+/** Base64, since the write gate takes JSON only; a `say` then names the id. */
 export const upload = (base64: string, name: string, keepPrivate = false): Promise<Uploaded> =>
   http.act("/api/secretary/attachments", { file: base64, name, private: keepPrivate } satisfies Uploading, payload.Uploaded);
 
 /** A send answers in seconds; past this the card asks the box what happened. */
 export const TAP_BOUND = 30_000;
 
-/** The irreversible act. It carries an index, never a body that could change what is performed; `value` is a secret
- * act's alone. */
+/** The irreversible act: it carries an index, never a body that could change what is performed. */
 export const tapProposal = (
   id: string,
   index: number,
@@ -174,6 +170,10 @@ export const tapProposal = (
     TAP_BOUND,
   );
 
+/** The tap of a card's fix. */
+export const fixProposal = (id: string, index: number): Promise<ConversationPayload> =>
+  http.act(proposalPath(id, index, "tap"), { fix: true } satisfies Tapping, payload.ConversationPayload, TAP_BOUND);
+
 /** Behind the tap's own gate. */
 export const dismissProposal = (id: string, index: number, reason: string): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "dismiss"), { reason } satisfies Reasoning, payload.ConversationPayload);
@@ -187,8 +187,7 @@ export const dropSession = (id: string, index: number, reason: string): Promise<
 
 export const getMemory = (): Promise<MemoryPayload> => http.get("/api/secretary/memory", payload.MemoryPayload);
 
-/** `conversation` is `null` on a mail page. Answered once and kept nowhere; `Gone` when the box holds it no more or
- * answered a replay. */
+/** `conversation` is `null` on a mail page; answered once and kept nowhere. */
 export const revealHeld = (conversation: string | null): heldvalue.Reveal => (handle) =>
   http.act("/api/held/reveal", { handle, conversation } satisfies Revealing, payload.RevealPayload).then((p): heldvalue.Opened => {
     switch (p.type) {

@@ -33,10 +33,7 @@ pub enum Step {
     /// A proposal made.
     Proposed,
     /// A coding session recorded for proposal `proposal`.
-    Coding {
-        /// The proposal's index.
-        proposal: usize,
-    },
+    Coding { proposal: usize },
     /// Names the conversation: the last such line, in causal order, holds the title's words.
     Titled,
     /// Seals slot `of` again, from the seal under `from`, so a reader of that slot may read it from

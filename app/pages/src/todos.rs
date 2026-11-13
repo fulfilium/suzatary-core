@@ -108,12 +108,10 @@ pub enum Ask {
         n: u32,
     },
     Added,
-    /// A seal of the todo the sheet added, by its id.
     Sealed {
         todo: String,
         seal: Seal,
     },
-    /// An act on a line, or an undo or redo, at its phase.
     Line {
         todo: String,
         acting: Acting,
@@ -191,7 +189,6 @@ pub(crate) struct Filter {
 }
 
 impl Filter {
-    /// A field the register cannot supply is the default.
     fn of(v: &Value) -> Filter {
         let choice = |k: &str| {
             v.get(k)
@@ -251,7 +248,6 @@ impl Filter {
         .collect()
     }
 
-    /// Whether a row passes it at the fold's instant.
     fn takes(&self, e: &Entry, now: i64) -> bool {
         let done = !is_open(e);
         let states = match self.states {
@@ -276,7 +272,6 @@ impl Filter {
     }
 }
 
-/// How long ahead a deadline counts as dated.
 const FORTNIGHT_MS: i64 = 14 * 86_400_000;
 
 /// Any `Decay` of the spec whose end falls in the fortnight from `now`, both ends in.
@@ -438,7 +433,6 @@ struct Grown {
     children: Vec<Grown>,
 }
 
-/// What a tree answers: its basis, its members and its grouping.
 #[derive(Debug, Clone, PartialEq)]
 struct Asked {
     of: Of,
@@ -475,7 +469,6 @@ enum ReadAnswer {
 /// The reading of the objects the tab holds.
 #[derive(Debug, Clone, PartialEq)]
 struct Read {
-    /// The instant the replica was read at.
     at: String,
     name: Value,
     specs: BTreeMap<String, Vec<Value>>,
@@ -501,7 +494,6 @@ enum Of {
 #[derive(Debug, Clone, PartialEq)]
 enum Wants {
     Nothing,
-    /// Asked as its number.
     Asking(u32, Asked),
 }
 
@@ -542,7 +534,6 @@ enum Setup {
     Unfinished { done: usize, of: usize },
 }
 
-/// The todo a new one is added under, by its id and its title.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Parent {
     todo: String,
@@ -590,7 +581,6 @@ impl Sheet {
         }
     }
 
-    /// Its price, or the refusal and the field it is about.
     fn read(&self) -> Result<Price, (About, String)> {
         if self.body.text.trim().is_empty() {
             Err((About::Body, "Say what the todo is.".to_owned()))
@@ -1410,7 +1400,6 @@ impl Model {
         }
     }
 
-    /// The reading of the objects the tab holds, asked again at the fold's instant.
     fn reread(&self) -> Vec<Fx> {
         self.fold
             .as_ref()
@@ -1806,8 +1795,6 @@ struct Card<'a> {
     lines: Vec<Shown>,
 }
 
-/// A line as drawn: its node, how deep, its key, its parent's key, and whether it has lines
-/// under it and how many todos.
 #[derive(Debug, Clone)]
 struct Shown {
     place: Place,
@@ -1819,8 +1806,6 @@ struct Shown {
     count: usize,
 }
 
-/// Where the cursor can stand: a card's head (its key, whether it is open, its worth), or a
-/// line.
 struct Stop {
     key: String,
     at: At,
@@ -1881,7 +1866,6 @@ fn is_open_at(folds: &BTreeMap<String, bool>, k: &str, w: &Worth) -> bool {
         .unwrap_or(matches!(w.band(), Band::Problem | Band::Watch))
 }
 
-/// The distinct todos a subtree places.
 fn todos_in(t: &Tree<Line>) -> BTreeSet<&str> {
     t.nodes().iter().filter_map(|n| todo_of(&n.place)).collect()
 }
@@ -2330,8 +2314,6 @@ impl Program for Todos {
 mod tests {
     use super::*;
 
-    // What this device keeps is read, never trusted: the filter round-trips through its print,
-    // anything else reads as the default, and a partial one keeps the fields it carries.
     #[test]
     fn the_kept_filter_is_parsed_rather_than_trusted() {
         let filter = Filter {
@@ -2406,8 +2388,6 @@ mod tests {
         }
     }
 
-    // A tree asked, then asked again before its answer: the late answer to the first is not
-    // drawn, and the second's is.
     #[test]
     fn an_answer_to_a_replaced_ask_draws_nothing() {
         let (mut m, _) = Model::open(Flags {

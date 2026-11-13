@@ -12,15 +12,9 @@ use crate::secretary::memory::FactId;
 #[serde(try_from = "Spelled", into = "Spelled")]
 pub enum Erasure {
     /// The owner, or another actor the gate admitted, erased them on a tap.
-    Asked {
-        /// Who.
-        by: Actor,
-    },
+    Asked { by: Actor },
     /// Forgetting a fact erased the copies its remembering wrote.
-    Forgot {
-        /// The fact.
-        fact: FactId,
-    },
+    Forgot { fact: FactId },
 }
 
 impl Erasure {

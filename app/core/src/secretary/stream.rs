@@ -31,11 +31,9 @@ pub const PAGE: usize = 30;
 /// One round a page draws: its conversation, that conversation's outline, and the round.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Drawn<'o> {
-    /// The conversation.
     pub conversation: &'o ConversationId,
     /// Its outline.
     pub rounds: &'o Rounds,
-    /// The round.
     pub round: &'o Round,
 }
 
@@ -76,7 +74,6 @@ pub enum Unread {
     Undrawn {
         /// The round's conversation.
         conversation: ConversationId,
-        /// The line.
         line: Hash,
     },
 }

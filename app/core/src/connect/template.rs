@@ -6,21 +6,17 @@ use crate::health::plugin::{ManifestError, PluginName};
 use crate::mail::account::{Authority, MailAccount, MsImap, Proton, Sync, slug_of};
 use crate::mail::account_email::AccountEmail;
 use crate::mail::folders::Folders;
-use crate::mail::lacking::{Grant, Lacking};
 use crate::plugin::Manifest;
 
 /// A template: its group, the table it writes, the steps a person takes and the check that
-/// proves it. Every value that grants anything (an origin, a secret's name, a help link, a
-/// table) is here or derived from a parameter its constructor parsed.
+/// proves it; every value that grants anything is here or parsed by its constructor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Template {
-    /// Which it is.
     pub id: TemplateId,
     /// Where the overview draws its connections.
     pub group: Group,
     /// What it connects, as a card names it.
     pub title: &'static str,
-    /// The table it writes.
     pub table: Table,
     /// The person's steps, in order.
     pub steps: &'static [StepShape],
@@ -35,18 +31,27 @@ impl Template {
         self.table.shape()
     }
 
-    /// What a conversation that connects it is titled: `Connect a Google account`.
+    /// What a conversation that connects it is titled.
     #[must_use]
     pub fn called(&self) -> String {
         let what = self.title.split(" (").next().unwrap_or(self.title);
         format!("Connect {what}")
     }
 
-    /// The setup conversation's first line for it: what it connects, each step in order, and
-    /// what to reply to begin.
+    /// The setup conversation's first line: what it connects, each step still owed, and what to
+    /// reply. A box that keeps its client is never told to make one.
     #[must_use]
-    pub fn opening(&self) -> String {
-        let steps = self.steps.iter().enumerate().map(|(at, step)| {
+    pub fn opening(&self, client: crate::secrets::SecretState) -> String {
+        let owed = self.steps.iter().filter(|step| match step {
+            StepShape::GoogleClient => !client.is_set(),
+            StepShape::Secret { .. }
+            | StepShape::DeviceCode
+            | StepShape::SendingConsent
+            | StepShape::AuthCode
+            | StepShape::SignIn
+            | StepShape::Terminal { .. } => true,
+        });
+        let steps = owed.enumerate().map(|(at, step)| {
             let when = if at == 0 { "First," } else { "Then" };
             format!("{when} {}.", step.sentence())
         });
@@ -61,16 +66,14 @@ impl Template {
     }
 }
 
-/// The table of the instance file a template writes, from a closed vocabulary: each arm is
-/// interpreted once, and every template is data over them.
+/// The table of the instance file a template writes, from a closed vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Table {
     /// None: every deployment has exactly one, its data repository.
     Always,
     /// None: the deployment's model, which every deployment runs.
     Model,
-    /// A `url` credential its label names on the fragment's plugin, whose manifest is declared
-    /// from the fragment when the instance has none.
+    /// A `url` credential its label names on the fragment's plugin.
     Link(Fragment),
     /// A `[[mail.accounts]]` entry of this kind.
     Account(AccountKind),
@@ -80,8 +83,7 @@ pub enum Table {
     Channel(Channel),
 }
 
-/// A channel that wakes the owner's phones: `[notify] channels` is read into these once, where
-/// the instance file is read, and a name that is none of them stops the instance from loading.
+/// A channel that wakes the owner's phones, as `[notify] channels` names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Channel {
     /// Firebase Cloud Messaging, by a service account.
@@ -166,8 +168,7 @@ impl Table {
 pub enum AccountKind {
     /// Gmail, through lieer and its own sign-in.
     Gmail,
-    /// A Google account signed in from the box's card: its mail through lieer, under the grant
-    /// the box keeps, and its calendars through Google's Calendar API.
+    /// A Google account signed in from the box's card.
     Google,
     /// Microsoft, over IMAP and XOAUTH2.
     Microsoft,
@@ -198,8 +199,7 @@ impl AccountKind {
         }
     }
 
-    /// The roster entry for `params`: its maildir folder named by the address, and this kind's
-    /// defaults.
+    /// The roster entry for `params`, with this kind's defaults.
     ///
     /// # Errors
     /// Parameters of another shape.
@@ -257,8 +257,7 @@ impl AccountKind {
     }
 }
 
-/// The manifest a calendar-like template declares when the instance has none of its plugin:
-/// an app bundle and the origins it may reach from the start.
+/// The manifest a calendar-like template declares for its plugin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fragment {
     /// The plugin, and its credentials' namespace.
@@ -272,7 +271,7 @@ pub struct Fragment {
 }
 
 impl Fragment {
-    /// Its manifest, through the door the file's tables go through.
+    /// Its manifest, through the file's own door.
     ///
     /// # Errors
     /// The refusal the file's table would get.
@@ -354,22 +353,6 @@ impl TemplateId {
             .ok_or_else(|| Refused::Template(text.to_owned()))
     }
 
-    /// The template whose setup in Settings gives the box what `lacking` names.
-    #[must_use]
-    pub const fn fixing(lacking: &Lacking) -> Self {
-        match lacking {
-            Lacking::Grant {
-                grant: Grant::GoogleCalendar | Grant::GoogleSend,
-                ..
-            }
-            | Lacking::GoogleClient => TemplateId::Google,
-            Lacking::Grant {
-                grant: Grant::MicrosoftSend,
-                ..
-            } => TemplateId::MsImap,
-        }
-    }
-
     /// Its data.
     #[must_use]
     pub const fn template(self) -> &'static Template {
@@ -408,6 +391,21 @@ pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Google account's opening asks for the client only while the box keeps none.
+    #[test]
+    fn the_opening_asks_for_the_client_only_while_none_is_kept() {
+        use crate::secrets::SecretState;
+        let google = TemplateId::Google.template();
+        let client = "make the box's Google Cloud client";
+        assert!(google.opening(SecretState::Missing).contains(client));
+        let kept = google.opening(SecretState::Set);
+        assert!(!kept.contains(client), "{kept}");
+        assert!(
+            kept.contains("First, tap the account's Sign in with Google card"),
+            "{kept}"
+        );
+    }
 
     /// Each channel reads back from its name, its template writes that channel, and a name no
     /// channel has is refused where the instance file is read, naming the channels there are.

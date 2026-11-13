@@ -15,10 +15,7 @@ use crate::secretary::erasure::Erasure;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Words<T> {
     /// Here.
-    Kept {
-        /// The words.
-        kept: T,
-    },
+    Kept { kept: T },
     /// Not here.
     Gone {
         /// Why.
@@ -31,10 +28,7 @@ pub enum Words<T> {
 #[serde(tag = "why", rename_all = "lowercase")]
 pub enum Gone {
     /// Their key was destroyed, for the reason the history records.
-    Erased {
-        /// The erasure.
-        erasure: Erasure,
-    },
+    Erased { erasure: Erasure },
     /// Their key is not here: lost in a restore, or never given to this replica.
     Missing,
     /// They were locked under older redaction rules and no longer pass the door under the

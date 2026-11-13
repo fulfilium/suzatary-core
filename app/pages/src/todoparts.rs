@@ -24,7 +24,6 @@ pub enum Verb {
 /// How an act reaches the chain: an event the tab spells, or one the box prints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Spelled {
-    /// The tab's core spells it.
     Here(Lifecycle),
     /// The box prints it (`POST …/author`).
     ByTheBox,
@@ -253,11 +252,9 @@ pub enum Seal {
 pub(crate) enum Came<H, A, S> {
     /// The box printed it: these seal it.
     Seals(Vec<Effect<H, A, S>>),
-    /// The replica took it.
     Taken,
     /// It was asked already and stands asked.
     Already,
-    /// It was refused, in these words.
     Refused(String),
 }
 

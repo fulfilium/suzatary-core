@@ -14,7 +14,6 @@ use suzatary_base::refusal::Refusal;
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Advanced {
-    /// Its conversation.
     pub conversation: ConversationId,
     /// The proposal that started it.
     pub index: usize,

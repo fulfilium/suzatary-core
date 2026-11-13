@@ -20,7 +20,6 @@ const LOCKED: &str = "The secret store did not answer, so no saved key can be re
 /// One declared name with nothing stored under it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fix {
-    /// The name.
     pub name: Settable,
     /// Every table declaring it.
     pub declared: Vec<Declaration>,

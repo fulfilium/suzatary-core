@@ -1,6 +1,4 @@
 //! Sign-ins with Google: consents opened by a tapped card and finished by Google's callback.
-//! Held in no capability record (only a tap begins one) and in memory alone (a restart closes
-//! every one).
 //!
 //! The callback is a GET with no CSRF triple; in its place stand the one-use state (RFC 6749
 //! §10.12) and the gate's actor, which must be the actor who tapped.
@@ -13,7 +11,7 @@ use suzatary_base::refusal::Refusal;
 use suzatary_core::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_core::mail::account::Sync as Strategy;
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken};
+use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::stamp::stamp;
@@ -27,13 +25,12 @@ use super::{Chained, State};
 
 const BACK: &str = "/#/inbox";
 
-/// The consents this server holds open, and what it opens and finishes them with.
+/// The consents this server holds open.
 pub struct Consenting {
     open: Mutex<Open>,
     google: Google,
     store: Arc<dyn Resolves + Send + Sync>,
     edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
-    /// `None` when the app's URL names no origin Google can send the owner back to.
     redirect: Option<RedirectUri>,
     entropy: Arc<dyn Entropy + Send + Sync>,
 }
@@ -61,11 +58,6 @@ impl Consenting {
         self.google.endpoints()
     }
 
-    #[must_use]
-    pub fn redirect(&self) -> Option<&RedirectUri> {
-        self.redirect.as_ref()
-    }
-
     fn table(&self) -> std::sync::MutexGuard<'_, Open> {
         self.open
             .lock()
@@ -85,6 +77,10 @@ impl Consenting {
 }
 
 impl google_sign_in::Consents for Consenting {
+    fn redirect(&self) -> Option<&RedirectUri> {
+        self.redirect.as_ref()
+    }
+
     fn begin(
         &self,
         card: &ProposalId,
@@ -92,6 +88,7 @@ impl google_sign_in::Consents for Consenting {
         scopes: &Scopes,
         by: &prodrome_core::event::Actor,
         now: suzatary_base::capability::Datetime,
+        then: Then,
     ) -> Performed {
         let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
         match self.declared(account) {
@@ -151,6 +148,7 @@ impl google_sign_in::Consents for Consenting {
                 redirect,
                 link,
                 until,
+                then,
             },
         );
         Performed::Tried(Tried::Running {
@@ -182,11 +180,10 @@ impl Params for Card {
 }
 
 /// `GET /api/oauth/google/consent/{card}`: redirects the tapping actor to Google's consent page.
-/// The state and challenge are held in memory, never stored.
 ///
 /// # Errors
-/// [`Refusal::forbidden`] for a browser whose login maps to no actor or another actor than the
-/// one who tapped, and [`Refusal::not_found`] when the card holds no consent open.
+/// [`Refusal::forbidden`] for another actor than the one who tapped, and [`Refusal::not_found`]
+/// when the card holds no consent open.
 pub fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
     let by = suzatary_api::gate::actor_of(&call.state.deployment, &call.admitted)?;
     let table = call.state.consenting.table();
@@ -204,13 +201,10 @@ pub fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
 }
 
 /// `GET /api/oauth/google/callback`: trades Google's code for the grant and ends the card.
-/// The state is taken once, and only for the actor who tapped.
 ///
 /// # Errors
-/// [`Refusal::forbidden`] for a browser whose login maps to no actor, or to another actor than
-/// the one who tapped (whose consent is closed, its card saying so), and
-/// [`Refusal::bad_request`] for a state no consent is open under: never drawn here, used once
-/// already, or closed by a restart. None of them reads a code.
+/// [`Refusal::forbidden`] for another actor than the one who tapped, and [`Refusal::bad_request`]
+/// for a state no consent is open under. None of them reads a code.
 pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> {
     let state = &call.state;
     let by = suzatary_api::gate::actor_of(&state.deployment, &call.admitted)?;
@@ -244,16 +238,49 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
     } else {
         None
     };
-    ended(state, &card, now, performed)?;
+    let retrying = match &taken {
+        Taken::Yours(begun) => Some(&**begun),
+        Taken::Lapsed(begun) => Some(begun),
+        Taken::Unknown | Taken::NotYours(_) => None,
+    }
+    .and_then(|begun| match &begun.then {
+        Then::Retry { card, consent } => Some((card.clone(), begun.by.clone(), *consent)),
+        Then::Ended => None,
+    });
+    ended(state, &card, now, performed.clone())?;
     if let Some(calendars) = kept {
         state.checks.check(&calendars);
         state.notice();
     }
+    let back = match retrying {
+        Some((lacked, by, consent)) => {
+            let caps = state.first.caps;
+            let conversation = suzatary_api::secretary::routes::retry(
+                &caps.secretary,
+                (
+                    state.edits.as_ref(),
+                    &state.settables(),
+                    state.acting.as_ref(),
+                ),
+                (&lacked, &by, consent),
+                &performed,
+            )?;
+            state.notice();
+            conversation.map_or_else(
+                || BACK.to_owned(),
+                |conversation| {
+                    state.heard(&conversation);
+                    format!("/#/secretary/{}", conversation.as_str())
+                },
+            )
+        }
+        None => BACK.to_owned(),
+    };
     match taken {
         Taken::NotYours(_) => Err(Refusal::forbidden(
             "this sign-in with Google was begun by someone else, so nothing was kept",
         )),
-        Taken::Unknown | Taken::Lapsed(_) | Taken::Yours(_) => Ok(Redirect::to(BACK)),
+        Taken::Unknown | Taken::Lapsed(_) | Taken::Yours(_) => Ok(Redirect::to(&back)),
     }
 }
 
@@ -280,9 +307,12 @@ fn exchanged(
         return performed;
     };
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
-    // A lieer-read Gmail account moves onto the grant only once the grant has read its mail.
+    // A lieer account moves only on a consent for its mail, once the grant has read it.
     let moving = match state.consenting.declared(&begun.account) {
-        Ok(sync) => matches!(sync, Some(Strategy::Gmail)),
+        Ok(sync) => {
+            matches!(sync, Some(Strategy::Gmail))
+                && begun.scopes.contains(suzatary_core::google::Scope::Mail)
+        }
         Err(failed) => {
             return not_sent(format!(
                 "Google granted it, and the instance file does not read, so nothing was kept: \

@@ -28,9 +28,7 @@ pub type LineDelta = Delta<Parsed, KeyRing>;
 /// A line the device keeps as its husk ([`Husk`]): its name, the names it rests on, and the husk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Husked {
-    /// The line's object's name.
     pub name: Hash,
-    /// The names it rests on.
     pub parents: Vec<Hash>,
     /// The line, its words dropped.
     pub husk: Husk,
@@ -41,16 +39,13 @@ pub struct Husked {
 /// again.
 #[derive(Debug, Default, PartialEq)]
 pub struct LineReplica {
-    /// The rows.
     pub rows: LinePulling,
-    /// The husks.
     pub husks: BTreeMap<Hash, Husked>,
 }
 
 /// One move of the replica: the rows' delta, and the lines it husked.
 #[derive(Debug, Clone)]
 pub struct LineFrame {
-    /// The rows' move.
     pub delta: LineDelta,
     /// The lines it husked.
     pub husked: Vec<Husked>,

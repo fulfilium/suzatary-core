@@ -21,16 +21,12 @@ use crate::secretary::salted_text::Words;
 pub enum LineWords {
     /// A person's turn: their words and each attachment's, in order.
     Person {
-        /// The words.
         text: String,
         /// Each attachment's words.
         attachments: Vec<AttachmentWords>,
     },
     /// A model turn's prose.
-    Model {
-        /// The words.
-        text: String,
-    },
+    Model { text: String },
     /// One call's arguments.
     Args {
         /// The arguments, as the model passed them.
@@ -46,28 +42,15 @@ pub enum LineWords {
         texts: Vec<String>,
     },
     /// An act's sentence.
-    Act {
-        /// The sentence.
-        text: String,
-    },
+    Act { text: String },
     /// A conversation's name.
-    Title {
-        /// The name.
-        title: String,
-    },
+    Title { title: String },
     /// A review's reason.
-    Why {
-        /// The reason.
-        why: String,
-    },
+    Why { why: String },
     /// Why a review could not run.
-    Reason {
-        /// The reason.
-        reason: String,
-    },
+    Reason { reason: String },
     /// A coding session's report: its file, its text and the branch's diff stat.
     Report {
-        /// The report.
         report: crate::coding_report::Report,
     },
     /// Why the owner let a coding session go.

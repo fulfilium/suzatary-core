@@ -23,7 +23,6 @@ pub struct Owners<'a>(pub &'a BTreeSet<Actor>);
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{actor} is not one of the deployment's writers, so it cannot retract")]
 pub struct NotAnOwner {
-    /// Who wrote it.
     pub actor: Actor,
 }
 

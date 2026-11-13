@@ -31,7 +31,6 @@ pub struct Opening {
 /// One line as the outline reads it.
 #[derive(Debug, Clone, Copy)]
 pub struct Line<'a> {
-    /// Its name.
     pub name: &'a Hash,
     /// When it was written.
     pub at: Datetime,
@@ -60,7 +59,6 @@ pub struct Rounds {
 /// One live round: its opening, and each of its turns by index with the line that says it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Round {
-    /// Its opening.
     pub opening: Opening,
     /// Its turns, the opening first.
     pub turns: Vec<(usize, Hash)>,

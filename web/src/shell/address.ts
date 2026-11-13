@@ -41,6 +41,13 @@ export namespace address {
     window.history.back()
   }
 
+  // Out of the app, to a path the box serves as a document (a consent the box sends on): a document load, so the box
+  // answers it. What the page keeps is kept first, for the way back.
+  export const leave = (href: string): void => {
+    keep()
+    window.location.assign(href)
+  }
+
   // The browser moved (its back or forward, a hash typed or set): the log reads the entry it moved to.
   const moved = (state: unknown): void => {
     const route = parseRoute(window.location.hash)

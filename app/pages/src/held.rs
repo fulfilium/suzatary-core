@@ -25,7 +25,6 @@ impl Folded {
 /// Where a todo's last act this tab holds stands, when the box has not taken it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, TS)]
 pub(crate) enum Unsent {
-    /// On its way.
     Sending,
     /// Kept until this device is trusted.
     AwaitingTrust,

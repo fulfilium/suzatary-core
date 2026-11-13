@@ -1,4 +1,5 @@
-//! Close each waiting card a rule finds done another way; idempotent.
+//! Close each waiting card a rule finds needs nothing more: done another way, or past its
+//! moment; idempotent.
 
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
@@ -10,8 +11,8 @@ use suzatary_base::refusal::Refusal;
 
 /// What a rule sees of one waiting card.
 pub enum Seen {
-    /// Done another way, in the box's words.
-    Done(String),
+    /// Needs nothing more: why, as the card's withdrawal says it.
+    Closed(Withdrawal),
     /// Still to do, or not this rule's card.
     Waits,
     /// Not looked at, and why.
@@ -21,13 +22,12 @@ pub enum Seen {
 /// What one sweep did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Swept {
-    /// The cards closed.
     pub closed: Vec<ProposalId>,
     /// The cards not looked at, and why.
     pub unread: Vec<(ProposalId, String)>,
 }
 
-/// Close every waiting card that `seen` finds done another way.
+/// Close every waiting card that `seen` finds needs nothing more.
 pub fn sweep(
     inbox: &dyn Prodrome<InboxEvent>,
     at: Datetime,
@@ -41,13 +41,13 @@ pub fn sweep(
     let mut swept = Swept::default();
     for (id, proposal) in waiting {
         match seen(&proposal)? {
-            Seen::Done(what) => {
+            Seen::Closed(withdrawal) => {
                 inbox::withdraw(
                     inbox,
                     &id,
                     &crate::secretary::transcript::writer(),
                     at,
-                    Withdrawal::DoneElsewhere { what },
+                    withdrawal,
                 )?;
                 swept.closed.push(id);
             }

@@ -43,7 +43,6 @@ pub struct Transcript {
 /// One line beside its name, its reading and the lines it rests on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Written {
-    /// The object's name.
     pub name: Hash,
     /// The line as stored.
     pub line: LineEvent,
@@ -57,9 +56,7 @@ pub struct Written {
 /// objects it rests on, which may include objects that are no line of the conversation.
 #[derive(Debug, Clone, Copy)]
 pub struct Write<'n> {
-    /// The object's name.
     pub name: &'n Hash,
-    /// The line.
     pub line: &'n LineEvent,
     /// The names of the objects it rests on.
     pub parents: &'n [Hash],
