@@ -1214,6 +1214,12 @@ pub struct Bulk {
     /// again.
     #[arg(long, value_enum, default_value_t = Sealed::Current, requires = "lines")]
     sealed: Sealed,
+    /// How many more lines to write to one conversation, `heavy`, the store's newest, after every
+    /// other: the box's shape, where the conversation the secretary page opens to holds most of the
+    /// lines. With it, the reseals are shared in proportion to each conversation's lines, so it
+    /// holds most of them too.
+    #[arg(long, default_value_t = 0, requires = "lines")]
+    heavy: usize,
     /// How many more conversations to open, one line each, so the store has that many heads: a
     /// tab holding it names its replica by a frontier no longer than it would name one head by.
     #[arg(long, default_value_t = 0)]
@@ -1246,9 +1252,9 @@ impl Bulk {
         bulk_proposals(read, self.proposals, self.todos)?;
         bulk_lines(
             read,
-            &sizes(self.lines, self.conversations, self.wide),
+            &sizes(self.lines, self.conversations, self.heavy, self.wide),
             self.sealed,
-            self.reseals,
+            Resealing::of(self.reseals, self.heavy),
         )?;
         bulk_topics(read, self.topics)
     }
@@ -1257,8 +1263,9 @@ impl Bulk {
 /// Each bulk conversation and how many lines it holds. With no `conversations`, half the `count`
 /// lines in `bulk-0` and each next one half the size of the last; else up to 400 in `bulk-0` and
 /// the rest shared evenly, at least two to a conversation (its opening and a question), so fewer
-/// conversations where the lines do not stretch. Then `wide` of one line each.
-fn sizes(count: usize, conversations: usize, wide: usize) -> Vec<(String, usize)> {
+/// conversations where the lines do not stretch. Then `wide` of one line each, and last `heavy`
+/// in one conversation, `heavy`, the newest.
+fn sizes(count: usize, conversations: usize, heavy: usize, wide: usize) -> Vec<(String, usize)> {
     let mut sizes = Vec::new();
     if conversations == 0 {
         let mut left = count;
@@ -1285,7 +1292,47 @@ fn sizes(count: usize, conversations: usize, wide: usize) -> Vec<(String, usize)
         named.push(("bulk-0".to_owned(), 1));
     }
     named.extend((0..wide).map(|n| (format!("wide-{n}"), 1)));
+    if heavy > 0 {
+        named.push(("heavy".to_owned(), heavy));
+    }
     named
+}
+
+/// How the reseals are shared over the generated conversations.
+#[derive(Clone, Copy)]
+enum Resealing {
+    /// This many, shared evenly, each conversation's share of what is left.
+    Evenly(usize),
+    /// This many, each conversation's share in proportion to its lines.
+    BySize(usize),
+}
+
+impl Resealing {
+    /// Evenly, as every scene's store, unless one conversation is `heavy`.
+    fn of(reseals: usize, heavy: usize) -> Self {
+        if heavy > 0 {
+            Self::BySize(reseals)
+        } else {
+            Self::Evenly(reseals)
+        }
+    }
+
+    /// Conversation `n`'s share of `sizes`, `left` reseals still to share.
+    fn share(self, sizes: &[(String, usize)], n: usize, left: usize) -> usize {
+        match self {
+            Self::Evenly(_) => left.div_ceil(sizes.len() - n),
+            Self::BySize(_) => {
+                let rest: usize = sizes[n..].iter().map(|(_, size)| size).sum();
+                (left * sizes[n].1).div_ceil(rest.max(1))
+            }
+        }
+    }
+
+    fn total(self) -> usize {
+        match self {
+            Self::Evenly(n) | Self::BySize(n) => n,
+        }
+    }
 }
 
 /// The lines `sizes` names written to new conversations, each with its words locked under a key of its own
@@ -1297,7 +1344,7 @@ fn bulk_lines(
     read: &crate::instance::Instance,
     sizes: &[(String, usize)],
     sealed: Sealed,
-    reseals: usize,
+    reseals: Resealing,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
@@ -1320,11 +1367,11 @@ fn bulk_lines(
     let mut events: Vec<LineEvent> = Vec::new();
     let writer = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
     let mut written = 0u32;
-    let mut resealing = reseals;
+    let mut resealing = reseals.total();
     for (n, (id, size)) in sizes.iter().enumerate() {
         let id = ConversationId::new(id.clone())?;
-        // Each conversation's share of what is left, so the reseals are spread evenly.
-        let mut share = resealing.div_ceil(sizes.len() - n);
+        // Each conversation's share of what is left, as `reseals` shares them.
+        let mut share = reseals.share(sizes, n, resealing);
         let mut slots: Vec<(suzatary_core::secretary::locked_text::TextKey, LineWords)> =
             Vec::new();
         // The first conversation's opening line is the store's own, above.

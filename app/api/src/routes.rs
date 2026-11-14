@@ -559,6 +559,7 @@ pub fn objects_since(
         now,
         Cut::Whole,
         &Literals,
+        &Spent::default(),
     )
     .map(
         |Pulled {
@@ -623,6 +624,7 @@ fn store_answer<E: suzatary_core::stores::Store>(
         now,
         cut,
         &Literals,
+        &Spent::default(),
     )?;
     let (rest, size, weight) = (piece.rest, piece.size, piece.weight);
     let (sent, objects): (Vec<_>, Vec<_>) = piece.sent.into_iter().unzip();
@@ -873,6 +875,33 @@ fn closed_order<E>(
     order
 }
 
+/// How long each part of one answer took, in the order they ran: kept as the answer is read, so
+/// its caller can say where a slow piece spent its time.
+#[derive(Default)]
+struct Spent(std::cell::RefCell<Vec<(&'static str, std::time::Duration)>>);
+
+impl Spent {
+    /// `part` run, its time kept under its name.
+    fn time<T>(&self, part: &'static str, run: impl FnOnce() -> T) -> T {
+        let started = std::time::Instant::now();
+        let ran = run();
+        self.0.borrow_mut().push((part, started.elapsed()));
+        ran
+    }
+
+    /// Every part kept, `<part> <ms>` each, and their sum in milliseconds.
+    fn line(&self) -> (String, u128) {
+        let parts = self.0.borrow();
+        let total = parts.iter().map(|(_, spent)| spent.as_millis()).sum();
+        let line = parts
+            .iter()
+            .map(|(part, spent)| format!("{part} {}", spent.as_millis()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        (line, total)
+    }
+}
+
 /// An answer of `store`, read under its epoch's lock so the epoch and the objects are one
 /// snapshot: every head, the prodromes it serves, and what `sends` makes of each object the
 /// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in the
@@ -880,6 +909,10 @@ fn closed_order<E>(
 /// once it has taken the answer is recorded, and named in it. The store is read through the graph
 /// it keeps by its heads, so an answer at heads already read reads no object; one to a `since` at
 /// the store's heads also walks none, and sends nothing.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each part of a pull, from its caller, and where its parts' times are kept"
+)]
 fn answered<E, S>(
     store: &dyn Prodrome<E>,
     key: &str,
@@ -888,33 +921,38 @@ fn answered<E, S>(
     now: Datetime,
     cut: Cut,
     sends: &S,
+    timed: &Spent,
 ) -> Answered<Pulled<E, S::Item>>
 where
     E: prodrome_core::schema::Schema + Send + Sync + 'static,
     S: Sends<E>,
 {
     let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
-        let graph = store.graph()?;
+        let graph = timed.time("history", || store.graph())?;
         let seen = suzatary_signatures::epoch::Seen {
             geneses: names(graph.geneses()).into_iter().collect(),
             heads: names(graph.heads()).into_iter().collect(),
             held: std::sync::Arc::clone(graph.names()),
         };
-        let lacking = books
-            .frontiers
-            .answer(key, since, graph.dag())
+        let lacking = timed
+            .time("lacking", || {
+                books.frontiers.answer(key, since, graph.dag())
+            })
             .map_err(suzatary_store::store::StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
         // Weighed once per head set, so a pull of many pieces weighs each object once.
-        let weights = graph.reading(S::WEIGHTS, |graph| {
-            graph
-                .objects()
-                .map(|(name, envelope)| (name.clone(), sends.weigh(name, envelope)))
-                .collect::<std::collections::HashMap<_, _>>()
+        let weights = timed.time("weights", || {
+            graph.reading(S::WEIGHTS, |graph| {
+                graph
+                    .objects()
+                    .map(|(name, envelope)| (name.clone(), sends.weigh(name, envelope)))
+                    .collect::<std::collections::HashMap<_, _>>()
+            })
         });
-        let order = sends.order(&graph, lacking.lacking());
+        let order = timed.time("order", || sends.order(&graph, lacking.lacking()));
+        let emitting = std::time::Instant::now();
         for (name, envelope) in order.into_iter().map(|at| lacking.lacking()[at]) {
             piece.rest += 1;
             if full {
@@ -937,12 +975,13 @@ where
             piece.size += weight;
         }
         piece.rest -= piece.sent.len();
+        timed.0.borrow_mut().push(("emit", emitting.elapsed()));
         // The pieces are sent in `order`, not as a prefix of the linear order, so the frontier is
         // what the asker held joined to the closure of what it was sent.
         let sent: Vec<_> = piece.sent.iter().map(|(name, _)| name.clone()).collect();
         let frontier = frontier_of(
-            &lacking
-                .record_with(sent)
+            &timed
+                .time("record", || lacking.record_with(sent))
                 .map_err(suzatary_store::store::StoreError::from)?,
         );
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
@@ -995,6 +1034,7 @@ pub fn lines_skeleton(
     now: Datetime,
     cut: Cut,
 ) -> Answered<SkeletonPayload> {
+    let timed = Spent::default();
     let Pulled {
         snapshot,
         piece,
@@ -1007,15 +1047,28 @@ pub fn lines_skeleton(
         now,
         cut,
         &Nodes,
+        &timed,
     )?;
     let (rest, size, weight) = (piece.rest, piece.size, piece.weight);
     let (sent, nodes): (Vec<_>, Vec<_>) = piece.sent.into_iter().unzip();
     let keys = if sent.is_empty() {
         BTreeMap::new()
     } else {
-        keys_of(conversations, &graph, &retired(&graph), &sent)?
+        let retired = timed.time("retired", || retired(&graph));
+        timed.time("keys", || keys_of(conversations, &graph, &retired, &sent))?
     };
-    let husked = husked(&graph, &keys, &sent);
+    let husked = timed.time("husks", || husked(&graph, &keys, &sent));
+    let sized = timed.time("sizes", || held_sizes(conversations.lines, &sent, nodes))?;
+    let (parts, total) = timed.line();
+    // One line a piece, so the box's log says where a slow piece spent its time.
+    tracing::info!(
+        target: "suzatary::skeleton",
+        nodes = sent.len(),
+        weight,
+        rest,
+        ms = total,
+        "skeleton piece: {parts}"
+    );
     // A replica that lacks nothing holds the store's heads already.
     let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
         (SinceRead::Known, true) => Heads::Held,
@@ -1027,7 +1080,7 @@ pub fn lines_skeleton(
         heads,
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
-        nodes: held_sizes(conversations.lines, &sent, nodes)?
+        nodes: sized
             .into_iter()
             .zip(&sent)
             .map(|(node, name)| match husked.get(name) {
@@ -2031,6 +2084,22 @@ pub fn lines_readings(
 mod tests {
     use super::*;
     use suzatary_core::secrets::SecretState;
+
+    /// A piece's line names each part in the order it ran, with its time, and sums them.
+    #[test]
+    fn spent_names_each_part_in_order_and_sums_them() {
+        let spent = super::Spent::default();
+        assert_eq!(spent.time("history", || 7), 7);
+        spent.time("order", || ());
+        let (line, total) = spent.line();
+        let parts: Vec<&str> = line
+            .split(", ")
+            .map(|part| part.split(' ').next().unwrap_or(""))
+            .collect();
+        assert_eq!(parts, ["history", "order"]);
+        assert!(total < 1000, "two empty parts take no time: {total} ms");
+        assert_eq!(super::Spent::default().line(), (String::new(), 0));
+    }
 
     /// A value the fake's store reads as locked.
     const LOCKED: &str = "<the store is locked>";
