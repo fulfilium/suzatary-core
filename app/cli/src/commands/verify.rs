@@ -45,6 +45,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let digest_texts = suzatary_io::texts::Texts::open(instance.secretary.digest_texts());
     let decisions = suzatary_io::objects::Objects::open(instance.decisions());
     let topics = instance.secretary.topics.open();
+    let asks = suzatary_io::objects::Objects::open(instance.asks());
     let triage = suzatary_io::state::State::open(instance.mail.state.clone());
     let triage_local = suzatary_io::state::Local::open(instance.local.mail());
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
@@ -71,6 +72,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         decisions: &decisions,
         topics: &topics.memberships,
         topic_aliases: &topics.aliases,
+        asks: &asks,
         plugins: BTreeMap::new(),
         triage: &triage,
         triage_local: &triage_local,

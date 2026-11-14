@@ -22,7 +22,7 @@ export namespace progress {
     | { readonly type: "Lost"; readonly name: stores.Name; readonly bytes: number }
 
   const IDLE: One = { pull: { type: "Idle" }, fetch: { type: "Idle" } }
-  export const NONE: T = { inbox: IDLE, lines: IDLE, topics: IDLE, "topic-aliases": IDLE }
+  export const NONE: T = { inbox: IDLE, lines: IDLE, topics: IDLE, "topic-aliases": IDLE, asks: IDLE }
 
   // The first piece's size is the pull's; a later piece that says more lacking than was left grew the pull by as much.
   const pulled = (p: Pull, size: number, weight: number): Pull =>
@@ -61,7 +61,7 @@ export namespace progress {
     return o.pull.type === "Idle" && o.fetch.type === "Idle" ? { type: "Hidden" } : { type: "Shown", done: pull.done + fetch.done, needed: pull.needed + fetch.needed }
   }
 
-  export const LABEL: { readonly [N in stores.Name]: string } = { inbox: "the inbox", lines: "conversations", topics: "topics", "topic-aliases": "topic names" }
+  export const LABEL: { readonly [N in stores.Name]: string } = { inbox: "the inbox", lines: "conversations", topics: "topics", "topic-aliases": "topic names", asks: "refusals" }
 
   // Megabytes to one decimal from a tenth of one, else kilobytes.
   const amount = (done: number, needed: number): string =>

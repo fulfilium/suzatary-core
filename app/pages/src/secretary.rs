@@ -57,31 +57,11 @@ pub enum Ask {
     Slice,
 }
 
+/// A topic write's follow-up once the tab's replica holds it: a rename of a topic the filter
+/// holds moves the address to the new name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub struct Wrote {
     pub renamed: Option<(String, String)>,
-    pub closes: Closes,
-}
-
-/// The sheet a write came from, closed when it is taken only if it still stands.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
-#[serde(tag = "type")]
-pub enum Closes {
-    Nothing,
-    Renaming { topic: String },
-    Adding { target: String },
-}
-
-impl Closes {
-    fn stands(&self, sheet: &Sheet) -> bool {
-        match (self, sheet) {
-            (Closes::Renaming { topic: a }, Sheet::Renaming { topic: b, .. })
-            | (Closes::Adding { target: a }, Sheet::Adding { target: b, .. }) => a == b,
-            (Closes::Nothing, Sheet::Closed | Sheet::Renaming { .. } | Sheet::Adding { .. })
-            | (Closes::Renaming { .. }, Sheet::Closed | Sheet::Adding { .. })
-            | (Closes::Adding { .. }, Sheet::Closed | Sheet::Renaming { .. }) => false,
-        }
-    }
 }
 
 pub(crate) type Effect = runtime::Effect<Hold, Ask>;
@@ -271,13 +251,7 @@ impl Program for Secretary {
                     field: "topic".to_owned(),
                 }]
             }
-            Msg::Chip(write) => wrote(
-                write,
-                Wrote {
-                    renamed: None,
-                    closes: Closes::Nothing,
-                },
-            ),
+            Msg::Chip(write) => wrote(write, Wrote { renamed: None }),
             Msg::Typed(words) => {
                 match &mut m.sheet {
                     Sheet::Renaming { typed, .. } | Sheet::Adding { typed, .. } => *typed = words,
@@ -333,35 +307,21 @@ impl Program for Secretary {
     }
 }
 
+/// The sheet's write: the sheet closes at the tap, and the bar draws it from the tab's replica.
 fn update_write(m: &mut Model, topic: String) -> Vec<Effect> {
-    match m.sheet.clone() {
+    let sheet = std::mem::replace(&mut m.sheet, Sheet::Closed);
+    match sheet {
         Sheet::Closed => Vec::new(),
         Sheet::Renaming { topic: from, .. } => {
             let renamed = m
                 .chosen
                 .contains(&from)
                 .then(|| (from.clone(), topic.clone()));
-            wrote(
-                TopicWrite::Rename {
-                    from: from.clone(),
-                    to: topic,
-                },
-                Wrote {
-                    renamed,
-                    closes: Closes::Renaming { topic: from },
-                },
-            )
+            wrote(TopicWrite::Rename { from, to: topic }, Wrote { renamed })
         }
-        Sheet::Adding { target, .. } => wrote(
-            TopicWrite::Add {
-                target: target.clone(),
-                topic,
-            },
-            Wrote {
-                renamed: None,
-                closes: Closes::Adding { target },
-            },
-        ),
+        Sheet::Adding { target, .. } => {
+            wrote(TopicWrite::Add { target, topic }, Wrote { renamed: None })
+        }
     }
 }
 
@@ -475,25 +435,20 @@ fn topic_answered(m: &mut Model, w: &Wrote, a: Answer) -> Vec<Effect> {
         Ok(Outcome::Answered {
             answer: Said::Taken,
             ..
-        }) => {
-            if w.closes.stands(&m.sheet) {
-                m.sheet = Sheet::Closed;
+        }) => match &w.renamed {
+            Some((from, to)) => {
+                let chosen = filter(
+                    m.chosen
+                        .iter()
+                        .map(|t| if t == from { to.clone() } else { t.clone() })
+                        .collect(),
+                );
+                vec![Effect::Replace {
+                    href: Place::Secretary(&chosen).href(),
+                }]
             }
-            match &w.renamed {
-                Some((from, to)) => {
-                    let chosen = filter(
-                        m.chosen
-                            .iter()
-                            .map(|t| if t == from { to.clone() } else { t.clone() })
-                            .collect(),
-                    );
-                    vec![Effect::Replace {
-                        href: Place::Secretary(&chosen).href(),
-                    }]
-                }
-                None => Vec::new(),
-            }
-        }
+            None => Vec::new(),
+        },
         Ok(Outcome::Answered {
             answer: Said::Refused { e } | Said::Lost { e },
             ..

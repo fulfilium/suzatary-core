@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod agent;
+pub mod asks;
 pub mod attachment;
 pub mod authoring;
 pub mod believed;
@@ -43,6 +44,7 @@ pub mod pdf_text;
 pub mod plugin;
 pub mod priced;
 pub mod reading;
+pub mod receipt;
 pub mod redact;
 pub mod release;
 pub mod render;

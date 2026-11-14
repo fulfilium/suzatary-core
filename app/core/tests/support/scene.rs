@@ -1,4 +1,5 @@
-//! A request the cast's phone signed, proven: test support, never production.
+//! A request the cast's phone signed, proven, and a chain trusting the phone: test support,
+//! never production.
 
 use prodrome_core::event::Actor;
 
@@ -57,4 +58,32 @@ pub fn scene(actor: &str) -> Trusted {
         .expect("a well-formed request")
         .trusted(&[&chain], &keys::root())
         .expect("the phone is trusted")
+}
+
+/// A chain in memory whose root, the cast's, trusts the cast's phone for each of `actors`.
+///
+/// # Panics
+/// Never for the cast's keys.
+#[must_use]
+pub fn phone_trusted(actors: &[&str]) -> crate::stores::InMemory<TodoEvent> {
+    use crate::cast::keys;
+    let chain: crate::stores::InMemory<TodoEvent> = crate::stores::InMemory::default();
+    let begun = prodrome_core::event::mk_completed(
+        "scene",
+        prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
+        "scene",
+        "",
+    )
+    .expect("an event");
+    chain.append(begun).expect("begins");
+    for actor in actors {
+        trust(
+            &chain,
+            &keys::secret(keys::ROOT),
+            &Actor::new(*actor).expect("a roster name"),
+            &keys::secret(keys::PHONE).public(),
+        )
+        .expect("the phone is trusted");
+    }
+    chain
 }

@@ -217,6 +217,7 @@ fn verify_walks_every_store() {
         "topic-aliases OK — {}",
         instance.secretary.topics.aliases.display()
     ));
+    wanted.push(format!("asks OK — {}", instance.asks().display()));
     wanted.push(format!("requests OK — {}", instance.requests().display()));
     assert_eq!(said.lines().collect::<Vec<_>>(), wanted);
 

@@ -192,6 +192,7 @@ fn every_prodrome_keeps_the_store_laws() {
         laws::<DecisionEvent>("decisions", Objects::open),
         laws::<MembershipEvent>("secretary-topics", Objects::open),
         laws::<AliasEvent>("secretary-topic-aliases", Objects::open),
+        laws::<suzatary_core::asks::AskEvent>("secretary-asks", Objects::open),
         laws::<Declared>("cache/plugins/ics/store", |root| {
             let pinned =
                 suzatary_io::plugin_store::PluginStore::at(pins("cache/plugins/ics/store"))

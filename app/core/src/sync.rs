@@ -1,35 +1,11 @@
-//! What the server decides when a replica posts objects, with no I/O: what it takes in, what it
-//! already holds, and what it refuses and why.
-//!
-//! Pure, so the sync law is a proptest over generated DAGs; the binary performs the one effect
-//! the answer names (the Prodrome's `store::accept` of what it takes) and decides nothing. Nothing is clamped: `at` is the
-//! writer's claim, and a future-dated object is stored and reported, never rewritten.
-//!
-//! The refusals:
-//!
-//! 1. **Bytes that are not one canonical object.** The name is the hash of the reprint, never a
-//!    name the client sent, so two replicas agree on what an object is called.
-//! 2. **A parent nobody holds** after this batch, which would leave a store whose `verify` fails;
-//!    a `Change` rests on its genesis as well as its deps, so an unheld genesis is one too.
-//! 3. **An event naming another actor** than the one the gate resolved
-//!    (`suzatary_api::gate::actor_of`); an eventless `Woven` asserts no fact and is allowed from anyone.
-//!    A replica's `Change` carries its event, so it is held to the rule like a `Sealed`.
-//! 4. **An object resting on a refused one**, (2) applied transitively: one bad object stops
-//!    everything under it, so a refusal is shown to a person rather than retried.
-//! 5. **A sealed lifecycle event on a `decision` record**, which settles only through its tap.
-//! 6. **Under a root, an object its signatures do not prove** (SPEC law 42): a write no
-//!    signature by a key the root registered to its actor proves, whatever kind it is, and a
-//!    signature that does not verify or whose key is not trusted for the poster. A key object or
-//!    an epoch is the box's to write and is refused from a replica. This is IN ADDITION to (3):
-//!    the gate says who is posting, the signature says who wrote the object, to anyone holding it.
-//!
-//! Idempotence needs no nonce: the same object posted twice is the same hash, answered `already`.
-//! What passes is taken in through the Prodrome's own verify-on-receive (`store::accept`), which
-//! rehashes and reparses it again; this module decides, it does not replace that check.
+//! What the server decides when a replica posts objects, with no I/O: what it takes, already
+//! holds and refuses, and why. `at` is the writer's claim and is never clamped. A name is the
+//! hash of the reprint, so the same object posted twice is answered `already`. The gate says who
+//! posts; under a root, the signature says who wrote it (SPEC law 42).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::signatures::{Trust, Unproven};
+use crate::signatures::{Trust, Trusting, Unproven};
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{
     Actor, Hash, TodoId, canonical_envelope, parents_of, parse_envelope, seal_hash,
@@ -44,7 +20,7 @@ pub struct Objects {
 }
 
 impl Objects {
-    /// The store's read, as this module reads it.
+    /// The store's read.
     #[must_use]
     pub fn of(objects: &[(Hash, Envelope)]) -> Objects {
         Objects {
@@ -85,8 +61,7 @@ impl Objects {
         self.by_name.get(name)
     }
 
-    /// Everything `name` rests on, strictly (parents, and a change's genesis); a name this set
-    /// does not hold ends that branch.
+    /// Everything `name` rests on; a name this set does not hold ends that branch.
     #[must_use]
     pub fn ancestors(&self, name: &Hash) -> BTreeSet<Hash> {
         let mut seen: BTreeSet<Hash> = BTreeSet::new();
@@ -102,13 +77,12 @@ impl Objects {
         seen
     }
 
-    /// Take one object in, as the law tests apply an [`Outcome`] without a filesystem.
+    /// Take one object in.
     pub fn insert(&mut self, name: Hash, envelope: Envelope) {
         self.by_name.insert(name, envelope);
     }
 
-    /// Is `todo` a `decision` record? Its kind never changes once authored, so any one
-    /// `Authored` answers for its whole life and no fold is needed.
+    /// Is `todo` a `decision` record? Its kind never changes, so any `Authored` answers.
     #[must_use]
     pub fn is_decision(&self, todo: &TodoId) -> bool {
         self.by_name.values().any(|envelope| {
@@ -121,8 +95,7 @@ impl Objects {
     }
 }
 
-/// Why one posted literal was not taken: a sum because the client branches on it (a missing
-/// parent can be completed, a foreign actor never); [`Reason::said`] is the sentence.
+/// Why one posted literal was not taken: a sum because the client branches on it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reason {
     /// The literal is not one canonical object.
@@ -133,39 +106,48 @@ pub enum Reason {
     ForeignActor {
         /// The actor the event names.
         named: String,
-        /// The actor the gate resolved for the login that posted it.
+        /// The gate's actor for the poster.
         poster: String,
     },
-    /// A lifecycle event on a `decision` record: the box appends its own after performing it,
-    /// so one sealed offline would make something look done that was never performed.
+    /// A lifecycle event on a `decision` record, which settles only through its tap.
     SealedDecision,
-    /// Under a root, an object its signatures do not prove, or a signature that proves nothing
-    /// for the poster.
+    /// Under a root, an object its signatures do not prove.
     Unproven(Unproven),
-    /// A genesis, a key object or an epoch, which only the box writes: a prodrome a replica
-    /// began would be one no key is registered in, so its first write could never be proven.
+    /// A genesis, a key object or an epoch, which only the box writes.
     BoxOnly,
     /// An object of this kind in a store that takes only changes.
     NotAChange(&'static str),
+    /// A signature posted without the change it signs.
+    Unaccompanied,
+    /// It rests on an object neither held nor posted: taken once a later post brings it.
+    NotYetHeld(Hash),
+    /// It rests on an object refused in this post, and is refused as that object is.
+    RestsOn {
+        /// The refused object.
+        parent: Hash,
+        /// Its refusal's kind.
+        kind: crate::wire::signatures::RefusalKind,
+    },
 }
 
 impl Reason {
-    /// Whether the same write can be taken later: an unsigned or untrusted one waits for its
-    /// device to be trusted (a tab caught at the switch, a phone before its card is tapped),
-    /// and every other refusal is final.
+    /// Whether the write may be taken later, so it is posted again: one unsigned, untrusted or
+    /// resting on an unheld object waits, one resting on a refused object is as it is, the rest
+    /// are final.
     #[must_use]
     pub fn kind(&self) -> crate::wire::signatures::RefusalKind {
         match self {
-            Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. }) => {
-                crate::wire::signatures::RefusalKind::Trust
-            }
+            Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. })
+            | Reason::NotYetHeld(_) => crate::wire::signatures::RefusalKind::Trust,
+            Reason::RestsOn { kind, .. } => *kind,
             Reason::NotAnObject(_)
             | Reason::MissingParent(_)
             | Reason::ForeignActor { .. }
             | Reason::SealedDecision
             | Reason::Unproven(Unproven::Forged | Unproven::Revoked { .. })
             | Reason::BoxOnly
-            | Reason::NotAChange(_) => crate::wire::signatures::RefusalKind::Final,
+            | Reason::NotAChange(_)
+            | Reason::Unaccompanied => crate::wire::signatures::RefusalKind::Final,
         }
     }
 
@@ -175,8 +157,7 @@ impl Reason {
         match self {
             Reason::NotAnObject(why) => format!("not one canonical object: {why}"),
             Reason::MissingParent(parent) => {
-                let short: String = parent.as_str().chars().take(12).collect();
-                format!("rests on {short}…, which this box does not hold")
+                format!("rests on {}…, which this box does not hold", short(parent))
             }
             Reason::ForeignActor { named, poster } => {
                 format!("its event is {named}'s and you are posting as {poster}")
@@ -189,14 +170,28 @@ impl Reason {
                 "prodromes, keys and epochs are the box's to begin and write".to_owned()
             }
             Reason::NotAChange(kind) => format!("this store takes only changes, not a {kind}"),
+            Reason::Unaccompanied => {
+                "a signature is taken only with the change it signs".to_owned()
+            }
+            Reason::NotYetHeld(parent) => format!(
+                "rests on {}…, which this box does not hold yet",
+                short(parent)
+            ),
+            Reason::RestsOn { parent, .. } => {
+                format!("rests on {}…, which this box refused", short(parent))
+            }
         }
     }
+}
+
+fn short(name: &Hash) -> String {
+    name.as_str().chars().take(12).collect()
 }
 
 /// One literal the server would not take, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refused {
-    /// The name it would have had, when the bytes were an object at all.
+    /// `None` where the bytes were no object.
     pub name: Option<Hash>,
     /// Which refusal.
     pub reason: Reason,
@@ -205,18 +200,16 @@ pub struct Refused {
 /// What a post means, decided from the objects alone: take in `taken`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Outcome {
-    /// The objects to adopt with their canonical prints, parents first, so applying them in
-    /// order never holds a child before its parent.
+    /// The objects to adopt with their canonical prints, parents first.
     pub taken: Vec<(Hash, String)>,
-    /// The names the server already had: what makes a re-post free, read as settled.
+    /// The names the server already had.
     pub already: Vec<Hash>,
     /// What was refused, in the order the literals arrived.
     pub refused: Vec<Refused>,
 }
 
-/// What a post does: the whole decision, with no I/O. What the objects would place
-/// (`placed`), held to their signatures under `root`, the chain's root key (SPEC law 42), so
-/// a write no key the history trusts for `writer` proves is refused with why.
+/// What a post does, with no I/O: what the objects place, held to their signatures under the
+/// chain's `root`.
 #[must_use]
 pub fn receive(held: &Objects, posted: &[String], writer: &Actor, root: &PublicKey) -> Outcome {
     let placed = placed(held, posted, writer);
@@ -228,16 +221,10 @@ pub fn receive(held: &Objects, posted: &[String], writer: &Actor, root: &PublicK
     }
 }
 
-/// What a post's objects would place, read from them alone: each parsed and named by its
-/// reprint, an event as another actor and a sealed act on a decision refused, a genesis, a key
-/// or a snapshot refused as the box's alone, and the rest taken by fixpoint over "every parent
-/// is held or taken", so a child posted before its parent is not refused. `writer` is the
-/// gate's actor for this login. Private: nothing it places is proven yet, so only [`receive`]
-/// may answer with it.
+/// What a post's objects would place; nothing it places is proven yet, so only [`receive`]
+/// answers with it.
 #[must_use]
 fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
-    // Parse first, and by content: the name is the hash of the reprint, so a
-    // client cannot name an object anything but what it is.
     let mut candidates: Vec<(Hash, String, Envelope)> = Vec::new();
     let mut refused: Vec<Refused> = Vec::new();
     let mut already: Vec<Hash> = Vec::new();
@@ -245,10 +232,8 @@ fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
         match named(literal) {
             Err(reason) => refused.push(Refused { name: None, reason }),
             Ok((name, canonical, envelope)) => {
-                // Already-held is answered before the actor rule: the rule stops a client
-                // writing as somebody else, and an object the box holds is no write. A replica
-                // routinely offers back the box's own `triage` events, and refusing them would
-                // leave a permanently stuck branch.
+                // Already-held comes before the actor rule: a replica offers back the box's own
+                // `triage` events, and refusing them would leave a stuck branch.
                 if held.holds(&name) {
                     already.push(name);
                     continue;
@@ -265,8 +250,6 @@ fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
                     });
                     continue;
                 }
-                // A sealed lifecycle act on a `decision` is refused before the fixpoint: a
-                // decision settles through the tap that performed it, never through adoption.
                 if let Some(
                     event @ (TodoEvent::Completed(_)
                     | TodoEvent::Cancelled(_)
@@ -316,9 +299,7 @@ fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
 /// What a post's objects would place ([`placed`]), before their signatures are read.
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Placed {
-    /// The objects placed, with their canonical prints, parents first.
     taken: Vec<(Hash, String)>,
-    /// Each placed object, by name.
     taking: BTreeMap<Hash, Envelope>,
     /// The names the server already had.
     already: Vec<Hash>,
@@ -326,9 +307,7 @@ struct Placed {
     refused: Vec<Refused>,
 }
 
-/// `candidates` placed by fixpoint over "every parent is held or taken", so a child posted
-/// before its parent is not refused: what is taken, parents first, each taken object by name,
-/// and a refusal naming the first missing parent of each object left over.
+/// `candidates` placed by fixpoint, parents first; each left over refused at its first missing parent.
 fn settled<E>(
     candidates: Vec<(Hash, String, prodrome_core::event::Envelope<E>)>,
     holds: &dyn Fn(&Hash) -> bool,
@@ -344,8 +323,6 @@ fn settled<E>(
                 .iter()
                 .all(|parent| holds(parent) || taking.contains_key(parent));
             if ready {
-                // A duplicate inside one post is the same hash twice: the
-                // second is nothing, exactly as a re-post is.
                 if taking.insert(name.clone(), envelope).is_none() {
                     taken.push((name, canonical));
                 }
@@ -386,20 +363,20 @@ struct Settled<E> {
     refused: Vec<Refused>,
 }
 
-/// What a post to a store of schema `E` that the box began and nobody signs means: every
-/// object a `Change` whose event is `writer`'s, resting on what is held or posted. The gate
-/// proved the request's device for `writer`, and the request's signature covers its body, so
-/// no object needs a signature of its own.
+/// What a post to a store a tab writes means: a `Change` as `writer` is taken only beside a
+/// posted `Signed` of it whose key every chain trusts for `writer` ([`Trusting::admits`]).
 #[must_use]
 pub fn receive_changes<E: prodrome_core::schema::Schema>(
     held: &BTreeSet<Hash>,
     posted: &[String],
     writer: &Actor,
-) -> Outcome
+    trusting: &Trusting,
+) -> Received
 where
     E::Vocabulary: Default,
 {
     let vocabulary = E::Vocabulary::default();
+    let mut parsed: BTreeMap<Hash, prodrome_core::event::Envelope<E>> = BTreeMap::new();
     let mut candidates = Vec::new();
     let mut refused: Vec<Refused> = Vec::new();
     let mut already: Vec<Hash> = Vec::new();
@@ -414,6 +391,7 @@ where
                     {
                         None
                     }
+                    prodrome_core::event::Envelope::Signed(_) => None,
                     prodrome_core::event::Envelope::Change(change) => Some(Reason::ForeignActor {
                         named: change.event.actor().as_str().to_owned(),
                         poster: writer.as_str().to_owned(),
@@ -423,11 +401,11 @@ where
                     | prodrome_core::event::Envelope::KeyRevoked(_)
                     | prodrome_core::event::Envelope::Snapshot(_) => Some(Reason::BoxOnly),
                     other @ (prodrome_core::event::Envelope::Sealed { .. }
-                    | prodrome_core::event::Envelope::Woven { .. }
-                    | prodrome_core::event::Envelope::Signed(_)) => {
+                    | prodrome_core::event::Envelope::Woven { .. }) => {
                         Some(Reason::NotAChange(other.name()))
                     }
                 };
+                parsed.insert(name.clone(), envelope.clone());
                 match reason {
                     Some(reason) => refused.push(Refused {
                         name: Some(name),
@@ -440,20 +418,178 @@ where
     }
     let Settled {
         taken,
+        taking,
         refused: unplaced,
-        ..
     } = settled(candidates, &|name| held.contains(name));
+    let unplaced = waiting(&parsed, &refused, &unplaced);
     refused.extend(unplaced);
-    Outcome {
-        taken,
-        already,
-        refused,
+    let (taken, unproven) = signed_by_their_writers(taken, &taking, writer, trusting);
+    refused.extend(unproven);
+    let recorded = recorded(&parsed, &refused, trusting);
+    Received {
+        outcome: Outcome {
+            taken,
+            already,
+            refused,
+        },
+        recorded,
     }
 }
 
-/// `taken` held to its signatures, read with what the box holds (SPEC law 42): a write the
-/// history does not prove is refused with why, and so is a signature that proves nothing for
-/// `writer`, and then everything resting on something refused. What stays is taken.
+/// A post to a store a tab writes, and the refusals to record.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Received {
+    /// What to take, and the answer.
+    pub outcome: Outcome,
+    /// Each final refusal a trusted key's posted signature proves, so an untrusted poster
+    /// cannot fill the asks.
+    pub recorded: Vec<(Hash, Reason)>,
+}
+
+/// `taken`, each change kept only with an admitted signature, each signature only with its
+/// change, and nothing resting on something refused.
+fn signed_by_their_writers<E>(
+    taken: Vec<(Hash, String)>,
+    taking: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    writer: &Actor,
+    trusting: &Trusting,
+) -> (Vec<(Hash, String)>, Vec<Refused>) {
+    let mut kept: Vec<(Hash, String)> = Vec::new();
+    let mut refused: Vec<Refused> = Vec::new();
+    let mut kinds: BTreeMap<Hash, crate::wire::signatures::RefusalKind> = BTreeMap::new();
+    for (name, print) in taken {
+        let why = match &taking[&name] {
+            prodrome_core::event::Envelope::Signed(signed) => {
+                if kept.iter().any(|(one, _)| *one == signed.object) {
+                    trusting.admits(writer, signed).err().map(Reason::Unproven)
+                } else if kinds.contains_key(&signed.object) {
+                    None
+                } else {
+                    Some(Reason::Unaccompanied)
+                }
+            }
+            _ => proof(&name, taking, writer, trusting).map(Reason::Unproven),
+        };
+        let reason = why.or_else(|| resting(rests_on(&taking[&name]), &kinds));
+        match reason {
+            Some(reason) => {
+                kinds.insert(name.clone(), reason.kind());
+                refused.push(Refused {
+                    name: Some(name),
+                    reason,
+                });
+            }
+            None => kept.push((name, print)),
+        }
+    }
+    (kept, refused)
+}
+
+/// Of `parents`, the refused one an object is refused with, a final refusal first.
+fn resting(
+    parents: Vec<Hash>,
+    kinds: &BTreeMap<Hash, crate::wire::signatures::RefusalKind>,
+) -> Option<Reason> {
+    let mut found: Vec<(Hash, crate::wire::signatures::RefusalKind)> = parents
+        .into_iter()
+        .filter_map(|parent| kinds.get(&parent).map(|kind| (parent, *kind)))
+        .collect();
+    found.sort_by_key(|(_, kind)| *kind != crate::wire::signatures::RefusalKind::Final);
+    found
+        .into_iter()
+        .next()
+        .map(|(parent, kind)| Reason::RestsOn { parent, kind })
+}
+
+/// `unplaced` (a parent neither held nor taken) said again: as the refused object of this post
+/// it rests on, else waiting. Each pass settles one more level, so `len` passes settle all.
+fn waiting<E>(
+    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    refused: &[Refused],
+    unplaced: &[Refused],
+) -> Vec<Refused> {
+    let base: BTreeMap<Hash, crate::wire::signatures::RefusalKind> = refused
+        .iter()
+        .filter_map(|one| Some((one.name.clone()?, one.reason.kind())))
+        .collect();
+    let again = |said: &[Refused]| -> Vec<Refused> {
+        let mut kinds = base.clone();
+        kinds.extend(
+            said.iter()
+                .filter_map(|one| Some((one.name.clone()?, one.reason.kind()))),
+        );
+        unplaced
+            .iter()
+            .map(|one| {
+                let parents = one
+                    .name
+                    .as_ref()
+                    .and_then(|name| parsed.get(name))
+                    .map(rests_on)
+                    .unwrap_or_default();
+                let reason = resting(parents, &kinds).unwrap_or_else(|| match &one.reason {
+                    Reason::MissingParent(parent) => Reason::NotYetHeld(parent.clone()),
+                    other => other.clone(),
+                });
+                Refused {
+                    name: one.name.clone(),
+                    reason,
+                }
+            })
+            .collect()
+    };
+    let mut said = again(&[]);
+    for _ in 0..unplaced.len() {
+        said = again(&said);
+    }
+    said
+}
+
+/// Why no signature of `name` among `signed` proves it for `actor`; a revocation wins.
+fn proof<E>(
+    name: &Hash,
+    signed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    actor: &Actor,
+    trusting: &Trusting,
+) -> Option<Unproven> {
+    let mut why = Unproven::Unsigned;
+    for object in signed.values() {
+        if let prodrome_core::event::Envelope::Signed(signature) = object
+            && signature.object == *name
+        {
+            match trusting.admits(actor, signature) {
+                Ok(()) => return None,
+                Err(revoked @ Unproven::Revoked { .. }) => return Some(revoked),
+                Err(other) => why = other,
+            }
+        }
+    }
+    Some(why)
+}
+
+/// Of `refused`, each change refused for good that a posted signature proves for its actor,
+/// once, however many times the post names it.
+fn recorded<E: prodrome_core::schema::Schema>(
+    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    refused: &[Refused],
+    trusting: &Trusting,
+) -> Vec<(Hash, Reason)> {
+    let once: BTreeMap<&Hash, &Reason> = refused
+        .iter()
+        .filter(|one| one.reason.kind() == crate::wire::signatures::RefusalKind::Final)
+        .filter_map(|one| Some((one.name.as_ref()?, &one.reason)))
+        .collect();
+    once.into_iter()
+        .filter_map(|(name, reason)| {
+            let event = parsed.get(name)?.event()?;
+            proof(name, parsed, event.actor(), trusting)
+                .is_none()
+                .then(|| (name.clone(), reason.clone()))
+        })
+        .collect()
+}
+
+/// `taken` held to its signatures (SPEC law 42), then everything resting on something refused.
 fn proven(
     held: &Objects,
     taken: Vec<(Hash, String)>,
@@ -482,8 +618,7 @@ fn proven(
                     .and_then(|genesis| union.key(&genesis));
                 trust.admits(&genesis, writer, signed).err()
             }
-            // An object that asserts no actor's fact (a bare merge) is still a write: it grows
-            // the chain, so it needs a trusted signature of its own like any other.
+            // A bare merge asserts no fact but grows the chain, so it needs a signature too.
             _ if object.event().is_none() => unasserted(&union, &trust, &name, writer),
             _ => trust.why(&name),
         };
@@ -504,8 +639,7 @@ fn proven(
     (kept, refused)
 }
 
-/// Why an object carrying no event is not admitted: no signature over it, or none by a key the
-/// history trusts for `writer`.
+/// Why an object carrying no event is not admitted.
 fn unasserted(
     union: &Dag<TodoEvent>,
     trust: &Trust,
@@ -529,8 +663,7 @@ fn unasserted(
     Some(why)
 }
 
-/// What an object cannot be held without: its parents, and the genesis a change names, which a
-/// store's verify-on-receive walks to as it walks to a parent.
+/// An object's parents and the genesis a change names, which verify-on-receive walks to.
 fn rests_on<E>(envelope: &prodrome_core::event::Envelope<E>) -> Vec<Hash> {
     let mut names = parents_of(envelope);
     names.extend(envelope.genesis().cloned());
@@ -581,8 +714,6 @@ mod tests {
         mk_sealed(prev.cloned(), event)
     }
 
-    /// A store's read, as `Objects` and as the nodes a fold takes.
-    /// The heads of a set, as the Prodrome derives them.
     fn heads(set: &Objects) -> BTreeSet<Hash> {
         prodrome_core::dag::Dag::from_iter(objects_of(set)).tips()
     }
@@ -607,7 +738,6 @@ mod tests {
             .collect()
     }
 
-    /// Apply an outcome the way the binary does: take in exactly what it names.
     fn apply(held: &mut Objects, taken: &[(Hash, String)]) {
         for (name, literal) in taken {
             let envelope =
@@ -618,7 +748,6 @@ mod tests {
         }
     }
 
-    /// The rows over everything the set holds.
     fn folded(set: &Objects) -> Vec<suzatary_record::record::Entry> {
         let nodes = prodrome_core::dag::Dag::from_iter(objects_of(set))
             .nodes()
@@ -627,7 +756,6 @@ mod tests {
             .expect("a closed set folds")
     }
 
-    /// A little chain of `count` objects for `todo`, genesis first.
     fn branch(from: Option<&Hash>, todo: &str, count: u32) -> Vec<Envelope> {
         let mut out: Vec<Envelope> = Vec::new();
         let mut prev = from.cloned();
@@ -651,8 +779,7 @@ mod tests {
         assert_eq!(outcome, Placed::default());
     }
 
-    /// The name is the print's hash, never the client's claim: bytes that are not one canonical
-    /// object are refused rather than filed under whatever they hash to.
+    /// The name is the print's hash, never the client's claim.
     #[test]
     fn bytes_that_are_not_one_canonical_object_are_refused() {
         let held = Objects::default();
@@ -684,8 +811,7 @@ mod tests {
         assert_eq!(outcome.refused.len(), 1);
     }
 
-    /// The actor rule applies only to a write: re-offering an object the box holds is `already`
-    /// whoever's event it carries, since a replica routinely offers back the agent's events.
+    /// The actor rule applies only to a write: re-offering a held object is `already`.
     #[test]
     fn re_offering_an_object_the_box_already_holds_is_never_a_foreign_actor() {
         let theirs = sealed(
@@ -727,8 +853,7 @@ mod tests {
             }]
         );
 
-        // …and a merge, which carries no event, is allowed from any actor:
-        // it asserts no fact about a todo, so there is nobody it could name.
+        // …and a merge, which carries no event, is allowed from any actor.
         let mut held = Objects::default();
         apply(&mut held, &outcome.taken);
         let other = sealed(
@@ -816,8 +941,6 @@ mod tests {
     #[test]
     fn an_object_resting_on_nothing_anyone_holds_is_refused_with_its_descendants() {
         let orphaned = branch(None, "alpha", 3);
-        // The genesis is withheld, so the second and third rest on a name
-        // nobody has.
         let posted: Vec<String> = orphaned[1..].iter().map(canonical_envelope).collect();
         let outcome = placed(&Objects::default(), &posted, &actor("ada"));
         assert!(outcome.taken.is_empty());
@@ -860,8 +983,7 @@ mod tests {
         assert_eq!(held.len(), 2);
     }
 
-    /// Two diverged replicas leave two heads, and nothing joins them: the box takes the post in
-    /// and writes nothing of its own.
+    /// Two diverged replicas leave two heads, and nothing joins them.
     #[test]
     fn divergence_leaves_both_heads_and_writes_nothing() {
         let shared = branch(None, "alpha", 1);
@@ -893,8 +1015,6 @@ mod tests {
         );
     }
 
-    /// A tab: the Prodrome's replica in memory, holding `objects`, as the browser's module
-    /// holds what it was handed.
     fn replica_of(objects: &[Envelope]) -> MemoryStore<TodoEvent> {
         let mut set = Objects::default();
         for object in objects {
@@ -912,7 +1032,6 @@ mod tests {
         tab
     }
 
-    /// What a tab posts for one act: the print of the object its append answers.
     fn wrote(tab: &MemoryStore<TodoEvent>, event: TodoEvent) -> String {
         let name = tab.append(event).expect("the replica appends");
         String::from_utf8(tab.print(&name).expect("an append holds its object")).expect("utf8")
@@ -966,8 +1085,6 @@ mod tests {
         );
     }
 
-    // Signatures (SPEC law 42): under a root, a post is held to who wrote each object.
-
     fn seed(byte: char) -> prodrome_core::sign::Secret {
         prodrome_core::sign::Secret::new(&byte.to_string().repeat(64)).expect("a seed")
     }
@@ -976,7 +1093,6 @@ mod tests {
         (seal_hash(object), canonical_envelope(object))
     }
 
-    /// `object` and the root's signature of it, as the box writes a key object.
     fn rooted(held: &mut Objects, root: &prodrome_core::sign::Secret, object: Envelope) -> Hash {
         let name = seal_hash(&object);
         held.insert(name.clone(), object);
@@ -985,8 +1101,7 @@ mod tests {
         name
     }
 
-    /// A box holding a little history and `phone` registered to ada by the root, and a tab
-    /// holding all of it.
+    /// A little history with `phone` registered to ada by the root, held by the box and a tab.
     fn signed_box(
         root: &prodrome_core::sign::Secret,
         phone: &prodrome_core::sign::Secret,
@@ -1012,7 +1127,6 @@ mod tests {
         (held, all, seal_hash(&base[0]))
     }
 
-    /// The tab's act and its signature by `key`, as the tab posts them.
     fn act(
         tab: &MemoryStore<TodoEvent>,
         key: &prodrome_core::sign::Secret,
@@ -1233,8 +1347,7 @@ mod tests {
         assert_eq!(reasons(&outcome), vec![Reason::BoxOnly]);
     }
 
-    /// Whatever the post carries, a genesis, a key or an epoch is the box's alone: refused by
-    /// the objects alone, before any signature is read, so no unsigned path takes one.
+    /// A genesis, a key or an epoch is the box's alone, refused before any signature is read.
     #[test]
     fn a_genesis_a_key_or_an_epoch_is_refused_from_the_objects_alone() {
         let genesis = prodrome_core::genesis::mk_genesis("chain", &"7".repeat(32)).expect("one");
@@ -1269,12 +1382,9 @@ mod tests {
         );
     }
 
-    // The sync law.
-
     use proptest::prelude::*;
 
-    /// A generated DAG: each object seals onto one earlier object or onto nothing, a forest of
-    /// chains that occasionally branch, which is the divergence sync is about.
+    /// A forest of chains that occasionally branch.
     fn a_dag() -> impl Strategy<Value = Vec<Envelope>> {
         (1usize..9, proptest::collection::vec(0usize..9, 0..9)).prop_map(|(count, choices)| {
             let mut built: Vec<Envelope> = Vec::new();
@@ -1301,7 +1411,6 @@ mod tests {
         })
     }
 
-    /// How the same objects are split into batches and shuffled.
     fn a_delivery(size: usize) -> impl Strategy<Value = (Vec<usize>, Vec<usize>)> {
         (
             proptest::collection::vec(0..size.max(1), size),
@@ -1309,11 +1418,7 @@ mod tests {
         )
     }
 
-    /// Receive `objects` in the order and batching `delivery` describes, as many
-    /// times as it says, and answer with the set that results.
     fn deliver(objects: &[Envelope], order: &[usize], batches: &[usize]) -> Objects {
-        // A permutation-ish order: every object exactly once, visited through
-        // the generated indices and then swept for whatever was missed.
         let mut seen: BTreeSet<usize> = BTreeSet::new();
         let mut sequence: Vec<usize> = Vec::new();
         for pick in order.iter().copied().chain(0..objects.len()) {
@@ -1339,8 +1444,7 @@ mod tests {
             apply(&mut held, &replay.taken);
             cut += size;
         }
-        // The exchange repeats until it takes nothing, as a replica does: convergence is the
-        // fixpoint, not the first round trip.
+        // The exchange repeats until it takes nothing: convergence is the fixpoint.
         let all: Vec<String> = objects.iter().map(canonical_envelope).collect();
         loop {
             let outcome = placed(&held, &all, &writer);
@@ -1352,7 +1456,6 @@ mod tests {
         held
     }
 
-    /// A tab's acts: which todo, which lifecycle move, which day.
     fn acts() -> impl Strategy<Value = Vec<(usize, usize, u32)>> {
         proptest::collection::vec((0usize..3, 0usize..3, 10u32..20), 1..5)
     }
@@ -1367,7 +1470,6 @@ mod tests {
         .expect("valid")
     }
 
-    /// The box holding `base`, after each post in turn, joined as it joins.
     fn boxed(base: &[Envelope], posts: &[&[String]]) -> Objects {
         let mut held = Objects::default();
         for object in base {
@@ -1384,8 +1486,6 @@ mod tests {
     proptest! {
         /// Sync is set union: the same objects in any order, batching or repetition yield the same
         /// received set and the same fold.
-        ///
-        /// The box writes nothing of its own, so both sides hold exactly the objects posted.
         #[test]
         fn receiving_in_any_order_or_batching_yields_one_store(
             objects in a_dag(),
@@ -1426,8 +1526,7 @@ mod tests {
             prop_assert_eq!(heads(&one), heads(&two));
         }
 
-        /// A box that took two diverged logs in IS their union, object for object, so it folds
-        /// as the union, every field of every row, conflicts included.
+        /// A box that took two diverged logs in IS their union, so it folds as the union.
         #[test]
         fn two_diverged_logs_received_are_their_union(
             shared in a_dag(),

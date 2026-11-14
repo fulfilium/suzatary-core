@@ -168,7 +168,14 @@ fn the_golden_list_is_sorted_and_every_write_is_guarded() {
             line.path
         );
         let asks = match (line.method, line.path) {
-            ("GET", _) | (_, "/api/objects" | "/api/{chain}/objects" | "/api/client-errors") => "-",
+            ("GET", _)
+            | (
+                _,
+                "/api/objects"
+                | "/api/{chain}/objects"
+                | "/api/stores/{store}/objects"
+                | "/api/client-errors",
+            ) => "-",
             (_, "/api/act/key" | "/api/act/pair") => "possession",
             _ => "signed",
         };

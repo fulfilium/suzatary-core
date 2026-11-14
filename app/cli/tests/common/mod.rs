@@ -1,9 +1,5 @@
-//! The shared test harness: fake capabilities, a real server per test over a real
-//! socket (the gate reads `ConnectInfo`), and a six-todo fixture chain.
-//!
-//! Every loopback dial arrives as `127.0.0.1` or `::1`, and the gate caches a whois
-//! answer per address process-wide, so each test file commits `v4` and `v6` to one
-//! fixed resolution for its lifetime.
+//! The shared test harness: fake capabilities, a real server per test over a real socket, and a
+//! six-todo fixture chain. The gate caches a whois answer per loopback address process-wide.
 
 #![allow(dead_code)]
 
@@ -79,10 +75,7 @@ pub fn actor(name: &str) -> Actor {
     Actor::new(name).expect("a roster name")
 }
 
-/// The fixture's one chain, with its roster and trust policy.
-///
-/// One, because the fakes hold one store and a second chain's policy would
-/// have none behind it.
+/// The fixture's one chain, with its roster and trust policy: the fakes hold one store.
 #[must_use]
 pub fn chain() -> suzatary_base::chains::ChainPolicy {
     suzatary_base::chains::ChainPolicy {
@@ -248,10 +241,7 @@ pub fn shift(at: Datetime, days: i64) -> Datetime {
     fpl::datetime_of(fpl::instant_of(at) + Duration::days(days)).expect("in range")
 }
 
-/// A scratch directory unique to this process, thread and call.
-///
-/// The counter, not the thread id, guarantees uniqueness: std does not promise
-/// never to reuse a `ThreadId`, and an earlier test's server may still be reading.
+/// A scratch directory unique to this process, thread and call, by a counter: a `ThreadId` may be reused.
 #[must_use]
 pub fn scratch(name: &str) -> PathBuf {
     static CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -265,21 +255,9 @@ pub fn scratch(name: &str) -> PathBuf {
     root
 }
 
-/// Six todos, each carrying one thing a caller has to get right, with prose from
-/// `CAST`:
-///
-/// 1. `urgent` — a Decay two days from its deadline, body carrying typst
-///    markup (`*permit*`).
-/// 2. `flat` — priced in the middle.
-/// 3. `checklist` — refers to `flat` via `#link("todo:book-flight")`, so
-///    `view::references` has something to resolve.
-/// 4. `resolved` — authored, then completed the next day.
-/// 5. `high`.
-/// 6. `agents` — authored by `triage` (untrusted), body carrying markup too,
-///    sourced from a message so the mail-reverse-index has something to find.
-///
-/// `born` is strictly before every `Authored`, because `chronological` breaks
-/// an `at` tie by canonical print and `"Authored("` sorts before `"Created("`.
+/// Six todos from `CAST`: `urgent` (a Decay near its deadline, markup in its body), `flat`,
+/// `checklist` (links `flat`), `resolved` (completed), `high`, and `agents` (by `triage`, sourced
+/// from a message). `born` is before every `Authored`, since an `at` tie breaks by print.
 #[must_use]
 #[expect(
     clippy::too_many_lines,
@@ -483,9 +461,7 @@ fn bound(ip: IpAddr) -> (std::net::TcpListener, SocketAddr) {
     (listener, address)
 }
 
-/// The one chain these fakes serve (they hold one store), as the box dialled at `address` serves
-/// it: the gate answers only at the deployment's own address, and the daemon names `this_box` as
-/// the box's own node.
+/// The one chain these fakes serve, as the box dialled at `address` serves it.
 fn dialled(
     record: &Effects,
     deploying: Deployment,
@@ -539,9 +515,7 @@ impl Whois for FakeWhois {
     }
 }
 
-/// A settable clock, defaulting to `now()`.
-///
-/// It ticks one microsecond per read, because under a frozen clock a write is
+/// A settable clock, defaulting to `now()`, ticking one microsecond per read so a write is never
 /// invisible to a fold stamped at the same instant.
 pub struct FakeClock {
     base: Mutex<Datetime>,
@@ -987,10 +961,7 @@ impl Gate {
     }
 }
 
-/// A model that answers from a list, one reply per turn, in order.
-///
-/// Verbs are dispatched on this side of the trait, so a scripted reply runs the
-/// real handlers against a real conversation file.
+/// A model that answers from a list, one reply per turn; its verbs run the real handlers.
 #[derive(Default)]
 pub struct FakeModel {
     /// Each ask's reply in order, or the failure it meets instead.
@@ -1302,10 +1273,7 @@ impl SessionModel for FakeModel {
     }
 }
 
-/// A corpus with no maildir behind it, empty unless seeded.
-///
-/// `search` mimics notmuch only as far as the sweep's queries need: `thread:` and
-/// `from:` match a field exactly, and a bare term matches subject or body.
+/// A corpus with no maildir, empty unless seeded; `search` mimics notmuch only as the sweep needs.
 #[derive(Default)]
 pub struct FakeCorpus {
     messages: Vec<FakeMessage>,
@@ -1463,10 +1431,7 @@ impl Manuals for FakeManuals {
     }
 }
 
-/// What a tap would have sent, kept in memory.
-///
-/// Every server this suite starts is wired with one, so no test can reach a
-/// transport.
+/// What a tap would have sent, kept in memory: every server here holds one, so no test reaches a transport.
 #[derive(Default)]
 pub struct Recorder {
     sent: Mutex<Vec<suzatary_core::secretary::proposal::Draft>>,
@@ -1585,10 +1550,7 @@ impl suzatary_core::settings::Checks for CheckRecorder {
     }
 }
 
-/// What a settings write would have set, kept in memory.
-///
-/// It records the value on purpose: the no-read-back rule is about the route's
-/// response, not this recorder.
+/// What a settings write would have set, kept in memory, value included on purpose.
 #[derive(Default)]
 pub struct SecretRecorder {
     calls: Mutex<Vec<(String, String)>>,
@@ -1713,9 +1675,8 @@ impl suzatary_core::settings::Declares for Undeclared {
     }
 }
 
-/// A store over the real [`suzatary_io::secrets::Declarations`], beside a code root whose own
-/// file declares no name, that refuses, as `secretspec` does, to set or clear a name its file
-/// does not declare at that moment, and otherwise records as [`SecretRecorder`] does.
+/// A store over the real secret declarations that refuses a name its file does not declare, and
+/// otherwise records as [`SecretRecorder`] does.
 pub struct DeclaredStore {
     /// What declares its names, which the server's `declares` is.
     pub declarations: suzatary_io::secrets::Declarations,
@@ -2103,12 +2064,8 @@ pub const ROUND_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Poll conversation `id` until `until` holds of it, for at most [`ROUND_WAIT`].
 ///
-/// An act's outcome and its turn are two writes, so `until` must cover
-/// everything the assertions read.
-///
 /// # Panics
-/// If `until` does not hold in time, naming the last reading's state, its last turn, and how
-/// long that reading held still, which tells a stalled round from a slow one.
+/// If `until` does not hold in time, naming the last reading's state.
 pub fn poll_conversation(
     base: &str,
     id: &str,
@@ -2191,9 +2148,7 @@ pub fn answered(body: serde_json::Value) -> suzatary_core::mail::oauth::Answered
     suzatary_core::mail::oauth::Answered { status: 200, body }
 }
 
-/// The whole capability set: real stores over temp directories, so the real file
-/// formats are tested, and fakes for everything that talks to a daemon or
-/// subprocess.
+/// The whole capability set: real stores over temp directories, and fakes for every daemon.
 pub struct Fakes {
     /// The scratch root every store here lives under.
     pub root: PathBuf,
@@ -2282,10 +2237,7 @@ impl Fakes {
         Self::over(root, suzatary_io::objects::Objects::chain(events))
     }
 
-    /// Fakes over a caller-built chain.
-    ///
-    /// Its auxiliary directories get a name distinct from `tag`, because `scratch`
-    /// deletes what it names and would wipe the caller's chain.
+    /// Fakes over a caller-built chain, their other directories named apart from `tag`.
     #[must_use]
     pub fn with_store(tag: &str, events: EventStore) -> Self {
         let root = scratch(&format!("{tag}-aux"));
@@ -2299,9 +2251,7 @@ impl Fakes {
         root: PathBuf,
         chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     ) -> Self {
-        // Every deployment signs: a scene's chain has adopted the cast's root, as a box's first
-        // writer does (its keys registered, its history an epoch), and the owner's phone is
-        // trusted, as `device trust` at the terminal does.
+        // Every deployment signs: the chain adopted the cast's root and trusts the owner's phone.
         suzatary_core::signatures::adopt(&chain, &cast_keys(), &self::chain())
             .expect("the scene adopts its root");
         suzatary_core::signatures::trust(
@@ -2742,11 +2692,7 @@ enum Performer {
     },
 }
 
-/// A test server builder: `new`, then the settings a scene needs, then `start`.
-///
-/// Every effect defaults to a recorder, so nothing in this suite is sent. A
-/// performer's conversation store must be the one `caps` reads, or its appends
-/// and the route's reads would be two different files.
+/// A test server builder: `new`, then a scene's settings, then `start`; every effect defaults to a recorder.
 #[must_use]
 pub struct Server {
     caps: Arc<Fakes>,
@@ -3221,6 +3167,9 @@ impl Server {
             door,
             serve::Signed {
                 requests: Arc::new(requests.clone()),
+                asks: Arc::new(suzatary_io::objects::Objects::open(
+                    held.root.join("secretary-asks"),
+                )),
                 pairings: pairings.clone(),
             },
             serve::Performers { postman, acting },
@@ -3474,9 +3423,7 @@ pub fn get(url: &str) -> ureq::http::Response<ureq::Body> {
     agent().get(url).call().expect("the request completes")
 }
 
-/// A write as the app makes one: the CSRF triple over a JSON body, from a page that keeps the
-/// box's write contract, signed by the owner's [`phone`] with a nonce of its own, so two acts a
-/// test makes alike are two requests.
+/// A write as the app makes one: the CSRF triple over JSON, signed by the owner's [`phone`].
 #[must_use]
 pub fn act(url: &str, body: &serde_json::Value) -> ureq::http::Response<ureq::Body> {
     static DRAWN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -3771,12 +3718,7 @@ fn no_drive() -> suzatary_base::drive_path::DriveFailure {
     suzatary_base::drive_path::DriveFailure::Unreachable("no Drive in this scene".to_owned())
 }
 
-/// A fake Proton Drive CLI script that answers the two reads, logs every call
-/// and exits 99 on anything else, so a write reaching it fails the scene.
-///
-/// `/my-files/Docs` holds `letter.txt` and a folder `Tax`;
-/// `/shared-with-me/Ada Documents` holds `w2.txt`, carrying an SSN, an EIN and a
-/// phone number.
+/// A fake Proton Drive CLI answering the two reads, logging every call and exiting 99 on anything else.
 pub struct FakeDrive {
     /// The scratch directory holding the script, fixtures and call log.
     pub dir: PathBuf,
@@ -4086,10 +4028,7 @@ pub fn replicas(
     (inbox, conversations)
 }
 
-/// One conversation's window as a tab reads it from its replicas, `before`, `limit` and `about`
-/// as the box's query spells them, dressed as the tab dresses it: the memory's words from its
-/// route, each block's HTML from `…/blocks/<sha>`, and a proposal drawn against its chain from
-/// `…/drawn?indices=<n>,…`, every proposal it draws in one read.
+/// One conversation's window as a tab reads and dresses it from its replicas and the box's routes.
 pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Value {
     let asked = |key: &str| {
         query

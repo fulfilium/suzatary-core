@@ -24,8 +24,6 @@ const required = (name: string): string => {
 const BASE = required("E2E_BASE_LINES")
 const INSTANCE = required("E2E_LINES_INSTANCE")
 const RUNS = Number(process.env["SUZATARY_WRITEWAIT_RUNS"] ?? "7")
-// The actor the lines' server maps its writer login to (`fixture.rs`, `WRITER_ACTOR`).
-const ACTOR = "ada"
 
 const hex = (bytes: ArrayBuffer): string => Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("")
 
@@ -66,19 +64,9 @@ const timed = async (name: string, act: (n: number) => Promise<number>): Promise
 
 const frontier = async (path: string): Promise<string> => ((await get(path)) as { frontier: { digest: string } }).frontier.digest
 
-// A topic alias as the core prints one (`secretary::topics`, `Aliased(topic, at, actor, to)`), resting on nothing: each run
-// renames a topic no earlier run named, so its register's frontier is empty.
-const aliased = (genesis: string, from: string, to: string): string => {
-  const d = new Date()
-  const at = `datetime(${d.getUTCFullYear()}, ${d.getUTCMonth() + 1}, ${d.getUTCDate()}, ${d.getUTCHours()}, ${d.getUTCMinutes()}, ${d.getUTCSeconds()}, ${d.getUTCMilliseconds() * 1000 + 1})`
-  return `Change(genesis='${genesis}', deps=(), event=Aliased(topic='${from}', at=${at}, actor='${ACTOR}', to='${to}'))`
-}
-
 const device = await keyed()
 atTheTerminal(["device", "trust", device.public], INSTANCE)
 
-const aliases = (await get("/api/stores/topic-aliases/objects")) as { geneses: readonly string[] }
-const aliasGenesis = aliases.geneses[0] ?? ""
 const opened = (await post(device, "/api/secretary/conversations", { title: "" })).json as { id: string }
 const conversation = `/api/secretary/conversations/${encodeURIComponent(opened.id)}`
 const linesSince = await frontier("/api/stores/lines/skeleton")
@@ -90,8 +78,6 @@ const results: Timed[] = [
   await timed("open a conversation", async () => (await post(device, "/api/secretary/conversations", { title: "" })).status),
   await timed("say (202, before the round runs)", async (n) => (await post(device, `${conversation}/say`, { say: `measured question ${n}`, references: [], attachments: [] })).status),
   await timed("rename a conversation", async (n) => (await post(device, `${conversation}/title`, { title: `Measured ${n}` })).status),
-  await timed("rename a topic (topic-aliases objects)", async (n) =>
-    (await post(device, "/api/stores/topic-aliases/objects", { objects: [aliased(aliasGenesis, `measured-${Date.now()}-${n}`, `renamed-${n}`)], since: "" })).status),
   // Every tenth bulk proposal stands (`fixture.rs`, `bulk_proposals`): an email card, recorded and not sent by the fixture.
   await timed("tap an email card", async (n) => (await post(device, `/api/secretary/conversations/bulk-proposals/proposals/${n * 10}/tap`, { note: "" })).status),
   await timed("dismiss a card", async (n) => (await post(device, `/api/secretary/conversations/bulk-proposals/proposals/${n * 10 + 100}/dismiss`, { reason: "measured" })).status),

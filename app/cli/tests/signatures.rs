@@ -1,9 +1,6 @@
 //! Who wrote an object, over a real server (SPEC law 42): a device's objects are refused until a
-//! tap from a device already trusted trusts its key, a revoked key's are refused after, and what
-//! it signed before still reads.
-//!
-//! `v4` is the writer `ada@example.com`; both "devices" post from it, as a new phone on the same
-//! login does, which is exactly why the login cannot be what trusts a key.
+//! trusted device's tap trusts its key, a revoked key's after, and what it signed before still
+//! reads. Both "devices" post from one login, which is why a login cannot be what trusts a key.
 
 mod common;
 
@@ -241,8 +238,7 @@ fn a_revoked_key_is_refused_and_its_earlier_objects_still_read() {
 }
 
 /// A route the box performs for a device is held to the same door: a revoked phone, an unsigned
-/// request, a body changed after it was signed and a key nobody trusted are all refused before
-/// any work, so no write reaches a chain through the box that would not reach it as an object.
+/// request, a body changed after signing and an untrusted key are refused before any work.
 #[test]
 fn a_box_route_is_held_to_the_key_that_asked() {
     let phone = seed('1');
@@ -297,9 +293,7 @@ fn a_box_route_is_held_to_the_key_that_asked() {
     assert_eq!((status, why.contains("revoked")), (410, true), "{why}");
 }
 
-/// A read signed by a revoked key is answered with the wipe, and nothing else is: a trusted
-/// key's signed read, an unsigned read and a read whose signature does not verify are read as
-/// before.
+/// A read signed by a revoked key is answered with the wipe, and nothing else is.
 #[test]
 fn a_read_signed_by_a_revoked_key_is_answered_with_the_wipe() {
     let phone = seed('1');
@@ -344,9 +338,8 @@ fn a_read_signed_by_a_revoked_key_is_answered_with_the_wipe() {
     );
 }
 
-/// The browser suite's servers resolve the fixture's seeds from the environment, which
-/// `scripts/web-e2e.sh` exports: the two spellings are one pair, or every fixture server would
-/// refuse to start for a root it cannot sign as.
+/// The browser suite's servers resolve the fixture's seeds from the environment: the two
+/// spellings are one pair.
 #[cfg(feature = "fixture")]
 #[test]
 fn the_e2e_script_exports_the_fixtures_own_seeds() {
@@ -762,11 +755,9 @@ impl Replaying {
     }
 }
 
-/// A REQUEST IS PERFORMED ONCE: each route the box performs for a device, sent again with the
-/// same name (a capture replayed), is answered from its record, marked as a replay, with the same
-/// status and the first body's digest in place of the body, and its effect is not repeated. Every first call here succeeds, so each
-/// replay shows a performed effect not done twice: here the secretary's routes, the secret a
-/// card's tap sets, the turn, the round asked again and the edit each once.
+/// A REQUEST IS PERFORMED ONCE: each route sent again with the same name is answered from its
+/// record, marked as a replay, with the same status and a digest in place of the body, and its
+/// effect is not repeated.
 #[test]
 fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     let r = replaying("signatures-replay");
@@ -951,30 +942,6 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
             serde_json::json!({ "title": MARKER })
         }
         "secretary/conversations/{conversation}/erase" => serde_json::json!({ "turns": [0] }),
-        // A topic whose name is the marker, over a prodrome the box does not hold: refused by name,
-        // and still a request performed.
-        "stores/{store}/objects" => {
-            let added = prodrome_core::tags::membership::added::<
-                suzatary_core::secretary::topics::reading::Topics,
-            >(
-                "round:default/0"
-                    .parse::<suzatary_base::topic_target::Target>()
-                    .expect("a target"),
-                suzatary_core::secretary::topics::topic::Topic::new(MARKER)
-                    .expect("the marker is a topic"),
-                prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
-                common::actor("ada"),
-            );
-            let change = prodrome_core::change::mk_change(
-                prodrome_core::event::Hash::new("a".repeat(64)).expect("a name"),
-                Vec::new(),
-                added,
-            )
-            .expect("a change");
-            serde_json::json!({ "objects": [prodrome_core::event::canonical_envelope(
-                &prodrome_core::event::Envelope::Change(change)
-            )] })
-        }
         "secretary/conversations/{conversation}/say"
         | "secretary/conversations/{conversation}/edit" => serde_json::json!({ "say": MARKER }),
         "secretary/conversations/{conversation}/proposals/{index}/tap" => {
@@ -1054,12 +1021,9 @@ fn private_model() -> common::FakeModel {
     ])
 }
 
-/// THE PUSHED RECORD IS PROVENANCE ONLY. Every route that asks a signature is sent a body it
-/// performs, carrying a secret's value or a marker wherever it takes words; a fact is remembered
-/// and another forgotten (the answer lists the standing fact's words), and a secret card tapped
-/// with the value. Then no file the push would carry holds a byte of any body or answer, any
-/// body's digest or the requests' nonce, no store the box keeps holds the value, no record and body sent recompute the request's name,
-/// and each record holds exactly the provenance fields.
+/// THE PUSHED RECORD IS PROVENANCE ONLY: after every signed route is sent a body carrying a
+/// secret's value or a marker, no pushed file holds a byte of any body, answer, digest or nonce,
+/// no store holds the value, and each record holds exactly the provenance fields.
 #[test]
 fn a_pushed_request_record_holds_nothing_said_either_way() {
     let r = replaying_with("signatures-private", private_model());
@@ -1171,9 +1135,8 @@ fn id_in(route: &str) -> &'static str {
     }
 }
 
-/// No pushed record holds a byte of anything sent or answered, no store the box keeps holds
-/// the value, and no answer kept for a replay holds a word any answer carried (law: a replay
-/// answer is a status and a digest): every route was sent the value wherever it takes one.
+/// No pushed record holds a byte of anything sent or answered, no store holds the value, and a
+/// replay's answer is a status and a digest.
 fn nothing_kept(r: &Replaying, sent: &Sent) {
     provenance_only(
         &common::requests_dir(r.running.port()),
@@ -1254,10 +1217,8 @@ fn a_request_outside_the_window_or_unstamped_is_refused() {
     );
 }
 
-/// How long the door's reading takes as a chain grows: read cold (the objects read, the history
-/// built, every signature checked), then as the door reads it after one new write (the chain
-/// moved by one signed change), and again unmoved. A measurement, run by name with `--ignored
-/// --nocapture`.
+/// How long the door's reading takes as a chain grows: cold, after one new write, and unmoved.
+/// A measurement, run by name with `--ignored --nocapture`.
 #[test]
 #[ignore = "a measurement, not a law"]
 fn the_door_s_reading_by_chain_size() {

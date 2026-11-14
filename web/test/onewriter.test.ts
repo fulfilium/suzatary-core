@@ -6,7 +6,7 @@
 // ciphertext of a line every slot of which is erased, a join the page or another tab sends after the erase writes
 // nothing back, and a reload brings none back.
 
-import { test } from "node:test"
+import { after, test } from "node:test"
 import assert from "node:assert/strict"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
@@ -84,7 +84,7 @@ const objectsOf = (objects: readonly StoredObject[], since: string): StorePayloa
 }
 
 // The box as `fetch` reaches it, serving its lines before the erasure or after it (the answers queued first, then the
-// whole store), its inbox, and two topic stores holding nothing.
+// whole store), its inbox, and the two topic stores and the asks holding nothing.
 let erased = false
 const queued: (SkeletonPayload | "Down")[] = []
 // Each answer tagged, as the box tags its reads, so a read this module may keep is kept.
@@ -98,7 +98,7 @@ Object.assign(globalThis, {
       const next = queued.shift() ?? (erased ? box.skeleton : before)
       return next === "Down" ? new Response("", { status: 503 }) : json(next)
     }
-    const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1]
+    const store = /^\/api\/stores\/(inbox|topics|topic-aliases|asks)\/objects$/.exec(url.pathname)?.[1]
     if (store !== undefined) return json(objectsOf(store === "inbox" ? inbox : [], url.searchParams.get("since") ?? ""))
     if (url.pathname === "/api/stores/lines/content") {
       const hashes = (url.searchParams.get("hashes") ?? "").split(",")
@@ -107,6 +107,9 @@ Object.assign(globalThis, {
     return new Response("", { status: 404 })
   },
 })
+
+// Every worker made, settled once the test ends.
+const made: { readonly ask: <K extends questions.Kind>(q: questions.Of<K>) => Promise<questions.Answer<K>> }[] = []
 
 // A worker over the device, every message it sends kept printed, and the page's blocks over it.
 const worker = () => {
@@ -122,8 +125,17 @@ const worker = () => {
     join: pairs => ask({ type: "KeepBlocks", pairs }),
     usage: () => ask({ type: "BlocksUsage" }),
   })
+  made.push({ ask })
   return { ask, posted, page }
 }
+
+// Each worker pulled whole with the box answering, which stops its retries, then hidden, which compacts and stops its
+// quiet timer: either timer left running keeps this file's process alive, whether the law held or not.
+after(async () => {
+  queued.length = 0
+  for (const w of made) await w.ask({ type: "Pull" })
+  for (const w of made) await w.ask({ type: "Shown", on: false })
+})
 
 // The conversation read through the worker, as the page reads it.
 const read = async (w: ReturnType<typeof worker>): Promise<void> => {

@@ -1,34 +1,32 @@
 use prodrome_core::event::Actor;
-use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
+use prodrome_core::sign::{PublicKey, Signature, Signed};
 
-use super::{Requested, Trust, Unproven, WINDOW_SECONDS, body_digest, is_nonce, request_name};
+use super::{Requested, Trusting, Unproven, WINDOW_SECONDS, body_digest, is_nonce, request_name};
 use suzatary_base::refusal::Refusal;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::{Prodrome, StoreError};
 
-/// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it: the parts its name is the hash of,
-/// the body read whole, and the key and signature it names, absent where it was not signed.
+/// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it; key and signature absent where unsigned.
 #[derive(Debug, Clone, Copy)]
 pub struct Request<'a> {
-    /// The method it asked with.
+    /// Its method.
     pub method: &'a str,
-    /// The path and query it asked at.
+    /// Its path and query.
     pub target: &'a str,
-    /// The instant its device stamped on it, RFC 3339.
+    /// Its device's instant, RFC 3339.
     pub at: Option<&'a str>,
-    /// The nonce its device drew for it.
+    /// Its nonce.
     pub nonce: Option<&'a str>,
     /// The body, whole.
     pub body: &'a [u8],
     /// The device key it names.
     pub key: Option<&'a str>,
-    /// Its signature of the request's name.
+    /// The signature of its name.
     pub signature: Option<&'a str>,
 }
 
-/// A request named by its content, signed by the key it names, stamped within the window of the
-/// box's clock, and written as the gate's actor. [`Asking::possessed`] or [`Asking::trusted`]
-/// consumes it.
+/// A request named by its content, signed by the key it names, stamped within the window and
+/// written as the gate's actor.
 #[derive(Debug)]
 pub struct Asking {
     record: Requested,
@@ -36,17 +34,12 @@ pub struct Asking {
     actor: Actor,
 }
 
-/// A request whose signature verifies under the key it names: a device showing it holds the key
-/// it asks to have trusted, and nothing more.
+/// A request whose signature verifies under the key it names, and nothing more.
 #[derive(Debug)]
 pub struct Possessed(Proven);
 
-/// A request signed by a key the history trusts for its actor on every chain the route can
-/// write: the only proof a route that acts for the owner may hold, and the one a
-/// [`crate::signatures::Tap`] is minted from.
-///
-/// It has no constructor but [`Asking::trusted`], which reads the trust, so holding one is the
-/// proof that reading passed.
+/// A request signed by a key every chain the route can write trusts for its actor: the only
+/// proof a route acting for the owner may hold. Only [`Asking::trusted`] makes one.
 ///
 /// ```compile_fail
 /// let forged = suzatary_core::signatures::Trusted(todo!());
@@ -54,7 +47,7 @@ pub struct Possessed(Proven);
 #[derive(Debug)]
 pub struct Trusted(Proven);
 
-/// What a proven request carries: its record, the key that signed it and the actor it writes as.
+/// What a proven request carries.
 #[derive(Debug, Clone)]
 pub struct Proven {
     record: Requested,
@@ -63,9 +56,8 @@ pub struct Proven {
 }
 
 impl Asking {
-    /// The request as the door reads it, written as `actor`, the gate's: refused when it carries
-    /// no instant, nonce, key or signature, when its instant is not one or lies outside
-    /// [`WINDOW_SECONDS`] of `now`, both read in UTC, or when its key or signature is malformed.
+    /// The request as the door reads it, written as `actor`: refused when unsigned, stamped
+    /// outside [`WINDOW_SECONDS`] of `now`, or malformed.
     ///
     /// # Errors
     /// The door's refusal, in its words.
@@ -139,32 +131,23 @@ impl Asking {
         }
     }
 
-    /// The request, its key trusted for its actor on every one of `chains`, each read under
-    /// `root`.
+    /// The request, its key trusted for its actor on every one of `chains` under `root`.
     ///
     /// # Errors
-    /// Why not, from the first chain that does not trust it; no chains at all trust nothing.
+    /// Why not, as [`Trusting::admits`] says it.
     pub fn trusted(
         self,
         chains: &[&dyn Prodrome<TodoEvent>],
         root: &PublicKey,
     ) -> Result<Trusted, Unproven> {
-        let untrusted = || Unproven::Untrusted {
+        let trusting = Trusting::held(chains, root).map_err(|_| Unproven::Untrusted {
             key: self.signed.key.clone(),
-        };
-        if chains.is_empty() {
-            return Err(untrusted());
-        }
-        let roots = Registrar::Roots([root.clone()].into_iter().collect());
-        for chain in chains {
-            let trust = Trust::held(*chain, &roots).map_err(|_| untrusted())?;
-            trust.admits(trust.home(), &self.actor, &self.signed)?;
-        }
+        })?;
+        trusting.admits(&self.actor, &self.signed)?;
         Ok(Trusted(self.proven()))
     }
 
-    /// [`Unproven::Revoked`] where any of `chains` revoked the key for its actor; asked only where
-    /// the signature verifies, since a request naming a key it does not hold proves nothing.
+    /// [`Unproven::Revoked`] where any of `chains` revoked the key; asked only of a verifying signature.
     ///
     /// # Errors
     /// A chain unreadable.
@@ -176,16 +159,7 @@ impl Asking {
         if !self.signed.verifies() {
             return Ok(None);
         }
-        let roots = Registrar::Roots([root.clone()].into_iter().collect());
-        for chain in chains {
-            let trust = Trust::held(*chain, &roots)?;
-            match trust.admits(trust.home(), &self.actor, &self.signed) {
-                Err(why @ Unproven::Revoked { .. }) => return Ok(Some(why)),
-                Ok(())
-                | Err(Unproven::Unsigned | Unproven::Forged | Unproven::Untrusted { .. }) => {}
-            }
-        }
-        Ok(None)
+        Ok(Trusting::held(chains, root)?.revoked(&self.actor, &self.signed))
     }
 
     fn proven(self) -> Proven {
@@ -198,7 +172,7 @@ impl Asking {
 }
 
 impl Proven {
-    /// The record the box keeps of it once performed.
+    /// The record the box keeps once performed.
     #[must_use]
     pub fn record(&self) -> &Requested {
         &self.record
@@ -210,7 +184,7 @@ impl Proven {
         &self.device
     }
 
-    /// The actor it writes as, the gate's.
+    /// The gate's actor.
     #[must_use]
     pub fn actor(&self) -> &Actor {
         &self.actor
@@ -233,8 +207,7 @@ impl Trusted {
     }
 }
 
-/// The door's refusal of a request its signature does not prove: a revoked key's is the wipe,
-/// on which the tab deletes what it holds; every other a 403.
+/// The door's refusal of an unproven request: the wipe for a revoked key, else a 403.
 #[must_use]
 pub fn refused(why: &Unproven) -> Refusal {
     let said = format!("this request's signature does not prove it: {}", why.said());

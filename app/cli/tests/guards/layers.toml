@@ -38,7 +38,7 @@ rendering = [
 ]
 
 [layers.modules]
-signatures = ["cast", "believed", "chain_set", "devices", "epoch", "signatures", "sync",
+signatures = ["cast", "believed", "chain_set", "devices", "epoch", "receipt", "signatures", "sync",
   "wire/signatures"]
 todo = ["authoring", "decisions", "priced", "reading", "release", "render", "render_cache",
   "rendering", "template", "todos", "verb", "view", "wire/todo"]
@@ -88,4 +88,4 @@ cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build",
   "secretary/merged_patches", "secretary/noticed", "secretary/request", "secretary/undo",
   "settings/overview", "wire/cards"]
 secretary = ["agent", "conversation", "secretary"]
-api = ["secretary/live_shape", "stores", "wire"]
+api = ["asks", "secretary/live_shape", "stores", "wire"]

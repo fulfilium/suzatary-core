@@ -5,6 +5,6 @@ import type { StoreName } from "../wire/generated/wire"
 
 export namespace stores {
   export type Name = StoreName
-  export const NAMES: readonly Name[] = ["inbox", "lines", "topics", "topic-aliases"]
+  export const NAMES: readonly Name[] = ["inbox", "lines", "topics", "topic-aliases", "asks"]
 }
 export default stores

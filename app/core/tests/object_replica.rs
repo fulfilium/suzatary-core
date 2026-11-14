@@ -395,3 +395,138 @@ proptest! {
         prop_assert_eq!(landed, whole, "after {:?}", steps);
     }
 }
+
+/// A topic store's objects, parents first: a genesis, then `n` writes of the owner's, each
+/// putting a topic on one of three rounds or taking it off, so writes to one round rest on each
+/// other and writes to another do not.
+fn written(n: usize) -> Vec<Object> {
+    let memberships: MemoryStore<MembershipEvent> = MemoryStore::default();
+    let aliases: MemoryStore<AliasEvent> = MemoryStore::default();
+    begin(&memberships);
+    begin(&aliases);
+    let owner = suzatary_core::secretary::topics::provenance::Owner::new(
+        prodrome_core::event::Actor::new("ada").expect("an actor"),
+    )
+    .expect("not the secretary");
+    let topic = Topic::new("travel").expect("a topic");
+    for i in 0..n {
+        let reading = read(&memberships, &aliases);
+        let at = Datetime::new(2026, 11, 3, 10, u32::try_from(i).expect("small"), 0, 0)
+            .expect("an instant");
+        let target = Target::Round {
+            conversation: ConversationId::new("default").expect("a slug"),
+            turn: i % 3,
+        };
+        let events = if reading.tags(&target).contains(&topic) {
+            reading.remove(&target, &topic, at, &owner)
+        } else {
+            reading
+                .add(&target, &topic, at, &owner)
+                .into_iter()
+                .collect()
+        };
+        for event in events {
+            memberships.append(event).expect("appended");
+        }
+    }
+    let held = memberships.held().expect("held");
+    held.dag
+        .linearise()
+        .expect("a closed set linearises")
+        .into_iter()
+        .map(|name| {
+            let print = canonical_envelope(held.dag.get(&name).expect("held"));
+            Object::read::<MembershipEvent>(&MembershipVocabulary::default(), print)
+        })
+        .collect()
+}
+
+/// `refused` and everything among `own` resting on one of them.
+fn resting_on<'o>(own: &'o [Object], refused: &BTreeSet<Hash>) -> BTreeSet<&'o Hash> {
+    let mut out: BTreeSet<&Hash> = own
+        .iter()
+        .map(Node::name)
+        .filter(|n| refused.contains(*n))
+        .collect();
+    loop {
+        let more: Vec<&Hash> = own
+            .iter()
+            .filter(|o| !out.contains(o.name()) && o.rests_on().iter().any(|p| out.contains(p)))
+            .map(Node::name)
+            .collect();
+        if more.is_empty() {
+            return out;
+        }
+        out.extend(more);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// THE ROLLBACK LAW. For a replica of a topic store holding the box's first `held` objects
+    /// and its own later writes, and any set F of those writes the asks store refuses, the
+    /// replica's standing objects with F refused are its standing objects had it never written
+    /// F or anything resting on F. A refusal of another store's object, or of an object the
+    /// replica did not write, moves nothing, and the replica's refusals name F exactly.
+    #[test]
+    fn law_a_refusal_in_the_asks_takes_back_what_rests_on_it(
+        n in 1usize..9,
+        held in 1usize..10,
+        refusing in prop::collection::vec(any::<bool>(), 9),
+        noise in any::<bool>(),
+    ) {
+        use suzatary_core::stores::Kind;
+        let all = written(n);
+        let held = held.min(all.len());
+        let own: Vec<Object> = all[held..].to_vec();
+        let f: BTreeSet<Hash> = own
+            .iter()
+            .zip(&refusing)
+            .filter(|(_, r)| **r)
+            .map(|(o, _)| o.name().clone())
+            .collect();
+
+        let asks: MemoryStore<suzatary_core::asks::AskEvent> = MemoryStore::default();
+        begin(&asks);
+        let at = Datetime::new(2026, 11, 3, 11, 0, 0, 0).expect("an instant");
+        let refuse = |name: &Hash, store: Kind| {
+            asks.append(suzatary_core::receipt::refused(
+                name.clone(),
+                at,
+                suzatary_core::asks::keeper(),
+                store,
+                "rests on what this box does not hold".to_owned(),
+            ))
+            .expect("appended");
+        };
+        for name in &f {
+            refuse(name, Kind::Topics);
+        }
+        if noise {
+            refuse(&Hash::new("e".repeat(64)).expect("a name"), Kind::Topics);
+            if let Some(o) = own.first() {
+                refuse(o.name(), Kind::TopicAliases);
+            }
+        }
+        let recorded = asks.held().expect("held");
+        let refusals = suzatary_core::receipt::refusals(recorded.dag.objects(), &Kind::Topics);
+
+        let landed = |own: Vec<Object>| {
+            let mut replica = Objects::default();
+            replica.piece(said(&all, held, 1, 1), 1);
+            replica.land();
+            replica.write(own);
+            replica
+        };
+        let mut refused = landed(own.clone());
+        refused.refused(refusals);
+        let gone = resting_on(&own, &f);
+        let never = landed(own.iter().filter(|o| !gone.contains(o.name())).cloned().collect());
+
+        let names = |r: &Objects| -> BTreeSet<Hash> { r.standing().iter().map(|o| o.name().clone()).collect() };
+        prop_assert_eq!(names(&refused), names(&never));
+        let told: BTreeSet<Hash> = refused.refusals().iter().map(|(o, _)| o.name().clone()).collect();
+        prop_assert_eq!(told, f);
+    }
+}

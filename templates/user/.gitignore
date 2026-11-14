@@ -33,6 +33,9 @@
 /secretary-topics/
 /secretary-topic-aliases/
 
+# The box's refusals of what a tab posted: a reason may quote a topic.
+/secretary-asks/
+
 # The cache tier: the plugins' stores, rebuilt by syncing again.
 /cache/
 

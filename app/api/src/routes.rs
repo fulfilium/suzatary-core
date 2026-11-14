@@ -1,7 +1,5 @@
-//! The routes as functions: each takes the capabilities it needs and the URL's parameters and
-//! answers a wire type or a [`Refusal`], with nothing known about HTTP.
-//!
-//! The bounds are the point: a route that cannot name a capability cannot use it.
+//! The routes as functions of the capabilities they need, with nothing known about HTTP: a route
+//! that cannot name a capability cannot use it.
 
 use std::collections::BTreeMap;
 use suzatary_core::secretary::conversations;
@@ -40,8 +38,7 @@ use suzatary_core::{mail, reading};
 use suzatary_store::store::Prodrome;
 use suzatary_store::wire::store::SinceRead;
 
-/// Every head, sorted: what a replica compares against and asks `since=` by, with no one of
-/// them picked, since no writer needs a single head.
+/// Every head, sorted, with none of them picked.
 pub(crate) fn head_set<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
 ) -> Result<Vec<String>, Refusal> {
@@ -57,11 +54,7 @@ fn names(set: &std::collections::BTreeSet<prodrome_core::event::Hash>) -> Vec<St
     set.iter().map(|h| h.as_str().to_owned()).collect()
 }
 
-/// Every object in linearisation order with its hash, parents and canonical literal, so the
-/// browser rehashes rather than believes.
-///
-/// `untrusted` is the deployment's trust policy, sent because the browser folds these objects
-/// offline with the same core.
+/// Every object in linearisation order, and `untrusted`, so the browser folds as the box does.
 pub fn chain(store: &dyn Prodrome<TodoEvent>, chain: &ChainPolicy) -> Answered<wire::ChainPayload> {
     let objects = store.objects()?;
     Ok(wire::ChainPayload {
@@ -86,11 +79,8 @@ pub fn tip(store: &dyn Prodrome<TodoEvent>) -> Answered<wire::TipPayload> {
     })
 }
 
-/// Every todo the chain has mentioned, as the folds see it at `t`; `limit` selects the most
-/// owed, ascending.
-///
-/// It reads the chain's name and trust policy alone, so the tab, which holds no root key, answers
-/// it from its replica as the box does.
+/// Every todo the chain has mentioned, at `t`; `limit` keeps the most owed. It reads the chain's
+/// name and policy alone, so the tab answers it as the box does.
 pub fn fold(
     render: &dyn Render,
     name: &ChainName,
@@ -120,8 +110,7 @@ pub fn fold(
     })
 }
 
-/// The chain `name` as the set read it: its objects by name, its nodes and its rows, each priced through
-/// the whole set.
+/// The chain `name` as the set read it, each row priced through the whole set.
 #[allow(clippy::type_complexity)]
 fn rows<'s>(
     set: &'s ChainSet<'_>,
@@ -150,8 +139,7 @@ fn not_a_member(failure: suzatary_core::chain_set::NotAMember) -> Refusal {
     }
 }
 
-/// The `n` open todos most in need of attention, ascending in the fold's own `value`; ties
-/// keep the fold's order.
+/// The `n` open todos most in need of attention, ascending; ties keep the fold's order.
 fn most_owed(entries: Vec<Entry>, n: usize) -> Vec<Entry> {
     let mut owed: Vec<(f64, Entry)> = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -168,8 +156,7 @@ fn most_owed(entries: Vec<Entry>, n: usize) -> Vec<Entry> {
     owed.into_iter().map(|(_, entry)| entry).collect()
 }
 
-/// One todo in full, with the routine "Build it" fires for it ([`Deployment::builder`]); an id no
-/// event mentions is a 404, not an empty page.
+/// One todo in full, with the routine "Build it" fires for it; an unmentioned id is a 404.
 pub fn todo(
     render: &dyn Render,
     chain: &ChainPolicy,
@@ -254,7 +241,7 @@ pub fn tree(
     })
 }
 
-/// Every day the assistant has saved a briefing for, newest first.
+/// The saved briefings' days, newest first.
 pub fn briefings(
     briefings: &dyn Briefings,
     conversations: suzatary_core::secretary::conversations::Conversations<'_>,
@@ -294,7 +281,7 @@ pub fn briefings(
     })
 }
 
-/// The first `= …` heading's text, or the date when the file has none, without a compile.
+/// The first `= …` heading's text, else the date, without a compile.
 fn briefing_title(source: &str, day: NaiveDate) -> String {
     source
         .lines()
@@ -305,8 +292,7 @@ fn briefing_title(source: &str, day: NaiveDate) -> String {
         .map_or_else(|| day.to_string(), str::to_owned)
 }
 
-/// One day's briefing: that day's secretary brief rendered block by block, else the saved
-/// file, which renders unconditionally because `briefings/` is trusted by convention.
+/// One day's briefing: the secretary's brief by block, else the saved file.
 pub fn briefing(
     briefings: &dyn Briefings,
     render: &dyn Render,
@@ -346,8 +332,7 @@ pub fn briefing(
     })
 }
 
-/// The account filter resolved against the roster; an unknown address is a refusal, never an
-/// empty inbox.
+/// The account filter resolved against the roster; an unknown address is a refusal.
 fn account<'a>(mail: &dyn Mailbox, named: Option<&'a str>) -> Answered<Option<&'a str>> {
     let Some(name) = named.filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -364,7 +349,7 @@ fn account<'a>(mail: &dyn Mailbox, named: Option<&'a str>) -> Answered<Option<&'
     }
 }
 
-/// The most recent inbox mail by date, not the agent's queue, with its disposition as a badge.
+/// The newest inbox mail by date, the agent's disposition a badge.
 pub fn inbox(
     mail: &dyn Mailbox,
     named: Option<&str>,
@@ -401,8 +386,7 @@ pub fn search(
     })
 }
 
-/// A message id: a notmuch locator or a canonical hash prefix, excluding notmuch query syntax
-/// because it is interpolated into a query.
+/// A message id: a notmuch locator or a hash prefix, never query syntax, since it is interpolated.
 fn check_mail_id(value: &str) -> Answered<&str> {
     let shaped = (4..=320).contains(&value.chars().count())
         && value
@@ -433,7 +417,7 @@ fn check_thread_id(value: &str) -> Answered<&str> {
     }
 }
 
-/// One message: headers, body text, links, conversation, and the todos it produced.
+/// One message, and the todos it produced.
 pub fn message(
     mail: &dyn Mailbox,
     render: &dyn Render,
@@ -456,8 +440,7 @@ pub fn message(
     })
 }
 
-/// What a message no longer kept reads as: the words, with the subject and sender a todo
-/// citing it recorded.
+/// A message no longer kept: the words a citing todo recorded.
 fn gone(chain: &ChainPolicy, set: &ChainSet<'_>, id: &str) -> Result<String, Refusal> {
     let (by_hash, _, rows) = rows(set, &chain.name)?;
     let source = rows.iter().find_map(|row| {
@@ -475,7 +458,7 @@ fn gone(chain: &ChainPolicy, set: &ChainSet<'_>, id: &str) -> Result<String, Ref
     .said())
 }
 
-/// One conversation, oldest first; 404 when the corpus knows no such thread.
+/// One conversation, oldest first.
 pub fn thread(
     mail: &dyn Mailbox,
     render: &dyn Render,
@@ -511,8 +494,7 @@ pub fn thread(
     })
 }
 
-/// Every todo whose latest `Authored` names this message, one-directional since the chain
-/// stores a hash prefix.
+/// Every todo whose latest `Authored` names the message.
 fn todos_from(
     render: &dyn Render,
     chain: &ChainPolicy,
@@ -532,7 +514,7 @@ fn todos_from(
         .collect())
 }
 
-/// Every confirmed markup fragment on the chain worth compiling at `now`.
+/// The chain's confirmed markup worth compiling at `now`.
 pub fn warmable(
     store: &dyn Prodrome<TodoEvent>,
     untrusted: &Untrusted,
@@ -547,7 +529,7 @@ pub fn now(clock: &dyn Clock) -> Datetime {
     clock.now()
 }
 
-/// What every pull records beside its answer: each store's epoch, and the frontiers it answered.
+/// What a pull records beside its answer.
 #[derive(Clone, Copy)]
 pub struct Books<'a> {
     /// Each store's epoch.
@@ -556,8 +538,7 @@ pub struct Books<'a> {
     pub frontiers: &'a prodrome_core::store::frontier::Frontiers,
 }
 
-/// `GET /api/objects?since=<frontier>`: the objects the frontier `since` names does not reach,
-/// all of them for a frontier this box does not hold.
+/// `GET /api/objects?since=<frontier>`: the objects the frontier does not reach.
 ///
 /// # Errors
 /// The store's own, and the books'.
@@ -591,23 +572,18 @@ pub fn objects_since(
 /// How much of what a caller lacks one answer carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cut {
-    /// All of it, as a chain's pull answers.
+    /// All of it.
     Whole,
-    /// The longest run of it, parents first, whose literals fit this many bytes, and never
-    /// less than one object: a piece of a store's pull, which a tab takes in and keeps before it
-    /// asks for the next from its new heads.
+    /// The longest run, parents first, whose literals fit this many bytes; at least one object.
     Bytes(usize),
 }
 
 impl Cut {
-    /// A piece of a store's pull: a megabyte of literals, about six seconds at 1.5 Mbps, well
-    /// under the thirty a tab waits for a read (`web/src/wire/http.ts`).
+    /// A megabyte of literals, well under a tab's read timeout.
     pub const PIECE: Cut = Cut::Bytes(1 << 20);
 }
 
-/// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica of `store` lacks, cut as
-/// `cut` says, parents first, with every head and how many objects are left. The pieces asked for
-/// one after another, each from the frontier the last named, are together one answer of the whole.
+/// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica lacks, cut by `cut`.
 ///
 /// # Errors
 /// The store's own, and the books'.
@@ -621,8 +597,7 @@ pub fn store_objects_since<E: suzatary_core::stores::Store>(
     store_answer(store, since, books, now, cut).map(|(payload, _, _)| payload)
 }
 
-/// [`store_objects_since`], with the names of the objects it sends and the graph it read them
-/// from.
+/// [`store_objects_since`], with its names and graph.
 fn store_answer<E: suzatary_core::stores::Store>(
     store: &dyn Prodrome<E>,
     since: &prodrome_core::store::frontier::Since,
@@ -663,7 +638,7 @@ fn store_answer<E: suzatary_core::stores::Store>(
     ))
 }
 
-/// One object as a replica carries it, weighed by its literal's bytes.
+/// One object, weighed by its literal's bytes.
 fn stored<E: prodrome_core::schema::Schema>(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<E>,
@@ -679,8 +654,7 @@ fn stored<E: prodrome_core::schema::Schema>(
     )
 }
 
-/// What a store held at one answer, in the epoch it was read in, how it read `since`, and the
-/// frontier the asker holds once it has taken the answer.
+/// What a store held at one answer.
 struct Snapshot {
     heads: Vec<String>,
     geneses: Vec<String>,
@@ -690,7 +664,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    /// An objects answer of these objects, read under no policy: the caller's.
+    /// An objects answer, under the caller's policy.
     fn payload(self, objects: Vec<StoredObject>) -> ObjectsPayload {
         ObjectsPayload {
             heads: self.heads,
@@ -705,8 +679,7 @@ impl Snapshot {
     }
 }
 
-/// What one answer of a pull sends: the items in linearisation order, how many it names are left
-/// out, the weight of those sent, and the weight of all it names, sent or not.
+/// What one answer of a pull sends and leaves out.
 struct Piece<T> {
     sent: Vec<(prodrome_core::event::Hash, T)>,
     rest: usize,
@@ -715,7 +688,7 @@ struct Piece<T> {
 }
 
 impl<T> Piece<T> {
-    /// What a replica lacking nothing is sent.
+    /// Nothing lacked.
     fn none() -> Self {
         Self {
             sent: Vec::new(),
@@ -725,20 +698,19 @@ impl<T> Piece<T> {
         }
     }
 
-    /// The items sent, without their names.
+    /// The items, unnamed.
     fn items(self) -> Vec<T> {
         self.sent.into_iter().map(|(_, item)| item).collect()
     }
 }
 
-/// What a pull sends of each object it answers: the object with its literal, or a skeleton's
-/// node. An object past a piece's cut is only weighed, for the pull's whole size.
+/// What a pull sends of each object.
 trait Sends<E: prodrome_core::schema::Schema> {
-    /// One object as the answer carries it.
+    /// One object as sent.
     type Item;
-    /// Under which the store's graph keeps every object's weight, read once per head set.
+    /// The key of the weights, read once per head set.
     const WEIGHTS: &'static str;
-    /// The object as sent, and its weight.
+    /// The item and its weight.
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
@@ -765,7 +737,7 @@ trait Sends<E: prodrome_core::schema::Schema> {
     }
 }
 
-/// Each object with its literal, weighed by the literal's bytes.
+/// Each object with its literal.
 struct Literals;
 
 impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
@@ -789,7 +761,7 @@ impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
     }
 }
 
-/// Each line as its skeleton node, weighed by its bytes on the wire.
+/// Each line as its skeleton node.
 struct Nodes;
 
 impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
@@ -933,8 +905,7 @@ where
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
-        // Every piece of a pull weighs all it leaves out; read once per head set, a pull of many
-        // pieces weighs each object once rather than once a piece.
+        // Weighed once per head set, so a pull of many pieces weighs each object once.
         let weights = graph.reading(S::WEIGHTS, |graph| {
             graph
                 .objects()
@@ -987,14 +958,14 @@ where
     })
 }
 
-/// One answer of a pull, and the graph it was read from.
+/// One answer, and its graph.
 struct Pulled<E: prodrome_core::schema::Schema, T> {
     snapshot: Snapshot,
     piece: Piece<T>,
     graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
 }
 
-/// Whether the store of record knew the frontier a pull named.
+/// Whether the box knew the frontier a pull named.
 fn since_read(reached: &prodrome_core::store::frontier::Reached) -> SinceRead {
     match reached {
         prodrome_core::store::frontier::Reached::Everything
@@ -1003,7 +974,7 @@ fn since_read(reached: &prodrome_core::store::frontier::Reached) -> SinceRead {
     }
 }
 
-/// The frontier an answer recorded, as the wire names it.
+/// The frontier an answer recorded.
 fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier {
     Frontier {
         digest: recorded.token.as_str().to_owned(),
@@ -1011,8 +982,7 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier 
     }
 }
 
-/// `GET /api/stores/lines/skeleton?since=<heads>`: the lines' pull, each object as its node,
-/// sized by what [`lines_content`] sends of it, with every key its nodes name but a retired one.
+/// `GET /api/stores/lines/skeleton?since=<heads>`: the lines' pull, as nodes.
 ///
 /// # Errors
 /// The stores' own.
@@ -1044,8 +1014,7 @@ pub fn lines_skeleton(
         keys_of(conversations, &graph, &retired(&graph), &sent)?
     };
     let husked = husked(&graph, &keys, &sent);
-    // A replica that lacks nothing holds the store's heads already: they are the heads of what it
-    // holds, which a recorded frontier names exactly.
+    // A replica that lacks nothing holds the store's heads already.
     let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
         (SinceRead::Known, true) => Heads::Held,
         (SinceRead::Known | SinceRead::Unknown, _) => Heads::These {
@@ -1105,7 +1074,7 @@ fn held_sizes(
         .collect()
 }
 
-/// One line's node: its name, what it rests on, its literal's size, and its header.
+/// One line's node.
 #[must_use]
 pub fn skeleton_node(
     name: &prodrome_core::event::Hash,
@@ -1118,7 +1087,7 @@ pub fn skeleton_node(
     )
 }
 
-/// One line's node, sized `size`.
+/// One line's node.
 fn node_of(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
@@ -1141,7 +1110,7 @@ fn node_of(
     }
 }
 
-/// An envelope's constructor, as its literal spells it.
+/// An envelope's constructor.
 fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str {
     use prodrome_core::event::Envelope;
     match envelope {
@@ -1156,8 +1125,7 @@ fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str 
     }
 }
 
-/// About how many bytes a node is on the wire: its strings and a little for the JSON around
-/// them, which is what a skeleton's piece is cut by.
+/// About how many bytes a node is on the wire.
 fn weight(node: &SkeletonNode) -> usize {
     const AROUND: usize = 96;
     // A step's tag, and the count two of them carry; the keys two others name are counted apart.
@@ -1196,13 +1164,11 @@ fn weight(node: &SkeletonNode) -> usize {
     AROUND + node.hash.len() + node.parents.iter().map(|p| p.len() + 3).sum::<usize>() + header
 }
 
-/// The most bytes of literals one content answer of more than one hash carries: a piece's
-/// ([`Cut::PIECE`]). A single object is answered whatever its size, since a line written before
-/// a stored answer was bounded can be larger.
+/// The most bytes of literals one content answer of more than one hash carries; a single object
+/// is answered whatever its size.
 pub const MOST_CONTENT_BYTES: usize = 1 << 20;
 
-/// The content questions for `nodes` (`(name, size)`), ascending, each within the bounds an answer
-/// carries, an object past them asked alone.
+/// The content questions for `nodes`, each within an answer's bounds.
 #[must_use]
 pub fn asks<'n>(nodes: impl IntoIterator<Item = (&'n str, usize)>) -> Vec<Vec<&'n str>> {
     let mut nodes: Vec<(&str, usize)> = nodes.into_iter().collect();
@@ -1224,13 +1190,11 @@ pub fn asks<'n>(nodes: impl IntoIterator<Item = (&'n str, usize)>) -> Vec<Vec<&'
     asks
 }
 
-/// `GET /api/stores/<store>/content?hashes=` and a chain's `…/content?hashes=`: the literal of
-/// each object `hashes` names, in that order, from `store` alone. A hash the store does not hold,
-/// or literals past [`MOST_CONTENT_BYTES`], refuse the whole question in the same words.
+/// `GET …/content?hashes=`: the literal of each object `hashes` names, from `store` alone.
 ///
 /// # Errors
-/// [`Refusal::not_found`] naming the hashes the store does not hold;
-/// [`Refusal::bad_request`] for literals past the bound; the store's own.
+/// [`Refusal::not_found`] for a hash the store does not hold; [`Refusal::bad_request`] past the
+/// bound; the store's own.
 pub fn content<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     hashes: &query::Hashes,
@@ -1238,9 +1202,7 @@ pub fn content<E: prodrome_core::schema::Schema>(
     answer(store, &*store.graph()?, hashes, &BTreeMap::new())
 }
 
-/// [`content`] of the lines, each line every key of whose words the box retires as its husk. A
-/// line with one live slot and one dead slot is sent whole, so the dead slot's sealed bytes go
-/// with it: a husk of some slots alone could be checked against nothing.
+/// [`content`] of the lines, each line whose every key the box retires as its husk.
 pub fn lines_content(
     conversations: suzatary_core::secretary::conversations::Conversations<'_>,
     hashes: &query::Hashes,
@@ -1251,8 +1213,7 @@ pub fn lines_content(
     answer(conversations.lines, &graph, hashes, &printed)
 }
 
-/// Each object `hashes` names that `graph`, the store's history read once for this question,
-/// holds: its husk where `husks` holds one, else its literal read by its name.
+/// Each object `hashes` names: its husk where `husks` holds one, else its literal.
 fn answer<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     graph: &suzatary_store::store::Graph<E>,
@@ -1304,13 +1265,10 @@ fn answer<E: prodrome_core::schema::Schema>(
     Ok(wire::ContentPayload { objects: sent })
 }
 
-/// `GET /api/waiting`: the badge's count of the Inbox's cards (open proposals, open decisions on
-/// `chains`, and the proposal lines no inbox record places, which it names by conversation),
-/// the lines read through the box's one memoised fold, so a call costs what moved since the last.
+/// `GET /api/waiting`: the Inbox badge's count, the lines read through the box's memoised fold.
 ///
 /// # Errors
-/// A store that does not read, a chain the set does not hold, and lines the fold refuses: no
-/// count is better than a wrong one.
+/// A store that does not read, a chain the set does not hold, and lines the fold refuses.
 pub fn waiting(
     inbox: &suzatary_core::secretary::inbox::Fold,
     conversations: suzatary_core::secretary::conversations::ReadConversations<'_>,
@@ -1349,10 +1307,9 @@ pub fn waiting(
 }
 
 /// The most objects one post may carry; more is a refusal, never a silent truncation.
-pub(crate) const MAX_POSTED: usize = 512;
+pub const MAX_POSTED: usize = 512;
 
-/// `POST /api/objects`: the one write path, deciding under the write lock and then taking in
-/// what the outcome names.
+/// `POST /api/objects`: the one chain write path, decided under the write lock.
 pub fn receive_objects(
     store: &dyn Prodrome<TodoEvent>,
     render: &dyn Render,
@@ -1432,26 +1389,46 @@ pub fn receive_objects(
     Ok((receipt(store, &outcome, (&key, since, frontiers))?, heard))
 }
 
-/// What a post carries: the prints, and the frontier the poster held before them.
+/// What a post carries.
 #[derive(Clone, Copy)]
 pub struct Posted<'a> {
-    /// Canonical prints, in any order.
+    /// Canonical prints.
     pub objects: &'a [String],
-    /// The frontier the poster held, as its last answer named it.
+    /// The poster's frontier.
     pub since: &'a prodrome_core::store::frontier::Since,
 }
 
-/// `POST /api/stores/<store>/objects`, for a store a tab writes that the box began and nobody
-/// signs: decided under the write lock, then what the outcome names taken in, through the
-/// store's own verify-on-receive.
+/// Who posts to a store a tab writes, and the chains it is trusted on.
+#[derive(Clone, Copy)]
+pub struct Writer<'a> {
+    /// The gate's actor.
+    pub actor: &'a prodrome_core::event::Actor,
+    /// Every chain.
+    pub chains: &'a [&'a dyn Prodrome<suzatary_record::record::TodoEvent>],
+    /// The deployment's root.
+    pub root: &'a prodrome_core::sign::PublicKey,
+}
+
+/// Where and when a post records its refusals.
+#[derive(Clone, Copy)]
+pub struct Recording<'a> {
+    /// The asks store.
+    pub asks: &'a dyn Prodrome<suzatary_core::asks::AskEvent>,
+    /// Now.
+    pub at: Datetime,
+}
+
+/// `POST /api/stores/<store>/objects`: decided under the store's lock, taken in, then each
+/// proven refusal recorded once in the asks under its own lock.
 ///
 /// # Errors
-/// More than `MAX_POSTED` objects, or the store not read or not written.
+/// More than `MAX_POSTED` objects, or a store not read or not written.
 pub fn receive_changes<E: suzatary_core::stores::Store>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
-    actor: &prodrome_core::event::Actor,
+    writer: Writer<'_>,
+    recording: Recording<'_>,
 ) -> Answered<ReceiptPayload>
 where
     E::Vocabulary: Default,
@@ -1466,17 +1443,51 @@ where
             posted.len()
         )));
     }
-    let _held = store.locked()?;
-    let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
-    let outcome = suzatary_core::sync::receive_changes::<E>(&held, posted, actor);
-    store.accept(&outcome.taken)?;
+    let received = {
+        let _held = store.locked()?;
+        // Read under the lock, so a revocation that lands before it is seen by this post.
+        let trusting = suzatary_core::signatures::Trusting::held(writer.chains, writer.root)?;
+        let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
+        let received =
+            suzatary_core::sync::receive_changes::<E>(&held, posted, writer.actor, &trusting);
+        store.accept(&received.outcome.taken)?;
+        received
+    };
+    record(&received.recorded, E::KIND, recording)?;
     let key = format!("store/{}", E::KIND.name());
-    receipt(store, &outcome, (&key, since, frontiers))
+    receipt(store, &received.outcome, (&key, since, frontiers))
 }
 
-/// What a post took, already held and refused, beside the store's heads after it, and the
-/// frontier the poster holds now: what `since` named, if this box holds it, and every object it
-/// took or already held, with all they rest on.
+/// Each of `refused` recorded once in the asks.
+fn record(
+    refused: &[(prodrome_core::event::Hash, suzatary_core::sync::Reason)],
+    store: suzatary_core::stores::Kind,
+    Recording { asks, at }: Recording<'_>,
+) -> Result<(), Refusal> {
+    if refused.is_empty() {
+        return Ok(());
+    }
+    let _held = asks.locked()?;
+    let objects = asks.objects()?;
+    let mut recorded = suzatary_core::receipt::refusals(
+        objects.iter().map(|(name, object)| (name, object)),
+        &store,
+    );
+    for (name, reason) in refused {
+        if recorded.insert(name.clone(), reason.said()).is_none() {
+            asks.append(suzatary_core::receipt::refused(
+                name.clone(),
+                at,
+                suzatary_core::asks::keeper(),
+                store,
+                reason.said(),
+            ))?;
+        }
+    }
+    Ok(())
+}
+
+/// A post's receipt.
 fn receipt<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     outcome: &suzatary_core::sync::Outcome,
@@ -1532,9 +1543,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
     })
 }
 
-/// `GET /api/about`: the release this binary was built as and its build, so the page shows what
-/// runs, and the todos that release completed, each as `plan`'s chain reads it in `set`; `dev`
-/// for a build no release was stamped on.
+/// `GET /api/about`: the release this binary runs and the todos it completed; `dev` unstamped.
 ///
 /// # Errors
 /// The plan's chain held and not read.
@@ -1559,9 +1568,7 @@ pub fn about(
     })
 }
 
-/// Each of `todos` that `plan`'s chain in `set` holds, by id, as its row and title now: how a
-/// release's todos are shown, looked up on the chain rather than stored with the release.
-/// `None` where the set does not hold that chain.
+/// Each of `todos` as `plan`'s chain reads it now; `None` where the set lacks the chain.
 fn held_todos(
     plan: &suzatary_core::release::Plan,
     set: &ChainSet<'_>,
@@ -1599,8 +1606,7 @@ fn held_todos(
     ))
 }
 
-/// `GET /api/releases`: `plan`'s releases as `set` reads them, each with its row, where it
-/// stands in the count and its items; no release where the set does not hold the plan's chain.
+/// `GET /api/releases`: `plan`'s releases as `set` reads them.
 ///
 /// # Errors
 /// The chain held and not read.
@@ -1671,8 +1677,7 @@ pub fn releases(
     })
 }
 
-/// `GET /api/<chain>/me`: the login the daemon named and the actor it writes as on this
-/// chain, `null` for a viewer or an actor the chain's roster does not know.
+/// `GET /api/<chain>/me`: the login and the actor it writes as; `null` for a viewer.
 #[must_use]
 pub fn me(
     deployment: &Deployment,
@@ -1697,8 +1702,7 @@ pub fn me(
     }
 }
 
-/// `POST /api/author`: build an event and append nothing, so the replica seals what the core
-/// authored.
+/// `POST /api/author`: build an event and append nothing; the replica seals it.
 pub fn author(
     caps: &crate::server::Server<'_>,
     deployment: &Deployment,
@@ -1782,11 +1786,7 @@ pub fn author(
     })
 }
 
-/// A new todo through the one authoring path, with its parent's revision when it is a subtodo.
-///
-/// The id is derived from the body unless one is given, since the body is the only handle a
-/// person can reproduce from what they see, and never one any event has mentioned, a cancelled
-/// todo's included.
+/// A new todo through the one authoring path, under an id no event has mentioned.
 fn add(
     deployment: &Deployment,
     chain: &ChainPolicy,
@@ -1873,8 +1873,7 @@ fn add(
     Ok((todo, event, Some(revision)))
 }
 
-/// Why this priority when the app's optional line is blank: where the number came from, which
-/// is honest where an invented reason would not be.
+/// Why this priority when the optional line is blank: where the number came from.
 pub(crate) const APP_RATIONALE: &str = "Set by hand in the app.";
 /// An action line, not a document.
 pub const MAX_BODY_CHARS: usize = 2000;
@@ -1924,8 +1923,7 @@ fn capped(name: &str, text: &str, cap: usize) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// A todo id off the wire, checked before it touches a fold or a path: the compile cache is a
-/// filesystem and `..` is a perfectly good string.
+/// A todo id off the wire, checked before it touches a path: `..` is a perfectly good string.
 fn todo_id(value: &str) -> Result<&str, Refusal> {
     static TODO_ID: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"\A[a-z0-9_-]+\z").expect("a literal pattern")
@@ -1940,8 +1938,7 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
     }
 }
 
-/// `GET /api/overview`: what is connected, by group, read from `declared`, what the secret
-/// store answered (`asked`) and what the box's registers say of it now.
+/// `GET /api/overview`: what is connected, by group, and what the box's registers say of it.
 #[must_use]
 pub fn overview(
     declared: &suzatary_core::settings::overview::Declared<'_>,
@@ -1964,8 +1961,7 @@ pub fn overview(
     )
 }
 
-/// `GET /api/calendar/<date>`: a week of the owner's calendars from that day, as Typst's HTML
-/// and as plain text.
+/// `GET /api/calendar/<date>`: a week of the owner's calendars, as Typst's HTML and plain text.
 pub fn calendar(
     calendar: &dyn suzatary_core::calendar::effect::Calendar,
     render: &dyn Render,
@@ -2033,7 +2029,7 @@ mod tests {
     use super::*;
     use suzatary_core::secrets::SecretState;
 
-    /// A value the fake's store reads as locked: it holds the name and cannot say what it is.
+    /// A value the fake's store reads as locked.
     const LOCKED: &str = "<the store is locked>";
 
     /// A fake `Secrets` holding real-shaped values, so a leak would show.
@@ -2098,7 +2094,7 @@ mod tests {
         );
     }
 
-    /// A store that counts the lookups it gives no answer to, each a wait for the timeout.
+    /// Counts the lookups it does not answer.
     struct Counting<'a>(
         &'a dyn suzatary_core::secrets::Secrets,
         std::sync::atomic::AtomicUsize,
@@ -2131,8 +2127,7 @@ mod tests {
     /// A value that looks leaked, so a leak would show.
     const LEAKED: &str = "sk-do-not-print-this-key";
 
-    /// What the overview's tests declare: the model, both channels, an account of each kind, a
-    /// calendar of two links and one chain.
+    /// What the overview's tests declare.
     struct Instance {
         deployment: Deployment,
         settables: suzatary_core::settings::Settables,

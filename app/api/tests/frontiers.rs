@@ -110,7 +110,9 @@ impl Device {
 
     /// Every object of this device's own writes, printed.
     fn own(&self) -> Vec<String> {
-        self.store
+        let key = suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE);
+        let changes: Vec<Envelope<MembershipEvent>> = self
+            .store
             .held()
             .expect("held")
             .dag
@@ -121,7 +123,25 @@ impl Device {
                     .event()
                     .is_some_and(|event| event.actor() == &self.actor)
             })
+            .cloned()
+            .collect();
+        let signed: std::collections::BTreeMap<Hash, String> = changes
+            .iter()
+            .map(|change| {
+                let signature: Envelope<MembershipEvent> =
+                    Envelope::Signed(key.sign(&seal_hash(change)));
+                (seal_hash(&signature), canonical_envelope(&signature))
+            })
+            .collect();
+        self.store
+            .receive(signed.keys().cloned().collect(), &|name| {
+                signed.get(name).map(|print| print.clone().into_bytes())
+            })
+            .expect("the device keeps its signatures");
+        changes
+            .iter()
             .map(canonical_envelope)
+            .chain(signed.into_values())
             .collect()
     }
 
@@ -147,6 +167,8 @@ impl Device {
 /// The box: its store, its epochs and the frontiers it recorded, which it may lose, and every
 /// store it held after a post, to go back to.
 struct TheBox {
+    asks: InMemory<suzatary_core::asks::AskEvent>,
+    chain: InMemory<suzatary_record::record::TodoEvent>,
     store: InMemory<MembershipEvent>,
     epochs: Epochs,
     frontiers: Frontiers,
@@ -158,6 +180,8 @@ impl TheBox {
         let store = InMemory::<MembershipEvent>::default();
         store.accept(&[genesis()]).expect("begun");
         Self {
+            asks: InMemory::default(),
+            chain: suzatary_core::signatures::phone_trusted(&["ada", "tab"]),
             store,
             epochs: Epochs::remembered(),
             frontiers: Frontiers::remembered(prodrome_core::store::frontier::KEPT),
@@ -212,7 +236,15 @@ impl TheBox {
                 since,
             },
             &self.frontiers,
-            &device.actor,
+            routes::Writer {
+                actor: &device.actor,
+                chains: &[&self.chain],
+                root: &suzatary_core::cast::keys::root(),
+            },
+            routes::Recording {
+                asks: &self.asks,
+                at: now(),
+            },
         )
         .expect("posted");
         self.held_before.push(self.prints());

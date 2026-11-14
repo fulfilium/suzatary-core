@@ -38,23 +38,23 @@ use suzatary_core::stores::Kind;
 /// The environment variable that names an instance file.
 pub const ENV: &str = "SUZATARY_INSTANCE";
 
-/// The variable a deployment's wrapper sets to the app's store path, over the file's `repo`.
+/// The app's store path a deployment's wrapper sets, over the file's `repo`.
 pub const CODE_ENV: &str = "SUZATARY_REPO";
 
 /// Each actor a chain registered on adopting, with the key that signs its writes.
 pub type Registered = Vec<(Actor, PublicKey)>;
 
-/// What [`Instance::adopt`] did: each chain that adopted, and why each of the others did not.
+/// What [`Instance::adopt`] did.
 #[derive(Debug)]
 pub struct Adopted<'a> {
-    /// Each chain that adopted, with the actors it registered now.
+    /// Each chain that adopted, and the actors it registered.
     pub chains: Vec<(&'a ChainDir, Registered)>,
-    /// Each chain that did not, and a revocation not completed, one sentence each.
+    /// One sentence for each chain that did not, and each revocation not completed.
     pub failed: Vec<String>,
 }
 
 impl<'a> Adopted<'a> {
-    /// Every chain, or the sentences of those that did not adopt.
+    /// Every chain, or why some did not adopt.
     ///
     /// # Errors
     /// Any chain that did not adopt, all of them named.
@@ -67,10 +67,7 @@ impl<'a> Adopted<'a> {
     }
 }
 
-/// Chain names the server's own routes would shadow.
-///
-/// `/api/act/{*verb}` is a catch-all, and `/api/briefings/{date}` and `/api/todo/{id}` would read
-/// a chain's verb as a parameter; other routes cannot collide because matchit backtracks.
+/// Chain names the server's own routes would shadow: a catch-all and two parameter routes.
 pub const RESERVED: &[&str] = &["act", "briefings", "todo"];
 
 /// Everything the binary learned from the file.
@@ -80,20 +77,18 @@ pub struct Instance {
     /// Every path derived outside the instance file.
     pub paths: Paths,
     pub roots: Roots,
-    /// Every chain in the file's order; `deployment.chains` holds the same policies.
+    /// Every chain, in the file's order.
     pub chains: ChainDirs,
     pub deployment: Deployment,
     pub serving: Serving,
     pub secretary: Secretary,
     /// What the triage agent is handed.
     pub agent: Triage,
-    /// Every repository the box may reach: `[[secretary.repos]]` and `[coding] repo`, one account.
+    /// `[[secretary.repos]]` and `[coding] repo`.
     pub repos: suzatary_core::repos::Declared,
-    /// The closed list of secret names a secret card mints its
-    /// [`suzatary_core::settings::Settable`] against.
+    /// The secret names a secret card's [`suzatary_core::settings::Settable`] is minted against.
     pub settables: Settables,
-    /// Those names, for a file under [`Paths::secretspec`]: reading the instance writes nothing;
-    /// the first store call that needs the file writes it.
+    /// Those names: reading the instance writes nothing; the first store call writes the file.
     pub declarations: suzatary_io::secrets::Declarations,
     /// The user repository's script the environment named.
     run: Option<String>,
@@ -101,7 +96,7 @@ pub struct Instance {
     pub persona: suzatary_base::persona::Persona,
     /// The box-local tier: never pushed, carried by the vault.
     pub local: Local,
-    /// The channels `[notify]` names. `None` is no push, and no push secret is resolved.
+    /// `[notify]`'s channels; `None` resolves no push secret.
     pub notify: Option<NonEmpty<Channel>>,
     /// What the box answers the Android portal at pairing.
     pub portal: suzatary_api::portal::Portal,
@@ -114,7 +109,7 @@ impl Instance {
         self.roots.code.as_path()
     }
 
-    /// Typst for a model's answer blocks, its cache under `[secretary] renders`.
+    /// Typst for answer blocks, cached under `[secretary] renders`.
     #[must_use]
     pub fn answers(&self) -> suzatary_io::render::Typst {
         suzatary_io::render::Typst::new(
@@ -147,7 +142,7 @@ impl Instance {
         self.plugins.stores().into_iter().chain(google).collect()
     }
 
-    /// The conversations; an erasure empties the answers' cache and the CLI's sessions.
+    /// The conversations; an erasure empties the answers' cache and the sessions.
     #[must_use]
     pub fn conversation_stores(&self) -> suzatary_io::conversations::ConversationStores {
         self.secretary.conversation_stores(
@@ -156,8 +151,7 @@ impl Instance {
         )
     }
 
-    /// How the person reaches the app from a terminal: the script [`crate::paths::RUN_ENV`]
-    /// named, else the binary on `PATH`.
+    /// The script [`crate::paths::RUN_ENV`] names, else the binary on `PATH`.
     #[must_use]
     pub fn reach(&self) -> suzatary_core::connect::Reach {
         match &self.run {
@@ -188,7 +182,7 @@ impl Instance {
         self.roots.data.as_path()
     }
 
-    /// The first chain: what a verb with no `--chain` and the bare `/api/…` paths mean.
+    /// The first chain, which no `--chain` and the bare `/api/…` paths mean.
     #[must_use]
     pub fn first(&self) -> &ChainDir {
         self.chains.first()
@@ -232,19 +226,25 @@ impl Instance {
         Self::beside(file, data)
     }
 
-    /// The performed requests' records, `requests/` in the data tree, pushed with the data.
+    /// `requests/` in the data tree, pushed.
     #[must_use]
     pub fn requests(&self) -> PathBuf {
         self.roots.data.under(Path::new("requests"))
     }
 
-    /// The recorded decisions' store, `decisions/` in the data tree, pushed with the data.
+    /// `secretary-asks/` in the data tree, box-local.
+    #[must_use]
+    pub fn asks(&self) -> PathBuf {
+        self.roots.data.under(Path::new("secretary-asks"))
+    }
+
+    /// `decisions/` in the data tree, pushed.
     #[must_use]
     pub fn decisions(&self) -> PathBuf {
         self.roots.data.under(Path::new("decisions"))
     }
 
-    /// Where each store of `kind` lives, by the name the fsck reports it under.
+    /// Where each store of `kind` lives, by its fsck name.
     #[must_use]
     pub fn directories(&self, kind: Kind) -> Vec<(String, PathBuf)> {
         let once = |path: PathBuf| vec![(kind.name().to_owned(), path)];
@@ -270,6 +270,7 @@ impl Instance {
             Kind::Decisions => once(self.decisions()),
             Kind::Topics => once(secretary.topics.memberships.clone()),
             Kind::TopicAliases => once(secretary.topics.aliases.clone()),
+            Kind::Asks => once(self.asks()),
             Kind::Plugin => self
                 .plugins
                 .manifests
@@ -293,9 +294,8 @@ impl Instance {
         &self.chains.first().policy.root
     }
 
-    /// What the box signs with: both keys from secretspec, checked against the root, or why not.
-    /// Never an error, so a box whose secrets are locked still starts and reads; every write
-    /// refuses with that sentence instead. It only reads; adopting is [`Instance::adopt`].
+    /// What the box signs with, or why not: never an error, so a box whose secrets are locked
+    /// still starts and reads, and every write refuses with that sentence.
     #[must_use]
     pub fn signers(&self) -> suzatary_core::signatures::Signers {
         use suzatary_core::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Signers};
@@ -320,9 +320,8 @@ impl Instance {
         }
     }
 
-    /// Adoption, asked of every chain (idempotent): each registers the box's and the agent's keys
-    /// and takes its epoch, and a revocation that reached only some chains is completed. Under a
-    /// lock beside each chain, so two processes adopt once. Every chain is tried.
+    /// Adoption of every chain (idempotent): the box's and the agent's keys and its epoch, under
+    /// a lock beside each chain.
     #[must_use]
     pub fn adopt(&self, signers: &suzatary_core::signatures::Signers) -> Adopted<'_> {
         let (adopted, failed): (Vec<_>, Vec<_>) = self
@@ -409,7 +408,7 @@ impl Instance {
         )
     }
 
-    /// The inbox's store, its one opener.
+    /// The inbox's one opener.
     #[must_use]
     pub fn inbox_store(
         &self,
@@ -417,7 +416,7 @@ impl Instance {
         suzatary_io::objects::Objects::open(self.secretary.inbox.clone())
     }
 
-    /// The memory's history, its one opener.
+    /// The memory's one opener.
     #[must_use]
     pub fn memory_store(
         &self,
@@ -425,7 +424,7 @@ impl Instance {
         suzatary_io::objects::Objects::open(self.secretary.memory.clone())
     }
 
-    /// The digest's history, its one opener.
+    /// The digests' one opener.
     #[must_use]
     pub fn digest_store(
         &self,
@@ -530,7 +529,7 @@ impl Instance {
         })
     }
 
-    /// An adopted code root, else the file's `repo` resolved beside it.
+    /// An adopted code root, else the file's `repo`.
     #[must_use]
     pub fn code_root_in(beside: PathBuf, adopted: Option<&Path>) -> PathBuf {
         adopted.map_or(beside, Path::to_path_buf)
@@ -543,7 +542,7 @@ impl Instance {
         Self::locate_in(flag, exported.as_deref())
     }
 
-    /// The flag, else a non-empty environment value, else `instance.toml` in the working directory.
+    /// The flag, else the environment, else `./instance.toml`.
     #[must_use]
     pub fn locate_in(flag: Option<&Path>, exported: Option<&str>) -> PathBuf {
         if let Some(named) = flag {
@@ -558,7 +557,7 @@ impl Instance {
     }
 }
 
-/// A line of `[web.act_as]` the gate, a chain's roster or its trust would refuse stops startup.
+/// A `[web.act_as]` line the gate, a roster or a trust would refuse stops startup.
 fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
     let refused = deployment.refused_writers();
     if !refused.is_empty() {

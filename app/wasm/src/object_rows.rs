@@ -1,18 +1,15 @@
-//! The inbox and the two topic stores as the tab's worker drives them: each a replica of objects
-//! the core holds (`suzatary_store::replica::objects`), at its own schema. Every move answers the
-//! frame the worker appends to the device's log, and whether it moved what a reading reads; a
-//! warm load hands the snapshot and the frames after it back. The worker keeps nothing of a store
-//! but the handle: every question is asked here.
-//!
-//! A reading reads the store's standing objects through the Prodrome's own replica at the
-//! schema, made once per move of them and kept until the next ([`Store::reading`]), so every
-//! reading of one holding reads one replica, and the store's `version` names it.
+//! The stores of objects as the tab's worker drives them: each a replica the core holds
+//! (`suzatary_store::replica::objects`) at its own schema. Every move answers the frame the worker
+//! appends to the device's log, and a reading is made once per move ([`Store::reading`]).
 
 use std::cell::OnceCell;
 
+use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
 use suzatary_api::wire::StorePayload;
+use suzatary_core::asks::{AskEvent, AskVocabulary};
+use suzatary_core::receipt;
 use suzatary_core::secretary::object_stores;
 use suzatary_core::wire::lines::ReceiptPayload;
 use suzatary_store::replica::held::Node as _;
@@ -40,7 +37,7 @@ impl<E: Schema<Vocabulary: Default>> Default for Store<E> {
     }
 }
 
-/// `moved` as a step says it, the way the lines say a move that touched every conversation.
+/// `moved` as a step says it.
 fn said(moved: bool) -> &'static str {
     if moved { "\"All\"" } else { "[]" }
 }
@@ -73,7 +70,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         self.replica.rows().landed().replica().spoken().is_some()
     }
 
-    /// Whether the box's heads `heads` name an object what is held does not read.
+    /// Whether the box's `heads` name an object not held.
     pub fn behind(&self, heads: &str) -> Result<bool, JsError> {
         let heads = hashes(heads, "heads")?;
         Ok(self
@@ -85,18 +82,17 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             .behind(&heads))
     }
 
-    /// Whether an answer of `epoch` is of a later epoch than either row heard.
+    /// Whether `epoch` is later than either row heard.
     pub fn overtaken(&self, epoch: f64) -> Result<bool, JsError> {
         Ok(self.replica.rows().overtaken(whole(epoch, "epoch")?))
     }
 
-    /// Whether an answer of `epoch` is of an earlier epoch than the word held.
+    /// Whether `epoch` is earlier than the word held.
     pub fn went_back(&self, epoch: f64) -> Result<bool, JsError> {
         Ok(self.replica.rows().went_back(whole(epoch, "epoch")?))
     }
 
-    /// The box's answer `answer` (`StorePayload` JSON) kept as a piece beside the landed row,
-    /// heard at `fetched_at`: the frame. It moves no reading.
+    /// The box's `StorePayload` kept as a piece beside the landed row: the frame.
     pub fn piece(&mut self, answer: &str, fetched_at: f64) -> Result<Vec<u8>, JsError> {
         let answer: StorePayload =
             serde_json::from_str(answer).map_err(|e| refused(format!("answer: {e}")))?;
@@ -111,13 +107,12 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         self.step(Objects::land)
     }
 
-    /// Every row reset, in the generation after both; what the tab wrote stays.
+    /// Every row reset; what the tab wrote stays.
     pub fn start_over(&mut self) -> Result<Step, JsError> {
         self.step(Objects::start_over)
     }
 
-    /// `event`, its print, sealed as a `Change` over the reading's own fold and kept as this
-    /// tab's, unsent: the frame, or none for an event the store already holds.
+    /// `event` sealed as a `Change` and kept unsent; none for a twin.
     pub fn append(&mut self, event: &str) -> Result<Option<Step>, JsError> {
         let mut read = Replica::<E>::of(&self.standing().map_err(refused)?).map_err(refused)?;
         let appended: Appended = serde_json::from_str(
@@ -136,27 +131,61 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         self.step(|r| r.write(objects)).map(Some)
     }
 
-    /// `[{hash, literal}]`: what the tab wrote that the box may take and has not.
+    /// `[[{hash, literal}]]`: the unsent, in posts the box takes whole.
     pub fn unsent(&self) -> Result<String, JsError> {
         json(
             &self
                 .replica
-                .unsent()
+                .unsent_pieces::<E>(&E::Vocabulary::default(), suzatary_api::routes::MAX_POSTED)
                 .iter()
-                .map(|o| serde_json::json!({ "hash": o.name().as_str(), "literal": o.literal() }))
+                .map(|piece| {
+                    piece
+                        .iter()
+                        .map(|o| serde_json::json!({ "hash": o.name().as_str(), "literal": o.literal() }))
+                        .collect::<Vec<_>>()
+                })
                 .collect::<Vec<_>>(),
         )
     }
 
-    /// The box's receipt `receipt` (`ReceiptPayload` JSON) for a post of what the tab wrote.
+    /// The box's `ReceiptPayload` for a post.
     pub fn answered(&mut self, receipt: &str) -> Result<Step, JsError> {
         let receipt: ReceiptPayload =
             serde_json::from_str(receipt).map_err(|e| refused(format!("receipt: {e}")))?;
         self.step(|r| r.answered(object_stores::answers(&receipt)))
     }
 
-    /// The objects `names` (`[<name>, …]`) refused for good in the box's words `reason`: a post
-    /// the box refused whole.
+    /// `[<name>, …]`: the tab's unsent changes no signature it wrote covers.
+    pub fn unsigned(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .replica
+                .unsigned::<E>(&E::Vocabulary::default())
+                .iter()
+                .map(|o| o.name().as_str())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// `[{hash, reason}]`: what the box refused for good.
+    pub fn refusals(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .replica
+                .refusals()
+                .iter()
+                .map(|(o, reason)| serde_json::json!({ "hash": o.name().as_str(), "reason": reason }))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// The device's signature `literal`, kept unsent.
+    pub fn signed(&mut self, literal: &str) -> Result<Step, JsError> {
+        let signature = Object::read::<E>(&E::Vocabulary::default(), literal.to_owned());
+        self.step(|r| r.write(vec![signature]))
+    }
+
+    /// The objects `names` refused for good in the box's words `reason`.
     pub fn refuse(&mut self, names: &str, reason: &str) -> Result<Step, JsError> {
         let names = hashes(names, "names")?;
         self.step(|r| {
@@ -172,8 +201,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         })
     }
 
-    /// A frame another tab appended taken: whether a reading moved. A frame of another form
-    /// moves nothing.
+    /// A frame another tab appended taken: whether a reading moved.
     pub fn apply(&mut self, frame: &[u8]) -> Result<String, JsError> {
         match objects::unframe(frame).map_err(|e| refused(e.to_string()))? {
             Some(m) => Ok(said(self.moved(|r| r.apply(&m)).1).to_owned()),
@@ -186,10 +214,8 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         snapshot::snapshot(&self.replica).map_err(|e| refused(e.to_string()))
     }
 
-    /// The replica replaced by the snapshot `bytes` (none for the empty one) and then each frame
-    /// of `frames` (each after its length as four little-endian bytes) taken in order: whether a
-    /// reading moved. Refused, holding what it held, for a snapshot of another form or a frame
-    /// that does not read; a frame of another form is passed over.
+    /// The replica replaced by `bytes` and then `frames`: whether a reading moved. Refused,
+    /// holding what it held, where one does not read.
     pub fn load(&mut self, bytes: Option<Vec<u8>>, frames: &[u8]) -> Result<String, JsError> {
         let mut kept: Objects = match bytes {
             None => Objects::default(),
@@ -203,13 +229,12 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         Ok(said(self.moved(|r| *r = kept).1).to_owned())
     }
 
-    /// Counts the moves of what a reading reads: a reading made at one count is the reading of
-    /// every later question until it moves.
+    /// Counts the moves of what a reading reads.
     pub fn version(&self) -> u32 {
         self.version
     }
 
-    /// The Prodrome's replica of the standing objects, made once per move of them.
+    /// The Prodrome's replica of the standing objects, made once per move.
     ///
     /// # Errors
     /// Why the objects have no reading at the schema.
@@ -220,7 +245,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             .map_err(refused)
     }
 
-    /// `{excluded}`: what the reading leaves out of the objects.
+    /// `{excluded}`: what the reading leaves out.
     pub fn tips(&self) -> Result<String, JsError> {
         prodrome_wasm_exports::tips(self.reading()?).map_err(refused)
     }
@@ -243,8 +268,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         Ok(Step::of(framed(&m)?, said(moved).to_owned()))
     }
 
-    /// `f` done to the replica: whether the standing objects moved, the reading made again
-    /// at the next question where they did.
+    /// `f` done to the replica: whether the standing objects moved.
     fn moved<T>(&mut self, f: impl FnOnce(&mut Objects) -> T) -> (T, bool) {
         let names = |r: &Objects| -> Vec<prodrome_core::event::Hash> {
             r.standing().iter().map(|o| o.name().clone()).collect()
@@ -257,6 +281,25 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             self.version = self.version.wrapping_add(1);
         }
         (done, moved)
+    }
+}
+
+impl<E: suzatary_core::stores::Store<Vocabulary: Default>> Store<E> {
+    /// The asks' refusals of what the tab wrote here, held as refused; none where none is new.
+    pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
+        let schema = AskVocabulary::default();
+        let objects: Vec<(Hash, Envelope<AskEvent>)> = asks
+            .replica
+            .standing()
+            .iter()
+            .filter_map(|o| Some((o.name().clone(), parse_envelope(&schema, o.literal()).ok()?)))
+            .collect();
+        let refused = receipt::refusals(objects.iter().map(|(name, o)| (name, o)), &E::KIND);
+        let (m, moved) = self.moved(|r| r.refused(refused));
+        match &m {
+            Move::Own(owned) if owned.is_empty() => Ok(None),
+            Move::Own(_) | Move::Rows(_) => Ok(Some(Step::of(framed(&m)?, said(moved).to_owned()))),
+        }
     }
 }
 
@@ -276,9 +319,29 @@ struct Text {
 }
 
 /// A store's exports at one schema: the class `$name` over a [`Store`]. A macro because
-/// `#[wasm_bindgen]` exports no generic item; each method is one call of the store's.
+/// `#[wasm_bindgen]` exports no generic item; each method is one call of the store's. A store
+/// `unread` exports no register readings, which only a schema with a JSON view answers.
 macro_rules! objects_store {
     ($name:ident = $schema:ty) => {
+        $crate::object_rows::objects_store!($name = $schema, unread);
+
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        impl $name {
+            /// Every entity's registers at `at` (ISO, or `null`) under `untrusted`.
+            pub fn readings(
+                &self,
+                at: Option<String>,
+                untrusted: &str,
+            ) -> Result<String, wasm_bindgen::JsError> {
+                prodrome_wasm_exports::thrown(prodrome_wasm_exports::readings(
+                    self.0.reading()?,
+                    at,
+                    untrusted,
+                ))
+            }
+        }
+    };
+    ($name:ident = $schema:ty, unread) => {
         #[doc = concat!("The store of objects at `", stringify!($schema), "` the tab holds.")]
         #[wasm_bindgen::prelude::wasm_bindgen]
         #[derive(Default)]
@@ -345,6 +408,28 @@ macro_rules! objects_store {
             pub fn unsent(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.unsent()
             }
+            /// See `Store::unsigned`.
+            pub fn unsigned(&self) -> Result<String, wasm_bindgen::JsError> {
+                self.0.unsigned()
+            }
+            /// See `Store::refusals`.
+            pub fn refusals(&self) -> Result<String, wasm_bindgen::JsError> {
+                self.0.refusals()
+            }
+            /// See `Store::signed`.
+            pub fn signed(
+                &mut self,
+                literal: &str,
+            ) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
+                self.0.signed(literal)
+            }
+            /// See `Store::refused_in`.
+            pub fn refused_in(
+                &mut self,
+                asks: &$crate::asks::Asks,
+            ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
+                self.0.refused_in(&asks.0)
+            }
             /// See `Store::answered`.
             pub fn answered(
                 &mut self,
@@ -384,19 +469,6 @@ macro_rules! objects_store {
             /// See `Store::tips`.
             pub fn tips(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.tips()
-            }
-            /// §6: every entity's registers in the store's reading, each its maximal writes,
-            /// at `at` (ISO, or `null` for everything) under `untrusted`.
-            pub fn readings(
-                &self,
-                at: Option<String>,
-                untrusted: &str,
-            ) -> Result<String, wasm_bindgen::JsError> {
-                prodrome_wasm_exports::thrown(prodrome_wasm_exports::readings(
-                    self.0.reading()?,
-                    at,
-                    untrusted,
-                ))
             }
         }
     };

@@ -81,8 +81,8 @@ const begun = (label: string): StoredObject => {
   const literal = `Genesis(label='${label}', nonce='${"0".repeat(32)}')`
   return { hash: createHash("sha256").update(literal, "utf8").digest("hex"), literal }
 }
-// The box as `fetch` reaches it: `holds` of its lines, its inbox's first `proposals` objects, and its two topic stores,
-// which take what a tab posts; or no box at all.
+// The box as `fetch` reaches it: `holds` of its lines, its inbox's first `proposals` objects, its two topic stores,
+// which take what a tab posts, and the asks, holding nothing; or no box at all.
 let holds = 1
 let proposals = box.inbox.length
 let topicStores: Record<"topics" | "topic-aliases", StoredObject[]> = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
@@ -95,6 +95,7 @@ Object.assign(globalThis, {
     const url = new URL(String(input), "http://box")
     const since = url.searchParams.get("since") ?? ""
     if (url.pathname === "/api/stores/lines/skeleton") return json(answer(holds, since))
+    if (url.pathname === "/api/stores/asks/objects") return json(objectsAnswer([], since))
     const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1] as "inbox" | "topics" | "topic-aliases" | undefined
     if (store !== undefined && method === "POST" && store !== "inbox") {
       const posted = JSON.parse(String(init?.body)) as PostedObjects

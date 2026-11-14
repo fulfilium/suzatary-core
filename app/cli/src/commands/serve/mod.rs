@@ -1,7 +1,5 @@
-//! `suzatary serve`; `table` lists every route.
-//!
-//! It sends no CORS header, and `gate` refuses with 403 any peer whois cannot name.
-//! The only HTML it serves is `dist`'s files and typst's rendering.
+//! `suzatary serve`; `table` lists every route. It sends no CORS header, `gate` refuses any peer
+//! whois cannot name, and the only HTML it serves is `dist`'s files and typst's rendering.
 
 pub(crate) mod asked;
 mod body;
@@ -101,9 +99,10 @@ pub struct Performers {
     pub acting: Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync>,
 }
 
-/// The signed requests kept, and the codes that pair a device.
+/// The signed requests kept, the box's refusals of signed objects, and the pairing codes.
 pub struct Signed {
     pub requests: Arc<suzatary_io::requests::Requests>,
+    pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
     pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
 }
 
@@ -172,6 +171,8 @@ pub struct Inner {
     /// Reached only by a tapped device card.
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
     pub requests: Arc<suzatary_io::requests::Requests>,
+    /// Written only by the acceptance of a tab's objects.
+    pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
     pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
@@ -313,7 +314,11 @@ impl State {
         rest: impl IntoIterator<Item = Chained>,
         deployment: Arc<Deployment>,
         door: suzatary_api::gate::Door,
-        Signed { requests, pairings }: Signed,
+        Signed {
+            requests,
+            asks,
+            pairings,
+        }: Signed,
         Performers { postman, acting }: Performers,
         workers: Arc<Workers>,
         Settings {
@@ -379,6 +384,7 @@ impl State {
             ))),
             keys: None,
             requests,
+            asks,
             pairings,
             performing: Arc::default(),
             wall: chrono::Utc::now,
@@ -867,8 +873,7 @@ pub fn app(state: State, dist: &std::path::Path) -> Router {
         Router::new().fallback(not_built)
     };
 
-    // Browsers cache no API answer but an object's literal (`reply::kept`).
-    // Fastest compression: bytes are cheap on a tailnet.
+    // Browsers cache no API answer but an object's literal; fastest compression on a tailnet.
     api.layer(axum::middleware::from_fn(validated::revalidated))
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
@@ -952,6 +957,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
                 instance.requests(),
                 instance.paths.answers.clone(),
             )),
+            asks: Arc::new(suzatary_io::objects::Objects::open(instance.asks())),
             pairings: Arc::new(suzatary_io::pairing::Pairings::at(
                 instance.paths.pairing.clone(),
             )),
@@ -1081,12 +1087,10 @@ pub struct Args {
     /// A TLS key (PEM).
     #[arg(long, requires = "cert")]
     key: Option<PathBuf>,
-    /// The built frontend directory, in place of the instance file's `dist`, so an
-    /// immutable store path is served rather than a checkout a dev build overwrites.
+    /// The built frontend directory, served in place of the instance file's `dist`.
     #[arg(long)]
     dist: Option<PathBuf>,
-    /// Test only, compiled out of the shipped binary: answer every whois with this
-    /// login.
+    /// Test only, compiled out of the shipped binary: answer every whois with this login.
     #[cfg(feature = "fixture")]
     #[arg(long, value_name = "LOGIN")]
     whois_fixture: Option<String>,
@@ -1102,8 +1106,7 @@ pub struct Args {
     #[cfg(feature = "fixture")]
     #[arg(long, value_name = "FILE")]
     build_fixture: Option<PathBuf>,
-    /// Test only: ask the fake Google at this base URL, for its sign-in and its calendars,
-    /// instead of Google's own.
+    /// Test only: ask the fake Google at this base URL instead of Google's own.
     #[cfg(feature = "fixture")]
     #[arg(long, value_name = "URL")]
     google_fixture: Option<String>,

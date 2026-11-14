@@ -40,6 +40,7 @@ mod scene;
 mod signers;
 mod tap;
 mod trust;
+mod trusting;
 mod unproven;
 
 pub use admitted::{Admitted, Seat};
@@ -63,10 +64,11 @@ pub use registry::{
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};
 #[cfg(any(test, feature = "nothing"))]
-pub use scene::scene;
+pub use scene::{phone_trusted, scene};
 pub use signers::Signers;
 pub use tap::Tap;
 pub use trust::{KEPT_CHECKS, Trust};
+pub use trusting::Trusting;
 pub use unproven::Unproven;
 
 #[cfg(test)]

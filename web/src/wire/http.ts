@@ -18,30 +18,20 @@ export namespace http {
     }
   }
 
-  // Whether the box may not have decided: no answer came (`fetch` itself failed) or a 5xx came from it or a gateway. A 4xx
-  // is the box deciding no, and status 0 is an answer of the wrong shape: both were decided.
+  // Whether the box may not have decided: no answer came, or a 5xx; a 4xx and status 0 were decided.
   export const unanswered = (e: unknown): boolean => !(e instanceof ApiError) || e.status >= 500
 
   // A custom header forces a CORS preflight the box never answers, so only a page the box served can act (`gate::check_csrf`).
   export const ACT_HEADER = "X-Suzatary-Act"
 
-  // The write contract this build keeps, which the box's `gate::CLIENT_MIN` must not pass: 2 stamps every instant in UTC,
-  // 3 signs every write with this device's key, 4 reads the conversations from the lines and forgets what is erased, 5
-  // reads the box's turns, card answers, proposed objects, reviews and stored objects as tagged sums, 6 keeps the
-  // lines as a skeleton and their content by hash, in a device database a page of contract 5 cannot open, 7 names what
-  // a replica holds by the frontier the box last named, in a device database a page of contract 6 cannot open, 8 keeps
-  // the lines' skeleton one node per row, in a version of that database a page of contract 7 cannot open, 9 decodes the
-  // steps that name the lines each round reads, which a page of contract 8 refuses, 10 reads its dead keys from the
-  // skeleton's steps and a pull that names no heads, which a page of contract 9 refuses, 11 decodes the step of the box's
-  // own note, which a page of contract 10 refuses.
+  // The write contract this build keeps: a page reloads when the box's `gate::CLIENT_MIN` passes this number.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 11
+  export const CLIENT = 12
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."
 
-  // A box this build may no longer read: it refused this build's contract, or answered in a shape this build does not
-  // know. Who hears it asks the box which build it serves and offers it; one heard before anyone listens is kept.
+  // A box this build may no longer read; one heard before anyone listens is kept.
   let unheard = false
   let stale = (): void => void (unheard = true)
   export const whenStale = (f: () => void): void => {
@@ -67,9 +57,7 @@ export namespace http {
   }
 
 
-  // Each read's last answer by path, with the tag the box gave it (`serve::validated`): the next ask of the path sends
-  // the tag, and a 304 is that answer again. The text is kept and parsed again, never the value, which a decoder may
-  // hand back as it was given. The most recently asked `KEPT` paths, so a tab reading mail after mail holds a few.
+  // Each read's last answer by path, with its tag (`serve::validated`): a 304 is that answer again, kept as text.
   export const KEPT = 24
   type Kept = { readonly tag: string; readonly text: string }
   const kept = new Map<string, Kept>()
@@ -82,12 +70,10 @@ export namespace http {
   // Every answer kept, as text: what a read of this module's memory finds.
   export const keptTexts = (): readonly string[] => [...kept.values()].map(k => k.text)
 
-  // Whether a read's answer is kept: an answer that carries the keys of locked words never is, since the key's bytes
-  // would outlive the erasure that lets them go.
+  // A read's answer that carries the keys of locked words is never kept: they would outlive their erasure.
   export type Keeping = "Kept" | "Never"
 
-  // The protocol the box last answered an API read over ("h2", "http/1.1"), or "" where the browser has not said. The
-  // page's own load may come from the worker's cache, which names none, so the API's answers are what is read.
+  // "h2", "http/1.1", or "".
   export const protocol = (): string => {
     const entries = typeof performance === "undefined" ? [] : performance.getEntriesByType("resource")
     for (let i = entries.length - 1; i >= 0; i -= 1) {
@@ -98,8 +84,7 @@ export namespace http {
   }
   export const NOT_MODIFIED = 304
 
-  // How a read is bounded: its whole answer within `wait.MS` (`Wall`), or no silence of `ms` between two pieces of its
-  // body (`Silence`), for a store's objects, which a phone on a slow network pulls for longer than that and is still pulling.
+  // How a read is bounded: a whole-answer timeout (`Wall`), or a longest silence between pieces (`Silence`).
   export type Bound = { readonly type: "Wall" } | { readonly type: "Silence"; readonly ms: number }
   export const WALL: Bound = { type: "Wall" }
 
@@ -115,7 +100,7 @@ export namespace http {
     return { signal: c.signal, heard, done: () => clearTimeout(t) }
   }
 
-  // The body as text, every piece that arrives counting as heard; the read fails as the box not answering once the signal aborts.
+  // The body as text, each piece counting as heard.
   const textOf = async (response: Response, signal: AbortSignal, heard: () => void): Promise<string> => {
     const body = response.body
     if (body === null) return response.text()
@@ -138,9 +123,7 @@ export namespace http {
     }
   }
 
-  // The loader's read of this path, when it started one: its answer, or its failure, its timeout's the same error as this
-  // read's own. Else, or when the box refused it, this read's own, signed, with the answer it holds, which a 304 means
-  // however many paths were kept since.
+  // The loader's read of this path, else this read's own.
   const answer = async (path: string, signal: AbortSignal): Promise<[Response, Kept | undefined]> => {
     const early = await primed.take(path)
     if (early?.type === "Answered" && early.r.ok) return [early.r, undefined]
@@ -160,7 +143,6 @@ export namespace http {
     try {
       const [response, had] = await answer(path, timer.signal)
       if (response.status === GONE) gone()
-      // A box past what this build reads: the page offers the new one, as it does for a write.
       if (response.status === OUTDATED) stale()
       if (response.status === NOT_MODIFIED && had !== undefined) {
         keep(path, had)
@@ -189,8 +171,7 @@ export namespace http {
     signs = s
   }
 
-  // The box's answer to a request a revoked key signed (`refusal::Status::Wipe`), and who hears it: an answer that
-  // arrives before anyone listens is kept, since a module's first read can run before the page installs its hearer.
+  // The box's answer to a request a revoked key signed (`refusal::Status::Wipe`); one heard before anyone listens is kept.
   export const GONE = 410
   let early = false
   let gone: () => void = () => {
@@ -211,7 +192,7 @@ export namespace http {
 
   const nonce = (): string => hex(crypto.getRandomValues(new Uint8Array(16)).buffer)
 
-  // A signed request's way out, timed by stage; logged only where this device keeps `suzatary.debug.requests` = "1".
+  // Timed by stage, logged where `suzatary.debug.requests` = "1".
   type Trace = { name: string; at: string; stages: [string, number][] }
   const tracing = (): boolean => kv.local.get("suzatary.debug.requests") === "1"
 

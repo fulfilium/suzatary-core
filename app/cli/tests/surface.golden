@@ -58,7 +58,7 @@ GET /api/stores/events read -
 GET /api/stores/lines/skeleton read -
 GET /api/stores/{store}/content read -
 GET /api/stores/{store}/objects read -
-POST /api/stores/{store}/objects act signed
+POST /api/stores/{store}/objects act -
 GET /api/tip read -
 GET /api/todo/{id} read -
 POST /api/todo/{id}/build tap signed

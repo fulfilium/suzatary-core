@@ -1,10 +1,7 @@
-//! Every store's bytes on disk, pinned. A scripted sequence written through each store must
-//! leave exactly the files under `tests/stores/`, and reading a copy of them writes nothing.
-//!
-//! `tests/stores/` is never regenerated: a difference is a change to stored data, which is a
-//! migration. The chain writes the Prodrome's `Change`, so its appends are pinned in
-//! `tests/stores-changes/`; `tests/stores/` keeps its legacy bytes, which a copy is still read
-//! from.
+//! Every store's bytes on disk, pinned: a scripted sequence written through each store leaves
+//! exactly the pinned files, and reading a copy writes nothing. `tests/stores/` is never
+//! regenerated (a difference is a migration); prodromes that write `Change`s are pinned in
+//! `tests/stores-changes/`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -71,9 +68,11 @@ const CALENDAR: &str = "cache/plugins/ics/store";
 const DECISIONS: &str = "decisions";
 const TOPICS: &str = "secretary-topics";
 const TOPIC_ALIASES: &str = "secretary-topic-aliases";
+/// The box's refusals of what a tab posted, pinned in `tests/stores-changes/` only.
+const ASKS: &str = "secretary-asks";
 
 /// Every store pinned in `tests/stores-changes/` only.
-const CHANGED: [&str; 10] = [
+const CHANGED: [&str; 11] = [
     DIGESTS,
     INBOX,
     LINES,
@@ -84,6 +83,7 @@ const CHANGED: [&str; 10] = [
     DECISIONS,
     TOPICS,
     TOPIC_ALIASES,
+    ASKS,
 ];
 
 /// The triage's bookkeeping in its keyed form, pushed and box-local, pinned in
@@ -273,8 +273,7 @@ fn literals(store: &Objects<TodoEvent>) -> Vec<(Hash, String)> {
         .collect()
 }
 
-/// The inbox's prodrome begun with a nonce of zeros, so its bytes can be pinned; the store's own
-/// first write draws a random one.
+/// The inbox's prodrome begun with a nonce of zeros, so its bytes can be pinned.
 fn begun(root: &Path) -> Objects<suzatary_core::secretary::inbox_event::InboxEvent> {
     let store = Objects::open(root.join(INBOX));
     rooted(&store, "inbox");
@@ -400,9 +399,7 @@ fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
     [prodrome_core::event::Actor::new("ada").expect("an actor")].into()
 }
 
-/// The memory: a `Genesis` begun with a nonce of zeros, two facts remembered and one forgotten,
-/// whose text is deleted; then two more remembered and consolidated into a sixth, whose sources'
-/// texts are deleted. The consolidation adds files, so every earlier object keeps its bytes.
+/// The memory: two facts remembered and one forgotten, then two more consolidated into a sixth.
 fn memories(root: &Path) {
     let history = Objects::open(root.join(MEMORY));
     rooted(&history, "memory");
@@ -479,8 +476,7 @@ fn memories(root: &Path) {
         .expect("consolidates");
 }
 
-/// The calendar plugin's store, at its declared schema: a `Genesis` begun with a nonce of zeros,
-/// one occurrence learned, learned again unchanged (nothing written), then cancelled.
+/// The calendar plugin's store: one occurrence learned, learned again unchanged, then cancelled.
 fn calendar(root: &Path) {
     use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
     use suzatary_store::store::learn;
@@ -578,8 +574,7 @@ fn uploads(root: &Path) {
         .expect("kept");
 }
 
-/// The digest: a `Genesis` begun with a nonce of zeros, and one node's summary retracted by
-/// the owner.
+/// The digest: one node's summary retracted by the owner.
 fn digests(root: &Path) {
     use prodrome_core::event::parse_event;
     use suzatary_core::secretary::digest_event::{DigestEvent, DigestVocabulary};
@@ -596,8 +591,7 @@ fn digests(root: &Path) {
     store.append(retracted).expect("appends");
 }
 
-/// The recorded decisions: a `Genesis` begun with a nonce of zeros, one decision decided, a
-/// second superseding it, and the first withdrawn.
+/// The recorded decisions: one decided, a second superseding it, and the first withdrawn.
 fn decisions(root: &Path) {
     use suzatary_core::decisions::{DecisionEvent, DecisionId, Statement};
     let store = Objects::<DecisionEvent>::open(root.join(DECISIONS));
@@ -633,8 +627,7 @@ fn decisions(root: &Path) {
         .expect("appends");
 }
 
-/// The topics and their aliases, each begun with a nonce of zeros: a round put on a topic and
-/// taken off another, and the first topic renamed.
+/// The topics: a round put on a topic and taken off another, and the first topic renamed.
 fn topics(root: &Path) {
     use suzatary_core::secretary::topics::reading::Topics;
     use suzatary_core::secretary::topics::topic::Topic;
@@ -679,6 +672,20 @@ fn topics(root: &Path) {
         .expect("appends");
 }
 
+/// The asks store: a refusal of a topic object a tab posted.
+fn asks(root: &Path) {
+    let asks: Objects<suzatary_core::asks::AskEvent> = Objects::open(root.join(ASKS));
+    rooted(&asks, "asks");
+    asks.append(suzatary_core::receipt::refused(
+        Hash::new("ab".repeat(32)).expect("a name"),
+        at(17, 0),
+        suzatary_core::asks::keeper(),
+        suzatary_core::stores::Kind::Topics,
+        "rests on cd…, which this box does not hold".to_owned(),
+    ))
+    .expect("appends");
+}
+
 fn write_every_store(root: &Path) {
     chain(root);
     let asked = inbox(root);
@@ -687,6 +694,7 @@ fn write_every_store(root: &Path) {
     digests(root);
     decisions(root);
     topics(root);
+    asks(root);
     calendar(root);
     devices(root);
     state(root);
@@ -771,6 +779,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     let uploads = AttachmentStore::new(root.join("secretary/attachments"), Pdftotext::new("."));
     let kept = Blobs::open(root.join("secretary/files"));
     let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
+    let asks = Objects::open(root.join(ASKS));
     let database = Database {
         chains: [(
             ChainName::new("life").expect("a chain name"),
@@ -787,6 +796,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
         decisions: &Objects::open(root.join(DECISIONS)),
         topics: &topics.memberships,
         topic_aliases: &topics.aliases,
+        asks: &asks,
         plugins: [(ics(), &calendar as &dyn Prodrome<_>)].into(),
         triage: &triage,
         triage_local: &triage_local,
@@ -862,6 +872,12 @@ fn decisions_and_topics_read(database: &suzatary_core::stores::Database<'_>) {
     .reading()
     .expect("reads");
     assert_eq!(reading.memberships().len(), 1);
+    let asks = database.asks.objects().expect("reads");
+    let refused = suzatary_core::receipt::refusals(
+        asks.iter().map(|(name, object)| (name, object)),
+        &suzatary_core::stores::Kind::Topics,
+    );
+    assert_eq!(refused.len(), 1);
 }
 
 /// The triage's two documents read back through the key as one.
@@ -971,10 +987,8 @@ pub(crate) fn conversations_at_scale(
     (ids, slots)
 }
 
-/// What a digest read costs at the live store's size, about 10,000 slots over 20 conversations,
-/// each answer about 8 KB: cold, warm, and after one new line; the lines' fold alone and one
-/// conversation, warm. Run by name, in release:
-/// `cargo test --release -p suzatary-io --test all -- --ignored digest_at_scale --nocapture`.
+/// What a digest read costs at the live store's size: cold, warm, and after one new line. Run by
+/// name, in release, with `--ignored digest_at_scale --nocapture`.
 #[test]
 #[ignore = "a measurement, run by name"]
 fn digest_at_scale() {
@@ -1033,11 +1047,8 @@ fn digest_at_scale() {
     });
 }
 
-/// The lines a phone holds at the live size, as a tab's pull hands them: 4,600 lines over four
-/// conversations, a person's turn and a two-block answer by turns, through the box's one door,
-/// and one answer erased; written as `{objects, keys}` to `$SUZATARY_LINES_FIXTURE`, which the
-/// tab's module is timed over (the report of the words plan's tab half). Run by name, in release: `cargo test
-/// --release -p suzatary-io --test all -- --ignored lines_for_a_tab --nocapture`.
+/// The lines a phone holds at the live size, as a tab's pull hands them, written to
+/// `$SUZATARY_LINES_FIXTURE`. Run by name, in release, with `--ignored lines_for_a_tab --nocapture`.
 #[test]
 #[ignore = "a fixture for a measurement, run by name"]
 fn lines_for_a_tab() {
@@ -1179,11 +1190,8 @@ fn lines_written_before_kinds_were_stored_read_whole() {
     }
 }
 
-/// What a compacted node and a record call cost over a digest of about 2,000 nodes, about half of
-/// them stale, as the box's reseal left it: 6,000 lines over 20 conversations, every node
-/// summarised level by level, then low nodes summarised again until half the nodes read stale.
-/// Run by name, in release: `cargo test --release -p suzatary-io --test all -- --ignored
-/// digest_nodes_at_scale --nocapture`.
+/// What a compacted node and a record call cost over a digest of about 2,000 nodes, half stale.
+/// Run by name, in release, with `--ignored digest_nodes_at_scale --nocapture`.
 #[test]
 #[ignore = "a measurement, run by name"]
 #[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]
@@ -1334,14 +1342,9 @@ fn inner(
     kept
 }
 
-/// What a deploy of a change of the scrub's rules does to a store written and summarised under the
-/// rules before it, with no migration run. Run by name in release, `write` under the build before
-/// and `read` under each build, on one directory:
-/// `SUZATARY_RULES_STORE=<dir> SUZATARY_RULES_PHASE=write|read cargo test --release -p suzatary-io
-/// --test all -- --ignored a_rules_change_over_a_stored_digest --nocapture`.
-/// `write` lays 20 conversations of 500 lines and one of 12 lines that each hold a code a claiming
-/// word follows, and summarises every node; `read` prints the census, how many slots read stale,
-/// how many of the 12 lines still show their code, and what the lines and the digest cost to read.
+/// What a deploy of a change of the scrub's rules does to a stored, summarised store, with no
+/// migration run: `SUZATARY_RULES_STORE=<dir> SUZATARY_RULES_PHASE=write|read`, by name, in
+/// release, with `--ignored a_rules_change_over_a_stored_digest --nocapture`.
 #[test]
 #[ignore = "a measurement, run by name"]
 #[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]

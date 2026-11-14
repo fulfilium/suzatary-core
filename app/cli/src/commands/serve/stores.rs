@@ -1,6 +1,5 @@
-//! The secretary's stores as replicas a tab holds. The inbox and the lines are written only by
-//! the box, so a tab only pulls them; the lines' pull carries the keys of the words it sends.
-//! Literals are asked for by hash. The two topic stores are written by a tab too.
+//! The secretary's stores as replicas a tab holds; the box alone writes the inbox, the lines and
+//! the asks, and a tab writes the topic stores, each object signed by its device.
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
@@ -8,12 +7,14 @@ use suzatary_api::server::Server;
 use suzatary_api::wire::StoreName;
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_store::store::StoreError;
+use suzatary_core::asks::AskEvent;
+use suzatary_core::wire::lines::ReceiptPayload;
+use suzatary_store::store::{Prodrome, StoreError};
 
 use super::Chained;
 use super::call::Call;
 use super::chain::Literals;
-use super::guard::Reader;
+use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
 
@@ -34,7 +35,7 @@ pub fn named(segment: &str) -> Result<StoreName, Refusal> {
         ));
     }
     Err(Refusal::not_found(format!(
-        "a tab holds the inbox, the lines, the topics and the topic aliases, not {}",
+        "a tab holds the inbox, the lines, the topics, the topic aliases and the asks, not {}",
         suzatary_base::refusal::shown(segment)
     )))
 }
@@ -43,24 +44,29 @@ pub fn named(segment: &str) -> Result<StoreName, Refusal> {
 ///
 /// # Errors
 /// The store's own.
-pub fn heads(store: StoreName, caps: &Server<'_>) -> Result<Vec<String>, StoreError> {
+pub fn heads(
+    store: StoreName,
+    caps: &Server<'_>,
+    asks: &dyn Prodrome<AskEvent>,
+) -> Result<Vec<String>, StoreError> {
     let tips = match store {
         StoreName::Inbox => caps.secretary.inbox.tips()?,
         StoreName::Lines => caps.secretary.conversations.lines.tips()?,
         StoreName::Topics => caps.secretary.topics.memberships.tips()?,
         StoreName::TopicAliases => caps.secretary.topics.aliases.tips()?,
+        StoreName::Asks => asks.tips()?,
     };
     let mut heads: Vec<String> = tips.iter().map(|h| h.as_str().to_owned()).collect();
     heads.sort();
     Ok(heads)
 }
 
-/// A store a replica pulls whole, by its objects: every one but the lines, whose literals hold
-/// the words of slots no key opens, so a replica pulls their skeleton and their content instead.
+/// A store a replica pulls whole, by its objects: every one but the lines, pulled by skeleton.
 enum Pulled {
     Inbox,
     Topics,
     TopicAliases,
+    Asks,
 }
 
 /// A store pulled by its objects, and the frontier a replica of it holds.
@@ -75,6 +81,7 @@ impl Params for Since {
             StoreName::Inbox => Pulled::Inbox,
             StoreName::Topics => Pulled::Topics,
             StoreName::TopicAliases => Pulled::TopicAliases,
+            StoreName::Asks => Pulled::Asks,
             StoreName::Lines => {
                 return Err(Refusal::not_found(
                     "the lines are pulled by their skeleton: GET /api/stores/lines/skeleton",
@@ -88,8 +95,7 @@ impl Params for Since {
     }
 }
 
-/// `GET /api/stores/<store>/objects?since=<frontier>`: a piece of what a replica holding that
-/// frontier lacks, and how much is left after it.
+/// `GET /api/stores/<store>/objects?since=<frontier>`: a piece of what that frontier lacks.
 pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload>, Refusal> {
     let caps = call.state.first.caps;
     let Since { store, since } = &call.params;
@@ -103,6 +109,7 @@ pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload
         Pulled::TopicAliases => {
             routes::store_objects_since(caps.secretary.topics.aliases, since, books, now, cut)
         }
+        Pulled::Asks => routes::store_objects_since(&*call.state.asks, since, books, now, cut),
     }
     .map(Json)
 }
@@ -118,23 +125,37 @@ impl Params for Written {
         match named(asked.segment("store")?)? {
             StoreName::Topics => Ok(Self::Topics),
             StoreName::TopicAliases => Ok(Self::TopicAliases),
-            StoreName::Inbox | StoreName::Lines => Err(Refusal::method_not_allowed(
-                "the box alone writes the inbox and the lines",
-            )),
+            StoreName::Inbox | StoreName::Lines | StoreName::Asks => {
+                Err(Refusal::method_not_allowed(
+                    "the box alone writes the inbox, the lines and the asks",
+                ))
+            }
         }
     }
 }
 
-/// `POST /api/stores/<store>/objects`: a topic store replica's changes, each written as the
-/// actor the request was proven for.
-pub fn take(
-    call: &Call<prodrome_core::event::Actor, Written, Literals>,
-) -> Result<Json<suzatary_core::wire::lines::ReceiptPayload>, Refusal> {
-    let topics = call.state.first.caps.secretary.topics;
-    let (posted, actor, frontiers) = (&call.body.posted(), &call.guard, &call.state.frontiers);
+/// `POST /api/stores/<store>/objects`: a topic store's changes, each taken only beside a trusted signature.
+pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayload>, Refusal> {
+    let caps = call.state.first.caps;
+    let topics = caps.secretary.topics;
+    let chains = call.state.chain_stores();
+    let (posted, frontiers) = (&call.body.posted(), &call.state.frontiers);
+    let writer = routes::Writer {
+        actor: &call.guard.0,
+        chains: &chains,
+        root: &call.chain.policy.root,
+    };
+    let recording = routes::Recording {
+        asks: &*call.state.asks,
+        at: caps.secretary.clock.now(),
+    };
     match call.params {
-        Written::Topics => routes::receive_changes(topics.memberships, posted, frontiers, actor),
-        Written::TopicAliases => routes::receive_changes(topics.aliases, posted, frontiers, actor),
+        Written::Topics => {
+            routes::receive_changes(topics.memberships, posted, frontiers, writer, recording)
+        }
+        Written::TopicAliases => {
+            routes::receive_changes(topics.aliases, posted, frontiers, writer, recording)
+        }
     }
     .map(Json)
 }
@@ -178,10 +199,8 @@ impl Params for Wanted {
     }
 }
 
-/// `GET /api/stores/<store>/content?hashes=<hashes>`: those objects' literals, kept for good;
-/// the lines' answer is not kept, since a line is its literal until its last key retires and
-/// its husk after, and a kept literal would hold the dead words on the device for a year. The
-/// tab keeps what it takes in its own store.
+/// `GET /api/stores/<store>/content?hashes=<hashes>`: those objects' literals, kept for good but
+/// the lines', since a kept line would hold its dead words on the device after its key retires.
 pub fn content(call: &Call<Reader, Wanted, ()>) -> Result<Response, Refusal> {
     let caps = call.state.first.caps;
     let Wanted { store, hashes } = &call.params;
@@ -192,11 +211,11 @@ pub fn content(call: &Call<Reader, Wanted, ()>) -> Result<Response, Refusal> {
             .map(|answer| Json(answer).into_response()),
         StoreName::Topics => routes::content(caps.secretary.topics.memberships, hashes).map(kept),
         StoreName::TopicAliases => routes::content(caps.secretary.topics.aliases, hashes).map(kept),
+        StoreName::Asks => routes::content(&*call.state.asks, hashes).map(kept),
     }
 }
 
-/// `GET /api/waiting`: the Inbox badge's count, so a tab shows it without pulling the
-/// conversations.
+/// `GET /api/waiting`: the Inbox badge's count, without pulling the conversations.
 pub fn waiting(call: &Call<Reader, (), ()>) -> Result<Json<wire::WaitingPayload>, Refusal> {
     let caps = call.state.first.caps;
     let inbox = suzatary_core::secretary::inbox::fold(caps.secretary.inbox)?;

@@ -1,12 +1,7 @@
-//! A replica of a store whose nodes are its objects, each carrying its literal, so a reading
-//! never waits on a fetch and no key locks its words: the rows of its pull ([`Pulling`]) beside
-//! the objects this replica wrote itself, each with how the box answered it. Nothing here names a
-//! Suzatary store: a store gives the schema its objects are read at.
-//!
-//! Every [`Move`] is a join: the rows' deltas but a purge's are, and an own object's answer only
-//! climbs ([`Answer`]'s order), so two tabs' moves taken in any order and any number of times
-//! hold the same replica. An own object stays whatever the rows do, so a reset or a later epoch
-//! never drops what the box has not taken.
+//! A replica of a store whose nodes are its objects, each with its literal: the rows of its pull
+//! ([`Pulling`]) beside the objects this replica wrote, each with the box's answer. It names no
+//! Suzatary store. Every [`Move`] is a join (an own answer only climbs), so two tabs' moves in
+//! any order hold the same replica, and an own object stays whatever the rows do.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
@@ -22,7 +17,7 @@ use crate::replica::pulling::{Delta, Pulling};
 use crate::replica::row::{Keys, Row};
 use crate::snapshot::{self, NotASnapshot, Unprinted};
 
-/// One object: its name, what it rests on, the prodrome it names itself as in, and its print.
+/// One object: its name, parents, prodrome and print.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Object {
     name: Hash,
@@ -32,10 +27,8 @@ pub struct Object {
 }
 
 impl Object {
-    /// `literal`, named by its bytes, read at `schema` for what it rests on and its prodrome. A
-    /// print that does not parse at the schema rests on nothing and names no prodrome: the
-    /// reading at the schema leaves it out with whatever rests on it (Prodrome SPEC law 44), so
-    /// one such print never stops a pull.
+    /// `literal`, named by its bytes and read at `schema`; a print that does not parse rests on
+    /// nothing, so the reading leaves it out (Prodrome SPEC law 44) and it never stops a pull.
     #[must_use]
     pub fn read<E: Schema>(schema: &E::Vocabulary, literal: String) -> Self {
         let name = Hash::new(hex::encode(Sha256::digest(literal.as_bytes())))
@@ -79,7 +72,7 @@ impl Node for Object {
     }
 }
 
-/// The keys of a store that locks no words: none, ever.
+/// The keys of a store that locks no words: none.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NoKeys;
 
@@ -105,10 +98,10 @@ pub(crate) type ObjectRows = Pulling<Object, NoKeys>;
 /// One move of those rows.
 pub(crate) type ObjectDelta = Delta<Object, NoKeys>;
 
-/// Why the box refused an object: for good, or until the device that signed it is trusted.
+/// Why the box refused an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Refusal {
-    /// Taken once the device is trusted: posted again.
+    /// May be taken later: posted again.
     Trust,
     /// Never taken as it is: held back, with everything resting on it.
     Final,
@@ -122,7 +115,7 @@ pub enum Answer {
     Unsent,
     /// Refused, in the box's words.
     Refused {
-        /// For good, or until trusted.
+        /// Its kind.
         kind: Refusal,
         /// The box's sentence.
         reason: String,
@@ -140,7 +133,7 @@ pub struct Own {
     pub answer: Answer,
 }
 
-/// The replica: the rows, and what it wrote by name.
+/// The rows, and what this replica wrote.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Objects {
     rows: ObjectRows,
@@ -152,7 +145,7 @@ pub struct Objects {
 pub enum Move {
     /// The rows moved.
     Rows(ObjectDelta),
-    /// Objects written, or answered: each joined into what was written.
+    /// Objects written or answered, joined in.
     Own(Vec<Own>),
 }
 
@@ -163,7 +156,7 @@ impl Objects {
         &self.rows
     }
 
-    /// The piece the box answered, `said` heard at `fetched_at`, kept beside the landed row.
+    /// The piece `said`, heard at `fetched_at`, kept beside the landed row.
     pub fn piece(&mut self, said: Said<Object>, fetched_at: u64) -> Move {
         Move::Rows(self.rows.piece(said, NoKeys, fetched_at))
     }
@@ -191,8 +184,7 @@ impl Objects {
         ))
     }
 
-    /// The box's answers to what this replica wrote; an answer about another object is passed
-    /// over, since the replica has nothing of it to hold the answer by.
+    /// The box's answers to what this replica wrote; any other is passed over.
     pub fn answered(&mut self, answers: impl IntoIterator<Item = (Hash, Answer)>) -> Move {
         let owned: Vec<Own> = answers
             .into_iter()
@@ -206,12 +198,38 @@ impl Objects {
         self.took(Move::Own(owned))
     }
 
+    /// The asks' refusals, joined in as final where they name an own object.
+    pub fn refused(&mut self, refused: BTreeMap<Hash, String>) -> Move {
+        let answers: Vec<(Hash, Answer)> = refused
+            .into_iter()
+            .filter(|(name, _)| {
+                self.own.get(name).is_some_and(|own| {
+                    !matches!(
+                        own.answer,
+                        Answer::Refused {
+                            kind: Refusal::Final,
+                            ..
+                        }
+                    )
+                })
+            })
+            .map(|(name, reason)| {
+                let answer = Answer::Refused {
+                    kind: Refusal::Final,
+                    reason,
+                };
+                (name, answer)
+            })
+            .collect();
+        self.answered(answers)
+    }
+
     fn took(&mut self, m: Move) -> Move {
         self.apply(&m);
         m
     }
 
-    /// `m` taken: this replica's own, another tab's, or one read back from the device.
+    /// `m` taken, whoever made it.
     pub fn apply(&mut self, m: &Move) {
         match m {
             Move::Rows(delta) => self.rows.apply(delta),
@@ -232,9 +250,8 @@ impl Objects {
         }
     }
 
-    /// Every object a reading reads: the landed row's, and what this replica wrote that it does
-    /// not hold, less each object refused for good, of a prodrome the box no longer holds, or
-    /// resting on either.
+    /// Every object a reading reads: the landed row's and what this replica wrote, less each
+    /// object refused for good, of a prodrome the box no longer holds, or resting on either.
     #[must_use]
     pub fn standing(&self) -> Vec<&Object> {
         let reading = self.rows.landed().replica().read();
@@ -246,9 +263,8 @@ impl Objects {
             .collect()
     }
 
-    /// What this replica wrote that the box has not taken and may take: unsent, or refused until
-    /// trusted, and neither held by what is held, landed and not, nor held back by a refusal for
-    /// good.
+    /// What this replica wrote that the box has not taken and may take: unsent or refused until
+    /// trusted, not held, and not held back by a refusal for good.
     #[must_use]
     pub fn unsent(&self) -> Vec<&Object> {
         let holding = self.rows.holding();
@@ -270,6 +286,86 @@ impl Objects {
                     )
             })
             .collect()
+    }
+
+    /// What the box refused for good of this replica's writes, with its sentence.
+    #[must_use]
+    pub fn refusals(&self) -> Vec<(&Object, &str)> {
+        self.own
+            .values()
+            .filter_map(|own| match &own.answer {
+                Answer::Refused {
+                    kind: Refusal::Final,
+                    reason,
+                } => Some((&own.object, reason.as_str())),
+                Answer::Unsent
+                | Answer::Refused {
+                    kind: Refusal::Trust,
+                    ..
+                }
+                | Answer::Taken => None,
+            })
+            .collect()
+    }
+
+    /// The unsent changes that no signature this replica wrote covers, read at `schema`; a
+    /// signature the box refused for good covers nothing.
+    #[must_use]
+    pub fn unsigned<E: Schema>(&self, schema: &E::Vocabulary) -> Vec<&Object> {
+        let read = |o: &Object| parse_envelope::<E>(schema, &o.literal).ok();
+        let signed: BTreeSet<Hash> = self
+            .own
+            .values()
+            .filter(|own| {
+                !matches!(
+                    own.answer,
+                    Answer::Refused {
+                        kind: Refusal::Final,
+                        ..
+                    }
+                )
+            })
+            .filter_map(|own| match read(&own.object)? {
+                Envelope::Signed(signature) => Some(signature.object),
+                _ => None,
+            })
+            .collect();
+        self.unsent()
+            .into_iter()
+            .filter(|o| !signed.contains(o.name()) && matches!(read(o), Some(Envelope::Change(_))))
+            .collect()
+    }
+
+    /// [`Objects::unsent`] in posts of at most `most`, each change beside its signatures. A
+    /// change posted before its parent's post waits, and the next exchange posts it again.
+    #[must_use]
+    pub fn unsent_pieces<E: Schema>(
+        &self,
+        schema: &E::Vocabulary,
+        most: usize,
+    ) -> Vec<Vec<&Object>> {
+        let unsent = self.unsent();
+        let names: BTreeSet<&Hash> = unsent.iter().map(|o| o.name()).collect();
+        let mut signatures: BTreeMap<Hash, Vec<&Object>> = BTreeMap::new();
+        let mut rest: Vec<&Object> = Vec::new();
+        for o in unsent {
+            match parse_envelope::<E>(schema, &o.literal) {
+                Ok(Envelope::Signed(signature)) if names.contains(&signature.object) => {
+                    signatures.entry(signature.object).or_default().push(o);
+                }
+                Ok(_) | Err(_) => rest.push(o),
+            }
+        }
+        let mut pieces: Vec<Vec<&Object>> = Vec::new();
+        for o in rest {
+            let mut group = vec![o];
+            group.extend(signatures.remove(o.name()).unwrap_or_default());
+            match pieces.last_mut() {
+                Some(piece) if piece.len() + group.len() <= most => piece.extend(group),
+                Some(_) | None => pieces.push(group),
+            }
+        }
+        pieces
     }
 
     /// What this replica wrote that `held` does not hold.
@@ -348,8 +444,7 @@ enum MoveForm {
 
 impl snapshot::Held for Objects {
     type Given = Given;
-    /// 1: the landed row and the pending pieces, each object with its edges and print, every
-    /// name as its 32 bytes, and what the replica wrote with the box's answer.
+    /// 1: the landed and pending rows and the own objects, every name as its 32 bytes.
     const FORM: u32 = 1;
 
     fn given(&self) -> Given {
@@ -389,7 +484,7 @@ pub fn frame(m: &Move) -> Result<Vec<u8>, Unprinted> {
     snapshot::print(<Objects as snapshot::Held>::FORM, &form)
 }
 
-/// The move `bytes` print, or none for a frame of another form, which this build passes over.
+/// The move `bytes` print, or none for a frame of another form.
 ///
 /// # Errors
 /// [`NotASnapshot`]: a frame of this form cut short, unread, or holding what no replica holds.

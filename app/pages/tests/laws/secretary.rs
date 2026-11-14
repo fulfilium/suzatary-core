@@ -33,11 +33,7 @@ fn secretary_msg() -> impl Strategy<Value = secretary::Msg> {
         Just(secretary::Msg::Close),
         prop::sample::select(vec!["", "zephyr", " zephyr "]).prop_map(|t| secretary::Msg::Searched(t.to_owned())),
         (0u32..4).prop_map(move |n| host(Input::Answered { ask: secretary::Ask::Search(chats::Asking::Rested(n)), answer: Answer::Done { body: json!(1_790_000_000_000_i64) } })),
-        (prop::sample::select(vec![
-            secretary::Closes::Nothing,
-            secretary::Closes::Renaming { topic: "garden".to_owned() },
-            secretary::Closes::Adding { target: "round:talk/1".to_owned() },
-        ]), outcome()).prop_map(move |(closes, answer)| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed: Some(("garden".to_owned(), "yard".to_owned())), closes }), answer })),
+        (prop::sample::select(vec![None, Some(("garden".to_owned(), "yard".to_owned()))]), outcome()).prop_map(move |(renamed, answer)| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed }), answer })),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]
 }

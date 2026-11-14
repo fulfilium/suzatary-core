@@ -43,7 +43,7 @@ snapshots() {
 # tabs' replicas keep later words.
 #
 # The box-local stores (`suzatary_core::store::Kind`); app/cli/tests/guards/lists.rs pins this list.
-VAULTED='secretary-lines-keys secretary-memory-texts secretary-digest-texts secretary-topics secretary-topic-aliases local secretary/attachments secretary/files'
+VAULTED='secretary-lines-keys secretary-memory-texts secretary-digest-texts secretary-topics secretary-topic-aliases secretary-asks local secretary/attachments secretary/files'
 # Claude Code names a project's directory by its path with every `/` a `-`.
 tar czf "$WORK/state.tar.gz" --exclude="*.lock" -C "$HOME" \
   .password-store \

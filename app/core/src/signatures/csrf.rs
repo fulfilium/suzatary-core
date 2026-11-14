@@ -53,15 +53,12 @@ pub fn check_csrf(headers: &ActHeaders<'_>) -> Result<(), Refusal> {
 /// The header a page's build names its write contract in.
 pub const CLIENT_HEADER: &str = "x-suzatary-client";
 
-/// The oldest write contract the box takes from a page. A page older than this writes what the
-/// box cannot take or holds words it never hears erased, so it is refused before it writes and
-/// loads the box's shell instead. Raise it in the same series as a change to what a page writes;
-/// a client that is not a page (no `Sec-Fetch-Site`) is not asked.
-pub const CLIENT_MIN: u32 = 11;
+/// The oldest write contract the box takes from a page; an older page is refused before it writes
+/// and reloads. Raise it in the same series as a change to what a page writes.
+pub const CLIENT_MIN: u32 = 12;
 
-/// The contract this build's own page writes by, as its header says it: what a test writes as,
-/// so raising [`CLIENT_MIN`] never leaves a test writing as a page the box refuses.
-pub const CLIENT: &str = "11";
+/// The contract this build's own page writes by: what a test writes as.
+pub const CLIENT: &str = "12";
 
 /// A page keeps [`CLIENT_MIN`] or later.
 fn current(client: Option<&str>) -> Result<(), Refusal> {
@@ -137,8 +134,7 @@ mod tests {
             Ok(())
         );
     }
-    /// A page older than the box's minimum is told to upgrade, never forbidden; a client that
-    /// is not a page is not asked for a contract.
+    /// A page older than the box's minimum is told to upgrade; a client that is not a page is not asked.
     #[test]
     fn a_page_writing_by_an_older_contract_is_told_to_load_the_new_one() {
         let page = |client| ActHeaders {
@@ -159,6 +155,7 @@ mod tests {
             Some("8"),
             Some("9"),
             Some("10"),
+            Some("11"),
             Some("not a number"),
         ] {
             let refused = check_csrf(&page(stale)).unwrap_err();
@@ -166,10 +163,10 @@ mod tests {
         }
         assert_eq!(
             check_csrf(&page(None)).unwrap_err().message(),
-            "this page writes by contract none, and the box takes 11 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
+            "this page writes by contract none, and the box takes 12 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
         );
-        assert_eq!(check_csrf(&page(Some("11"))), Ok(()));
         assert_eq!(check_csrf(&page(Some("12"))), Ok(()));
+        assert_eq!(check_csrf(&page(Some("13"))), Ok(()));
         assert_eq!(
             check_csrf(&ActHeaders {
                 site: None,

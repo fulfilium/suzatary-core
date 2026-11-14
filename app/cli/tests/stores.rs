@@ -547,8 +547,12 @@ fn topics_begun(base: &str) -> (prodrome_core::event::Hash, Vec<String>) {
     (genesis, heads)
 }
 
-/// A tab's topic on the first round of `default`, written as `actor` over `genesis`.
-fn added(genesis: &prodrome_core::event::Hash, actor: &str) -> String {
+/// A tab's topic on the first round of `default`, written as `actor` over `genesis` and `deps`.
+fn added(
+    genesis: &prodrome_core::event::Hash,
+    deps: Vec<prodrome_core::event::Hash>,
+    actor: &str,
+) -> prodrome_core::event::Envelope<suzatary_core::secretary::topics::reading::MembershipEvent> {
     let event = prodrome_core::tags::membership::added::<
         suzatary_core::secretary::topics::reading::Topics,
     >(
@@ -559,41 +563,73 @@ fn added(genesis: &prodrome_core::event::Hash, actor: &str) -> String {
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         common::actor(actor),
     );
-    let change =
-        prodrome_core::change::mk_change(genesis.clone(), Vec::new(), event).expect("a change");
-    prodrome_core::event::canonical_envelope(&prodrome_core::event::Envelope::Change(change))
+    prodrome_core::event::Envelope::Change(
+        prodrome_core::change::mk_change(genesis.clone(), deps, event).expect("a change"),
+    )
 }
 
-/// A tab posts a topic it wrote offline, and the box takes it as the actor its peer maps to, from
-/// a device the history trusts; a re-post takes nothing, and a change naming another actor is
-/// refused by name.
+/// The change's print and the print of `key`'s signature of it, as a tab posts them.
+fn signed_by(
+    change: &prodrome_core::event::Envelope<
+        suzatary_core::secretary::topics::reading::MembershipEvent,
+    >,
+    key: &prodrome_core::sign::Secret,
+) -> Vec<String> {
+    let signature: prodrome_core::event::Envelope<
+        suzatary_core::secretary::topics::reading::MembershipEvent,
+    > = prodrome_core::event::Envelope::Signed(key.sign(&prodrome_core::event::seal_hash(change)));
+    vec![
+        prodrome_core::event::canonical_envelope(change),
+        prodrome_core::event::canonical_envelope(&signature),
+    ]
+}
+
+fn phone() -> prodrome_core::sign::Secret {
+    suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE)
+}
+
+/// The asks store's refusals, by their prints.
+fn recorded(base: &str) -> Vec<String> {
+    objects(base, "asks", "")["objects"]
+        .as_array()
+        .expect("objects")
+        .iter()
+        .filter_map(|o| o["literal"].as_str())
+        .filter(|literal| literal.starts_with("Change("))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// A tab posts a topic it wrote offline, signed by its device, and the box takes it with its
+/// signature as the actor its peer maps to; a re-post takes nothing. A change naming another
+/// actor is refused by name, a signed change resting on what the box does not hold waits and is
+/// recorded nowhere, and one resting on a change refused for good is refused for good and
+/// recorded once in the asks, which every device pulls, however often it is posted.
 #[test]
 fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     let base = writing("stores-topic");
     let (genesis, _) = topics_begun(&base);
     let url = format!("{base}/api/stores/topics/objects");
-    let print = added(&genesis, "ada");
-    let mut taken = common::act(&url, &serde_json::json!({"objects": [print]}));
+    let prints = signed_by(&added(&genesis, Vec::new(), "ada"), &phone());
+    let mut taken = common::act(&url, &serde_json::json!({ "objects": prints }));
     assert_eq!(common::status(&taken), 200);
     let receipt = common::body_json(&mut taken);
     assert_eq!(
         receipt["adopted"].as_array().map(Vec::len),
-        Some(1),
+        Some(2),
         "{receipt}"
     );
     let heads = &receipt["heads"];
     assert_eq!(objects(&base, "topics", "")["heads"], *heads);
-    let mut again = common::act(&url, &serde_json::json!({"objects": [print]}));
+    let mut again = common::act(&url, &serde_json::json!({ "objects": prints }));
     assert_eq!(
         common::body_json(&mut again)["already"]
             .as_array()
             .map(Vec::len),
-        Some(1)
+        Some(2)
     );
-    let mut foreign = common::act(
-        &url,
-        &serde_json::json!({"objects": [added(&genesis, "triage")]}),
-    );
+    let theirs = signed_by(&added(&genesis, Vec::new(), "triage"), &phone());
+    let mut foreign = common::act(&url, &serde_json::json!({ "objects": theirs }));
     let refused = common::body_json(&mut foreign);
     assert!(
         refused["refused"][0]["reason"]
@@ -602,23 +638,66 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
         "{refused}"
     );
     assert_eq!(objects(&base, "topics", "")["heads"], *heads);
+    assert_eq!(recorded(&base), Vec::<String>::new());
+
+    let unheld = prodrome_core::event::Hash::new("f".repeat(64)).expect("a name");
+    let orphan = added(&genesis, vec![unheld], "ada");
+    let posted = serde_json::json!({ "objects": signed_by(&orphan, &phone()) });
+    let mut waits = common::act(&url, &posted);
+    assert_eq!(common::body_json(&mut waits)["refused"][0]["kind"], "trust");
+    assert_eq!(recorded(&base), Vec::<String>::new());
+
+    let triage = added(&genesis, Vec::new(), "triage");
+    let on_theirs = added(
+        &genesis,
+        vec![prodrome_core::event::seal_hash(&triage)],
+        "ada",
+    );
+    let mut objects = vec![prodrome_core::event::canonical_envelope(&triage)];
+    objects.extend(signed_by(&on_theirs, &phone()));
+    objects.push(prodrome_core::event::canonical_envelope(&on_theirs));
+    for _ in 0..2 {
+        let mut rests = common::act(&url, &serde_json::json!({ "objects": objects }));
+        let receipt = common::body_json(&mut rests);
+        assert!(
+            receipt["refused"]
+                .as_array()
+                .is_some_and(|all| all.iter().all(|r| r["kind"] == "final")),
+            "{receipt}"
+        );
+    }
+    let refusals = recorded(&base);
+    assert_eq!(refusals.len(), 1, "{refusals:?}");
+    assert!(
+        refusals[0].contains(prodrome_core::event::seal_hash(&on_theirs).as_str())
+            && refusals[0].contains("store='topics'"),
+        "{}",
+        refusals[0]
+    );
 }
 
-/// Nobody but a trusted device on a peer `web.act_as` maps writes a topic: an untrusted device
-/// key, an unsigned request and a viewer who acts as nobody are refused at the door, and the
-/// store holds only its genesis after each. The box alone writes the inbox and the lines.
+/// Nobody but a trusted device of a peer `web.act_as` maps writes a topic: a change signed by a
+/// key no chain trusts, or by no key, is refused until trusted and recorded nowhere, a viewer who
+/// acts as nobody is refused at the door, and the store holds only its genesis after each. The
+/// box alone writes the inbox, the lines and the asks.
 #[test]
 fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
     let base = writing("stores-topic-refused");
     let (genesis, heads) = topics_begun(&base);
     let url = format!("{base}/api/stores/topics/objects");
-    let body = serde_json::json!({"objects": [added(&genesis, "ada")]});
+    let change = added(&genesis, Vec::new(), "ada");
     let stranger = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
-    assert_eq!(
-        common::status(&common::act_signed(&url, &body, &stranger)),
-        403
-    );
-    assert_eq!(common::status(&common::act_unsigned(&url, &body)), 403);
+    for posted in [
+        signed_by(&change, &stranger),
+        vec![prodrome_core::event::canonical_envelope(&change)],
+    ] {
+        let mut answer = common::act(&url, &serde_json::json!({ "objects": posted }));
+        assert_eq!(common::status(&answer), 200);
+        let receipt = common::body_json(&mut answer);
+        assert_eq!(receipt["refused"][0]["kind"], "trust", "{receipt}");
+        assert_eq!(receipt["adopted"].as_array().map(Vec::len), Some(0));
+    }
+    assert_eq!(recorded(&base), Vec::<String>::new());
     let viewer = {
         let whois = common::FakeWhois::new().naming(common::v4(), ada());
         let fakes = Fakes::new("stores-topic-viewer").whois(whois);
@@ -628,7 +707,9 @@ fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
             .base
     };
     let (viewer_genesis, viewer_heads) = topics_begun(&viewer);
-    let asked = serde_json::json!({"objects": [added(&viewer_genesis, "ada")]});
+    let asked = serde_json::json!({
+        "objects": signed_by(&added(&viewer_genesis, Vec::new(), "ada"), &phone())
+    });
     assert_eq!(
         common::status(&common::act(
             &format!("{viewer}/api/stores/topics/objects"),
@@ -644,7 +725,7 @@ fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
         objects(&base, "topics", "")["heads"],
         serde_json::json!(heads)
     );
-    for store in ["inbox", "lines"] {
+    for store in ["inbox", "lines", "asks"] {
         assert_eq!(
             common::status(&common::act(
                 &format!("{base}/api/stores/{store}/objects"),

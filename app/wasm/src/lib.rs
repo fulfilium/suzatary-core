@@ -1,20 +1,12 @@
-//! Suzatary's browser module: the Prodrome's exports, generic over a schema, instantiated at
-//! this application's schemas, beside the evaluator and the lifecycle events a replica spells.
-//!
-//! A class per schema (`new Todos(objects)` reads the objects once; each method asks its
-//! question of what was read, and `append` writes into it: a tab's act is the Prodrome's own
-//! `Change`, its deps read off this replica's fold, so the tab and the box write the same bytes
-//! holding the same objects). Everything here parses its arguments, calls the core once and
-//! prints the answer: no arithmetic and no policy, so the tab and the box are one reading.
-//! A refusal is the JS exception, never a panic, which would poison the module for the session.
-//! No clock: every instant is an argument.
-//!
-//! Every reading is total over what a class holds (Prodrome SPEC law 44): a print that does not
-//! parse at the schema is left out with what rests on it. The Prodrome's own readings answer
-//! `excluded`; this module's are the box's answers over what was read, byte for byte, and leave
-//! what was left out to `tips`, a function of the prints the tab asks once per reading.
+//! Suzatary's browser module: the Prodrome's exports at this application's schemas, beside the
+//! evaluator and the lifecycle events a replica spells. A class per schema reads its objects
+//! once; every method parses its arguments, calls the core once and prints the answer, so the
+//! tab and the box are one reading. A refusal is the JS exception, never a panic, which would
+//! poison the module. No clock: every instant is an argument. A print that does not parse at the
+//! schema is left out with what rests on it (SPEC law 44), and `tips` says what was.
 #![forbid(unsafe_code)]
 
+mod asks;
 mod chains;
 mod counts;
 mod evaluator;

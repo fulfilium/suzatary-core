@@ -1,26 +1,7 @@
 /**
- * THE SECRETARY, END TO END.
- *
- * The real `suzatary serve`, the real routes, the real conversation store on
- * disk — and two substitutions, both compiled out of the shipped binary:
- * `--model-fixture` answers a turn from a script instead of running `claude -p`,
- * and `--smtp-fixture` RECORDS what a tap would have sent instead of sending
- * it. Everything between those two is the program: a scripted reply that asks
- * for `propose_email` runs the real handler, writes a real proposal into a real
- * file, and the page draws it from the real route.
- *
- * The claims §10.3 makes that only a page can show, among them:
- *
- * 1. A proposal card shows the EXACT text — every recipient, the subject, the
- *    whole body — because the card is the confirmation CLAUDE.md requires.
- * 2. The writing login's tap is accepted, the fixture's recorder holds exactly
- *    what would have gone out, and a second tap sends nothing.
- * 3. DISMISSING hides it from the Inbox count and shows the reason.
- * 4. A URL in the box's own act turn is a link; in a model's prose it is not.
- * 5. The transcript keeps the reader's scroll and its drawn rounds as answers land.
- *
- * Every scene that moves a conversation runs on `E2E_BASE_WRITE`; the one that reads the box's own rounds runs
- * on `E2E_BASE_PROPOSED`, whose store holds today's review and sweep.
+ * THE SECRETARY, END TO END: the real server, routes and stores, with a scripted model (`--model-fixture`) and a
+ * postman that records instead of sending (`--smtp-fixture`), both compiled out of the shipped binary. Every scene that
+ * moves a conversation runs on `E2E_BASE_WRITE`; the one that reads the box's own rounds on `E2E_BASE_PROPOSED`.
  */
 
 import assert from "node:assert/strict";
@@ -40,21 +21,8 @@ const app = await suite("secretary");
 const SUBJECT = "The deed documents";
 
 /**
- * A FRESH DATED CONVERSATION, minted directly over the route rather than
- * through the UI — `start` (POST) is untouched by the default-conversation
- * series (`docs/ONECHAT-PLAN-2026-09-13.md` §4, §6 commit 7), so this is
- * still the same write every `openConversation` call on the page makes. Doing
- * it over `fetch` rather than a button click keeps every scene's conversation
- * ISOLATED — the point of a dated id in the first place — without this file
- * depending on wherever the "Start a conversation" affordance lives on any
- * given page.
- *
- * ⚠️ LANDS ON `#/secretary/default` FIRST, NEVER THE BARE `#/secretary`:
- * `page.navigate` waits for `location.href` to equal exactly what it asked
- * for (`cdp.ts`'s own contract), and the bare hash now forwards itself away
- * before that can ever be true. `#/secretary/default` is a stable landing —
- * this is only here to give `evaluate` a same-origin document to run the
- * `fetch` from.
+ * A FRESH DATED CONVERSATION, minted over the route so every scene's conversation is isolated. It lands on
+ * `#/secretary/default` first: the bare `#/secretary` forwards itself before `page.navigate` sees it.
  */
 async function freshConversation(base: string): Promise<string> {
   await app.page.navigate(`${base}/#/secretary/default`);
@@ -78,17 +46,8 @@ app.scene("a proposal card shows the exact text that would be sent", async () =>
   await converse(WRITE_BASE, "propose the harrow reply");
   await app.page.waitFor(`document.querySelector(".proposal") !== null`, { timeout: 20000 });
 
-  // EVERY FIELD, VERBATIM. This is the confirmation, so a scene that checked
-  // only the subject would be checking the half that cannot go to the wrong
-  // person.
-  //
-  // READ BY LABEL, NOT BY POSITION. The first attempt asked for
-  // `.proposalfield:nth-of-type(1)` and matched NOTHING: `nth-of-type` counts
-  // elements of the same TAG among their siblings, and the card's first div is
-  // `.proposalact`, so the first field is the second div. A positional selector
-  // would also have gone quietly wrong the day a proposal carried a `Cc`, which
-  // the card draws only when it has one. The label is what a person reads, so
-  // it is what this reads.
+  // EVERY FIELD, VERBATIM, READ BY LABEL: the card is the confirmation, and a positional selector would go wrong the
+  // day a proposal carried a `Cc`.
   const card = await app.page.evaluate<string>(
     `JSON.stringify((() => {
        const card = document.querySelector('.proposal');
@@ -120,16 +79,8 @@ app.scene("a proposal card shows the exact text that would be sent", async () =>
 });
 
 /**
- * DISMISSING IS THE OTHER ANSWER, and it is three facts: the card says so, the
- * Send button is gone, and the INBOX drops its row. The third is the one a
- * unit test cannot see.
- *
- * The Inbox is checked by this proposal's own row, never by how many rows it
- * draws: the box files cards of its own whenever it owes them (a secret that
- * does not resolve, a model that stops answering), and another round can file
- * a proposal meanwhile, so the count moves for reasons that are not this
- * dismissal. The scene files one such proposal from a second conversation
- * while this one is answered, and its row stays.
+ * DISMISSING: the card says so, Send is gone, and the Inbox drops its row. The Inbox is checked by this proposal's own
+ * row, never by a count, since the box and another round file cards meanwhile.
  */
 app.scene("dismissing a proposal drops it from the Inbox and shows the reason", async () => {
   await converse(WRITE_BASE, "propose the reply to dismiss");
@@ -183,10 +134,7 @@ app.scene("dismissing a proposal drops it from the Inbox and shows the reason", 
     0,
     "an answered proposal offers no Send",
   );
-  // AND THE SECRETARY SEES IT. The transcript carries an act turn, which is
-  // what the next round reads. The box writes the act line after the inbox
-  // records the dismissal, and the tab pulls the two stores apart, so the
-  // card can read Dismissed a moment before the turn is drawn.
+  // AND THE SECRETARY SEES IT: the act line lands after the dismissal, so the card can read Dismissed first.
   await app.page.waitFor(`${said("act")}.includes("dismissed it: wrong person")`, { timeout: 15000 });
 
   await app.page.navigate(`${WRITE_BASE}/#/inbox`);
@@ -195,10 +143,7 @@ app.scene("dismissing a proposal drops it from the Inbox and shows the reason", 
 });
 
 /**
- * A CHANGESET CARD IS A DIFF (§10.3, "Changesets"), and it offers Confirm,
- * Dismiss and Reply — the same three answers a proposed email gets, drawn with
- * the same row a triage card's diff uses. Confirming APPLIES it: this is the
- * one scene that checks the acts actually land on the chain.
+ * A CHANGESET CARD IS A DIFF with Confirm, Dismiss and Reply, and Confirming applies it to the chain.
  */
 app.scene("a changeset card shows the diff, and Confirm applies it", async () => {
   await converse(WRITE_BASE, "propose a test changeset");
@@ -269,21 +214,9 @@ app.scene("a changeset card shows the diff, and Confirm applies it", async () =>
 });
 
 /**
- * A PROPOSED ACT, PERFORMED (`docs/SECRETARYACTS-PLAN-2026-09-14.md`, §6
- * commit 10): the box's own counterpart to a proposed email — the card names
- * the account and offers Run, with the same two-press confirm every other
- * proposal uses, and the sentence it shows is `Act::sentence`'s own words on
- * the wire (`wire::ProposedAct::Auth.sentence`), never a second composition
- * of them.
- *
- * `--model-fixture` now answers with `Acting::Recording` rather than
- * `Acting::NotYet` (commit 10 of the series): a tap performs the act on NO
- * THREAD AT ALL, so by the time the tap's own response lands the wire already
- * reports `acted` — no polling, no race. The card draws the `Done:` state and
- * the transcript carries the two act turns `begin_recording` wrote: the
- * announced sign-in sentence, whose `https://microsoft.com/devicelogin` is a
- * link because it is an ACT turn (`refs.ts`'s own rule, commit 6), and the
- * completion sentence.
+ * A PROPOSED ACT, PERFORMED: the card names the account and offers Run behind the two-press confirm, its sentence is
+ * `Act::sentence`'s own, and `Acting::Recording` performs it within the tap, so the card reads Done and the transcript
+ * carries the act turns, the sign-in URL a link because the box wrote it.
  */
 app.scene("a proposed act shows the account, and Run performs it in one round trip", async () => {
   await converse(WRITE_BASE, "propose an act");
@@ -349,11 +282,8 @@ app.scene("a proposed act shows the account, and Run performs it in one round tr
 });
 
 /**
- * A MODEL TURN'S URL IS NEVER LINKED — `refs.ts`'s negative half of the
- * act-turn rule (commit 6), checked here in a real browser rather than only
- * under node: an `https://` token in the box's OWN act turns is a link
- * because the box wrote it, and the same token in a model's prose is not,
- * because a model has just read attacker-controlled mail.
+ * A MODEL TURN'S URL IS NEVER LINKED: a token in the box's own act turn is a link, and in a model's prose, which may
+ * have read attacker-controlled mail, it is not.
  */
 app.scene("a model turn's URL stays plain text, never a link", async () => {
   await converse(WRITE_BASE, "give me a link");
@@ -387,10 +317,7 @@ app.scene("the tap is accepted for the writing login, and records what would go"
   await app.page.click(".proposal .act-send.confirming");
   await app.page.waitFor(`document.querySelector(".proposal-sent") !== null`, { timeout: 15000 });
 
-  // NOTHING WAS SENT, AND THE RECORDER IS THE EVIDENCE. `$SUZATARY_E2E_SENT` is
-  // the file the fixture postman appends to — one JSON line per message that
-  // WOULD have gone — so this asserts on the message rather than on the absence
-  // of one.
+  // NOTHING WAS SENT, AND THE RECORDER IS THE EVIDENCE: `$SUZATARY_E2E_SENT` holds one line per message that would have gone.
   const recorded = process.env["SUZATARY_E2E_SENT"] ?? "";
   assert.notEqual(recorded, "", "the suite names a recorder file");
   // COUNTED BY SUBJECT: the recorder is shared, and the Inbox's retry scenes
@@ -489,12 +416,8 @@ app.scene("the brand, a history's hash links and an answer's Copy, Reply and its
   );
 });
 /**
- * STREAMING NEVER SCROLLS A DRIFTED-UP BOX (`docs/CHAT-PLAN-2026-09-25.md`
- * §4.9, §5). The reader scrolls up; a question sent from elsewhere is
- * answered while they read, the place fills and the answer lands — and the
- * box stays exactly where they left it, the pill offering the way down.
- * (The fixture model answers whole, so what grows here is the place and the
- * landed round; `web/test/anchor.test.ts` pins the same law over every event.)
+ * STREAMING NEVER SCROLLS A DRIFTED-UP BOX: the reader scrolls up, an answer lands, and the box stays where they left it,
+ * the pill offering the way down.
  */
 app.scene("streaming never scrolls a drifted-up box", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -505,10 +428,7 @@ app.scene("streaming never scrolls a drifted-up box", async () => {
     await app.page.click(".composesend");
     await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === ${n}`, { timeout: 20000 });
   }
-  // THE SIXTH SEND SETTLES AFTER THE READER'S WHEEL, on a busy page. Its answer is drawn from the lines' pull, and the
-  // send settles after the inbox's, which is held; the page's thread is kept busy while the wheel arrives, so the
-  // compositor scrolls before the page hears the wheel, and the settled send then asks to place its question. That
-  // order is what a loaded machine makes; here it is made on purpose.
+  // THE SIXTH SEND SETTLES AFTER THE READER'S WHEEL, on a page kept busy on purpose: the order a loaded machine makes.
   const settling = await app.page.holdRequests(["/api/stores/inbox/"]);
   await app.page.type(".composebox", "give me a rendered answer 6");
   await app.page.click(".composesend");
@@ -535,15 +455,9 @@ app.scene("streaming never scrolls a drifted-up box", async () => {
 const QUESTION_AT_TOP = `Math.abs([...document.querySelectorAll(".round")].findLast((r) => r.querySelector(".turn-person") !== null).getBoundingClientRect().top - document.querySelector("body > header").getBoundingClientRect().bottom) <= 1`;
 
 /**
- * THE PAGE MOVING THE BOX SETTLES NOTHING; THE READER'S SCROLL DOES. A question just sent is held at the top with
- * room beneath it. Content drawn above it (an older round, a banner) makes the browser anchor the box, and that
- * scroll is the page's: the question stays held. The reader's own scroll up past a screen above what the box shows
- * lets it go, and the room beneath goes with it: the reader stays drifted, offered the pill when an answer lands, never
- * pulled down.
- *
- * ⚠️ THE PAGE ANCHORS THE BOX AGAIN RIGHT AFTER THE WHEEL. The transcript counts a scroll within a moment of the
- * reader's input as theirs (`READER_MS`), so a scroll the page causes then, such as a block's HTML replacing its
- * source above, is counted as the reader's. The scene makes that happen on every run.
+ * THE PAGE MOVING THE BOX SETTLES NOTHING; THE READER'S SCROLL DOES. A question held at the top stays held when the
+ * browser anchors the box; the reader's own scroll up lets it go, room included, and an answer then offers the pill.
+ * ⚠️ The scene makes the page anchor the box right after the wheel, within `READER_MS`, on every run.
  */
 app.scene("content drawn above a held question keeps it held, and the reader's scroll up drifts for good", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -582,10 +496,8 @@ app.scene("content drawn above a held question keeps it held, and the reader's s
 });
 
 /**
- * THE READER'S PLACE IS READ WITHOUT THE ROOM. A question held at the top has a window of empty room beneath it, and
- * the room goes as soon as the reader scrolls. The reader here scrolls up to a quarter of a screen above what the box
- * shows. With the room counted, that place is more than a screen above the box's end. Without it, the place is
- * within a screen, which is the bottom, so the hold goes to the newest and the next answer brings no pill.
+ * THE READER'S PLACE IS READ WITHOUT THE ROOM: a quarter screen up is within a screen of the end without the room, so
+ * the hold goes to the newest and the next answer brings no pill.
  */
 app.scene("a reader's scroll up from a held question is read against what the box shows, not the room under it", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -618,10 +530,7 @@ app.scene("a reader's scroll up from a held question is read against what the bo
 });
 
 /**
- * A FINISHED MODEL TURN, IN BLOCKS (`docs/CHAT-PLAN-2026-09-25.md` §4.5). A
- * heading, a paragraph and a `#panel` come back as three blocks of typst's
- * HTML, parsed by `rich.ts` alone, and the raw text stays underneath for
- * copy/select.
+ * A FINISHED MODEL TURN, IN BLOCKS: typst's HTML parsed by `rich.ts` alone, the raw text underneath for copy.
  */
 app.scene("a heading, a paragraph and a panel render as three blocks, with the source in a details", async () => {
   await converse(WRITE_BASE, "give me a rendered answer");
@@ -654,11 +563,7 @@ app.scene("a heading, a paragraph and a panel render as three blocks, with the s
 });
 
 /**
- * THE TRANSCRIPT AS A PLACE (`docs/CHATSHAPE-PLAN-2026-09-15.md` §4.4, §6
- * commit 6): a second round landing appends a new one rather than rebuilding
- * every round already drawn. The first round's own answer is marked with a
- * property set directly on the live DOM node, so finding it still there after
- * the second answer lands is evidence the node itself survived.
+ * THE TRANSCRIPT AS A PLACE: a second round appends, and the first answer's live DOM node survives it.
  */
 app.scene("a second message lands without rebuilding the first round's answer", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -689,10 +594,7 @@ app.scene("a second message lands without rebuilding the first round's answer", 
 });
 
 /**
- * THE BOX EMPTIES WHEN A QUESTION LEAVES, NOT WHEN THE BOX ANSWERS IT. The first `say` is held at
- * the network, so the next question is typed while the first send has not settled; let through, the first is answered
- * and read again, and the next question is still in the box, where Send finds it. Before, the box was emptied once
- * the send settled, wiping what had been typed since: the flake both scenes above it timed out on.
+ * THE BOX EMPTIES WHEN A QUESTION LEAVES, NOT WHEN THE BOX ANSWERS IT: what is typed while a send is held is kept.
  */
 app.scene("the next question typed before a send settles stays in the box, and both are sent", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -720,17 +622,13 @@ app.scene("the next question typed before a send settles stays in the box, and b
 });
 
 /**
- * THE SECRETARY AS A LAYER, ON A LAPTOP: at 62rem and up the panel stands
- * beside the todo list, showing the whole conversation when nothing is
- * selected, and a writer sends from it.
+ * THE SECRETARY AS A LAYER, ON A LAPTOP: at 62rem and up the panel stands beside the todo list, and a writer sends from it.
  */
 app.scene("the panel is present on the todo list at 62rem and shows the whole conversation", async () => {
   await app.resize(DESKTOP);
   await app.page.navigate(`${WRITE_BASE}/#/`);
   await app.page.waitFor(`document.querySelector(".secretarypanel") !== null`, { timeout: 15000 });
-  // THE HEADER IS DRAWN FROM THE SOURCE'S FIRST WINDOW (§9.3's fallback needs
-  // to know whether it fired), not at mount — so this waits for TEXT, not
-  // merely for the element to exist.
+  // THE HEADER IS DRAWN FROM THE SOURCE'S FIRST WINDOW, so this waits for text.
   await app.page.waitFor(
     `(document.querySelector(".secretarypanel .frameheader")?.textContent ?? "") !== ""`,
     { timeout: 15000 },
@@ -744,20 +642,14 @@ app.scene("the panel is present on the todo list at 62rem and shows the whole co
   if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
     await app.page.click(".panelcollapse");
   }
-  // THE PANEL SCROLLS ITSELF, NEVER THE PAGE UNDER IT (2026-09-16, the owner:
-  // "Todos page is landing me at the bottom not top"): the conversation's
-  // first draw jumps to its newest turn, and in a frame that jump has to
-  // land in the frame's own scroll box. The list behind it stays at the top.
+  // THE PANEL SCROLLS ITSELF, NEVER THE PAGE UNDER IT: the list behind stays at the top.
   await app.page.waitFor(`document.querySelector(".secretarypanel .turns") !== null`, { timeout: 15000 });
   assert.equal(
     await app.page.evaluate<number>(`document.scrollingElement.scrollTop`),
     0,
     "mounting the panel must not scroll the todo list",
   );
-  // THE COMPOSER IS PINNED, OUTSIDE THE SCROLLING BOX, SO IT IS ALWAYS ON
-  // SCREEN (§9.3, §9.4 commit 15) — the same symptom as the sheet's, one
-  // frame over: a composer inside `.panelscroll` would need scrolling down
-  // past the transcript before "tell it something" was reachable at all.
+  // THE COMPOSER IS PINNED, OUTSIDE THE SCROLLING BOX, SO IT IS ALWAYS ON SCREEN.
   await app.page.waitFor(`document.querySelector(".secretarypanel .composebox") !== null`, { timeout: 15000 });
   const composeRect = await app.page.evaluate<{ top: number; bottom: number }>(
     `(() => { const r = document.querySelector(".secretarypanel .composebox").getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`,
@@ -768,10 +660,7 @@ app.scene("the panel is present on the todo list at 62rem and shows the whole co
   await sendsFrom(".secretarypanel", "said in the panel by Send", "button");
   await sendsFrom(".secretarypanel", "said in the panel by Enter", "Enter");
 
-  // BELOW 62rem THE PANEL IS OUT OF THE DOCUMENT, not hidden: a hidden panel
-  // held the default conversation's turns, and every phone scene that asked
-  // the page for `.turnanswer` or `.turn-act` counted them once an earlier
-  // file had written there.
+  // BELOW 62rem THE PANEL IS OUT OF THE DOCUMENT, not hidden, so no phone scene counts its turns.
   await app.resize(PHONE);
   await app.page.waitFor(`document.querySelector(".secretarypanel") === null`, { timeout: 8000 });
 });
@@ -817,10 +706,7 @@ async function sendsFrom(scope: string, said: string, by: "button" | "Enter" | "
 }
 
 /**
- * A PHOTO SENT IN THE CHAT IS DRAWN ON ITS TURN. The photo is a real JPEG the page draws
- * on a canvas, uploaded through the same gated route the composer uses; the
- * scene then waits for the transcript to draw it at its own size, which
- * proves the store, the say, the wire and the read route in one pass.
+ * A PHOTO SENT IN THE CHAT IS DRAWN ON ITS TURN, at its own size: the store, the say, the wire and the read route.
  */
 app.scene("a photo sent in the chat is drawn on its turn", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
@@ -879,10 +765,7 @@ mkdirSync(SHOTS, { recursive: true });
 const photographed = (name: string): Promise<void> => app.page.screenshot(join(SHOTS, `${name}.png`));
 
 /**
- * A PDF PICKED IN THE COMPOSER IS SENT AND NAMED ON ITS TURN. The file goes in
- * through the composer's own input, as the phone's picker hands it over, so the
- * upload, the thumbnail, Send and the transcript's chip are one pass; the box
- * reads the PDF's text with pdftotext before it keeps it.
+ * A PDF PICKED IN THE COMPOSER IS SENT AND NAMED ON ITS TURN, through the composer's own input.
  */
 app.scene("a PDF picked in the composer is sent and named on its turn", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
@@ -939,11 +822,8 @@ app.scene("a PDF naming an SSN waits for the owner, then goes to the Drive", asy
 });
 
 /**
- * THE ONE "NEEDS YOU" PATH, END TO END (`needsyou.ts`, `notify::needs_you`).
- * With the app open, the secretary asks to read a page; nothing web-specific
- * draws the popup, because every request for his input is an open decision.
- * Open lands on the Inbox with that one row marked, and its card shows the
- * exact URL.
+ * THE ONE "NEEDS YOU" PATH: the secretary asks to read a page, Open lands on the Inbox with that row marked, and its
+ * card shows the exact URL.
  */
 app.scene("a new request pops up in an open app and Open lands on its row", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
@@ -974,12 +854,7 @@ app.scene("a new request pops up in an open app and Open lands on its row", asyn
 });
 
 /**
- * A TOPIC LEFT UNNAMED IS NAMED AFTER ITS FIRST ANSWER, AND RENAMED IN PLACE
- * (`docs/CHAT-PLAN-2026-09-25.md` §4.1): "New topic" on the list opens a draft
- * with the compose box focused, its first message opens the conversation, the
- * title job (the fixture script's `Title this conversation` line) names it
- * once the answer lands, and Rename is an append the heading and the list
- * both show.
+ * A TOPIC LEFT UNNAMED IS NAMED AFTER ITS FIRST ANSWER, AND RENAMED IN PLACE: the heading and the list both show it.
  */
 app.scene("a blank new topic is named after its first answer, and renamed in place", async () => {
   await app.resize(PHONE);
@@ -1011,8 +886,9 @@ app.scene("a blank new topic is named after its first answer, and renamed in pla
 });
 
 /**
- * A TOPIC THE BOX REFUSES IS SAID, AND LEAVES THE ROUND: the post is answered with the box's 403 and its sentence, the
- * owner is told in those words, and the refused write never shows as a chip or goes again.
+ * A TOPIC THE BOX REFUSES IS SAID, AND LEAVES THE ROUND: the sheet closes at the tap, the post is answered with the
+ * box's 403 and its sentence, the owner is told in those words, and the refused write leaves the round and never goes
+ * again.
  */
 app.scene("a topic write the box refuses is said in words and leaves no chip", async () => {
   await app.resize(PHONE);
@@ -1026,7 +902,8 @@ app.scene("a topic write the box refuses is said in words and leaves no chip", a
   await app.page.click(".streamround .roundtopicadd");
   await app.page.waitFor(`document.querySelector(".topicsheet .topicoffers") !== null`, { timeout: 8000 });
   await app.page.evaluate(`[...document.querySelectorAll(".topicsheet .topicoffers .chipbtn")].find((b) => b.textContent === "trip").click()`);
-  await app.page.waitFor(`document.getElementById("toast")?.textContent.includes("the box refused this topic: this device is not trusted to write topics") === true`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector(".topicsheet") === null`, { timeout: 8000 });
+  await app.page.waitFor(`document.getElementById("toast")?.textContent.includes("The box refused a topic: this device is not trusted to write topics") === true`, { timeout: 15000 });
   await app.page.waitFor(`${shown}.join("|") === "garden invoices"`, { timeout: 8000 });
   await app.page.resumeRequests();
   assert.equal(await app.page.evaluate<number>(trips), before, "the box holds no new write");
@@ -1076,9 +953,7 @@ app.scene("two topics chosen show the rounds holding both, and a topic added by 
 });
 
 /**
- * THE SEARCH ASKS THE BOX AND A HIT OPENS ITS CONVERSATION AT THE TURN
- * (`docs/CHAT-PLAN-2026-09-25.md` §4.2) — over what the scene above said, so
- * it runs after it.
+ * THE SEARCH ASKS THE BOX AND A HIT OPENS ITS CONVERSATION AT THE TURN; it runs after the scene above.
  */
 app.scene("search finds what was said and a hit opens its conversation", async () => {
   await app.resize(PHONE);
@@ -1103,9 +978,7 @@ app.scene("search finds what was said and a hit opens its conversation", async (
 });
 
 /**
- * AT 62rem AND UP THE LIST IS A COLUMN BESIDE THE CONVERSATION, the one on
- * screen marked; below it there is no column (`docs/CHAT-PLAN-2026-09-25.md`
- * §4.2).
+ * AT 62rem AND UP THE LIST IS A COLUMN BESIDE THE CONVERSATION, the one on screen marked; below it there is none.
  */
 app.scene("at 62rem the list stands beside the conversation, and not on a phone", async () => {
   await app.resize(DESKTOP);
@@ -1129,10 +1002,7 @@ app.scene("at 62rem the list stands beside the conversation, and not on a phone"
 });
 
 /**
- * A REMEMBERED FACT IS IN PLAIN SIGHT, AND FORGETTING ERASES IT
- * (`docs/CHAT-PLAN-2026-09-25.md` §3.6, §3.7): the round draws a receipt
- * outside its fold, the memory page lists the fact under its kind with a link
- * to the round that said it, and Forget takes it off the page and the route.
+ * A REMEMBERED FACT IS IN PLAIN SIGHT, AND FORGETTING ERASES IT from the page and the route.
  */
 app.scene("a remembered fact shows as a receipt and on the memory page, and Forget erases it", async () => {
   const fact = `${owner.name} takes calls after ten in the morning`;
@@ -1185,13 +1055,8 @@ const said = (who: string, within = ".turns"): string =>
   `[...document.querySelectorAll(${JSON.stringify(`${within} .turn-${who} .turntext`)})].map((t) => t.textContent).join("\\n")`;
 
 /**
- * STOP (`docs/CHAT-PLAN-2026-09-25.md` §4.3): it sits where the answer lands
- * while a round runs, the round ends in the act "stopped the answer", and
- * what the model was saying never lands. The script's "take your time" line
- * answers once the round's halt is pulled (`capability::pulled`), so the stop
- * always comes before the answer; the stateless arm the fixture takes drops
- * that reply when it returns. A stop is not a write, so
- * the question can be asked again straight after.
+ * STOP: it sits where the answer lands while a round runs, the round ends "stopped the answer", what the model was
+ * saying never lands, and the question can be asked again straight after.
  */
 app.scene("Stop ends the running answer, and its reply never lands", async () => {
   await app.resize(PHONE);
@@ -1216,10 +1081,8 @@ app.scene("Stop ends the running answer, and its reply never lands", async () =>
 });
 
 /**
- * REGENERATE AND EDIT, THE LAST ROUND ONLY (§4.4, §4.11). Regenerate sets the
- * answer aside, drawn collapsed as "Earlier attempt", and the question is
- * answered again; ↑ in the empty composer brings the question back, and
- * sending it reworded sets the old question aside with its answers.
+ * REGENERATE AND EDIT, THE LAST ROUND ONLY: Regenerate sets the answer aside as "Earlier attempt"; ↑ brings the question
+ * back, and sending it reworded sets the old question aside with its answers.
  */
 app.scene("Regenerate answers again beside an earlier attempt, and ↑ edits the question", async () => {
   await converse(WRITE_BASE, "ask me again");
@@ -1262,10 +1125,7 @@ app.scene("Regenerate answers again beside an earlier attempt, and ↑ edits the
 });
 
 /**
- * A ROUND THE BOX ASKED READS AS ITS TITLE: the reviewed deployment's review and brief, run through `secretary review`'s
- * and `secretary brief`'s own paths and stamped with their round, and its sweep, an older unstamped line in the shape
- * sweeps wrote with `show`'s JSON, each draw one title line and the secretary's answer, with none of the question on
- * the screen, and a tap opens the question.
+ * A ROUND THE BOX ASKED READS AS ITS TITLE, its answer beneath and none of the question on screen; a tap opens it.
  */
 app.scene("a round the box asked reads as its title and answer, its prompt a tap away, at 390 px", async () => {
   await app.resize(PHONE);

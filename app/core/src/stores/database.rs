@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use prodrome_core::declared::Declared;
 
 use super::{Kind, Store};
+use crate::asks::AskEvent;
 use crate::attachment::AttachmentId;
 use crate::decisions::DecisionEvent;
 use crate::devices::Device;
@@ -33,8 +34,7 @@ pub struct Database<'a> {
     pub inbox: &'a dyn Prodrome<InboxEvent>,
     /// The secretary's conversations, one prodrome keyed by conversation, every word locked.
     pub conversations: &'a dyn Prodrome<LineEvent>,
-    /// The key of each slot of the conversations' words not erased: box-local, vaulted, never
-    /// pushed, and destroyed by the lines' sweep.
+    /// The key of each slot of the conversations' words not erased: box-local and swept.
     pub line_keys: &'a dyn Doc<KeyName, TextKey>,
     /// The secretary's memory: which facts were remembered and forgotten, by id.
     pub memory: &'a dyn Prodrome<MemoryEvent>,
@@ -50,8 +50,9 @@ pub struct Database<'a> {
     pub topics: &'a dyn Prodrome<MembershipEvent>,
     /// The topics' aliases.
     pub topic_aliases: &'a dyn Prodrome<AliasEvent>,
-    /// What each plugin learned, by its name: a cache-tier replica at the plugin's declared
-    /// schema, rebuilt by syncing again.
+    /// The box's refusals of what a tab posted.
+    pub asks: &'a dyn Prodrome<AskEvent>,
+    /// What each plugin learned, by its name: a cache-tier replica rebuilt by syncing.
     pub plugins: BTreeMap<PluginName, &'a dyn Prodrome<Declared>>,
     /// The triage's dedup authority, pushed: decisions under keyed names.
     pub triage: &'a dyn Doc<(), TriageState>,
@@ -66,8 +67,7 @@ pub struct Database<'a> {
 }
 
 impl Database<'_> {
-    /// Every prodrome's fsck findings, each under the name [`Kind::name`] gives its store, a
-    /// chain's and a plugin's after their own names.
+    /// Every prodrome's fsck findings, each under its store's name.
     #[must_use]
     pub fn verify(&self) -> Vec<(String, Vec<String>)> {
         self.chains
@@ -84,6 +84,7 @@ impl Database<'_> {
                 found(self.decisions, self.decisions.verify()),
                 found(self.topics, self.topics.verify()),
                 found(self.topic_aliases, self.topic_aliases.verify()),
+                found(self.asks, self.asks.verify()),
             ])
             .chain(
                 self.plugins.iter().map(|(name, store)| {

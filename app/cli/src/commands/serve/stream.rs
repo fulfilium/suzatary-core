@@ -78,11 +78,12 @@ pub async fn events(AxumState(state): AxumState<State>, raw: RawPathParams) -> R
 /// `GET /api/stores/events`: `polled` over every store's heads.
 pub async fn store_events(AxumState(state): AxumState<State>) -> Response {
     let caps = state.first.caps;
+    let asks = std::sync::Arc::clone(&state.asks);
     polled(
         move || {
             wire::StoreName::ALL
                 .into_iter()
-                .map(|store| (store, stores::heads(store, caps)))
+                .map(|store| (store, stores::heads(store, caps, &*asks)))
                 .collect()
         },
         |store, heads| wire::StoreFrame { store, heads },

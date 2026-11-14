@@ -24,7 +24,7 @@ use suzatary_core::wire::triage::WatchesPayload;
 pub struct ChainPayload {
     /// Sorted.
     pub heads: Vec<String>,
-    /// This deployment's trust policy, so an offline fold folds the same chain.
+    /// The trust policy, so an offline fold folds the same chain.
     pub untrusted: Vec<String>,
     /// The root a device key counts under.
     pub root: String,
@@ -43,7 +43,7 @@ pub struct FoldPayload {
     pub entries: Vec<Entry>,
     /// What refers into one reads `∅` until it reads.
     pub failed: Vec<FailedChain>,
-    /// When a whole percent or the belief next moves after `at`; `null` for never.
+    /// When a whole percent or the belief next moves; `null` for never.
     pub next: Option<NextChange>,
 }
 
@@ -135,15 +135,18 @@ pub enum StoreName {
     Topics,
     #[serde(rename = "topic-aliases")]
     TopicAliases,
+    #[serde(rename = "asks")]
+    Asks,
 }
 
 impl StoreName {
-    /// Every store, in the order a stream first names them.
-    pub const ALL: [StoreName; 4] = [
+    /// In the order a stream first names them.
+    pub const ALL: [StoreName; 5] = [
         StoreName::Inbox,
         StoreName::Lines,
         StoreName::Topics,
         StoreName::TopicAliases,
+        StoreName::Asks,
     ];
 
     #[must_use]
@@ -154,11 +157,12 @@ impl StoreName {
             StoreName::Lines => Kind::Lines,
             StoreName::Topics => Kind::Topics,
             StoreName::TopicAliases => Kind::TopicAliases,
+            StoreName::Asks => Kind::Asks,
         }
     }
 }
 
-/// One frame of `GET /api/stores/events`: one store's heads, each time they move.
+/// One frame of `GET /api/stores/events`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct StoreFrame {
     pub store: StoreName,
@@ -228,7 +232,7 @@ pub struct MailPage {
     pub todos: Vec<Entry>,
 }
 
-/// `GET /api/mail/inbox`: by date, with the roster for the filter chips.
+/// `GET /api/mail/inbox`: by date, with the roster.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct InboxPayload {
     pub accounts: Vec<String>,
@@ -261,7 +265,7 @@ pub enum Authoring {
     Redo(String),
 }
 
-/// `POST /api/author` `{"add": …}`: the gate names the actor and the box stamps the instant.
+/// `POST /api/author` `{"add": …}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct NewTodo {
@@ -269,7 +273,7 @@ pub struct NewTodo {
     #[serde(flatten)]
     #[ts(flatten)]
     pub fields: suzatary_record::todo::TodoFields,
-    /// Refused if the chain ever mentioned it; otherwise one from the body.
+    /// Refused if the chain ever mentioned it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub id: Option<String>,
@@ -294,7 +298,7 @@ pub struct UpdateTodo {
     pub note: String,
 }
 
-/// `POST /api/author` `{"confirm": …}`: a provisional record a trusted actor takes as its own.
+/// `POST /api/author` `{"confirm": …}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct ConfirmTodo {
@@ -324,7 +328,7 @@ pub struct StorePayload {
     pub erased: Vec<String>,
 }
 
-/// `GET /api/stores/<store>/content?hashes=<hashes>`: literals, sent `Cache-Control: immutable`.
+/// `GET /api/stores/<store>/content?hashes=<hashes>`, sent immutable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ContentPayload {
     /// One per hash asked, in the order asked.
@@ -379,7 +383,7 @@ pub struct PickedFile {
     pub name: String,
 }
 
-/// `POST /api/secretary/attachments`: base64 in JSON, under the same content-type rule.
+/// `POST /api/secretary/attachments`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Uploading {
@@ -441,14 +445,14 @@ pub struct KeyAsked {
     pub key: String,
 }
 
-/// `POST /api/act/pair`: the code `suzatary device pair` printed at the box.
+/// `POST /api/act/pair`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Pairing {
     pub code: String,
 }
 
-/// `POST /api/held/reveal`: the owner's tap on a held value's placeholder.
+/// `POST /api/held/reveal`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Revealing {
@@ -562,11 +566,11 @@ impl From<&crate::portal::Portal> for PortalPayload {
     }
 }
 
-/// `GET /api/releases`: the releases the project chain reads, each with its items.
+/// `GET /api/releases`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReleasesPayload {
     pub chain: String,
-    /// The `major.minor` it reads now, which the next train starts from.
+    /// The `major.minor` the next train starts from.
     pub reads: String,
     /// In the order they ship; none where the chain is not served.
     pub releases: Vec<ReleaseRow>,
@@ -598,7 +602,7 @@ pub struct ReleaseItem {
 pub struct MePayload {
     /// The Tailscale login, `""` for the local shell.
     pub login: String,
-    /// `null` for a viewer (or a mapping this chain's roster does not know).
+    /// `null` for a viewer.
     pub actor: Option<String>,
     /// In the instance file's order.
     pub chains: Vec<String>,
@@ -704,7 +708,7 @@ pub struct SayPayload {
     pub conversation: ConversationPayload,
 }
 
-/// `GET /api/calendar/{date}`: a week of the owner's calendars.
+/// `GET /api/calendar/{date}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CalendarPayload {
     /// ISO 8601.
@@ -715,7 +719,7 @@ pub struct CalendarPayload {
     pub rich: Option<String>,
 }
 
-/// `Todos.verify_history` in the browser's module: SPEC §3's verify of a tab's objects.
+/// `Todos.verify_history`: SPEC §3's verify of a tab's objects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct VerifiedPayload {
     pub tips: Vec<String>,
@@ -805,7 +809,7 @@ impl Found {
     }
 }
 
-/// `Todos.provenance` in the browser's module: who wrote one object carrying an event.
+/// `Todos.provenance`: who wrote one object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ProvenanceRow {
     pub hash: String,
@@ -838,7 +842,7 @@ impl From<&suzatary_core::signatures::Provenance> for Proof {
     }
 }
 
-/// `signed` in the browser's module: the `Signed` it sealed for a signature the tab made.
+/// `signed`: the `Signed` the module sealed for the tab's signature.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct SignedObject {
     pub hash: String,
@@ -1129,8 +1133,7 @@ mod tests {
         reads::<crate::clienterror::Sent>(&serde_json::json!({"kind": "error", "message": "m"}));
     }
 
-    /// A phone keeps an installed APK for months, so the portal's JSON moves only with
-    /// `Pairing.java`.
+    /// A phone keeps an installed APK for months, so the portal's JSON moves with `Pairing.java`.
     #[test]
     fn the_portal_answer_is_the_json_the_android_portal_reads() {
         use crate::portal::{Portal, Sender};

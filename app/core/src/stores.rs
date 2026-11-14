@@ -1,7 +1,5 @@
-//! Every store the data tree keeps, declared once in `stores!`: its name, its tier and what its
-//! directory holds, and for a prodrome its schema and its hold. The interpreters, the fsck and
-//! the routes read these rows, and a guard derives the data push's and the vault's lists from
-//! them, so a new store is one row and its schema.
+//! Every store the data tree keeps, declared once in `stores!`: a new store is one row and its
+//! schema, and the interpreters, the fsck, the routes and the guards read the rows.
 
 mod database;
 #[cfg(any(test, feature = "nothing"))]
@@ -11,6 +9,7 @@ mod in_memory;
 use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
 
+use crate::asks::AskEvent;
 use crate::decisions::DecisionEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::inbox_event::InboxEvent;
@@ -30,7 +29,7 @@ pub use in_memory::InMemory;
 pub enum Tier {
     /// Committed and pushed with the data repository.
     Pushed,
-    /// Kept on the box and in the vault, never pushed: words a push could not erase, and keys.
+    /// Kept on the box and in the vault, never pushed.
     Local,
     /// Kept on the box only, and rebuilt by syncing again.
     Cache,
@@ -39,11 +38,11 @@ pub enum Tier {
 /// What a store's directory holds, as the data push stages and checks it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Files {
-    /// A todo chain's objects, appended and never edited, beside its tracked lock file.
+    /// A todo chain's objects, beside its tracked lock file.
     Chain,
     /// Objects appended and never edited.
     Objects,
-    /// One record per performed request, named by its hash and written once.
+    /// One record per performed request, written once.
     Records,
     /// One file, rewritten whole.
     File,
@@ -57,14 +56,12 @@ pub trait Store: Schema {
     const KIND: Kind;
     /// What serialises its writers.
     const HOLD: Hold;
-    /// The label of the `Genesis` an empty store's first write begins it with.
+    /// Its `Genesis` label.
     const LABEL: &'static str = Self::KIND.name();
 }
 
-/// The rows: `Variant = name, tier, files`, and for a prodrome `: schema, hold`, then its
-/// `Genesis` label where that is not its name. The name is what errors and the fsck say, a
-/// prodrome's label and a tab's route segment, so it never changes for a store that holds
-/// objects.
+/// The rows: `Variant = name, tier, files`, and for a prodrome `: schema, hold` and its `Genesis`
+/// label where that is not its name. A name never changes for a store that holds objects.
 macro_rules! stores {
     ($($(#[doc = $doc:literal])* $variant:ident = $name:literal, $tier:ident, $files:ident
         $(: $event:ty, $hold:expr $(, $label:expr)?)?;)*) => {
@@ -124,7 +121,7 @@ stores! {
     Memory = "memory", Pushed, Objects: MemoryEvent, Hold::File("memory.lock");
     /// Each standing fact's words; forgetting deletes them.
     MemoryTexts = "memory texts", Local, Directory;
-    /// What was said of each node of the conversations' summary tree.
+    /// The conversations' summary tree.
     Digests = "digests", Pushed, Objects: DigestEvent, Hold::File("digests.lock");
     /// Each summary's words; the sweep deletes the dead.
     DigestTexts = "digest texts", Local, Directory;
@@ -134,18 +131,19 @@ stores! {
     Topics = "topics", Local, Objects: MembershipEvent, Hold::File("topics.lock");
     /// The topics' aliases.
     TopicAliases = "topic-aliases", Local, Objects: AliasEvent, Hold::File("topic-aliases.lock");
+    /// The box's refusals of what a tab posted; a reason may quote a topic.
+    Asks = "asks", Local, Objects: AskEvent, Hold::File("asks.lock");
     /// What a plugin learned, at its declared schema.
     Plugin = "plugin", Cache, Objects: Declared, Hold::File("store.lock");
     /// The triage's dedup authority, decisions under keyed names.
     Triage = "triage", Pushed, File;
-    /// The box-local tier: what the box keeps of its mail, the person's prose, the leak guard's
-    /// terms.
+    /// The box-local tier.
     Local = "local", Local, Directory;
     /// The owner's uploads.
     Uploads = "uploads", Local, Directory;
     /// The files a verb kept for the model.
     Kept = "kept", Local, Directory;
-    /// Each request a device signed and the server performed, as provenance.
+    /// Each performed signed request, as provenance.
     Requests = "requests", Pushed, Records;
 }
 
