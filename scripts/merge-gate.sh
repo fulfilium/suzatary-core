@@ -359,16 +359,15 @@ step tree clippy          $rust   clippy_all
 step tree clippy-fixture  $rust   clippy_all --features suzatary/fixture
 step tree doc             $rust   env RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/Cargo.toml -q --workspace --no-deps --features suzatary/fixture
 lane=tests
-# Every debug executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
+# Every test executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
 # resolves other features and rebuilds wasmtime and the wit crates.
-# The cli's tests that need `fixture`, in the feature set app-build.sh --fixture uses.
+# The cli's tests that need `fixture`, in app-build.sh --fixture's feature set, which e2e reuses.
 fixture_tests=(--test all --features suzatary/fixture --features suzatary-core/nothing)
 # shellcheck disable=SC2329
 build_once() {
   cargo_app test -q --workspace --no-run &&
     cargo_app test -q --workspace --no-run --test guards --test fence --test plugin &&
-    cargo_app test -q --workspace --no-run "${fixture_tests[@]}" &&
-    scripts/app-build.sh --fixture >/dev/null
+    cargo_app test -q --workspace --no-run "${fixture_tests[@]}"
 }
 step tree build           $rust   build_once
 # The plugin host's fences against hostile components (app/plugin/tests/fence.rs); loopback only.
@@ -441,7 +440,7 @@ web_units() { if ((nightly)); then scripts/web-test.sh; else SUZATARY_WEB_ZONES=
 step tree web-test        files:web/test web_units
 step tree build-web       $web    scripts/build-web.sh
 lane=quiet
-# The store's fixture binary when it holds this tree's, else cargo's, sharing `build`'s target.
+# The store's fixture binary when it holds this tree's, else cargo's (web-e2e.sh links it).
 # shellcheck disable=SC2329
 e2e_scenes() {
   local scenes=() unit
