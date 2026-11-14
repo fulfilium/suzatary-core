@@ -322,8 +322,9 @@ impl LineEvent {
         sealed.open(&self.slot(slot, &sealed.under), key)
     }
 
-    /// Slot `slot`'s words as they were locked, under whatever rules: only for sealing them again
-    /// through the door ([`LineEvent::reseal`]), never for a reader.
+    /// Slot `slot`'s words as they were locked, under whatever rules: for sealing them again
+    /// through the door ([`LineEvent::reseal`]) and for naming the blocks they were rendered to
+    /// ([`crate::secretary::transcript::fed`]), never for a reader.
     pub(crate) fn unscrubbed(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
         let sealed = self.words.get(slot)?;
         let Seal::Locked(locked) = &sealed.seal else {
