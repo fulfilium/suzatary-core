@@ -361,7 +361,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
 fn a_note_on_his_own_todo_the_agent_claimed_done_stays_clean() {
     let owners = common::CAST.todos.urgent.id;
     let (_, stamp, taint) = remember_after_a_note_on("acts-note-claimed", owners, &|fakes| {
-        suzatary_core::store::Prodrome::append(
+        suzatary_store::store::Prodrome::append(
             &fakes.chain,
             prodrome_core::event::mk_completed(owners, common::now(), "triage", "")
                 .expect("an event"),

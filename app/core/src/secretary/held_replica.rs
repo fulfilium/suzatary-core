@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::replica::held::Said;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
@@ -19,6 +18,7 @@ use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_store::replica::held::Said;
 
 /// The lines held: the rows, and the readings of the landed one.
 #[derive(Default)]
@@ -68,7 +68,7 @@ pub enum NotItsHusk {
     #[error("the box answered a husk for {0}, which names no line this replica reads")]
     Unknown(String),
     #[error("{0}: {1}")]
-    Unread(String, crate::store::NotAHusk),
+    Unread(String, suzatary_store::store::NotAHusk),
     #[error("the box's husk for {0} is not the line its node says")]
     Header(String),
     #[error("the box answered a husk for {0}, whose words a live key this replica holds opens")]
@@ -264,8 +264,10 @@ impl HeldReplica {
                     })
                     .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
                 let husk =
-                    crate::store::Husk::<crate::secretary::line_event::LineEvent>::read(&text)
-                        .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
+                    suzatary_store::store::Husk::<crate::secretary::line_event::LineEvent>::read(
+                        &text,
+                    )
+                    .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
                 if crate::secretary::line_form::line_header(husk.event()) != node.header {
                     return Err(NotItsHusk::Header(shown));
                 }

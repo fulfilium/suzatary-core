@@ -176,9 +176,9 @@ mod tests {
     use super::*;
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::responded::Performed;
-    use crate::store::InMemory;
-    use crate::store::Reads as _;
+    use crate::stores::InMemory;
     use suzatary_base::capability::Datetime;
+    use suzatary_store::store::Reads as _;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")

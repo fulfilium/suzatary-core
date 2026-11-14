@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 
 use crate::calendar::Day;
-use crate::store::StoreError;
+use suzatary_store::store::StoreError;
 
 /// Reading the calendar a `source` plugin fills: the days asked for, each occurrence placed in
 /// the box's clock. Read-only; its titles, places and names are other people's words.

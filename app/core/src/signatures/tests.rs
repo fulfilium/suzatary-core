@@ -8,9 +8,10 @@ use prodrome_core::sign::{PublicKey, Registrar, Secret, Signed};
 use proptest::prelude::*;
 
 use super::*;
-use crate::store::Reads as _;
-use crate::store::{InMemory, Prodrome, Signing, sign};
+use crate::stores::InMemory;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Prodrome, Signing, sign};
 
 fn key(byte: char) -> Secret {
     Secret::new(&byte.to_string().repeat(64)).expect("a seed")
@@ -347,7 +348,7 @@ proptest! {
 #[test]
 fn a_signing_store_writes_nothing_unsigned() {
     let phone = key('1');
-    let store = Signing::new(begun(), crate::store::Signer::Key(key('1').into()));
+    let store = Signing::new(begun(), suzatary_store::store::Signer::Key(key('1').into()));
     trust(store.inner(), &root(), &actor("ada"), &phone.public()).expect("registered");
     let written = store.append(done("alpha", "ada")).expect("appends");
     let count = store.objects().expect("reads").len();
@@ -469,8 +470,8 @@ fn a_writer_signs_as_each_actor_with_the_key_adoption_registered() {
     let keys = box_keys();
     let signers = Signers::Held(keys.clone());
     let key = |who: &str| match signers.for_actor(&actor(who), &Untrusted::none()) {
-        crate::store::Signer::Key(key) => key.public(),
-        crate::store::Signer::Refusing(_) => panic!("no key for {who}"),
+        suzatary_store::store::Signer::Key(key) => key.public(),
+        suzatary_store::store::Signer::Refusing(_) => panic!("no key for {who}"),
     };
     assert_eq!(key("triage"), keys.agent().public());
     assert_eq!(key("ada"), keys.root().public());

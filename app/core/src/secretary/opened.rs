@@ -15,7 +15,7 @@ use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::key_ring::spelled;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KeyName, TextKey};
-use crate::store::{Gets, Graph, StoreError};
+use suzatary_store::store::{Gets, Graph, StoreError};
 
 #[derive(Default)]
 pub struct Opened {

@@ -12,11 +12,11 @@ use crate::repository::Repository;
 use crate::secretary::briefings::Briefings;
 use crate::secretary::model::Model;
 use crate::secrets::Secrets;
-use crate::store::Prodrome;
 use crate::weather::Weather;
 use crate::web::Web;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Prodrome;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its
@@ -70,7 +70,7 @@ pub struct Secretary<'a> {
     /// Where each exchange is written down.
     pub conversations: crate::secretary::conversations::Conversations<'a>,
     /// Where a proposal is filed for a person to tap.
-    pub inbox: &'a dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    pub inbox: &'a dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
     /// Its memory, shared by every conversation; the agent has none, so an injection
     /// cannot become durable.
     pub memories: crate::secretary::memories::Memories<'a>,
@@ -101,15 +101,18 @@ pub struct Secretary<'a> {
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
-    pub uploads: &'a dyn crate::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
+    pub uploads: &'a dyn suzatary_store::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
     /// The words of the uploads, for its search.
     pub upload_index: &'a dyn crate::upload_index::UploadIndex,
     /// The files a verb keeps for the model.
-    pub kept: &'a dyn crate::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
+    pub kept: &'a dyn suzatary_store::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
     /// A PDF's text layer, which a held file's numbers are read back from.
     pub pdf: &'a dyn crate::pdf_text::PdfText,
     /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
-    pub tapped: &'a dyn crate::store::Gets<crate::held_value::HeldFile, crate::secretary::attached::Attached>,
+    pub tapped: &'a dyn suzatary_store::store::Gets<
+        crate::held_value::HeldFile,
+        crate::secretary::attached::Attached,
+    >,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
     pub configuration: &'a dyn crate::settings::Configuration,
     /// The watches on mail the owner expects; a watch's only act is the sync's push.

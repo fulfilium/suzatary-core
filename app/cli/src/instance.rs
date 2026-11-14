@@ -341,7 +341,7 @@ impl Instance {
         if let Some(keys) = signers.held() {
             let stores: Vec<_> = self.chains.iter().map(crate::commands::store_of).collect();
             let stores: Vec<
-                &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+                &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
             > = stores.iter().map(|store| store as _).collect();
             if let Err(why) = suzatary_core::signatures::complete_revocations(&stores, keys.root())
             {
@@ -400,10 +400,10 @@ impl Instance {
         chain: &ChainDir,
         signers: &suzatary_core::signatures::Signers,
         actor: &prodrome_core::event::Actor,
-    ) -> suzatary_core::store::Signing<
+    ) -> suzatary_store::store::Signing<
         suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     > {
-        suzatary_core::store::Signing::new(
+        suzatary_store::store::Signing::new(
             crate::commands::store_of(chain),
             signers.for_actor(actor, &chain.policy.untrusted),
         )

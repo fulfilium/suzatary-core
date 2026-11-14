@@ -13,9 +13,9 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::store::{Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock};
 use suzatary_core::stores::{Kind, Store};
 use suzatary_record::record::Record;
+use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock};
 
 use crate::durable;
 use crate::husked::Husked;
@@ -37,7 +37,7 @@ type Door<E> = Box<dyn Fn(&E) -> Result<(), String> + Send + Sync>;
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
     heads: Vec<Hash>,
-    graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
+    graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
     verified: Option<Vec<String>>,
@@ -117,7 +117,7 @@ impl<E: Schema, F> Objects<E, F> {
 
 impl<E: Store<Vocabulary: Default>> Objects<E, Husked<E>>
 where
-    E: suzatary_core::store::Husking,
+    E: suzatary_store::store::Husking,
 {
     /// The store at `root`, every writer believed, where a name may hold a husk in place of its
     /// whole.
@@ -159,7 +159,7 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// A chain's objects taken in, told to whatever request is being recorded on this thread.
     fn wrote(names: &[Hash]) {
         if E::KIND == Kind::Chain {
-            names.iter().for_each(suzatary_core::store::wrote);
+            names.iter().for_each(suzatary_store::store::wrote);
         }
     }
 
@@ -183,10 +183,10 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
             return Ok(look(held));
         }
         let dag = self.events.dag().map_err(|e| Self::unreadable(e))?;
-        let excluded = suzatary_core::store::left_out(&dag);
+        let excluded = suzatary_store::store::left_out(&dag);
         Ok(look(slot.insert(Remembered {
             heads,
-            graph: std::sync::Arc::new(suzatary_core::store::Graph::over(dag)?),
+            graph: std::sync::Arc::new(suzatary_store::store::Graph::over(dag)?),
             excluded,
             verified: None,
         })))
@@ -211,7 +211,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
         })
     }
 
-    fn graph(&self) -> Result<std::sync::Arc<suzatary_core::store::Graph<E>>, StoreError> {
+    fn graph(&self) -> Result<std::sync::Arc<suzatary_store::store::Graph<E>>, StoreError> {
         self.with(|held| std::sync::Arc::clone(&held.graph))
     }
 

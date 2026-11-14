@@ -4,10 +4,10 @@ use chrono::NaiveDate;
 use prodrome_core::store::Replica as _;
 use suzatary_base::zone::Zone;
 use suzatary_core::calendar::{Calendar as Reading, Day, Occurrence};
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use crate::plugin_store::PluginStore;
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 /// The union of the plugin stores whose declared schema is a calendar's.
 #[derive(Debug)]

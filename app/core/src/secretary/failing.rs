@@ -316,7 +316,7 @@ mod tests {
     use crate::secretary::inbox::{self, Fold};
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::proposer::Proposer;
-    use crate::store::InMemory;
+    use crate::stores::InMemory;
 
     fn at(hour: u32) -> Instant {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
@@ -591,11 +591,11 @@ mod tests {
                 let fold = inbox::fold(&inbox_store).expect("reads");
                 let owed = crate::secretary::fixes::owed(&world.settables, missing, &fold)
                     .join(world.owed(at(hour)));
-                let before = crate::store::Reads::objects(&inbox_store)
+                let before = suzatary_store::store::Reads::objects(&inbox_store)
                     .expect("reads")
                     .len();
                 file(&owed, &inbox_store, &conversations, hour);
-                let after = crate::store::Reads::objects(&inbox_store)
+                let after = suzatary_store::store::Reads::objects(&inbox_store)
                     .expect("reads")
                     .len();
                 if hour > 1 {

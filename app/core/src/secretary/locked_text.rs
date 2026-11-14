@@ -365,6 +365,12 @@ fn unpad(padded: &[u8]) -> Option<&[u8]> {
     (padded[end] == 0x80 && pad(&padded[..end]) == padded).then_some(&padded[..end])
 }
 
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/in_memory_keys.rs"]
+mod in_memory_keys;
+#[cfg(any(test, feature = "nothing"))]
+pub use in_memory_keys::InMemoryKeys;
+
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;

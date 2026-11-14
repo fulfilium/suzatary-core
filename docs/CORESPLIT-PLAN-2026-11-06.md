@@ -275,6 +275,22 @@ becomes `pub` first.
 (the calendar's page is drawn in `calendar::page`), and `readings` and `title -> secretary`
 (`typst_prose_line` is `title`'s; `state` is named at `store`, not through the re-export).
 
+**PR 14 (store).** `store`, `replica`, `snapshot` and `wire/store` move to `app/store`, with
+their test support and `husk`; USE 19.8k. The crate depends on base and the Prodrome alone.
+- **Where the in-memory stores live.** The plan's open question on `InMemory`'s hold is settled
+  by where it lives. `InMemory` reads its hold from `stores::Store`, which stays in core above the
+  store cut, so it lives beside `Store` in `stores`. `InMemoryKeys` moves beside
+  `secretary::locked_text`.
+- **The store laws that hold an `InMemory`** (`signing`, `memoised`, and one of `learnt`'s) move to
+  `core/tests/store_*.rs`. `learnt`'s law over `Knowledge` stays in the crate, with the doors'
+  schema as `store::doors`.
+- **The inert stores are generic.** The orphan rule refuses core an impl of the store's traits for
+  base's `Nothing` at a schema core does not own: `TodoEvent` is record's, and five schemas are
+  aliases of the Prodrome's `Event`. So `app/store/tests/support/nothing.rs` implements them once
+  over any schema, and an inert chain now keeps an append nowhere instead of refusing it.
+- **The layer guard** skips a module file that is only `#[cfg(test)] mod tests;`.
+  `secretary::live_shape`, test and bench support that holds `InMemory`, takes the api cut.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

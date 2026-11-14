@@ -9,14 +9,8 @@ mod graph;
 mod hold;
 mod husk;
 #[cfg(any(test, feature = "nothing"))]
-#[path = "../../tests/support/in_memory.rs"]
-mod in_memory;
-#[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/in_memory_doc.rs"]
 mod in_memory_doc;
-#[cfg(any(test, feature = "nothing"))]
-#[path = "../../tests/support/in_memory_keys.rs"]
-mod in_memory_keys;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/in_memory_log.rs"]
 mod in_memory_log;
@@ -36,14 +30,12 @@ pub use graph::Graph;
 pub use hold::{Hold, InMemoryHold, Once};
 pub use husk::{Husk, HuskObject, Husking, NotAHusk};
 #[cfg(any(test, feature = "nothing"))]
-pub use in_memory::InMemory;
-#[cfg(any(test, feature = "nothing"))]
 pub use in_memory_doc::InMemoryDoc;
-#[cfg(any(test, feature = "nothing"))]
-pub use in_memory_keys::InMemoryKeys;
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory_log::InMemoryLog;
 pub(crate) use knowledge::Knowledge;
+#[cfg(any(test, feature = "nothing"))]
+pub use learnt::doors;
 pub use learnt::{Learnt, learn};
 pub use log::{Decide, Edit, Log};
 pub use memoised::memoised;

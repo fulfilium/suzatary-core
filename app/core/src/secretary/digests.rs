@@ -20,9 +20,9 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::texts::Naming;
-use crate::store::{Doc, Gets, Prodrome, Reads};
 use crate::timings::{Phase, timed};
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::{Doc, Gets, Prodrome, Reads};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
 pub(crate) const COMPACTOR: &str = "compactor";
@@ -96,7 +96,7 @@ impl ReadDigests<'_> {
     /// The store's own.
     pub(crate) fn line_graph(
         &self,
-    ) -> Result<std::sync::Arc<crate::store::Graph<LineEvent>>, Refusal> {
+    ) -> Result<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>, Refusal> {
         Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
     }
 

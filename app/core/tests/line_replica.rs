@@ -10,10 +10,6 @@ use proptest::prelude::*;
 use sha2::{Digest, Sha256};
 
 use prodrome_core::event::Hash;
-use suzatary_core::replica::frontier::Frontier;
-use suzatary_core::replica::held::{Held, Node, Said};
-use suzatary_core::replica::pulling::Delta;
-use suzatary_core::replica::row::Row;
 use suzatary_core::secretary::held_replica::{HeldReplica, Moved};
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::line_form::{
@@ -22,10 +18,14 @@ use suzatary_core::secretary::line_form::{
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
-use suzatary_core::snapshot::{from_snapshot, snapshot};
 use suzatary_core::wire::lines as wire;
 use suzatary_core::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
-use suzatary_core::wire::store::SinceRead;
+use suzatary_store::replica::frontier::Frontier;
+use suzatary_store::replica::held::{Held, Node, Said};
+use suzatary_store::replica::pulling::Delta;
+use suzatary_store::replica::row::Row;
+use suzatary_store::snapshot::{from_snapshot, snapshot};
+use suzatary_store::wire::store::SinceRead;
 
 type LineRow = Row<Parsed, KeyRing>;
 
@@ -192,7 +192,7 @@ fn row() -> impl Strategy<Value = LineRow> {
         let mut replica = Held::empty(generation);
         for a in &answers {
             replica = replica.pulled(a.said(), a.fetched_at);
-            keys = suzatary_core::replica::row::Keys::union(keys, &ring(&a.keys));
+            keys = suzatary_store::replica::row::Keys::union(keys, &ring(&a.keys));
         }
         Row::of(replica, keys)
     })

@@ -9,8 +9,8 @@ use prodrome_core::schema::Schema;
 use prodrome_core::sign::{Checks, PublicKey, Registrar, Signed};
 
 use super::{KeyStanding, Provenance, Unproven};
-use crate::store::{Prodrome, StoreError};
 use suzatary_base::table::Table;
+use suzatary_store::store::{Prodrome, StoreError};
 
 /// How many readings a process keeps by their heads: a few chains, each under its registrar.
 pub(crate) const KEPT_READINGS: usize = 8;

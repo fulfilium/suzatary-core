@@ -33,20 +33,21 @@ use suzatary_core::secretary::store::{
 };
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{InMemory, Prodrome, linearised};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Prodrome, linearised};
 
 type Memory = suzatary_core::secretary::conversations::InMemory;
 type Disk = EventStore<LineEvent, Everything>;
 
 /// Every key the lines written straight to a store were locked under, and where they came from.
-static KEYS: std::sync::LazyLock<suzatary_core::store::InMemoryKeys> =
+static KEYS: std::sync::LazyLock<suzatary_core::secretary::locked_text::InMemoryKeys> =
     std::sync::LazyLock::new(Default::default);
 static ENTROPY: std::sync::LazyLock<Counting> = std::sync::LazyLock::new(Default::default);
 
 /// A key `KEYS` holds, or missing.
 fn key(name: &KeyName) -> Words<suzatary_core::secretary::locked_text::TextKey> {
-    use suzatary_core::store::Gets as _;
+    use suzatary_store::store::Gets as _;
     KEYS.get(name).ok().flatten().map_or_else(
         || suzatary_core::secretary::words::Gone::Missing.into(),
         Words::kept,
@@ -131,7 +132,7 @@ fn event(held: usize, entry: &Entry) -> LineEvent {
 }
 
 fn line_of(id: &ConversationId, held: usize, entry: &Entry) -> LineEvent {
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let (line, keys) = LineEvent::write(
         id.clone(),
         by(),
@@ -593,8 +594,8 @@ proptest! {
     ) {
         use suzatary_core::secretary::outline;
         use suzatary_core::secretary::outlines::{Outlines, Parsed};
-        use suzatary_core::store::Doc as _;
-        use suzatary_core::store::Prodrome as _;
+        use suzatary_store::store::Doc as _;
+        use suzatary_store::store::Prodrome as _;
         let lines = conversation(&script);
         let (memory, _) = written(&lines);
         // A turn sealed under rules from before lines recorded them, and sealed again under the current ones.

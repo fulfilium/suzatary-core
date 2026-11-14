@@ -11,11 +11,11 @@ use crate::agent::Agent;
 use crate::deployment::Deployment;
 use crate::secretary::memory::Memory;
 use crate::secretary::shown_record::OwnersRecord;
-use crate::store::Reads;
 use crate::todos;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_store::store::Reads;
 
 pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<Value, Refusal> {
     let open = todos::open_todos(&caps.chain.nodes()?, caps.clock.now(), &chain.untrusted)?;

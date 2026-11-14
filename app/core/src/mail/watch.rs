@@ -11,9 +11,9 @@ use sha2::{Digest as _, Sha256};
 
 use crate::mail::corpus::Corpus;
 use crate::mail::mailbox::Query;
-use crate::store::{Edit, Log};
 use suzatary_base::reference::MailHash;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::{Edit, Log};
 
 /// The longest text a watch looks for, in characters, so its query with the owner's accounts
 /// stays under the corpus's cap.
@@ -536,8 +536,8 @@ mod tests {
     use crate::mail::state::Decision;
     use crate::mail::sync_report::SyncReport;
     use crate::mail::verbs::{Marked, Show, Summary};
-    use crate::store::InMemoryLog;
     use suzatary_base::capability::Nothing;
+    use suzatary_store::store::InMemoryLog;
 
     /// A corpus whose every search answers the messages that have arrived, newest first.
     struct Arrived(Vec<Summary>);

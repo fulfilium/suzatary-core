@@ -19,10 +19,10 @@ use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
-use crate::store::{Doc, Gets, Log, Prodrome};
 use crate::upload::Upload;
 use suzatary_base::chains::ChainName;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::{Doc, Gets, Log, Prodrome};
 
 /// The whole store, as one value: every chain, and the box's own stores.
 #[derive(Clone)]

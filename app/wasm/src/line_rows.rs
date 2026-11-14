@@ -11,15 +11,15 @@ use std::collections::BTreeSet;
 
 use prodrome_core::event::Hash;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::replica::frontier::Frontier;
-use suzatary_core::replica::row::Row;
 use suzatary_core::secretary::held_replica::{Moved, Took};
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::line_form::{self, LineFrame, LineReplica};
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
-use suzatary_core::snapshot;
 use suzatary_core::wire::lines::SkeletonPayload;
+use suzatary_store::replica::frontier::Frontier;
+use suzatary_store::replica::row::Row;
+use suzatary_store::snapshot;
 use wasm_bindgen::prelude::*;
 
 use crate::secretary::Lines;

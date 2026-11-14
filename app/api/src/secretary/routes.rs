@@ -1862,8 +1862,8 @@ pub const ALREADY_TRUSTED: &str =
 /// # Errors
 /// The stores' own.
 pub fn withdraw_trusted(
-    inbox: &dyn suzatary_core::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>,
-    history: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>,
+    history: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
     root: &prodrome_core::sign::PublicKey,
     at: suzatary_base::capability::Datetime,
 ) -> Result<Vec<ProposalId>, Refusal> {

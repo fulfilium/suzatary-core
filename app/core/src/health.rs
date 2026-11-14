@@ -25,7 +25,7 @@ use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::store::StoreError;
+use suzatary_store::store::StoreError;
 
 /// An instant on the box's clock, naive and UTC, as every `at` is.
 pub type Instant = NaiveDateTime;

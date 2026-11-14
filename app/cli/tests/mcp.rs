@@ -33,13 +33,13 @@ fn at(day: u32) -> Datetime {
 fn a_chain(root: &Path) -> EventStore {
     let untrusted = prodrome_core::policy::Untrusted::of([Actor::new("triage").expect("valid")]);
     let store = EventStore::new(root.join("events"), untrusted);
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &store,
         suzatary_record::record::GENESIS,
         mk_created("filething", at(1), "ada", "permit renewal", "").expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &store,
         suzatary_record::record::GENESIS,
         mk_authored(
@@ -557,7 +557,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
         )
         .expect("a line");
         for key in keys {
-            suzatary_core::store::Doc::set(lines.keys, &key.name(), &key).expect("kept");
+            suzatary_store::store::Doc::set(lines.keys, &key.name(), &key).expect("kept");
         }
         lines.lines.append(line).expect("said");
     }

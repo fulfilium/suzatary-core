@@ -1514,7 +1514,7 @@ pub(crate) mod tests {
             use suzatary_base::conversation_id::ConversationId;
             use crate::secretary::proposal::{Draft, Reasons};
             let email = "ada@example.test";
-            let store = crate::store::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
+            let store = crate::stores::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
             let ask = |index: usize, proposal: Proposal, minute: u32| {
                 let asked = inbox::Asked {
                     proposer: crate::secretary::proposer::Proposer::Secretary,

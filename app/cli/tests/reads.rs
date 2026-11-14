@@ -138,13 +138,13 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
     );
     let born = common::shift(common::now(), -10);
     let made = common::shift(common::now(), -5);
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_created("call-harrow", born, "ada", "", "").expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_authored(
@@ -167,7 +167,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
         .expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_completed("call-harrow", common::shift(made, 1), "triage", "").expect("valid"),
@@ -209,13 +209,13 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     let born = common::shift(common::now(), -10);
     let first = common::shift(common::now(), -5);
     let second = common::shift(common::now(), -4);
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_created("file-permit", born, "ada", "", "").expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_authored(
@@ -238,7 +238,7 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
         .expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_authored(

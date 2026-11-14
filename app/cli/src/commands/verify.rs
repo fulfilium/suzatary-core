@@ -50,12 +50,12 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
     let uploads = upload_store(&instance);
     let kept = file_store(&instance);
-    let chains: BTreeMap<ChainName, &dyn suzatary_core::store::Prodrome<_>> = stores
+    let chains: BTreeMap<ChainName, &dyn suzatary_store::store::Prodrome<_>> = stores
         .iter()
         .map(|(name, store)| {
             (
                 name.clone(),
-                store as &dyn suzatary_core::store::Prodrome<_>,
+                store as &dyn suzatary_store::store::Prodrome<_>,
             )
         })
         .collect();

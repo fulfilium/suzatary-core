@@ -17,7 +17,7 @@ use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::policy::{Policy, Untrusted};
 use prodrome_core::store::{EventStore, Held, Overlay, Replica};
-use suzatary_core::store::{HuskObject, Husking};
+use suzatary_store::store::{HuskObject, Husking};
 
 use crate::durable;
 use crate::object_files::ObjectFiles;

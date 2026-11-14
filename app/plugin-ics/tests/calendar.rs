@@ -22,7 +22,8 @@ fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
     use prodrome_core::declared::{Declaration, Declared};
     use suzatary_core::health::plugin::PluginName;
     use suzatary_core::plugin::admit;
-    use suzatary_core::store::{InMemory, Reads, learn};
+    use suzatary_core::stores::InMemory;
+    use suzatary_store::store::{Reads, learn};
     let ics = PluginName::parse("ics").map_err(|refused| refused.to_string())?;
     let schema =
         Declaration::admit(include_str!("../ics.schema")).map_err(|refused| refused.to_string())?;

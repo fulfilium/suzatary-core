@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use suzatary_core::health::{Healths, Instant, Outcome, Reading, Register};
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use crate::docs::{DocCodec, Docs};
 use crate::health_file::HealthFile;

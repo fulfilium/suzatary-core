@@ -3,7 +3,7 @@
 mod common;
 
 use common::{Fakes, actor, deployment, login, v4};
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 fn writer() -> (String, Fakes) {
     let fakes =
@@ -293,7 +293,7 @@ fn a_read_answers_304_to_its_own_tag_and_a_new_tag_once_the_chain_moves() {
         root.join("events"),
         prodrome_core::policy::Untrusted::of([actor("triage")]),
     );
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         prodrome_core::event::mk_created("a-new-todo", common::now(), "ada", "A new todo", "")

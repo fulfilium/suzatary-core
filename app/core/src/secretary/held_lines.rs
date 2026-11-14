@@ -34,9 +34,9 @@ use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Stored};
 use crate::secretary::transcript::{self, Transcript, Write};
 use crate::secretary::words::{Gone, Words};
-use crate::store::Husk;
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_store::store::Husk;
 
 thread_local! {
     static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -1483,11 +1483,11 @@ mod tests {
     use super::*;
     use crate::secretary::conversations::InMemory;
     use crate::secretary::store::Kind;
-    use crate::store::Prodrome as _;
-    use crate::store::Reads as _;
-    use crate::store::{Doc as _, Gets as _};
     use prodrome_core::event::canonical_envelope;
     use prodrome_core::literal::Datetime;
+    use suzatary_store::store::Prodrome as _;
+    use suzatary_store::store::Reads as _;
+    use suzatary_store::store::{Doc as _, Gets as _};
 
     /// Every key `held` keeps, spelled as a replica is given it.
     fn given(held: &InMemory) -> BTreeMap<KeyName, String> {

@@ -32,6 +32,7 @@ required-features = ["fixture"]
 [dependencies]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
+suzatary-store.workspace = true
 suzatary-core.workspace = true
 suzatary-api.workspace = true
 suzatary-io.workspace = true

@@ -14,7 +14,6 @@ use prodrome_core::fpl::instant_of;
 use suzatary_base::capability::Clock as _;
 use suzatary_core::health::plugin::CredentialName;
 use suzatary_core::plugin::{Answer, Came, LastRun, Manifest, admit};
-use suzatary_core::store::{Learnt, learn};
 use suzatary_io::clock::SystemClock;
 use suzatary_io::durable;
 use suzatary_io::http::Ureq;
@@ -22,6 +21,7 @@ use suzatary_io::objects::Objects;
 use suzatary_io::plugin_store::{Begun, PluginStore};
 use suzatary_io::present::Present as _;
 use suzatary_plugin::{Budget, Effects, Fetch, Host, Run, Source};
+use suzatary_store::store::{Learnt, learn};
 
 use crate::instance::{Instance, Plugins};
 

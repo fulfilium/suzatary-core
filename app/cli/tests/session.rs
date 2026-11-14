@@ -232,7 +232,7 @@ fn a_retraction_reopens_a_stored_session() {
     )
     .expect("the owner's tap");
     let node = prodrome_core::event::Hash::new("ab".repeat(32)).expect("a name");
-    suzatary_core::store::Prodrome::append(
+    suzatary_store::store::Prodrome::append(
         &caps.digests,
         suzatary_core::secretary::digest_event::retracted(
             node,

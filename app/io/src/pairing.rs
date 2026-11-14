@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use suzatary_core::signatures::{Code, Pairing, Pairings as Kept, Salt};
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use crate::docs::{DocCodec, Docs, Locked};
 

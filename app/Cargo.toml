@@ -1,14 +1,14 @@
 # THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the only one in the repository. The
 # Prodrome is the database, a dependency by REVISION (→ `prodromedependency`).
 #
-# Arrows point down only: cli → plugin → io → core → record → base → prodrome-core. `wasm` is the
-# browser's module, depended on by nothing. `plugin` is the plugin host
+# Arrows point down only: cli → plugin → io → core → store, record → base → prodrome-core.
+# `wasm` is the browser's module, depended on by nothing. `plugin` is the plugin host
 # (docs/PLUGINS-PLAN-2026-10-02.md), its own crate because wasmtime is the largest tree here.
 # `plugin-fence` is a hostile plugin the flake builds for wasm32 and the workspace only lints.
 # `testkit` is a dev-dependency of `io` and `cli`: the programs their tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the binary reads `app/release.toml` at
@@ -34,6 +34,7 @@ prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium
 prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "a0e99598eb61866c447f386dcb75557b0520dad4" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
+suzatary-store = { path = "store" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }

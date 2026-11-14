@@ -3,9 +3,9 @@ use crate::mail::mailbox::Mailbox;
 use crate::render::Render;
 use crate::repository::Repository;
 use crate::secretary::recollection::Recollection;
-use crate::store::Reads;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Reads;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
 /// sends, notifies, names a peer or performs a card, and its `chain` is only read.
@@ -52,7 +52,7 @@ use suzatary_record::record::TodoEvent;
 /// fn remember(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.memory.hold(); }
 /// ```
 ///
-/// Those stores are read halves ([`Reads`], [`crate::store::Gets`]), so not even code inside
+/// Those stores are read halves ([`Reads`], [`suzatary_store::store::Gets`]), so not even code inside
 /// [`Recollection`] can append a fact or a summary, or keep or delete their words:
 ///
 /// ```compile_fail,E0599

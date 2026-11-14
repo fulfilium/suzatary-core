@@ -1,5 +1,3 @@
-use prodrome_core::event::Hash;
-
 use crate::agent::Agent;
 use crate::drive::Drive;
 use crate::mail::corpus::{Corpus, CorpusError};
@@ -21,7 +19,6 @@ use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::briefings::{BriefingError, Briefings};
 use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use crate::secrets::{MailGrants, Secrets};
-use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 use crate::weather::{Weather, WeatherError};
 use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
 use suzatary_base::capability::RenderError;
@@ -30,7 +27,7 @@ use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::escape::Escaped;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
-use suzatary_record::record::{Envelope, TodoEvent};
+use suzatary_store::store::StoreError;
 
 impl Agent<'static> {
     /// The agent's record, every field inert.
@@ -130,41 +127,10 @@ impl Secretary<'static> {
     }
 }
 
-struct NoLock;
-impl WriteLock for NoLock {}
-
 fn absent(kind: &'static str, name: &str) -> MailError {
     MailError::Absent {
         kind,
         name: name.to_owned(),
-    }
-}
-
-impl Reads<TodoEvent> for Nothing {
-    fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
-        Ok(std::collections::BTreeSet::new())
-    }
-
-    fn tips(&self) -> Result<Vec<Hash>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn verify(&self) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-impl Prodrome<TodoEvent> for Nothing {
-    fn append(&self, _event: TodoEvent) -> Result<Hash, StoreError> {
-        Err(StoreError::not_appended("chain", "nothing is written"))
-    }
-    fn accept(&self, _objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
-        Err(StoreError::not_appended("chain", "nothing is written"))
-    }
-    fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
-        Ok(Box::new(NoLock))
     }
 }
 
@@ -293,64 +259,9 @@ impl Sessions for Nothing {
     }
 }
 
-/// The inbox and the conversations take what is written and keep none of it.
-macro_rules! kept_nowhere {
-    ($schema:ty) => {
-        impl crate::store::Reads<$schema> for Nothing {
-            fn objects(
-                &self,
-            ) -> Result<
-                Vec<(Hash, prodrome_core::event::Envelope<$schema>)>,
-                crate::store::StoreError,
-            > {
-                Ok(Vec::new())
-            }
-            fn excluded(
-                &self,
-            ) -> Result<std::collections::BTreeSet<Hash>, crate::store::StoreError> {
-                Ok(std::collections::BTreeSet::new())
-            }
-
-            fn tips(&self) -> Result<Vec<Hash>, crate::store::StoreError> {
-                Ok(Vec::new())
-            }
-            fn verify(&self) -> Vec<String> {
-                Vec::new()
-            }
-        }
-
-        impl crate::store::Prodrome<$schema> for Nothing {
-            fn append(&self, event: $schema) -> Result<Hash, crate::store::StoreError> {
-                Ok(prodrome_core::event::seal_hash(
-                    &prodrome_core::event::mk_sealed(None, event),
-                ))
-            }
-            fn accept(
-                &self,
-                _objects: &[(Hash, String)],
-            ) -> Result<Vec<Hash>, crate::store::StoreError> {
-                Ok(Vec::new())
-            }
-            fn locked(
-                &self,
-            ) -> Result<Box<dyn crate::store::WriteLock + '_>, crate::store::StoreError> {
-                Ok(Box::new(NoLock))
-            }
-        }
-    };
-}
-
-kept_nowhere!(crate::secretary::inbox_event::InboxEvent);
-kept_nowhere!(crate::secretary::line_event::LineEvent);
-kept_nowhere!(crate::secretary::memory_event::MemoryEvent);
-kept_nowhere!(crate::secretary::digest_event::DigestEvent);
-kept_nowhere!(crate::secretary::topics::reading::MembershipEvent);
-kept_nowhere!(crate::secretary::topics::reading::AliasEvent);
-
 /// No owner: nothing here believes a retraction or an erasure.
 static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =
     std::collections::BTreeSet::new();
-kept_nowhere!(crate::decisions::DecisionEvent);
 
 /// No calendar: every day asked for is empty.
 impl crate::calendar::effect::Calendar for Nothing {
@@ -358,7 +269,7 @@ impl crate::calendar::effect::Calendar for Nothing {
         &self,
         first: chrono::NaiveDate,
         count: u32,
-    ) -> Result<Vec<crate::calendar::Day>, crate::store::StoreError> {
+    ) -> Result<Vec<crate::calendar::Day>, suzatary_store::store::StoreError> {
         Ok(first
             .iter_days()
             .take(count as usize)
@@ -503,22 +414,6 @@ impl crate::drive::Port for Nothing {
     }
 }
 
-/// No file was uploaded or kept, no fact's words either, and none is kept here.
-impl<K, T> crate::store::Gets<K, T> for Nothing {
-    fn get(&self, _key: &K) -> Result<Option<T>, StoreError> {
-        Ok(None)
-    }
-}
-
-impl<K, T> crate::store::Doc<K, T> for Nothing {
-    fn set(&self, _key: &K, _value: &T) -> Result<(), StoreError> {
-        Err(StoreError::unwritable("file store", "nothing keeps files"))
-    }
-    fn remove(&self, _key: &K) -> Result<(), StoreError> {
-        Ok(())
-    }
-}
-
 impl Junk for Nothing {
     fn junk_accounts(&self) -> Vec<String> {
         Vec::new()
@@ -595,7 +490,8 @@ impl crate::upload_index::UploadIndex for Nothing {
 impl crate::health::Register<crate::health::SourceKey> for Nothing {
     fn healths(
         &self,
-    ) -> Result<crate::health::Healths<crate::health::SourceKey>, crate::store::StoreError> {
+    ) -> Result<crate::health::Healths<crate::health::SourceKey>, suzatary_store::store::StoreError>
+    {
         Ok(crate::health::Healths::default())
     }
 }
@@ -622,7 +518,7 @@ impl Answers for Nothing {
 }
 
 /// No phone is registered, and a registration is refused.
-impl crate::store::Log<String, crate::devices::Device> for Nothing {
+impl suzatary_store::store::Log<String, crate::devices::Device> for Nothing {
     fn keys(&self) -> Result<Vec<String>, StoreError> {
         Ok(Vec::new())
     }
@@ -644,14 +540,14 @@ impl crate::store::Log<String, crate::devices::Device> for Nothing {
     fn edit(
         &self,
         _actor: &String,
-        _decide: &mut crate::store::Decide<'_, crate::devices::Device>,
-    ) -> Result<crate::store::Edit<crate::devices::Device>, Refusal> {
+        _decide: &mut suzatary_store::store::Decide<'_, crate::devices::Device>,
+    ) -> Result<suzatary_store::store::Edit<crate::devices::Device>, Refusal> {
         Err(StoreError::unwritable("device store", "nothing is registered").into())
     }
 }
 
 /// No watch is set, and setting one is refused.
-impl crate::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> for Nothing {
+impl suzatary_store::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> for Nothing {
     fn keys(&self) -> Result<Vec<crate::mail::watch::WatchId>, StoreError> {
         Ok(Vec::new())
     }
@@ -678,8 +574,8 @@ impl crate::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> fo
     fn edit(
         &self,
         _watch: &crate::mail::watch::WatchId,
-        _decide: &mut crate::store::Decide<'_, crate::mail::watch::Line>,
-    ) -> Result<crate::store::Edit<crate::mail::watch::Line>, Refusal> {
+        _decide: &mut suzatary_store::store::Decide<'_, crate::mail::watch::Line>,
+    ) -> Result<suzatary_store::store::Edit<crate::mail::watch::Line>, Refusal> {
         Err(StoreError::unwritable("watch store", "nothing is watched").into())
     }
 }

@@ -1,12 +1,12 @@
 //! The triage pass's pulse on disk, as two [`Doc`]s: the heartbeat (when a pass last ended
 //! well) at the instance's `mail.heartbeat`, and the outcome of the last pass beside it.
 //!
-//! [`Doc`]: suzatary_core::store::Doc
+//! [`Doc`]: suzatary_store::store::Doc
 
 use std::path::Path;
 
 use suzatary_core::mail::heartbeat::{Pass, PassOutcome, Recorded, stamp};
-use suzatary_core::store::{Doc as _, Gets as _, StoreError};
+use suzatary_store::store::{Doc as _, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 

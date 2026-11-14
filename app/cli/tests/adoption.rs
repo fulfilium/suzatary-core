@@ -79,7 +79,7 @@ fn adopting_again_refuses_an_unsigned_write_since_the_epoch_until_it_is_repaired
     let instance = a_signing_instance(&root, &public(OWN));
     ok(&signing(&instance, &["device", "init"], &seeds()));
     // What a crash between the append and its signature leaves.
-    let unsigned = suzatary_core::store::append_to(
+    let unsigned = suzatary_store::store::append_to(
         &EventStore::new(
             root.join("events"),
             prodrome_core::policy::Untrusted::none(),

@@ -14,7 +14,7 @@ use suzatary_core::secretary::inbox::{self, ProposalId, Response};
 use suzatary_core::secretary::inbox_reading::Reading;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
-use suzatary_core::store::InMemory;
+use suzatary_core::stores::InMemory;
 
 /// The inbox, in memory; its hold is the one lock the law is about.
 type Memory = InMemory<suzatary_core::secretary::inbox_event::InboxEvent>;

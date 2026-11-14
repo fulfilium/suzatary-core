@@ -36,8 +36,8 @@ use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::transcript;
 use crate::secretary::words::Words;
-use crate::store::StoreError;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_store::store::StoreError;
 
 /// How the lines' slots stand against the current rules.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

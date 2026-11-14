@@ -1,8 +1,8 @@
 use prodrome_core::event::Actor;
 
 use super::{BoxKeys, Custody};
-use crate::store::Signer;
 use prodrome_core::policy::Untrusted;
+use suzatary_store::store::Signer;
 
 /// What the box signs with, as the deployment declares and secretspec answers: resolved once
 /// per process, and never a reason not to start, since a box whose keys are locked away must

@@ -39,7 +39,7 @@ fn open_card(object: &Object) -> Option<&Changeset> {
 /// # Errors
 /// The inbox does not read.
 pub fn standing(
-    inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
 ) -> Result<Vec<(suzatary_base::reference::ProposalRef, Changeset)>, Refusal> {
     Ok(inbox::fold(inbox)?
         .objects()

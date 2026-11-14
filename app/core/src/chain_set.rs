@@ -426,8 +426,9 @@ mod tests {
     use prodrome_core::term::Term;
 
     use super::*;
-    use crate::store::Reads as _;
-    use crate::store::{InMemory, Prodrome as _};
+    use crate::stores::InMemory;
+    use suzatary_store::store::Prodrome as _;
+    use suzatary_store::store::Reads as _;
 
     type Objects = Vec<(Hash, Envelope<TodoEvent>)>;
 
@@ -606,10 +607,13 @@ mod tests {
             .expect("appends");
         let stores = || {
             [
-                (&life, &life_store as &dyn crate::store::Prodrome<TodoEvent>),
+                (
+                    &life,
+                    &life_store as &dyn suzatary_store::store::Prodrome<TodoEvent>,
+                ),
                 (
                     &project,
-                    &project_store as &dyn crate::store::Prodrome<TodoEvent>,
+                    &project_store as &dyn suzatary_store::store::Prodrome<TodoEvent>,
                 ),
             ]
         };
@@ -656,7 +660,12 @@ mod tests {
             root: crate::cast::keys::root(),
         };
         let (open, closed) = (policy(Untrusted::none()), policy(Untrusted::of([triage])));
-        let of = |policy| [(policy, &store as &dyn crate::store::Prodrome<TodoEvent>)];
+        let of = |policy| {
+            [(
+                policy,
+                &store as &dyn suzatary_store::store::Prodrome<TodoEvent>,
+            )]
+        };
         let first = Read::of_stores(of(&open));
         let second = first.moved(of(&closed));
         assert!(!second.shares(&first, &open.name), "the policy moved");

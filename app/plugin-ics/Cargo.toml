@@ -31,6 +31,7 @@ wit-bindgen.workspace = true
 proptest.workspace = true
 # The host's own door for an item, so the tests ask the reader that stores it.
 suzatary-core = { workspace = true, features = ["nothing"] }
+suzatary-store.workspace = true
 
 [lints]
 workspace = true

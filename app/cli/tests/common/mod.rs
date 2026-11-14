@@ -143,7 +143,7 @@ pub fn begun(store: &EventStore) {
 /// appends byte for byte what a store holding them appends.
 #[must_use]
 pub fn tab(
-    store: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+    store: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
 ) -> prodrome_core::store::MemoryStore<suzatary_record::record::TodoEvent> {
     use prodrome_core::store::Replica as _;
     let prints: std::collections::BTreeMap<prodrome_core::event::Hash, String> = store
@@ -182,7 +182,7 @@ pub fn acted(
 
 /// One act a fresh tab of `store` writes.
 pub fn written(
-    store: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+    store: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
     event: suzatary_record::record::TodoEvent,
 ) -> suzatary_record::record::Envelope {
     acted(&tab(store), event)
@@ -297,7 +297,7 @@ pub fn six_todo_chain(root: &Path) -> EventStore {
     begun(&events);
 
     let append = |event| {
-        suzatary_core::store::append_to(&events, suzatary_record::record::GENESIS, event)
+        suzatary_store::store::append_to(&events, suzatary_record::record::GENESIS, event)
             .expect("appends");
     };
     let authored = |todo: &cast::Todo, at, actor, spec, source| {
@@ -2647,7 +2647,7 @@ pub struct FakeFiles {
 }
 
 impl
-    suzatary_core::store::Gets<
+    suzatary_store::store::Gets<
         suzatary_core::attachment::AttachmentId,
         suzatary_core::upload::Upload,
     > for FakeFiles
@@ -2655,16 +2655,16 @@ impl
     fn get(
         &self,
         id: &suzatary_core::attachment::AttachmentId,
-    ) -> Result<Option<suzatary_core::upload::Upload>, suzatary_core::store::StoreError> {
+    ) -> Result<Option<suzatary_core::upload::Upload>, suzatary_store::store::StoreError> {
         Ok(self.uploads.get(id).cloned())
     }
 }
 
-impl suzatary_core::store::Gets<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
+impl suzatary_store::store::Gets<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn get(
         &self,
         id: &suzatary_core::attachment::AttachmentId,
-    ) -> Result<Option<Vec<u8>>, suzatary_core::store::StoreError> {
+    ) -> Result<Option<Vec<u8>>, suzatary_store::store::StoreError> {
         Ok(self
             .kept
             .lock()
@@ -2675,12 +2675,12 @@ impl suzatary_core::store::Gets<suzatary_core::attachment::AttachmentId, Vec<u8>
     }
 }
 
-impl suzatary_core::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
+impl suzatary_store::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn set(
         &self,
         _id: &suzatary_core::attachment::AttachmentId,
         bytes: &Vec<u8>,
-    ) -> Result<(), suzatary_core::store::StoreError> {
+    ) -> Result<(), suzatary_store::store::StoreError> {
         self.kept
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -2691,7 +2691,7 @@ impl suzatary_core::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>>
     fn remove(
         &self,
         id: &suzatary_core::attachment::AttachmentId,
-    ) -> Result<(), suzatary_core::store::StoreError> {
+    ) -> Result<(), suzatary_store::store::StoreError> {
         self.kept
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

@@ -91,7 +91,7 @@ pub type ActingConversations = &'static suzatary_io::conversations::Conversation
 
 /// The inbox an act ends in.
 pub type ActingInbox =
-    &'static dyn suzatary_core::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>;
+    &'static dyn suzatary_store::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>;
 
 /// The server's own store handles, so the process holds one copy of each.
 #[derive(Clone, Copy)]
@@ -765,7 +765,7 @@ fn keep_tapped(
     size: u64,
     digest: &suzatary_core::attachment::AttachmentId,
 ) {
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let file = suzatary_core::held_value::HeldFile::Drive { path: path.clone() };
     let kept_it = suzatary_core::secretary::attached::Attached::known(
         file.source(),
@@ -1538,7 +1538,7 @@ pub fn backfill_apply(
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
     use suzatary_core::secretary::topics::plan::Plan;
-    use suzatary_core::store::Prodrome as _;
+    use suzatary_store::store::Prodrome as _;
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let text = std::fs::read_to_string(file)
@@ -1572,7 +1572,7 @@ pub fn carry(
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
     use suzatary_core::secretary::topics::carry::{self, Carrying, Map};
-    use suzatary_core::store::Prodrome as _;
+    use suzatary_store::store::Prodrome as _;
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
@@ -1872,7 +1872,7 @@ fn words_of(
 ) -> impl Fn(
     &suzatary_core::secretary::salted_text::TextName,
 ) -> suzatary_core::secretary::inbox_reading::Words {
-    use suzatary_core::store::Gets as _;
+    use suzatary_store::store::Gets as _;
     let texts = suzatary_io::texts::Texts::<suzatary_core::secretary::memory::Fact>::open(
         instance.secretary.memory_texts(),
     );
@@ -2668,7 +2668,7 @@ mod sign_in_completion {
     use suzatary_core::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::store::{Entry, Stored};
     use suzatary_core::secretary::{taint, transcript};
-    use suzatary_core::store::InMemory;
+    use suzatary_core::stores::InMemory;
 
     use super::{append_completion, completion};
 

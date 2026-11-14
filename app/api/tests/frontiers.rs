@@ -30,10 +30,11 @@ use suzatary_base::topic_target::Target;
 use suzatary_core::epoch::Epochs;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{InMemory, Prodrome as _};
+use suzatary_core::stores::InMemory;
 use suzatary_core::wire::lines::Frontier;
-use suzatary_core::wire::store::SinceRead;
+use suzatary_store::store::Prodrome as _;
+use suzatary_store::store::Reads as _;
+use suzatary_store::wire::store::SinceRead;
 
 const KEY: &str = "store/topics";
 

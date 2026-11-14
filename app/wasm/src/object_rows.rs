@@ -1,5 +1,5 @@
 //! The inbox and the two topic stores as the tab's worker drives them: each a replica of objects
-//! the core holds (`suzatary_core::replica::objects`), at its own schema. Every move answers the
+//! the core holds (`suzatary_store::replica::objects`), at its own schema. Every move answers the
 //! frame the worker appends to the device's log, and whether it moved what a reading reads; a
 //! warm load hands the snapshot and the frames after it back. The worker keeps nothing of a store
 //! but the handle: every question is asked here.
@@ -13,11 +13,11 @@ use std::cell::OnceCell;
 use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
 use suzatary_api::wire::StorePayload;
-use suzatary_core::replica::held::Node as _;
-use suzatary_core::replica::objects::{self, Answer, Move, Object, Objects, Refusal};
 use suzatary_core::secretary::object_stores;
-use suzatary_core::snapshot;
 use suzatary_core::wire::lines::ReceiptPayload;
+use suzatary_store::replica::held::Node as _;
+use suzatary_store::replica::objects::{self, Answer, Move, Object, Objects, Refusal};
+use suzatary_store::snapshot;
 use wasm_bindgen::JsError;
 
 use crate::line_rows::{Step, hashes, whole};

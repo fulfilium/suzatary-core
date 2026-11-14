@@ -1,4 +1,4 @@
-//! The lines' replica in the device's form: its snapshot ([`crate::snapshot::Held`]) and its
+//! The lines' replica in the device's form: its snapshot ([`suzatary_store::snapshot::Held`]) and its
 //! frames, each name printed as its 32 bytes rather than 64 hex characters. A node reads back
 //! through [`Parsed::of`], as the box's are read, so a snapshot holds nothing a pull could not;
 //! a husk reads back through [`Husk::read`], which reads no words.
@@ -8,17 +8,17 @@ use std::collections::BTreeMap;
 use prodrome_core::event::Hash;
 use serde::{Deserialize, Serialize};
 
-use crate::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
-use crate::replica::pulling::{Delta, Pulling};
-use crate::replica::row::Row;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KEY_BYTES, KeyName};
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
-use crate::snapshot::{self, NotASnapshot, Unprinted};
-use crate::store::Husk;
 use crate::wire::lines::{NodeHeader, SkeletonNode};
+use suzatary_store::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
+use suzatary_store::replica::pulling::{Delta, Pulling};
+use suzatary_store::replica::row::Row;
+use suzatary_store::snapshot::{self, NotASnapshot, Unprinted};
+use suzatary_store::store::Husk;
 
 /// The lines' rows.
 pub type LinePulling = Pulling<Parsed, KeyRing>;

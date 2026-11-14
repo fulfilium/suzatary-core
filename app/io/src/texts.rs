@@ -1,7 +1,7 @@
 //! Salted texts on disk, one file per [`Text`] named by its [`TextName`], as a [`Doc`]:
 //! box-local and git-ignored. A swapped file, or one whose words do not read, reads as absent.
 //!
-//! [`Doc`]: suzatary_core::store::Doc
+//! [`Doc`]: suzatary_store::store::Doc
 
 use std::path::PathBuf;
 
@@ -52,7 +52,7 @@ impl Entropy for SystemEntropy {
 mod tests {
     use suzatary_base::capability::SALT_BYTES;
     use suzatary_core::secretary::memory::Fact;
-    use suzatary_core::store::{Doc as _, Gets as _};
+    use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;
 

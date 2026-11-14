@@ -338,7 +338,8 @@ fn upward(layers: &Layers) -> BTreeSet<String> {
     let mut edges = BTreeSet::new();
     for file in files {
         let module = module_of(&file);
-        if module == "lib" {
+        // The crate's root, and a module file that is only a `#[cfg(test)] mod tests;`.
+        if module == "lib" || module.rsplit('/').next() == Some("tests") {
             continue;
         }
         let from = cut_of(&module, &owner).unwrap_or_else(|| {

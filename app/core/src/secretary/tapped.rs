@@ -13,8 +13,8 @@ use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
 use crate::secretary::responded::{Performed, Responded};
 use crate::signatures::Tap;
-use crate::store::Prodrome;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// The tap's rule at the instant of the tap.
 #[derive(Debug, Clone, Copy)]
@@ -115,7 +115,7 @@ mod tests {
     /// nothing.
     #[test]
     fn a_tap_performs_once_and_its_response_discharges_the_rule() {
-        let store = crate::store::InMemory::<InboxEvent>::default();
+        let store = crate::stores::InMemory::<InboxEvent>::default();
         let asked = inbox::Asked {
             proposer: crate::secretary::proposer::Proposer::Secretary,
             proposal: Proposal::Email(Draft::default()),
@@ -138,7 +138,7 @@ mod tests {
         )
         .expect("filed");
         let rule = Tapped { now: now() };
-        let standing = |store: &crate::store::InMemory<InboxEvent>| {
+        let standing = |store: &crate::stores::InMemory<InboxEvent>| {
             inbox::fold(store)
                 .expect("reads")
                 .get(&id)

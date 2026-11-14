@@ -15,11 +15,11 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
 use crate::secrets::{SecretState, Secrets};
-use crate::store::Prodrome;
 use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// What the rule reads of a deployment's Google accounts.
 #[derive(Debug, Clone, Copy)]

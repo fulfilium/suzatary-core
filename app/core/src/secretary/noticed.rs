@@ -11,10 +11,10 @@ use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::Entry;
 use crate::secretary::{conversations, transcript};
-use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// Why a stale card is withdrawn.
 pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed for is in \
@@ -388,9 +388,9 @@ impl FromIterator<Noticed> for Owed {
 mod tests {
     use super::*;
     use crate::secretary::acts::Act;
-    use crate::store::InMemory;
-    use crate::store::Reads as _;
+    use crate::stores::InMemory;
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_store::store::Reads as _;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")

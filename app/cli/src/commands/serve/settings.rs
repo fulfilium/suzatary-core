@@ -15,10 +15,10 @@ use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
 };
 use suzatary_core::settings::remote::{self, Pushed, Tip};
-use suzatary_core::store::StoreError;
 use suzatary_core::timings::{Part, Phase, timed};
 use suzatary_core::wire::cards as wire;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_store::store::StoreError;
 
 use super::State;
 use super::call::Call;
@@ -57,7 +57,7 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     })?;
     let storage = timed(part(Part::Storage), || storage(state));
     let asking = timed(part(Part::Inbox), || {
-        suzatary_core::store::memoised(
+        suzatary_store::store::memoised(
             &state.asking,
             b"settings::overview::Asking::open of the inbox's fold",
             caps.secretary.inbox,
@@ -117,7 +117,7 @@ fn build(state: &State, now: suzatary_base::capability::Datetime) -> Result<Buil
         "settings::overview::Build::of GET /api/about, built {}",
         state.stamp.build()
     );
-    Ok(suzatary_core::store::memoised(
+    Ok(suzatary_store::store::memoised(
         &state.built,
         function.as_bytes(),
         project.caps.secretary.chain,

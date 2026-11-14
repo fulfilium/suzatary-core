@@ -36,52 +36,16 @@ pub fn learn(store: &dyn Prodrome<Declared>, items: Vec<Declared>) -> Result<Lea
     Ok(learnt)
 }
 
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/doors.rs"]
+pub mod doors;
+
 #[cfg(test)]
 mod tests {
     use prodrome_core::declared::Declaration;
-    use prodrome_core::event::parse_event;
 
-    use super::*;
-    use crate::store::InMemory;
-    use crate::store::Reads as _;
-
-    const SCHEMA: &str = "Schema(key='door', events=(Event(name='Seen', fields=(Field(name='door', \
-        type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), \
-        Field(name='state', type=Enum(alternatives=('open', 'shut'))))),), \
-        registers=(Register(name='state', order=Discrete(), inflationary=False, \
-        writes=(Write(event='Seen', field='state'),)),))";
-
-    fn seen(schema: &Declaration, door: &str, minute: u32, state: &str) -> Declared {
-        parse_event(
-            schema,
-            &format!("Seen(door='{door}', at=datetime(2026, 10, 5, 10, {minute}), actor='probe', state='{state}')"),
-        )
-        .expect("an event")
-    }
-
-    #[test]
-    fn learning_twice_is_learning_once_whenever_it_was_seen() {
-        let schema = Declaration::admit(SCHEMA).expect("lawful");
-        let store = InMemory::<Declared>::at(schema.clone());
-        let first = learn(&store, vec![seen(&schema, "front", 0, "open")]).expect("learns");
-        assert_eq!((first.written, first.known), (1, 0));
-        let again = learn(&store, vec![seen(&schema, "front", 5, "open")]).expect("learns");
-        assert_eq!((again.written, again.known), (0, 1), "the instant is data");
-        let shut = learn(
-            &store,
-            vec![
-                seen(&schema, "front", 6, "shut"),
-                seen(&schema, "front", 7, "shut"),
-            ],
-        )
-        .expect("learns");
-        assert_eq!((shut.written, shut.known), (1, 1));
-        assert_eq!(
-            store.objects().expect("reads").len(),
-            3,
-            "the genesis the first write began, and two changes"
-        );
-    }
+    use super::Knowledge;
+    use super::doors::{SCHEMA, seen};
 
     #[test]
     fn a_conflict_is_never_known_so_the_next_write_settles_it() {

@@ -159,7 +159,9 @@ mod tests {
     struct FailingFor(i64);
 
     impl crate::health::Register<SourceKey> for FailingFor {
-        fn healths(&self) -> Result<crate::health::Healths<SourceKey>, crate::store::StoreError> {
+        fn healths(
+            &self,
+        ) -> Result<crate::health::Healths<SourceKey>, suzatary_store::store::StoreError> {
             use suzatary_base::capability::Clock as _;
             let now = prodrome_core::fpl::instant_of(suzatary_base::capability::Nothing.now());
             let row = |ok| crate::mail::sync_report::SyncReport {
@@ -211,14 +213,14 @@ mod tests {
 
     struct Stores {
         lines: crate::secretary::conversations::InMemory,
-        inbox: crate::store::InMemory<crate::secretary::inbox_event::InboxEvent>,
+        inbox: crate::stores::InMemory<crate::secretary::inbox_event::InboxEvent>,
         id: ConversationId,
     }
 
     fn stores() -> Stores {
         let stores = Stores {
             lines: crate::secretary::conversations::InMemory::default(),
-            inbox: crate::store::InMemory::default(),
+            inbox: crate::stores::InMemory::default(),
             id: ConversationId::new("default").expect("a slug"),
         };
         crate::secretary::transcript::start(

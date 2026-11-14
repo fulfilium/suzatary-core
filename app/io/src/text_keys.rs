@@ -2,7 +2,7 @@
 //! [`Doc`]: box-local, readable by this user alone, in the vault and never pushed. `remove`
 //! destroys a key and succeeds when it is already gone; a swapped file reads as absent.
 //!
-//! [`Doc`]: suzatary_core::store::Doc
+//! [`Doc`]: suzatary_store::store::Doc
 
 use std::path::PathBuf;
 
@@ -42,7 +42,7 @@ mod tests {
 
     use suzatary_core::secretary::locked_text::{FreshKey, Locked, Shape};
     use suzatary_core::secretary::memory::Fact;
-    use suzatary_core::store::{Doc as _, Gets as _};
+    use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;
     use crate::texts::SystemEntropy;

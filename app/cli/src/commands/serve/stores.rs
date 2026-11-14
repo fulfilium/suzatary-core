@@ -8,7 +8,7 @@ use suzatary_api::server::Server;
 use suzatary_api::wire::StoreName;
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use super::Chained;
 use super::call::Call;

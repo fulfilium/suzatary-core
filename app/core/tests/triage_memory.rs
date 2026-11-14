@@ -44,7 +44,8 @@ use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::surface::SecretaryVerb;
 use suzatary_core::secretary::verb_name::{Binding, Effect};
-use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Only, Prodrome, Reads as _};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::{Doc as _, InMemoryDoc, Only, Prodrome, Reads as _};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -79,7 +80,7 @@ struct Reader<'a> {
     digests: Only<&'a InMemory<DigestEvent>>,
     summaries: Only<&'a InMemoryDoc<TextName, Text<Line>>>,
     lines: Only<&'a InMemory<LineEvent>>,
-    keys: Only<&'a suzatary_core::store::InMemoryKeys>,
+    keys: Only<&'a suzatary_core::secretary::locked_text::InMemoryKeys>,
 }
 
 impl Reader<'_> {

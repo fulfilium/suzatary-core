@@ -23,7 +23,7 @@ a sentence here.
 - **A page drawn in Rust**: a `viewtree::Program` (`app/pages/`), painted by
   `web/src/painter/painter.ts` and run by `web/src/pages/program.ts`.
 - **What the tab holds**: replicas of the box's objects
-  (`web/src/prodrome/replica.ts`, and the stores' in `app/core/src/replica/`),
+  (`web/src/prodrome/replica.ts`, and the stores' in `app/store/src/replica/`),
   read and moved by the core in its worker (`web/src/prodrome/questions.ts`).
 - **The tab's own state**: registers, each declared once with its tier in
   `web/src/app/registers.ts`.

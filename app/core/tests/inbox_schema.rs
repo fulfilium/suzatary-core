@@ -359,7 +359,8 @@ proptest! {
 #[test]
 fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
     use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
-    use suzatary_core::store::{InMemory, Prodrome as _};
+    use suzatary_core::stores::InMemory;
+    use suzatary_store::store::Prodrome as _;
 
     let checked = responded(1, Responded::Checked(()));
 
@@ -404,7 +405,8 @@ fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
 fn one_unreadable_proposal_leaves_every_other_tappable() {
     use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
     use suzatary_core::secretary::inbox::Unchecked;
-    use suzatary_core::store::{InMemory, Prodrome as _};
+    use suzatary_core::stores::InMemory;
+    use suzatary_store::store::Prodrome as _;
 
     let other = Asked {
         proposal: Proposal::Email(Draft {

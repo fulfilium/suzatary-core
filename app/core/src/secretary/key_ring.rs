@@ -110,7 +110,7 @@ impl KeyRing {
     }
 }
 
-impl crate::replica::row::Keys for KeyRing {
+impl suzatary_store::replica::row::Keys for KeyRing {
     type Name = KeyName;
 
     fn union(mut self, other: &Self) -> Self {

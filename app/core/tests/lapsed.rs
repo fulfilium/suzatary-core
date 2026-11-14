@@ -15,7 +15,7 @@ use suzatary_core::secretary::proposal::Reasons;
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::secretary::responded::Responded;
 use suzatary_core::secretary::responded::Withdrawal;
-use suzatary_core::store::InMemory;
+use suzatary_core::stores::InMemory;
 
 fn at(day: u32, hour: u32) -> Datetime {
     Datetime::new(2026, 11, day, hour, 0, 0, 0).expect("an instant")

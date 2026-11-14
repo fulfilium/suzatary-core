@@ -6,9 +6,9 @@ use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::responded::Withdrawal;
-use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// Close every waiting repository card whose patch `repos` finds merged.
 pub fn sweep(

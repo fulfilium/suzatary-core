@@ -132,7 +132,7 @@ decisions.
 
 ## 3. The stores
 
-Every store is one row of `stores!` in `app/core/src/store/kind.rs`, with its tier: PUSHED
+Every store is one row of `stores!` in `app/core/src/stores.rs`, with its tier: PUSHED
 (committed to the data repository), LOCAL (on the box and in the vault, never pushed) or CACHE
 (on the box, rebuilt by syncing). A prodrome store has its own schema and its own hold.
 

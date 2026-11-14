@@ -7,7 +7,7 @@ use suzatary_base::refusal::Answered;
 
 /// What the lines of `graph` retire of their keys, kept in the graph.
 pub fn retired(
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
 ) -> std::sync::Arc<crate::secretary::transcript::Retired> {
     graph.reading("retired", |graph| {
         crate::secretary::transcript::Retired::of(graph.objects())
@@ -18,7 +18,7 @@ pub fn retired(
 /// erased or superseded by a reseal the box opens.
 pub fn keys_of(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     retired: &crate::secretary::transcript::Retired,
     sent: &[prodrome_core::event::Hash],
 ) -> Answered<BTreeMap<String, String>> {
@@ -46,7 +46,7 @@ pub fn keys_of(
 /// The printed husk of each line of `names` with words no key the box sends opens.
 pub fn husks(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],
 ) -> Answered<BTreeMap<prodrome_core::event::Hash, String>> {
     let sent = keys_of(conversations, graph, &retired(graph), names)?;
@@ -55,7 +55,7 @@ pub fn husks(
 
 /// [`husks`] of `names`, given `sent`, the keys [`keys_of`] sends of them.
 pub fn husked(
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     sent: &BTreeMap<String, String>,
     names: &[prodrome_core::event::Hash],
 ) -> BTreeMap<prodrome_core::event::Hash, String> {
@@ -66,7 +66,7 @@ pub fn husked(
             if line.keys().any(|key| sent.contains_key(key.as_str())) {
                 return None;
             }
-            Some((name.clone(), crate::store::Husk::of(line)?.print()))
+            Some((name.clone(), suzatary_store::store::Husk::of(line)?.print()))
         })
         .collect()
 }
@@ -77,7 +77,7 @@ pub fn husked(
 /// erasure or reseal retires out.
 pub fn dead(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],
 ) -> Answered<BTreeSet<prodrome_core::event::Hash>> {
     let retired = retired(graph);

@@ -16,7 +16,7 @@ use suzatary_core::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Trust};
 
 use super::store_of;
 use crate::instance::Instance;
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 /// Which act.
 #[derive(Debug, clap::Args)]

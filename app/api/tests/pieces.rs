@@ -22,9 +22,9 @@ use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::{Entry, Kind};
 use suzatary_core::secretary::transcript;
 use suzatary_core::secretary::words::Words;
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Doc as _, Prodrome as _};
 use suzatary_core::wire::lines::Content;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Doc as _, Prodrome as _};
 
 fn at(n: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, n / 60, n % 60, 0).expect("an instant")
@@ -131,7 +131,7 @@ impl Writer {
             } => {
                 let said = self.said(*conversation, *words);
                 // The other replica holds what this one does, and each writes a line from it.
-                let other = suzatary_core::store::InMemory::<LineEvent>::default();
+                let other = suzatary_core::stores::InMemory::<LineEvent>::default();
                 let held: Vec<(Hash, String)> = self
                     .lines
                     .lines
@@ -250,7 +250,7 @@ proptest! {
             let objects = store.lines.lines.objects().expect("reads");
             let by_name: BTreeMap<&Hash, &Envelope<LineEvent>> = objects.iter().map(|(n, o)| (n, o)).collect();
             let piece = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Bytes(budget)).expect("a piece");
-            prop_assert_eq!(piece.objects.since, suzatary_core::wire::store::SinceRead::Known);
+            prop_assert_eq!(piece.objects.since, suzatary_store::wire::store::SinceRead::Known);
             let lacked = objects.len() - held.len();
             prop_assert_eq!(piece.objects.objects.is_empty(), lacked == 0);
             prop_assert_eq!(piece.rest, lacked - piece.objects.objects.len());
@@ -389,7 +389,7 @@ fn landed_by_pieces(
     each: bool,
     mut landed: impl FnMut(&BTreeSet<Hash>, &BTreeMap<Hash, Vec<Hash>>, bool),
 ) -> suzatary_core::secretary::held_replica::HeldReplica {
-    use suzatary_core::replica::held::Node as _;
+    use suzatary_store::replica::held::Node as _;
     let mut replica = suzatary_core::secretary::held_replica::HeldReplica::default();
     loop {
         let since = match replica.rows().holding().replica().frontier().digest() {
@@ -593,7 +593,7 @@ proptest! {
                     prop_assert!(!opens, "{}: husked though a key the pull sends opens it", node.hash);
                     // A node sized before an erasure the store moved by is sized as its literal.
                     prop_assert!(node.size == husk.len() || (moved && node.size == print.len()));
-                    prop_assert_eq!(Some(husk.clone()), line.and_then(suzatary_core::store::Husk::of).map(|h| h.print()));
+                    prop_assert_eq!(Some(husk.clone()), line.and_then(suzatary_store::store::Husk::of).map(|h| h.print()));
                 }
             }
             literals.insert(node.hash.clone(), print);
@@ -754,20 +754,20 @@ fn the_content_bound_holds() {
 
 /// A store whose prints are its objects' reprints and more, as a file written by an older printer
 /// is: what a content answer sends of each is longer than its reprint.
-struct Padded<'a>(&'a dyn suzatary_core::store::Prodrome<LineEvent>);
+struct Padded<'a>(&'a dyn suzatary_store::store::Prodrome<LineEvent>);
 
 const PAD: usize = 40_000;
 
-impl suzatary_core::store::Reads<LineEvent> for Padded<'_> {
+impl suzatary_store::store::Reads<LineEvent> for Padded<'_> {
     fn objects(
         &self,
-    ) -> Result<Vec<(Hash, Envelope<LineEvent>)>, suzatary_core::store::StoreError> {
+    ) -> Result<Vec<(Hash, Envelope<LineEvent>)>, suzatary_store::store::StoreError> {
         self.0.objects()
     }
     fn literals(
         &self,
         names: &[Hash],
-    ) -> Result<Vec<Option<String>>, suzatary_core::store::StoreError> {
+    ) -> Result<Vec<Option<String>>, suzatary_store::store::StoreError> {
         Ok(self
             .0
             .literals(names)?
@@ -775,10 +775,10 @@ impl suzatary_core::store::Reads<LineEvent> for Padded<'_> {
             .map(|l| l.map(|l| format!("{l}{}", " ".repeat(PAD))))
             .collect())
     }
-    fn excluded(&self) -> Result<BTreeSet<Hash>, suzatary_core::store::StoreError> {
+    fn excluded(&self) -> Result<BTreeSet<Hash>, suzatary_store::store::StoreError> {
         self.0.excluded()
     }
-    fn tips(&self) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+    fn tips(&self) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
         self.0.tips()
     }
     fn verify(&self) -> Vec<String> {
@@ -786,19 +786,19 @@ impl suzatary_core::store::Reads<LineEvent> for Padded<'_> {
     }
 }
 
-impl suzatary_core::store::Prodrome<LineEvent> for Padded<'_> {
-    fn append(&self, event: LineEvent) -> Result<Hash, suzatary_core::store::StoreError> {
+impl suzatary_store::store::Prodrome<LineEvent> for Padded<'_> {
+    fn append(&self, event: LineEvent) -> Result<Hash, suzatary_store::store::StoreError> {
         self.0.append(event)
     }
     fn accept(
         &self,
         objects: &[(Hash, String)],
-    ) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+    ) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
         self.0.accept(objects)
     }
     fn locked(
         &self,
-    ) -> Result<Box<dyn suzatary_core::store::WriteLock + '_>, suzatary_core::store::StoreError>
+    ) -> Result<Box<dyn suzatary_store::store::WriteLock + '_>, suzatary_store::store::StoreError>
     {
         self.0.locked()
     }
@@ -1010,7 +1010,7 @@ fn an_erased_line_is_answered_as_its_husk() {
 /// destroyed, the rest of the husked lines as waiting on the sweep, and writes nothing.
 #[test]
 fn the_prune_census_counts_the_dead_lines_and_writes_nothing() {
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let mut store = Writer::new();
     store.apply(&Write::Said {
         conversation: 0,

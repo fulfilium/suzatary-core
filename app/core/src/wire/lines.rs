@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::signatures::RefusalKind;
-use super::store::SinceRead;
+use suzatary_store::wire::store::SinceRead;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct StoredObject {

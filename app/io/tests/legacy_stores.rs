@@ -14,10 +14,10 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::payload::Payload;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
-use suzatary_core::store::Prodrome;
-use suzatary_core::store::Reads as _;
 use suzatary_io::objects::Objects;
 use suzatary_record::record::{EventStore, Record};
+use suzatary_store::store::Prodrome;
+use suzatary_store::store::Reads as _;
 
 /// The chains and the agent's replica.
 const CHAINS: [&str; 4] = ["events", "events-suzatary", "events-triage", "conflicted"];

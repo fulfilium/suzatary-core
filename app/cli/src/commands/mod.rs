@@ -65,7 +65,7 @@ pub fn chains_read(instance: &Instance) -> suzatary_core::chain_set::Read {
     suzatary_core::chain_set::Read::of_stores(stores.iter().map(|(policy, store)| {
         (
             *policy,
-            store as &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+            store as &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
         )
     }))
 }

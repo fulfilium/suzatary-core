@@ -14,9 +14,9 @@ use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use suzatary_base::capability::Clock;
 use suzatary_core::cast::{self, CAST};
-use suzatary_core::store::{append_to, linearised};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::record::{EventStore, mk_authored, mk_source, mk_subtodo};
+use suzatary_store::store::{append_to, linearised};
 
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
@@ -1424,7 +1424,7 @@ fn bulk_entry(
 /// `events` appended to `store` in order, through a store in memory holding what `store`
 /// holds, and the objects they made handed to `store` at once: one read of the store, where an
 /// append each would read it again for every event.
-fn appended<E>(store: &dyn suzatary_core::store::Prodrome<E>, events: Vec<E>) -> anyhow::Result<()>
+fn appended<E>(store: &dyn suzatary_store::store::Prodrome<E>, events: Vec<E>) -> anyhow::Result<()>
 where
     E: prodrome_core::schema::Schema,
     E::Vocabulary: Default,

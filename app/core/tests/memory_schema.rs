@@ -27,7 +27,7 @@ use suzatary_core::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary
 use suzatary_core::secretary::provenance::Wrote;
 use suzatary_core::secretary::salted_text::TextName;
 use suzatary_core::secretary::two_phase::TwoPhase;
-use suzatary_core::store::linearised;
+use suzatary_store::store::linearised;
 
 type Disk = EventStore<MemoryEvent, Everything>;
 

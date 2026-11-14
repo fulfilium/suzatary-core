@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
-use suzatary_core::store::Reads as _;
 use suzatary_record::record::{EventStore, mk_authored};
+use suzatary_store::store::Reads as _;
 
 /// A scratch root unique to this process and thread.
 pub(crate) fn scratch(name: &str) -> PathBuf {
@@ -33,7 +33,7 @@ pub(crate) fn a_chain(root: &Path) {
         root.join("events"),
         prodrome_core::policy::Untrusted::none(),
     );
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &store,
         suzatary_record::record::GENESIS,
         mk_authored(
@@ -56,7 +56,7 @@ pub(crate) fn a_chain(root: &Path) {
         .expect("valid"),
     )
     .expect("appends");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &store,
         suzatary_record::record::GENESIS,
         mk_authored(

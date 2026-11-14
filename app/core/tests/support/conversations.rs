@@ -23,9 +23,9 @@ impl Entropy for Counting {
 #[derive(Default)]
 pub struct InMemory {
     /// The lines.
-    pub lines: crate::store::InMemory<LineEvent>,
+    pub lines: crate::stores::InMemory<LineEvent>,
     /// The keys.
-    pub keys: crate::store::InMemoryKeys,
+    pub keys: crate::secretary::locked_text::InMemoryKeys,
     /// Where keys come from.
     pub entropy: Counting,
     /// The blocks and sessions a sweep forgot.

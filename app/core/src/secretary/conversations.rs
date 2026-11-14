@@ -16,11 +16,11 @@ use crate::secretary::opened::Opened;
 use crate::secretary::store::{self, Entry, Stored};
 use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
-use crate::store::{Doc, Gets, Prodrome, Reads, StoreError};
 use crate::timings::{Phase, timed};
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, Status};
+use suzatary_store::store::{Doc, Gets, Prodrome, Reads, StoreError};
 
 /// The conversations: their lines, their keys, and the source of fresh keys.
 #[derive(Clone, Copy)]

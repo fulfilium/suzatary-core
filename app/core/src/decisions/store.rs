@@ -4,9 +4,9 @@ use prodrome_core::event::{Actor, Hash};
 use prodrome_core::literal::Datetime;
 
 use super::{DecisionEvent, DecisionId, Draft, Ledger, Statement};
-use crate::store::Prodrome;
 use suzatary_base::capability::Typeset;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_store::store::Prodrome;
 
 /// The decisions' store, and its three writes.
 ///

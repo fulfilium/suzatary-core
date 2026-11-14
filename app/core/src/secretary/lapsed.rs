@@ -7,10 +7,10 @@ use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::responded::Withdrawal;
-use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::zone::Zone;
+use suzatary_store::store::Prodrome;
 
 /// Close every waiting calendar card whose event ended by `at`; an all-day event ends when the
 /// owner's day after its last begins, in `zone`.

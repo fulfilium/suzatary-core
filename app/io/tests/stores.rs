@@ -31,14 +31,14 @@ use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::transcript;
-use suzatary_core::store::Prodrome;
-use suzatary_core::store::Reads as _;
 use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
 use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_record::record::{EventStore, TodoEvent, mk_authored};
+use suzatary_store::store::Prodrome;
+use suzatary_store::store::Reads as _;
 
 const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
 const SCAN: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 4, 5, 6];
@@ -483,7 +483,7 @@ fn memories(root: &Path) {
 /// one occurrence learned, learned again unchanged (nothing written), then cancelled.
 fn calendar(root: &Path) {
     use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
-    use suzatary_core::store::learn;
+    use suzatary_store::store::learn;
 
     let store = PluginStore::at(root.join(CALENDAR))
         .begin(&calendar_schema())
@@ -962,7 +962,7 @@ pub(crate) fn conversations_at_scale(
             let (line, kept) = LineEvent::write(id.clone(), writer.clone(), held, &entry, &entropy)
                 .expect("a line");
             for key in &kept {
-                suzatary_core::store::Doc::set(keys, &key.name(), key)?;
+                suzatary_store::store::Doc::set(keys, &key.name(), key)?;
             }
             slots += kept.len();
             Ok(Some(line))
@@ -1235,7 +1235,7 @@ fn digest_nodes_at_scale() {
                     Line::new(&format!("summary {count} of what was said")).expect("a line"),
                     [7; suzatary_base::capability::SALT_BYTES],
                 );
-                suzatary_core::store::Doc::set(&texts, &text.name(), &text)?;
+                suzatary_store::store::Doc::set(&texts, &text.name(), &text)?;
                 let attempt = Attempt {
                     over: reading.over(node).expect("over"),
                     model: model.clone(),
@@ -1422,7 +1422,7 @@ fn a_rules_change_over_a_stored_digest() {
                         Line::new(&format!("summary {count} of what was said")).expect("a line"),
                         [7; suzatary_base::capability::SALT_BYTES],
                     );
-                    suzatary_core::store::Doc::set(&texts, &text.name(), &text)?;
+                    suzatary_store::store::Doc::set(&texts, &text.name(), &text)?;
                     let attempt = Attempt {
                         over: reading.over(node).expect("over"),
                         model: model.clone(),

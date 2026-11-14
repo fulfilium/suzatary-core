@@ -4,7 +4,7 @@ use prodrome_core::event::Actor;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-use crate::store::StoreError;
+use suzatary_store::store::StoreError;
 
 /// THE LETTERS OF A PAIRING CODE: RFC 8628 §6.1's base-20 set, consonants only, so a code
 /// spells no word and holds no letter a person confuses with a digit.

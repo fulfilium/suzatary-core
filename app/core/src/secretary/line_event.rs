@@ -963,10 +963,10 @@ fn line_of(
     })
 }
 
-/// A line every key of whose words is let go is kept as its husk ([`crate::store::Husk`]): each
+/// A line every key of whose words is let go is kept as its husk ([`suzatary_store::store::Husk`]): each
 /// slot's words dropped, the name of the key they were locked under all that is left of them. No
 /// store's vocabulary reads a dropped slot, so a husk is never read as a whole object.
-impl crate::store::Husking for LineEvent {
+impl suzatary_store::store::Husking for LineEvent {
     type Seal = KeyName;
     type Husks = HuskVocabulary;
 

@@ -10,8 +10,8 @@ use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;
 use suzatary_core::held_value::{Masked, Placeholder};
 use suzatary_core::secretary::upload_standing::UploadStanding;
-use suzatary_core::store::{Doc as _, Gets as _, StoreError};
 use suzatary_core::upload_index::{IndexError, UploadIndex};
+use suzatary_store::store::{Doc as _, Gets as _, StoreError};
 
 use crate::attachments::{AttachmentStore, Place, Stored};
 use crate::docs::{DocCodec, Docs};

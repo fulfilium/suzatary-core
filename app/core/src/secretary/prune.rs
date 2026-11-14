@@ -50,7 +50,7 @@ pub fn census(conversations: Conversations<'_>, large: usize) -> Result<Census, 
     dead.retain(|name| {
         graph.dag().get(name).is_some_and(|object| match object {
             prodrome_core::event::Envelope::Change(change) => {
-                crate::store::Husking::holds_sealed(&change.event)
+                suzatary_store::store::Husking::holds_sealed(&change.event)
             }
             _ => false,
         })
@@ -68,7 +68,7 @@ pub fn census(conversations: Conversations<'_>, large: usize) -> Result<Census, 
                 census.dead_bytes += bytes;
                 census.husks += husk.len();
             }
-            Some(_) if line.is_some_and(crate::store::Husking::holds_sealed) => {
+            Some(_) if line.is_some_and(suzatary_store::store::Husking::holds_sealed) => {
                 census.retired.add(bytes);
             }
             None if bytes > large => {
@@ -95,7 +95,7 @@ pub fn admitted(
     now: impl Fn(&Hash) -> Option<Vec<u8>>,
 ) -> Result<Vec<String>, Refusal> {
     use crate::secretary::line_event::{LineEvent, LineVocabulary};
-    use crate::store::HuskObject;
+    use suzatary_store::store::HuskObject;
     let graph = conversations.lines.graph()?;
     let names: Vec<Hash> = was.iter().map(|(name, _)| name.clone()).collect();
     let dead = crate::secretary::husks::dead(conversations, &graph, &names)?;
@@ -128,7 +128,7 @@ pub fn admitted(
 /// A finding for each husk the lines hold under a line a key may still open: one the prune did not
 /// write, which reads as words gone that are not.
 pub fn stray(conversations: Conversations<'_>) -> Result<Vec<String>, Refusal> {
-    use crate::store::Husking as _;
+    use suzatary_store::store::Husking as _;
     let graph = conversations.lines.graph()?;
     let husks: Vec<Hash> = graph
         .objects()

@@ -15,13 +15,13 @@ use suzatary_base::escape::markup_text;
 use suzatary_core::release::{
     Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,
 };
-use suzatary_core::store::Prodrome;
 use suzatary_io::clock::SystemClock;
 use suzatary_record::record::Node;
+use suzatary_store::store::Prodrome;
 
 use super::store_of;
 use crate::instance::{ChainDir, Instance};
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 /// Which reading or act.
 #[derive(Debug, clap::Args)]

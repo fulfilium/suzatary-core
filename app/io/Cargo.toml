@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
+suzatary-store.workspace = true
 suzatary-core.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
@@ -27,8 +28,7 @@ ureq.workspace = true
 webpki-roots.workspace = true
 jsonwebtoken.workspace = true
 base64.workspace = true
-# The maildir files notmuch names, and the sha256 `mail/dedup.py` reduces their
-# headers to.
+# The maildir files notmuch names, and the sha256 their headers reduce to.
 mail-parser.workspace = true
 sha2.workspace = true
 hex.workspace = true
@@ -39,9 +39,7 @@ percent-encoding = "2"
 # `markup.suspicious`' three tripwires, and the html-to-text walk over a body.
 regex.workspace = true
 # --- THE MAIL TRANSPORTS (§8.6).
-# The IMAP conversation `ms_imap_sync.py` had from `imaplib`. No TLS feature of
-# its own — see the workspace manifest for why the stream is built here, out of
-# the one rustls this workspace has.
+# IMAP, with no TLS feature of its own: the stream is built here, from the workspace's rustls.
 imap.workspace = true
 # The TLS both mail transports run over, and the roots they trust.
 # `webpki-roots` rather than the platform store, for the reason the push clients
@@ -69,10 +67,7 @@ toml.workspace = true
 workspace = true
 
 [dev-dependencies]
-# THE TRIPWIRE IS FUZZED, and it used to be fuzzed in Python
-# (`tests/test_fuzz.py`) until the markup renderer moved here. A property over
-# arbitrary strings is the same claim that test made and a wider alphabet than
-# it drew from: `suspicious` answers for every input and never panics.
+# THE TRIPWIRE IS FUZZED: `suspicious` answers every string and never panics.
 proptest.workspace = true
 # Inert effects a test fills a record from (a render cache that keeps nothing).
 suzatary-core = { workspace = true, features = ["nothing"] }

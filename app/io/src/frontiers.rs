@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use prodrome_core::event::Hash;
 use prodrome_core::store::frontier::{Frontiers, KEPT, Records, Token, Unrecorded};
-use suzatary_core::store::{Doc as _, Gets as _};
+use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
 

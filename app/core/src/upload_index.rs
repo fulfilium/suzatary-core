@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::attachment::AttachmentId;
 use crate::file_read::FileRead;
 use crate::secretary::upload_standing::UploadStanding;
-use crate::store::StoreError;
+use suzatary_store::store::StoreError;
 
 /// The upload index: the words of each upload a live turn names, kept beside the uploads and
 /// rebuilt from them, so deleting it loses nothing. The interpreter is

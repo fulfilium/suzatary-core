@@ -56,6 +56,12 @@ mod puller_port;
 mod release;
 #[path = "snapshot.rs"]
 mod snapshot;
+#[path = "store_learnt.rs"]
+mod store_learnt;
+#[path = "store_memoised.rs"]
+mod store_memoised;
+#[path = "store_signing.rs"]
+mod store_signing;
 #[path = "surface.rs"]
 mod surface;
 #[path = "topics.rs"]

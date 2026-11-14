@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use sha2::{Digest as _, Sha256};
 use suzatary_core::held_value::{Kinds, MAX_OPENED, Values};
 use suzatary_core::mail_error::MailError;
-use suzatary_core::store::{Doc as _, Gets as _};
+use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
 use crate::pdftotext::{Pdftotext, Unlayered};
@@ -26,7 +26,7 @@ impl Attached {
     pub(crate) fn kinds(&self, pdf: &[u8], pdftotext: &Pdftotext) -> Result<Kinds, MailError> {
         let digest = hex::encode(Sha256::digest(pdf));
         let unreachable =
-            |failed: suzatary_core::store::StoreError| MailError::Unreachable(failed.to_string());
+            |failed: suzatary_store::store::StoreError| MailError::Unreachable(failed.to_string());
         if let Some(kinds) = self.0.get(&digest).map_err(unreachable)? {
             return Ok(kinds);
         }

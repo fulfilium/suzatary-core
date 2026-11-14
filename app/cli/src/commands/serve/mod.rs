@@ -478,7 +478,7 @@ impl State {
     #[must_use]
     pub fn chain_stores(
         &self,
-    ) -> Vec<&'static dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>> {
+    ) -> Vec<&'static dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>> {
         std::iter::once(self.first.caps.secretary.chain)
             .chain(
                 self.chains

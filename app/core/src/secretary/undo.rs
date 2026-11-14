@@ -9,11 +9,11 @@ use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Responded, Withdrawal};
-use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// How far back a brief looks for withdrawals: one day, the brief's own cadence.
 const DAY_SECONDS: i64 = 24 * 60 * 60;
@@ -121,7 +121,7 @@ mod tests {
     fn a_restore_applies_the_withdrawn_card_s_changes_alone() {
         let (lines, inbox) = (
             InMemory::default(),
-            crate::store::InMemory::<InboxEvent>::default(),
+            crate::stores::InMemory::<InboxEvent>::default(),
         );
         let at = Datetime::new(2026, 11, 8, 9, 0, 0, 0).expect("an instant");
         let file = |todo: &str| {

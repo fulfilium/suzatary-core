@@ -16,8 +16,9 @@ use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{self, Fact, FactId, Kind, MAX_LIVE, Origin};
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Gets as _, InMemory, InMemoryDoc};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Gets as _, InMemoryDoc};
 
 /// Each salt the next number.
 #[derive(Default)]

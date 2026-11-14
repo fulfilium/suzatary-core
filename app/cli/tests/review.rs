@@ -14,7 +14,7 @@ use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::secretary::proposal::Reasons;
 use suzatary_core::secretary::review::{Reviewed, reviews};
 use suzatary_core::secretary::store::{Outcome, Settle};
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 /// The review run to its end; a scripted model is under no limit, so it always starts.
 fn review(

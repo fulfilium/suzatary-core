@@ -3,8 +3,8 @@ use prodrome_core::genesis::mk_genesis;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{MemoryStore, Replica};
 
-use super::{InMemoryHold, Prodrome, Reads, StoreError, WriteLock};
 use crate::stores::Store;
+use suzatary_store::store::{InMemoryHold, Prodrome, Reads, StoreError, WriteLock};
 
 /// A prodrome held in memory, for tests: the Prodrome's own `MemoryStore`, so an append writes
 /// byte for byte what a store on disk holding the same objects writes, its heads are derived, and
@@ -14,7 +14,7 @@ pub struct InMemory<E: Schema> {
     store: MemoryStore<E>,
     hold: InMemoryHold,
     /// The graph at the heads it was read at, as a store on disk keeps it.
-    graph: std::sync::Mutex<Option<std::sync::Arc<super::Graph<E>>>>,
+    graph: std::sync::Mutex<Option<std::sync::Arc<suzatary_store::store::Graph<E>>>>,
 }
 
 impl<E: Store<Vocabulary: Default>> Default for InMemory<E> {
@@ -72,7 +72,7 @@ impl<E: Store> Reads<E> for InMemory<E> {
             .collect())
     }
 
-    fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
+    fn graph(&self) -> Result<std::sync::Arc<suzatary_store::store::Graph<E>>, StoreError> {
         let heads: std::collections::BTreeSet<Hash> = self.tips()?.into_iter().collect();
         let mut kept = self
             .graph
@@ -81,7 +81,7 @@ impl<E: Store> Reads<E> for InMemory<E> {
         if let Some(graph) = kept.as_ref().filter(|graph| graph.heads() == &heads) {
             return Ok(std::sync::Arc::clone(graph));
         }
-        let graph = std::sync::Arc::new(super::Graph::of(self.objects()?));
+        let graph = std::sync::Arc::new(suzatary_store::store::Graph::of(self.objects()?));
         *kept = Some(std::sync::Arc::clone(&graph));
         Ok(graph)
     }
@@ -91,7 +91,7 @@ impl<E: Store> Reads<E> for InMemory<E> {
             .store
             .held()
             .map_err(|why| StoreError::unreadable("memory", why))?;
-        Ok(super::left_out(&held.dag))
+        Ok(suzatary_store::store::left_out(&held.dag))
     }
 
     fn tips(&self) -> Result<Vec<Hash>, StoreError> {

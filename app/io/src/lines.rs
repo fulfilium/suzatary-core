@@ -7,7 +7,7 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 use suzatary_base::refusal::Refusal;
-use suzatary_core::store::{Decide, Edit, Log, StoreError};
+use suzatary_store::store::{Decide, Edit, Log, StoreError};
 
 use crate::durable::{self, Held};
 use crate::present::Present as _;

@@ -31,8 +31,8 @@ use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
-use suzatary_core::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 use suzatary_record::record::{Envelope, EventStore, TodoEvent};
+use suzatary_store::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 
 fn chain() -> ChainPolicy {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -138,17 +138,17 @@ impl Prodrome<TodoEvent> for Fixed {
 }
 
 /// Where a line pushed to [`Fixed`]'s conversation keeps its keys.
-static KEYS: std::sync::LazyLock<suzatary_core::store::InMemoryKeys> =
+static KEYS: std::sync::LazyLock<suzatary_core::secretary::locked_text::InMemoryKeys> =
     std::sync::LazyLock::new(Default::default);
 static ENTROPY: std::sync::LazyLock<suzatary_core::secretary::conversations::Counting> =
     std::sync::LazyLock::new(Default::default);
 /// The watches `watch_mail` sets.
 static WATCHES: std::sync::LazyLock<
-    suzatary_core::store::InMemoryLog<
+    suzatary_store::store::InMemoryLog<
         suzatary_core::mail::watch::WatchId,
         suzatary_core::mail::watch::Line,
     >,
-> = std::sync::LazyLock::new(|| suzatary_core::store::InMemoryLog::new("watch"));
+> = std::sync::LazyLock::new(|| suzatary_store::store::InMemoryLog::new("watch"));
 /// The words opened, kept for the calls' conversation.
 static OPENED: std::sync::LazyLock<suzatary_core::secretary::opened::Opened> =
     std::sync::LazyLock::new(suzatary_core::secretary::opened::Opened::default);
@@ -513,7 +513,7 @@ fn agent(
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
     let conversations = suzatary_core::secretary::conversations::InMemory::default();
-    let inbox = suzatary_core::store::InMemory::<suzatary_core::secretary::inbox_event::InboxEvent>::default();
+    let inbox = suzatary_core::stores::InMemory::<suzatary_core::secretary::inbox_event::InboxEvent>::default();
     let cards =
         suzatary_core::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
     suzatary_core::agent::call(&records, &cards, deployment, verb, args)

@@ -10,8 +10,8 @@ use common::Fakes;
 use prodrome_core::event::{
     Hash, canonical_envelope, mk_completed, mk_created, mk_reopened, mk_sealed, seal_hash,
 };
-use suzatary_core::store::Reads as _;
 use suzatary_record::record::Envelope;
+use suzatary_store::store::Reads as _;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")

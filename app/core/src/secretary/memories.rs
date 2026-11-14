@@ -19,9 +19,9 @@ use crate::secretary::memory_event::{self, MemoryEvent};
 use crate::secretary::proposal::Proposal;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::two_phase::TwoPhase;
-use crate::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 
 /// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
 #[derive(Clone, Copy)]
@@ -634,8 +634,9 @@ mod tests {
 
     use super::*;
     use crate::secretary::inbox_event::InboxEvent;
-    use crate::store::{InMemory, InMemoryDoc, Reads};
+    use crate::stores::InMemory;
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_store::store::{InMemoryDoc, Reads};
 
     /// Each salt one more than the last.
     #[derive(Default)]
@@ -810,23 +811,31 @@ mod tests {
                 prodrome_core::event::Hash,
                 prodrome_core::event::Envelope<E>,
             )>,
-            crate::store::StoreError,
+            suzatary_store::store::StoreError,
         > {
             if self.failing.load(Ordering::Relaxed) {
-                return Err(crate::store::StoreError::unreadable("failing", "told to"));
+                return Err(suzatary_store::store::StoreError::unreadable(
+                    "failing", "told to",
+                ));
             }
             self.inner.objects()
         }
         fn excluded(
             &self,
-        ) -> Result<std::collections::BTreeSet<prodrome_core::event::Hash>, crate::store::StoreError>
-        {
+        ) -> Result<
+            std::collections::BTreeSet<prodrome_core::event::Hash>,
+            suzatary_store::store::StoreError,
+        > {
             if self.failing.load(Ordering::Relaxed) {
-                return Err(crate::store::StoreError::unreadable("failing", "told to"));
+                return Err(suzatary_store::store::StoreError::unreadable(
+                    "failing", "told to",
+                ));
             }
             self.inner.excluded()
         }
-        fn tips(&self) -> Result<Vec<prodrome_core::event::Hash>, crate::store::StoreError> {
+        fn tips(
+            &self,
+        ) -> Result<Vec<prodrome_core::event::Hash>, suzatary_store::store::StoreError> {
             self.inner.tips()
         }
         fn verify(&self) -> Vec<String> {
@@ -835,16 +844,19 @@ mod tests {
     }
 
     impl<E: crate::stores::Store> Prodrome<E> for Failing<E> {
-        fn append(&self, event: E) -> Result<prodrome_core::event::Hash, crate::store::StoreError> {
+        fn append(
+            &self,
+            event: E,
+        ) -> Result<prodrome_core::event::Hash, suzatary_store::store::StoreError> {
             self.inner.append(event)
         }
         fn accept(
             &self,
             objects: &[(prodrome_core::event::Hash, String)],
-        ) -> Result<Vec<prodrome_core::event::Hash>, crate::store::StoreError> {
+        ) -> Result<Vec<prodrome_core::event::Hash>, suzatary_store::store::StoreError> {
             self.inner.accept(objects)
         }
-        fn locked(&self) -> Result<Box<dyn WriteLock + '_>, crate::store::StoreError> {
+        fn locked(&self) -> Result<Box<dyn WriteLock + '_>, suzatary_store::store::StoreError> {
             self.inner.locked()
         }
     }
@@ -870,7 +882,7 @@ mod tests {
                 texts: &digest_texts,
                 lines: crate::secretary::conversations::Conversations {
                     lines: &lines,
-                    keys: &crate::store::InMemoryKeys::default(),
+                    keys: &crate::secretary::locked_text::InMemoryKeys::default(),
                     entropy: &entropy,
                     renders: &suzatary_base::capability::Nothing,
                     sessions: &suzatary_base::capability::Nothing,

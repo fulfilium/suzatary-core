@@ -9,7 +9,7 @@ use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::secretary::store::ConversationState;
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use super::State;
 use super::params::Asked;

@@ -28,8 +28,8 @@ use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Said, Stored};
 use crate::secretary::words::{Gone, Words};
-use crate::store::{Prodrome, StoreError};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_store::store::{Prodrome, StoreError};
 
 /// One conversation's lines in causal order, and their fold.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1123,7 +1123,7 @@ pub use plain_reading::{ReadFailed, of_objects, opened};
 mod tests {
     use super::*;
     use crate::secretary::model::Turn;
-    use crate::store::Reads as _;
+    use suzatary_store::store::Reads as _;
 
     fn id(text: &str) -> ConversationId {
         ConversationId::new(text).expect("a slug")

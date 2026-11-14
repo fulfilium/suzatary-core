@@ -29,16 +29,16 @@ use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
 use suzatary_core::secretary::line_form::line_header;
 use suzatary_core::secretary::step::Step;
-use suzatary_core::store::Prodrome;
 use suzatary_core::view;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use suzatary_core::wire::lines::{
     Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
     SkeletonNode, SkeletonPayload, StoredObject,
 };
-use suzatary_core::wire::store::SinceRead;
 use suzatary_core::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
 use suzatary_core::{mail, reading};
+use suzatary_store::store::Prodrome;
+use suzatary_store::wire::store::SinceRead;
 
 /// Every head, sorted: what a replica compares against and asks `since=` by, with no one of
 /// them picked, since no writer needs a single head.
@@ -632,7 +632,7 @@ fn store_answer<E: suzatary_core::stores::Store>(
 ) -> Answered<(
     wire::StorePayload,
     Vec<prodrome_core::event::Hash>,
-    std::sync::Arc<suzatary_core::store::Graph<E>>,
+    std::sync::Arc<suzatary_store::store::Graph<E>>,
 )> {
     let Pulled {
         snapshot,
@@ -755,7 +755,7 @@ trait Sends<E: prodrome_core::schema::Schema> {
     /// order unless a store says which objects a reader wants first.
     fn order(
         &self,
-        _graph: &suzatary_core::store::Graph<E>,
+        _graph: &suzatary_store::store::Graph<E>,
         lacking: &[(
             &prodrome_core::event::Hash,
             &prodrome_core::event::Envelope<E>,
@@ -820,7 +820,7 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     /// So a device draws the conversation it opens to from the first piece.
     fn order(
         &self,
-        graph: &suzatary_core::store::Graph<suzatary_core::secretary::line_event::LineEvent>,
+        graph: &suzatary_store::store::Graph<suzatary_core::secretary::line_event::LineEvent>,
         lacking: &[(
             &prodrome_core::event::Hash,
             &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
@@ -929,7 +929,7 @@ where
         let lacking = books
             .frontiers
             .answer(key, since, graph.dag())
-            .map_err(suzatary_core::store::StoreError::from)?;
+            .map_err(suzatary_store::store::StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
@@ -970,7 +970,7 @@ where
         let frontier = frontier_of(
             &lacking
                 .record_with(sent)
-                .map_err(suzatary_core::store::StoreError::from)?,
+                .map_err(suzatary_store::store::StoreError::from)?,
         );
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
@@ -991,7 +991,7 @@ where
 struct Pulled<E: prodrome_core::schema::Schema, T> {
     snapshot: Snapshot,
     piece: Piece<T>,
-    graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
+    graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
 }
 
 /// Whether the store of record knew the frontier a pull named.
@@ -1255,7 +1255,7 @@ pub fn lines_content(
 /// holds: its husk where `husks` holds one, else its literal read by its name.
 fn answer<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
-    graph: &suzatary_core::store::Graph<E>,
+    graph: &suzatary_store::store::Graph<E>,
     hashes: &query::Hashes,
     husks: &BTreeMap<prodrome_core::event::Hash, String>,
 ) -> Answered<wire::ContentPayload> {
@@ -1490,7 +1490,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
     let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
     let lacking = frontiers
         .answer(key, since, &dag)
-        .map_err(suzatary_core::store::StoreError::from)?;
+        .map_err(suzatary_store::store::StoreError::from)?;
     let read = since_read(lacking.reached());
     let posted = outcome
         .taken
@@ -1501,7 +1501,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
     let frontier = frontier_of(
         &lacking
             .record_with(posted)
-            .map_err(suzatary_core::store::StoreError::from)?,
+            .map_err(suzatary_store::store::StoreError::from)?,
     );
     Ok(ReceiptPayload {
         since: read,

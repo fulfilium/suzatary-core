@@ -12,14 +12,14 @@ use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Clock;
 use suzatary_core::believed::Preview;
 use suzatary_core::signatures::Signers;
-use suzatary_core::store::{Prodrome, Signing};
 use suzatary_core::{authoring, view};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::todo;
+use suzatary_store::store::{Prodrome, Signing};
 
 use super::store_of;
 use crate::instance::{ChainDir, Instance};
-use suzatary_core::store::Reads as _;
+use suzatary_store::store::Reads as _;
 
 /// Which `todo` act, and its own arguments.
 #[derive(Debug, clap::Args)]

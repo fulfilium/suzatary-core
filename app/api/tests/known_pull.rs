@@ -23,7 +23,7 @@ use suzatary_core::secretary::locked_text::TextKey;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::{Entry, Kind};
 use suzatary_core::secretary::words::Words;
-use suzatary_core::store::{Doc as _, Prodrome, Reads, StoreError, WriteLock};
+use suzatary_store::store::{Doc as _, Prodrome, Reads, StoreError, WriteLock};
 
 const CONVERSATIONS: usize = 100;
 const LINES: usize = 7_000;
@@ -143,7 +143,7 @@ fn store() -> InMemory {
 struct Counted<'a> {
     lines: &'a dyn Prodrome<LineEvent>,
     reads: AtomicUsize,
-    graph: std::sync::Mutex<Option<std::sync::Arc<suzatary_core::store::Graph<LineEvent>>>>,
+    graph: std::sync::Mutex<Option<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>>>,
 }
 
 impl Counted<'_> {
@@ -154,7 +154,7 @@ impl Counted<'_> {
 
 impl Reads<LineEvent> for Counted<'_> {
     /// A graph the store built again, rather than the one it kept, is a read of the whole store.
-    fn graph(&self) -> Result<std::sync::Arc<suzatary_core::store::Graph<LineEvent>>, StoreError> {
+    fn graph(&self) -> Result<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>, StoreError> {
         let graph = self.lines.graph()?;
         let mut last = self
             .graph
@@ -236,7 +236,7 @@ fn a_pull_that_lacks_nothing_sends_nothing_and_reads_no_object() {
         routes::lines_skeleton(conversations, &since, books, now, Cut::PIECE).expect("the pull");
     let took = started.elapsed();
     let bytes = serde_json::to_vec(&known).expect("prints").len();
-    assert_eq!(known.since, suzatary_core::wire::store::SinceRead::Known);
+    assert_eq!(known.since, suzatary_store::wire::store::SinceRead::Known);
     assert!(known.nodes.is_empty() && known.keys.is_empty() && known.rest == 0);
     assert_eq!(
         known.frontier, whole.frontier,

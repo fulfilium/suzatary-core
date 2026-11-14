@@ -44,9 +44,9 @@ use crate::secretary::digests::{Digests, ReadDigests, compactor};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Memories;
 use crate::secretary::store::Entry;
-use crate::store::Prodrome;
 use suzatary_base::capability::Clock;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// The one digest the box keeps, as a rule's key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,7 +62,7 @@ impl std::fmt::Display for TheDigest {
 #[derive(Debug, Clone)]
 pub struct Reading {
     digest: Digest,
-    lines: std::sync::Arc<crate::store::Graph<LineEvent>>,
+    lines: std::sync::Arc<suzatary_store::store::Graph<LineEvent>>,
     gathered: std::sync::Arc<crate::secretary::held_lines::Gathered>,
 }
 

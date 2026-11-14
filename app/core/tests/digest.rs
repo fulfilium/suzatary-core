@@ -25,8 +25,9 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Doc, Gets as _, InMemory, InMemoryDoc, Prodrome};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Doc, Gets as _, InMemoryDoc, Prodrome};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -496,7 +497,7 @@ fn accept_lines(
     from: &suzatary_core::secretary::conversations::InMemory,
     given: impl FnOnce(Vec<(Hash, String)>) -> Vec<(Hash, String)>,
 ) {
-    use suzatary_core::store::{Doc as _, Gets as _};
+    use suzatary_store::store::{Doc as _, Gets as _};
     to.lines.accept(&given(prints(&from.lines))).expect("lines");
     for name in from.keys.names() {
         let key = from.keys.get(&name).expect("reads").expect("held");
@@ -2178,7 +2179,7 @@ fn write_line(
     held: u32,
     entry: &Entry,
 ) {
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let (line, keys) = suzatary_core::secretary::line_event::LineEvent::written_under(
         &fixture_rules(),
         conversation,

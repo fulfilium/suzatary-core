@@ -4,6 +4,9 @@
 //! them, so a new store is one row and its schema.
 
 mod database;
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/in_memory.rs"]
+mod in_memory;
 
 use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
@@ -15,10 +18,12 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
-use crate::store::Hold;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Hold;
 
 pub use database::Database;
+#[cfg(any(test, feature = "nothing"))]
+pub use in_memory::InMemory;
 
 /// Where a store's files go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

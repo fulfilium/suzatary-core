@@ -3,7 +3,7 @@
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
-use crate::store::{Prodrome, StoreError};
+use suzatary_store::store::{Prodrome, StoreError};
 
 #[derive(Clone, Copy)]
 pub struct TopicStores<'a> {

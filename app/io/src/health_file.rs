@@ -2,7 +2,7 @@
 //! migration joining at once each keep the others' results.
 
 use suzatary_core::health::{Healths, Register};
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use crate::docs::Locked;
 

@@ -10,8 +10,8 @@ use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;
 use suzatary_core::vault::{PrivateCopy, Vault};
 
-use suzatary_core::store::{Doc, Gets, StoreError};
 use suzatary_core::upload::Upload;
+use suzatary_store::store::{Doc, Gets, StoreError};
 
 use crate::blobs::Blobs;
 use crate::docs::{DocCodec, Docs};

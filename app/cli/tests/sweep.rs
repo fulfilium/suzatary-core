@@ -18,8 +18,8 @@ use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sweep::{Swept, dry_run};
-use suzatary_core::store::Reads as _;
 use suzatary_record::record::{EventStore, TodoEvent, mk_source};
+use suzatary_store::store::Reads as _;
 
 /// The sweep run to its end; a scripted model is under no limit, so it always starts.
 fn sweep(
@@ -84,7 +84,7 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
         &suzatary_io::typeset::InProcess,
     )
     .expect("a valid todo");
-    suzatary_core::store::append_to(events, suzatary_record::record::GENESIS, event)
+    suzatary_store::store::append_to(events, suzatary_record::record::GENESIS, event)
         .expect("appends");
 }
 
@@ -114,7 +114,7 @@ fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
         &suzatary_io::typeset::InProcess,
     )
     .expect("a valid todo");
-    suzatary_core::store::append_to(events, suzatary_record::record::GENESIS, event)
+    suzatary_store::store::append_to(events, suzatary_record::record::GENESIS, event)
         .expect("appends");
 }
 
@@ -291,7 +291,7 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     a_sourced_todo(&events, "flightcheckin", "th1", "noreply@airline.example");
     // The one the script will wrongly try to complete.
     a_plain_todo(&events, "alreadydone", "Renew the parking permit");
-    suzatary_core::store::append_to(
+    suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
         mk_completed("alreadydone", common::now(), "ada", "done already").expect("valid"),

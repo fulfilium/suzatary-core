@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::store::{Doc, Gets, StoreError};
+use suzatary_store::store::{Doc, Gets, StoreError};
 
 use crate::durable::Mode;
 use crate::present::Present as _;

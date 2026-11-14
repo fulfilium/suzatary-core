@@ -197,7 +197,7 @@ async fn serve<W: Guarded, P: Params, B: Body, O: Outcome>(
         device: performing.as_ref().map(|asked| asked.device().clone()),
     };
     let (answer, wrote) =
-        blocking(move || Ok(suzatary_core::store::recording(|| run(&call).outcome()))).await?;
+        blocking(move || Ok(suzatary_store::store::recording(|| run(&call).outcome()))).await?;
     let response = answer.unwrap_or_else(|refusal| refused(&refusal));
     traced.passed("perform");
     let status = response.status().as_u16();

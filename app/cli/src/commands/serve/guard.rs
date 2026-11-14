@@ -10,8 +10,8 @@ use suzatary_core::signatures::Admitted;
 use suzatary_core::signatures::Tap;
 use suzatary_core::signatures::{ActHeaders, check_csrf};
 use suzatary_core::signatures::{Asking, Possessed, Proven, Trusted, Unproven};
-use suzatary_core::store::Prodrome;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Prodrome;
 
 use super::State;
 

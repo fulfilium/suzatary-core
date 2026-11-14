@@ -3,9 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::store::{Edit, Log, StoreError};
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::{Edit, Log, StoreError};
 
 /// One registration of a phone.
 #[derive(Debug, Clone, PartialEq, Eq)]

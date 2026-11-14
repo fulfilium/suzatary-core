@@ -178,8 +178,9 @@ mod tests {
 
     use super::*;
     use crate::calendar::{CalendarName, Status};
-    use crate::store::learn;
-    use crate::store::{InMemory, Reads as _};
+    use crate::stores::InMemory;
+    use suzatary_store::store::Reads as _;
+    use suzatary_store::store::learn;
 
     fn schema() -> Declaration {
         Declaration::admit(include_str!("../../../plugin-ics/ics.schema")).expect("lawful")

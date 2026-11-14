@@ -10,10 +10,10 @@ use suzatary_core::connect::Channel;
 use suzatary_core::devices::Device;
 use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::notify::{Notify as _, Push};
-use suzatary_core::store::Log;
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::{Channels, Configured, Waiting};
 use suzatary_io::secrets::Resolves;
+use suzatary_store::store::Log;
 
 use crate::instance::Instance;
 
@@ -152,7 +152,7 @@ pub(crate) fn push<D: Log<String, Device> + Clone>(
 mod tests {
     use suzatary_base::capability::Secret;
     use suzatary_base::refusal::Refusal;
-    use suzatary_core::store::{Decide, Edit, StoreError};
+    use suzatary_store::store::{Decide, Edit, StoreError};
 
     use super::*;
 

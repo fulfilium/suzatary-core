@@ -23,10 +23,10 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{CheckFields, Done, Performed, Responded, Tried, Withdrawal};
 use crate::secretary::tapped::Tapped;
-use crate::store::Prodrome;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 use suzatary_base::reference::{ProposalRef, TodoRef};
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// Its fulfillment at the set's instant, priced through `set`.
 #[must_use]
@@ -874,7 +874,7 @@ mod tests {
 
     use super::*;
     use crate::secretary::proposal::Draft;
-    use crate::store::Reads as _;
+    use suzatary_store::store::Reads as _;
 
     fn draft(subject: &str) -> Proposal {
         Proposal::Email(Draft {
@@ -957,7 +957,7 @@ mod tests {
     /// another instant is another proposal.
     #[test]
     fn the_same_content_is_the_same_proposal_whatever_named_it() {
-        let store = crate::store::InMemory::<InboxEvent>::default();
+        let store = crate::stores::InMemory::<InboxEvent>::default();
         let ada = Actor::new("ada").expect("an actor");
         let carried = ProposalId::new("p0123456789abcdef0123456789abcdef").expect("an id");
         store
@@ -997,7 +997,7 @@ mod tests {
         fn holding_is_get_of_the_content_id(
             asks in proptest::collection::vec((0u8..3, proptest::bool::ANY, 0u32..3), 1..10),
         ) {
-            let store = crate::store::InMemory::<InboxEvent>::default();
+            let store = crate::stores::InMemory::<InboxEvent>::default();
             let ada = Actor::new("ada").expect("an actor");
             let make = |subject: u8, recurring: bool| {
                 if recurring {
@@ -1036,7 +1036,7 @@ mod tests {
     /// asking of the same act while that card still waits: one request, one card.
     #[test]
     fn the_box_asking_an_act_the_secretary_asked_is_the_same_proposal() {
-        let store = crate::store::InMemory::<InboxEvent>::default();
+        let store = crate::stores::InMemory::<InboxEvent>::default();
         let ada = Actor::new("ada").expect("an actor");
         let first = ask(&store, signing_in("sign in"), &ada, at(1)).expect("asks");
         let boxs = Asked {
@@ -1050,7 +1050,7 @@ mod tests {
     /// one still waiting holds it.
     #[test]
     fn a_dismissed_card_does_not_hold_the_box_s_next_episode() {
-        let store = crate::store::InMemory::<InboxEvent>::default();
+        let store = crate::stores::InMemory::<InboxEvent>::default();
         let ada = Actor::new("ada").expect("an actor");
         let boxs = || Asked {
             proposer: Proposer::Box,
@@ -1375,8 +1375,8 @@ mod tests {
     fn two_answers_apart_are_a_conflict_of_two() {
         let ada = Actor::new("ada").expect("an actor");
         let (one, two) = (
-            crate::store::InMemory::<InboxEvent>::default(),
-            crate::store::InMemory::<InboxEvent>::default(),
+            crate::stores::InMemory::<InboxEvent>::default(),
+            crate::stores::InMemory::<InboxEvent>::default(),
         );
         let id = ask(&one, asked("a"), &ada, at(0)).expect("asks");
         let asking: Vec<(Hash, String)> = one
@@ -1438,8 +1438,8 @@ mod tests {
         let ada = Actor::new("ada").expect("an actor");
         let assistant = Actor::new("assistant").expect("an actor");
         let (one, two) = (
-            crate::store::InMemory::<InboxEvent>::default(),
-            crate::store::InMemory::<InboxEvent>::default(),
+            crate::stores::InMemory::<InboxEvent>::default(),
+            crate::stores::InMemory::<InboxEvent>::default(),
         );
         let id = ask(&one, asked("a"), &assistant, at(0)).expect("asks");
         let asking: Vec<(Hash, String)> = one

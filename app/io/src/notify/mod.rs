@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 
 use suzatary_core::devices::Device;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Printed, Push};
-use suzatary_core::store::Log;
+use suzatary_store::store::Log;
 
 pub use fcm::{API as FCM, ServiceAccount, credentials};
 pub use ntfy::DEFAULT_BASE as NTFY;
@@ -185,7 +185,7 @@ impl<D: Log<String, Device>> Notify for Channels<D> {
 mod tests {
     use suzatary_base::capability::Datetime;
     use suzatary_base::refusal::Refusal;
-    use suzatary_core::store::{Decide, Edit, StoreError};
+    use suzatary_store::store::{Decide, Edit, StoreError};
 
     use super::fcm::tests::test_account;
     use super::*;

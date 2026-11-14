@@ -45,7 +45,7 @@ const RECORD: DocCodec<HeldFile, Attached> = DocCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::store::{Doc as _, Gets as _};
+    use suzatary_store::store::{Doc as _, Gets as _};
 
     #[test]
     fn a_record_is_read_back_only_under_its_own_file() {

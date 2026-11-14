@@ -11,10 +11,10 @@ use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::transcript;
-use suzatary_core::store::{Prodrome as _, Reads as _};
 use suzatary_io::husked::Husked;
 use suzatary_io::objects::Objects;
 use suzatary_io::text_keys::TextKeys;
+use suzatary_store::store::{Prodrome as _, Reads as _};
 
 type Lines = Objects<
     suzatary_core::secretary::line_event::LineEvent,
@@ -179,9 +179,9 @@ fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
         .into_iter()
         .find_map(|(name, object)| match object {
             prodrome_core::event::Envelope::Change(change)
-                if suzatary_core::store::Husking::holds_sealed(&change.event) =>
+                if suzatary_store::store::Husking::holds_sealed(&change.event) =>
             {
-                Some((name, suzatary_core::store::HuskObject::of(&change)?))
+                Some((name, suzatary_store::store::HuskObject::of(&change)?))
             }
             _ => None,
         })

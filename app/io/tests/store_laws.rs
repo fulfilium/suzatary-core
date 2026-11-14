@@ -23,11 +23,11 @@ use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Hold, Prodrome};
 use suzatary_core::stores::{Files, Kind, Store};
 use suzatary_io::objects::Objects;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Hold, Prodrome};
 
 fn pins(store: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

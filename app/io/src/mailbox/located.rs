@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_core::mail_error::MailError;
-use suzatary_core::store::{Doc as _, Gets as _};
+use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs, shard};
 use crate::present::Present as _;
@@ -94,7 +94,7 @@ impl Located {
     }
 }
 
-fn unreachable(failed: &suzatary_core::store::StoreError) -> MailError {
+fn unreachable(failed: &suzatary_store::store::StoreError) -> MailError {
     MailError::Unreachable(failed.to_string())
 }
 

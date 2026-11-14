@@ -60,7 +60,7 @@ impl World {
     ///
     /// # Errors
     /// Either store unreadable or not begun.
-    pub fn begin_topics(&self) -> Result<(), suzatary_core::store::StoreError> {
+    pub fn begin_topics(&self) -> Result<(), suzatary_store::store::StoreError> {
         self.opened.topics.begin()
     }
 

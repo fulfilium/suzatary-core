@@ -108,7 +108,7 @@ pub async fn watcher(
 }
 
 /// A read's answer, or nothing this round and a warning: an unreadable store is not an empty one.
-fn read<T>(what: &str, answer: Result<T, suzatary_core::store::StoreError>) -> Option<T> {
+fn read<T>(what: &str, answer: Result<T, suzatary_store::store::StoreError>) -> Option<T> {
     answer
         .inspect_err(|failed| tracing::warn!("watch: {what} could not be read: {failed}"))
         .ok()
@@ -125,11 +125,11 @@ fn send(caps: &'static Server<'static>, push: suzatary_core::notify::Push) {
 /// The chain's events, in the order the notifier counts them.
 fn events(
     caps: &'static Server<'static>,
-) -> Result<Vec<suzatary_record::record::TodoEvent>, suzatary_core::store::StoreError> {
+) -> Result<Vec<suzatary_record::record::TodoEvent>, suzatary_store::store::StoreError> {
     Ok(view::events_of(&caps.secretary.chain.nodes()?))
 }
 
-fn heads(caps: &'static Server<'static>) -> Result<Vec<String>, suzatary_core::store::StoreError> {
+fn heads(caps: &'static Server<'static>) -> Result<Vec<String>, suzatary_store::store::StoreError> {
     Ok(caps
         .secretary
         .chain

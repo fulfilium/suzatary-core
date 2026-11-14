@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-use super::{Doc, Gets, StoreError};
 use crate::secretary::locked_text::{KEY_BYTES, KeyName, TextKey};
+use suzatary_store::store::{Doc, Gets, StoreError};
 
 /// Keys held in memory as their bytes, for tests: a key is read back as a fresh [`TextKey`], as
 /// a key file is.

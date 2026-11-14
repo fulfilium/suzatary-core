@@ -10,7 +10,7 @@ use prodrome_core::literal::ProdromeError;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
-use suzatary_core::store::begun;
+use suzatary_store::store::begun;
 
 /// A prodrome's files, read, appended and received.
 pub trait ObjectFiles<E: Schema>: Replica<E> + Send + Sync {

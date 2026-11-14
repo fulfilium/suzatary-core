@@ -1,5 +1,5 @@
 //! The inbox and the two topic stores as a device holds them: each a replica of objects
-//! ([`Objects`](crate::replica::objects::Objects)) at its own schema. This reads the box's
+//! ([`Objects`](suzatary_store::replica::objects::Objects)) at its own schema. This reads the box's
 //! answers into what such a replica takes: a pull's piece ([`said`]) and a post's receipt
 //! ([`answers`]).
 
@@ -8,11 +8,11 @@ use std::collections::BTreeSet;
 use prodrome_core::event::Hash;
 use prodrome_core::schema::Schema;
 
-use crate::replica::held::Said;
-use crate::replica::objects::{Answer, Object, Refusal};
 use crate::secretary::held_replica::NotAnAnswer;
 use crate::wire::lines::{ObjectsPayload, ReceiptPayload};
 use crate::wire::signatures::RefusalKind;
+use suzatary_store::replica::held::Said;
+use suzatary_store::replica::objects::{Answer, Object, Refusal};
 
 /// The piece `answer` the box served, its objects read at `schema`.
 ///

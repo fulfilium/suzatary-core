@@ -46,12 +46,13 @@ use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::stamp::stamp;
 use suzatary_core::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::transcript;
-use suzatary_core::store::{
-    InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
-};
+use suzatary_core::stores::InMemory;
 use suzatary_core::wire::topics as wire;
 use suzatary_record::record::TodoEvent;
 use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_store::store::{
+    InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
+};
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -603,7 +604,7 @@ fn every_line() -> Vec<ConversationEntry> {
 fn resealed(bundle: &Bundle, id: &ConversationId) {
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let held = transcript::read(bundle.conversations.conversations(), id)
         .expect("reads")
         .lines()
@@ -1079,7 +1080,7 @@ fn with_an_unreadable_proposal(bundle: &Bundle, id: &ConversationId) -> (Proposa
     use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_core::secretary::responded::Responded;
-    use suzatary_core::store::Prodrome as _;
+    use suzatary_store::store::Prodrome as _;
 
     let opened = now();
     let reasons = || {
@@ -1160,7 +1161,7 @@ fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
     use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_core::secretary::responded::Responded;
-    use suzatary_core::store::Prodrome as _;
+    use suzatary_store::store::Prodrome as _;
 
     let elsewhere = Bundle::over(
         six_todo_chain(&scratch(&format!("{id}-elsewhere"))),
@@ -1465,7 +1466,7 @@ fn shipped<E: suzatary_core::stores::Store>(store: &InMemory<E>) -> Vec<Shipped>
 
 /// Every key the conversations hold, by name, as the pull spells it.
 fn keys_of(conversations: &conversations::InMemory) -> BTreeMap<String, String> {
-    use suzatary_core::store::Gets as _;
+    use suzatary_store::store::Gets as _;
     conversations
         .keys
         .names()
@@ -1681,7 +1682,7 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
 /// A digest history whose read left an object out: every sweep over it refuses.
 struct LeftOut;
 
-impl suzatary_core::store::Reads<suzatary_core::secretary::digest_event::DigestEvent> for LeftOut {
+impl suzatary_store::store::Reads<suzatary_core::secretary::digest_event::DigestEvent> for LeftOut {
     fn objects(
         &self,
     ) -> Result<
@@ -1689,16 +1690,16 @@ impl suzatary_core::store::Reads<suzatary_core::secretary::digest_event::DigestE
             Hash,
             prodrome_core::event::Envelope<suzatary_core::secretary::digest_event::DigestEvent>,
         )>,
-        suzatary_core::store::StoreError,
+        suzatary_store::store::StoreError,
     > {
         Ok(Vec::new())
     }
     fn excluded(
         &self,
-    ) -> Result<std::collections::BTreeSet<Hash>, suzatary_core::store::StoreError> {
+    ) -> Result<std::collections::BTreeSet<Hash>, suzatary_store::store::StoreError> {
         Ok([Hash::new("0".repeat(64)).expect("a name")].into())
     }
-    fn tips(&self) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+    fn tips(&self) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
         Ok(Vec::new())
     }
     fn verify(&self) -> Vec<String> {
@@ -1706,26 +1707,26 @@ impl suzatary_core::store::Reads<suzatary_core::secretary::digest_event::DigestE
     }
 }
 
-impl suzatary_core::store::Prodrome<suzatary_core::secretary::digest_event::DigestEvent>
+impl suzatary_store::store::Prodrome<suzatary_core::secretary::digest_event::DigestEvent>
     for LeftOut
 {
     fn append(
         &self,
         _: suzatary_core::secretary::digest_event::DigestEvent,
-    ) -> Result<Hash, suzatary_core::store::StoreError> {
-        Err(suzatary_core::store::StoreError::not_appended(
+    ) -> Result<Hash, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::not_appended(
             "left out",
             "never written",
         ))
     }
-    fn accept(&self, _: &[(Hash, String)]) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+    fn accept(&self, _: &[(Hash, String)]) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
         Ok(Vec::new())
     }
     fn locked(
         &self,
-    ) -> Result<Box<dyn suzatary_core::store::WriteLock + '_>, suzatary_core::store::StoreError>
+    ) -> Result<Box<dyn suzatary_store::store::WriteLock + '_>, suzatary_store::store::StoreError>
     {
-        Err(suzatary_core::store::StoreError::not_appended(
+        Err(suzatary_store::store::StoreError::not_appended(
             "left out",
             "never written",
         ))
@@ -2151,7 +2152,7 @@ fn the_answers_vector_holds_every_answer() {
         heads: heads.clone(),
         adopted: heads.clone(),
         already: Vec::new(),
-        since: suzatary_core::wire::store::SinceRead::Unknown,
+        since: suzatary_store::wire::store::SinceRead::Unknown,
         frontier: suzatary_core::wire::lines::Frontier {
             digest: "f".repeat(64),
             count: heads.len(),
@@ -3046,7 +3047,7 @@ fn three_turns(
     under: &suzatary_core::secretary::scrubbed_under::ScrubbedUnder,
 ) -> conversations::InMemory {
     use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let lines = conversations::InMemory::default();
     let opened = ConversationEntry::Opened {
         at: now(),
@@ -3123,7 +3124,7 @@ fn reseal_again(lines: &conversations::InMemory) {
     use suzatary_core::secretary::line_shape::LineShape;
     use suzatary_core::secretary::line_words::LineWords;
     use suzatary_core::secretary::locked_text::KeyName;
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     let read = transcript::read(lines.conversations(), &keys_conversation()).expect("reads");
     // Each slot's words as a reader reads them, by the key of the slot as first written.
     let words: BTreeMap<KeyName, LineWords> = read
@@ -3192,7 +3193,7 @@ fn restore_keys_from_before(
         suzatary_core::secretary::locked_text::TextKey,
     )],
 ) {
-    use suzatary_core::store::Doc as _;
+    use suzatary_store::store::Doc as _;
     for name in lines.keys.names() {
         lines.keys.remove(&name).expect("removed");
     }
@@ -3208,7 +3209,7 @@ fn held_keys(
     suzatary_core::secretary::locked_text::KeyName,
     suzatary_core::secretary::locked_text::TextKey,
 )> {
-    use suzatary_core::store::Gets as _;
+    use suzatary_store::store::Gets as _;
     lines
         .keys
         .names()
@@ -3392,7 +3393,7 @@ fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
 fn a_slot_resealed_twice_reads_its_newest_reseal() {
     use suzatary_core::secretary::line_shape::LineShape;
     use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
-    use suzatary_core::store::Gets as _;
+    use suzatary_store::store::Gets as _;
     let lines = three_turns(&ScrubbedUnder::Unversioned);
     migrate(&lines);
     reseal_again(&lines);

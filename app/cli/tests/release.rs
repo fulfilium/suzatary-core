@@ -52,7 +52,7 @@ fn a_project_chain(root: &Path) {
         prodrome_core::policy::Untrusted::none(),
     );
     let append = |event| {
-        suzatary_core::store::append_to(&store, GENESIS, event).expect("appends");
+        suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
     };
     let mut terms = vec![fpl::mk_flat(0.6).expect("a term")];
     terms.extend(

@@ -15,9 +15,9 @@ use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, sea
 use prodrome_core::sign::Checks;
 use prodrome_core::sign::{Registrar, Secret};
 use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
-use suzatary_core::store::Prodrome as _;
-use suzatary_core::store::Reads as _;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Prodrome as _;
+use suzatary_store::store::Reads as _;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -1277,7 +1277,7 @@ fn the_door_s_reading_by_chain_size() {
             .chain
             .accept(&[(name.clone(), canonical_envelope(&change))])
             .expect("kept");
-        suzatary_core::store::sign(&fakes.chain, &phone, &name).expect("signed");
+        suzatary_store::store::sign(&fakes.chain, &phone, &name).expect("signed");
     };
     let mut written: u32 = 0;
     for size in [100, 400, 1600] {

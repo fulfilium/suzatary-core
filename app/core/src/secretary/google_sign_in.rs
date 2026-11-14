@@ -250,7 +250,7 @@ pub fn refused(taken: &Taken, error: Option<&str>) -> Option<(ProposalId, Perfor
 /// The stores' own failures.
 pub fn end(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
     card: &ProposalId,
     at: suzatary_base::capability::Datetime,
     performed: Performed,

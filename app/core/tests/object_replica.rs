@@ -14,15 +14,15 @@ use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
-use suzatary_core::replica::frontier::Frontier;
-use suzatary_core::replica::held::{Node, Said};
-use suzatary_core::replica::objects::{Answer, Move, Object, Objects, Refusal, frame, unframe};
 use suzatary_core::secretary::topics::reading::{
     AliasEvent, MembershipEvent, MembershipVocabulary,
 };
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::snapshot::{from_snapshot, snapshot};
-use suzatary_core::wire::store::SinceRead;
+use suzatary_store::replica::frontier::Frontier;
+use suzatary_store::replica::held::{Node, Said};
+use suzatary_store::replica::objects::{Answer, Move, Object, Objects, Refusal, frame, unframe};
+use suzatary_store::snapshot::{from_snapshot, snapshot};
+use suzatary_store::wire::store::SinceRead;
 
 /// The box's store: one genesis, then `n` memberships, each written over the one before.
 fn universe(n: u32) -> Vec<Object> {
@@ -238,7 +238,7 @@ fn law_what_a_replica_wrote_stands_until_the_box_answers() {
 fn a_frame_of_another_form_is_passed_over() {
     let lines = suzatary_core::secretary::line_form::frame(
         &suzatary_core::secretary::line_form::LineFrame {
-            delta: suzatary_core::replica::pulling::Delta::StartedOver { generation: 1 },
+            delta: suzatary_store::replica::pulling::Delta::StartedOver { generation: 1 },
             husked: Vec::new(),
         },
     )

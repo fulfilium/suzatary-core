@@ -8,7 +8,7 @@ use prodrome_core::sign::{KeyAdded, PublicKey, Registrar, Secret, mk_key_revoked
 use prodrome_core::snapshot::mk_snapshot;
 
 use super::{Custody, KeyStanding, Signers, Trust};
-use crate::store::{Prodrome, Signer, StoreError, sign};
+use suzatary_store::store::{Prodrome, Signer, StoreError, sign};
 
 /// THE ROOT'S THREE WRITES, the only key objects this application writes, each joined into
 /// `store` in every prodrome it holds and signed by `root`, so it counts.

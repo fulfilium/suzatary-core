@@ -19,7 +19,7 @@ const RESTARTED: &str = "the box restarted while this act was waiting; the devic
 /// The stores' own failures.
 pub fn reconcile(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    inbox: &dyn crate::store::Prodrome<super::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<super::inbox_event::InboxEvent>,
     now: suzatary_base::capability::Datetime,
 ) -> Result<usize, Refusal> {
     let restarted = Performed::Tried(Tried::NotSent {
@@ -178,13 +178,13 @@ mod tests {
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_base::reference::ProposalRef;
 
-    use crate::store::Reads as _;
+    use suzatary_store::store::Reads as _;
 
     /// An in-memory conversation store, since this crate reaches no filesystem.
     #[derive(Default)]
     struct InMemory {
         lines: crate::secretary::conversations::InMemory,
-        inbox: crate::store::InMemory<crate::secretary::inbox_event::InboxEvent>,
+        inbox: crate::stores::InMemory<crate::secretary::inbox_event::InboxEvent>,
     }
 
     impl suzatary_base::capability::Clock for InMemory {

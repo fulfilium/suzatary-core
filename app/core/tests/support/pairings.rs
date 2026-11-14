@@ -1,7 +1,7 @@
 //! A pairing held in memory: test support, never production.
 
 use super::{Pairing, Pairings};
-use crate::store::StoreError;
+use suzatary_store::store::StoreError;
 
 /// A pairing held in memory, for tests.
 #[derive(Debug, Default)]

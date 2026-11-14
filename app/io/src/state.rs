@@ -4,7 +4,7 @@
 //! Neither can be rebuilt, so each is replaced atomically: a truncated `state.json` would read
 //! as nothing decided and re-triage the corpus.
 //!
-//! [`Doc`]: suzatary_core::store::Doc
+//! [`Doc`]: suzatary_store::store::Doc
 
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -13,7 +13,7 @@ use suzatary_core::mail::dedup_key::{DEDUP_KEY, DedupKey};
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::LocalState;
 use suzatary_core::mail::state::TriageState;
-use suzatary_core::store::{Doc as _, Gets as _};
+use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
 use crate::secrets::Resolves;
@@ -198,7 +198,7 @@ mod tests {
     use suzatary_base::capability::Secret;
     use suzatary_core::mail::local_state::Kept;
     use suzatary_core::mail::state::Decision;
-    use suzatary_core::store::StoreError;
+    use suzatary_store::store::StoreError;
 
     fn key() -> DedupKey {
         DedupKey::of(&Secret::new("ef".repeat(32))).expect("a key")

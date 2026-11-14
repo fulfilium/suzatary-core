@@ -91,11 +91,8 @@
       appVersionName = "${appVersion}+${self.shortRev or self.dirtyShortRev or "dirty"}";
       appVersionCode = toString (self.revCount or 0);
     in
-    # System-independent outputs live outside eachDefaultSystem. The NixOS
-    # module is consumed by ~/Documents/nixos, which takes this repo as a
-    # `path:` flake input; it replaces the four hand-written unit files that
-    # used to sit untracked in ~/.config/systemd/user/, plus the imperative
-    # `systemd-run` bring-up. See nix/nixos-module.nix for why that mattered.
+    # System-independent outputs live outside eachDefaultSystem. The NixOS module is consumed by
+    # the host's configuration, which takes this repo as a `path:` flake input.
     {
       nixosModules.default = import ./nix/nixos-module.nix;
       nixosModules.suzatary = self.nixosModules.default;
@@ -113,11 +110,8 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          # claude-code is unfree. Named explicitly rather than a blanket
-          # allowUnfree, so this stays a decision about one package: the
-          # scheduled jobs cannot run without it, and until now that permission
-          # was granted only by the host's NixOS config — which is precisely why
-          # `nix build .#triage` worked on this box and nowhere else.
+          # claude-code is unfree. Named explicitly rather than a blanket allowUnfree, so this
+          # stays a decision about one package the scheduled jobs need.
           config.allowUnfreePredicate = pkg:
             builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
         };
@@ -178,6 +172,7 @@
             ./app/core
             ./app/base
             ./app/record
+            ./app/store
             ./app/api
             ./app/io
             ./app/plugin
@@ -268,15 +263,18 @@
           ./app/core/Cargo.toml
           ./app/base/Cargo.toml
           ./app/record/Cargo.toml
+          ./app/store/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
           ./app/record/src
+          ./app/store/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
           ./app/core/tests/support
           ./app/base/tests/support
+          ./app/store/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -402,10 +400,12 @@
                 ./app/core/Cargo.toml
                 ./app/base/Cargo.toml
                 ./app/record/Cargo.toml
+                ./app/store/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
                 ./app/record/src
+                ./app/store/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -499,6 +499,7 @@
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
               ./app/record/Cargo.toml
+              ./app/store/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -549,6 +550,7 @@
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
               ./app/record/Cargo.toml
+              ./app/store/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
@@ -914,19 +916,9 @@
           '';
         };
 
-        # `nix flake check` runs THE APPLICATION'S suites and nothing else.
-        #
-        # It used to run the database's too — SPEC §9 against
-        # `prodrome/conformance/*.json`, and clippy over that workspace. Both
-        # are gone, and not because they stopped mattering: they are
-        # https://github.com/fulfilium/prodrome's own CI now, and that CI ran on
-        # the commit `inputs.prodrome` pins before this repository could pin it.
-        # Re-running them here would compile the same crate a second time to
-        # re-state a verdict already taken, which is the duplication the split
-        # was for — and the seeded vectors they read are not even in this tree
-        # any more. What did NOT go upstream is the LIVE chain's pins, and those
-        # are `app/cli/tests/live.rs`, run by the merge gate's live half because the
-        # sandbox has no `events/` to run them against.
+        # `nix flake check` runs THE APPLICATION'S suites and nothing else: the Prodrome's are its
+        # own CI's. The live chain's pins are `app/cli/tests/live.rs`, run by the merge gate's
+        # live half, since the sandbox has no `events/`.
         checks = {
           # The NixOS module, evaluated into a host's configuration, and the
           # facts a deploy rests on read off it (nix/module-check.nix).
@@ -993,12 +985,8 @@
         # e.g. a university's Exchange), plus openssl/curl for diagnostics.
         # Enter with: nix develop .#triage
         #
-        # `.#rust` is the EDITOR's shell for `app/`: the same toolchain the
-        # checks above build with, plus a language server. It was written when
-        # `prodrome/` was a second workspace here needing a cargo of its own;
-        # that workspace is its own repository now (§8.8, and it ships a
-        # `devShells.default` of its own for anyone working ON it), so what is
-        # left is one workspace and one shell to edit it in.
+        # `.#rust` is the EDITOR's shell for `app/`: the same toolchain the checks above build
+        # with, plus a language server.
         devShells.rust = pkgs.mkShell {
           # `rust-analyzer` is the editor's. Nothing else — no pkg-config, no
           # OpenSSL, no interpreter: rustls, never OpenSSL (CLAUDE.md),
@@ -1030,15 +1018,9 @@
           # fall back to. DejaVu Sans alone is the one font this box holds, so
           # the e2e suite measures the same text on both.
           FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts.minimal ]; };
-          # A SHELL IS TOOLS, NOT BUILDS (2026-09-29). Everything here comes
-          # from nixpkgs, so entering it downloads from the binary cache and
-          # builds nothing of this repository's; it used to export the
-          # Prodrome's wasm and the conformance vectors as JSON, which made a
-          # fresh session compile the whole dependency tree before `true`
-          # could run. The scripts that read those (scripts/build-web.sh,
-          # scripts/web-test.sh) resolve them when they run, and a caller
-          # that has them already (the `suzatary-web` derivation, CI's
-          # tests.yml, scripts/merge-gate.sh) passes them in.
+          # A SHELL IS TOOLS, NOT BUILDS: everything here comes from nixpkgs, so entering it builds
+          # nothing of this repository's. The scripts that need the Prodrome's wasm or the vectors
+          # resolve them when they run, or are handed them.
           # Every command in this repo runs through this shell, so this is
           # where the commit-msg hook gets wired — not a README step and not
           # a value some tool can clobber for a day (memory/, decision hookspath:
@@ -1055,33 +1037,22 @@
             # esbuild/typescript/nodejs: the TypeScript frontend (web/) — one
             # bundle, no npm, tsc as the type gate, node for the unit tests.
             #
-            # ⚠️ NO INTERPRETER HERE ANY MORE (stage 6). This shell carried
-            # `python3.withPackages (msal, httpx, prodrome-py)` for as long as
-            # there was a Python application to run; there is not. `node` also
-            # reads the two JSON documents `scripts/hourly-triage.sh` used to
-            # read with `python3 -c`, and the end-to-end fixture's chain is a
-            # verb of `suzatary-dev`, behind the `fixture` feature.
+            # ⚠️ NO INTERPRETER HERE: decisions over JSON are verbs of the binary.
             # ⚠️ `nodejs_24` BY NAME, not the unversioned alias. Three places
             # assert node 24 out loud — scripts/web-test.sh (`--test` semantics
             # and `crypto.subtle`), scripts/web-e2e.sh (a global `WebSocket` is
             # the whole CDP client) and the browser comment below — and an
             # alias moves when nixpkgs moves, with only a test failure to say
-            # so. The Rust toolchain is explicit; this was the one tool in the
-            # shell whose version was a coincidence.
+            # so.
             esbuild typescript nodejs_24
             # brotli: scripts/build-web.sh precompresses the frontend at
             # quality 11, so the server never compresses a file per request.
             brotli
-            # THE BROWSER IS PART OF THE TOOLCHAIN (2026-09-04). The frontend's
-            # unit tests run its pure modules under node; until now nothing
-            # rendered a page, so the screenshots an agent took by eye were the
-            # UI's only test suite. `scripts/web-e2e.sh` drives this headless
+            # THE BROWSER IS PART OF THE TOOLCHAIN: `scripts/web-e2e.sh` drives it headless
             # over CDP — node 24's global WebSocket is the whole client, so the
             # browser is a pinned package and not an npm dependency tree.
             chromium
             # typst and poppler-utils come with testTools, below.
-            # The type and lint gates are `cargo clippy` and `cargo fmt` now;
-            # `ty` and `ruff` checked a package that no longer exists.
             notmuch lieer isync openssl curl
             protonmail-bridge pass gnupg  # Proton: Bridge serves localhost IMAP; pass/gnupg back its keyring on this headless box
             # Resolves the static secrets declared in secretspec.toml out of the

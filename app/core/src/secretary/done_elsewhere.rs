@@ -5,9 +5,9 @@ use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::responded::Withdrawal;
-use crate::store::Prodrome;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::Prodrome;
 
 /// What a rule sees of one waiting card.
 pub enum Seen {

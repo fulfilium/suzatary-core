@@ -151,7 +151,7 @@ impl Parsed {
 
 /// A node of the lines' replica: a genesis is its own prodrome, and a line rests on its genesis
 /// through its parents.
-impl crate::replica::held::Node for Parsed {
+impl suzatary_store::replica::held::Node for Parsed {
     fn name(&self) -> &Hash {
         Parsed::name(self)
     }

@@ -673,7 +673,7 @@ pub fn dismiss(
 /// [`inbox::acknowledge`]'s refusals and the stores' own.
 pub fn acknowledge(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     card: &ProposalRef,

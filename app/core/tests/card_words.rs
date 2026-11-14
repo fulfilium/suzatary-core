@@ -21,7 +21,8 @@ use suzatary_core::secretary::proposal::{Proposal, Reasons};
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::texts;
-use suzatary_core::store::{InMemory, InMemoryDoc, Prodrome};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::{InMemoryDoc, Prodrome};
 
 /// Each salt the next number.
 #[derive(Default)]

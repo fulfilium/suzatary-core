@@ -2,13 +2,13 @@
 //! are cards in the Inbox (`suzatary_core::secretary::filed::TriageCards`), so the chain it holds
 //! is only a [`Reads`]: no append or accept exists on it.
 //!
-//! [`Reads`]: suzatary_core::store::Reads
+//! [`Reads`]: suzatary_store::store::Reads
 
 use std::path::PathBuf;
 
 use prodrome_core::policy::Untrusted;
-use suzatary_core::store::Only;
 use suzatary_record::record::{EventStore, TodoEvent};
+use suzatary_store::store::Only;
 
 use crate::objects::Objects;
 

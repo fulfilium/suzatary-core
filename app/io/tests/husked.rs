@@ -30,7 +30,7 @@ fn an_append_at_scale() {
     for (what, store) in [
         (
             "prodrome",
-            &prodrome as &dyn suzatary_core::store::Prodrome<_>,
+            &prodrome as &dyn suzatary_store::store::Prodrome<_>,
         ),
         ("husked", &lines),
         ("prodrome", &prodrome),

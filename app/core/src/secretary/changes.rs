@@ -539,7 +539,7 @@ pub enum Unapplied {
 /// The chain's refusal of the first act it would not build, or a chain that cannot be read.
 pub fn checked(
     changeset: &Changeset,
-    chain: &dyn crate::store::Reads<TodoEvent>,
+    chain: &dyn suzatary_store::store::Reads<TodoEvent>,
     building: &Building<'_>,
 ) -> Result<(), Refusal> {
     let preview =

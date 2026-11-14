@@ -2568,7 +2568,7 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     );
     events.push(prodrome_core::event::mk_completed("alpha", at, "ada", "").expect("an event"));
     for event in events {
-        suzatary_core::store::append_to(&store, GENESIS, event).expect("appends");
+        suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
     }
     let path = data.join("instance.toml");
     std::fs::write(

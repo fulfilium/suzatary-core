@@ -31,7 +31,8 @@ use suzatary_core::secretary::memory::{
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::shown_record::OwnersRecord;
 use suzatary_core::secretary::store::Entry;
-use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
+use suzatary_core::stores::InMemory;
+use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

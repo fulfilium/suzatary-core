@@ -3,7 +3,7 @@
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::stores::TopicStores;
-use suzatary_core::store::StoreError;
+use suzatary_store::store::StoreError;
 
 use crate::objects::Objects;
 

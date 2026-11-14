@@ -11,11 +11,11 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::store::{Entry, Kind};
 use crate::secretary::transcript;
-use crate::store::{Prodrome, StoreError};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
+use suzatary_store::store::{Prodrome, StoreError};
 
 /// Where a proposal is drawn: its card's index in the conversation it was filed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -467,7 +467,7 @@ fn phase_said(reading: &Reading) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::InMemory;
+    use crate::stores::InMemory;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 27, 9, minute, 0, 0).expect("an instant")

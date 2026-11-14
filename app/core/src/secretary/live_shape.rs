@@ -24,9 +24,10 @@ use crate::secretary::recollection::Recollection;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::{Entry, Kind};
 use crate::secretary::words::Words;
-use crate::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
+use crate::stores::InMemory;
 use suzatary_base::capability::Entropy as _;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 
 /// How large a memory to build.
 #[derive(Debug, Clone, Copy)]

@@ -301,7 +301,7 @@ Name each file for its main type, and declare that type first, after the imports
 two main types, split it into two files. Do not make `utils` files. A reader learns the program
 from its folder names and types.
 
-- Rust: `app/core/src/secretary/phase.rs` contains `Phase`. `app/core/src/store/` has one file
+- Rust: `app/core/src/secretary/phase.rs` contains `Phase`. `app/store/src/store/` has one file
   for each store shape.
 - TypeScript: a module is a namespace named for one idea, such as `lo`, `tree` or `parsed`.
   The details are in `docs/TS-STYLE.md`.
