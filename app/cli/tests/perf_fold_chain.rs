@@ -158,7 +158,7 @@ fn fold_breakdown() {
 
     let (payload, full_times) = repeated(ITERATIONS, || {
         // The whole fold: a limited one builds the same entries and drops most.
-        let read = suzatary_core::chain_set::Read::of_stores([(&policy, chain)]);
+        let read = suzatary_signatures::chain_set::Read::of_stores([(&policy, chain)]);
         routes::fold(
             &bench.render,
             &policy.name,

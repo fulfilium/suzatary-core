@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use prodrome_core::event::Hash;
-use suzatary_core::signatures::{Answer, Requested, WINDOW_SECONDS};
+use suzatary_signatures::signatures::{Answer, Requested, WINDOW_SECONDS};
 use suzatary_store::store::{Doc, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
@@ -160,7 +160,7 @@ const RECORD: DocCodec<Hash, Requested> = DocCodec {
 };
 
 /// A request's nonce: 128 random bits in lowercase hex
-/// ([`suzatary_core::signatures::is_nonce`]).
+/// ([`suzatary_signatures::signatures::is_nonce`]).
 pub fn fresh_nonce() -> Result<String, String> {
     let bytes: [u8; 16] = ring::rand::generate(&ring::rand::SystemRandom::new())
         .map(ring::rand::Random::expose)

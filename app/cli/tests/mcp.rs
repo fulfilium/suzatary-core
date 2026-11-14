@@ -158,7 +158,7 @@ impl Session {
         Session::started(
             crate::binary::suzatary()
                 .args(["--instance", &instance.to_string_lossy(), "mcp"])
-                .env(suzatary_core::signatures::AGENT_KEY, agent_seed)
+                .env(suzatary_signatures::signatures::AGENT_KEY, agent_seed)
                 .env("HOME", &isolated)
                 .env("XDG_CONFIG_HOME", isolated.join("config")),
         )
@@ -437,8 +437,8 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     const OWN: &str = "9999999999999999999999999999999999999999999999999999999999999999";
     const AGENT: &str = "8888888888888888888888888888888888888888888888888888888888888888";
     let seeds = [
-        (suzatary_core::signatures::BOX_KEY, OWN.to_owned()),
-        (suzatary_core::signatures::AGENT_KEY, AGENT.to_owned()),
+        (suzatary_signatures::signatures::BOX_KEY, OWN.to_owned()),
+        (suzatary_signatures::signatures::AGENT_KEY, AGENT.to_owned()),
         (suzatary_core::mail::dedup_key::DEDUP_KEY, "7".repeat(64)),
     ];
     let root = scratch("adopted-agent");

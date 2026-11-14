@@ -688,16 +688,24 @@ pub fn dead<'l>(
 }
 
 /// The answer blocks slot `slot`'s words were rendered to, opened by `key`: what a replica
-/// forgets before it destroys the key, since nothing finds them once the words are gone.
+/// forgets before it destroys the key, since nothing finds them once the words are gone. A slot
+/// under older rules was rendered from its words as they were locked while those rules stood, and
+/// from its words as the current rules read them after, so the blocks of both are named; the
+/// words as locked only name blocks, and are shown to no one.
 #[must_use]
 pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<suzatary_base::answer::Renderable> {
-    match line.open(slot, key) {
-        Some(LineWords::Model { text }) => suzatary_base::answer::blocks(&text)
-            .iter()
-            .map(|block| suzatary_base::answer::Renderable::of(&block.source))
-            .collect(),
-        _ => Vec::new(),
+    let mut fed: Vec<suzatary_base::answer::Renderable> = Vec::new();
+    for words in [line.unscrubbed(slot, key), line.open(slot, key)] {
+        if let Some(LineWords::Model { text }) = words {
+            for block in suzatary_base::answer::blocks(&text) {
+                let block = suzatary_base::answer::Renderable::of(&block.source);
+                if !fed.contains(&block) {
+                    fed.push(block);
+                }
+            }
+        }
     }
+    fed
 }
 
 /// Every key the objects' lines name that an erasure of the same conversation names: the keys

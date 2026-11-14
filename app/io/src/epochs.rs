@@ -1,4 +1,4 @@
-//! The box's epochs on disk (`suzatary_core::epoch`), one text file per store in the state
+//! The box's epochs on disk (`suzatary_signatures::epoch`), one text file per store in the state
 //! directory. Never pushed (a history rewrite must not take an epoch back) and never backed up
 //! (a restored box must start its epochs as a fresh one does). Format: the epoch on the first
 //! line, then `genesis <name>` and `head <name>` lines; any other line is refused.
@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use suzatary_core::epoch::{Epochs, Served};
+use suzatary_signatures::epoch::{Epochs, Served};
 
 use crate::docs::{DocCodec, Docs};
 
@@ -56,7 +56,7 @@ const CODEC: DocCodec<String, Served> = DocCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::epoch::Seen;
+    use suzatary_signatures::epoch::Seen;
 
     #[test]
     fn an_epoch_outlives_the_process_that_kept_it() {

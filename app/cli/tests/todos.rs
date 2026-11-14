@@ -263,8 +263,8 @@ fn each_write_is_signed_by_the_key_its_actor_owns() {
     };
     let instance = a_signing_instance(&root, &public(&own));
     let seeds = [
-        (suzatary_core::signatures::BOX_KEY, own.clone()),
-        (suzatary_core::signatures::AGENT_KEY, agent.clone()),
+        (suzatary_signatures::signatures::BOX_KEY, own.clone()),
+        (suzatary_signatures::signatures::AGENT_KEY, agent.clone()),
     ];
     let signer_of = |todo: &str| {
         let held = objects(&root);

@@ -28,7 +28,7 @@ fn every_live_record_renders_verified() {
         ));
         let nodes = store.nodes().expect("the live chain reads");
         let mut refused = Vec::new();
-        for record in suzatary_core::believed::records(&nodes, now)
+        for record in suzatary_signatures::believed::records(&nodes, now)
             .into_values()
             .flatten()
         {

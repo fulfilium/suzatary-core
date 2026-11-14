@@ -245,9 +245,9 @@ fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none()
 }
 
 /// The cast's deployment keys, what a test's `init` keeps rather than mints.
-fn cast_keys() -> suzatary_core::signatures::BoxKeys {
+fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
     use suzatary_core::cast::keys;
-    suzatary_core::signatures::BoxKeys::of(
+    suzatary_signatures::signatures::BoxKeys::of(
         &keys::root(),
         &suzatary_base::capability::Secret::new(keys::ROOT),
         &suzatary_base::capability::Secret::new(keys::AGENT),
@@ -305,11 +305,11 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
 
     let seeded = init(&[
         (
-            suzatary_core::signatures::BOX_KEY,
+            suzatary_signatures::signatures::BOX_KEY,
             suzatary_core::cast::keys::ROOT,
         ),
         (
-            suzatary_core::signatures::AGENT_KEY,
+            suzatary_signatures::signatures::AGENT_KEY,
             suzatary_core::cast::keys::AGENT,
         ),
         (

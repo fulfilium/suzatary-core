@@ -517,35 +517,6 @@ impl Answers for Nothing {
     }
 }
 
-/// No phone is registered, and a registration is refused.
-impl suzatary_store::store::Log<String, crate::devices::Device> for Nothing {
-    fn keys(&self) -> Result<Vec<String>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn lines(&self, _actor: &String) -> Result<Vec<crate::devices::Device>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn start(&self, _actor: &String, _first: &crate::devices::Device) -> Result<(), StoreError> {
-        Err(StoreError::unwritable(
-            "device store",
-            "nothing is registered",
-        ))
-    }
-    fn push(&self, _actor: &String, _line: &crate::devices::Device) -> Result<(), StoreError> {
-        Err(StoreError::unwritable(
-            "device store",
-            "nothing is registered",
-        ))
-    }
-    fn edit(
-        &self,
-        _actor: &String,
-        _decide: &mut suzatary_store::store::Decide<'_, crate::devices::Device>,
-    ) -> Result<suzatary_store::store::Edit<crate::devices::Device>, Refusal> {
-        Err(StoreError::unwritable("device store", "nothing is registered").into())
-    }
-}
-
 /// No watch is set, and setting one is refused.
 impl suzatary_store::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> for Nothing {
     fn keys(&self) -> Result<Vec<crate::mail::watch::WatchId>, StoreError> {

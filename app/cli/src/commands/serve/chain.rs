@@ -9,8 +9,8 @@ use suzatary_base::conversation_id::DEFAULT;
 use suzatary_base::reference::TodoRef;
 use suzatary_base::refusal::{Refusal, Status};
 use suzatary_core::secretary::act_lines::{self, ActLine};
-use suzatary_core::signatures::Seat;
-use suzatary_core::signatures::Tap;
+use suzatary_signatures::signatures::Seat;
+use suzatary_signatures::signatures::Tap;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -285,7 +285,7 @@ pub fn author(
 /// A failure to note is not the write's failure, so it is a log line, not the answer's.
 fn noted(
     state: &State,
-    read: &suzatary_core::chain_set::Read,
+    read: &suzatary_signatures::chain_set::Read,
     lines: &[ActLine],
     now: Datetime,
     from: Seat,

@@ -7,12 +7,12 @@ use std::path::Path;
 use anyhow::bail;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::connect::Channel;
-use suzatary_core::devices::Device;
 use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::notify::{Notify as _, Push};
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::{Channels, Configured, Waiting};
 use suzatary_io::secrets::Resolves;
+use suzatary_signatures::devices::Device;
 use suzatary_store::store::Log;
 
 use crate::instance::Instance;
@@ -98,7 +98,7 @@ pub fn deliver(instance: &Instance, push: &Push) -> anyhow::Result<usize> {
         );
     };
     let devices = Devices::open(instance.paths.devices.clone());
-    let known = suzatary_core::devices::everyone(&devices)
+    let known = suzatary_signatures::devices::everyone(&devices)
         .map_err(|error| anyhow::anyhow!("notify: reading the registered devices: {error}"))?
         .len();
     let delivered = self::push(

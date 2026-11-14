@@ -12,8 +12,8 @@ fn fixture(root: &Path) -> Command {
     command
         .env("XDG_STATE_HOME", root.join("state"))
         .env("SUZATARY_FIXTURE_NO_MAIL", "1")
-        .env(suzatary_core::signatures::BOX_KEY, BOX_SEED)
-        .env(suzatary_core::signatures::AGENT_KEY, AGENT_SEED);
+        .env(suzatary_signatures::signatures::BOX_KEY, BOX_SEED)
+        .env(suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED);
     command
 }
 

@@ -1,7 +1,7 @@
 //! Pure readings of the inbox and the conversations, shared by the box's routes and the tab's
 //! module; anything beyond the two stores comes in as a [`Dress`].
 
-use crate::chain_set::ChainSet;
+use suzatary_signatures::chain_set::ChainSet;
 
 use crate::render::Html;
 use crate::secretary::acts::Act;

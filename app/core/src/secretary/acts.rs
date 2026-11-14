@@ -69,7 +69,7 @@ pub enum Act {
         task: crate::coding::Task,
     },
     /// Trust a new device's key (SPEC law 42), on a tap a trusted device endorses.
-    Device(crate::signatures::Enrolment),
+    Device(suzatary_signatures::signatures::Enrolment),
     /// Sign the model in: the tap runs the sign-in on the box, which files the code's card.
     #[serde(rename = "sign_in")]
     SignIn {
@@ -487,7 +487,7 @@ impl Literal for Act {
             },
             "Device" => {
                 let fields = Fields::of(value, DEVICE)?;
-                Act::Device(crate::signatures::Enrolment {
+                Act::Device(suzatary_signatures::signatures::Enrolment {
                     actor: prodrome_core::event::Actor::new(fields.get::<String>("actor")?)?,
                     key: prodrome_core::sign::PublicKey::new(fields.get::<String>("key")?)?,
                 })

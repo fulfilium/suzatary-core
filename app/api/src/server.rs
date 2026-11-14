@@ -19,7 +19,7 @@ pub struct Server<'a> {
     /// Typst, for a model's answer blocks.
     pub answers: &'a dyn Answers,
     /// The phones that asked to be woken.
-    pub devices: &'a dyn suzatary_store::store::Log<String, suzatary_core::devices::Device>,
+    pub devices: &'a dyn suzatary_store::store::Log<String, suzatary_signatures::devices::Device>,
     /// The session-holding model, when there is one.
     pub sessions: &'a dyn Sessions,
 }

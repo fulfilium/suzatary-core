@@ -217,7 +217,7 @@ fn a_pull_that_lacks_nothing_sends_nothing_and_reads_no_object() {
         ..lines.conversations()
     };
     let (epochs, frontiers) = (
-        suzatary_core::epoch::Epochs::remembered(),
+        suzatary_signatures::epoch::Epochs::remembered(),
         Frontiers::remembered(KEPT),
     );
     let books = Books {

@@ -7,10 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::chain_set::ChainSet;
 use crate::secretary::own_round::OwnRound;
-use crate::signatures::Seat;
 use suzatary_base::reference::{Reference, TodoRef};
+use suzatary_signatures::chain_set::ChainSet;
+use suzatary_signatures::signatures::Seat;
 
 /// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

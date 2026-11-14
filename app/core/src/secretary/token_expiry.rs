@@ -125,9 +125,9 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::believed::Preview;
     use crate::secretary::changes::Building;
     use suzatary_base::capability::Parses;
+    use suzatary_signatures::believed::Preview;
 
     /// One todo per token and expiry: the same expiry read again writes nothing, and a later one
     /// completes the earlier day's todo and writes its own.

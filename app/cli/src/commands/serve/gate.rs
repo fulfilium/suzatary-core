@@ -16,7 +16,7 @@ use axum::response::{IntoResponse, Response};
 use suzatary_api::gate::{self, Door, Knock, Named};
 use suzatary_base::capability::{Peer, Whois, WhoisError};
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_core::signatures::Admitted;
+use suzatary_signatures::signatures::Admitted;
 
 use super::State;
 use super::reply::refused;

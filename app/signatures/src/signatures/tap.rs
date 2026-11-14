@@ -55,38 +55,3 @@ impl Tap {
         &self.who
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn triple() -> ActHeaders<'static> {
-        ActHeaders {
-            act: Some("1"),
-            client: Some(crate::signatures::CLIENT),
-            content_type: Some("application/json"),
-            site: Some("same-origin"),
-        }
-    }
-
-    #[test]
-    fn a_trusted_request_mints_a_tap_naming_its_actor() {
-        let tap =
-            Tap::of(&crate::signatures::scene("ada"), &triple(), Seat::Device).expect("a tap");
-        assert_eq!(tap.who().as_str(), "ada");
-    }
-
-    #[test]
-    fn a_write_without_the_apps_own_header_gets_no_tap() {
-        let refused = Tap::of(
-            &crate::signatures::scene("ada"),
-            &ActHeaders {
-                act: None,
-                ..triple()
-            },
-            Seat::Device,
-        )
-        .expect_err("no header, no tap");
-        assert!(refused.message().contains(crate::signatures::ACT_HEADER));
-    }
-}

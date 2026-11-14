@@ -27,11 +27,11 @@ use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
 use suzatary_api::routes::{self, Books, Cut, Posted};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
-use suzatary_core::epoch::Epochs;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::stores::InMemory;
 use suzatary_core::wire::lines::Frontier;
+use suzatary_signatures::epoch::Epochs;
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
 use suzatary_store::wire::store::SinceRead;
@@ -181,7 +181,7 @@ impl TheBox {
         store.accept(&[genesis()]).expect("begun");
         Self {
             asks: InMemory::default(),
-            chain: suzatary_core::signatures::phone_trusted(&["ada", "tab"]),
+            chain: suzatary_core::stores::phone_trusted(&["ada", "tab"]),
             store,
             epochs: Epochs::remembered(),
             frontiers: Frontiers::remembered(prodrome_core::store::frontier::KEPT),

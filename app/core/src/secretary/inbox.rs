@@ -13,7 +13,6 @@ use prodrome_core::policy::Everything;
 use prodrome_core::registers::{Node, Stamp};
 use prodrome_core::term::{Term, TermF};
 
-use crate::chain_set::ChainSet;
 use crate::content_id::ContentId;
 use crate::health::plugin::PluginName;
 use crate::secretary::inbox_event::{InboxEvent, Said};
@@ -26,6 +25,7 @@ use crate::secretary::tapped::Tapped;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 use suzatary_base::reference::{ProposalRef, TodoRef};
 use suzatary_base::refusal::Refusal;
+use suzatary_signatures::chain_set::ChainSet;
 use suzatary_store::store::Prodrome;
 
 /// Its fulfillment at the set's instant, priced through `set`.

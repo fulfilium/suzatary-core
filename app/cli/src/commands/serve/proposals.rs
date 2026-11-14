@@ -6,8 +6,8 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::settings::EditError;
-use suzatary_core::signatures::Tap;
 use suzatary_core::wire::topics as wire;
+use suzatary_signatures::signatures::Tap;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -111,8 +111,8 @@ impl Body for Answer {
 
 fn endorsement_of(
     endorsing: &suzatary_api::wire::Endorsing,
-) -> Result<suzatary_core::signatures::Endorsement, Refusal> {
-    Ok(suzatary_core::signatures::Endorsement {
+) -> Result<suzatary_signatures::signatures::Endorsement, Refusal> {
+    Ok(suzatary_signatures::signatures::Endorsement {
         key: prodrome_core::sign::PublicKey::new(&endorsing.key)
             .map_err(|e| Refusal::bad_request(format!("endorsement.key: {e}")))?,
         signature: prodrome_core::sign::Signature::new(&endorsing.signature)
@@ -152,13 +152,12 @@ pub fn tap(
                 signing: state.signing.as_ref(),
                 edits: &edits,
                 forget: state.forget.as_ref(),
-                enrolling: state
-                    .keys
-                    .as_deref()
-                    .map(|keys| suzatary_core::signatures::Enrolling {
+                enrolling: state.keys.as_deref().map(|keys| {
+                    suzatary_signatures::signatures::Enrolling {
                         chains: &chains,
                         root: keys.root(),
-                    }),
+                    }
+                }),
                 consents: state.consenting.as_ref(),
             };
             match &call.body {

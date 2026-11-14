@@ -285,7 +285,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
         let findings = || {
             let found = self.events.findings();
             let found = match self.events.dag() {
-                Ok(dag) => suzatary_core::signatures::since_epoch(&dag, found),
+                Ok(dag) => suzatary_signatures::signatures::since_epoch(&dag, found),
                 Err(_) => found,
             };
             found.iter().map(ToString::to_string).collect()

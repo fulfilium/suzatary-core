@@ -8,10 +8,10 @@ use chrono::NaiveDate;
 use prodrome_core::fpl;
 use prodrome_core::observe::Observation;
 use prodrome_core::policy::Untrusted;
-use suzatary_core::believed::{Believed, records};
 use suzatary_record::record::{Node, TodoEvent};
+use suzatary_signatures::believed::{Believed, records};
 
-use suzatary_core::chain_set::ChainSet;
+use suzatary_signatures::chain_set::ChainSet;
 
 use crate::query;
 use crate::wire;
@@ -132,9 +132,11 @@ fn rows<'s>(
 }
 
 /// A chain the set could not read, as a refusal: one it does not hold is not found.
-fn not_a_member(failure: suzatary_core::chain_set::NotAMember) -> Refusal {
+fn not_a_member(failure: suzatary_signatures::chain_set::NotAMember) -> Refusal {
     match failure {
-        suzatary_core::chain_set::NotAMember::Absent(_) => Refusal::not_found(failure.to_string()),
+        suzatary_signatures::chain_set::NotAMember::Absent(_) => {
+            Refusal::not_found(failure.to_string())
+        }
         other => Refusal::internal(other.to_string()),
     }
 }
@@ -533,7 +535,7 @@ pub fn now(clock: &dyn Clock) -> Datetime {
 #[derive(Clone, Copy)]
 pub struct Books<'a> {
     /// Each store's epoch.
-    pub epochs: &'a suzatary_core::epoch::Epochs,
+    pub epochs: &'a suzatary_signatures::epoch::Epochs,
     /// Each store's recorded frontiers.
     pub frontiers: &'a prodrome_core::store::frontier::Frontiers,
 }
@@ -893,7 +895,7 @@ where
 {
     let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
         let graph = store.graph()?;
-        let seen = suzatary_core::epoch::Seen {
+        let seen = suzatary_signatures::epoch::Seen {
             geneses: names(graph.geneses()).into_iter().collect(),
             heads: names(graph.heads()).into_iter().collect(),
             held: std::sync::Arc::clone(graph.names()),
@@ -1284,8 +1286,9 @@ pub fn waiting(
             .filter(|row| {
                 view::content_of(row, &by_hash).is_some_and(|record| {
                     record.payload.is_decision()
-                        && EntryState::from(suzatary_core::believed::one_outcome(row.outcome()))
-                            == EntryState::Open
+                        && EntryState::from(suzatary_signatures::believed::one_outcome(
+                            row.outcome(),
+                        )) == EntryState::Open
                 })
             })
             .count();
@@ -1446,7 +1449,7 @@ where
     let received = {
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.
-        let trusting = suzatary_core::signatures::Trusting::held(writer.chains, writer.root)?;
+        let trusting = suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)?;
         let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
         let received =
             suzatary_core::sync::receive_changes::<E>(&held, posted, writer.actor, &trusting);
@@ -1578,7 +1581,7 @@ fn held_todos(
         .map_err(|e| Refusal::internal(e.to_string()))?;
     match set.held(&name) {
         Ok(_) => {}
-        Err(suzatary_core::chain_set::NotAMember::Absent(_)) => return Ok(None),
+        Err(suzatary_signatures::chain_set::NotAMember::Absent(_)) => return Ok(None),
         Err(failure) => return Err(not_a_member(failure)),
     }
     let (by_hash, _, rows) = rows(set, &name)?;
@@ -1618,7 +1621,7 @@ pub fn releases(
         .map_err(|e| Refusal::internal(e.to_string()))?;
     let held = match set.held(&name) {
         Ok(held) => held,
-        Err(suzatary_core::chain_set::NotAMember::Absent(_)) => {
+        Err(suzatary_signatures::chain_set::NotAMember::Absent(_)) => {
             return Ok(wire::ReleasesPayload {
                 chain: plan.chain().to_owned(),
                 reads: suzatary_core::release::Counted {
@@ -1682,7 +1685,7 @@ pub fn releases(
 pub fn me(
     deployment: &Deployment,
     chain: &ChainPolicy,
-    admitted: &suzatary_core::signatures::Admitted,
+    admitted: &suzatary_signatures::signatures::Admitted,
 ) -> wire::MePayload {
     let login = admitted.login();
     wire::MePayload {
@@ -1992,7 +1995,7 @@ pub fn lines_readings(
 ) -> Answered<[(&'static str, String); 3]> {
     let lines = suzatary_core::secretary::conversations::list(conversations)?;
     let (epochs, frontiers) = (
-        suzatary_core::epoch::Epochs::remembered(),
+        suzatary_signatures::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let skeleton = lines_skeleton(

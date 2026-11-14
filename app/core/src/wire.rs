@@ -4,7 +4,6 @@
 pub mod cards;
 pub mod inbox;
 pub mod lines;
-pub mod signatures;
 pub mod todo;
 pub mod topics;
 pub mod triage;

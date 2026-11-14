@@ -10,7 +10,7 @@ use prodrome_core::schema::Schema;
 
 use crate::secretary::held_replica::NotAnAnswer;
 use crate::wire::lines::{ObjectsPayload, ReceiptPayload};
-use crate::wire::signatures::RefusalKind;
+use suzatary_signatures::wire::signatures::RefusalKind;
 use suzatary_store::replica::held::Said;
 use suzatary_store::replica::objects::{Answer, Object, Refusal};
 

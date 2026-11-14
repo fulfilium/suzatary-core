@@ -39,8 +39,8 @@ snapshots() {
 # restoring both may skip the re-login.
 #
 # The IMAP sync state is not here (rebuildable). The epochs must never be: a restored box starts
-# its epochs above every one it answered (`suzatary_core::epoch`), and a week-old count would let
-# tabs' replicas keep later words.
+# its epochs above every one it answered (`suzatary_signatures::epoch`), and a week-old count
+# would let tabs' replicas keep later words.
 #
 # The box-local stores (`suzatary_core::store::Kind`); app/cli/tests/guards/lists.rs pins this list.
 VAULTED='secretary-lines-keys secretary-memory-texts secretary-digest-texts secretary-topics secretary-topic-aliases secretary-asks local secretary/attachments secretary/files'

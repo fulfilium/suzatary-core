@@ -56,13 +56,13 @@ pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_record::record::Tod
 /// Every chain this instance serves, each store read once: the set every row and proposal is
 /// priced through.
 #[must_use]
-pub fn chains_read(instance: &Instance) -> suzatary_core::chain_set::Read {
+pub fn chains_read(instance: &Instance) -> suzatary_signatures::chain_set::Read {
     let stores: Vec<_> = instance
         .chains
         .iter()
         .map(|chain| (&chain.policy, store_of(chain)))
         .collect();
-    suzatary_core::chain_set::Read::of_stores(stores.iter().map(|(policy, store)| {
+    suzatary_signatures::chain_set::Read::of_stores(stores.iter().map(|(policy, store)| {
         (
             *policy,
             store as &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,

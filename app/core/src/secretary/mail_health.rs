@@ -112,7 +112,7 @@ pub fn propose_persistent(
         }
         let changeset = Changeset::new(project, vec![act_of(zone, account, *since)])
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-        let preview = crate::believed::Preview::of(caps.chain.objects()?)
+        let preview = suzatary_signatures::believed::Preview::of(caps.chain.objects()?)
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
         changes::events_of(
             &changeset,

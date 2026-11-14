@@ -76,8 +76,9 @@ pub fn listed(
                     format!("this box serves no chain named {}", changeset.chain()),
                 ),
                 Some(bound) => {
-                    let preview = crate::believed::Preview::of(bound.caps.chain.objects()?)
-                        .map_err(|failed| Refusal::internal(failed.to_string()))?;
+                    let preview =
+                        suzatary_signatures::believed::Preview::of(bound.caps.chain.objects()?)
+                            .map_err(|failed| Refusal::internal(failed.to_string()))?;
                     changes::shown(
                         changeset,
                         &preview,

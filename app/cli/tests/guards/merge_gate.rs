@@ -2282,7 +2282,14 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 }
 
 /// The crates the core's library is cut into; a new one joins with its `flake.nix` lines.
-const LIBRARY_CRATES: [&str; 5] = ["app/base", "app/record", "app/store", "app/core", "app/api"];
+const LIBRARY_CRATES: [&str; 6] = [
+    "app/base",
+    "app/record",
+    "app/store",
+    "app/signatures",
+    "app/core",
+    "app/api",
+];
 
 /// Whether `rel` is a test file of one of the library's crates.
 fn a_library_test(rel: &str) -> bool {

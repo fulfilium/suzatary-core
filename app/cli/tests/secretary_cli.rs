@@ -57,7 +57,7 @@ fn fresh_instance(name: &str) -> Instance {
         repo,
     ]);
     init::run_keyed(&instance_path, args, &env_beside(&instance_path), |_| {
-        Ok(suzatary_core::signatures::BoxKeys::of(
+        Ok(suzatary_signatures::signatures::BoxKeys::of(
             &suzatary_core::cast::keys::root(),
             &suzatary_base::capability::Secret::new(suzatary_core::cast::keys::ROOT),
             &suzatary_base::capability::Secret::new(suzatary_core::cast::keys::AGENT),

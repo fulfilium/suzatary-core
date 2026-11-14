@@ -19,7 +19,7 @@ pub struct World {
     /// Each chain's stores, in the instance file's order.
     pub chains: Vec<Stores>,
     /// What the box signs with; missing keys leave every write refusing and every read as it was.
-    pub signers: suzatary_core::signatures::Signers,
+    pub signers: suzatary_signatures::signatures::Signers,
 }
 
 impl World {
@@ -27,7 +27,7 @@ impl World {
     #[must_use]
     pub fn assemble(
         instance: &Instance,
-        signers: suzatary_core::signatures::Signers,
+        signers: suzatary_signatures::signatures::Signers,
         peers: Peers,
         brain: Brain,
     ) -> Self {

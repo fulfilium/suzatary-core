@@ -7,7 +7,7 @@ use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
 use suzatary_api::wire::{
     Condition, Found, ObjectVerdict, ProvenanceRow, SignedObject, Verified, VerifiedPayload, Walk,
 };
-use suzatary_core::signatures::{Enrolment, Trust};
+use suzatary_signatures::signatures::{Enrolment, Trust};
 use wasm_bindgen::prelude::*;
 
 use crate::{Event, Todos, json as printed_json, refused};
@@ -82,13 +82,13 @@ impl Todos {
             .copied()
             .find(|standing| !standing.signs())
             .or_else(|| standings.first().copied())
-            .unwrap_or(suzatary_core::signatures::KeyStanding::Untrusted);
+            .unwrap_or(suzatary_signatures::signatures::KeyStanding::Untrusted);
         Ok(worst.as_str().to_owned())
     }
 
     /// The class's `verify`, with each object beneath an epoch that no key proves read as
     /// history written before signatures rather than as a finding, as the box's own verify
-    /// reads it (`suzatary_core::signatures::since_epoch`).
+    /// reads it (`suzatary_signatures::signatures::since_epoch`).
     pub fn verify_history(&self) -> Result<String, JsError> {
         // Objects with no honest reading have no epoch to read either: their findings stand.
         let history: std::collections::BTreeSet<String> = self

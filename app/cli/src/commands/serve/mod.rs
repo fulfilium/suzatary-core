@@ -103,7 +103,7 @@ pub struct Performers {
 pub struct Signed {
     pub requests: Arc<suzatary_io::requests::Requests>,
     pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
-    pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
+    pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
 }
 
 /// Everything a handler reads.
@@ -150,7 +150,7 @@ pub struct Inner {
     pub repos: Arc<suzatary_core::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
-    pub read: Arc<Mutex<suzatary_core::chain_set::Read>>,
+    pub read: Arc<Mutex<suzatary_signatures::chain_set::Read>>,
     /// Open connection cards, memoised.
     pub asking: Arc<
         Mutex<
@@ -169,11 +169,11 @@ pub struct Inner {
         >,
     >,
     /// Reached only by a tapped device card.
-    pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
+    pub keys: Option<Arc<suzatary_signatures::signatures::BoxKeys>>,
     pub requests: Arc<suzatary_io::requests::Requests>,
     /// Written only by the acceptance of a tab's objects.
     pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
-    pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
+    pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
@@ -188,7 +188,7 @@ pub struct Inner {
     pub noticing: Arc<Mutex<Option<Heard>>>,
     /// Secret store answers since the last filing.
     pub secrets_answered: Arc<Mutex<suzatary_core::secrets::SecretAnswers>>,
-    pub epochs: Arc<suzatary_core::epoch::Epochs>,
+    pub epochs: Arc<suzatary_signatures::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     pub portal: Arc<suzatary_api::portal::Portal>,
 }
@@ -268,7 +268,7 @@ impl Stamp {
     /// What `GET /api/about` answers.
     pub fn about(
         &self,
-        set: &suzatary_core::chain_set::ChainSet<'_>,
+        set: &suzatary_signatures::chain_set::ChainSet<'_>,
     ) -> Result<suzatary_core::wire::cards::AboutPayload, Refusal> {
         let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
         let released = match crate::stamp::release().map_err(|e| internal(&e))? {
@@ -394,7 +394,7 @@ impl State {
             consenting,
             noticing: Arc::default(),
             secrets_answered: Arc::default(),
-            epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
+            epochs: Arc::new(suzatary_signatures::epoch::Epochs::remembered()),
             frontiers: Arc::new(prodrome_core::store::frontier::Frontiers::remembered(
                 prodrome_core::store::frontier::KEPT,
             )),
@@ -411,7 +411,7 @@ impl State {
     #[must_use]
     pub fn with_books(
         mut self,
-        epochs: Arc<suzatary_core::epoch::Epochs>,
+        epochs: Arc<suzatary_signatures::epoch::Epochs>,
         frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     ) -> Self {
         let inner = self.building();
@@ -475,7 +475,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_keys(mut self, keys: Option<suzatary_core::signatures::BoxKeys>) -> Self {
+    pub fn with_keys(mut self, keys: Option<suzatary_signatures::signatures::BoxKeys>) -> Self {
         self.building().keys = keys.map(Arc::new);
         self
     }
@@ -774,7 +774,7 @@ impl State {
 
     /// Every chain; only moved heads are reread.
     #[must_use]
-    pub fn chains_read(&self) -> suzatary_core::chain_set::Read {
+    pub fn chains_read(&self) -> suzatary_signatures::chain_set::Read {
         let lock = || locks::held(&self.read);
         // Read unlocked; of two racing requests the last to finish wins.
         let last = lock().clone();

@@ -137,6 +137,69 @@ mod tests {
         said.expect("the owner's words have a key")
     }
 
+    /// Law: a migration forgets every block its old words were rendered to. A model's answer
+    /// written under older rules holds a code the current rules redact; while it stood, it was
+    /// rendered from its words as they were locked, so its blocks hold the code. `migrate-scrub`
+    /// seals the slot again, and the sweep that destroys the old key forgets each of those blocks,
+    /// not the blocks of the words as the current rules read them.
+    #[test]
+    fn a_migration_forgets_the_blocks_its_old_words_were_rendered_to() {
+        let held = InMemory::default();
+        let id = ConversationId::new("2026-11-12-1").expect("a slug");
+        let text = "Your verification code is 482913. fee\n\nThe second block.";
+        let entries = [
+            Entry::Opened {
+                at: at(0),
+                title: Words::kept("Codes".to_owned()),
+                model: "a-cli/small".to_owned(),
+                kind: Kind::Topic,
+            },
+            Entry::Said {
+                at: at(1),
+                turn: Turn::Model {
+                    text: text.to_owned(),
+                    calls: Vec::new(),
+                },
+                by: None,
+            },
+        ];
+        for (count, entry) in entries.iter().enumerate() {
+            let (line, keys) = LineEvent::written_under(
+                &ScrubbedUnder::Unversioned,
+                id.clone(),
+                transcript::writer(),
+                u32::try_from(count).expect("a count"),
+                entry,
+                &held.entropy,
+            )
+            .expect("a line");
+            for key in &keys {
+                held.keys.set(&key.name(), key).expect("kept");
+            }
+            held.lines.append(line).expect("appended");
+        }
+        let rendered: Vec<String> = suzatary_base::answer::blocks(text)
+            .iter()
+            .map(|block| {
+                suzatary_base::answer::Renderable::of(&block.source)
+                    .as_str()
+                    .to_owned()
+            })
+            .collect();
+        assert!(
+            rendered.iter().any(|block| block.contains("482913")),
+            "the old words' blocks hold the code: {rendered:?}"
+        );
+        crate::secretary::rescrub::run(held.conversations(), at(9)).expect("migrated");
+        let forgot = held.forgot.sources();
+        for block in &rendered {
+            assert!(
+                forgot.contains(block),
+                "{block:?} is still held; forgotten: {forgot:?}"
+            );
+        }
+    }
+
     /// Law: the erase question names every holder, and how long each copy out of the box's reach
     /// stays.
     #[test]

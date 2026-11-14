@@ -48,8 +48,8 @@ fn fixture(root: &Path) -> Command {
     let mut command = crate::binary::fixture();
     command
         .env("XDG_STATE_HOME", root.join("state"))
-        .env(suzatary_core::signatures::BOX_KEY, BOX_SEED)
-        .env(suzatary_core::signatures::AGENT_KEY, AGENT_SEED)
+        .env(suzatary_signatures::signatures::BOX_KEY, BOX_SEED)
+        .env(suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED)
         .env(
             suzatary_core::mail::dedup_key::DEDUP_KEY,
             "e2e0000000000000000000000000000000000000000000000000000000000d3d",
@@ -238,8 +238,8 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
             .post(&format!("{base}{said}"))
             .header("x-suzatary-act", "1")
             .header(
-                suzatary_core::signatures::CLIENT_HEADER,
-                suzatary_core::signatures::CLIENT_MIN.to_string(),
+                suzatary_signatures::signatures::CLIENT_HEADER,
+                suzatary_signatures::signatures::CLIENT_MIN.to_string(),
             )
             .header("sec-fetch-site", "same-origin")
             .header("content-type", "application/json"),

@@ -3,8 +3,8 @@
 use crate::google::Scope;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
-use crate::signatures::{Seat, Tap};
 use suzatary_base::refusal::Refusal;
+use suzatary_signatures::signatures::{Seat, Tap};
 
 /// Whether a tap on a proposal puts mail on a wire, or gives the box the consent to.
 /// The greater of two sends when either does.

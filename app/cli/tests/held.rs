@@ -80,7 +80,7 @@ fn holds(dir: &std::path::Path, text: &str) -> bool {
 
 /// What a replay of a request first answered `first` is given: the digest, never the value.
 fn not_kept(first: &str) -> String {
-    suzatary_core::signatures::Answer::of(200, first.as_bytes()).body
+    suzatary_signatures::signatures::Answer::of(200, first.as_bytes()).body
 }
 
 #[test]

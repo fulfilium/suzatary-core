@@ -13,9 +13,9 @@ use prodrome_core::term::Term;
 use suzatary_record::record::Entry;
 
 use suzatary_base::tree::{By, Classifier, Members, Monoid, Place, Segment, Tree};
-use suzatary_core::believed::Believed;
 use suzatary_core::view::{self, Row};
 use suzatary_record::record::{Envelope, TodoEvent, mk_authored};
+use suzatary_signatures::believed::Believed;
 
 fn at(day: u32) -> Datetime {
     Datetime::new(2026, 9, day, 12, 0, 0, 0).expect("a real instant")

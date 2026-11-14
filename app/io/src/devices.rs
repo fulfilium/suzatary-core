@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use prodrome_core::fpl::{datetime_of, instant_of, iso, parse_iso};
-use suzatary_core::devices::Device;
+use suzatary_signatures::devices::Device;
 
 use crate::lines::{Codec, Layout, Lines};
 
@@ -87,7 +87,7 @@ fn safe_actor(actor: &str) -> String {
 #[cfg(test)]
 mod tests {
     use suzatary_base::capability::Datetime;
-    use suzatary_core::devices::{self, Phones};
+    use suzatary_signatures::devices::{self, Phones};
     use suzatary_store::store::{Edit, Log as _};
 
     use super::*;

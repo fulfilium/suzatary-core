@@ -10,11 +10,11 @@ use clap::Subcommand;
 use prodrome_core::event::{Actor, TodoId, mk_cancelled, mk_completed, mk_reopened, mk_tended};
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Clock;
-use suzatary_core::believed::Preview;
-use suzatary_core::signatures::Signers;
 use suzatary_core::{authoring, view};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::todo;
+use suzatary_signatures::believed::Preview;
+use suzatary_signatures::signatures::Signers;
 use suzatary_store::store::{Prodrome, Signing};
 
 use super::store_of;
@@ -494,7 +494,7 @@ fn add(
             let Some(parent) = suzatary_core::todos::current(preview.nodes(), now, parent) else {
                 bail!("no todo with id {parent:?} on the chain to be a parent");
             };
-            let believed = suzatary_core::believed::Believed::of(
+            let believed = suzatary_signatures::believed::Believed::of(
                 preview.nodes(),
                 now,
                 &chain.policy.untrusted,
@@ -690,8 +690,8 @@ fn lifecycle(
     let digest = store.append(event).context("appending")?;
     let after = store.nodes().context("re-reading the chain")?;
     let todo = TodoId::new(id).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let state = suzatary_core::believed::spelled(
-        &suzatary_core::believed::Believed::of(&after, now, &chain.policy.untrusted)
+    let state = suzatary_signatures::believed::spelled(
+        &suzatary_signatures::believed::Believed::of(&after, now, &chain.policy.untrusted)
             .context("folding the chain")?
             .outcome(&todo),
     );

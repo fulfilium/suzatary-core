@@ -30,7 +30,7 @@ use suzatary_core::secretary::topics::reading::{
 };
 use suzatary_core::secretary::topics::standing::Standing;
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::wire::signatures::RefusalKind;
+use suzatary_signatures::wire::signatures::RefusalKind;
 
 const NAMES: [&str; 4] = ["travel", "trips", "work", "job"];
 
@@ -430,17 +430,17 @@ proptest! {
 }
 
 /// The trust of a chain whose root trusts the cast's phone for every device's actor.
-static TRUSTING: std::sync::LazyLock<suzatary_core::signatures::Trusting> =
+static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> =
     std::sync::LazyLock::new(|| {
         let actors: Vec<String> = (0..9).map(|n| format!("device{n}")).collect();
         let actors: Vec<&str> = actors.iter().map(String::as_str).collect();
-        trusting_of(&[&suzatary_core::signatures::phone_trusted(&actors)])
+        trusting_of(&[&suzatary_core::stores::phone_trusted(&actors)])
     });
 
 fn trusting_of(
     chains: &[&dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>],
-) -> suzatary_core::signatures::Trusting {
-    suzatary_core::signatures::Trusting::held(chains, &suzatary_core::cast::keys::root())
+) -> suzatary_signatures::signatures::Trusting {
+    suzatary_signatures::signatures::Trusting::held(chains, &suzatary_core::cast::keys::root())
         .expect("reads")
 }
 
@@ -569,7 +569,7 @@ impl Door {
     fn post(
         &self,
         prints: &[String],
-        trusting: &suzatary_core::signatures::Trusting,
+        trusting: &suzatary_signatures::signatures::Trusting,
     ) -> suzatary_core::sync::Received {
         suzatary_core::sync::receive_changes::<MembershipEvent>(
             &self.held, prints, &self.ada, trusting,
@@ -683,8 +683,8 @@ fn the_box_door_takes_only_the_posters_changes() {
 /// trusted key signed is recorded, once per post: never a revoked key's, never a waiting one.
 #[test]
 fn the_box_door_takes_a_change_only_with_its_writers_signature() {
-    use suzatary_core::signatures::Unproven;
     use suzatary_core::sync::Reason;
+    use suzatary_signatures::signatures::Unproven;
     let door = Door::new();
     let mine = &door.mine;
     assert_eq!(
@@ -731,15 +731,15 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
     let reasons: Vec<_> = lone.outcome.refused.into_iter().map(|r| r.reason).collect();
     assert_eq!(reasons, vec![Reason::Unaccompanied]);
 
-    let revoking = suzatary_core::signatures::phone_trusted(&["device0"]);
-    suzatary_core::signatures::revoke(
+    let revoking = suzatary_core::stores::phone_trusted(&["device0"]);
+    suzatary_signatures::signatures::revoke(
         &revoking,
         &suzatary_core::cast::keys::secret(suzatary_core::cast::keys::ROOT),
         &door.ada,
         &suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE).public(),
     )
     .expect("revokes");
-    let fine = suzatary_core::signatures::phone_trusted(&["device0"]);
+    let fine = suzatary_core::stores::phone_trusted(&["device0"]);
     let revoked = door.post(
         &[print(mine), print(&signature(mine))],
         &trusting_of(&[&fine, &revoking]),
@@ -808,7 +808,7 @@ fn law_writes_made_before_trust_are_taken_after_it() {
             .map(|o| o.literal().to_owned())
             .collect()
     };
-    let untrusted = trusting_of(&[&suzatary_core::signatures::phone_trusted(&[])]);
+    let untrusted = trusting_of(&[&suzatary_core::stores::phone_trusted(&[])]);
     let first = door.post(&posted(&tab), &untrusted);
     assert!(first.outcome.taken.is_empty());
     assert_eq!(first.outcome.refused.len(), 4);

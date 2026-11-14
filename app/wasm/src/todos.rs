@@ -19,7 +19,7 @@ use wasm_bindgen::prelude::*;
 
 use suzatary_api::routes;
 use suzatary_base::chains::ChainName;
-use suzatary_core::chain_set::Held;
+use suzatary_signatures::chain_set::Held;
 
 use crate::unrendered::Unrendered;
 use crate::{Chains, Event, Todos, printed, refused};

@@ -297,8 +297,8 @@ impl Instance {
     /// What the box signs with, or why not: never an error, so a box whose secrets are locked
     /// still starts and reads, and every write refuses with that sentence.
     #[must_use]
-    pub fn signers(&self) -> suzatary_core::signatures::Signers {
-        use suzatary_core::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Signers};
+    pub fn signers(&self) -> suzatary_signatures::signatures::Signers {
+        use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Signers};
         let root = self.root();
         let secrets = self.secrets();
         let seed = |name: &str| {
@@ -323,7 +323,7 @@ impl Instance {
     /// Adoption of every chain (idempotent): the box's and the agent's keys and its epoch, under
     /// a lock beside each chain.
     #[must_use]
-    pub fn adopt(&self, signers: &suzatary_core::signatures::Signers) -> Adopted<'_> {
+    pub fn adopt(&self, signers: &suzatary_signatures::signatures::Signers) -> Adopted<'_> {
         let (adopted, failed): (Vec<_>, Vec<_>) = self
             .chains
             .iter()
@@ -342,7 +342,8 @@ impl Instance {
             let stores: Vec<
                 &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
             > = stores.iter().map(|store| store as _).collect();
-            if let Err(why) = suzatary_core::signatures::complete_revocations(&stores, keys.root())
+            if let Err(why) =
+                suzatary_signatures::signatures::complete_revocations(&stores, keys.root())
             {
                 failed.push(format!("completing a revocation across chains: {why}"));
             }
@@ -362,13 +363,13 @@ impl Instance {
     /// The lock not taken, a store failing, or writes since the epoch that no key signed.
     fn adopted(
         chain: &ChainDir,
-        signers: &suzatary_core::signatures::Signers,
+        signers: &suzatary_signatures::signatures::Signers,
     ) -> anyhow::Result<Registered> {
         let Some(keys) = signers.held() else {
             return Ok(Vec::new());
         };
         let _held = adoption_lock(&chain.events)?;
-        let adoption = suzatary_core::signatures::adopt(
+        let adoption = suzatary_signatures::signatures::adopt(
             &crate::commands::store_of(chain),
             keys,
             &chain.policy,
@@ -397,7 +398,7 @@ impl Instance {
     #[must_use]
     pub fn writer_of(
         chain: &ChainDir,
-        signers: &suzatary_core::signatures::Signers,
+        signers: &suzatary_signatures::signatures::Signers,
         actor: &prodrome_core::event::Actor,
     ) -> suzatary_store::store::Signing<
         suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,

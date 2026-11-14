@@ -12,9 +12,9 @@ use clap::Subcommand;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::sign::Secret;
 use suzatary_api::gate::OPERATOR_HEADER;
-use suzatary_core::signatures::{Signers, body_digest, request_name};
 use suzatary_core::wire::lines as wire;
 use suzatary_io::http::{Http as _, Method, Req, Ureq};
+use suzatary_signatures::signatures::{Signers, body_digest, request_name};
 
 use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
 use super::serve::{route, table};
@@ -260,7 +260,7 @@ impl Operator {
             .chain([
                 (OPERATOR_HEADER.to_owned(), self.actor.as_str().to_owned()),
                 (
-                    suzatary_core::signatures::ACT_HEADER.to_owned(),
+                    suzatary_signatures::signatures::ACT_HEADER.to_owned(),
                     "1".to_owned(),
                 ),
                 ("content-type".to_owned(), "application/json".to_owned()),

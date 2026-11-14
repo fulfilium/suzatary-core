@@ -5,13 +5,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::signatures::{Trust, Trusting, Unproven};
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{
     Actor, Hash, TodoId, canonical_envelope, parents_of, parse_envelope, seal_hash,
 };
 use prodrome_core::sign::{PublicKey, Registrar};
 use suzatary_record::record::{Envelope, TodoEvent};
+use suzatary_signatures::signatures::{Trust, Trusting, Unproven};
 
 /// What the server holds: its objects by name, as `Prodrome::objects` answers them.
 #[derive(Debug, Clone, Default)]
@@ -126,7 +126,7 @@ pub enum Reason {
         /// The refused object.
         parent: Hash,
         /// Its refusal's kind.
-        kind: crate::wire::signatures::RefusalKind,
+        kind: suzatary_signatures::wire::signatures::RefusalKind,
     },
 }
 
@@ -135,10 +135,10 @@ impl Reason {
     /// resting on an unheld object waits, one resting on a refused object is as it is, the rest
     /// are final.
     #[must_use]
-    pub fn kind(&self) -> crate::wire::signatures::RefusalKind {
+    pub fn kind(&self) -> suzatary_signatures::wire::signatures::RefusalKind {
         match self {
             Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. })
-            | Reason::NotYetHeld(_) => crate::wire::signatures::RefusalKind::Trust,
+            | Reason::NotYetHeld(_) => suzatary_signatures::wire::signatures::RefusalKind::Trust,
             Reason::RestsOn { kind, .. } => *kind,
             Reason::NotAnObject(_)
             | Reason::MissingParent(_)
@@ -147,7 +147,7 @@ impl Reason {
             | Reason::Unproven(Unproven::Forged | Unproven::Revoked { .. })
             | Reason::BoxOnly
             | Reason::NotAChange(_)
-            | Reason::Unaccompanied => crate::wire::signatures::RefusalKind::Final,
+            | Reason::Unaccompanied => suzatary_signatures::wire::signatures::RefusalKind::Final,
         }
     }
 
@@ -456,7 +456,8 @@ fn signed_by_their_writers<E>(
 ) -> (Vec<(Hash, String)>, Vec<Refused>) {
     let mut kept: Vec<(Hash, String)> = Vec::new();
     let mut refused: Vec<Refused> = Vec::new();
-    let mut kinds: BTreeMap<Hash, crate::wire::signatures::RefusalKind> = BTreeMap::new();
+    let mut kinds: BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind> =
+        BTreeMap::new();
     for (name, print) in taken {
         let why = match &taking[&name] {
             prodrome_core::event::Envelope::Signed(signed) => {
@@ -488,13 +489,15 @@ fn signed_by_their_writers<E>(
 /// Of `parents`, the refused one an object is refused with, a final refusal first.
 fn resting(
     parents: Vec<Hash>,
-    kinds: &BTreeMap<Hash, crate::wire::signatures::RefusalKind>,
+    kinds: &BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind>,
 ) -> Option<Reason> {
-    let mut found: Vec<(Hash, crate::wire::signatures::RefusalKind)> = parents
+    let mut found: Vec<(Hash, suzatary_signatures::wire::signatures::RefusalKind)> = parents
         .into_iter()
         .filter_map(|parent| kinds.get(&parent).map(|kind| (parent, *kind)))
         .collect();
-    found.sort_by_key(|(_, kind)| *kind != crate::wire::signatures::RefusalKind::Final);
+    found.sort_by_key(|(_, kind)| {
+        *kind != suzatary_signatures::wire::signatures::RefusalKind::Final
+    });
     found
         .into_iter()
         .next()
@@ -508,7 +511,7 @@ fn waiting<E>(
     refused: &[Refused],
     unplaced: &[Refused],
 ) -> Vec<Refused> {
-    let base: BTreeMap<Hash, crate::wire::signatures::RefusalKind> = refused
+    let base: BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind> = refused
         .iter()
         .filter_map(|one| Some((one.name.clone()?, one.reason.kind())))
         .collect();
@@ -576,7 +579,9 @@ fn recorded<E: prodrome_core::schema::Schema>(
 ) -> Vec<(Hash, Reason)> {
     let once: BTreeMap<&Hash, &Reason> = refused
         .iter()
-        .filter(|one| one.reason.kind() == crate::wire::signatures::RefusalKind::Final)
+        .filter(|one| {
+            one.reason.kind() == suzatary_signatures::wire::signatures::RefusalKind::Final
+        })
         .filter_map(|one| Some((one.name.as_ref()?, &one.reason)))
         .collect();
     once.into_iter()
@@ -1185,11 +1190,11 @@ mod tests {
         // An unsigned write waits for its device, where a forged one never goes.
         assert_eq!(
             Reason::Unproven(Unproven::Unsigned).kind(),
-            crate::wire::signatures::RefusalKind::Trust
+            suzatary_signatures::wire::signatures::RefusalKind::Trust
         );
         assert_eq!(
             Reason::Unproven(Unproven::Forged).kind(),
-            crate::wire::signatures::RefusalKind::Final
+            suzatary_signatures::wire::signatures::RefusalKind::Final
         );
         // Before signatures the same post is taken: the law begins with the root.
         assert!(

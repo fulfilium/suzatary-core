@@ -76,9 +76,9 @@ impl Consent {
         Self(())
     }
 
-    /// Claim that the owner tapped a proposal, witnessed by a [`crate::signatures::Tap`].
+    /// Claim that the owner tapped a proposal, witnessed by a [`suzatary_signatures::signatures::Tap`].
     #[must_use]
-    pub fn given_by_tap(_tap: &crate::signatures::Tap) -> Self {
+    pub fn given_by_tap(_tap: &suzatary_signatures::signatures::Tap) -> Self {
         Self(())
     }
 }
@@ -431,15 +431,15 @@ mod tests {
     /// A minted tap builds the device flow's `Consent`, whose request names the IMAP scope.
     #[test]
     fn a_minted_tap_is_a_consent_for_the_device_flow() {
-        let tap = crate::signatures::Tap::of(
-            &crate::signatures::scene("ada"),
-            &crate::signatures::ActHeaders {
+        let tap = suzatary_signatures::signatures::Tap::of(
+            &crate::stores::scene("ada"),
+            &suzatary_signatures::signatures::ActHeaders {
                 act: Some("1"),
-                client: Some(crate::signatures::CLIENT),
+                client: Some(suzatary_signatures::signatures::CLIENT),
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
-            crate::signatures::Seat::Device,
+            suzatary_signatures::signatures::Seat::Device,
         )
         .expect("a tap");
         let consent = Consent::given_by_tap(&tap);

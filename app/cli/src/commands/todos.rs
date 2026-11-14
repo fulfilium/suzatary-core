@@ -8,9 +8,9 @@ use anyhow::Context;
 use clap::Subcommand;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::{markup_text, string_text};
-use suzatary_core::believed::one_outcome;
 use suzatary_io::clock::SystemClock;
 use suzatary_record::record::Entry;
+use suzatary_signatures::believed::one_outcome;
 
 use crate::instance::{ChainDir, Instance};
 

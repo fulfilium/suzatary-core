@@ -7,9 +7,9 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::sign::{PublicKey, Registrar, Secret, Signed};
 use proptest::prelude::*;
 
-use super::*;
-use crate::stores::InMemory;
+use suzatary_core::stores::InMemory;
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::signatures::*;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Prodrome, Signing, sign};
 
