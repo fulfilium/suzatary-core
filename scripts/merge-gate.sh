@@ -17,16 +17,15 @@
 # ends. `together` steps run together (one writes what another reads outside the tree). `unkept`
 # steps run every time.
 #
-#   nix develop .#triage -c scripts/merge-gate.sh               both halves
-#   nix develop .#triage -c scripts/merge-gate.sh --no-live     the tree half
-#   nix develop .#triage -c scripts/merge-gate.sh --only-live   the live half
-#   nix develop .#triage -c scripts/merge-gate.sh --full ...    every step and every unit, no pass read
-#   nix develop .#triage -c scripts/merge-gate.sh --nightly ... --full, and the live half's web suite whole
-#   nix develop .#triage -c scripts/merge-gate.sh --no-live --steps fmt,doc   those steps alone
-#   scripts/merge-gate.sh --list                                every step: half, lane, reads
+# In `nix develop .#triage -c`:
+#   scripts/merge-gate.sh               both halves
+#   scripts/merge-gate.sh --no-live     the tree half (--only-live: the live half)
+#   scripts/merge-gate.sh --full ...    every step and every unit, no pass read
+#   scripts/merge-gate.sh --nightly ... --full, every zone and the live half's web suite whole
+#   scripts/merge-gate.sh --no-live --steps fmt,doc   those steps alone
+#   scripts/merge-gate.sh --list        every step: half, lane, reads (needs no shell)
 #
-# --steps runs only the named steps; the caller names a step's writers beside it. An unknown
-# name is refused (64).
+# --steps runs only the named steps (an unknown name is 64); name a step's writers beside it.
 #
 # Units: `crates` (each workspace member, reading its own and its dependencies' directories) and
 # `files:<dir>` (each test file, reading what its imports reach), named in SUZATARY_GATE_UNITS.
@@ -601,7 +600,7 @@ for name in ${only//,/ }; do
 done
 
 # One `<unit>\t<the paths it skips>` line each, or a failure when the graph cannot be read. The
-# esbuild graph needs the generated wire from an earlier gate.
+# esbuild graph needs the generated wire, written below where the store holds this tree's.
 units_for() {
   local i="$1" dir
   case "${s_reads[i]}" in
@@ -638,8 +637,7 @@ units_for() {
   esac
 }
 
-# Sets `kept`/`units` (all) and `todo_kept`/`todo_units` (those with no pass). An empty
-# `todo_units` means the step runs whole.
+# Sets `kept`/`units` and `todo_kept`/`todo_units` (no pass yet; empty: the step runs whole).
 plan_step() {
   local i="$1" lines unit skips path n=0 todo=0 k specs=() at reads narrowed
   if [[ "${s_reads[i]}" == crates || "${s_reads[i]}" == files:* ]]; then
@@ -688,14 +686,18 @@ plan_step() {
   ((todo < n)) || todo_units[i]=""
 }
 
-# Decided once, before any step runs. A `together` partner runs whole when another runs, but a
-# unit step runs only its moved units: a kept unit reads nothing.
+# Decided once: a `together` partner runs whole when another runs; a unit step, its moved units.
 kept=() hit=() units=() todo_kept=() todo_units=()
 eligible() { [[ "${s_reads[$1]}" != unkept ]] && chosen "$1"; }
 if why="$(keeping)"; then
   head="$(git rev-parse HEAD)"
   snapshot || { echo "==> could not read HEAD's tree to name the steps' inputs: not starting" >&2; exit 75; }
   declare -A active=()
+  for i in "${!s_name[@]}"; do
+    if [[ "${s_reads[i]}" == files:* ]] && eligible "$i" && wire="$(nix_held suzatary-web-ts 2>/dev/null)"; then
+      SUZATARY_WIRE_TS="$wire" bash scripts/wire.sh >/dev/null && break
+    fi
+  done
   for i in "${!s_name[@]}"; do
     eligible "$i" || continue
     plan_step "$i" || { echo "==> could not name ${s_name[i]}'s inputs: not starting" >&2; exit 75; }
