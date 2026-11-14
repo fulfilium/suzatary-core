@@ -2633,11 +2633,11 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
         ("HOME", data.join("home").display().to_string()),
         ("XDG_RUNTIME_DIR", data.join("run").display().to_string()),
         (
-            suzatary_core::signatures::BOX_KEY,
+            suzatary_signatures::signatures::BOX_KEY,
             suzatary_core::cast::keys::ROOT.to_owned(),
         ),
         (
-            suzatary_core::signatures::AGENT_KEY,
+            suzatary_signatures::signatures::AGENT_KEY,
             suzatary_core::cast::keys::AGENT.to_owned(),
         ),
         (

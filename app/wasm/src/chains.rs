@@ -1,5 +1,5 @@
 //! The todo chains a tab holds, as the set every row and proposal is priced through
-//! (`suzatary_core::chain_set`): each chain's objects read once, its name and its policy, and the
+//! (`suzatary_signatures::chain_set`): each chain's objects read once, its name and its policy, and the
 //! set read at the instant a reading asks for, each chain's reading there folded once until the
 //! chain is held again. A chain whose objects or policy do not read is held as that failure, so
 //! it moves nothing that does not refer into it and never refuses an act.
@@ -13,8 +13,8 @@ use prodrome_core::term::Term;
 use prodrome_wasm_exports::wire::{parse_instant, parse_specs, parse_term, parse_untrusted};
 use prodrome_wasm_exports::{Replica, json};
 use suzatary_base::chains::ChainName;
-use suzatary_core::chain_set::{self, ChainSet, Remembered};
-use suzatary_core::wire::signatures::FailedChain;
+use suzatary_signatures::chain_set::{self, ChainSet, Remembered};
+use suzatary_signatures::wire::signatures::FailedChain;
 use wasm_bindgen::prelude::*;
 
 use crate::{Event, json, printed, refused};

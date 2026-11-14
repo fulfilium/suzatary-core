@@ -291,6 +291,20 @@ their test support and `husk`; USE 19.8k. The crate depends on base and the Prod
 - **The layer guard** skips a module file that is only `#[cfg(test)] mod tests;`.
   `secretary::live_shape`, test and bench support that holds `InMemory`, takes the api cut.
 
+**PR 15 (signatures).** `believed`, `chain_set`, `devices`, `epoch`, `signatures/*` and
+`wire/signatures` move to `app/signatures`; USE 23.6k.
+- **Two modules stay in core**, as PR 11 kept base's: nothing in the crate names them, and with
+  them its USE was 28.5k. `cast` takes the todo cut, and `sync` takes the api cut, the cut of its
+  one user (`api`'s routes). `receipt`, which #462 added to the cut, stays too, in the api cut
+  beside `asks`, its one user in core.
+- **What holds an `InMemory`** stays beside it, as in PR 14. `scene`, the test support that builds
+  a `Trusted` over an in-memory chain, moves from `signatures` to `stores`. The tests that hold an
+  `InMemory` move to core's integration tests: `signatures/tests.rs`, `chain_set`'s (with
+  `Read::shares` public in the builds that compile the inert stores) and `tap`'s two. The `sooner`
+  law stays with `sooner`.
+- **The inert device log** for base's `Nothing` moves with `Device`: the orphan rule gives its impl
+  to the type's crate.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

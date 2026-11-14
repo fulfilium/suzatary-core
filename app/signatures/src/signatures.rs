@@ -34,9 +34,6 @@ mod provenance;
 mod registry;
 mod request;
 mod requested;
-#[cfg(any(test, feature = "nothing"))]
-#[path = "../tests/support/scene.rs"]
-mod scene;
 mod signers;
 mod tap;
 mod trust;
@@ -63,13 +60,8 @@ pub use registry::{
 };
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};
-#[cfg(any(test, feature = "nothing"))]
-pub use scene::{phone_trusted, scene};
 pub use signers::Signers;
 pub use tap::Tap;
 pub use trust::{KEPT_CHECKS, Trust};
 pub use trusting::Trusting;
 pub use unproven::Unproven;
-
-#[cfg(test)]
-mod tests;

@@ -7,9 +7,9 @@ use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::secretary::acts::Act;
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sending::performs;
-use suzatary_core::signatures::ActHeaders;
-use suzatary_core::signatures::Seat;
-use suzatary_core::signatures::Tap;
+use suzatary_signatures::signatures::ActHeaders;
+use suzatary_signatures::signatures::Seat;
+use suzatary_signatures::signatures::Tap;
 
 const SHA: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
 
@@ -100,7 +100,7 @@ fn sends(proposal: &Proposal) -> bool {
 
 fn tap(seat: Seat) -> Tap {
     Tap::of(
-        &suzatary_core::signatures::scene("ada"),
+        &suzatary_core::stores::scene("ada"),
         &ActHeaders {
             act: Some("1"),
             client: None,

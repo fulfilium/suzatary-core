@@ -2252,9 +2252,9 @@ impl Fakes {
         chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     ) -> Self {
         // Every deployment signs: the chain adopted the cast's root and trusts the owner's phone.
-        suzatary_core::signatures::adopt(&chain, &cast_keys(), &self::chain())
+        suzatary_signatures::signatures::adopt(&chain, &cast_keys(), &self::chain())
             .expect("the scene adopts its root");
-        suzatary_core::signatures::trust(
+        suzatary_signatures::signatures::trust(
             &chain,
             cast_keys().root(),
             &actor(CAST.owner.actor),
@@ -2709,7 +2709,7 @@ pub struct Server {
     publishing: Option<Arc<suzatary_io::repos::Mirrors>>,
     drive: Option<suzatary_io::drive::ProtonDrive>,
     firing: Option<suzatary_cli::commands::coding::Firing>,
-    keys: Option<suzatary_core::signatures::BoxKeys>,
+    keys: Option<suzatary_signatures::signatures::BoxKeys>,
     models: Reaching,
     checks: Option<Arc<CheckRecorder>>,
     watching: Option<PathBuf>,
@@ -2835,7 +2835,7 @@ pub struct Running {
     /// Where the requests devices signed and the server admitted are recorded.
     pub requests: suzatary_io::requests::Requests,
     /// The last pairing code, as `suzatary device pair` would keep it.
-    pub pairings: Arc<suzatary_core::signatures::InMemoryPairings>,
+    pub pairings: Arc<suzatary_signatures::signatures::InMemoryPairings>,
 }
 
 impl Running {
@@ -3044,7 +3044,7 @@ impl Server {
     }
 
     /// Signing with the box's keys, whose root a tapped device card registers keys with.
-    pub fn keys(self, keys: suzatary_core::signatures::BoxKeys) -> Self {
+    pub fn keys(self, keys: suzatary_signatures::signatures::BoxKeys) -> Self {
         Self {
             keys: Some(keys),
             ..self
@@ -3085,7 +3085,7 @@ impl Server {
             let actors: std::collections::BTreeSet<&Actor> =
                 self.deploying.actors.values().collect();
             for actor in actors {
-                suzatary_core::signatures::trust(
+                suzatary_signatures::signatures::trust(
                     &self.caps.chain,
                     keys.root(),
                     actor,
@@ -3152,7 +3152,7 @@ impl Server {
         );
         let vault = Arc::new(FakeVault::default());
         let requests = recorded_requests(address.port());
-        let pairings = Arc::new(suzatary_core::signatures::InMemoryPairings::default());
+        let pairings = Arc::new(suzatary_signatures::signatures::InMemoryPairings::default());
         let grants = self.settings.grants.clone();
         let (chained, deploying, door) = dialled(
             &(self.effects)(held.server()),
@@ -3454,8 +3454,8 @@ pub fn act_unsigned(url: &str, body: &serde_json::Value) -> ureq::http::Response
         .post(url)
         .header("x-suzatary-act", "1")
         .header(
-            suzatary_core::signatures::CLIENT_HEADER,
-            suzatary_core::signatures::CLIENT_MIN.to_string(),
+            suzatary_signatures::signatures::CLIENT_HEADER,
+            suzatary_signatures::signatures::CLIENT_MIN.to_string(),
         )
         .header("sec-fetch-site", "same-origin")
         .send_json(body)
@@ -3464,9 +3464,9 @@ pub fn act_unsigned(url: &str, body: &serde_json::Value) -> ureq::http::Response
 
 /// The cast's deployment keys: its root, and the agent's.
 #[must_use]
-pub fn cast_keys() -> suzatary_core::signatures::BoxKeys {
+pub fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
     use suzatary_core::cast::keys;
-    suzatary_core::signatures::BoxKeys::of(
+    suzatary_signatures::signatures::BoxKeys::of(
         &keys::root(),
         &suzatary_base::capability::Secret::new(keys::ROOT),
         &suzatary_base::capability::Secret::new(keys::AGENT),
@@ -3530,12 +3530,12 @@ fn named_with(
     key: &prodrome_core::sign::PublicKey,
 ) -> prodrome_core::event::Hash {
     let bytes = serde_json::to_vec(body).expect("JSON prints");
-    suzatary_core::signatures::request_name(
+    suzatary_signatures::signatures::request_name(
         "POST",
         &target_of(url),
         at,
         nonce,
-        &suzatary_core::signatures::body_digest(&bytes),
+        &suzatary_signatures::signatures::body_digest(&bytes),
         key.as_str(),
     )
 }
@@ -3594,8 +3594,8 @@ fn sent_bytes_signed(
                 .post(url)
                 .header("x-suzatary-act", "1")
                 .header(
-                    suzatary_core::signatures::CLIENT_HEADER,
-                    suzatary_core::signatures::CLIENT_MIN.to_string(),
+                    suzatary_signatures::signatures::CLIENT_HEADER,
+                    suzatary_signatures::signatures::CLIENT_MIN.to_string(),
                 )
                 .header("sec-fetch-site", "same-origin")
                 .header("content-type", "application/json"),
@@ -4116,7 +4116,7 @@ pub fn listing(base: &str) -> serde_json::Value {
 
 /// The chains the deployment serves (`/api/me`'s list), pulled from `/api/<chain>/objects` as
 /// a tab's replicas pull them: the set a proposal is priced through.
-pub fn chains_read(base: &str) -> suzatary_core::chain_set::Read {
+pub fn chains_read(base: &str) -> suzatary_signatures::chain_set::Read {
     let mut me = get(&format!("{base}/api/me"));
     assert_eq!(status(&me), 200, "the box says what it serves");
     let served: Vec<String> = body_json(&mut me)["chains"]
@@ -4174,7 +4174,7 @@ pub fn chains_read(base: &str) -> suzatary_core::chain_set::Read {
             }
         })
         .collect();
-    suzatary_core::chain_set::Read::of_objects(held)
+    suzatary_signatures::chain_set::Read::of_objects(held)
 }
 
 /// Every proposal the Inbox lists at `at`, as a tab's replica reads them.

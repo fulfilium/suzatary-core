@@ -6,8 +6,8 @@ use std::path::Path;
 
 use prodrome_core::event::Envelope;
 use prodrome_core::sign::{PublicKey, Secret};
-use suzatary_core::signatures::{AGENT_KEY, BOX_KEY};
 use suzatary_record::record::{EventStore, TodoEvent};
+use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY};
 
 use super::todos::{a_chain, a_signing_instance, objects, scratch, signing};
 
@@ -216,10 +216,10 @@ fn device_init_repairs_a_box_adopted_before_custody() {
         ));
         for actor in ["ada", "assistant", "triage"] {
             let actor = prodrome_core::event::Actor::new(actor).expect("an actor");
-            suzatary_core::signatures::trust(&chain, &own, &actor, &own.public())
+            suzatary_signatures::signatures::trust(&chain, &own, &actor, &own.public())
                 .expect("registered");
         }
-        suzatary_core::signatures::epoch(&chain, &own).expect("the epoch");
+        suzatary_signatures::signatures::epoch(&chain, &own).expect("the epoch");
     }
     assert_eq!(listed(instance, "triage", &public(OWN)), "trusted");
     assert_eq!(listed(instance, "triage", &public(AGENT)), "absent");

@@ -5,6 +5,9 @@ mod database;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/in_memory.rs"]
 mod in_memory;
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/scene.rs"]
+mod scene;
 
 use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
@@ -23,6 +26,8 @@ use suzatary_store::store::Hold;
 pub use database::Database;
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory::InMemory;
+#[cfg(any(test, feature = "nothing"))]
+pub use scene::{phone_trusted, scene};
 
 /// Where a store's files go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

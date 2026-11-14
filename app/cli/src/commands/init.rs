@@ -99,7 +99,7 @@ pub fn run_keyed(
     env: &crate::paths::Env,
     keys: impl FnOnce(
         &suzatary_io::secrets::Secretspec,
-    ) -> anyhow::Result<suzatary_core::signatures::BoxKeys>,
+    ) -> anyhow::Result<suzatary_signatures::signatures::BoxKeys>,
 ) -> anyhow::Result<()> {
     if args.options {
         print!("{}", options::markdown());

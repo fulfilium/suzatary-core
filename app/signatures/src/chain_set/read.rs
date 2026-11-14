@@ -139,8 +139,9 @@ impl Read {
     }
 
     /// Whether `other` holds this read's chain `name`, the same reading, not a copy of it.
-    #[cfg(test)]
-    pub(super) fn shares(&self, other: &Read, name: &ChainName) -> bool {
+    #[cfg(any(test, feature = "nothing"))]
+    #[must_use]
+    pub fn shares(&self, other: &Read, name: &ChainName) -> bool {
         let of = |read: &Read| read.0.iter().find(|chain| chain.name == *name).cloned();
         matches!((of(self), of(other)), (Some(a), Some(b)) if Arc::ptr_eq(&a, &b))
     }

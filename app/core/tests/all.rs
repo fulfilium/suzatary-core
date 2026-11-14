@@ -12,6 +12,8 @@ mod calls;
 mod card_stages;
 #[path = "card_words.rs"]
 mod card_words;
+#[path = "chain_set.rs"]
+mod chain_set;
 #[path = "connect.rs"]
 mod connect;
 #[path = "context_cost.rs"]
@@ -54,6 +56,8 @@ mod operator_tap;
 mod puller_port;
 #[path = "release.rs"]
 mod release;
+#[path = "signatures.rs"]
+mod signatures;
 #[path = "snapshot.rs"]
 mod snapshot;
 #[path = "store_learnt.rs"]
@@ -64,6 +68,8 @@ mod store_memoised;
 mod store_signing;
 #[path = "surface.rs"]
 mod surface;
+#[path = "tap.rs"]
+mod tap;
 #[path = "topics.rs"]
 mod topics;
 #[path = "transport_port.rs"]

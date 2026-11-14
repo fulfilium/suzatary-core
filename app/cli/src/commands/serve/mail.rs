@@ -6,7 +6,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 
 use suzatary_core::mail::watch::{self, WatchId};
-use suzatary_core::signatures::Tap;
+use suzatary_signatures::signatures::Tap;
 
 use super::Chained;
 use super::call::Call;

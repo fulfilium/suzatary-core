@@ -5,7 +5,6 @@
 //! keep in sync. `untrusted` is required so a provisional triage event cannot close or reprice a
 //! todo; content is folded from every actor, and `authored_by` says whose text it is.
 
-use crate::believed::{Believed, one_outcome, records};
 use prodrome_core::event::TodoId;
 use prodrome_core::fpl::Outcome;
 use prodrome_core::fpl::{self};
@@ -14,6 +13,7 @@ use prodrome_core::payload::Payload as _;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use suzatary_record::record::{Authored, Node};
+use suzatary_signatures::believed::{Believed, one_outcome, records};
 
 use suzatary_base::escape::markup_text;
 use suzatary_base::refusal::Refusal;
@@ -229,7 +229,7 @@ mod tests {
             prodrome_core::event::mk_completed("filething", at(8), "triage", "").expect("an event"),
         ];
         let open = open_todos(
-            crate::believed::Preview::chain(&events).nodes(),
+            suzatary_signatures::believed::Preview::chain(&events).nodes(),
             at(9),
             &untrusted(),
         )

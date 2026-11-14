@@ -101,7 +101,7 @@ fn the_template_begins_a_deployment_whose_every_file_is_shipped_staged_or_ignore
     .args;
     init::run_keyed(&path, args, &env_beside(&path), |_| {
         use suzatary_core::cast::keys;
-        Ok(suzatary_core::signatures::BoxKeys::of(
+        Ok(suzatary_signatures::signatures::BoxKeys::of(
             &keys::root(),
             &suzatary_base::capability::Secret::new(keys::ROOT),
             &suzatary_base::capability::Secret::new(keys::AGENT),

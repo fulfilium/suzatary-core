@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::authoring::{self, NewTodo};
-use crate::believed::{Believed, Preview};
 use crate::priced::{PRICE_SPELLINGS, Priced};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::capability::{Datetime, Typeset};
@@ -19,6 +18,7 @@ use suzatary_base::writer::Writer;
 use suzatary_base::zone::Moment;
 use suzatary_record::record::{Node, Source, TodoEvent};
 use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
+use suzatary_signatures::believed::{Believed, Preview};
 
 /// One chain act, each arm backed by an existing builder.
 ///

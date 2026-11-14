@@ -548,10 +548,12 @@ pub struct Bound<'a> {
     pub policy: &'a ChainPolicy,
 }
 
-/// The chains a call may read, each read once ([`crate::chain_set::Read`]).
+/// The chains a call may read, each read once ([`suzatary_signatures::chain_set::Read`]).
 #[must_use]
-pub(crate) fn chains_read(chains: &[Bound<'_>]) -> crate::chain_set::Read {
-    crate::chain_set::Read::of_stores(chains.iter().map(|bound| (bound.policy, bound.caps.chain)))
+pub(crate) fn chains_read(chains: &[Bound<'_>]) -> suzatary_signatures::chain_set::Read {
+    suzatary_signatures::chain_set::Read::of_stores(
+        chains.iter().map(|bound| (bound.policy, bound.caps.chain)),
+    )
 }
 
 /// Call the verb `verb` names with `args`, read whole first.

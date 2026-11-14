@@ -9,7 +9,7 @@ use prodrome_core::event::Actor;
 use suzatary_base::capability::{Peer, Whois, WhoisError};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::signatures::Admitted;
+use suzatary_signatures::signatures::Admitted;
 
 /// The headers a proxy writes. A request carrying one came through something that is not its
 /// peer, so the socket's address names the proxy and whois would answer for the wrong party.

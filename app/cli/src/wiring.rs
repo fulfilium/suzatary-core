@@ -24,12 +24,12 @@ use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::model::Model;
 use suzatary_core::secretary::recollection::Recollection;
-use suzatary_core::signatures::Signers;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
 use suzatary_io::unrendered::Unrendered;
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::signatures::Signers;
 use suzatary_store::store::{Only, Reads, Signing};
 
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};

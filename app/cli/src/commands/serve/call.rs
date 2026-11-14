@@ -1,6 +1,6 @@
 //! What a route's work is handed.
 
-use suzatary_core::signatures::Admitted;
+use suzatary_signatures::signatures::Admitted;
 
 use super::{Chained, State};
 

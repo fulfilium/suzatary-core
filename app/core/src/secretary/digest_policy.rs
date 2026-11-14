@@ -1,6 +1,6 @@
 //! Whose word the digest believes about standing: a retraction binds only from one of the
 //! deployment's owners, the actors the gate maps a login to (every one who can mint a
-//! [`crate::signatures::Tap`]). Anyone else's, the secretary's, the triage agent's, a
+//! [`suzatary_signatures::signatures::Tap`]). Anyone else's, the secretary's, the triage agent's, a
 //! plugin's or a compactor's, is stored and claims, and moves nothing. A summary binds whoever
 //! wrote it, since writing summaries is what a compactor is for.
 //!

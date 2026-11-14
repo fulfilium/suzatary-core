@@ -12,8 +12,8 @@ use crate::secretary::inbox::{self, Object, ProposalId, Response};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
 use crate::secretary::responded::{Performed, Responded};
-use crate::signatures::Tap;
 use suzatary_base::refusal::Refusal;
+use suzatary_signatures::signatures::Tap;
 use suzatary_store::store::Prodrome;
 
 /// The tap's rule at the instant of the tap.
@@ -88,20 +88,20 @@ impl Tapped {
 mod tests {
     use super::*;
     use crate::secretary::proposal::{Draft, Proposal, Reasons};
-    use crate::signatures::ActHeaders;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_base::reference::ProposalRef;
+    use suzatary_signatures::signatures::ActHeaders;
 
     fn tap() -> Tap {
         Tap::of(
-            &crate::signatures::scene("ada"),
+            &crate::stores::scene("ada"),
             &ActHeaders {
                 act: Some("1"),
-                client: Some(crate::signatures::CLIENT),
+                client: Some(suzatary_signatures::signatures::CLIENT),
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
-            crate::signatures::Seat::Device,
+            suzatary_signatures::signatures::Seat::Device,
         )
         .expect("a tap")
     }

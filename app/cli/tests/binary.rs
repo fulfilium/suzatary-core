@@ -45,11 +45,11 @@ pub(crate) fn keyed() -> Command {
     let mut command = suzatary();
     command
         .env(
-            suzatary_core::signatures::BOX_KEY,
+            suzatary_signatures::signatures::BOX_KEY,
             suzatary_core::cast::keys::ROOT,
         )
         .env(
-            suzatary_core::signatures::AGENT_KEY,
+            suzatary_signatures::signatures::AGENT_KEY,
             suzatary_core::cast::keys::AGENT,
         )
         .env(

@@ -529,7 +529,7 @@ fn devices(root: &Path) {
     }
     let store = suzatary_io::devices::Devices::open(root.join("devices"));
     let register = |actor: &str, platform: &str, token: &str, minute: u32| {
-        suzatary_core::devices::register_device(
+        suzatary_signatures::devices::register_device(
             &store,
             &At(at(14, minute)),
             &serde_json::from_value(serde_json::json!({"platform": platform, "token": token}))
@@ -542,7 +542,7 @@ fn devices(root: &Path) {
     register(CAST.owner.actor, "ios", "tok-2", 1);
     register(CAST.owner.actor, "android", "tok-1", 2);
     register("assistant", "android", "tok-3", 3);
-    suzatary_core::devices::forget(&store, CAST.owner.actor, "tok-2").expect("forgets");
+    suzatary_signatures::devices::forget(&store, CAST.owner.actor, "tok-2").expect("forgets");
 }
 
 /// The triage's bookkeeping, saved twice.
@@ -840,7 +840,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
         (2, 1, 2)
     );
     decisions_and_topics_read(&database);
-    let phones = suzatary_core::devices::everyone(database.devices).expect("reads");
+    let phones = suzatary_signatures::devices::everyone(database.devices).expect("reads");
     assert_eq!(phones.values().map(|them| them.0.len()).sum::<usize>(), 2);
     triage_reads(&database);
     for id in [PNG, SCAN].map(AttachmentId::of) {

@@ -229,7 +229,7 @@ fn deployment(path: &Path) {
 /// The deployment's root (SPEC law 42), and whether its two keys resolve: names, never a
 /// value.
 fn signs(read: &instance::Instance) -> String {
-    use suzatary_core::signatures::Signers;
+    use suzatary_signatures::signatures::Signers;
     let root = read.root().as_str();
     match read.signers() {
         Signers::Held(_) => format!("root {root}; the box's and the agent's keys resolve"),

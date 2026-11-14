@@ -121,11 +121,13 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     standing_cards(root, *connected)?;
     // The fixture adopts signatures as a box's first writer does: every chain registers the
     // box's key and the agent's, and its epoch makes what was built above history.
-    let signers = suzatary_core::signatures::Signers::Held(suzatary_core::signatures::BoxKeys::of(
-        &fixture_root(),
-        &suzatary_base::capability::Secret::new(BOX_SEED),
-        &suzatary_base::capability::Secret::new(AGENT_SEED),
-    )?);
+    let signers = suzatary_signatures::signatures::Signers::Held(
+        suzatary_signatures::signatures::BoxKeys::of(
+            &fixture_root(),
+            &suzatary_base::capability::Secret::new(BOX_SEED),
+            &suzatary_base::capability::Secret::new(AGENT_SEED),
+        )?,
+    );
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     answers(&read, no_model)?;
     if settings {

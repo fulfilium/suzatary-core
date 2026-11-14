@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::signatures::RefusalKind;
+use suzatary_signatures::wire::signatures::RefusalKind;
 use suzatary_store::wire::store::SinceRead;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -31,7 +31,7 @@ pub struct ObjectsPayload {
     pub root: Option<String>,
     /// Sorted: a replica drops any other store it holds.
     pub geneses: Vec<String>,
-    /// Bumped whenever `geneses` changes and by nothing else (`suzatary_core::epoch`).
+    /// Bumped whenever `geneses` changes and by nothing else (`suzatary_signatures::epoch`).
     #[ts(type = "number")]
     pub epoch: u64,
     /// Parents first.

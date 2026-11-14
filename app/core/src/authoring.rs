@@ -1815,8 +1815,8 @@ mod tests {
 
     fn reading_of(events: &[TodoEvent], t: Datetime, policy: &Untrusted, id: &str) -> Reading {
         let todo = prodrome_core::event::TodoId::new(id).expect("valid");
-        let believed = crate::believed::Believed::of(
-            crate::believed::Preview::chain(events).nodes(),
+        let believed = suzatary_signatures::believed::Believed::of(
+            suzatary_signatures::believed::Preview::chain(events).nodes(),
             t,
             policy,
         )
@@ -1825,7 +1825,7 @@ mod tests {
             .env
             .outcomes
             .get(todo.as_str())
-            .and_then(crate::believed::one_outcome)
+            .and_then(suzatary_signatures::believed::one_outcome)
             .map_or("open", |binding| binding.kind());
         let spec = believed
             .specs

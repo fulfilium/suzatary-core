@@ -11,13 +11,13 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 use suzatary_base::wire::base::ErrorPayload;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Overview};
 use suzatary_core::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
-use suzatary_core::wire::signatures::{DevicePayload, FailedChain, Registering};
 use suzatary_core::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use suzatary_core::wire::topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
     MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
 };
 use suzatary_core::wire::triage::WatchesPayload;
+use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
 
 /// `GET /api/chain`: every object in the linearisation's order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -829,9 +829,9 @@ pub enum Proof {
     Unproven,
 }
 
-impl From<&suzatary_core::signatures::Provenance> for Proof {
-    fn from(provenance: &suzatary_core::signatures::Provenance) -> Self {
-        use suzatary_core::signatures::Provenance;
+impl From<&suzatary_signatures::signatures::Provenance> for Proof {
+    fn from(provenance: &suzatary_signatures::signatures::Provenance) -> Self {
+        use suzatary_signatures::signatures::Provenance;
         match provenance {
             Provenance::Proven { key } => Self::Proven {
                 key: key.as_str().to_owned(),
@@ -1024,8 +1024,8 @@ impl TypeVisitor for Declarations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::wire::signatures::Registering;
     use suzatary_core::wire::todo::{Block, Fulfillment};
+    use suzatary_signatures::wire::signatures::Registering;
 
     /// `decision` alone is a decision; every other name a todo that keeps its name for the chip.
     #[test]

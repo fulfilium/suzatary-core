@@ -3,8 +3,8 @@
 
 use prodrome_core::event::Actor;
 
-use super::{Asking, Request, Trusted, body_digest, request_name, trust};
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::signatures::{Asking, Request, Trusted, body_digest, request_name, trust};
 use suzatary_store::store::Prodrome as _;
 
 /// A real [`Trusted`] for a scene: the cast's root adopting a chain in memory, the owner's phone
@@ -16,7 +16,7 @@ use suzatary_store::store::Prodrome as _;
 pub fn scene(actor: &str) -> Trusted {
     use crate::cast::keys;
     let actor = Actor::new(actor).expect("a roster name");
-    let chain: crate::stores::InMemory<TodoEvent> = crate::stores::InMemory::default();
+    let chain: super::InMemory<TodoEvent> = super::InMemory::default();
     let begun = prodrome_core::event::mk_completed(
         "scene",
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),

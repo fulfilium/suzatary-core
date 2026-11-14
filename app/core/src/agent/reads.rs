@@ -1,10 +1,10 @@
 //! The verbs that only look; the ones that append are [`super::writes`].
 
-use crate::believed::Believed;
 use prodrome_core::fpl;
 use prodrome_core::payload::Payload as _;
 use serde_json::{Value, json};
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::believed::Believed;
 
 use super::events_of;
 use crate::agent::Agent;

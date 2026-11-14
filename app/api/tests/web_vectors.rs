@@ -28,7 +28,6 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::Escaped;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_core::cast::{self, CAST};
-use suzatary_core::chain_set::Read;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::render::{Html, Render};
 use suzatary_core::secretary::Secretary;
@@ -50,6 +49,7 @@ use suzatary_core::stores::InMemory;
 use suzatary_core::wire::topics as wire;
 use suzatary_record::record::TodoEvent;
 use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
@@ -803,7 +803,7 @@ fn conversation_answer(stored: &Stored) -> ConversationAnswer {
 #[test]
 fn the_client_vector_holds_the_box_s_minimum() {
     write_or_check(
-        &serde_json::json!({ "min": suzatary_core::signatures::CLIENT_MIN }),
+        &serde_json::json!({ "min": suzatary_signatures::signatures::CLIENT_MIN }),
         "client.json",
     );
 }
@@ -1374,7 +1374,11 @@ fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable
         payload.proposals[0].outcome
     );
     let fold = inbox::fold(&bundle.inbox).expect("the inbox reads");
-    let listed = readings::inbox(&fold, &suzatary_core::chain_set::ChainSet::new(now()), None);
+    let listed = readings::inbox(
+        &fold,
+        &suzatary_signatures::chain_set::ChainSet::new(now()),
+        None,
+    );
     let row = listed
         .proposals
         .iter()
@@ -1385,7 +1389,7 @@ fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable
         "it is listed as unreadable, saying why: {:?}",
         row.state
     );
-    let set = suzatary_core::chain_set::ChainSet::new(now());
+    let set = suzatary_signatures::chain_set::ChainSet::new(now());
     assert!(
         readings::waiting(&fold, &set)
             .iter()
@@ -1878,7 +1882,7 @@ fn skeleton_of(bundle: &Bundle) -> suzatary_core::wire::lines::SkeletonPayload {
         bundle.conversations.conversations(),
         &prodrome_core::store::frontier::Since::Nothing,
         suzatary_api::routes::Books {
-            epochs: &suzatary_core::epoch::Epochs::remembered(),
+            epochs: &suzatary_signatures::epoch::Epochs::remembered(),
             frontiers: &prodrome_core::store::frontier::Frontiers::remembered(
                 prodrome_core::store::frontier::KEPT,
             ),
@@ -2088,7 +2092,7 @@ fn the_answers_vector_holds_every_answer() {
         heads: heads.clone(),
     }]);
     let (epochs, frontiers) = (
-        suzatary_core::epoch::Epochs::remembered(),
+        suzatary_signatures::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let books = routes::Books {
@@ -2161,12 +2165,12 @@ fn the_answers_vector_holds_every_answer() {
             suzatary_core::wire::lines::RefusedObject {
                 hash: String::new(),
                 reason: "not an object".to_owned(),
-                kind: suzatary_core::wire::signatures::RefusalKind::Final,
+                kind: suzatary_signatures::wire::signatures::RefusalKind::Final,
             },
             suzatary_core::wire::lines::RefusedObject {
                 hash: heads.first().cloned().unwrap_or_default(),
                 reason: "its signatures do not prove it: unsigned".to_owned(),
-                kind: suzatary_core::wire::signatures::RefusalKind::Trust,
+                kind: suzatary_signatures::wire::signatures::RefusalKind::Trust,
             },
         ],
     }]);
@@ -2289,7 +2293,7 @@ fn the_answers_vector_holds_every_answer() {
         event: "Created(...)".to_owned(),
         revision: None,
     }]);
-    samples.add([suzatary_core::wire::signatures::DevicePayload {
+    samples.add([suzatary_signatures::wire::signatures::DevicePayload {
         ok: true,
         devices: 1,
     }]);
@@ -2965,8 +2969,8 @@ mod erased {
 }
 
 /// A member the set holds as a failure, as the fold and the Inbox name it.
-fn failed_chain() -> suzatary_core::wire::signatures::FailedChain {
-    suzatary_core::wire::signatures::FailedChain {
+fn failed_chain() -> suzatary_signatures::wire::signatures::FailedChain {
+    suzatary_signatures::wire::signatures::FailedChain {
         chain: "suzatary".to_owned(),
         why: "two geneses: the chain is two prodromes".to_owned(),
     }
@@ -3255,7 +3259,7 @@ fn converged(name: &str, lines: &conversations::InMemory, steps: &[Step<'_>]) {
     use suzatary_core::secretary::locked_text::KeyName;
     use suzatary_core::secretary::outlines::{self, Parsed};
     let (epochs, frontiers) = (
-        suzatary_core::epoch::Epochs::remembered(),
+        suzatary_signatures::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let books = routes::Books {

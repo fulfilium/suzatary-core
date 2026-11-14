@@ -10,7 +10,7 @@ use common::{FakeModel, Fakes};
 use suzatary_cli::commands::{ask, tap};
 use suzatary_core::cast::CAST;
 use suzatary_core::secretary::stamp::{Speaker, Stamp};
-use suzatary_core::signatures::Seat;
+use suzatary_signatures::signatures::Seat;
 
 fn owner() -> suzatary_base::capability::Login {
     common::login("ada@example.com")

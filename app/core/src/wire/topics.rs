@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::inbox::{Asker, Card, CodingSession, ProposedAct};
-use super::signatures::FailedChain;
 use super::todo::Fulfillment;
 use suzatary_base::reference::Reference;
+use suzatary_signatures::wire::signatures::FailedChain;
 
 /// The route's match over `Turn` has no wildcard.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

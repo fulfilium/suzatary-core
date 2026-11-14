@@ -8,8 +8,8 @@ use prodrome_core::event::Actor;
 use suzatary_api::clienterror::{MAX_BODY_BYTES, Report, Sent};
 use suzatary_api::{routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::devices;
 use suzatary_core::release::Plan;
+use suzatary_signatures::devices;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -35,7 +35,7 @@ impl Params for Day {
     }
 }
 
-impl Body for suzatary_core::wire::signatures::Registering {
+impl Body for suzatary_signatures::wire::signatures::Registering {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -122,8 +122,8 @@ pub fn client_errors(call: &Call<Reporter, (), Report>) -> StatusCode {
 
 /// `POST /api/act/device`: the phone saying "wake me here"; nothing on the chain.
 pub fn device(
-    call: &Call<Actor, (), suzatary_core::wire::signatures::Registering>,
-) -> Result<Json<suzatary_core::wire::signatures::DevicePayload>, Refusal> {
+    call: &Call<Actor, (), suzatary_signatures::wire::signatures::Registering>,
+) -> Result<Json<suzatary_signatures::wire::signatures::DevicePayload>, Refusal> {
     let caps = call.chain.caps;
     devices::register_device(caps.devices, caps.secretary.clock, &call.body, &call.guard).map(Json)
 }
@@ -160,7 +160,7 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
 }
 
 /// A pairing code, as `POST /api/act/pair` carries it.
-pub struct PairingCode(suzatary_core::signatures::Code);
+pub struct PairingCode(suzatary_signatures::signatures::Code);
 
 impl Body for PairingCode {
     const CAP: usize = MAX_ACT_BYTES;
@@ -168,7 +168,7 @@ impl Body for PairingCode {
     type Wire = wire::Pairing;
 
     fn parse(pairing: wire::Pairing, _: &State) -> Result<Self, Refusal> {
-        suzatary_core::signatures::Code::typed(&pairing.code)
+        suzatary_signatures::signatures::Code::typed(&pairing.code)
             .map_err(|refused| Refusal::bad_request(refused.to_string()))
             .map(Self)
     }
@@ -178,7 +178,7 @@ impl Body for PairingCode {
 /// The key it trusts is the one that signed this request, never a field of it, so a code
 /// trusts only the device that typed it; neither the code nor its hash is logged.
 pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Value>, Refusal> {
-    use suzatary_core::signatures::Presented;
+    use suzatary_signatures::signatures::Presented;
     let state = &call.state;
     let Asker(actor, device) = &call.guard;
     let pairings = &*state.pairings;
@@ -189,7 +189,12 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
     };
     // Asked before the code is read, so a revoked key spends no try and no code.
     for chain in state.chain_stores() {
-        if suzatary_core::signatures::revoked_for(chain, &keys.root().public(), actor, device)? {
+        if suzatary_signatures::signatures::revoked_for(
+            chain,
+            &keys.root().public(),
+            actor,
+            device,
+        )? {
             return Err(Refusal::forbidden(
                 "This device's key was revoked, so no code can trust it again. Use a new key on \
                  this device (Settings, This device), then type the code.",
@@ -197,12 +202,12 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
         }
     }
     let presented =
-        suzatary_core::signatures::present(pairings, &call.body.0, actor, (state.wall)())?;
+        suzatary_signatures::signatures::present(pairings, &call.body.0, actor, (state.wall)())?;
     match presented {
         Presented::Refused(refused) => Err(Refusal::forbidden(refused.said())),
         Presented::Matched => {
             for chain in state.chain_stores() {
-                suzatary_core::signatures::trust(chain, keys.root(), actor, device)?;
+                suzatary_signatures::signatures::trust(chain, keys.root(), actor, device)?;
             }
             tracing::info!(
                 "paired: trusted the device key {} for {actor}",

@@ -8,8 +8,8 @@ mod ntfy;
 
 use std::sync::OnceLock;
 
-use suzatary_core::devices::Device;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Printed, Push};
+use suzatary_signatures::devices::Device;
 use suzatary_store::store::Log;
 
 pub use fcm::{API as FCM, ServiceAccount, credentials};
@@ -147,7 +147,7 @@ impl<D: Log<String, Device>> Notify for Channels<D> {
         let mut failed = std::collections::BTreeSet::new();
 
         if let Some(sender) = &self.fcm {
-            let everyone = suzatary_core::devices::everyone(&self.devices)
+            let everyone = suzatary_signatures::devices::everyone(&self.devices)
                 .map_err(|error| NotifyError::Unreachable(error.to_string()))?;
             for (actor, phones) in &everyone {
                 for device in &phones.0 {
@@ -156,10 +156,12 @@ impl<D: Log<String, Device>> Notify for Channels<D> {
                             accepted += 1;
                             Ok(())
                         }
-                        fcm::Sent::Gone => {
-                            suzatary_core::devices::forget(&self.devices, actor, &device.token)
-                                .map_err(|error| format!("forgetting a gone device: {error}"))
-                        }
+                        fcm::Sent::Gone => suzatary_signatures::devices::forget(
+                            &self.devices,
+                            actor,
+                            &device.token,
+                        )
+                        .map_err(|error| format!("forgetting a gone device: {error}")),
                         fcm::Sent::Failed(why) => Err(why),
                     };
                     failed.extend(sent.err());
@@ -261,7 +263,7 @@ mod tests {
             .expect("the fan-out never errors on a per-device failure");
 
         assert_eq!(delivered.devices(), 1);
-        let left = suzatary_core::devices::everyone(&channels.devices).expect("reads");
+        let left = suzatary_signatures::devices::everyone(&channels.devices).expect("reads");
         assert_eq!(left["ada"].0, vec![phone("live-token")]);
     }
 

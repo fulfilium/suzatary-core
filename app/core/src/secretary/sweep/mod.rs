@@ -14,7 +14,6 @@ use super::surface::{SecretaryCall, SecretaryVerb, Subset};
 use super::verb_name::Effect;
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
-use crate::believed::one_outcome;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
 use crate::deployment::Deployment;
@@ -24,6 +23,7 @@ use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown as quoted};
+use suzatary_signatures::believed::one_outcome;
 
 /// At most this many candidates per todo, in [`Match`] rank order then newest first.
 pub(crate) const PER_TODO: usize = 6;

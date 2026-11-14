@@ -173,6 +173,7 @@
             ./app/base
             ./app/record
             ./app/store
+            ./app/signatures
             ./app/api
             ./app/io
             ./app/plugin
@@ -264,17 +265,20 @@
           ./app/base/Cargo.toml
           ./app/record/Cargo.toml
           ./app/store/Cargo.toml
+          ./app/signatures/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
           ./app/record/src
           ./app/store/src
+          ./app/signatures/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
           ./app/core/tests/support
           ./app/base/tests/support
           ./app/store/tests/support
+          ./app/signatures/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -401,11 +405,13 @@
                 ./app/base/Cargo.toml
                 ./app/record/Cargo.toml
                 ./app/store/Cargo.toml
+                ./app/signatures/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
                 ./app/record/src
                 ./app/store/src
+                ./app/signatures/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -500,6 +506,7 @@
               ./app/base/Cargo.toml
               ./app/record/Cargo.toml
               ./app/store/Cargo.toml
+              ./app/signatures/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -551,6 +558,7 @@
               ./app/base/Cargo.toml
               ./app/record/Cargo.toml
               ./app/store/Cargo.toml
+              ./app/signatures/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml

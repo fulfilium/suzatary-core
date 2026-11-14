@@ -14,12 +14,12 @@ use prodrome_core::term::{Term, TermF};
 use regex::Regex;
 use suzatary_record::record::{Authored, Entry, Envelope, Node, TodoEvent};
 
-use crate::believed::one_outcome;
 use crate::render::Render;
 use crate::wire::todo as wire;
 use suzatary_base::capability::Datetime;
 use suzatary_base::escape::{Escaped, Quoted, escape_markup};
 use suzatary_base::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie};
+use suzatary_signatures::believed::one_outcome;
 
 /// Whether a row's content is still its untrusted writer's: authored by an actor the policy does
 /// not confirm and never re-authored by one it does.
@@ -378,7 +378,7 @@ pub fn entry<R: Render + ?Sized>(
 }
 
 /// The content record a single-record reading shows: the entry's first candidate (see
-/// [`crate::believed::Believed`]), out of the objects the caller holds.
+/// [`suzatary_signatures::believed::Believed`]), out of the objects the caller holds.
 #[must_use]
 pub fn content_of<'a>(
     entry: &Entry,

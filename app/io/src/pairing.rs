@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::signatures::{Code, Pairing, Pairings as Kept, Salt};
+use suzatary_signatures::signatures::{Code, Pairing, Pairings as Kept, Salt};
 use suzatary_store::store::StoreError;
 
 use crate::docs::{DocCodec, Docs, Locked};
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn a_new_code_replaces_the_last() {
-        use suzatary_core::signatures::{Presented, Refused, TRIES, present};
+        use suzatary_signatures::signatures::{Presented, Refused, TRIES, present};
         let dir = tempfile::tempdir().expect("a temp dir");
         let store = Pairings::at(dir.path().join("one.json"));
         let now = chrono::Utc::now();
@@ -111,7 +111,7 @@ mod tests {
     /// Two writers on one file, as the terminal and the server are.
     #[test]
     fn of_tries_at_once_through_two_handles_one_matches() {
-        use suzatary_core::signatures::{Presented, Refused, present};
+        use suzatary_signatures::signatures::{Presented, Refused, present};
         let dir = tempfile::tempdir().expect("a temp dir");
         let path = dir.path().join("one.json");
         let (code, salt) = fresh().expect("random bytes");

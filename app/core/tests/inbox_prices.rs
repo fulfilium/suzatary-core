@@ -19,13 +19,13 @@ use prodrome_core::term::Term;
 use proptest::prelude::*;
 
 use suzatary_base::chains::ChainName;
-use suzatary_core::chain_set::{ChainSet, Read};
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::stores::InMemory;
 use suzatary_core::wire::todo::Fulfillment;
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::chain_set::{ChainSet, Read};
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
 

@@ -11,8 +11,8 @@ use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, seal_hash};
 use prodrome_core::sign::Checks;
 use prodrome_core::sign::{Registrar, Secret};
-use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
 
@@ -60,8 +60,13 @@ fn signing_over(
     let fakes = Arc::new(fakes.whois(whois));
     let keys = keys();
     for (actor, key) in [("ada", phone.public()), ("triage", seed('8').public())] {
-        suzatary_core::signatures::trust(&fakes.chain, keys.root(), &common::actor(actor), &key)
-            .expect("trusted at the terminal");
+        suzatary_signatures::signatures::trust(
+            &fakes.chain,
+            keys.root(),
+            &common::actor(actor),
+            &key,
+        )
+        .expect("trusted at the terminal");
     }
     deployment.chains =
         suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
@@ -213,7 +218,7 @@ fn a_revoked_key_is_refused_and_its_earlier_objects_still_read() {
     let (before, mine) = act(&fakes, &phone, "alpha");
     assert_eq!(adopted(&post(&base, &mine)), 2);
 
-    suzatary_core::signatures::revoke(
+    suzatary_signatures::signatures::revoke(
         &fakes.chain,
         keys().root(),
         &common::actor("ada"),
@@ -282,7 +287,7 @@ fn a_box_route_is_held_to_the_key_that_asked() {
     let (status, why) = said(common::act_signed(&accept, &body, &seed('3')));
     assert_eq!((status, why.contains("not trusted")), (403, true), "{why}");
 
-    suzatary_core::signatures::revoke(
+    suzatary_signatures::signatures::revoke(
         &fakes.chain,
         keys().root(),
         &common::actor("ada"),
@@ -300,7 +305,7 @@ fn a_read_signed_by_a_revoked_key_is_answered_with_the_wipe() {
     let (base, fakes) = signing_box("signatures-revoked-read", &phone);
     let fold = format!("{base}/api/fold");
     assert_eq!(common::status(&common::get_signed(&fold, &phone)), 200);
-    suzatary_core::signatures::revoke(
+    suzatary_signatures::signatures::revoke(
         &fakes.chain,
         keys().root(),
         &common::actor("ada"),
@@ -349,8 +354,8 @@ fn the_e2e_script_exports_the_fixtures_own_seeds() {
     )
     .expect("the e2e script reads");
     for (name, seed) in [
-        (suzatary_core::signatures::BOX_KEY, BOX_SEED),
-        (suzatary_core::signatures::AGENT_KEY, AGENT_SEED),
+        (suzatary_signatures::signatures::BOX_KEY, BOX_SEED),
+        (suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED),
     ] {
         assert!(
             script.contains(&format!("export {name}=\"{seed}\"")),
@@ -361,7 +366,7 @@ fn the_e2e_script_exports_the_fixtures_own_seeds() {
 
 /// What `suzatary device pair` keeps for `code`, minted at the server's clock for ada.
 fn paired(running: &common::Running, code: &str) {
-    use suzatary_core::signatures::{Code, Pairing, Pairings as _, Salt};
+    use suzatary_signatures::signatures::{Code, Pairing, Pairings as _, Salt};
     let at = chrono::DateTime::parse_from_rfc3339(common::STAMPED)
         .expect("an instant")
         .with_timezone(&chrono::Utc);
@@ -479,7 +484,7 @@ fn a_revoked_key_is_refused_a_code_and_spends_no_try() {
     let phone = seed('1');
     let (running, fakes) = signing_server("signatures-pair-revoked", &phone);
     let base = running.base.clone();
-    suzatary_core::signatures::revoke(
+    suzatary_signatures::signatures::revoke(
         &fakes.chain,
         keys().root(),
         &common::actor("ada"),
@@ -539,7 +544,7 @@ fn a_key_trusted_at_the_terminal_withdraws_its_card() {
         .len()
     };
     assert_eq!(withdraw(), 0, "an untrusted key's card stays");
-    suzatary_core::signatures::trust(
+    suzatary_signatures::signatures::trust(
         &fakes.chain,
         keys().root(),
         &common::actor("ada"),
@@ -886,9 +891,10 @@ impl Sent {
         key: &Secret,
     ) -> (u16, String) {
         let url = r.url(path);
-        self.digests.push(suzatary_core::signatures::body_digest(
-            &serde_json::to_vec(body).expect("JSON prints"),
-        ));
+        self.digests
+            .push(suzatary_signatures::signatures::body_digest(
+                &serde_json::to_vec(body).expect("JSON prints"),
+            ));
         let mut answer = common::act_signed(&url, body, key);
         let status = common::status(&answer);
         self.requests.push((
@@ -1110,7 +1116,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
         // The record and the body sent do not name the request: only the nonce, which no record
         // holds, does.
         let named = |nonce: &str| {
-            suzatary_core::signatures::request_name(
+            suzatary_signatures::signatures::request_name(
                 &record.method,
                 &record.target,
                 &record.at,
@@ -1193,8 +1199,8 @@ fn a_request_outside_the_window_or_unstamped_is_refused() {
             .post(&url)
             .header("x-suzatary-act", "1")
             .header(
-                suzatary_core::signatures::CLIENT_HEADER,
-                suzatary_core::signatures::CLIENT_MIN.to_string(),
+                suzatary_signatures::signatures::CLIENT_HEADER,
+                suzatary_signatures::signatures::CLIENT_MIN.to_string(),
             )
             .header("sec-fetch-site", "same-origin")
             .header("content-type", "application/json")

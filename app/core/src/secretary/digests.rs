@@ -266,7 +266,7 @@ impl Held<'_> {
         &self,
         node: &Hash,
         at: Datetime,
-        tap: &crate::signatures::Tap,
+        tap: &suzatary_signatures::signatures::Tap,
     ) -> Result<Hash, Refusal> {
         let digests = self.digests();
         let reads = digests.reads();

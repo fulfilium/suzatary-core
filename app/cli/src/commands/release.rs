@@ -200,11 +200,13 @@ impl Chain<'_> {
 
     /// Each todo's spec in force.
     fn current(&self) -> anyhow::Result<BTreeMap<TodoId, Vec<Term>>> {
-        Ok(
-            suzatary_core::believed::Believed::of(self.nodes, self.now, &self.dir.policy.untrusted)
-                .context("folding the project chain")?
-                .specs,
+        Ok(suzatary_signatures::believed::Believed::of(
+            self.nodes,
+            self.now,
+            &self.dir.policy.untrusted,
         )
+        .context("folding the project chain")?
+        .specs)
     }
 
     /// A todo's action line as plain text, `None` when the chain holds no record of it.
@@ -291,7 +293,7 @@ fn items(
         bail!("no todo {release:?} on the {} chain", plan.chain());
     };
     let functions =
-        suzatary_core::believed::Believed::of(&nodes, chain.now, &chain.dir.policy.untrusted)
+        suzatary_signatures::believed::Believed::of(&nodes, chain.now, &chain.dir.policy.untrusted)
             .context("folding the project chain")?
             .linkable();
     let event =
@@ -300,7 +302,7 @@ fn items(
     writer.append(event).context("appending the revision")?;
     let after = writer.nodes().context("re-reading the project chain")?;
     let current =
-        suzatary_core::believed::Believed::of(&after, chain.now, &chain.dir.policy.untrusted)
+        suzatary_signatures::believed::Believed::of(&after, chain.now, &chain.dir.policy.untrusted)
             .context("folding the project chain")?
             .specs;
     let reading = Reading::of(

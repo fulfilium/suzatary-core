@@ -8,7 +8,6 @@ use suzatary_base::capability::{Clock, Secret};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
-use suzatary_core::believed::Preview;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::health::plugin::{Origin, PluginName};
 use suzatary_core::held_value::{self, Filled, Reveal};
@@ -33,8 +32,9 @@ use suzatary_core::secretary::store::{Entry, Kind, Stored, Title};
 use suzatary_core::secretary::transcript;
 use suzatary_core::secrets::Secrets;
 use suzatary_core::settings::{Edits, Settable, Settables, Writes};
-use suzatary_core::signatures::Tap;
 use suzatary_core::wire::topics as wire;
+use suzatary_signatures::believed::Preview;
+use suzatary_signatures::signatures::Tap;
 
 /// Sending a proposed message; in no capability bundle, so no verb can send.
 pub trait Post {
@@ -655,7 +655,7 @@ pub struct Effectors<'a> {
     /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn suzatary_core::mail::cache::Forget,
     /// Registers a device's key on every chain; `None` without a root.
-    pub enrolling: Option<suzatary_core::signatures::Enrolling<'a>>,
+    pub enrolling: Option<suzatary_signatures::signatures::Enrolling<'a>>,
     /// Opens a sign-in with Google.
     pub consents: &'a dyn suzatary_core::secretary::google_sign_in::Consents,
 }
@@ -670,7 +670,7 @@ pub enum TapAnswer {
     /// The card's wider yes.
     Always,
     /// The tapping device's signature of a device card's registration.
-    Endorsed(suzatary_core::signatures::Endorsement),
+    Endorsed(suzatary_signatures::signatures::Endorsement),
 }
 
 const VALUE_BELONGS: &str =
@@ -713,7 +713,7 @@ impl TapAnswer {
         }
     }
 
-    fn endorsement(&self) -> Result<&suzatary_core::signatures::Endorsement, Refusal> {
+    fn endorsement(&self) -> Result<&suzatary_signatures::signatures::Endorsement, Refusal> {
         match self {
             TapAnswer::Endorsed(endorsement) => Ok(endorsement),
             TapAnswer::Plain => Err(Refusal::forbidden(
@@ -771,8 +771,8 @@ enum Prepared<'p, 'c> {
         turn: usize,
     },
     Device {
-        enrolling: suzatary_core::signatures::Enrolling<'c>,
-        enrolment: &'p suzatary_core::signatures::Enrolment,
+        enrolling: suzatary_signatures::signatures::Enrolling<'c>,
+        enrolment: &'p suzatary_signatures::signatures::Enrolment,
         endorsed: prodrome_core::sign::Signed,
     },
     Begin {
@@ -808,7 +808,7 @@ enum Prepared<'p, 'c> {
 
 struct Preparing<'r, 'c> {
     settables: &'r Settables,
-    enrolling: Option<suzatary_core::signatures::Enrolling<'c>>,
+    enrolling: Option<suzatary_signatures::signatures::Enrolling<'c>>,
     tap: &'r Tap,
     hold: &'r dyn Fn() -> Result<suzatary_core::secretary::memories::Held<'c>, Refusal>,
     /// The changes of the triage card a [`Act::Restore`] names.
@@ -1787,7 +1787,7 @@ pub fn ask_trust(
     // Bounded, since a key nobody trusts can ask: a stray key cannot flood the Inbox.
     // An unplaced line holds no act this box can read, so it is no device this box could trust.
     let lines = stored.lines(&inbox::fold(caps.secretary.inbox)?);
-    let waiting: Vec<&suzatary_core::signatures::Enrolment> = lines
+    let waiting: Vec<&suzatary_signatures::signatures::Enrolment> = lines
         .standings()
         .filter(|standing| standing.object.reading.open())
         .filter_map(|standing| match &standing.object.asked.proposal {
@@ -1843,7 +1843,7 @@ pub fn ask_trust(
         &secretary,
         &[],
         &stored.id,
-        Proposal::Act(Act::Device(suzatary_core::signatures::Enrolment {
+        Proposal::Act(Act::Device(suzatary_signatures::signatures::Enrolment {
             actor: actor.clone(),
             key: key.clone(),
         })),
@@ -1872,7 +1872,7 @@ pub fn withdraw_trusted(
         let Proposal::Act(Act::Device(enrolment)) = proposal else {
             return Ok(Seen::Waits);
         };
-        let trusted = suzatary_core::signatures::trusted_for(history, root, &enrolment.key)?;
+        let trusted = suzatary_signatures::signatures::trusted_for(history, root, &enrolment.key)?;
         Ok(if trusted.contains(&enrolment.actor) {
             Seen::Closed(
                 suzatary_core::secretary::responded::Withdrawal::DoneElsewhere {
@@ -1889,10 +1889,10 @@ pub fn withdraw_trusted(
 /// A device card's endorsement checked first: only a device the chain already trusts for the
 /// same person vouches (SPEC law 42), so a new phone cannot tap its own card.
 fn vouched(
-    enrolling: suzatary_core::signatures::Enrolling<'_>,
+    enrolling: suzatary_signatures::signatures::Enrolling<'_>,
     tap: &Tap,
-    enrolment: &suzatary_core::signatures::Enrolment,
-    endorsement: &suzatary_core::signatures::Endorsement,
+    enrolment: &suzatary_signatures::signatures::Enrolment,
+    endorsement: &suzatary_signatures::signatures::Endorsement,
 ) -> Result<prodrome_core::sign::Signed, Refusal> {
     if enrolment.actor != *tap.who() {
         return Err(Refusal::forbidden(format!(
@@ -1908,8 +1908,8 @@ fn vouched(
 
 /// Register a vouched device's key on every chain.
 fn trusted(
-    enrolling: suzatary_core::signatures::Enrolling<'_>,
-    enrolment: &suzatary_core::signatures::Enrolment,
+    enrolling: suzatary_signatures::signatures::Enrolling<'_>,
+    enrolment: &suzatary_signatures::signatures::Enrolment,
     endorsed: &prodrome_core::sign::Signed,
 ) -> Performed {
     match enrolling.enrol(enrolment, endorsed) {
@@ -2428,7 +2428,7 @@ pub fn build(
     cards.deployment.builder(&todo.chain)?;
     let bound = suzatary_core::secretary::bound_of(cards.chains, Some(todo.chain.as_str()))?;
     let at = caps.secretary.clock.now();
-    let believed = suzatary_core::believed::Believed::of(
+    let believed = suzatary_signatures::believed::Believed::of(
         &bound.caps.chain.nodes()?,
         at,
         &bound.policy.untrusted,
@@ -2601,7 +2601,7 @@ pub fn record(
 pub fn retract(
     memories: suzatary_core::secretary::memories::Memories<'_>,
     clock: &dyn Clock,
-    tap: &suzatary_core::signatures::Tap,
+    tap: &suzatary_signatures::signatures::Tap,
     node: &prodrome_core::event::Hash,
 ) -> Answered<crate::wire::RecordPayload> {
     memories.hold()?.retract(node, clock.now(), tap)?;
@@ -3077,14 +3077,14 @@ mod tests {
     /// The tap's own [`Tap`], minted as the gate mints it.
     fn tapped() -> Tap {
         Tap::of(
-            &suzatary_core::signatures::scene("ada"),
-            &suzatary_core::signatures::ActHeaders {
+            &suzatary_core::stores::scene("ada"),
+            &suzatary_signatures::signatures::ActHeaders {
                 act: Some("1"),
-                client: Some(suzatary_core::signatures::CLIENT),
+                client: Some(suzatary_signatures::signatures::CLIENT),
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
-            suzatary_core::signatures::Seat::Device,
+            suzatary_signatures::signatures::Seat::Device,
         )
         .expect("a tap")
     }
@@ -3094,7 +3094,7 @@ mod tests {
     }
 
     fn endorsed() -> TapAnswer {
-        TapAnswer::Endorsed(suzatary_core::signatures::Endorsement {
+        TapAnswer::Endorsed(suzatary_signatures::signatures::Endorsement {
             key: suzatary_core::cast::keys::root(),
             signature: prodrome_core::sign::Signature::new("00".repeat(64)).expect("a signature"),
         })
@@ -3287,7 +3287,7 @@ mod tests {
     /// root; without either nothing runs.
     #[test]
     fn a_device_card_needs_an_endorsement_and_a_root() {
-        let card = Proposal::Act(Act::Device(suzatary_core::signatures::Enrolment {
+        let card = Proposal::Act(Act::Device(suzatary_signatures::signatures::Enrolment {
             actor: prodrome_core::event::Actor::new("ada").expect("an actor"),
             key: suzatary_core::cast::keys::root(),
         }));

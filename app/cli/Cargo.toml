@@ -33,6 +33,7 @@ required-features = ["fixture"]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
+suzatary-signatures.workspace = true
 suzatary-core.workspace = true
 suzatary-api.workspace = true
 suzatary-io.workspace = true
