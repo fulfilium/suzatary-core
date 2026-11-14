@@ -4,7 +4,7 @@
 # web/test/wasm.test.ts loads the same .wasm the browser fetches (via `--target nodejs` glue
 # from the same derivation) and drives it against the conformance vectors and the live chain:
 # hashes and knot instants exactly, fulfillments to 1e-9. `cargo test` cannot cover the glue,
-# wasm-opt's rewrite or core.ts's decoders. `tsc` runs in scripts/build-web.sh.
+# wasm-opt's rewrite (in the live half and the nightly) or core.ts's decoders.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -58,8 +58,9 @@ esbuild "${entries[@]}" \
   --outdir="$out"
 
 # Files named explicitly: `node --test <dir>` loads the directory itself as a module (node 24).
-# Several zones, so a test or module that reads the device's zone fails here.
-for zone in UTC America/New_York Europe/Berlin Pacific/Kiritimati; do
+# Several zones, so a test or module that reads the device's zone fails here; $SUZATARY_WEB_ZONES
+# names fewer.
+for zone in ${SUZATARY_WEB_ZONES:-UTC America/New_York Europe/Berlin Pacific/Kiritimati}; do
   echo "==> the web unit suite with TZ=$zone"
   TZ="$zone" node --test "$out"/*.test.mjs
 done

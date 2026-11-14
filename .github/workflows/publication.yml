@@ -156,6 +156,10 @@ jobs:
           nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-wasm ./tree#suzatary-wasm
           nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-views-wasm ./tree#suzatary-views-wasm
           nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-typst-wasm ./tree#suzatary-typst-wasm
+          # The development modules the gate's tests and scenes read, so a later gate of a tree
+          # whose modules' sources this one shares substitutes them.
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-wasm-dev ./tree#suzatary-wasm-dev
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-views-wasm-dev ./tree#suzatary-views-wasm-dev
 
       # What the push adds to the cache: every path of the built closures that
       # neither cache.nixos.org nor the cache already serves, by its NAR size

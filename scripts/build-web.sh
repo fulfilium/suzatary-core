@@ -160,7 +160,13 @@ done
 
 # What a phone downloads on a deploy's first load: each shipped wasm module's brotli bytes against
 # its line of web/wasm-budget for the system that built it (stdenv's `system`, set in a derivation
-# and in `nix develop` alike), which only moves down.
+# and in `nix develop` alike), which only moves down; not of the development modules, which ship
+# nowhere.
+case "${SUZATARY_WASM:-optimised}" in
+  optimised) ;;
+  development) echo "==> no budget for the development modules (.#suzatary-web judges the deploy's)"; exit 0 ;;
+  *) echo "build-web.sh: SUZATARY_WASM is optimised or development" >&2; exit 64 ;;
+esac
 echo "==> every wasm module within its brotli budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
 over=0
 for wasm in web/dist/*.wasm; do

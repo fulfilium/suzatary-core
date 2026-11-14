@@ -125,7 +125,8 @@ fn gate_yml_and_the_box_run_every_tree_step() {
     }
 }
 
-/// The e2e jobs are the parts 1/n to n/n of one n, each once, and only they run e2e.
+/// The e2e jobs are the timed scenes' part and the parts 1/n to n/n of one n, each once, and only
+/// they run e2e.
 #[test]
 fn gate_yml_e2e_jobs_are_every_part_once() {
     let jobs = jobs();
@@ -134,9 +135,12 @@ fn gate_yml_e2e_jobs_are_every_part_once() {
         .filter(|(s, _)| s.iter().any(|s| s == "e2e"))
         .map(|(_, part)| part.as_str())
         .collect();
-    let n = parts.len();
+    let n = parts.len() - 1;
     assert!(n > 1, "the scenes are split: {parts:?}");
-    let want: BTreeSet<String> = (1..=n).map(|k| format!("{k}/{n}")).collect();
+    let want: BTreeSet<String> = (1..=n)
+        .map(|k| format!("{k}/{n}"))
+        .chain(["timed".to_owned()])
+        .collect();
     assert_eq!(
         parts
             .iter()
@@ -170,9 +174,14 @@ fn trigger(body: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Every `uses:` names its action by a commit.
+/// Every `uses:` names its action by a commit, or names an action of this tree, whose own
+/// `uses:` do.
 fn assert_pinned(body: &str) {
     for line in body.lines().filter(|l| l.contains("uses: ")) {
+        if let Some(local) = line.split_once("uses: ./").map(|(_, path)| path.trim()) {
+            assert_pinned(&code(&format!("{local}/action.yml")));
+            continue;
+        }
         let pin = line
             .rsplit_once('@')
             .map(|(_, at)| at.split_whitespace().next());
@@ -420,6 +429,34 @@ fn gate_passes_yml_takes_passes_from_this_repositorys_gate_pushes_alone() {
     );
 }
 
+/// The cargo lanes restore the dependency build gate-store.yml saves on master, one action keeping
+/// both (`for: gate`, so one key and one list of paths); the build runs before the save, and the
+/// action drops the workspace's own units before it saves, so an entry holds only what cargo
+/// identifies by what it was built from.
+#[test]
+fn gate_yml_restores_the_dependency_build_gate_store_saves() {
+    let store = code(".github/workflows/gate-store.yml");
+    let gate = code(".github/workflows/gate.yml");
+    let action = code(".github/actions/cargo-target/action.yml");
+    let uses = "uses: ./.github/actions/cargo-target\n        with: { for: gate, mode: ";
+    assert_eq!(gate.matches(uses).count(), 1, "the lanes restore it once");
+    assert!(gate.contains(&format!("{uses}restore }}")));
+    let at = |body: &str, needle: &str| {
+        body.find(needle)
+            .unwrap_or_else(|| panic!("the workflow or the action has {needle:?}"))
+    };
+    assert!(
+        at(&store, &format!("{uses}restore }}")) < at(&store, "merge-gate.sh --no-live --steps")
+            && at(&store, "merge-gate.sh --no-live --steps")
+                < at(&store, &format!("{uses}save }}")),
+        "gate-store.yml restores, builds, then saves"
+    );
+    assert!(
+        at(&action, "target-deps.sh") < at(&action, "uses: actions/cache/save@"),
+        "the members' units dropped, then saved"
+    );
+}
+
 /// actionlint passes the workflows the gate and the caches rest on: their syntax, their
 /// expressions, their runner labels and the shell of each step.
 #[test]
@@ -442,8 +479,9 @@ fn gate_workflows_pass_actionlint() {
     );
 }
 
-/// `scripts/e2e-part.sh <k>/<n>`: the n parts hold every file once, the same files on every run,
-/// each part some file while there are files enough, and a part that is no part is refused.
+/// `scripts/e2e-part.sh <k>/<n>`: the n parts and `timed` hold every file once, the same files on
+/// every run, `timed` those that read the page's clock and each part some file while there are
+/// files enough, and a part that is no part is refused.
 #[test]
 fn e2e_parts_hold_every_file_once() {
     let scratch = Scratch::new("e2e-part");
@@ -458,6 +496,11 @@ fn e2e_parts_hold_every_file_once() {
         .expect("a scene");
     }
     std::fs::write(e2e.join("bench.bench.ts"), "not a scene").expect("a bench");
+    std::fs::write(
+        e2e.join("clock.test.ts"),
+        "const ms = performance.now() - start",
+    )
+    .expect("a timed scene");
     let part = |arg: &str| {
         let out = Command::new(repo().join("scripts/e2e-part.sh"))
             .arg(arg)
@@ -472,6 +515,7 @@ fn e2e_parts_hold_every_file_once() {
                 .collect::<Vec<_>>(),
         )
     };
+    assert_eq!(part("timed"), (Some(0), vec!["clock".to_owned()]));
     let mut seen = Vec::new();
     for k in 1..=4 {
         let (code, names) = part(&format!("{k}/4"));

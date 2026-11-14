@@ -920,6 +920,7 @@ pub type Performing = Box<
 
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
     use suzatary_io::{epochs, frontiers};
+    let listener = bound(&serving.listening)?;
     // Declared first, so a server that cannot write them does not start.
     instance
         .declarations
@@ -1019,18 +1020,24 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     let router = app(state, &serving.dist);
     let service = router.into_make_service_with_connect_info::<SocketAddr>();
 
-    serve_on(serving.listening, service).await
+    serve_on(serving.listening, listener, service).await
+}
+
+/// The listener, bound before the markup warms, so no other server takes the port meanwhile.
+fn bound(listening: &listening::Listening) -> anyhow::Result<std::net::TcpListener> {
+    let address = listening.at();
+    let listener =
+        std::net::TcpListener::bind(address).with_context(|| format!("binding {address}"))?;
+    listener.set_nonblocking(true)?;
+    Ok(listener)
 }
 
 async fn serve_on(
     listening: listening::Listening,
+    listener: std::net::TcpListener,
     service: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 ) -> anyhow::Result<()> {
     let address = listening.at();
-    // Bound before the line a caller waits on says so.
-    let listener =
-        std::net::TcpListener::bind(address).with_context(|| format!("binding {address}"))?;
-    listener.set_nonblocking(true)?;
     match listening {
         listening::Listening::Loopback(_) => {
             tracing::info!(

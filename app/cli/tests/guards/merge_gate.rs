@@ -69,6 +69,7 @@ pub(super) fn steps() -> Vec<Step> {
             !line.starts_with("together ")
                 && !line.starts_with("heavy ")
                 && !line.starts_with("cli_only ")
+                && !line.starts_with("build ")
         })
         .map(|line| {
             let mut words = line.split_whitespace();
@@ -1553,9 +1554,10 @@ fn merge_gate_reads_one_prodrome_through_cargo_and_the_flake() {
 /// The deploy's build is made once, by the gate: the live half builds HEAD's public tree on the
 /// box with the list `scripts/deploy.sh` builds (`scripts/app-builds.sh`), from the store path a
 /// published commit is fetched to, so the deploy of a landed commit finds every output built.
-/// And the dry push and the leak check run the binary that build made, the program the deploy runs:
-/// this gate's, handed on in its lane's shell, never a link another checkout's gate moves, and
-/// none at all after a failed build.
+/// The dry push runs the binary that build made, the program the deploy runs: this gate's, handed
+/// on in its lane's shell, never a link another checkout's gate moves, and none at all after a
+/// failed build. The leak check reads that build's tree with the deployed app, so no tree
+/// weakens the matcher that reads it.
 #[test]
 fn merge_gate_live_half_builds_what_the_deploy_builds() {
     let step = steps()
@@ -1596,8 +1598,12 @@ fn merge_gate_live_half_builds_what_the_deploy_builds() {
     assert_eq!(
         gate.matches("\"${SUZATARY_DEPLOY_BIN:?deploy-build made no binary}\"")
             .count(),
-        2,
-        "push-dry and public-check run that binary, or fail"
+        1,
+        "push-dry runs that binary, or fails"
+    );
+    assert!(
+        gate.contains("bin=\"$(scripts/app-bin.sh --deployed)/bin/suzatary\" || exit"),
+        "public-check's matcher is the deployed app"
     );
     for reader in ["push_dry() (", "public_check() ("] {
         assert!(
@@ -2407,18 +2413,25 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
 }
 
 /// No output holds the dependency builds the browser module and the core's builds start from,
-/// so web-inputs roots them where it builds, on the box as on a runner: a collection that took
-/// one cost a gate the wasm32 dependencies again.
+/// so web-inputs roots each one the store holds (`nix_held`), on the box as on a runner: a
+/// collection that took one cost a gate the wasm32 dependencies again. One the store does not
+/// hold (the modules were fetched) is not built only to be rooted.
 #[test]
 fn merge_gate_roots_the_web_inputs_dependency_builds() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
     let start = gate.find("\nweb_inputs() {").expect("the web inputs");
     let body = &gate[start..start + gate[start..].find("\n}").expect("its end")];
+    let rooted = body
+        .lines()
+        .find_map(|l| {
+            l.trim()
+                .strip_prefix("for deps in ")?
+                .split_once("; do nix_held \"$deps\"")
+        })
+        .map(|(names, _)| names.split_whitespace().collect::<Vec<_>>())
+        .expect("web-inputs roots the dependency builds it holds");
     for deps in ["suzatary-wasm-deps", "suzatary-core-deps"] {
-        assert!(
-            body.contains(&format!("nix_out {deps}")),
-            "web-inputs roots {deps}"
-        );
+        assert!(rooted.contains(&deps), "web-inputs roots {deps}");
     }
 }
 
@@ -2874,5 +2887,160 @@ fn merge_gate_every_script_run_by_path_is_executable() {
     assert!(
         lost.is_empty(),
         "these scripts are run by path and are not 100755 in the index: {lost:?}"
+    );
+}
+
+/// The private history, as `.gitattributes` marks it export-ignore, each path as its directory and
+/// its name; the public tree holds neither these paths nor the attributes, and no line here spells
+/// a private file's path whole, which the leak guard would read as a link to it.
+const PRIVATE_HISTORY: &[(&str, &str)] = &[
+    ("docs", "reports"),
+    ("docs", "CLAUDE-history.md"),
+    ("", "CHANGELOG.md"),
+    ("", "changelog.d"),
+    ("", ".gitattributes"),
+    ("app/cli/tests", "live.rs"),
+];
+
+/// A private path, whole.
+fn private_path((dir, name): (&str, &str)) -> String {
+    if dir.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{dir}/{name}")
+    }
+}
+
+/// A source's top-level functions: (name, whether it is a test, its body).
+fn functions(source: &str) -> Vec<(String, bool, String)> {
+    let lines: Vec<&str> = source.lines().collect();
+    let mut found = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        let Some(rest) = ["fn ", "pub fn ", "pub(super) fn ", "pub(crate) fn "]
+            .iter()
+            .find_map(|prefix| line.strip_prefix(prefix))
+        else {
+            continue;
+        };
+        let name: String = rest
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let test = at > 0 && lines[at - 1].trim() == "#[test]";
+        let tail = lines[at..].join("\n");
+        let (mut depth, mut end) = (0_i32, tail.len());
+        for (i, c) in tail.char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        found.push((name, test, tail[..end].to_owned()));
+    }
+    found
+}
+
+/// Whether a function's body reads beyond the public tree: this deployment, a path of the private
+/// history, or this checkout itself (git run in it, or a walk of its directories).
+fn reads_beyond_the_public_tree(body: &str) -> bool {
+    let deployment = body.contains("this_box::")
+        || body.split("public_tree(").skip(1).any(|call| {
+            call.split(';')
+                .next()
+                .is_some_and(|c| c.contains(", None)"))
+        });
+    let private = PRIVATE_HISTORY.iter().any(|&(dir, name)| {
+        body.contains(&format!("\"{}\"", private_path((dir, name))))
+            || body.contains(&format!("\"{name}\""))
+    });
+    let git = body.contains("Command::new(\"git\")")
+        && (body.contains(".arg(repo())") || body.contains("current_dir(repo())"));
+    let walk = ["read_dir(", "files_under(", "walk("]
+        .iter()
+        .any(|w| body.contains(w))
+        && body.contains("repo()");
+    deployment || private || git || walk
+}
+
+/// The live half runs on the box exactly the guards whose verdict the public tree cannot give:
+/// those that read this deployment, the private history or this checkout's own history and
+/// directories, directly or through a helper of their file or of guards.rs. GitHub's guards lane
+/// runs every guard over the public tree, so every other guard's verdict is already the tree's.
+/// `app/cli/tests/guards/on-the-box.txt` is the list, and the reading here is its definition.
+#[test]
+fn merge_gate_live_guards_are_the_guards_that_read_beyond_the_public_tree() {
+    if let Ok(attributes) = std::fs::read_to_string(repo().join(".gitattributes")) {
+        let mut marked: Vec<String> = attributes
+            .lines()
+            .filter_map(|l| l.strip_suffix(" export-ignore"))
+            .map(|p| p.trim_start_matches('/').trim_end_matches("/**").to_owned())
+            .collect();
+        marked.sort();
+        let mut pinned: Vec<String> = PRIVATE_HISTORY.iter().map(|&p| private_path(p)).collect();
+        pinned.sort();
+        assert_eq!(
+            marked, pinned,
+            "PRIVATE_HISTORY is .gitattributes' export-ignore"
+        );
+    }
+    let tests = repo().join("app/cli/tests");
+    let root = std::fs::read_to_string(tests.join("guards.rs")).expect("guards.rs reads");
+    let mut files = vec![(String::new(), root.clone())];
+    let mut modules: Vec<PathBuf> = std::fs::read_dir(tests.join("guards"))
+        .expect("guards/")
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+        .collect();
+    modules.sort();
+    for module in modules {
+        let name = module.file_stem().expect("a stem").to_string_lossy();
+        let source = std::fs::read_to_string(&module).expect("a guard module reads");
+        files.push((format!("{name}::"), source));
+    }
+    let shared = functions(&root);
+    let mut beyond = BTreeSet::new();
+    for (module, source) in &files {
+        let own = functions(source);
+        let helpers: Vec<&str> = own
+            .iter()
+            .chain(&shared)
+            .filter(|(_, test, body)| !test && reads_beyond_the_public_tree(body))
+            .map(|(name, _, _)| name.as_str())
+            .collect();
+        for (name, test, body) in &own {
+            let calls = helpers.iter().any(|h| {
+                h != name
+                    && body.match_indices(&format!("{h}(")).any(|(i, _)| {
+                        !body[..i].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.')
+                    })
+            });
+            if *test && (reads_beyond_the_public_tree(body) || calls) {
+                beyond.insert(format!("{module}{name}"));
+            }
+        }
+    }
+    let listed: BTreeSet<String> =
+        std::fs::read_to_string(repo().join("app/cli/tests/guards/on-the-box.txt"))
+            .expect("the box's guards are listed")
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(str::to_owned)
+            .collect();
+    assert_eq!(
+        listed, beyond,
+        "app/cli/tests/guards/on-the-box.txt lists the guards that read beyond the public tree"
+    );
+    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
+    assert!(
+        gate.contains("guards/on-the-box.txt"),
+        "the live half runs the listed guards"
     );
 }

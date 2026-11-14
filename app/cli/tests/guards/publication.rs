@@ -146,7 +146,8 @@ fn publication_cache_runs_only_masters_code_over_the_tree() {
     assert!(at(build, check) < at(build, "      - name: Build what a deploy builds"));
     assert!(!text.contains("cache-nix-action/save@"), "never saved");
     // Every build is of the tree, with no flake configuration of its own and no lock written, and of
-    // an output this list names: what a deploy builds, and what the gate's live half reads.
+    // an output this list names: what a deploy builds, what the gate's live half reads, and the
+    // development modules the gate's tests read.
     let allowed = [
         "suzatary",
         "suzatary-web",
@@ -157,6 +158,8 @@ fn publication_cache_runs_only_masters_code_over_the_tree() {
         "suzatary-wasm",
         "suzatary-views-wasm",
         "suzatary-typst-wasm",
+        "suzatary-wasm-dev",
+        "suzatary-views-wasm-dev",
     ];
     let mut outputs = BTreeSet::new();
     for line in build.lines().filter(|l| l.contains("nix build")) {

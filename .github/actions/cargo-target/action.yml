@@ -1,25 +1,32 @@
 name: Cargo target
 description: >
-  Restore or keep the check job's compiled dependencies (app/target and cargo's
-  sources), keyed by everything that decides them, and set the flags they
-  were built with.
+  Restore or keep a job's compiled dependencies (app/target and cargo's
+  sources), keyed by everything that decides them.
 
 # WHAT IS KEPT IS THE DEPENDENCIES. A checkout stamps every file with the time
 # it was written, so cargo rebuilds this workspace's own crates on every run
-# whatever the target holds; their artifacts are dropped before saving, and
-# what the entry carries is the third-party build, which cargo identifies by
-# package and version, never by a file's time. So an entry cannot make a
-# stale crate look fresh: the worst it can be is incomplete, and cargo builds
-# what it lacks.
+# whatever the target holds; their units are dropped before saving
+# (target-deps.sh, beside this file), and what the entry carries is the third-party
+# build, which cargo identifies by package, version, compiler, profile,
+# features and flags, never by a file's time. So an entry cannot make a stale
+# crate look fresh: the worst it can be is incomplete, and cargo builds what it
+# lacks.
 #
-# The key names what decides that build: the lock, the toolchain and shell
-# (flake.lock, flake.nix), the flags (.github/cargo-ci.toml, installed here
-# as cargo's own configuration so every step reads the same ones) and the
-# commands (the workflow). A miss
-# restores the nearest older entry, and the job saves under
-# the new key only once its compile step has succeeded, so a half-built
-# target is never kept under a key that would then always hit.
+# WHOSE BUILD (`for`), since each builds with its own flags and commands, both
+# in the key:
+#   quick  quick.yml's check job: the flags of .github/cargo-ci.toml, installed
+#          here as cargo's own configuration so every step reads the same ones.
+#   gate   the merge gate's cargo lanes (gate.yml): the flags merge-gate.sh and
+#          app-build.sh set, which gate-store.yml saves on master by running
+#          those steps.
+# The key also names the lock, the toolchain and shell (flake.lock, flake.nix)
+# and the manifests' features. A miss restores the nearest older entry, and a
+# job saves under the new key only once its compile step has succeeded, so a
+# half-built target is never kept under a key that would then always hit.
 inputs:
+  for:
+    description: '`quick` or `gate`.'
+    required: true
   mode:
     description: '`restore` or `save`.'
     required: true
@@ -31,19 +38,31 @@ outputs:
   hit:
     description: Whether the exact key was restored.
     value: ${{ steps.restore.outputs.cache-hit }}
+  key:
+    description: The entry's key.
+    value: ${{ steps.key.outputs.key }}
 
 runs:
   using: composite
   steps:
     - id: key
       shell: bash
+      env:
+        FOR: ${{ inputs.for }}
+        QUICK: ${{ hashFiles('app/Cargo.lock', 'flake.lock', 'flake.nix', '.github/cargo-ci.toml', '.github/workflows/quick.yml') }}
+        GATE: ${{ hashFiles('app/Cargo.lock', 'flake.lock', 'flake.nix', 'app/**/Cargo.toml', 'scripts/merge-gate.sh', 'scripts/app-build.sh') }}
       run: |
-        echo "prefix=target-${{ runner.os }}-" >> "$GITHUB_OUTPUT"
-        echo "key=target-${{ runner.os }}-${{ hashFiles('app/Cargo.lock', 'flake.lock', 'flake.nix', '.github/cargo-ci.toml', '.github/workflows/quick.yml') }}" >> "$GITHUB_OUTPUT"
+        case "$FOR" in
+          quick) prefix="target-$RUNNER_OS-" hash="$QUICK" ;;
+          gate) prefix="gate-target-$RUNNER_OS-$RUNNER_ARCH-" hash="$GATE" ;;
+          *) echo "::error::the cargo-target action keeps the build of quick or gate, not '$FOR'"; exit 1 ;;
+        esac
+        echo "prefix=$prefix" >>"$GITHUB_OUTPUT"
+        echo "key=$prefix$hash" >>"$GITHUB_OUTPUT"
 
     - id: restore
       if: inputs.mode == 'restore'
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           app/target
@@ -52,33 +71,18 @@ runs:
         key: ${{ steps.key.outputs.key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
 
-    - if: inputs.mode == 'restore'
+    - if: inputs.mode == 'restore' && inputs.for == 'quick'
       shell: bash
       run: |
         mkdir -p ~/.cargo
         cp .github/cargo-ci.toml ~/.cargo/config.toml
 
-    # The workspace's own targets, by the names cargo gives their files. A
-    # name this misses is bytes kept, never a wrong answer: deleting from a
-    # cache only lowers what it knows.
     - if: inputs.mode == 'save' && inputs.hit != 'true'
       shell: bash
-      run: |
-        names=$(nix develop .#rust --command \
-          cargo metadata --manifest-path app/Cargo.toml --no-deps --offline --format-version 1 |
-          jq -r '.packages[] | .name, (.targets[].name | ., gsub("-"; "_"))' | sort -u)
-        for dir in app/target/*/; do
-          for name in $names; do
-            rm -rf "$dir".fingerprint/"$name"-* "$dir"build/"$name"-* \
-              "$dir"deps/"$name"-* "$dir"deps/lib"$name"-* "$dir$name" "$dir$name".d
-          done
-          rm -rf "$dir"incremental "$dir"examples
-        done
-        rm -rf app/target/doc
-        du -sh app/target
+      run: nix develop .#rust --command "$GITHUB_ACTION_PATH/target-deps.sh"
 
     - if: inputs.mode == 'save' && inputs.hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           app/target

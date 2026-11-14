@@ -122,6 +122,7 @@ if [ "$1" = api ]; then
   exit 0
 fi
 case "$1 $2" in
+  "pr comment") mkdir -p "$here/comments" && printf '%s\n' "$5" >>"$here/comments/$3" ;;
   "pr view")
     if [ "$5" = body ]; then cat "$here/prs/$3.body" 2>/dev/null; exit 0; fi
     exec cat "$here/prs/$3" ;;
@@ -171,6 +172,7 @@ exit 1
 /// the real one's "could not run whole".
 const PUBLIC: &str = r#"#!/bin/sh
 if [ "$1" = --check ]; then
+  echo "${SUZATARY_BIN:-}" >>"$TRAIN_PROBES.matcher"
   [ "$2" = --strict ] || exit 64
   [ -z "$PUBLIC_UNCHECKED" ] || { echo "public-tree: a list is missing" >&2; exit 2; }
   hits="$(grep -rl leak "$3")" || exit 0
@@ -2859,9 +2861,9 @@ fn train_land_takes_a_chain_that_moved_above_the_cut() {
     );
 }
 
-/// THE BINARY THAT WRITES THE CHAIN IS BUILT FROM A NAMED COMMIT: with no `SUZATARY_TRAIN_BIN`, every
-/// app the train asks `scripts/app-bin.sh` for is a commit's, origin/master's at build and the
-/// train's at land, and never the checkout as it is.
+/// THE BINARY THAT WRITES THE CHAIN IS A NAMED COMMIT'S: with no `SUZATARY_TRAIN_BIN`, every app the
+/// train asks `scripts/app-bin.sh` for is a commit's, origin/master's at build and the train's at
+/// land, or the deployed one, which reads each publication's tree; never the checkout as it is.
 #[test]
 fn train_builds_the_app_from_a_named_commit() {
     let t = Train::new("release-named");
@@ -2886,9 +2888,14 @@ fn train_builds_the_app_from_a_named_commit() {
     t.master_releases(&files, "1.1.0");
     t.pr(1, "calendar links", &[("a.txt", "a\n")]);
     std::fs::write(t.scratch.join("prs/1.body"), "Completes: calendarlinks\n").expect("a body");
+    // The deployed app, which reads each publication's tree (train.sh's own app-bin.sh finds it).
+    let state = t.scratch.join("state");
+    std::fs::create_dir_all(state.join("suzatary/roots")).expect("the roots");
+    std::os::unix::fs::symlink(&app, state.join("suzatary/roots/lock-bin")).expect("lock-bin");
     let unpinned = |args: &[&str]| {
         let mut cmd = t.command(args, &env);
-        cmd.env_remove("SUZATARY_TRAIN_BIN");
+        cmd.env_remove("SUZATARY_TRAIN_BIN")
+            .env("XDG_STATE_HOME", &state);
         cmd.output().expect("train.sh runs")
     };
     let master = t.origin_master();
@@ -3264,10 +3271,11 @@ fn train_full_red_beside_a_selective_green_is_a_finding() {
     );
 }
 
-/// THE TRAIN'S APP IS THE ONE THE GATE BUILT: `scripts/app-bin.sh` builds a named commit
+/// THE TRAIN'S APP IS THE ONE THE GATE BUILT: `scripts/app-bin.sh` takes a named commit's
 /// (`SUZATARY_APP_REV`) from that commit's public tree (`scripts/public-tree.sh --store`), the
-/// store path the merge gate's deploy-build builds and roots, never from `git+file` of the
-/// private repository, a second build of the same binary.
+/// store path the merge gate's deploy-build and publication.yml build, never from `git+file` of
+/// the private repository, and only from the store or a binary cache (`--max-jobs 0`): the box
+/// never compiles a commit's app to read its release. `--deployed` is the app deploy.sh linked.
 #[test]
 fn app_bin_builds_a_named_commit_from_its_public_tree() {
     let scratch = Scratch::new("app-bin-public");
@@ -3314,8 +3322,31 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
     let lines: Vec<&str> = asked.lines().collect();
     assert_eq!(lines[0], "public --store 0123456789abcdef", "{asked}");
     assert!(
-        lines[1].starts_with(&format!("nix build {}#suzatary ", tree.display())),
-        "the public tree's package is built: {asked}"
+        lines[1].starts_with(&format!("nix build {}#suzatary ", tree.display()))
+            && lines[1].contains(" --max-jobs 0 "),
+        "the public tree's package is fetched, never built: {asked}"
+    );
+
+    let deployed = scratch.join("deployed");
+    std::fs::create_dir_all(deployed.join("bin")).expect("a deployed app");
+    let _ = suzatary_testkit::fake_program(
+        &deployed.join("bin"),
+        "suzatary",
+        "#!/bin/sh\necho deployed\n",
+    );
+    std::fs::create_dir_all(scratch.join("roots")).expect("the roots");
+    std::os::unix::fs::symlink(&deployed, scratch.join("roots/lock-bin")).expect("lock-bin");
+    let named = Command::new(checkout.join("scripts/app-bin.sh"))
+        .arg("--deployed")
+        .env("SUZATARY_REPO", &checkout)
+        .env("SUZATARY_ROOTS", scratch.join("roots"))
+        .output()
+        .expect("app-bin.sh runs");
+    assert!(named.status.success(), "{}", text(&named.stderr));
+    assert_eq!(
+        PathBuf::from(text(&named.stdout).trim()),
+        deployed.canonicalize().expect("the deployed app"),
+        "the deployed app, resolved"
     );
 }
 
@@ -3473,4 +3504,160 @@ fn train_gate_github_reports_a_red_scene_without_a_block() {
         "the report names the failed scene and why: {report}"
     );
     live_half_stopped(&hold);
+}
+
+impl Train {
+    /// The comments posted on pull request `n`, as the stub `gh` kept them.
+    fn comments(&self, n: u32) -> String {
+        std::fs::read_to_string(self.scratch.join("comments").join(n.to_string()))
+            .unwrap_or_default()
+    }
+
+    /// `check <n>` while another `scripts/train.sh` holds the train's lock, the checkout's HEAD
+    /// and status unchanged by it.
+    fn check_beside_a_train(&self, n: u32) -> Output {
+        let lock = self.work().join(".git/train/lock");
+        std::fs::create_dir_all(lock.parent().expect("its directory")).expect("the train's state");
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&lock)
+            .expect("the lock file opens");
+        let mut holder = Command::new("flock")
+            .arg(&lock)
+            .args(["sleep", "120"])
+            .spawn()
+            .expect("flock runs");
+        assert!(
+            within_two_minutes(|| !holders(&lock).is_empty()),
+            "the lock is held"
+        );
+        let (head, status) = (
+            self.git(&["rev-parse", "HEAD"]),
+            self.git(&["status", "--porcelain"]),
+        );
+        let out = self.train(&["check", &n.to_string()]);
+        let _ = holder.kill();
+        let _ = holder.wait();
+        assert_eq!(
+            self.git(&["rev-parse", "HEAD"]),
+            head,
+            "the checkout's HEAD is as it was"
+        );
+        assert_eq!(self.git(&["status", "--porcelain"]), status, "and its tree");
+        out
+    }
+}
+
+/// `check <pr>` needs no lock and leaves the checkout as it is: the PR's head merged on master is
+/// checked on GitHub's runners as a public tree on `gate/pr<n>-<head>`, deleted once read, and
+/// its green is a comment on the PR. It records no verdict, so no train may land on it.
+#[test]
+fn train_check_posts_the_runners_green_on_the_pr() {
+    let t = Train::new("check-green");
+    t.on_github();
+    t.pr(
+        1,
+        "the first",
+        &[("a.txt", "a\n"), ("private/notes.md", "private\n")],
+    );
+    let head = t.head(1);
+    let out = t.check_beside_a_train(1);
+    assert!(out.status.success(), "check: {}", text(&out.stderr));
+    let branch = format!("refs/heads/gate/pr1-{}", &head[..12]);
+    let refs = t.core_pushes();
+    assert_eq!(refs.len(), 2, "one push and one deletion: {refs:?}");
+    let pushed = refs[0]
+        .strip_prefix(&format!("{branch} "))
+        .unwrap_or_else(|| panic!("only gate/pr1-<head> is pushed: {refs:?}"))
+        .to_owned();
+    assert_eq!(refs[1], format!("{branch} {ZERO}"));
+    let files = t.core(&["ls-tree", "-r", "--name-only", &pushed]);
+    assert!(
+        files.lines().any(|f| f == "a.txt") && !files.contains("private/"),
+        "{files}"
+    );
+    assert!(
+        t.comments(1).contains("is green on GitHub's runners"),
+        "{}",
+        t.comments(1)
+    );
+    assert!(
+        !t.work().join(".git/train/gates").exists(),
+        "no verdict is recorded"
+    );
+}
+
+/// A red run is posted with the failing lines of its jobs, so the session that wrote the PR reads
+/// its own failures.
+#[test]
+fn train_check_posts_the_runners_red_with_its_failing_lines() {
+    let t = Train::new("check-red");
+    t.on_github();
+    t.pr(1, "the first", &[("broken", "x\n")]);
+    let out = t.check_beside_a_train(1);
+    assert!(!out.status.success());
+    let posted = t.comments(1);
+    assert!(
+        posted.contains("is red on GitHub's runners") && posted.contains("broken is in the tree"),
+        "{posted}"
+    );
+    assert_eq!(
+        t.core(&["for-each-ref", "refs/heads/gate/"]),
+        "",
+        "no branch is left"
+    );
+}
+
+/// A merge whose public tree its leak guard refuses never leaves the box: nothing is pushed, and
+/// the comment says so without the guard's hits, which name what leaked.
+#[test]
+fn train_check_of_a_leaking_tree_pushes_nothing_and_posts_no_hit() {
+    let t = Train::new("check-leak");
+    t.on_github();
+    t.pr(1, "the first", &[("leaky.txt", "a leak\n")]);
+    let out = t.check_beside_a_train(1);
+    assert!(!out.status.success());
+    assert_eq!(t.core_pushes(), Vec::<String>::new(), "nothing pushed");
+    let posted = t.comments(1);
+    assert!(posted.contains("did not pass the leak guard"), "{posted}");
+    assert!(
+        !posted.contains("leaky"),
+        "the hit stays on the box: {posted}"
+    );
+}
+
+/// The leak guard that decides whether a tree leaves the box reads it with the deployed app, which
+/// no tree it reads compiled, so a train cannot weaken the guard over itself, and the box builds no
+/// app of the train before the push.
+#[test]
+fn train_gate_github_reads_its_public_tree_with_the_deployed_app() {
+    let t = Train::new("github-deployed-matcher");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    let state = t.scratch.join("state");
+    let deployed = t.scratch.join("deployed-app");
+    std::fs::create_dir_all(deployed.join("bin")).expect("a deployed app");
+    std::os::unix::fs::symlink(crate::binary::path(), deployed.join("bin/suzatary"))
+        .expect("a link");
+    std::fs::create_dir_all(state.join("suzatary/roots")).expect("the roots");
+    std::os::unix::fs::symlink(&deployed, state.join("suzatary/roots/lock-bin")).expect("lock-bin");
+    let mut cmd = t.command(
+        &["gate", "--remote", "github"],
+        &[("XDG_STATE_HOME", state.to_str().expect("utf-8"))],
+    );
+    cmd.env_remove("SUZATARY_TRAIN_BIN");
+    let out = cmd.output().expect("train.sh runs");
+    assert!(out.status.success(), "gate: {}", text(&out.stderr));
+    let matcher =
+        std::fs::read_to_string(t.probes_file().with_extension("matcher")).expect("the guard ran");
+    let want = deployed
+        .canonicalize()
+        .expect("the deployed app")
+        .join("bin/suzatary");
+    assert!(
+        !matcher.is_empty() && matcher.lines().all(|bin| Path::new(bin) == want),
+        "every leak guard read with the deployed app: {matcher}"
+    );
 }

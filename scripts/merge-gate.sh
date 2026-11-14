@@ -32,9 +32,6 @@
 # `files:<dir>` (each test file, reading what its imports reach), named in SUZATARY_GATE_UNITS.
 # Where the graph cannot be read, the step runs whole.
 #
-# --full reads no pass and runs every step whole (SUZATARY_GUARD_FULL); its verdict is kept apart.
-# --nightly is --full with the live half's web suite whole (scripts/train.sh nightly).
-#
 # SUZATARY_GATE_RUN names a stub run in each step's place; its passes are keyed by its bytes.
 #
 # Exit 0 green, 1 red, 64 usage, 75 when the gate did not start (too little disk, a key it could
@@ -66,12 +63,16 @@ case "${SUZATARY_GATE_SERIAL:-}" in
   *) echo "merge-gate.sh: SUZATARY_GATE_SERIAL is 1 or unset, not $SUZATARY_GATE_SERIAL" >&2; exit 64 ;;
 esac
 unset SUZATARY_GATE_SERIAL
+# The wasm build the web steps read (gate.yml's lanes set it).
+case "${SUZATARY_WASM:=optimised}" in
+  optimised | development) ;;
+  *) echo "merge-gate.sh: SUZATARY_WASM is optimised or development, not $SUZATARY_WASM" >&2; exit 64 ;;
+esac
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 
 # One gate per checkout: two would race on the target, web/dist, the generated wire, the roots.
-# The steps run without the lock's descriptor, so nothing a step leaves running holds it.
 if ((!list)); then
   lock="$(git rev-parse --absolute-git-dir)/merge-gate.lock"
   exec 8>>"$lock"
@@ -181,8 +182,8 @@ together() {
   done
 }
 
-# Heavy steps take the machine one at a time, in the order named; within a lane the order must
-# be the lane's own.
+# Heavy steps take the machine one at a time, in the order named, which within a lane is the
+# lane's own: two builds side by side ran the box (11 GB) out of memory.
 s_heavy=() heavy_order=() s_after=()
 heavy() {
   local name i
@@ -194,8 +195,8 @@ heavy() {
   done
 }
 
-# The passes step <i> made: a kept path, or an observed unit's key and its reads file. An observed
-# unit that recorded nothing ran elsewhere (another part) and keeps nothing.
+# The passes step <i> made: a kept path, or an observed unit's key and its reads file (none for a
+# unit another part ran).
 passes() {
   local i="$1" line unit at reads narrowed
   while read -r line; do
@@ -211,8 +212,8 @@ passes() {
   done <<<"${todo_kept[i]}"
 }
 
-# Runs in its lane's shell so a step that exports (the resolvers) hands the value on. The heavy
-# lock's descriptor is not inherited by the step, so a process it leaves running holds nothing.
+# In its lane's shell, so a step that exports hands the value on; without the heavy lock's
+# descriptor, so nothing a step leaves running holds it.
 run_step() {
   local i="$1" name="${s_name[$1]}" start=$SECONDS code took of=""
   if [[ -n "${hit[i]:-}" ]]; then
@@ -255,7 +256,6 @@ run_step() {
   } 9>"$logs/.print"
 }
 
-# Heavy steps take turns because two builds side by side run the box (11 GB) out of memory.
 run_lane() {
   local i
   for i in "${!s_name[@]}"; do
@@ -292,8 +292,6 @@ if ((!list)) && [[ -z "${SUZATARY_GATE_RUN:-}" ]]; then
   export CARGO_INCREMENTAL=0
 
   free_gb() { df --output=avail -BG "$root" | tail -1 | tr -dc '0-9'; }
-  # Root this shell before anything collects: `nix develop` roots nothing, and a collection would
-  # take its tools mid-gate.
   if ! root_environment "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/environment"; then
     echo "==> could not root the environment this gate runs in, so it collects nothing: not starting" >&2
     exit 75
@@ -333,9 +331,8 @@ declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]=
 # naming it; `<test>=<path>` is read by that unit alone.
 declare -A unit_scopes=([web/test]="web/src web/test web/e2e" [web/e2e]="web/src web/test web/e2e")
 declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.test.ts=web/e2e" [web/e2e]="web/src web/e2e/typstbench.ts web/e2e/painter.test.ts=web/e2e/painterlaws.ts")
-# A scene's reads are observed: a page runs a dynamically loaded chunk, or the Rust pages' module
-# (`scene_later`), only once it fetched it, so a scene file's pass is keyed by its imports and
-# what its tabs fetched (web/e2e/harness.ts, SUZATARY_E2E_READS).
+# A scene file's pass is keyed by its imports and what its tabs fetched (web/e2e/harness.ts,
+# SUZATARY_E2E_READS): a page fetches a chunk, or the pages' module (`scene_later`), when it runs it.
 observed=files:web/e2e
 scene_later=(app/pages app/viewtree)
 
@@ -356,16 +353,14 @@ clippy_all() {
     cargo_app clippy -q --workspace "${live_pins[@]}" --test guards --test fence --test plugin "$@" -- -D warnings
 }
 
-# Two Rust lanes keep cargo's lock busy.
 lane=check
 step tree fmt             $rust   cargo fmt --manifest-path app/Cargo.toml --all --check
 step tree clippy          $rust   clippy_all
 step tree clippy-fixture  $rust   clippy_all --features suzatary/fixture
 step tree doc             $rust   env RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/Cargo.toml -q --workspace --no-deps --features suzatary/fixture
 lane=tests
-# Every debug executable the tree half runs, built in one step. `--workspace` everywhere: cargo
-# resolves features over the packages a command selects, and a `-p` rebuilds wasmtime and the
-# wit crates.
+# Every debug executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
+# resolves other features and rebuilds wasmtime and the wit crates.
 # The cli's tests that need `fixture`, in the feature set app-build.sh --fixture uses.
 fixture_tests=(--test all --features suzatary/fixture --features suzatary-core/nothing)
 # shellcheck disable=SC2329
@@ -411,41 +406,55 @@ step tree guards          all     cargo_app test -q --workspace --test guards
 step tree plugin-fence    $rust   cargo_app test -q --workspace --test fence
 step tree plugin-sync     $rust   cargo_app test -q --workspace --test plugin
 lane=web
-# Prepared once in the lane's shell and exported to the steps after it. Built by Nix, outside the
-# cargo lock the Rust lanes hold. The dependency builds are rooted too: no output holds them.
+# Exported to the lane's later steps; Nix builds them, outside the cargo lock. The dependency
+# builds the store holds are rooted too: no output holds them.
 # shellcheck disable=SC1091,SC2329
 web_inputs() {
-  web_outputs &&
-    nix_out suzatary-wasm-deps >/dev/null && nix_out suzatary-views-wasm-deps >/dev/null && nix_out suzatary-core-deps >/dev/null &&
-    . scripts/web-inputs.sh
+  local deps
+  web_outputs || return
+  for deps in suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps; do nix_held "$deps" >/dev/null || true; done
+  . scripts/web-inputs.sh
 }
 # publication.yml pushes these outputs for the live half.
 # shellcheck disable=SC2329
 web_outputs() {
-  local o v
-  nix_outs "${web_outputs[@]#*=}" || return
-  for o in "${web_outputs[@]}"; do v="$(nix_out "${o#*=}")" || return; export "${o%%=*}=$v"; done
+  local o v outs=()
+  for o in "${web_outputs[@]}"; do outs+=("$(in_build "$SUZATARY_WASM" "${o#*=}")"); done
+  nix_outs "${outs[@]}" || return
+  for o in "${web_outputs[@]}"; do
+    v="$(nix_out "$(in_build "$SUZATARY_WASM" "${o#*=}")")" || return
+    export "${o%%=*}=$v"
+  done
 }
 web_outputs=(SUZATARY_WIRE_TS=suzatary-web-ts SUZATARY_PRODROME_CONFORMANCE=suzatary-vector-json
   SUZATARY_PRODROME_WASM=suzatary-wasm SUZATARY_VIEWS_WASM=suzatary-views-wasm SUZATARY_TYPST_WASM=suzatary-typst-wasm)
+# in_build <build> <output>: the output in that wasm build (flake.nix's wasmBuilds).
+in_build() { case "$1 $2" in "development suzatary-wasm" | "development suzatary-views-wasm") echo "$2-dev" ;; *) echo "$2" ;; esac; }
+# What gate.yml's `build-<name>` jobs build once per tree (`--list`: `build <name> <output>...`).
+declare -A builds=([fixture]=suzatary-fixture)
+for o in "${web_outputs[@]#*=}"; do builds[web]+=" $o" builds[web-dev]+=" $(in_build development "$o")"; done
+((!list)) || for name in "${!builds[@]}"; do echo "build $name ${builds[$name]# }"; done
 step tree web-inputs      $web    web_inputs
-step tree web-test        files:web/test scripts/web-test.sh
+# One zone on a train (UTC+14, where a test reading the device's zone fails most hours), all nightly.
+# shellcheck disable=SC2329
+web_units() { if ((nightly)); then scripts/web-test.sh; else SUZATARY_WEB_ZONES=Pacific/Kiritimati scripts/web-test.sh; fi; }
+step tree web-test        files:web/test web_units
 step tree build-web       $web    scripts/build-web.sh
 lane=quiet
+# The store's fixture binary when it holds this tree's, else cargo's, sharing `build`'s target.
 # shellcheck disable=SC2329
 e2e_scenes() {
   local scenes=() unit
   for unit in ${SUZATARY_GATE_UNITS:-}; do scenes+=("$(basename "$unit" .test.ts)"); done
-  scripts/web-e2e.sh "${scenes[@]}"
+  SUZATARY_FIXTURE="${SUZATARY_FIXTURE:-$(nix_held suzatary-fixture)}" scripts/web-e2e.sh "${scenes[@]}"
 }
 step tree e2e             files:web/e2e e2e_scenes
 # web-inputs writes web/src/wire/generated, which web-test and build-web read, and e2e serves the
 # bundle build-web writes to web/dist: none of it is in the tree.
 together web-inputs web-test build-web e2e
 lane=nix
-# HEAD's public tree, built as the roots run builds it, so a file it needs from the private
-# history is red here. It reads all but the paths `.gitattributes` marks export-ignore, keeping
-# the changelog and the attributes (merge_gate.rs pins the list).
+# HEAD's public tree, built as the roots run builds it, so a file it needs from the private history
+# is red here. It reads all but the export-ignore paths save the changelog and the attributes.
 private="$(sed -n 's#^/\(.*\) export-ignore$#\1#p' .gitattributes 2>/dev/null | sed 's#/\*\*$##' |
   grep -vxF -e CHANGELOG.md -e .gitattributes | paste -sd, -)"
 public_reads="all-but:${private:+$private,}docs,memory,android"
@@ -508,8 +517,8 @@ changelog_entry() {
 step tree changelog       unkept  changelog_entry
 
 lane=live
-# The live tests are kept by the code that reads the data, not by the data; the nightly gate
-# reruns them. merge_gate.rs fails when a path their sources name is outside this list.
+# Kept by the code that reads the data, not by the data (the nightly reruns them); merge_gate.rs
+# holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record
   app/store app/signatures app/core app/api app/io app/plugin app/bench
   app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema app/plugin-fence/Cargo.toml
@@ -523,16 +532,16 @@ if ((${#live_pins[@]})); then
   heavy live
 fi
 step live live-all        $live_only cargo_app test -q --workspace --test all -- "${live_modules[@]/%/::}"
-# Unkept: the leak guard must read every tracked file, docs included.
-step live live-guards     unkept  cargo_app test -q --workspace --test guards
-# A smoke per gate: the unit tests that read the live chain and the scenes over a copy of the data
-# tree; --nightly runs every unit test. merge_gate.rs fails when a unit test that reads the live
-# chain is not in `live_web_units`. The scenes read the server's code, so this is kept by all but
-# docs/, memory/, android/ and `cli_only`.
+# The guards that read beyond the public tree (merge_gate.rs holds the list); gate.yml judges the
+# rest. Unkept: the leak guard reads every tracked file.
+mapfile -t box_guards < <(grep -v '^#' app/cli/tests/guards/on-the-box.txt)
+step live live-guards     unkept  cargo_app test -q --workspace --test guards -- --exact "${box_guards[@]}"
+# A smoke per gate: the unit tests that read the live chain (`live_web_units`, which merge_gate.rs
+# holds) and the scenes over a copy of the data tree; --nightly runs every unit test. The scenes
+# read the server's code, so this is kept by all but docs/, memory/, android/ and `cli_only`.
 live_web_units=(web/test/wasm.test.ts)
 live_scenes=(pages)
-# The fixture binary of HEAD's public tree, which publication.yml pushes: the private tree's holds the
-# live pins, so no cache serves it.
+# HEAD's public tree's fixture binary, which publication.yml pushes (no cache holds the private tree's).
 # shellcheck disable=SC2329
 public_fixture() {
   local tree
@@ -548,7 +557,7 @@ web_live() (
   if ((nightly)); then
     scripts/web-test.sh || exit
   else
-    SUZATARY_GATE_UNITS="${live_web_units[*]}" scripts/web-test.sh || exit
+    SUZATARY_GATE_UNITS="${live_web_units[*]}" web_units || exit
   fi
   [[ -f "$instance" ]] || { echo "web-live: the scenes skipped: no instance file at $instance"; exit 0; }
   public_fixture || exit
@@ -556,9 +565,8 @@ web_live() (
 )
 step live web-live        all-but:android,docs,memory,$cli_only web_live
 lane=deploy
-# The deploy's build, done here so the deploy of this commit finds every output in the store (the
-# same `-source` path). The two steps after it run $SUZATARY_DEPLOY_BIN, each in a subshell, so a
-# missing binary fails the step, not the lane.
+# The deploy's build, so the deploy of this commit finds every output in the store. The two steps
+# after it run $SUZATARY_DEPLOY_BIN in a subshell, so a missing binary fails the step, not the lane.
 step live deploy-build    unkept  public_tree
 # Dry: it commits nothing and reaches no remote.
 # shellcheck disable=SC2329
@@ -569,12 +577,12 @@ push_dry() (
       scripts/safe-push.sh --dry
 )
 step live push-dry        unkept  push_dry
-# As a publish checks it, so a leaking tree never lands. SUZATARY_BIN avoids a second release build.
+# As a publish checks it, the deployed app the matcher, so no leaking tree lands and none weakens it.
 # shellcheck disable=SC2329
 public_check() (
   instance="${SUZATARY_INSTANCE:-$root/instance.toml}"
   [[ -f "$instance" ]] || { echo "public-check: skipped: no instance file at $instance"; exit 0; }
-  bin="${SUZATARY_DEPLOY_BIN:?deploy-build made no binary}"
+  bin="$(scripts/app-bin.sh --deployed)/bin/suzatary" || exit
   SUZATARY_INSTANCE="$instance" SUZATARY_BIN="$bin" \
     scripts/public-tree.sh --check --strict "${SUZATARY_DEPLOY_TREE:?deploy-build made no tree}"
 )

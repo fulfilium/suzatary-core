@@ -23,12 +23,9 @@ name: Gate
 # read the public `bmabsout` Cachix as a plain substituter, which only publication.yml writes, and
 # the Actions cache's store, which only gate-store.yml writes, from master.
 #
-# THE STORE. A run on a branch reads only the caches saved on that branch or on master, and a
-# gate branch is new for every train, so what a job saved here no later job could read. So each
-# job restores the one store gate-store.yml saves on each push to master (the dependency builds
-# no binary cache serves, keyed by what they are built from), or the newest one before it when
-# the key moved, and saves nothing. A miss, or a restore that fails, leaves the job a cold store:
-# slower, never red.
+# THE STORE. A run reads only the caches saved on its branch or on master, and a gate branch is
+# new for every train, so each job restores the store gate-store.yml saves on master (or the
+# newest one before it) and saves nothing. A miss is a cold store: slower, never red.
 on:
   push:
     branches: [ 'gate/**' ]
@@ -40,6 +37,7 @@ concurrency:
   group: gate-${{ github.ref }}
 
 jobs:
+  # The lanes that read no build of the `builds` jobs, so they start at once.
   gate:
     name: gate (${{ matrix.lane }})
     # The box is aarch64, and no step of the half needs x86_64.
@@ -50,32 +48,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { lane: checks, steps: 'clippy,clippy-fixture,doc', part: '' }
-          - { lane: tests, steps: 'build,fence-plugin,test,test-fixture,plugin-fence,plugin-sync', part: '' }
-          - { lane: guards, steps: 'guards', part: '' }
-          - { lane: web, steps: 'web-inputs,web-test,build-web', part: '' }
-          # e2e serves the bundle build-web writes from what web-inputs prepares, so each part
-          # makes them again; scripts/e2e-part.sh deals the scenes to the parts.
-          - { lane: e2e-1, steps: 'web-inputs,build-web,e2e', part: '1/4' }
-          - { lane: e2e-2, steps: 'web-inputs,build-web,e2e', part: '2/4' }
-          - { lane: e2e-3, steps: 'web-inputs,build-web,e2e', part: '3/4' }
-          - { lane: e2e-4, steps: 'web-inputs,build-web,e2e', part: '4/4' }
-          - { lane: nix, steps: 'nix-web,nix-module,release-free', part: '' }
-    steps:
+          - { lane: checks, steps: 'clippy,clippy-fixture,doc', part: '', builds: '', deps: true, wasm: optimised }
+          - { lane: tests, steps: 'build,fence-plugin,test,test-fixture,plugin-fence,plugin-sync', part: '', builds: '', deps: true, wasm: optimised }
+          - { lane: guards, steps: 'guards', part: '', builds: '', deps: true, wasm: optimised }
+    steps: &lane
       # The runner's preinstalled toolchains, none of them used here, hold most of its disk, and
       # the gate does not start short of 12 GB.
-      - name: Free the runner's disk
+      - &free
+        name: Free the runner's disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
             /usr/share/swift /usr/local/share/powershell /opt/hostedtoolcache || true
           df -h /
 
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - &checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
       # Nix with flakes, reading the public Cachix as a plain substituter.
-      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+      - &nix
+        uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
@@ -84,16 +77,60 @@ jobs:
             extra-trusted-public-keys = bmabsout.cachix.org-1:/GhCEayGQ3NHMIlJiUelQrLtHHXVdGjHtyDz32xNAo4=
 
       # The key is gate-store.yml's, spelled the same (a guard test holds the two equal).
-      - name: the store
+      - &store
+        name: the store
         uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         continue-on-error: true
         with:
           primary-key: gate-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'app/Cargo.lock', 'app/**/Cargo.toml') }}
           restore-prefixes-first-match: gate-store-${{ runner.os }}-${{ runner.arch }}-
 
-      # THE PASSES THE LAST GATES KEPT, which gate-passes.yml saves on master from each run's artifacts: a step or a
-      # unit whose inputs passed before is kept here as on the box (scripts/merge-gate.sh, A PASS IS KEPT BY WHAT
-      # THE STEP READ). A miss runs every step; the key names this run, which no entry holds, so the newest one is read.
+      # The cargo lanes' dependency build (`matrix.deps`), which gate-store.yml keeps on master.
+      - name: the dependency build
+        if: matrix.deps
+        continue-on-error: true
+        uses: ./.github/actions/cargo-target
+        with: { for: gate, mode: restore }
+
+      # The builds this job waited for (`matrix.builds`), imported. A lane that finds none builds
+      # what it reads itself: slower, never red.
+      - name: the builds
+        if: matrix.builds
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ matrix.builds }}
+          path: ${{ runner.temp }}/builds
+
+      # A cache's own paths are copied unsigned (the build job made them), with only the references
+      # it lacks fetched first from the signed substituters, so one rule holds for every build;
+      # each path is then checked valid, and a miss fails this step by name.
+      - name: the builds, in the store
+        if: matrix.builds
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          missed=0
+          mapfile -t caches < <(find "$RUNNER_TEMP/builds" -name nix-cache-info -printf '%h\n')
+          ((${#caches[@]})) || { echo "::error::no build was downloaded, so this lane builds what it reads itself"; exit 1; }
+          for cache in "${caches[@]}"; do
+            mapfile -t paths < <(nix path-info --store "file://$cache" --all)
+            mapfile -t lacked < <(nix path-info --store "file://$cache" --json "${paths[@]}" |
+              jq -r 'if type == "array" then .[] else to_entries[].value end | .references[]' | sort -u |
+              grep -vxF -f <(printf '%s\n' "${paths[@]}"))
+            if ((${#paths[@]})) && { ((${#lacked[@]} == 0)) || nix build --no-link "${lacked[@]}"; } &&
+              nix copy --no-recursive --no-check-sigs --from "file://$cache" "${paths[@]}" &&
+              nix path-info "${paths[@]}" >/dev/null; then
+              echo "imported ${cache##*/}: ${#paths[@]} paths, and ${#lacked[@]} references from the substituters"
+            else
+              echo "::error::the build ${cache##*/} was not imported (above), so this lane builds what it held itself"
+              missed=1
+            fi
+          done
+          exit "$missed"
+
+      # The passes the last gates kept (gate-passes.yml). The key names this run, which no entry
+      # holds, so the newest one is read; a miss runs every step.
       - name: the passes
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         continue-on-error: true
@@ -117,6 +154,7 @@ jobs:
         env:
           STEPS: ${{ matrix.steps }}
           SUZATARY_E2E_PART: ${{ matrix.part }}
+          SUZATARY_WASM: ${{ matrix.wasm }}
           SUZATARY_E2E_SHOTS: ${{ runner.temp }}/e2e-shots
         run: |
           code=0
@@ -133,8 +171,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # What this job's gate kept, for gate-passes.yml to save for the next gate, whatever the verdict: a red step keeps no
-      # pass, and a passed one is a function of its inputs.
+      # What this job's gate kept, for gate-passes.yml, whatever the verdict: a red step keeps no pass.
       - name: the passes kept
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -156,3 +193,123 @@ jobs:
         run: |
           echo "::error::the gate did not reach a verdict (exit ${CODE:-none}), which says nothing of the tree"
           exit 1
+
+  # ONE BUILD PER TREE: each job builds the outputs `merge-gate.sh --list` names for it and hands
+  # their closures, named by store path, to the lanes that read them as a binary cache in the run's
+  # artifacts. A failed build is no verdict: each lane that reads it builds it, and is red there.
+  build-web:
+    name: build (web)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { build: web }
+    steps: &build
+      - *free
+      - *checkout
+      - *nix
+      - *store
+      - name: build
+        env:
+          BUILD: ${{ matrix.build }}
+        run: |
+          set -euo pipefail
+          read -ra outputs <<<"$(scripts/merge-gate.sh --list | sed -n "s/^build $BUILD //p")"
+          ((${#outputs[@]})) || { echo "::error::merge-gate.sh --list names no build $BUILD"; exit 1; }
+          built="$(nix build --no-link --print-out-paths --print-build-logs "${outputs[@]/#/.#}")"
+          mapfile -t paths <<<"$built"
+          nix copy --to "file://$RUNNER_TEMP/build?compression=zstd" "${paths[@]}"
+          du -sh "$RUNNER_TEMP/build"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-${{ matrix.build }}
+          path: ${{ runner.temp }}/build
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  build-web-dev:
+    name: build (web-dev)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { build: web-dev }
+    steps: *build
+
+  build-fixture:
+    name: build (fixture)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - { build: fixture }
+    steps: *build
+
+  # The lanes that read the builds: each waits for its builds' jobs to end, whatever they ended as.
+  # The tests and the scenes read the development wasm build; the deploy's bundle (nix-web, which
+  # judges its brotli budget) and the scenes that bound a task's time read the optimised one.
+  gate-web:
+    name: gate (${{ matrix.lane }})
+    needs: build-web-dev
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lane: web, steps: 'web-inputs,web-test,build-web', part: '', builds: 'build-web-dev', deps: false, wasm: development }
+    steps: *lane
+
+  gate-e2e:
+    name: gate (${{ matrix.lane }})
+    needs: [build-web-dev, build-fixture]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Each part runs web-inputs and build-web for e2e; scripts/e2e-part.sh deals the untimed
+          # scenes to the parts and the timed ones to `timed`.
+          - { lane: e2e-1, steps: 'web-inputs,build-web,e2e', part: '1/4', builds: 'build-*', deps: false, wasm: development }
+          - { lane: e2e-2, steps: 'web-inputs,build-web,e2e', part: '2/4', builds: 'build-*', deps: false, wasm: development }
+          - { lane: e2e-3, steps: 'web-inputs,build-web,e2e', part: '3/4', builds: 'build-*', deps: false, wasm: development }
+          - { lane: e2e-4, steps: 'web-inputs,build-web,e2e', part: '4/4', builds: 'build-*', deps: false, wasm: development }
+    steps: *lane
+
+  # The deploy's bundle reads the optimised modules alone, so it waits for no fixture.
+  gate-nix:
+    name: gate (${{ matrix.lane }})
+    needs: build-web
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lane: nix, steps: 'nix-web,nix-module,release-free', part: '', builds: 'build-web', deps: false, wasm: optimised }
+    steps: *lane
+
+  gate-timed:
+    name: gate (${{ matrix.lane }})
+    needs: [build-web, build-fixture]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lane: e2e-timed, steps: 'web-inputs,build-web,e2e', part: 'timed', builds: 'build-*', deps: false, wasm: optimised }
+    steps: *lane

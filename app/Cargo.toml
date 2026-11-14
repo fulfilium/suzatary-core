@@ -186,3 +186,9 @@ opt-level = "s"
 codegen-units = 1
 lto = true
 panic = "abort"
+
+# The gate's tests' and scenes' build of it (`-dev`): no LTO, half the compile (75 s against 166).
+[profile.wasm-dev]
+inherits = "wasm-release"
+codegen-units = 16
+lto = false

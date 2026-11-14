@@ -8,6 +8,14 @@ nix_out() {
     nix build "$root#$1" --out-link "$roots/$1" --print-out-paths
 }
 
+# nix_held <output>: as nix_out when the store already holds the output, else fails; builds nothing.
+nix_held() {
+  local roots out
+  roots="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/gate-roots" &&
+    out="$(nix eval --raw "$root#$1.outPath")" && [[ -e "$out" ]] &&
+    mkdir -p "$roots" && nix-store --add-root "$roots/$1" --realise "$out" >/dev/null && echo "$out"
+}
+
 # nix_outs <output>...: builds the outputs in one `nix build`, in parallel; root each with nix_out.
 nix_outs() {
   local outputs=("${@/#/$root#}")

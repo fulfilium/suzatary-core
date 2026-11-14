@@ -200,18 +200,12 @@
         # so the two are no longer compared by eye.
         appSrcBuild = builtins.substring 0 8 (builtins.baseNameOf (toString appSrc));
 
-        # `cargoRoot` is where the lockfile lives and `buildAndTestSubdir` is
-        # where cargo runs; both are `app`, because the source root is the
-        # repository and the workspace is one level in.
-        #
         # ONE DEPENDENCY BUILD, SHARED BY EVERY DERIVATION BELOW: `cargoArtifacts` is the
         # dependencies compiled against a dummy copy of the crates, so its hash moves only with
         # `app/Cargo.lock` or the toolchain. The git dependency is vendored at the lock's rev.
         #
-        # THE WORKSPACE IS ONE LEVEL IN, so cargo is told where the manifest is
-        # and where to put `target/`: crane restores the dependency artifacts
-        # into `./target` at the source root, and a cargo that wrote to
-        # `app/target` instead would rebuild everything beside them.
+        # THE WORKSPACE IS ONE LEVEL IN: crane restores the dependencies into `./target`, so cargo
+        # writes there, not to `app/target`, where it would rebuild them all.
         craneLib = crane.mkLib pkgs;
         # The plugins' toolchain: rustup's 1.98.1, nixpkgs' version at this lock, with the
         # wasm32-wasip2 std, whose linker writes the component itself.
@@ -308,12 +302,8 @@
         suzatary-bin = appCrate {
           pname = "suzatary";
           doCheck = false;
-          # THE REVISION THE ABOUT PAGE SHOWS (`GET /api/about`): `appSrcBuild`
-          # (above `appSrc`) — a pure hash of exactly this binary's own
-          # sources, NOT `self.shortRev`/`dirtyShortRev` any more (see that
-          # comment for why: the whole-repo git rev made every chain write a
-          # full release rebuild). A binary cargo built outside the flake has
-          # no stamp and says `dev`.
+          # The revision `GET /api/about` shows: `appSrcBuild`, a hash of this binary's own sources.
+          # A binary cargo built outside the flake says `dev`.
           SUZATARY_BUILD = appSrcBuild;
           meta = {
             description = "Suzatary's binary, without its release; `.#suzatary` installs both";
@@ -367,26 +357,20 @@
           };
         };
 
-        # THE CORE, FOR THE BROWSER (`nix build .#suzatary-wasm`): `app/wasm`,
-        # the Prodrome's generic exports at this application's schemas,
-        # compiled to WebAssembly in the derivation shape the Prodrome builds its
-        # reference module with. Its dependencies are built once against the
-        # lock (`buildDepsOnly`), so a `.rs` edit compiles the workspace's own
-        # crates and nothing else. The wasm32 std comes with nixpkgs' rustc, which
-        # links with `lld` from PATH; the `wasm-bindgen` CLI is the exact patch
-        # the crate pins, since the two negotiate over a schema version compiled
-        # into both. The output is the two glues, `web/` for the app and
-        # `nodejs/` for scripts/web-test.sh, beside one `.wasm` each.
-        #
-        # The source is the manifests and the two crates the module links, so an
-        # edit to the server or the CLI does not rebuild it. Panic locations are
-        # remapped off the vendor directory, so no store path is in the bytes.
-        # ONE SHAPE FOR EVERY BROWSER MODULE: `package` compiled to wasm32 from the
-        # manifests, the core and `crates`, its glue named `name` for `web` and
-        # `nodejs`. The core's module and the pages' module are its two instances.
-        wasmModule = { pname, package, name, crates, description }: let
+        # THE BROWSER MODULES: `package` compiled to wasm32 from the manifests, the core and
+        # `crates` (so a server edit rebuilds none), in one of `wasmBuilds`: the deploy's, or the
+        # gate's tests' and scenes' (no LTO, no wasm-opt). Dependencies are built once per lock;
+        # `wasm-bindgen` is the patch the crate pins; the glues are `web/` and `nodejs/` (for
+        # scripts/web-test.sh); panic locations are remapped off the vendor directory. The core's
+        # module (`app/wasm`) and the pages' are its instances.
+        wasmBuilds = {
+          optimised = { profile = "wasm-release"; suffix = ""; wasmOpt = true; };
+          development = { profile = "wasm-dev"; suffix = "-dev"; wasmOpt = false; };
+        };
+        wasmModule = build: { pname, package, name, crates, description }: let
+          inherit (wasmBuilds.${build}) profile wasmOpt;
           args = commonArgs // {
-            inherit pname;
+            pname = pname + wasmBuilds.${build}.suffix;
             src = lib.fileset.toSource {
               root = ./.;
               fileset = lib.fileset.unions ([
@@ -427,7 +411,7 @@
             doCheck = false;
             buildPhaseCargoCommand = ''
               cargo build --offline --frozen \
-                --profile wasm-release --target wasm32-unknown-unknown -p ${package}
+                --profile ${profile} --target wasm32-unknown-unknown -p ${package}
             '';
           };
           # Its dependency build, keyed on the lock like `cargoArtifacts`, exposed so the merge
@@ -445,43 +429,50 @@
             # rather than dropping them. `SIZES` is the module before and after it, which
             # is what a first visit pays.
             installPhaseCommand = ''
-              wasm=target/wasm32-unknown-unknown/wasm-release/${builtins.replaceStrings ["-"] ["_"] package}.wasm
+              wasm=target/wasm32-unknown-unknown/${profile}/${builtins.replaceStrings ["-"] ["_"] package}.wasm
               features="--enable-bulk-memory --enable-bulk-memory-opt --enable-sign-ext"
               features="$features --enable-nontrapping-float-to-int --enable-mutable-globals"
               features="$features --enable-multivalue --enable-reference-types"
               for target in web nodejs; do
                 wasm-bindgen --target "$target" --out-dir "$out/$target" --out-name ${name} "$wasm"
                 bound=$(stat -c %s "$out/$target/${name}_bg.wasm")
+              '' + lib.optionalString wasmOpt ''
                 # shellcheck disable=SC2086
                 wasm-opt -Os $features -o "$out/$target/${name}_bg.wasm" "$out/$target/${name}_bg.wasm"
+              '' + ''
               done
-              printf 'cargo\t%s bytes\nbindgen\t%s bytes\nwasm-opt\t%s bytes\n' \
-                "$(stat -c %s "$wasm")" "$bound" "$(stat -c %s "$out/web/${name}_bg.wasm")" | tee "$out/SIZES"
+              printf 'cargo\t%s bytes\nbindgen\t%s bytes\n' "$(stat -c %s "$wasm")" "$bound" | tee "$out/SIZES"
+              '' + lib.optionalString wasmOpt ''
+              printf 'wasm-opt\t%s bytes\n' "$(stat -c %s "$out/web/${name}_bg.wasm")" | tee -a "$out/SIZES"
             '';
             meta.description = description;
           });
         };
         # The core: the glue keeps the name `prodrome` the loader and the tests have always fetched.
-        coreModule = wasmModule {
+        coreModule = build: wasmModule build {
           pname = "suzatary-wasm";
           package = "suzatary-wasm";
           name = "prodrome";
           crates = [ ./app/wasm ];
           description = "Suzatary's browser module: the Prodrome's exports at Suzatary's schemas, with the JS glue";
         };
-        suzatary-wasm-deps = coreModule.deps;
-        suzatary-wasm = coreModule.module;
+        suzatary-wasm-deps = (coreModule "optimised").deps;
+        suzatary-wasm = (coreModule "optimised").module;
+        suzatary-wasm-dev-deps = (coreModule "development").deps;
+        suzatary-wasm-dev = (coreModule "development").module;
         # The pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md), loaded by the page
         # that is drawn from them.
-        viewsModule = wasmModule {
+        viewsModule = build: wasmModule build {
           pname = "suzatary-views-wasm";
           package = "suzatary-pages";
           name = "views";
           crates = [ ./app/viewtree ./app/pages ];
           description = "Suzatary's pages as Rust programs, with the JS glue the painter loads";
         };
-        suzatary-views-wasm-deps = viewsModule.deps;
-        suzatary-views-wasm = viewsModule.module;
+        suzatary-views-wasm-deps = (viewsModule "optimised").deps;
+        suzatary-views-wasm = (viewsModule "optimised").module;
+        suzatary-views-wasm-dev-deps = (viewsModule "development").deps;
+        suzatary-views-wasm-dev = (viewsModule "development").module;
 
         # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`):
         # `app/plugin-fence`, a plugin whose every mode tries to break one of the
@@ -692,26 +683,11 @@
           meta.description = "Suzatary's web frontend bundle — scripts/build-web.sh, as a derivation";
         };
 
-        # THE WEB TEST'S FPL/SERIES VECTORS, REGENERATED FROM THE CRATE'S OWN
-        # GRAMMAR. Prodrome 0.4 (2b71293e10ced78b57ad6540ed5f8a6a9379a951, "the
-        # evidence is a literal") replaced `conformance/fpl.json`/`series.json`
-        # with `conformance/fpl.py`/`series.py`: the same evidence, printed in
-        # the crate's own §2 grammar instead of a second JSON encoding of it.
-        # `web/test/wasm.test.ts` has no parser for that grammar and should not
-        # grow one — a second reading of somebody else's format is exactly
-        # what this repository refuses elsewhere (typst's HTML, the store's
-        # own objects) — so `app/core/examples/vector_json.rs` reads the two
-        # files with the crate's OWN parser (`literal::parse_literal` under
-        # `literal::Open`, the same door `app/cli/tests/live.rs` reads
-        # `events/objects/` through) and re-emits the JSON shape the test has
-        # always consumed. `env`/`json` are copied through from
-        # `prodrome-wasm`'s own frozen `wasm/conformance/term-json.json`
-        # (the JSON codec's evidence, unchanged since 0.4 moved it) rather than
-        # re-derived, so that half has one reading too; only `samples` (fpl)
-        # and the whole of `series` — neither ever touched by the JSON codec —
-        # are converted here. CI's tests.yml points
-        # `SUZATARY_PRODROME_CONFORMANCE` HERE; scripts/web-test.sh without it
-        # runs the same two `cargo run`s in the working tree.
+        # THE WEB TEST'S FPL/SERIES VECTORS, read from the Prodrome's `conformance/*.py` with the
+        # crate's own parser (`app/core/examples/vector_json.rs`), so `web/test/wasm.test.ts` needs
+        # no second reader of that grammar; `env`/`json` come from `prodrome-wasm`'s frozen
+        # `term-json.json` as they are. scripts/web-test.sh without this output runs the same two
+        # `cargo run`s in the working tree.
         suzatary-vector-json = coreCrate {
           pname = "suzatary-vector-json";
           doCheck = false;
@@ -858,19 +834,13 @@
           suzatary = suzatary-app;
           # `nix build .#suzatary-bin` — its binary alone, which no release moves.
           inherit suzatary-bin;
-          # `nix build -o <root> .#suzatary-deps` — the dependency build every
-          # derivation above starts from, exposed so it can be ROOTED
-          # (2026-09-13). It is a build-time input, which no `result` link of
-          # a package keeps alive, and the box's daemon collects below 3 GB
-          # free: the remote builder's first warm run spent 1007 s
-          # re-vendoring because the previous run's artifacts had already
-          # been collected. Root it per architecture — this box's own, and
-          # the builder's x86_64 — and a lock change is the only thing that
-          # rebuilds it.
+          # `nix build -o <root> .#suzatary-deps` — the dependency build every derivation above
+          # starts from, exposed so it can be rooted: no output keeps a build-time input alive.
           suzatary-deps = cargoArtifacts;
           # The other two dependency builds, the browser module's and the core's
           # alone (the wire's and the vectors'), exposed to be rooted the same way.
           inherit suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps;
+          inherit suzatary-wasm-dev-deps suzatary-views-wasm-dev-deps;
           # `nix build .#suzatary-wire-ts` — the frontend's wire declarations,
           # generated from suzatary-core rather than mirrored by hand.
           inherit suzatary-wire-ts;
@@ -890,6 +860,7 @@
           inherit suzatary-wasm;
           # `nix build .#suzatary-views-wasm` — the pages' module, resolved the same way.
           inherit suzatary-views-wasm;
+          inherit suzatary-wasm-dev suzatary-views-wasm-dev;
           # `nix build .#suzatary-plugin-fence` — the components the plugin
           # host's fence tests load; resolved by scripts/merge-gate.sh.
           inherit suzatary-plugin-fence;
@@ -988,10 +959,7 @@
           meta.description = "Suzatary, with this source as its code root";
         };
 
-        # Single operator env for the triage code + suzatary CLI: stdlib Python,
-        # notmuch (read the store), lieer (Gmail sync), isync/mbsync (IMAP sync,
-        # e.g. a university's Exchange), plus openssl/curl for diagnostics.
-        # Enter with: nix develop .#triage
+        # The operator's shell (`nix develop .#triage`): notmuch, lieer, isync and the tools below.
         #
         # `.#rust` is the EDITOR's shell for `app/`: the same toolchain the checks above build
         # with, plus a language server.
