@@ -58,10 +58,13 @@ export namespace storesync {
     return { payload: answer, held: held.held.map(c => c.name) }
   }
 
-  // Asked of the worker, which answers once every store it reads is ready and every line it reads is held.
+  // Asked of the worker, which answers once every store it reads is ready and every line it reads is held; measured as
+  // `ask:<question>`.
   const over = async <K extends questions.Kind>(question: questions.Of<K>, whole: boolean, lane: lanes.Lane): Promise<questions.Answer<K>> => {
     void showing.get()
+    const start = performance.now()
     const answer = await remote.ask(question, lane)
+    performance.measure(`ask:${question.type}`, { start, end: performance.now() })
     // Asked behind the answer, so it says what the reading left out and the answer waits for none of it.
     if (whole) void remote.ask({ type: "Left" }, "Shell").then(left => readings.told("stores", excluded.left(left)))
     return answer
@@ -85,8 +88,10 @@ export namespace storesync {
   export const write = async (w: topics.Write, at: string): Promise<void> => {
     const actor = app.actor(app.now())
     if (actor === null) throw new Error("this device only reads, so it writes no topic")
-    // Held as the page's own writes are, so a reload waits for the worker to keep it and the box to answer.
+    // Held as the page's own writes are, so a reload waits for the worker to keep it.
+    const start = performance.now()
     await inflight.held(remote.ask({ type: "Topic", write: w, at, actor }, "Page"))
+    performance.measure("write:worker", { start, end: performance.now() })
   }
 
   // One conversation over its own lines, read as the whole store reads it; absent where they hold none of it.
@@ -95,7 +100,6 @@ export namespace storesync {
   export const conversation = (id: string, window: Window, memory: MemoryPayload | null, lane: lanes.Lane = lanes.FIRST): Promise<One> =>
     over({ type: "Conversation", id, window, memory }, false, lane)
 
-  // How a page says lines of `of` are not on this device.
   export const notHere = (lines: number, of: string, why: string): string => `Not on this device yet: ${lines} ${lines === 1 ? "line" : "lines"} of ${of} (${why}).`
 
   // The same, read back to the turn it must reach, grouped into rounds on the owner's days in `zone`.
@@ -141,10 +145,8 @@ export namespace storesync {
     }
   }
 
-  // Who hears a revoked key, an older build, or a core that did not load.
   export type Heard = { readonly gone: () => void; readonly stale: () => void; readonly unloaded: (why: string) => void }
 
-  // Everything the worker says unasked, each to what hears it.
   const heardFromWorker = (s: questions.Said, fx: Heard): void => {
     switch (s.type) {
       case "Gone":
@@ -163,14 +165,12 @@ export namespace storesync {
   // Returns its own removal.
   export const watch = (listener: () => void): (() => void) => moves.subscribe(() => listener())
 
-  // Wakes on a move that touched conversation `id`.
   export const watchConversation = (id: string, listener: () => void): (() => void) =>
     moves.subscribe(() => {
       const moved = moves.state().moved
       if (moved === "All" || moved.includes(id)) listener()
     })
 
-  // Wakes on every move of a store's sync, with how far each has come.
   export const watchProgress = (listener: (p: progress.T) => void): (() => void) => bars.subscribe(() => listener(bars.state()))
 
   const frame = d.json(payload.StoreFrame)

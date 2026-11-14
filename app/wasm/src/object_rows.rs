@@ -1,6 +1,5 @@
-//! The stores of objects as the tab's worker drives them: each a replica the core holds
-//! (`suzatary_store::replica::objects`) at its own schema. Every move answers the frame the worker
-//! appends to the device's log, and a reading is made once per move ([`Store::reading`]).
+//! The stores of objects as the tab's worker drives them, each at its own schema. Every move
+//! answers its frame; a reading is made once per move, and an append extends it in place.
 
 use std::cell::OnceCell;
 
@@ -112,13 +111,17 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         self.step(Objects::start_over)
     }
 
-    /// `event` sealed as a `Change` and kept unsent; none for a twin.
+    /// `event` sealed as a `Change` over the kept reading, and kept unsent; none for a twin. A
+    /// failed append leaves no reading kept, so the next question makes one afresh.
     pub fn append(&mut self, event: &str) -> Result<Option<Step>, JsError> {
-        let mut read = Replica::<E>::of(&self.standing().map_err(refused)?).map_err(refused)?;
-        let appended: Appended = serde_json::from_str(
-            &prodrome_wasm_exports::append(&mut read, event, None).map_err(refused)?,
-        )
-        .map_err(|e| refused(format!("append: {e}")))?;
+        let mut read = match self.read.take() {
+            Some(read) => read.map_err(refused)?,
+            None => self.fresh().map_err(refused)?,
+        };
+        let appended = prodrome_wasm_exports::append(&mut read, event, None).map_err(refused)?;
+        self.read = OnceCell::from(Ok(read));
+        let appended: Appended =
+            serde_json::from_str(&appended).map_err(|e| refused(format!("append: {e}")))?;
         if appended.objects.is_empty() {
             return Ok(None);
         }
@@ -128,7 +131,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             .into_iter()
             .map(|o| Object::read::<E>(&schema, o.text))
             .collect();
-        self.step(|r| r.write(objects)).map(Some)
+        let m = self.replica.write(objects);
+        self.version = self.version.wrapping_add(1);
+        Ok(Some(Step::of(framed(&m)?, said(true).to_owned())))
     }
 
     /// `[[{hash, literal}]]`: the unsent, in posts the box takes whole.
@@ -240,9 +245,13 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     /// Why the objects have no reading at the schema.
     pub fn reading(&self) -> Result<&Replica<E>, JsError> {
         self.read
-            .get_or_init(|| self.standing().and_then(|o| Replica::of(&o)))
+            .get_or_init(|| self.fresh())
             .as_ref()
             .map_err(refused)
+    }
+
+    fn fresh(&self) -> Result<Replica<E>, String> {
+        self.standing().and_then(|o| Replica::of(&o))
     }
 
     /// `{excluded}`: what the reading leaves out.
@@ -250,13 +259,10 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         prodrome_wasm_exports::tips(self.reading()?).map_err(refused)
     }
 
-    /// The standing objects as the Prodrome's replica reads them, `[{hash, text}]`.
+    /// The read objects as the Prodrome's replica reads them, `[{hash, text}]`.
     fn standing(&self) -> Result<String, String> {
         serde_json::to_string(
-            &self
-                .replica
-                .standing()
-                .iter()
+            &read_objects(&self.replica)
                 .map(|o| serde_json::json!({ "hash": o.name().as_str(), "text": o.literal() }))
                 .collect::<Vec<_>>(),
         )
@@ -271,7 +277,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     /// `f` done to the replica: whether the standing objects moved.
     fn moved<T>(&mut self, f: impl FnOnce(&mut Objects) -> T) -> (T, bool) {
         let names = |r: &Objects| -> Vec<prodrome_core::event::Hash> {
-            r.standing().iter().map(|o| o.name().clone()).collect()
+            read_objects(r).map(|o| o.name().clone()).collect()
         };
         let was = names(&self.replica);
         let done = f(&mut self.replica);
@@ -301,6 +307,11 @@ impl<E: suzatary_core::stores::Store<Vocabulary: Default>> Store<E> {
             Move::Own(_) | Move::Rows(_) => Ok(Some(Step::of(framed(&m)?, said(moved).to_owned()))),
         }
     }
+}
+
+/// Every standing object but a signature, which asserts no event, so a signing keeps the reading.
+fn read_objects(replica: &Objects) -> impl Iterator<Item = &Object> {
+    replica.standing().into_iter().filter(|o| !o.is_signature())
 }
 
 fn framed(m: &Move) -> Result<Vec<u8>, JsError> {
@@ -355,33 +366,26 @@ macro_rules! objects_store {
             pub fn new() -> $name {
                 $name::default()
             }
-            /// See `Store::since`.
             #[must_use]
             pub fn since(&self) -> String {
                 self.0.since()
             }
-            /// See `Store::heads`.
             pub fn heads(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.heads()
             }
-            /// See `Store::heard`.
             #[must_use]
             pub fn heard(&self) -> bool {
                 self.0.heard()
             }
-            /// See `Store::behind`.
             pub fn behind(&self, heads: &str) -> Result<bool, wasm_bindgen::JsError> {
                 self.0.behind(heads)
             }
-            /// See `Store::overtaken`.
             pub fn overtaken(&self, epoch: f64) -> Result<bool, wasm_bindgen::JsError> {
                 self.0.overtaken(epoch)
             }
-            /// See `Store::went_back`.
             pub fn went_back(&self, epoch: f64) -> Result<bool, wasm_bindgen::JsError> {
                 self.0.went_back(epoch)
             }
-            /// See `Store::piece`.
             pub fn piece(
                 &mut self,
                 answer: &str,
@@ -389,55 +393,45 @@ macro_rules! objects_store {
             ) -> Result<Vec<u8>, wasm_bindgen::JsError> {
                 self.0.piece(answer, fetched_at)
             }
-            /// See `Store::land`.
             pub fn land(&mut self) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.land()
             }
-            /// See `Store::start_over`.
             pub fn start_over(&mut self) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.start_over()
             }
-            /// See `Store::append`.
             pub fn append(
                 &mut self,
                 event: &str,
             ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
                 self.0.append(event)
             }
-            /// See `Store::unsent`.
             pub fn unsent(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.unsent()
             }
-            /// See `Store::unsigned`.
             pub fn unsigned(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.unsigned()
             }
-            /// See `Store::refusals`.
             pub fn refusals(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.refusals()
             }
-            /// See `Store::signed`.
             pub fn signed(
                 &mut self,
                 literal: &str,
             ) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.signed(literal)
             }
-            /// See `Store::refused_in`.
             pub fn refused_in(
                 &mut self,
                 asks: &$crate::asks::Asks,
             ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
                 self.0.refused_in(&asks.0)
             }
-            /// See `Store::answered`.
             pub fn answered(
                 &mut self,
                 receipt: &str,
             ) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.answered(receipt)
             }
-            /// See `Store::refuse`.
             pub fn refuse(
                 &mut self,
                 names: &str,
@@ -445,15 +439,12 @@ macro_rules! objects_store {
             ) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.refuse(names, reason)
             }
-            /// See `Store::apply`.
             pub fn apply(&mut self, frame: &[u8]) -> Result<String, wasm_bindgen::JsError> {
                 self.0.apply(frame)
             }
-            /// See `Store::snapshot`.
             pub fn snapshot(&self) -> Result<Vec<u8>, wasm_bindgen::JsError> {
                 self.0.snapshot()
             }
-            /// See `Store::load`.
             pub fn load(
                 &mut self,
                 bytes: Option<Vec<u8>>,
@@ -461,12 +452,10 @@ macro_rules! objects_store {
             ) -> Result<String, wasm_bindgen::JsError> {
                 self.0.load(bytes, frames)
             }
-            /// See `Store::version`.
             #[must_use]
             pub fn version(&self) -> u32 {
                 self.0.version()
             }
-            /// See `Store::tips`.
             pub fn tips(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.tips()
             }
@@ -474,3 +463,7 @@ macro_rules! objects_store {
     };
 }
 pub(crate) use objects_store;
+
+#[cfg(test)]
+#[path = "object_rows_signed.rs"]
+mod signed;

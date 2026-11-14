@@ -29,3 +29,8 @@ proptest.workspace = true
 
 [lints]
 workspace = true
+
+# A target of its own, so `suites.rs` in the cli's tests sees it run.
+[[test]]
+name = "signature"
+path = "tests/signature.rs"

@@ -21,7 +21,6 @@ import storereads from "../wire/storereads"
 import type { StorePayload } from "../wire/generated/wire"
 
 export namespace storeset {
-  // What the worker says of the stores: leavings, progress, a move, and a write of this tab's the box refused.
   export type Said =
     | { readonly type: "Told"; readonly reader: string; readonly left: excluded.Left }
     | { readonly type: "Bars"; readonly e: progress.Event }
@@ -81,11 +80,11 @@ export namespace storeset {
   export const of = (core: Core, held: Lines, say: (s: Said) => void, blocks: rendered.Device): T => {
     const told = (reader: string, left: excluded.Left): void => say({ type: "Told", reader, left })
     const bars = (e: progress.Event): void => say({ type: "Bars", e })
-    // A store a later epoch started over is waited for again by every reading of it.
+    // A store a later epoch started over no longer holds what a reading was ready over, so every reading of it waits
+    // again, as for a store never landed, until a pull of it ends whole.
     const replaced = (name: stores.Name) => (): void => {
       for (const s of SCOPE_NAMES) if (SCOPES[s].includes(name)) readies[s].forget()
     }
-    // A store of objects; a move touches every conversation, then runs `after`.
     const objectStore = <S extends ObjectStore>(name: Exclude<stores.Name, "lines">, store: S, after: () => void = () => {}): { readonly store: S; readonly sync: replicasync.T } => ({
       store,
       sync: replicasync.of<StorePayload>(
@@ -221,14 +220,21 @@ export namespace storeset {
 
     // Each event planned for `w`, sealed, signed and kept; handed over behind the answer, so no round trip is waited on.
     const write = async (w: topics.Write, at: string, actor: string): Promise<void> => {
-      await readies.All.get()
       const name = topics.store(w)
-      const { store, sync } = topicStores[name]
-      for (const event of topics.plan(topicsNow().reading, w, at, actor)) {
-        const step = store.append(event)
-        if (step !== undefined) await sync.stepped(step)
+      const measured = async <A>(step: string, f: () => A | Promise<A>): Promise<A> => {
+        const start = performance.now()
+        const a = await f()
+        performance.measure(`write:${step}`, { start, end: performance.now(), detail: { store: name } })
+        return a
       }
-      await signOwn(name)
+      await measured("ready", () => readies.All.get())
+      const { store, sync } = topicStores[name]
+      const events = await measured("plan", () => topics.plan(topicsNow().reading, w, at, actor))
+      for (const event of events) {
+        const step = await measured("append", () => store.append(event))
+        if (step !== undefined) await measured("keep", () => sync.stepped(step))
+      }
+      await measured("sign", () => signOwn(name))
       void handOver(name).catch(() => undefined)
     }
 

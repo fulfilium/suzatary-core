@@ -209,16 +209,19 @@ one key per text), after the redaction door (`line_event.rs:392`, `seal`).
 The seal is a function of the core, so the tab runs the same function in the
 core's worker (`suzatary-wasm`), with the browser's entropy as the `Entropy`
 port. The tab posts the slot's key beside the object, as a pull answer
-carries keys beside the nodes today (`routes::words`). Then:
+carries keys beside the nodes today (`routes::words`). A key travels beside
+the object, never inside one: an object is kept forever and a key must be
+destroyable, so a key inside an object would make an erasure impossible. Then:
 
 - **Erasure is unchanged.** The box keeps the key in the lines' key store, and
   an erasure deletes it there and in every device's row (§4.3).
 - **The scrub is checked at acceptance.** The admission rule opens the slot
   with the posted key, scrubs the words under the current rules, and refuses
   the line if the scrub changes them or the slot claims other rules. A tab of
-  an older bundle seals under older rules. Its line is refused with a new
-  `RefusalKind`, `Outdated`: the tab keeps the line, offers Reload as it does
-  for `CLIENT_MIN`, and the new bundle seals the words again.
+  an older bundle seals under older rules. Its line is refused as
+  `Refused::Outdated`, a new constructor of the asks store's refusal schema
+  (a shipped kind's fields are frozen): the tab keeps the line, offers Reload
+  as it does for `CLIENT_MIN`, and the new bundle seals the words again.
   So no unscrubbed word reaches the store, and the box stays the one door.
 - **The stamp is checked at acceptance.** A said line carries its stamp
   (`Stamp::Actor(Speaker { actor, seat })`, `app/core/src/seat.rs`). The rule computes the
@@ -720,15 +723,30 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
    drawn from the asks store. *Measure:* tap to the bar drawn, before and
    after, in the browser (`bigstore`'s server); expected no round trip.
 2. **The tab seals lines: a title, a new conversation and a setup
-   conversation.** The core's seal
-   in the worker, keys posted beside the object, the scrub and stamp checked
-   at acceptance (§2.3), own nodes (§5.5), and the lines' row never dropping
-   an unsent object. Rename, open and setup stop calling their routes; the
-   routes are deleted. *Laws:* a line the tab seals and the line the box seals from
-   the same words read alike; the admission rule refuses a slot whose scrub
-   changes its words and a stamp the signer does not prove; the node the tab
-   computes equals the box's. *Measure:* rename drawn with no round trip;
-   the box's acceptance time.
+   conversation.** Three pull requests, after which a new kind of write
+   costs its vocabulary and its admission rule alone.
+   - **2a. An append extends the kept reading**, not a second one made
+     afresh, and each step of a write is measured (`write:*`, `ask:*`).
+     *Law:* for every store of objects, the kept reading is the fresh one.
+     *Measure:* topicdraw, per step.
+   - **2b. The general pieces moved up** to `app/store`, importing nothing
+     of core or record: `Writes<N>`, `receipt` and a per-schema `Admission`;
+     one hand-over engine; writability read from the `stores!` row. *Law:*
+     the rollback law, stated once over `Writes<N>`.
+   - **2c. The lines.** The lines' vocabulary (the first `Said` of a
+     conversation, whose id is the first 32 hex digits of its name;
+     `SetUp { template }`; `Refused::Outdated`) and their admission rule (the
+     scrub and the stamp checked at acceptance, §2.3, and the slot keys posted
+     beside the objects); the core's seal in the worker, own nodes (§5.5),
+     and the lines' row never dropping an unsent object. Rename, open and
+     setup stop calling their routes; the routes are deleted. What an
+     accepted line starts (an answer, the setup's opening note) is a reading
+     of what no outcome follows yet, run at most once per line name. *Laws:*
+     a line the tab seals and the line the box seals from the same words read
+     alike; the admission rule refuses a slot whose scrub changes its words
+     and a stamp the signer does not prove; the node the tab computes equals
+     the box's; an accepted line starts its effect once, across a restart.
+     *Measure:* rename drawn with no round trip; the box's acceptance time.
 3. **Say, edit, regenerate and stop as lines; rounds claimed by `Began`.** The
    owed reading and the claim (§4.4), generic in the Prodrome; the run id and
    its lifetime `flock`; one automatic retry. *Law:* at most two model calls

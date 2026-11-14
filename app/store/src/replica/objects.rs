@@ -56,6 +56,14 @@ impl Object {
     pub fn literal(&self) -> &str {
         &self.literal
     }
+
+    /// Whether this is a signature, which asserts no event. Read without a parse: a canonical
+    /// print begins with its constructor's name, and a signature that parsed rests on the one
+    /// object it signs.
+    #[must_use]
+    pub fn is_signature(&self) -> bool {
+        self.rests_on.len() == 1 && self.literal.starts_with("Signed(")
+    }
 }
 
 impl Node for Object {

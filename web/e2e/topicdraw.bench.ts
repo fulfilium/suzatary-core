@@ -7,7 +7,7 @@
  *   scripts/web-e2e.sh topicdraw
  *
  * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
- * JSON to `$SUZATARY_TOPICDRAW` when that is set.
+ * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write.
  */
 
 import assert from "node:assert/strict"
@@ -27,6 +27,7 @@ const app = await suite("topicdraw", PHONE)
 const tapped = (topic: string): string => `new Promise((done) => {
   const start = performance.now()
   let closed = null
+  window.e2eTapped = start
   document.querySelector(".topicsheet .act-topicwrite").click()
   const look = () => {
     const now = performance.now()
@@ -40,6 +41,24 @@ const tapped = (topic: string): string => `new Promise((done) => {
 })`
 
 type Run = { readonly closed: number; readonly drawn: number }
+type Steps = Readonly<Record<string, number>>
+
+const pageSteps = (drawn: number): string => `(() => {
+  const from = window.e2eTapped, until = from + ${drawn}
+  const steps = {}
+  for (const m of performance.getEntriesByType("measure"))
+    if (["write:worker", "ask:Stream", "page:draw"].includes(m.name) && m.startTime >= from && m.startTime <= until) steps[m.name] = m.duration
+  return steps
+})()`
+
+// The worker's measures of its latest write, summed by name.
+const WORKER_STEPS = `(() => {
+  const all = performance.getEntriesByType("measure").filter((m) => m.name.startsWith("write:"))
+  const begun = all.filter((m) => m.name === "write:ready").at(-1)?.startTime ?? 0
+  const steps = {}
+  for (const m of all) if (m.startTime >= begun) steps[m.name] = (steps[m.name] ?? 0) + m.duration
+  return steps
+})()`
 
 const summary = (ms: readonly number[]): { readonly median: number; readonly slowest: number } => {
   const sorted = [...ms].sort((a, b) => a - b)
@@ -54,6 +73,7 @@ app.scene("measured: the tap on a topic to the sheet closed and the chip drawn, 
   await app.page.waitFor(`document.querySelector(".streamround .roundtopicadd") !== null`, { timeout: 30 * 60_000 })
   await app.page.network({ offline: false, latency: LATENCY_MS, downloadThroughput: THROUGHPUT, uploadThroughput: THROUGHPUT })
   const runs: Run[] = []
+  const steps: Steps[] = []
   for (let n = 0; n < RUNS; n++) {
     const topic = `measured-${Date.now()}-${n}`
     await app.page.click(".streamround .roundtopicadd")
@@ -63,9 +83,12 @@ app.scene("measured: the tap on a topic to the sheet closed and the chip drawn, 
     const run = await app.page.evaluate<Run>(tapped(topic), 90_000)
     assert.ok(run.drawn >= 0, `the chip ${topic} was drawn`)
     runs.push(run)
+    steps.push({ ...(await app.page.evaluate<Steps>(pageSteps(run.drawn))), ...(await app.page.inWorker<Steps>("prodromework", WORKER_STEPS)) })
   }
   await app.page.network(null)
-  const report = { latency: LATENCY_MS, closed: summary(runs.map(r => r.closed)), drawn: summary(runs.map(r => r.drawn)), runs }
+  const named = [...new Set(steps.flatMap(s => Object.keys(s)))].sort()
+  const perStep = Object.fromEntries(named.map(n => [n, summary(steps.map(s => s[n] ?? 0))]))
+  const report = { latency: LATENCY_MS, closed: summary(runs.map(r => r.closed)), drawn: summary(runs.map(r => r.drawn)), steps: perStep, runs }
   console.log(JSON.stringify(report, null, 2))
   const out = process.env["SUZATARY_TOPICDRAW"]
   if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
