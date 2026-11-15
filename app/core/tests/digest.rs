@@ -966,7 +966,8 @@ impl Box {
 /// A conversation drawn from `kinds`: the owner's turn, the secretary's answer, a clean verb's
 /// answer, or a verb's answer that holds somebody else's words. The secretary's answer restates
 /// the last such answer its model holds, as a model would: a stateless model holds the window
-/// it is sent (the last [`WINDOW`] turns, from the first owner's turn among them), and when
+/// it is sent (the last [`WINDOW`] turns, from the first round among them: a round opens at the
+/// first turn and after each answer of the secretary's, which never calls a verb here), and when
 /// `sessions` lets some answers open a session (a `Kept` line, written before the answer), that
 /// session holds every turn from the first its opening window sent. The generator keeps its own
 /// account of what its model was sent, never the code it tests.
@@ -978,10 +979,10 @@ fn conversation(kinds: &[u8], sessions: bool) -> Vec<Entry> {
     let mut kept: Option<usize> = None;
     let window = |turns: &[Turn]| {
         let floor = turns.len().saturating_sub(WINDOW);
-        let owners = |at: &usize| matches!(turns[*at], Turn::Person { .. });
+        let opens = |at: &usize| *at == 0 || matches!(turns[*at - 1], Turn::Model { .. });
         (floor..turns.len())
-            .find(owners)
-            .or_else(|| (0..floor).rev().find(owners))
+            .find(opens)
+            .or_else(|| (0..floor).rev().find(opens))
             .unwrap_or(0)
     };
     for (k, kind) in kinds.iter().enumerate() {
@@ -1902,84 +1903,155 @@ fn a_session_is_told_the_facts_then_the_record() {
     }
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
+/// [`zoom_law`] on proptest's shrunk case: the owner's turn 1 follows a verb's answer, so it opens
+/// no round, and the secretary's answer 61 is sent turns 23 on, after the read at 21.
+#[test]
+fn a_zoom_answers_its_nodes_taint_when_the_owner_speaks_mid_round() {
+    let kinds = [
+        95, 112, 50, 55, 72, 247, 182, 200, 140, 255, 2, 80, 116, 6, 51, 190, 82, 159, 227, 75, 36,
+        79, 185, 133, 116, 113, 190, 96, 221, 166, 177, 148, 128, 80, 50, 240, 130, 88, 220, 97,
+        184, 10, 77, 89, 84, 169, 193, 190, 160, 121, 37, 138, 188, 60, 178, 194, 25, 172, 188, 61,
+        20, 73, 89, 170, 208, 175, 110, 23, 202, 223, 77, 66, 103, 251, 245, 115, 25, 161, 97, 236,
+        4, 126, 220,
+    ];
+    zoom_law(&kinds, 3_688).expect("the law holds");
+}
 
-    /// Law 9's last half: a `zoom` answers the class of the node it opened, so after zooming
-    /// into a tainted part a `remember` in that round is a card, and after a clean one it is
-    /// not. And zooming every part down to its lines reads every line once, in order: the record
-    /// is lossless beneath its view.
+/// A round in which the owner asks, the secretary zooms and is answered `answer`, then calls
+/// `remember`: what the binding gate reads after a zoom.
+fn zoomed_round(answer: &str) -> suzatary_core::secretary::store::Stored {
+    let id = ConversationId::new("z").expect("a slug");
+    let line = |turn: Turn, by: Option<&str>| Entry::Said {
+        at: at(0),
+        turn,
+        by: by.map(Into::into),
+    };
+    let call = |verb: &str| Turn::Model {
+        text: String::new(),
+        calls: vec![suzatary_core::secretary::model::ToolCall {
+            verb: verb.into(),
+            args: std::collections::BTreeMap::new(),
+        }],
+    };
+    suzatary_core::secretary::store::Stored::of(
+        &id,
+        &[
+            Entry::Opened {
+                at: at(0),
+                title: suzatary_core::secretary::words::Words::kept("z".to_owned()),
+                model: "m".to_owned(),
+                kind: suzatary_core::secretary::store::Kind::Topic,
+            },
+            line(
+                Turn::Person {
+                    text: "what did I say".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                Some("ada"),
+            ),
+            line(call("zoom"), None),
+            line(
+                Turn::Tool {
+                    verb: "zoom".into(),
+                    answer: answer.to_owned(),
+                    outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+                    files: Vec::new(),
+                },
+                None,
+            ),
+            line(call("remember"), None),
+        ],
+    )
+    .expect("a conversation")
+}
+
+/// Law 9's last half: a `zoom` answers the class of the node it opened, so after zooming into a
+/// tainted part a `remember` in that round is a card, and after a clean one it is not. And zooming
+/// every part down to its lines reads every line once, in order: the record is lossless beneath
+/// its view.
+fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
+    use suzatary_core::secretary::compaction::Reading;
+    use suzatary_core::secretary::taint::{self, Taint};
+    let the = Box::default();
+    the.write("a", turns(kinds));
+    the.compact_all(&Recording::joining());
+    let reading = Reading::of(&the.digests().reads()).expect("reads whole");
+    let digest = reading.digest();
+    let view = digest
+        .view(u64::try_from(budget).expect("small"))
+        .expect("lines");
+    let mut lines = Vec::new();
+    let mut handles: Vec<String> = view
+        .parts
+        .iter()
+        .map(prodrome_core::digest::Part::handle)
+        .collect();
+    handles.reverse();
+    while let Some(handle) = handles.pop() {
+        let (first, count) = handle.split_once('+').expect("first+lines");
+        let first: usize = first.parse().expect("a line");
+        let span = first..first + count.parse::<usize>().expect("a count");
+        let nodes = digest
+            .tree()
+            .expect("a tree")
+            .cover(span.clone())
+            .expect("a handle the reading printed names lines");
+        prop_assert_eq!(nodes.len(), 1, "a printed handle names one node");
+        let answer =
+            suzatary_core::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
+        let said = serde_json::to_string_pretty(&answer).expect("prints");
+        let tainted = nodes[0].measure().taint == Taint::Tainted;
+        let round = zoomed_round(&said);
+        prop_assert_eq!(taint::tainted(&round), tainted, "{}", said);
+        prop_assert!(taint::opener(&round).is_some());
+        if !tainted {
+            prop_assert!(
+                !said.contains("INJECTED"),
+                "a clean node holds no tainted word"
+            );
+        }
+        let beneath = answer["beneath"].as_array().expect("parts");
+        if span.len() == 1 {
+            lines.push(
+                beneath[0]["said"]
+                    .as_str()
+                    .expect("a line whole")
+                    .to_owned(),
+            );
+        } else {
+            handles.extend(
+                beneath
+                    .iter()
+                    .rev()
+                    .map(|part| part["handle"].as_str().expect("a handle").to_owned()),
+            );
+        }
+    }
+    let expected: Vec<String> = turns(kinds)
+        .into_iter()
+        .enumerate()
+        .map(|(k, turn)| {
+            suzatary_core::secretary::digest_view::whole(&Entry::Said {
+                at: at(k),
+                turn,
+                by: Some("ada".into()),
+            })
+        })
+        .collect();
+    prop_assert_eq!(lines, expected);
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
+
     #[test]
     fn a_zoom_answers_its_nodes_taint_and_opens_down_to_every_line(
         kinds in proptest::collection::vec(any::<u8>(), 20..90),
         budget in 200usize..4_000,
     ) {
-        use suzatary_core::secretary::compaction::Reading;
-        use suzatary_core::secretary::taint::{self, Taint};
-        let the = Box::default();
-        the.write("a", turns(&kinds));
-        the.compact_all(&Recording::joining());
-        let reading = Reading::of(&the.digests().reads()).expect("reads whole");
-        let digest = reading.digest();
-        let view = digest.view(u64::try_from(budget).expect("small")).expect("lines");
-        let mut lines = Vec::new();
-        let mut handles: Vec<String> = view.parts.iter().map(prodrome_core::digest::Part::handle).collect();
-        handles.reverse();
-        while let Some(handle) = handles.pop() {
-            let (first, count) = handle.split_once('+').expect("first+lines");
-            let first: usize = first.parse().expect("a line");
-            let span = first..first + count.parse::<usize>().expect("a count");
-            let nodes = digest.tree().expect("a tree").cover(span.clone()).expect("a handle the reading printed names lines");
-            prop_assert_eq!(nodes.len(), 1, "a printed handle names one node");
-            let answer = suzatary_core::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
-            let said = serde_json::to_string_pretty(&answer).expect("prints");
-            let round = |answer: &str| {
-                let id = ConversationId::new("z").expect("a slug");
-                let line = |turn: Turn, by: Option<&str>| Entry::Said {
-                    at: at(0),
-                    turn,
-                    by: by.map(Into::into),
-                };
-                let call = |verb: &str| Turn::Model {
-                    text: String::new(),
-                    calls: vec![suzatary_core::secretary::model::ToolCall {
-                        verb: verb.into(),
-                        args: std::collections::BTreeMap::new(),
-                    }],
-                };
-                suzatary_core::secretary::store::Stored::of(&id, &[
-                    Entry::Opened { at: at(0), title: suzatary_core::secretary::words::Words::kept("z".to_owned()), model: "m".to_owned(), kind: suzatary_core::secretary::store::Kind::Topic },
-                    line(Turn::Person { text: "what did I say".to_owned(), references: Vec::new(), attachments: Vec::new() }, Some("ada")),
-                    line(call("zoom"), None),
-                    line(Turn::Tool { verb: "zoom".into(), answer: answer.to_owned(), outcome: suzatary_core::secretary::outcome::Outcome::Answered, files: Vec::new() }, None),
-                    line(call("remember"), None),
-                ]).expect("a conversation")
-            };
-            let tainted = nodes[0].measure().taint == Taint::Tainted;
-            prop_assert_eq!(taint::tainted(&round(&said)), tainted, "{}", said);
-            prop_assert!(taint::opener(&round(&said)).is_some());
-            if !tainted {
-                prop_assert!(!said.contains("INJECTED"), "a clean node holds no tainted word");
-            }
-            let beneath = answer["beneath"].as_array().expect("parts");
-            if span.len() == 1 {
-                lines.push(beneath[0]["said"].as_str().expect("a line whole").to_owned());
-            } else {
-                handles.extend(beneath.iter().rev().map(|part| {
-                    part["handle"].as_str().expect("a handle").to_owned()
-                }));
-            }
-        }
-        let expected: Vec<String> = turns(&kinds)
-            .into_iter()
-            .enumerate()
-            .map(|(k, turn)| suzatary_core::secretary::digest_view::whole(&Entry::Said {
-                at: at(k),
-                turn,
-                by: Some("ada".into()),
-            }))
-            .collect();
-        prop_assert_eq!(lines, expected);
+        zoom_law(&kinds, budget)?;
     }
 }
 
