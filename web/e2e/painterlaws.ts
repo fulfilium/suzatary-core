@@ -4,6 +4,7 @@
 
 import painter from "../src/painter/painter";
 import run from "../src/painter/run";
+import type { Input } from "../src/wire/generated/pages";
 
 export namespace painterlaws {
   // A program's class as `viewtree::export!` makes it, with the fresh draw the laws compare against.
@@ -12,7 +13,7 @@ export namespace painterlaws {
   // What one step does: hand the program an input of the runtime's, tap the `at`-th button, type into the `at`-th field,
   // or answer the `at`-th act still waiting.
   export type Step =
-    | { readonly type: "input"; readonly input: unknown }
+    | { readonly type: "input"; readonly input: Input<unknown, unknown, unknown> }
     | { readonly type: "click"; readonly at: number }
     | { readonly type: "type"; readonly at: number; readonly words: string }
     | { readonly type: "answer"; readonly at: number; readonly body: unknown; readonly refused: string | null };

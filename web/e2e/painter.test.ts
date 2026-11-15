@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { BASE, PHONE, suite } from "./harness";
 import { GROUPS, overviewLine, reshuffled, rng } from "../test/gen";
 import type { Rng } from "../test/gen";
-import type { Context, Device, SettingsFlags, SettingsHold } from "../src/wire/generated/pages";
+import type { Context, Device, Input, SettingsFlags, SettingsHold } from "../src/wire/generated/pages";
 import type { Offer, Overview, OverviewLine } from "../src/wire/generated/wire";
 import type painterlaws from "./painterlaws";
 
@@ -79,20 +79,20 @@ const context = (r: Rng): Context => {
 };
 
 // What the tab's register of a question may hold, as the host hands it over.
-const held = (r: Rng, ask: SettingsHold, body: unknown): unknown => ({
+const held = (r: Rng, ask: SettingsHold, body: unknown): Input<unknown, unknown, unknown> => ({
   type: "Held",
   ask,
   reading: r.pick([{ type: "Loading" }, { type: "Error", e: "no answer" }, { type: "Val", v: { type: "Done", body } }, { type: "Val", v: { type: "Done", body } }]),
   behind: r.bool(0.2) ? { why: r.bool() ? "offline" : null, since: 1_780_000_000_000 } : null,
 });
 
-const input = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): unknown => {
+const input = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): Input<unknown, unknown, unknown> => {
   const o = overview(r, lines);
   return r.pick([
     () => held(r, "Overview", o),
     () => held(r, "Device", r.bool(0.8) ? device(r) : null),
     () => held(r, { Rows: { type: "Proposals" } }, { payload: { at: "2026-10-05T04:00:00", proposals: [], failed: [] }, held: [] }),
-    () => ({ type: "Context", ...context(r) }),
+    (): Input<unknown, unknown, unknown> => ({ type: "Context", ...context(r) }),
   ])();
 };
 

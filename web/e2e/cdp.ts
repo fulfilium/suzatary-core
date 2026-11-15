@@ -327,10 +327,20 @@ export class Page {
   /** The sentence `refuse` answers with. */
   private refusal = "";
 
+  /** The trace `trace` is recording, and what ends its stop; null when none is. */
+  private tracing: { readonly events: TraceEvent[]; readonly ended: () => void } | null = null;
+
   constructor(
     private readonly connection: Connection,
     private readonly session: string,
-  ) {}
+  ) {
+    connection.on("Tracing.dataCollected", (params, from) => {
+      if (from === session) this.tracing?.events.push(...(params["value"] as TraceEvent[]));
+    });
+    connection.on("Tracing.tracingComplete", (_, from) => {
+      if (from === session) this.tracing?.ended();
+    });
+  }
 
   private async command(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     return within(this.connection.send(method, params, this.session), ANSWER_MS, `the DevTools command ${method}`);
@@ -1180,6 +1190,52 @@ export class Page {
     return async () => (await this.command("Profiler.stop", {}))["profile"] as CpuProfile;
   }
 
+  /** The browser's trace of `categories` (its timeline, V8's samples, the page's User Timing) from now until the
+   * returned stop, which answers every event recorded, each on the trace's clock in microseconds. */
+  async trace(categories: readonly string[]): Promise<() => Promise<readonly TraceEvent[]>> {
+    const events: TraceEvent[] = [];
+    let ended = (): void => {};
+    const complete = new Promise<void>((done) => (ended = done));
+    this.tracing = { events, ended };
+    await this.command("Tracing.start", { transferMode: "ReportEvents", traceConfig: { recordMode: "recordAsMuchAsPossible", includedCategories: categories } });
+    return async () => {
+      await this.command("Tracing.end");
+      await within(complete, ANSWER_MS, "the trace's end");
+      this.tracing = null;
+      return events;
+    };
+  }
+
+  /** Each node a trace names by its backend id (a `Layout` event's roots, say), as `tag#id.class`, or `gone` when the
+   * document no longer holds it. */
+  async describeNodes(ids: readonly number[]): Promise<readonly string[]> {
+    await this.command("DOM.getDocument", { depth: 0 });
+    return Promise.all(
+      ids.map((backendNodeId) =>
+        this.command("DOM.describeNode", { backendNodeId }).then(
+          (r) => {
+            const node = r["node"] as { readonly nodeName: string; readonly attributes?: readonly string[] };
+            const attr = (name: string): string => {
+              const a = node.attributes ?? [];
+              const at = a.indexOf(name);
+              return at >= 0 && at % 2 === 0 ? (a[at + 1] ?? "") : "";
+            };
+            const id = attr("id");
+            const cls = attr("class").trim().split(/\s+/).filter((c) => c !== "").join(".");
+            return `${node.nodeName.toLowerCase()}${id === "" ? "" : `#${id}`}${cls === "" ? "" : `.${cls}`}`;
+          },
+          () => "gone",
+        ),
+      ),
+    );
+  }
+
+  /** What the browser does when the system runs short of memory: at `critical`, it drops caches it can rebuild, such
+   * as decoded font data. */
+  async memoryPressure(level: "moderate" | "critical"): Promise<void> {
+    await this.command("Memory.simulatePressureNotification", { level });
+  }
+
   /** The storage quota `origin` is given, as `navigator.storage.estimate()` reads it; `null` is the browser's own again. */
   async quota(origin: string, bytes: number | null): Promise<void> {
     await this.command("Storage.overrideQuotaForOrigin", bytes === null ? { origin } : { origin, quotaSize: bytes });
@@ -1227,6 +1283,29 @@ export interface CpuProfile {
   }[];
   readonly samples: readonly number[];
   readonly timeDeltas: readonly number[];
+}
+
+/** One event of a Chromium trace, as `Page.trace` answers it: `ph` is its phase (`X` complete, `B`/`E` a begin and its
+ * end, `M` metadata), `ts`, `dur` and `tdur` (time on the processor) are microseconds. */
+export interface TraceEvent {
+  readonly name: string;
+  readonly cat: string;
+  readonly ph: string;
+  readonly ts: number;
+  readonly dur?: number;
+  readonly tdur?: number;
+  readonly pid: number;
+  readonly tid: number;
+  readonly id?: string;
+  readonly id2?: { readonly local?: string; readonly global?: string };
+  readonly args?: {
+    readonly name?: string;
+    readonly data?: Record<string, unknown>;
+    readonly beginData?: Record<string, unknown>;
+    readonly endData?: Record<string, unknown>;
+    readonly elementCount?: number;
+    readonly detail?: string;
+  };
 }
 
 /** What `Page.journal` records: a scene's own marks between the page's lines, in the order they happened. */

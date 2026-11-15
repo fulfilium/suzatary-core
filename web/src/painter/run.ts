@@ -1,5 +1,6 @@
 // A Rust program in the tab: its patches painted, each effect handed to the host, one input at a time.
 
+import type { Input } from "../wire/generated/pages"
 import mailbox from "./mailbox"
 import painter from "./painter"
 import scroll from "./scroll"
@@ -17,11 +18,15 @@ export namespace run {
   export type Stepped = { readonly fromEnd: number }
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
+  // An input as its step's measure names it: its type, and the ask it answers.
+  const named = (input: Input<unknown, unknown, unknown>): string =>
+    input.type === "Context" ? input.type : `${input.type} ${JSON.stringify(input.ask)}`
+
   // Serde prints the `Effect` sum the handler's type is generated from, so it needs no decoder.
   const parse = <E>(json: string): readonly E[] => JSON.parse(json)
 
   // A `Keep` restores the place of the scroll box `box` finds (one a page draws itself is there once drawn).
-  export const start = <I, E>(
+  export const start = <I extends Input<unknown, unknown, unknown>, E>(
     root: HTMLElement,
     page: Module,
     foreign: painter.Foreign,
@@ -32,7 +37,7 @@ export namespace run {
     refresh?: painter.Refresh,
   ): T<I> => {
     let live = true
-    const inputs = mailbox.of<I>(input => void step("input", () => page.input(JSON.stringify(input))))
+    const inputs = mailbox.of<I>(input => void step(named(input), () => page.input(JSON.stringify(input))))
     const step = (name: string, patches: () => Uint8Array | undefined): boolean =>
       inputs.turn(() => {
         if (!live) return false

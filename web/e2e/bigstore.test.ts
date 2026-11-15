@@ -148,6 +148,32 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
   }
 })
 
+// A closed fold holds nothing in layout: under a closed <details>, no element but its summary has a box. Chromium keeps
+// a closed fold's content laid out behind a lock and lays all of it out at once when the lock is lifted (it does under
+// memory pressure), so the largest conversation's folds would cost one layout of every fold together.
+const FOLDS = `(() => {
+  const closed = [...document.querySelectorAll("details:not([open])")]
+  const boxed = closed.flatMap((d) =>
+    [...d.querySelectorAll(":scope > :not(summary), :scope > :not(summary) *")]
+      .filter((e) => e.getClientRects().length > 0)
+      .map((e) => e.tagName.toLowerCase() + (e.className === "" ? "" : "." + String(e.className).split(" ")[0])))
+  return { closed: closed.length, boxed }
+})()`
+
+app.scene("a conversation's closed folds hold no layout box once it is opened", async () => {
+  await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  await app.page.navigate(`${LINES_BASE}/?folds#/`)
+  await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: STEP_MS })
+  await app.page.evaluate(`void (location.hash = "#/secretary")`)
+  await app.page.waitFor(BULK, { timeout: STEP_MS })
+  const was = await app.page.evaluate<number>(placed)
+  await app.page.evaluate(`void (location.hash = "#/secretary/bulk-0")`)
+  await app.page.waitFor(`document.querySelectorAll(".turns .turn").length > 0 && ${placed} > ${was}`, { timeout: STEP_MS })
+  const folds = await app.page.evaluate<{ readonly closed: number; readonly boxed: readonly string[] }>(FOLDS)
+  assert.ok(folds.closed > 0, "the largest conversation draws closed folds")
+  assert.equal(folds.boxed.length, 0, `elements under ${folds.closed} closed folds have a layout box: ${folds.boxed.slice(0, 8).join(", ")}`)
+})
+
 // The API reads open now, less the event streams, which stay open for a page's life; a build's own files are the shell's
 // worker's to answer.
 const reads = (open: readonly string[]): string[] => open.filter((r) => r.includes(" /api/") && !r.endsWith("/events"))

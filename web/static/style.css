@@ -1016,6 +1016,13 @@ select {
   color: var(--ink);
 }
 
+/* A closed fold's content has no box. Chromium keeps it laid out behind a
+   lock and lays all of it out again when the lock is lifted; a conversation
+   holds dozens of closed folds. */
+details:not([open]) > :not(summary) {
+  display: none;
+}
+
 /* A button is a capsule: secondary is outlined, the primary act is filled. */
 button {
   cursor: pointer;
@@ -3013,13 +3020,8 @@ h1[tabindex="-1"]:focus {
   gap: var(--s-2);
 }
 
-/* BUBBLES, and the shape carries the speaker (2026-09-10). They were three
-   identical bordered blocks in a column, so who said what was a small uppercase
-   word at the top of each — legible, and not scannable, which for a transcript
-   is the whole job. A person's turn is now on the right with the corner nearest
-   them squared off, the secretary's on the left, and a verb's answer is full
-   width because it is REFERENCE and not conversation. Nothing is hidden and no
-   colour carries a meaning on its own: the label is still there. */
+/* The shape carries the speaker: a person's turn sits on the right, the
+   secretary's on the left, and a verb's answer is full width. */
 .turn {
   max-width: 88%;
   border: 2px solid var(--line);
@@ -3073,9 +3075,7 @@ h1[tabindex="-1"]:focus {
   color: var(--ink-muted);
 }
 
-/* THE PARTIAL (§3, §6 commit 6): the model's reply, still streaming in. A
-   thin left border rather than the ordinary card border says "not settled
-   yet" without a second colour. */
+/* The model's reply while it streams: a dashed border, no second colour. */
 .turn.partial {
   border-style: dashed;
   border-color: var(--ink-muted);
@@ -3245,11 +3245,7 @@ h1[tabindex="-1"]:focus {
   margin-top: var(--s-1);
 }
 
-/* ONE ROUND (`docs/CHATSHAPE-PLAN-2026-09-15.md` §4.1, §6 commit 2): the
-   opening, its folded trace and its answer, stacked in the same flow the flat
-   turn list used before it — a round carries no border of its own, so the
-   page still reads as one column of bubbles and one small fold line between
-   a question and its answer. */
+/* A round (its opening, folded trace and answer) has no border of its own. */
 .round {
   display: flex;
   flex-direction: column;
@@ -3291,11 +3287,7 @@ h1[tabindex="-1"]:focus {
   margin-top: var(--s-2);
 }
 
-/* THE TRANSCRIPT AS A PLACE (§4.4, §6 commit 6). `.roundwrap` is a KEYING
-   node only — `display: contents` so it takes no part in `.turns`'s own flex
-   layout, and a day separator and its round still sit as direct children for
-   the same gap the rest of the column already has; `.rounds`, the keyed list
-   of them, is one too. */
+/* Keying nodes only: a day separator and its round are items of `.turns`. */
 .rounds,
 .roundwrap {
   display: contents;
