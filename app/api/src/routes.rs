@@ -794,6 +794,12 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     /// The newest conversation first: conversations by their latest line, latest first, each in
     /// the store's linear order, every object after the ancestors it lacks; then what is no line.
     /// So a device draws the conversation it opens to from the first piece.
+    ///
+    /// That order over every object is a function of the head set, kept once for it; a piece's is
+    /// its restriction to what the piece lacks. What the asker holds is closed under parents, so
+    /// a walk to an object's ancestors never passes through a held one to a lacking one, and the
+    /// order over `lacking` alone is that restriction (the law
+    /// `law_a_piece_is_sent_in_the_whole_order_less_what_is_held`).
     fn order(
         &self,
         graph: &suzatary_store::store::Graph<suzatary_core::secretary::line_event::LineEvent>,
@@ -802,40 +808,68 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
             &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
         )],
     ) -> Vec<usize> {
-        let latest = graph.reading("latest line of each conversation", |graph| {
-            let mut latest: std::collections::HashMap<
-                suzatary_base::conversation_id::ConversationId,
-                fpl::Instant,
-            > = std::collections::HashMap::new();
-            for (_, envelope) in graph.objects() {
-                if let Some(line) = envelope.event() {
-                    let at = fpl::instant_of(line.at());
-                    latest
-                        .entry(line.conversation().clone())
-                        .and_modify(|was| *was = (*was).max(at))
-                        .or_insert(at);
-                }
-            }
-            latest
+        let rank = graph.reading("newest first, each object's place", |graph| {
+            let every: Vec<_> = graph.objects().collect();
+            newest_first(&every)
+                .into_iter()
+                .enumerate()
+                .map(|(place, at)| (every[at].0.clone(), place))
+                .collect::<std::collections::HashMap<_, _>>()
         });
-        let mut wanted: Vec<_> = lacking
+        // Each place looked up once, then sorted. Every lacking object is the graph's, so each has
+        // a place; `closed_order` makes the answer a linear extension whatever the places say, and
+        // the store's own order after them sends any object without one, last.
+        let mut placed: Vec<(usize, usize)> = lacking
             .iter()
             .enumerate()
-            .map(|(at, (_, envelope))| {
-                let conversation = envelope
-                    .event()
-                    .map(suzatary_core::secretary::line_event::LineEvent::conversation);
-                let newest = conversation.and_then(|id| latest.get(id)).copied();
-                (std::cmp::Reverse(newest), conversation, at)
-            })
+            .filter_map(|(at, (name, _))| Some((*rank.get(*name)?, at)))
             .collect();
-        wanted.sort_unstable();
-        closed_order(lacking, wanted.into_iter().map(|(_, _, at)| at))
+        placed.sort_unstable();
+        closed_order(
+            lacking,
+            placed.into_iter().map(|(_, at)| at).chain(0..lacking.len()),
+        )
     }
 }
 
-/// `wanted`, a permutation of `lacking`'s indices, made a linear extension: each object is sent
-/// after every ancestor of it `lacking` holds, those in `lacking`'s own order, which is one.
+/// [`Nodes::order`] over `every` object of one head set, as their indices.
+fn newest_first(
+    every: &[(
+        &prodrome_core::event::Hash,
+        &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+    )],
+) -> Vec<usize> {
+    let mut latest: std::collections::HashMap<
+        &suzatary_base::conversation_id::ConversationId,
+        fpl::Instant,
+    > = std::collections::HashMap::new();
+    for (_, envelope) in every {
+        if let Some(line) = envelope.event() {
+            let at = fpl::instant_of(line.at());
+            latest
+                .entry(line.conversation())
+                .and_modify(|was| *was = (*was).max(at))
+                .or_insert(at);
+        }
+    }
+    let mut wanted: Vec<_> = every
+        .iter()
+        .enumerate()
+        .map(|(at, (_, envelope))| {
+            let conversation = envelope
+                .event()
+                .map(suzatary_core::secretary::line_event::LineEvent::conversation);
+            let newest = conversation.and_then(|id| latest.get(id)).copied();
+            (std::cmp::Reverse(newest), conversation, at)
+        })
+        .collect();
+    wanted.sort_unstable();
+    closed_order(every, wanted.into_iter().map(|(_, _, at)| at))
+}
+
+/// `wanted`, `lacking`'s indices in the order wanted (each at least once; a repeat is passed over),
+/// made a linear extension: each object is sent after every ancestor of it `lacking` holds, those
+/// in `lacking`'s own order, which is one.
 fn closed_order<E>(
     lacking: &[(
         &prodrome_core::event::Hash,
@@ -927,7 +961,12 @@ where
     E: prodrome_core::schema::Schema + Send + Sync + 'static,
     S: Sends<E>,
 {
+    // The epoch's lock is waited for before the read and its record written after: `lock` and
+    // `epoch` name them, so a piece's parts cover the whole answer.
+    let asked = std::time::Instant::now();
+    let read_at = std::cell::Cell::new(None);
     let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
+        timed.0.borrow_mut().push(("lock", asked.elapsed()));
         let graph = timed.time("history", || store.graph())?;
         let seen = suzatary_signatures::epoch::Seen {
             geneses: names(graph.geneses()).into_iter().collect(),
@@ -984,8 +1023,12 @@ where
                 .time("record", || lacking.record_with(sent))
                 .map_err(suzatary_store::store::StoreError::from)?,
         );
+        read_at.set(Some(std::time::Instant::now()));
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
+    if let Some(read) = read_at.get() {
+        timed.0.borrow_mut().push(("epoch", read.elapsed()));
+    }
     Ok(Pulled {
         snapshot: Snapshot {
             heads: names(graph.heads()),
@@ -1034,6 +1077,7 @@ pub fn lines_skeleton(
     now: Datetime,
     cut: Cut,
 ) -> Answered<SkeletonPayload> {
+    let started = std::time::Instant::now();
     let timed = Spent::default();
     let Pulled {
         snapshot,
@@ -1060,13 +1104,17 @@ pub fn lines_skeleton(
     let husked = timed.time("husks", || husked(&graph, &keys, &sent));
     let sized = timed.time("sizes", || held_sizes(conversations.lines, &sent, nodes))?;
     let (parts, total) = timed.line();
-    // One line a piece, so the box's log says where a slow piece spent its time.
+    // One line a piece, so the box's log says where a slow piece spent its time: the parts, their
+    // sum, and the whole call beside it, so what no part names shows as their difference.
+    let whole = started.elapsed().as_millis();
     tracing::info!(
         target: "suzatary::skeleton",
         nodes = sent.len(),
         weight,
         rest,
         ms = total,
+        whole,
+        unnamed = whole.saturating_sub(total),
         "skeleton piece: {parts}"
     );
     // A replica that lacks nothing holds the store's heads already.

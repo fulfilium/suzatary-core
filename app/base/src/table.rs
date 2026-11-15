@@ -26,7 +26,7 @@ impl<V: Clone + Eq> Table<V> {
     /// The value kept under `key`, if one is.
     pub fn kept(&self, key: &Key) -> Option<V> {
         match self.held().get(key) {
-            Lookup::Hit(value) => Some(value.clone()),
+            Lookup::Hit(value) => Some(value),
             Lookup::Miss | Lookup::Finding(_) => None,
         }
     }
@@ -49,7 +49,7 @@ impl<V: Clone + Eq> Table<V> {
 
     /// Every key that holds two values.
     pub fn findings(&self) -> Vec<Finding> {
-        self.held().findings().collect()
+        self.held().findings()
     }
 
     /// `computed`'s value, which `key` names: the kept one, or computed now (outside the lock, so

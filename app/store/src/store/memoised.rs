@@ -45,7 +45,7 @@ where
     let key = key(function, store)?;
     let hold = || cache.lock().unwrap_or_else(PoisonError::into_inner);
     if let Lookup::Hit(value) = hold().get(&key) {
-        return Ok(value.clone());
+        return Ok(value);
     }
     let value = read(store)?;
     // A second value under one key is the cache's finding to keep; this answer is the reading now.

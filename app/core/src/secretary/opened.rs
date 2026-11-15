@@ -198,7 +198,7 @@ mod tests {
             transcript::push(held.conversations(), &id, &said).expect("said");
             assert!(read_by_all(reading, &id).contains(SAID), "told: {told}");
             assert!(crate::secretary::held_lines::says(
-                &fold.lines.lock().expect("held").lines,
+                &mut fold.lines.lock().expect("held").lines,
                 SAID
             ));
             let keys: std::collections::BTreeSet<_> =
@@ -215,7 +215,7 @@ mod tests {
             let holds = || {
                 keys.iter().any(|key| fold.holds(key))
                     || crate::secretary::held_lines::says(
-                        &fold.lines.lock().expect("held").lines,
+                        &mut fold.lines.lock().expect("held").lines,
                         SAID,
                     )
             };

@@ -1471,10 +1471,11 @@ fn leaf(
 
 /// Whether anything `lines` keeps says `text`.
 #[cfg(test)]
-pub(crate) fn says<F: Folds>(lines: &HeldLines<F>, text: &str) -> bool {
+pub(crate) fn says<F: Folds>(lines: &mut HeldLines<F>, text: &str) -> bool {
     lines
         .cache
         .pairs()
+        .into_iter()
         .any(|(_, read)| format!("{read:?}").contains(text))
 }
 
@@ -1713,10 +1714,16 @@ mod tests {
         assert!(matches!(lines.round(&id, 0, &names), Held::Opened(_)));
         assert!(lines.read().0.is_ok());
         let says = "a title nobody else says";
-        assert!(super::says(&lines, says), "the reading opened the title");
+        assert!(
+            super::says(&mut lines, says),
+            "the reading opened the title"
+        );
         let gone: Vec<KeyName> = given.into_keys().collect();
         lines.keys(&BTreeMap::new(), &gone);
-        assert!(!super::says(&lines, says), "nothing cached still says it");
+        assert!(
+            !super::says(&mut lines, says),
+            "nothing cached still says it"
+        );
     }
 
     /// A measurement, run by hand with `--ignored --nocapture`: reading 1,200 rounds of mail-like

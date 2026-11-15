@@ -1061,9 +1061,11 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         subdir: "bo-at-example-test".to_owned(),
         sync: Sync::Gmail,
     };
-    let root =
-        std::env::temp_dir().join(format!("suzatary-lieer-calendars-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    // A directory of this call's own: the three fix-from-its-button scenes run as threads of one
+    // process, so a root named by the process alone was one store that each removed while
+    // another appended to it.
+    let scratch = tempfile::tempdir().expect("a scratch dir");
+    let root = scratch.path();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
     let (lines, healths, stored) = suzatary_cli::commands::google::read_calendars(
         &[account(sync.clone()), unsigned],
@@ -1097,7 +1099,6 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         vec![account(sync.clone())],
         "its mail stays where it was read"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// `propose_act` is clean (`taint`): no answer it gives, filed or refused, holds words from

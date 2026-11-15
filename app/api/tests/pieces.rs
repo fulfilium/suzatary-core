@@ -1240,3 +1240,38 @@ fn a_pull_s_size_is_the_weight_its_pieces_send() {
     }
     assert_eq!(said, Some(sent), "the objects' pull");
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// A pull from what a replica holds sends the skeleton in the order a pull from nothing
+    /// sends it, less what is held: the order is one per head set, and a piece's is its
+    /// restriction, wherever the replica's down-set ends.
+    #[test]
+    fn law_a_piece_is_sent_in_the_whole_order_less_what_is_held(
+        script in prop::collection::vec(write(), 1..24),
+        held_first in 0..64usize,
+    ) {
+        let mut store = Writer::new();
+        for write in &script {
+            store.apply(write);
+        }
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let books = Books { epochs: &epochs, frontiers: &frontiers };
+        let hashes = |since: &Since| -> Vec<String> {
+            routes::lines_skeleton(store.lines.conversations(), since, books, now(), Cut::Whole)
+                .expect("the whole")
+                .nodes
+                .iter()
+                .map(|node| node.hash.clone())
+                .collect()
+        };
+        let whole = hashes(&Since::Nothing);
+        let objects = store.lines.lines.objects().expect("reads");
+        // A replica holds a down-set: a prefix of the store's order.
+        let held: BTreeSet<Hash> = objects.iter().take(held_first).map(|(name, _)| name.clone()).collect();
+        let since = since_of(&frontiers, &objects, &held);
+        let less: Vec<String> = whole.into_iter().filter(|hash| !held.iter().any(|name| name.as_str() == hash)).collect();
+        prop_assert_eq!(hashes(&since), less);
+    }
+}
