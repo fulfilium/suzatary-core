@@ -516,13 +516,16 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
             Node::Round { .. } => Read::join(children),
             Node::Store { .. } => {
                 let mut read = Read::join(children);
-                read.gathered = F::gather(&read.closed);
+                read.gathered = crate::first_read::part("gather", || F::gather(&read.closed));
                 read
             }
             Node::Conversation { id, .. } => {
                 let mut read = Read::join(children);
                 let lines = std::mem::take(&mut read.open);
-                read.closed.insert(id.clone(), F::close(id, lines));
+                read.closed.insert(
+                    id.clone(),
+                    crate::first_read::part("close", || F::close(id, lines)),
+                );
                 read
             }
             Node::Line { leaf, .. } => {
@@ -572,7 +575,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
                         object: leaf.object.clone(),
                         line: Arc::clone(&leaf.line),
                         parents: leaf.parents.clone(),
-                        entry: leaf.line.entry(&read),
+                        entry: crate::first_read::part("open", || leaf.line.entry(&read)),
                     })],
                     closed: BTreeMap::new(),
                     gathered: F::Gathered::default(),

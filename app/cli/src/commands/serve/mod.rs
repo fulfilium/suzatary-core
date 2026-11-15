@@ -1006,14 +1006,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     ));
     let state = compaction::started(state, instance, serving.compacting);
 
-    for chain in std::iter::once(&first).chain(&rest) {
-        watch::warm_now(chain.caps, &chain.policy);
-    }
-    reconcile_orphaned_acts(&first).await;
-    erase_at_startup(&first).await;
-    open_default(&first).await;
-    notice_from_now_on(state.clone(), serving.moved).await;
-    resume_waiting(&state).await;
+    started_up(&first, &rest, &state, serving.moved).await;
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
     watch_from_now_on(instance, stores, &state, &first, rest);
 
@@ -1021,6 +1014,67 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     let service = router.into_make_service_with_connect_info::<SocketAddr>();
 
     serve_on(serving.listening, listener, service).await
+}
+
+/// Everything serve does before it listens, each step timed, and the steps logged as one line
+/// ([`Started`]): the markup warmed, orphaned acts reconciled, the startup's erasures, the default
+/// conversation opened, and the conversations left waiting resumed.
+async fn started_up(
+    first: &Chained,
+    rest: &[Chained],
+    state: &State,
+    moved: Arc<tokio::sync::Notify>,
+) {
+    let starting = std::time::Instant::now();
+    let mut started = Started::default();
+    started.step("warm", || {
+        for chain in std::iter::once(first).chain(rest) {
+            watch::warm_now(chain.caps, &chain.policy);
+        }
+    });
+    let at = std::time::Instant::now();
+    reconcile_orphaned_acts(first).await;
+    started.0.push(("reconcile", at.elapsed()));
+    erase_at_startup(first, &mut started).await;
+    let at = std::time::Instant::now();
+    open_default(first).await;
+    started.0.push(("default", at.elapsed()));
+    let at = std::time::Instant::now();
+    notice_from_now_on(state.clone(), moved).await;
+    resume_waiting(state).await;
+    started.0.push(("waiting", at.elapsed()));
+    started.log(starting.elapsed());
+}
+
+/// How long each step of serve's start took, in the order they ran: logged once, as one line at
+/// `suzatary::start`, before the server listens. It names steps and milliseconds, nothing a store
+/// holds.
+#[derive(Default)]
+struct Started(Vec<(&'static str, std::time::Duration)>);
+
+impl Started {
+    /// `run`'s answer, its time kept as `step`'s.
+    fn step<T>(&mut self, step: &'static str, run: impl FnOnce() -> T) -> T {
+        let at = std::time::Instant::now();
+        let answer = run();
+        self.0.push((step, at.elapsed()));
+        answer
+    }
+
+    /// The steps, `<step> <ms>` each, beside the whole start, `whole` long, as one line.
+    fn log(&self, whole: std::time::Duration) {
+        let steps = self
+            .0
+            .iter()
+            .map(|(step, spent)| format!("{step} {}", spent.as_millis()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        tracing::info!(
+            target: "suzatary::start",
+            whole = whole.as_millis(),
+            "serve start: {steps}"
+        );
+    }
 }
 
 /// The listener, bound before the markup warms, so no other server takes the port meanwhile.
@@ -1624,32 +1678,42 @@ fn tls_config(cert: &Path, key: &Path) -> anyhow::Result<rustls::ServerConfig> {
 }
 
 /// Each step reads only stored state, so a restart resumes it.
-async fn erase_at_startup(chain: &Chained) {
+async fn erase_at_startup(chain: &Chained, timed: &mut Started) {
     let caps = chain.caps;
     let done = tokio::task::spawn_blocking(move || {
+        let mut spent = Started::default();
         // In order, so a key the sweep kept keeps no summary that read its words.
-        let erased = caps
-            .secretary
-            .memories
-            .hold()
-            .and_then(|held| held.erase_forgotten());
-        let lines = suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
-            .map_err(Refusal::from);
-        let texts = caps.secretary.memories.sweep();
-        let indexed = suzatary_core::secretary::file_search::reindex(
-            caps.secretary.conversations,
-            caps.secretary.upload_index,
-        );
-        [
-            ("erased by forgetting", erased),
-            ("keys destroyed", lines),
-            ("texts deleted", texts),
-            ("uploads in the search index", indexed),
-        ]
+        let erased = spent.step("erase.forgotten", || {
+            caps.secretary
+                .memories
+                .hold()
+                .and_then(|held| held.erase_forgotten())
+        });
+        let lines = spent.step("erase.lines", || {
+            suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
+                .map_err(Refusal::from)
+        });
+        let texts = spent.step("erase.texts", || caps.secretary.memories.sweep());
+        let indexed = spent.step("erase.uploads", || {
+            suzatary_core::secretary::file_search::reindex(
+                caps.secretary.conversations,
+                caps.secretary.upload_index,
+            )
+        });
+        (
+            [
+                ("erased by forgetting", erased),
+                ("keys destroyed", lines),
+                ("texts deleted", texts),
+                ("uploads in the search index", indexed),
+            ],
+            spent,
+        )
     })
     .await;
     match done {
-        Ok(steps) => {
+        Ok((steps, spent)) => {
+            timed.0.extend(spent.0);
             for (what, step) in steps {
                 match step {
                     Ok(0) => {}
@@ -1671,11 +1735,12 @@ async fn erase_at_startup(chain: &Chained) {
 
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
-    tracing_subscriber::fmt()
+    // Installed already where `RUST_LOG` asked `main` for it, with the same filter.
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
-        .init();
+        .try_init();
     let serving = serving(&instance, args)?;
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

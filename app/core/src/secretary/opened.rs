@@ -111,7 +111,7 @@ impl Fold {
         for name in named {
             if !self.lines.key_ring().holds(name)
                 && !given.contains_key(name)
-                && let Some(key) = keys.get(name)?
+                && let Some(key) = crate::first_read::part("keys", || keys.get(name))?
             {
                 given.insert(name.clone(), spelled(&key));
             }
@@ -123,10 +123,8 @@ impl Fold {
             .cloned()
             .collect();
         self.lines.keys(&given, &[]);
-        self.lines.hold_objects(fresh, &gone);
-        let dead: Vec<KeyName> = self
-            .lines
-            .dead()
+        crate::first_read::part("hold", || self.lines.hold_objects(fresh, &gone));
+        let dead: Vec<KeyName> = crate::first_read::part("nodes", || self.lines.dead())
             .into_iter()
             .filter(|name| self.lines.key_ring().holds(name))
             .collect();

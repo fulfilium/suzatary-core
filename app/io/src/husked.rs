@@ -86,6 +86,7 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
     /// The files, each read again where its inode moved, and their reading.
     fn memory(&self) -> Result<MutexGuard<'_, Memory<E>>, ProdromeError> {
         let mut memory = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
+        let objects = suzatary_core::first_read::mine().then(std::time::Instant::now);
         let listed = self.listing()?.0;
         let before = memory.files.len();
         memory.files.retain(|name, _| listed.contains_key(name));
@@ -104,6 +105,10 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
             let kept = self.kept(&name);
             (name, (ino, kept))
         });
+        if let Some(started) = objects {
+            // The listing and every file read, hashed and parsed, as a wall time: they run spread.
+            suzatary_core::first_read::add_part("objects", started.elapsed());
+        }
         let moved = read.iter().any(|(name, (_, kept))| {
             !matches!(kept, Kept::Unread(_))
                 || !matches!(memory.files.get(name), Some((_, Kept::Unread(_))))
@@ -113,8 +118,12 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
         }
         memory.files.extend(read);
         if memory.read.is_none() {
-            let dag = Arc::new(Self::history(&memory.files).0);
-            let folded = Arc::new(prodrome_core::registers::fold(&dag.nodes()?));
+            let dag =
+                suzatary_core::first_read::part("dag", || Arc::new(Self::history(&memory.files).0));
+            let nodes = dag.nodes()?;
+            let folded = suzatary_core::first_read::part("registers", || {
+                Arc::new(prodrome_core::registers::fold(&nodes))
+            });
             let held = Held {
                 tips: dag.tips(),
                 dag,

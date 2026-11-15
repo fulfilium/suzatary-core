@@ -170,13 +170,14 @@ impl Interpreters {
 /// Logs go to stderr only: one stray line on stdout desynchronises the client.
 /// `RUST_LOG=warn,suzatary::timings=info` adds the memory-reading timings.
 pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
+    // Installed already where `RUST_LOG` asked `main` for it, to stderr as here.
+    let _ = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_ansi(false)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
         )
-        .init();
+        .try_init();
     let instance = crate::instance::Instance::open(path)?;
     // Leaked for the life of the process, so every record borrows them for 'static.
     let grounds: &'static crate::wiring::Grounds =

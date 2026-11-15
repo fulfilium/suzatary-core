@@ -38,7 +38,7 @@ rendering = [
 ]
 
 [layers.modules]
-held = ["attachment", "cast", "enclosed", "excerpt", "file_read", "for_model", "held_file",
+held = ["attachment", "cast", "enclosed", "excerpt", "file_read", "first_read", "for_model", "held_file",
   "held_value", "leak", "mail_error", "message_part", "pdf_text", "priced", "redact",
   "secretary/attached", "secretary/attachment_source", "secretary/upload_standing", "upload",
   "upload_index", "vault", "verb"]

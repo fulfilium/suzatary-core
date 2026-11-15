@@ -195,7 +195,9 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
         let excluded = suzatary_store::store::left_out(&dag);
         Ok(look(slot.insert(Remembered {
             heads,
-            graph: std::sync::Arc::new(suzatary_store::store::Graph::over(dag)?),
+            graph: std::sync::Arc::new(suzatary_core::first_read::part("graph", || {
+                suzatary_store::store::Graph::over(dag)
+            })?),
             excluded,
             verified: None,
         })))

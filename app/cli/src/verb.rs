@@ -144,6 +144,19 @@ impl Verb {
     }
 }
 
+/// A command logs only when asked: with `RUST_LOG` set, a subscriber with that filter, to stderr
+/// and plain (stdout is a command's answer, and the MCP server's protocol). `serve` and `mcp`
+/// install their own defaults otherwise, and take this one, with the same filter, when it is set.
+pub fn logs_when_asked() {
+    if std::env::var_os("RUST_LOG").is_some() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_writer(std::io::stderr)
+            .with_ansi(false)
+            .try_init();
+    }
+}
+
 /// Print a failure and its causes under the program's name, and exit 1.
 pub fn exit_on(program: &str, result: anyhow::Result<()>) {
     if let Err(failed) = result {

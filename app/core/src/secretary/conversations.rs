@@ -80,8 +80,14 @@ impl ReadConversations<'_> {
     /// # Errors
     /// The stores' own.
     pub fn fold<T>(&self, read: impl FnOnce(&mut HeldLines<TheBox>) -> T) -> Result<T, StoreError> {
+        // This process's first read of the lines is logged once, part by part (`first_read::part`).
+        let first = crate::first_read::begins();
         let graph = timed(Phase::Lines, || self.lines.graph())?;
-        timed(Phase::Opened, || self.opened.read(&graph, self.keys, read))
+        let read = timed(Phase::Opened, || self.opened.read(&graph, self.keys, read));
+        if let Some(started) = first {
+            crate::first_read::done("conversations", started);
+        }
+        read
     }
 }
 

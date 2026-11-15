@@ -38,6 +38,7 @@ enum Dev {
 }
 
 fn main() {
+    suzatary_cli::verb::logs_when_asked();
     // The version is the installed release's ([`suzatary_cli::stamp`]), not the crate's.
     let cli = Cli::from_arg_matches(
         &Cli::command()
