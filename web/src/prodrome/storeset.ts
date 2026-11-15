@@ -1,24 +1,22 @@
 // Every store the tab holds, in the core's worker: their pulls, the hand-over of what this tab wrote, its refusals,
 // and what moved. The page holds none of it.
 
-import type { Core, LineStep, Lines, ObjectStore, Proposals, TopicReading, TopicStore } from "./core"
-import { CoreError, signedObject } from "./core"
+import type { Core, Lines, ObjectStore, Proposals, TopicReading, TopicStore } from "./core"
 import type excluded from "./excluded"
 import type heads from "./heads"
 import linesync from "./linesync"
 import type progress from "./progress"
 import replicasync from "./replicasync"
-import signer from "./signer"
 import stores from "./stores"
 import topics from "./topics"
+import written from "./written"
 import last from "../algebra/last"
 import lo from "../algebra/lo"
 import once from "../algebra/once"
 import type rendered from "../app/rendered"
-import d from "../wire/decoder"
-import http from "../wire/http"
 import storereads from "../wire/storereads"
 import type { StorePayload } from "../wire/generated/wire"
+import { measure } from "../app/perf"
 
 export namespace storeset {
   export type Said =
@@ -32,7 +30,7 @@ export namespace storeset {
   const SCOPE_NAMES: readonly Scope[] = ["Inbox", "All"]
 
   // The core's two topic stores and their one reading, made once per move of either.
-  export type Topics = { readonly replicas: { readonly [N in topics.Store]: TopicStore }; readonly reading: TopicReading }
+  export type Topics = { readonly replicas: { readonly [N in stores.Written]: TopicStore }; readonly reading: TopicReading }
 
   export type T = {
     readonly lines: linesync.T
@@ -52,30 +50,13 @@ export namespace storeset {
     readonly write: (w: topics.Write, at: string, actor: string) => Promise<void>
   }
 
-  const BAD_REQUEST = 400
   // The stores this tab writes, each with the noun a refusal names.
-  const WRITTEN: { readonly [N in topics.Store]: string } = { topics: "topic", "topic-aliases": "topic's new name" }
-  const WRITTEN_NAMES: readonly topics.Store[] = ["topics", "topic-aliases"]
-
-  // In posts the box takes whole, each change beside its signatures.
-  const Unsent = d.json(d.arr(d.arr(d.obj<{ hash: string; literal: string }>({ hash: d.str, literal: d.str }))))
-  const unsentIn = (store: ObjectStore): readonly (readonly { readonly hash: string; readonly literal: string }[])[] => {
-    const read = Unsent(store.unsent())
-    if (read.type === "Val") return read.v
-    throw new CoreError(`unsent: unexpected shape (${read.e})`)
-  }
-  const Names = d.json(d.arr(d.str))
-  const unsignedIn = (store: ObjectStore): readonly string[] => {
-    const read = Names(store.unsigned())
-    if (read.type === "Val") return read.v
-    throw new CoreError(`unsigned: unexpected shape (${read.e})`)
-  }
-  const Refusals = d.json(d.arr(d.obj<{ hash: string; reason: string }>({ hash: d.str, reason: d.str })))
-  const refusalsIn = (store: ObjectStore): ReadonlyMap<string, string> => {
-    const read = Refusals(store.refusals())
-    if (read.type === "Val") return new Map(read.v.map(r => [r.hash, r.reason]))
-    throw new CoreError(`refusals: unexpected shape (${read.e})`)
-  }
+  const NOUNS: { readonly [N in stores.Written]: string } = { topics: "topic", "topic-aliases": "topic's new name" }
+  const listed = <const L extends readonly stores.Written[]>(names: L): L => names
+  const WRITTEN = listed(["topics", "topic-aliases"])
+  // Every store a tab writes is in the list: a name left out fails to compile here.
+  const everyWritten: [Exclude<stores.Written, (typeof WRITTEN)[number]>] extends [never] ? true : never = true
+  void everyWritten
 
   export const of = (core: Core, held: Lines, say: (s: Said) => void, blocks: rendered.Device): T => {
     const told = (reader: string, left: excluded.Left): void => say({ type: "Told", reader, left })
@@ -110,9 +91,11 @@ export namespace storeset {
       blocks,
     )
     const inbox = objectStore("inbox", new core.Proposals())
-    const topicStores = { topics: objectStore("topics", new core.Memberships()), "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()) }
-    // Read again whenever it moves: each store this tab writes holds what it records as refused.
-    const asks = objectStore("asks", new core.Asks(), () => void refusedInAsks())
+    const topicStores: { readonly [N in stores.Written]: { readonly store: TopicStore; readonly sync: replicasync.T } } = {
+      topics: objectStore("topics", new core.Memberships()),
+      "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()),
+    }
+    const asks: { readonly store: ObjectStore; readonly sync: replicasync.T } = objectStore("asks", new core.Asks(), () => void writes.refusedIn(asks.store))
     const engines: { readonly [N in stores.Name]: replicasync.Store } = { lines: lines.engine, inbox: inbox.sync, topics: topicStores.topics.sync, "topic-aliases": topicStores["topic-aliases"].sync, asks: asks.sync }
 
     const reading = last.of<string, TopicReading>(
@@ -124,59 +107,11 @@ export namespace storeset {
       return { replicas, reading: reading(`${replicas.topics.version()}/${replicas["topic-aliases"].version()}`, () => new core.TopicReading(replicas.topics, replicas["topic-aliases"])) }
     }
 
-    // `step`, a move of a store this tab writes, kept; each newly refused object said once, in the box's words.
-    const settled = async (name: topics.Store, step: () => LineStep | undefined): Promise<void> => {
-      const { store, sync } = topicStores[name]
-      const before = refusalsIn(store)
-      const made = step()
-      if (made === undefined) return
-      await sync.stepped(made)
-      for (const [hash, reason] of refusalsIn(store)) {
-        if (!before.has(hash)) say({ type: "Refused", why: `The box refused a ${WRITTEN[name]}: ${reason}` })
-      }
-    }
-
-    const refusedInAsks = async (): Promise<void> => {
-      for (const name of WRITTEN_NAMES) await settled(name, () => topicStores[name].store.refused_in(asks.store))
-    }
-
-    // Each unsigned change this tab wrote, signed by the key only the page mints, so a write made keyless is signed later.
-    const signOwn = async (name: topics.Store): Promise<void> => {
-      const { store, sync } = topicStores[name]
-      const unsigned = unsignedIn(store)
-      if (unsigned.length === 0) return
-      const key = await signer.existing()
-      if (key === null) return
-      for (const hash of unsigned) await sync.stepped(store.signed(signedObject(core, hash, key.public, await signer.sign(key, hash)).literal))
-    }
-
-    // A post with no answer leaves everything for the next sync. A 400 refuses the post's shape, not its objects: they
-    // stay unsent, and the box's words are said once per tab.
-    const shapes = new Set<string>()
-    const handOver = async (name: topics.Store): Promise<void> => {
-      await signOwn(name)
-      const { store } = topicStores[name]
-      for (const posting of unsentIn(store)) {
-        try {
-          const receipt = await storereads.post(
-            name,
-            posting.map(o => o.literal),
-            store.since(),
-          )
-          await settled(name, () => store.answered(JSON.stringify(receipt)))
-        } catch (e: unknown) {
-          if (e instanceof http.ApiError && e.status === http.OUTDATED) return say({ type: "Refused", why: `The box runs a newer build: reload, and this ${WRITTEN[name]} goes with the next sync.` })
-          if (http.unanswered(e)) return
-          const reason = lo.reason(e)
-          if (e instanceof http.ApiError && e.status === BAD_REQUEST) {
-            if (!shapes.has(reason)) say({ type: "Refused", why: `The box did not take a post of this tab's writes: ${reason}` })
-            shapes.add(reason)
-            return
-          }
-          await settled(name, () => store.refuse(JSON.stringify(posting.map(o => o.hash)), reason))
-        }
-      }
-    }
+    // Read again whenever it moves: each store this tab writes holds what it records as refused.
+    const entry = (name: stores.Written): written.Entry => ({ noun: NOUNS[name], store: topicStores[name].store, stepped: step => topicStores[name].sync.stepped(step) })
+    const writes = written.of(core, { topics: entry("topics"), "topic-aliases": entry("topic-aliases") }, why => say({ type: "Refused", why }))
+    // A hand-over that failed is said, and the next sync tries it again.
+    const failed = (name: stores.Written) => (e: unknown): void => say({ type: "Refused", why: `This tab's ${NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
 
     // Which stores a reading has asked for so far: a reconnect pulls those alone.
     let wanted: "None" | Scope = "None"
@@ -186,11 +121,11 @@ export namespace storeset {
     const all = (): Promise<boolean> => {
       wanted = "All"
       const topicPulls = Promise.all(
-        WRITTEN_NAMES.map(name =>
+        WRITTEN.map(name =>
           topicStores[name].sync.sync.restored
             .get()
-            .then(() => handOver(name))
-            .catch(() => undefined)
+            .then(() => writes.handOver(name))
+            .catch(failed(name))
             .then(() => topicStores[name].sync.want()),
         ),
       )
@@ -224,7 +159,7 @@ export namespace storeset {
       const measured = async <A>(step: string, f: () => A | Promise<A>): Promise<A> => {
         const start = performance.now()
         const a = await f()
-        performance.measure(`write:${step}`, { start, end: performance.now(), detail: { store: name } })
+        measure(`write:${step}`, start, { store: name })
         return a
       }
       await measured("ready", () => readies.All.get())
@@ -234,8 +169,8 @@ export namespace storeset {
         const step = await measured("append", () => store.append(event))
         if (step !== undefined) await measured("keep", () => sync.stepped(step))
       }
-      await measured("sign", () => signOwn(name))
-      void handOver(name).catch(() => undefined)
+      await measured("sign", () => writes.sign(name))
+      void writes.handOver(name).catch(failed(name))
     }
 
     return {
@@ -246,7 +181,7 @@ export namespace storeset {
       pull: all,
       heard: (store, box) => engines[store].heard(box),
       opened: () => void (wanted === "All" ? all() : wanted === "Inbox" ? inboxOnly() : undefined),
-      shown: on => Promise.all([lines.shown(on), inbox.sync.shown(on), asks.sync.shown(on), ...WRITTEN_NAMES.map(n => topicStores[n].sync.shown(on))]).then(() => undefined),
+      shown: on => Promise.all([lines.shown(on), inbox.sync.shown(on), asks.sync.shown(on), ...WRITTEN.map(name => topicStores[name].sync.shown(on))]).then(() => undefined),
       reset: store => engines[store].reset(),
       write,
     }

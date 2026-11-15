@@ -18,6 +18,7 @@ import grouped from "./grouped"
 import pageBlocks from "../app/blocks"
 import type questions from "../prodrome/questions"
 import type lanes from "../prodrome/lanes"
+import { measure } from "../app/perf"
 
 export namespace dressed {
   // A block the box will not render stays its source, which the view draws.
@@ -68,12 +69,15 @@ export namespace dressed {
   export type Inbox = storesync.Proposals
   export const inbox = (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<Inbox> => storesync.proposals(at, memory, lane)
 
+  // Measured as `read:Stream`, the ask and the turns' words together.
   export const stream = async (chosen: readonly string[], pages: number, lane: lanes.Lane): Promise<storesync.Streamed> => {
+    const start = performance.now()
     const read = await storesync.streamed(chosen, pages, lane)
     const answers = read.stream.rounds.flatMap(r => (r.answer === null ? [] : [{ id: r.conversation, turn: r.answer }]))
     const dressed = await turnsOf(answers, read.keys)
     let next = 0
     const rounds = read.stream.rounds.map(r => (r.answer === null ? r : { ...r, answer: dressed[next++] ?? r.answer }))
+    measure("read:Stream", start)
     return { ...read, stream: { ...read.stream, rounds } }
   }
 

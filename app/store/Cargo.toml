@@ -34,3 +34,7 @@ workspace = true
 [[test]]
 name = "signature"
 path = "tests/signature.rs"
+
+[[test]]
+name = "writes"
+path = "tests/writes.rs"

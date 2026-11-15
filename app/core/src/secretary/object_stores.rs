@@ -12,7 +12,8 @@ use crate::secretary::held_replica::NotAnAnswer;
 use crate::wire::lines::{ObjectsPayload, ReceiptPayload};
 use suzatary_signatures::wire::signatures::RefusalKind;
 use suzatary_store::replica::held::Said;
-use suzatary_store::replica::objects::{Answer, Object, Refusal};
+use suzatary_store::replica::objects::Object;
+use suzatary_store::replica::writes::{Answer, Refusal};
 
 /// The piece `answer` the box served, its objects read at `schema`.
 ///

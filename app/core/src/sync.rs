@@ -9,9 +9,11 @@ use prodrome_core::dag::Dag;
 use prodrome_core::event::{
     Actor, Hash, TodoId, canonical_envelope, parents_of, parse_envelope, seal_hash,
 };
+use prodrome_core::schema::Schema as _;
 use prodrome_core::sign::{PublicKey, Registrar};
 use suzatary_record::record::{Envelope, TodoEvent};
 use suzatary_signatures::signatures::{Trust, Trusting, Unproven};
+use suzatary_store::admission::Admission;
 
 /// What the server holds: its objects by name, as `Prodrome::objects` answers them.
 #[derive(Debug, Clone, Default)]
@@ -121,6 +123,9 @@ pub enum Reason {
     Unaccompanied,
     /// It rests on an object neither held nor posted: taken once a later post brings it.
     NotYetHeld(Hash),
+    /// Its store's own rule refuses it ([`suzatary_store::admission::Admission`]), in the
+    /// rule's words.
+    Inadmissible(String),
     /// It rests on an object refused in this post, and is refused as that object is.
     RestsOn {
         /// The refused object.
@@ -147,7 +152,8 @@ impl Reason {
             | Reason::Unproven(Unproven::Forged | Unproven::Revoked { .. })
             | Reason::BoxOnly
             | Reason::NotAChange(_)
-            | Reason::Unaccompanied => suzatary_signatures::wire::signatures::RefusalKind::Final,
+            | Reason::Unaccompanied
+            | Reason::Inadmissible(_) => suzatary_signatures::wire::signatures::RefusalKind::Final,
         }
     }
 
@@ -173,6 +179,7 @@ impl Reason {
             Reason::Unaccompanied => {
                 "a signature is taken only with the change it signs".to_owned()
             }
+            Reason::Inadmissible(why) => why.clone(),
             Reason::NotYetHeld(parent) => format!(
                 "rests on {}…, which this box does not hold yet",
                 short(parent)
@@ -364,24 +371,25 @@ struct Settled<E> {
 }
 
 /// What a post to a store a tab writes means: a `Change` as `writer` is taken only beside a
-/// posted `Signed` of it whose key every chain trusts for `writer` ([`Trusting::admits`]).
+/// posted `Signed` of it whose key every chain trusts for `writer` ([`Trusting::admits`]), and
+/// only where its store's own rule takes it ([`Admission`]).
 #[must_use]
-pub fn receive_changes<E: prodrome_core::schema::Schema>(
+pub fn receive_changes<A: Admission>(
     held: &BTreeSet<Hash>,
     posted: &[String],
     writer: &Actor,
     trusting: &Trusting,
 ) -> Received
 where
-    E::Vocabulary: Default,
+    <A::Schema as prodrome_core::schema::Schema>::Vocabulary: Default,
 {
-    let vocabulary = E::Vocabulary::default();
-    let mut parsed: BTreeMap<Hash, prodrome_core::event::Envelope<E>> = BTreeMap::new();
+    let vocabulary = <A::Schema as prodrome_core::schema::Schema>::Vocabulary::default();
+    let mut parsed: BTreeMap<Hash, prodrome_core::event::Envelope<A::Schema>> = BTreeMap::new();
     let mut candidates = Vec::new();
     let mut refused: Vec<Refused> = Vec::new();
     let mut already: Vec<Hash> = Vec::new();
     for literal in posted {
-        match named_at::<E>(&vocabulary, literal) {
+        match named_at::<A::Schema>(&vocabulary, literal) {
             Err(reason) => refused.push(Refused { name: None, reason }),
             Ok((name, _, _)) if held.contains(&name) => already.push(name),
             Ok((name, canonical, envelope)) => {
@@ -389,7 +397,7 @@ where
                     prodrome_core::event::Envelope::Change(change)
                         if change.event.actor() == writer =>
                     {
-                        None
+                        A::refuses(change).map(Reason::Inadmissible)
                     }
                     prodrome_core::event::Envelope::Signed(_) => None,
                     prodrome_core::event::Envelope::Change(change) => Some(Reason::ForeignActor {

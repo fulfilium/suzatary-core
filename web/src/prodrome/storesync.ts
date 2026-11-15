@@ -27,6 +27,7 @@ import stream from "../algebra/stream"
 import d from "../wire/decoder"
 import payload from "../wire/generated/payload"
 import type { ConversationsPayload, InboxProposalsPayload, MemoryPayload, SearchPayload } from "../wire/generated/wire"
+import { measure } from "../app/perf"
 
 export namespace storesync {
   const bars = sources.create<progress.T, progress.Event>(progress.NONE, progress.step)
@@ -64,7 +65,7 @@ export namespace storesync {
     void showing.get()
     const start = performance.now()
     const answer = await remote.ask(question, lane)
-    performance.measure(`ask:${question.type}`, { start, end: performance.now() })
+    measure(`ask:${question.type}`, start)
     // Asked behind the answer, so it says what the reading left out and the answer waits for none of it.
     if (whole) void remote.ask({ type: "Left" }, "Shell").then(left => readings.told("stores", excluded.left(left)))
     return answer
@@ -91,7 +92,7 @@ export namespace storesync {
     // Held as the page's own writes are, so a reload waits for the worker to keep it.
     const start = performance.now()
     await inflight.held(remote.ask({ type: "Topic", write: w, at, actor }, "Page"))
-    performance.measure("write:worker", { start, end: performance.now() })
+    measure("write:worker", start)
   }
 
   // One conversation over its own lines, read as the whole store reads it; absent where they hold none of it.
@@ -118,13 +119,16 @@ export namespace storesync {
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>
     void (await remote.ask({ type: "Reset", store: name }, "Page")).forEach(said)
 
-  // A move is heard once a frame however many the worker says, and in a hidden tab within a tenth of a second.
+  // A move is heard once a frame however many the worker says, and in a hidden tab within a tenth of a second; the
+  // wait from the first of a burst is measured as `moved:batched`.
   let moving: linesync.Moved | null = null
+  let movedAt = 0
   const MOVES_MS = 100
   const flush = (): void => {
     if (moving === null) return
     const moved = moving
     moving = null
+    measure("moved:batched", movedAt)
     moves.dispatch(moved)
   }
   export const heardWorker = (s: storeset.Said): void => {
@@ -139,6 +143,7 @@ export namespace storesync {
         const was = moving
         moving = was === null ? s.conversations : both(was, s.conversations)
         if (was !== null) return
+        movedAt = performance.now()
         requestAnimationFrame(flush)
         return void setTimeout(flush, MOVES_MS)
       }

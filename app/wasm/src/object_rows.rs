@@ -8,11 +8,12 @@ use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
 use suzatary_api::wire::StorePayload;
 use suzatary_core::asks::{AskEvent, AskVocabulary};
-use suzatary_core::receipt;
 use suzatary_core::secretary::object_stores;
 use suzatary_core::wire::lines::ReceiptPayload;
+use suzatary_store::receipt;
 use suzatary_store::replica::held::Node as _;
-use suzatary_store::replica::objects::{self, Answer, Move, Object, Objects, Refusal};
+use suzatary_store::replica::objects::{self, Move, Object, Objects};
+use suzatary_store::replica::writes::{Answer, Refusal};
 use suzatary_store::snapshot;
 use wasm_bindgen::JsError;
 

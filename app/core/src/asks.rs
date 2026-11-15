@@ -2,8 +2,8 @@
 //! name and the store it was posted to, which every device of the owner pulls. A refused object
 //! leaves each reading of that store with everything resting on it.
 
-use crate::receipt::{RefusalEvent, RefusalVocabulary};
 use crate::stores::Kind;
+use suzatary_store::receipt::{RefusalEvent, RefusalVocabulary};
 
 prodrome_core::word_literal!(Kind: Kind::ALL.iter().copied() => |kind| kind.name());
 

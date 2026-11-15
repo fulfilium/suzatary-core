@@ -1474,12 +1474,13 @@ pub struct Recording<'a> {
     pub at: Datetime,
 }
 
-/// `POST /api/stores/<store>/objects`: decided under the store's lock, taken in, then each
-/// proven refusal recorded once in the asks under its own lock.
+/// `POST /api/stores/<store>/objects`: decided under the store's lock by the shared rule and the
+/// rule the store's row names, taken in, then each proven refusal recorded once in the asks under its own
+/// lock.
 ///
 /// # Errors
 /// More than `MAX_POSTED` objects, or a store not read or not written.
-pub fn receive_changes<E: suzatary_core::stores::Store>(
+pub fn receive_changes<E: suzatary_core::stores::Written>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
@@ -1505,7 +1506,7 @@ where
         let trusting = suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)?;
         let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
         let received =
-            suzatary_core::sync::receive_changes::<E>(&held, posted, writer.actor, &trusting);
+            suzatary_core::sync::receive_changes::<E::Rule>(&held, posted, writer.actor, &trusting);
         store.accept(&received.outcome.taken)?;
         received
     };
@@ -1525,13 +1526,13 @@ fn record(
     }
     let _held = asks.locked()?;
     let objects = asks.objects()?;
-    let mut recorded = suzatary_core::receipt::refusals(
+    let mut recorded = suzatary_store::receipt::refusals(
         objects.iter().map(|(name, object)| (name, object)),
         &store,
     );
     for (name, reason) in refused {
         if recorded.insert(name.clone(), reason.said()).is_none() {
-            asks.append(suzatary_core::receipt::refused(
+            asks.append(suzatary_store::receipt::refused(
                 name.clone(),
                 at,
                 suzatary_core::asks::keeper(),

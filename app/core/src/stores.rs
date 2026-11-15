@@ -21,6 +21,7 @@ use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use suzatary_record::record::TodoEvent;
+use suzatary_store::admission::{Admission, Shared};
 use suzatary_store::store::Hold;
 
 pub use database::Database;
@@ -28,6 +29,13 @@ pub use database::Database;
 pub use in_memory::InMemory;
 #[cfg(any(test, feature = "nothing"))]
 pub use scene::{phone_trusted, scene};
+
+/// A store a tab writes, by its schema: the rule its row names, which the box takes a tab's post by
+/// after the rule every such store shares.
+pub trait Written: Store {
+    /// Its rule.
+    type Rule: Admission<Schema = Self>;
+}
 
 /// Where a store's files go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +63,15 @@ pub enum Files {
     Directory,
 }
 
+/// Who writes a store's objects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Writer {
+    /// The box alone: a post of objects to it is refused.
+    Box,
+    /// A tab too, each change beside its writer's signature, taken by the rule its row names.
+    Tab,
+}
+
 /// A schema kept as one of this application's prodromes: its row, its hold and its label.
 pub trait Store: Schema {
     /// Its row.
@@ -65,11 +82,12 @@ pub trait Store: Schema {
     const LABEL: &'static str = Self::KIND.name();
 }
 
-/// The rows: `Variant = name, tier, files`, and for a prodrome `: schema, hold` and its `Genesis`
-/// label where that is not its name. A name never changes for a store that holds objects.
+/// The rows: `Variant = name, tier, files`, and for a prodrome `: schema, hold`, its `Genesis`
+/// label where that is not its name, and `=> rule` where a tab writes it, the rule the box takes
+/// a tab's post by. A name never changes for a store that holds objects.
 macro_rules! stores {
     ($($(#[doc = $doc:literal])* $variant:ident = $name:literal, $tier:ident, $files:ident
-        $(: $event:ty, $hold:expr $(, $label:expr)?)?;)*) => {
+        $(: $event:ty, $hold:expr $(, $label:expr)? $(=> $rule:ty)?)?;)*) => {
         /// A store the data tree keeps.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum Kind {
@@ -103,13 +121,34 @@ macro_rules! stores {
                     $(Kind::$variant => Files::$files,)*
                 }
             }
+
+            /// Who writes its objects.
+            #[must_use]
+            pub const fn writer(self) -> Writer {
+                match self {
+                    $(Kind::$variant => writer!($($($rule)?)?),)*
+                }
+            }
         }
 
         $($(impl Store for $event {
             const KIND: Kind = Kind::$variant;
             const HOLD: Hold = $hold;
             $(const LABEL: &'static str = $label;)?
-        })?)*
+        }
+        $(impl Written for $event {
+            type Rule = $rule;
+        })?)?)*
+    };
+}
+
+/// A row's writer: a tab where it names a rule, else the box alone.
+macro_rules! writer {
+    () => {
+        Writer::Box
+    };
+    ($rule:ty) => {
+        Writer::Tab
     };
 }
 
@@ -133,9 +172,9 @@ stores! {
     /// The recorded decisions.
     Decisions = "decisions", Pushed, Objects: DecisionEvent, Hold::File("decisions.lock");
     /// The topics on the secretary's rounds and notes: a topic's name is words.
-    Topics = "topics", Local, Objects: MembershipEvent, Hold::File("topics.lock");
+    Topics = "topics", Local, Objects: MembershipEvent, Hold::File("topics.lock") => Shared<MembershipEvent>;
     /// The topics' aliases.
-    TopicAliases = "topic-aliases", Local, Objects: AliasEvent, Hold::File("topic-aliases.lock");
+    TopicAliases = "topic-aliases", Local, Objects: AliasEvent, Hold::File("topic-aliases.lock") => Shared<AliasEvent>;
     /// The box's refusals of what a tab posted; a reason may quote a topic.
     Asks = "asks", Local, Objects: AskEvent, Hold::File("asks.lock");
     /// What a plugin learned, at its declared schema.

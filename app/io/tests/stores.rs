@@ -676,7 +676,7 @@ fn topics(root: &Path) {
 fn asks(root: &Path) {
     let asks: Objects<suzatary_core::asks::AskEvent> = Objects::open(root.join(ASKS));
     rooted(&asks, "asks");
-    asks.append(suzatary_core::receipt::refused(
+    asks.append(suzatary_store::receipt::refused(
         Hash::new("ab".repeat(32)).expect("a name"),
         at(17, 0),
         suzatary_core::asks::keeper(),
@@ -873,7 +873,7 @@ fn decisions_and_topics_read(database: &suzatary_core::stores::Database<'_>) {
     .expect("reads");
     assert_eq!(reading.memberships().len(), 1);
     let asks = database.asks.objects().expect("reads");
-    let refused = suzatary_core::receipt::refusals(
+    let refused = suzatary_store::receipt::refusals(
         asks.iter().map(|(name, object)| (name, object)),
         &suzatary_core::stores::Kind::Topics,
     );

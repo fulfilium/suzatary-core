@@ -52,6 +52,7 @@ import thirty from "../todo/thirty"
 import grouped from "../chat/grouped"
 import rendered from "../app/rendered"
 import type time from "../app/time"
+import { measure } from "../app/perf"
 
 export namespace questions {
   // `whole` replaces what the worker holds: sent after a refused holding, since nothing then says what it took.
@@ -401,12 +402,16 @@ export namespace questions {
           return scoped(
             turn,
             () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages).map(n => n.hash) }),
+            // Measured in the worker as `stream:read`, from its words held to its answer.
             () => {
               phases.mark("stream content held")
+              const start = performance.now()
               const read = stores.topics()
               const stream = streamOf(held, read.reading, q.chosen, q.pages)
               phases.mark("stream drawn")
-              return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+              const answer = { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+              measure("stream:read", start)
+              return answer
             },
           )
         case "Topic":

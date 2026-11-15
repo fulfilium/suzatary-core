@@ -7,7 +7,8 @@
  *   scripts/web-e2e.sh topicdraw
  *
  * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
- * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write.
+ * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write: its duration, and for a
+ * step of the page `<step>@`, when it began after the tap.
  */
 
 import assert from "node:assert/strict"
@@ -43,20 +44,25 @@ const tapped = (topic: string): string => `new Promise((done) => {
 type Run = { readonly closed: number; readonly drawn: number }
 type Steps = Readonly<Record<string, number>>
 
+// The page's measures from the tap to the chip drawn, each name's last: when it began after the tap and how long it took.
+const PAGE_STEPS = ["write:worker", "moved:batched", "ask:Stream", "read:Stream", "page:heard", "painter:step"]
 const pageSteps = (drawn: number): string => `(() => {
   const from = window.e2eTapped, until = from + ${drawn}
   const steps = {}
   for (const m of performance.getEntriesByType("measure"))
-    if (["write:worker", "ask:Stream", "page:draw"].includes(m.name) && m.startTime >= from && m.startTime <= until) steps[m.name] = m.duration
+    if (${JSON.stringify(PAGE_STEPS)}.includes(m.name) && m.startTime >= from && m.startTime + m.duration <= until) {
+      steps[m.name] = m.duration
+      steps[m.name + "@"] = m.startTime - from
+    }
   return steps
 })()`
 
-// The worker's measures of its latest write, summed by name.
+// The worker's measures of its latest write, summed by name, and of the stream it read after.
 const WORKER_STEPS = `(() => {
-  const all = performance.getEntriesByType("measure").filter((m) => m.name.startsWith("write:"))
+  const all = performance.getEntriesByType("measure").filter((m) => m.name.startsWith("write:") || m.name === "stream:read")
   const begun = all.filter((m) => m.name === "write:ready").at(-1)?.startTime ?? 0
   const steps = {}
-  for (const m of all) if (m.startTime >= begun) steps[m.name] = (steps[m.name] ?? 0) + m.duration
+  for (const m of all) if (m.startTime >= begun) steps[m.name] = m.name === "stream:read" ? m.duration : (steps[m.name] ?? 0) + m.duration
   return steps
 })()`
 

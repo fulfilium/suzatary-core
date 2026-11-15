@@ -20,7 +20,8 @@ use suzatary_core::secretary::topics::reading::{
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::{Node, Said};
-use suzatary_store::replica::objects::{Answer, Move, Object, Objects, Refusal, frame, unframe};
+use suzatary_store::replica::objects::{Move, Object, Objects, frame, unframe};
+use suzatary_store::replica::writes::{Answer, Refusal};
 use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::wire::store::SinceRead;
 
@@ -464,11 +465,13 @@ fn resting_on<'o>(own: &'o [Object], refused: &BTreeSet<Hash>) -> BTreeSet<&'o H
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
-    /// THE ROLLBACK LAW. For a replica of a topic store holding the box's first `held` objects
-    /// and its own later writes, and any set F of those writes the asks store refuses, the
-    /// replica's standing objects with F refused are its standing objects had it never written
-    /// F or anything resting on F. A refusal of another store's object, or of an object the
-    /// replica did not write, moves nothing, and the replica's refusals name F exactly.
+    /// THE ROLLBACK LAW AT THE JOIN. For a replica of a topic store holding the box's first `held`
+    /// objects in its landed row and its own later writes, and any set F of those writes the
+    /// asks store refuses, the replica's standing objects (the row's joined with the writes')
+    /// with F refused are its standing objects had it never written F or anything resting on F.
+    /// A refusal of another store's object, or of an object the replica did not write, moves
+    /// nothing, and the replica's refusals name F exactly. The writes alone, with prodromes the
+    /// rows no longer hold, are `app/store/tests/writes.rs`.
     #[test]
     fn law_a_refusal_in_the_asks_takes_back_what_rests_on_it(
         n in 1usize..9,
@@ -491,7 +494,7 @@ proptest! {
         begin(&asks);
         let at = Datetime::new(2026, 11, 3, 11, 0, 0, 0).expect("an instant");
         let refuse = |name: &Hash, store: Kind| {
-            asks.append(suzatary_core::receipt::refused(
+            asks.append(suzatary_store::receipt::refused(
                 name.clone(),
                 at,
                 suzatary_core::asks::keeper(),
@@ -510,7 +513,7 @@ proptest! {
             }
         }
         let recorded = asks.held().expect("held");
-        let refusals = suzatary_core::receipt::refusals(recorded.dag.objects(), &Kind::Topics);
+        let refusals = suzatary_store::receipt::refusals(recorded.dag.objects(), &Kind::Topics);
 
         let landed = |own: Vec<Object>| {
             let mut replica = Objects::default();
@@ -526,6 +529,12 @@ proptest! {
 
         let names = |r: &Objects| -> BTreeSet<Hash> { r.standing().iter().map(|o| o.name().clone()).collect() };
         prop_assert_eq!(names(&refused), names(&never));
+        let joined: BTreeSet<Hash> = all[..held]
+            .iter()
+            .chain(own.iter().filter(|o| !gone.contains(o.name())))
+            .map(|o| o.name().clone())
+            .collect();
+        prop_assert_eq!(names(&refused), joined, "the landed row stands whole beside every write not taken back");
         let told: BTreeSet<Hash> = refused.refusals().iter().map(|(o, _)| o.name().clone()).collect();
         prop_assert_eq!(told, f);
     }

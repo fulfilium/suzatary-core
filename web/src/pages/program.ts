@@ -36,6 +36,7 @@ import parts from "./parts"
 import type { KeyTarget } from "../shell/keyboard"
 import { clearKeyTarget, setKeyTarget } from "../shell/keyboard"
 import local from "./local"
+import { measure } from "../app/perf"
 
 export namespace program {
   // Once per tab; the load is a User Timing measure the bench reads.
@@ -206,14 +207,16 @@ export namespace program {
         held_.set(k, stop)
       }
       const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
-      // A move is told in a task of its own, once per burst; a subscription let go tells nothing more.
+      // A move is told in a task of its own, once per burst, the wait measured as `page:heard`; a subscription let go
+      // tells nothing more.
       const heard = (tell: () => void, listen: (f: () => void) => () => void): (() => void) => {
         let owed = false
         let gone = false
         const unheard = listen(() => {
           if (owed) return
           owed = true
-          soon.run(() => ((owed = false), gone ? undefined : tell()))
+          const start = performance.now()
+          soon.run(() => ((owed = false), measure("page:heard", start), gone ? undefined : tell()))
         })
         return () => ((gone = true), unheard())
       }

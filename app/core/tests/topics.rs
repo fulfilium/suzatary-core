@@ -12,6 +12,7 @@
 //! - Every event, topic and target prints and parses back to itself.
 
 use std::collections::BTreeSet;
+use suzatary_store::admission::{Admission, Shared};
 
 use prodrome_core::event::{
     Actor, Envelope, canonical, canonical_envelope, parse_event, seal_hash,
@@ -505,7 +506,8 @@ fn posted<E: Schema<Vocabulary: Default>>(
         .keys()
         .cloned()
         .collect();
-    let received = suzatary_core::sync::receive_changes::<E>(&held, &mine, actor, &TRUSTING);
+    let received =
+        suzatary_core::sync::receive_changes::<Shared<E>>(&held, &mine, actor, &TRUSTING);
     let prints: std::collections::BTreeMap<_, _> = received
         .outcome
         .taken
@@ -571,7 +573,7 @@ impl Door {
         prints: &[String],
         trusting: &suzatary_signatures::signatures::Trusting,
     ) -> suzatary_core::sync::Received {
-        suzatary_core::sync::receive_changes::<MembershipEvent>(
+        suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
             &self.held, prints, &self.ada, trusting,
         )
     }
@@ -662,7 +664,7 @@ fn the_box_door_takes_only_the_posters_changes() {
             seal_hash(&signature(&door.child)),
         ]
     );
-    let again = suzatary_core::sync::receive_changes::<MembershipEvent>(
+    let again = suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
         &door
             .held
             .iter()
@@ -674,6 +676,65 @@ fn the_box_door_takes_only_the_posters_changes() {
         &TRUSTING,
     );
     assert_eq!(again.outcome.already, vec![seal_hash(&door.theirs)]);
+}
+
+/// A store's own rule ([`Admission`]) refuses what the shared rule takes, for good and in the
+/// rule's own words: a signature of what it refuses is refused as it is, and the refusal of a
+/// change a trusted key signed is recorded.
+#[test]
+fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
+    use suzatary_core::sync::Reason;
+    /// A rule that takes no change resting on another write.
+    struct Roots;
+    impl Admission for Roots {
+        type Schema = MembershipEvent;
+        fn refuses(change: &prodrome_core::change::Change<MembershipEvent>) -> Option<String> {
+            (!change.deps.is_empty()).then(|| "only a first write is taken here".to_owned())
+        }
+    }
+    let door = Door::new();
+    let (mine, child) = (&door.mine, &door.child);
+    let prints = [
+        print(mine),
+        print(&signature(mine)),
+        print(child),
+        print(&signature(child)),
+    ];
+    assert_eq!(
+        door.post(&prints, &TRUSTING).outcome.taken.len(),
+        4,
+        "the shared rule takes all four"
+    );
+    let ruled =
+        suzatary_core::sync::receive_changes::<Roots>(&door.held, &prints, &door.ada, &TRUSTING);
+    let taken: BTreeSet<_> = ruled
+        .outcome
+        .taken
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    assert_eq!(taken, [seal_hash(mine), seal_hash(&signature(mine))].into());
+    let refused: Vec<_> = ruled
+        .outcome
+        .refused
+        .iter()
+        .map(|r| (r.name.clone(), r.reason.clone()))
+        .collect();
+    assert!(refused.contains(&(
+        Some(seal_hash(child)),
+        Reason::Inadmissible("only a first write is taken here".to_owned())
+    )));
+    assert!(
+        refused
+            .iter()
+            .all(|(_, reason)| reason.kind() == RefusalKind::Final)
+    );
+    assert!(
+        ruled
+            .recorded
+            .iter()
+            .any(|(name, _)| *name == seal_hash(child))
+    );
 }
 
 /// A change is taken only beside a signature of it by a key every chain trusts for the poster:
@@ -722,7 +783,7 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
         door.refused(&[print(&signature(mine))]),
         vec![Reason::NotYetHeld(seal_hash(mine))]
     );
-    let lone = suzatary_core::sync::receive_changes::<MembershipEvent>(
+    let lone = suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
         &door.held.iter().cloned().chain([seal_hash(mine)]).collect(),
         &[print(&signature(mine))],
         &door.ada,
@@ -786,7 +847,8 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
 /// once the device is trusted, all four are taken.
 #[test]
 fn law_writes_made_before_trust_are_taken_after_it() {
-    use suzatary_store::replica::objects::{Answer, Object, Objects, Refusal};
+    use suzatary_store::replica::objects::{Object, Objects};
+    use suzatary_store::replica::writes::{Answer, Refusal};
     let door = Door::new();
     let schema = MembershipVocabulary::default();
     let mut tab = Objects::default();

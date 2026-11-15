@@ -10,3 +10,4 @@ pub mod objects;
 pub mod pulling;
 pub mod row;
 pub mod word;
+pub mod writes;

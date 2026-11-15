@@ -73,19 +73,9 @@ export interface Todos {
   free: () => void;
 }
 
-/** A store of objects the core holds (`object_rows::Store`); each move answers its frame. */
-export interface ObjectStore {
+/** What a store this tab writes answers its hand-over (`written`). */
+export interface Written {
   since: () => string;
-  heads: () => string;
-  heard: () => boolean;
-  behind: (heads: string) => boolean;
-  overtaken: (epoch: number) => boolean;
-  went_back: (epoch: number) => boolean;
-  piece: (answer: string, fetchedAt: number) => Uint8Array;
-  land: () => LineStep;
-  start_over: () => LineStep;
-  /** `event` sealed as a `Change` and kept as the tab's, unsent; none for a twin. */
-  append: (event: string) => LineStep | undefined;
   /** `[[{hash, literal}]]`: what the tab wrote and may post, in posts the box takes whole. */
   unsent: () => string;
   answered: (receipt: string) => LineStep;
@@ -99,6 +89,20 @@ export interface ObjectStore {
   signed: (literal: string) => LineStep;
   /** The asks' refusals of this store's writes, held as refused; none where nothing moved. */
   refused_in: (asks: ObjectStore) => LineStep | undefined;
+}
+
+/** A store of objects the core holds (`object_rows::Store`); each move answers its frame. */
+export interface ObjectStore extends Written {
+  heads: () => string;
+  heard: () => boolean;
+  behind: (heads: string) => boolean;
+  overtaken: (epoch: number) => boolean;
+  went_back: (epoch: number) => boolean;
+  piece: (answer: string, fetchedAt: number) => Uint8Array;
+  land: () => LineStep;
+  start_over: () => LineStep;
+  /** `event` sealed as a `Change` and kept as the tab's, unsent; none for a twin. */
+  append: (event: string) => LineStep | undefined;
   apply: (frame: Uint8Array) => string;
   load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
   snapshot: () => Uint8Array;

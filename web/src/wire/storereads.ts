@@ -1,6 +1,7 @@
 // The secretary's stores read from the box, by the frontier a replica holds and by name, and a tab's own objects handed
 // to it: plain requests, which the core's worker makes, so this module reads no state of the page.
 
+import type stores from "../prodrome/stores"
 import type { ContentPayload, PostedObjects, ReceiptPayload, SkeletonPayload, StorePayload } from "./generated/wire"
 import http from "./http"
 import wait from "./wait"
@@ -30,7 +31,7 @@ export namespace storereads {
 
   // What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the
   // request was proven for.
-  export const post = (store: "topics" | "topic-aliases", objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+  export const post = (store: stores.Written, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
     http.act(`/api/stores/${store}/objects`, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload)
 }
 export default storereads

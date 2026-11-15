@@ -2,6 +2,7 @@
 
 import type { TopicReading } from "./core"
 import { CoreError } from "./core"
+import type stores from "./stores"
 import d from "../wire/decoder"
 
 export namespace topics {
@@ -10,10 +11,8 @@ export namespace topics {
     | { readonly type: "Remove"; readonly target: string; readonly topic: string }
     | { readonly type: "Rename"; readonly from: string; readonly to: string }
 
-  // The two stores a tab writes, by their path segment.
-  export type Store = "topics" | "topic-aliases"
-
-  export const store = (w: Write): Store => (w.type === "Rename" ? "topic-aliases" : "topics")
+  // The store a write goes to.
+  export const store = (w: Write): stores.Written => (w.type === "Rename" ? "topic-aliases" : "topics")
 
   const prints = d.json(d.arr(d.str))
   const each = (text: string): readonly string[] => {

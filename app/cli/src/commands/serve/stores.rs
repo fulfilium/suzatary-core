@@ -1,10 +1,10 @@
-//! The secretary's stores as replicas a tab holds; the box alone writes the inbox, the lines and
-//! the asks, and a tab writes the topic stores, each object signed by its device.
+//! The secretary's stores as replicas a tab holds. Who writes each is its row's (`Kind::writer`):
+//! the box alone, or a tab too, each object signed by its device and taken by the store's rule.
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
 use suzatary_api::server::Server;
-use suzatary_api::wire::StoreName;
+use suzatary_api::wire::{StoreName, WrittenName};
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
 use suzatary_core::asks::AskEvent;
@@ -114,27 +114,25 @@ pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload
     .map(Json)
 }
 
-/// A store a tab writes: one of the topic stores.
-pub enum Written {
-    Topics,
-    TopicAliases,
-}
+/// A store a tab writes, as its row says (`Kind::writer`).
+pub struct Written(WrittenName);
 
 impl Params for Written {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
-        match named(asked.segment("store")?)? {
-            StoreName::Topics => Ok(Self::Topics),
-            StoreName::TopicAliases => Ok(Self::TopicAliases),
-            StoreName::Inbox | StoreName::Lines | StoreName::Asks => {
-                Err(Refusal::method_not_allowed(
-                    "the box alone writes the inbox, the lines and the asks",
+        let store = named(asked.segment("store")?)?;
+        WrittenName::named(store.kind().name())
+            .map(Self)
+            .ok_or_else(|| {
+                Refusal::method_not_allowed(format!(
+                    "the box alone writes the {}",
+                    store.kind().name()
                 ))
-            }
-        }
+            })
     }
 }
 
-/// `POST /api/stores/<store>/objects`: a topic store's changes, each taken only beside a trusted signature.
+/// `POST /api/stores/<store>/objects`: a store a tab writes, each change taken only beside a
+/// trusted signature and where the rule its row names takes it.
 pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayload>, Refusal> {
     let caps = call.state.first.caps;
     let topics = caps.secretary.topics;
@@ -149,11 +147,11 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
         asks: &*call.state.asks,
         at: caps.secretary.clock.now(),
     };
-    match call.params {
-        Written::Topics => {
+    match call.params.0 {
+        WrittenName::Topics => {
             routes::receive_changes(topics.memberships, posted, frontiers, writer, recording)
         }
-        Written::TopicAliases => {
+        WrittenName::TopicAliases => {
             routes::receive_changes(topics.aliases, posted, frontiers, writer, recording)
         }
     }

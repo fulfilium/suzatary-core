@@ -1,7 +1,7 @@
 //! A replica of a store whose nodes are its objects, each with its literal: the rows of its pull
-//! ([`Pulling`]) beside the objects this replica wrote, each with the box's answer. It names no
-//! Suzatary store. Every [`Move`] is a join (an own answer only climbs), so two tabs' moves in
-//! any order hold the same replica, and an own object stays whatever the rows do.
+//! ([`Pulling`]) beside what this replica wrote ([`Writes`]). It names no Suzatary store. Every
+//! [`Move`] is a join, so two tabs' moves in any order hold the same replica, and an own object
+//! stays whatever the rows do.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
@@ -15,6 +15,7 @@ use crate::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
 use crate::replica::held::{Node, Said};
 use crate::replica::pulling::{Delta, Pulling};
 use crate::replica::row::{Keys, Row};
+use crate::replica::writes::{Answer, Own, Role, Writes};
 use crate::snapshot::{self, NotASnapshot, Unprinted};
 
 /// One object: its name, parents, prodrome and print.
@@ -106,46 +107,11 @@ pub(crate) type ObjectRows = Pulling<Object, NoKeys>;
 /// One move of those rows.
 pub(crate) type ObjectDelta = Delta<Object, NoKeys>;
 
-/// Why the box refused an object.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Refusal {
-    /// May be taken later: posted again.
-    Trust,
-    /// Never taken as it is: held back, with everything resting on it.
-    Final,
-}
-
-/// How the box answered an object this replica wrote. The order is the join's: an answer only
-/// climbs, so a refusal stands over the post it answered and a taking over every refusal.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Answer {
-    /// Not answered yet.
-    Unsent,
-    /// Refused, in the box's words.
-    Refused {
-        /// Its kind.
-        kind: Refusal,
-        /// The box's sentence.
-        reason: String,
-    },
-    /// The box holds it.
-    Taken,
-}
-
-/// An object this replica wrote, and how the box answered it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Own {
-    /// The object.
-    pub object: Object,
-    /// The box's answer.
-    pub answer: Answer,
-}
-
 /// The rows, and what this replica wrote.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Objects {
     rows: ObjectRows,
-    own: BTreeMap<Hash, Own>,
+    own: Writes<Object>,
 }
 
 /// One move of the replica.
@@ -154,7 +120,7 @@ pub enum Move {
     /// The rows moved.
     Rows(ObjectDelta),
     /// Objects written or answered, joined in.
-    Own(Vec<Own>),
+    Own(Vec<Own<Object>>),
 }
 
 impl Objects {
@@ -181,80 +147,24 @@ impl Objects {
 
     /// `objects` written by this replica, unsent.
     pub fn write(&mut self, objects: Vec<Object>) -> Move {
-        self.took(Move::Own(
-            objects
-                .into_iter()
-                .map(|object| Own {
-                    object,
-                    answer: Answer::Unsent,
-                })
-                .collect(),
-        ))
+        Move::Own(self.own.write(objects))
     }
 
     /// The box's answers to what this replica wrote; any other is passed over.
     pub fn answered(&mut self, answers: impl IntoIterator<Item = (Hash, Answer)>) -> Move {
-        let owned: Vec<Own> = answers
-            .into_iter()
-            .filter_map(|(name, answer)| {
-                self.own.get(&name).map(|own| Own {
-                    object: own.object.clone(),
-                    answer,
-                })
-            })
-            .collect();
-        self.took(Move::Own(owned))
+        Move::Own(self.own.answered(answers))
     }
 
     /// The asks' refusals, joined in as final where they name an own object.
     pub fn refused(&mut self, refused: BTreeMap<Hash, String>) -> Move {
-        let answers: Vec<(Hash, Answer)> = refused
-            .into_iter()
-            .filter(|(name, _)| {
-                self.own.get(name).is_some_and(|own| {
-                    !matches!(
-                        own.answer,
-                        Answer::Refused {
-                            kind: Refusal::Final,
-                            ..
-                        }
-                    )
-                })
-            })
-            .map(|(name, reason)| {
-                let answer = Answer::Refused {
-                    kind: Refusal::Final,
-                    reason,
-                };
-                (name, answer)
-            })
-            .collect();
-        self.answered(answers)
-    }
-
-    fn took(&mut self, m: Move) -> Move {
-        self.apply(&m);
-        m
+        Move::Own(self.own.refused(refused))
     }
 
     /// `m` taken, whoever made it.
     pub fn apply(&mut self, m: &Move) {
         match m {
             Move::Rows(delta) => self.rows.apply(delta),
-            Move::Own(owned) => {
-                for own in owned {
-                    match self.own.get_mut(own.object.name()) {
-                        Some(held) => {
-                            if own.answer > held.answer {
-                                held.answer = own.answer.clone();
-                            }
-                        }
-                        None => {
-                            self.own.insert(own.object.name().clone(), own.clone());
-                        }
-                    }
-                }
-            }
+            Move::Own(owned) => self.own.apply(owned),
         }
     }
 
@@ -263,157 +173,56 @@ impl Objects {
     #[must_use]
     pub fn standing(&self) -> Vec<&Object> {
         let reading = self.rows.landed().replica().read();
-        let mine = self.mine(|name| reading.holds(name));
-        let blocked = self.blocked(&mine, reading.gone());
-        reading
-            .nodes()
-            .chain(mine.into_iter().filter(|o| !blocked.contains(o.name())))
-            .collect()
+        let mine = self
+            .own
+            .standing(|name| reading.holds(name), reading.gone());
+        reading.nodes().chain(mine).collect()
     }
 
-    /// What this replica wrote that the box has not taken and may take: unsent or refused until
-    /// trusted, not held, and not held back by a refusal for good.
+    /// What this replica wrote that the box has not taken and may take.
     #[must_use]
     pub fn unsent(&self) -> Vec<&Object> {
         let holding = self.rows.holding();
         let reading = holding.replica().read();
-        let mine = self.mine(|name| reading.holds(name));
-        let blocked = self.blocked(&mine, &BTreeSet::new());
-        mine.into_iter()
-            .filter(|o| {
-                !blocked.contains(o.name())
-                    && matches!(
-                        self.own.get(o.name()).map(|own| &own.answer),
-                        Some(
-                            Answer::Unsent
-                                | Answer::Refused {
-                                    kind: Refusal::Trust,
-                                    ..
-                                }
-                        )
-                    )
-            })
-            .collect()
+        self.own.unsent(|name| reading.holds(name))
     }
 
     /// What the box refused for good of this replica's writes, with its sentence.
     #[must_use]
     pub fn refusals(&self) -> Vec<(&Object, &str)> {
-        self.own
-            .values()
-            .filter_map(|own| match &own.answer {
-                Answer::Refused {
-                    kind: Refusal::Final,
-                    reason,
-                } => Some((&own.object, reason.as_str())),
-                Answer::Unsent
-                | Answer::Refused {
-                    kind: Refusal::Trust,
-                    ..
-                }
-                | Answer::Taken => None,
-            })
-            .collect()
+        self.own.refusals()
     }
 
     /// The unsent changes that no signature this replica wrote covers, read at `schema`; a
     /// signature the box refused for good covers nothing.
     #[must_use]
     pub fn unsigned<E: Schema>(&self, schema: &E::Vocabulary) -> Vec<&Object> {
-        let read = |o: &Object| parse_envelope::<E>(schema, &o.literal).ok();
-        let signed: BTreeSet<Hash> = self
-            .own
-            .values()
-            .filter(|own| {
-                !matches!(
-                    own.answer,
-                    Answer::Refused {
-                        kind: Refusal::Final,
-                        ..
-                    }
-                )
-            })
-            .filter_map(|own| match read(&own.object)? {
-                Envelope::Signed(signature) => Some(signature.object),
-                _ => None,
-            })
-            .collect();
-        self.unsent()
-            .into_iter()
-            .filter(|o| !signed.contains(o.name()) && matches!(read(o), Some(Envelope::Change(_))))
-            .collect()
+        let holding = self.rows.holding();
+        let reading = holding.replica().read();
+        self.own
+            .unsigned(|name| reading.holds(name), |o| role::<E>(schema, o))
     }
 
-    /// [`Objects::unsent`] in posts of at most `most`, each change beside its signatures. A
-    /// change posted before its parent's post waits, and the next exchange posts it again.
+    /// [`Objects::unsent`] in posts of at most `most`, each change beside its signatures.
     #[must_use]
     pub fn unsent_pieces<E: Schema>(
         &self,
         schema: &E::Vocabulary,
         most: usize,
     ) -> Vec<Vec<&Object>> {
-        let unsent = self.unsent();
-        let names: BTreeSet<&Hash> = unsent.iter().map(|o| o.name()).collect();
-        let mut signatures: BTreeMap<Hash, Vec<&Object>> = BTreeMap::new();
-        let mut rest: Vec<&Object> = Vec::new();
-        for o in unsent {
-            match parse_envelope::<E>(schema, &o.literal) {
-                Ok(Envelope::Signed(signature)) if names.contains(&signature.object) => {
-                    signatures.entry(signature.object).or_default().push(o);
-                }
-                Ok(_) | Err(_) => rest.push(o),
-            }
-        }
-        let mut pieces: Vec<Vec<&Object>> = Vec::new();
-        for o in rest {
-            let mut group = vec![o];
-            group.extend(signatures.remove(o.name()).unwrap_or_default());
-            match pieces.last_mut() {
-                Some(piece) if piece.len() + group.len() <= most => piece.extend(group),
-                Some(_) | None => pieces.push(group),
-            }
-        }
-        pieces
-    }
-
-    /// What this replica wrote that `held` does not hold.
-    fn mine(&self, held: impl Fn(&Hash) -> bool) -> Vec<&Object> {
+        let holding = self.rows.holding();
+        let reading = holding.replica().read();
         self.own
-            .values()
-            .map(|own| &own.object)
-            .filter(|o| !held(o.name()))
-            .collect()
+            .pieces(|name| reading.holds(name), |o| role::<E>(schema, o), most)
     }
+}
 
-    /// Those of `mine` refused for good or of a prodrome in `gone`, and every one resting on one.
-    fn blocked<'o>(&self, mine: &[&'o Object], gone: &BTreeSet<Hash>) -> BTreeSet<&'o Hash> {
-        let mut blocked: BTreeSet<&Hash> = mine
-            .iter()
-            .filter(|o| {
-                o.prodrome().is_some_and(|p| gone.contains(p))
-                    || matches!(
-                        self.own.get(o.name()).map(|own| &own.answer),
-                        Some(Answer::Refused {
-                            kind: Refusal::Final,
-                            ..
-                        })
-                    )
-            })
-            .map(|o| o.name())
-            .collect();
-        loop {
-            let more: Vec<&Hash> = mine
-                .iter()
-                .filter(|o| {
-                    !blocked.contains(o.name()) && o.rests_on().iter().any(|p| blocked.contains(p))
-                })
-                .map(|o| o.name())
-                .collect();
-            if more.is_empty() {
-                return blocked;
-            }
-            blocked.extend(more);
-        }
+/// What `o` is to a post, read at `schema`.
+fn role<E: Schema>(schema: &E::Vocabulary, o: &Object) -> Role {
+    match parse_envelope::<E>(schema, &o.literal) {
+        Ok(Envelope::Change(_)) => Role::Change,
+        Ok(Envelope::Signed(signature)) => Role::Signs(signature.object),
+        Ok(_) | Err(_) => Role::Other,
     }
 }
 
@@ -460,7 +269,7 @@ impl snapshot::Held for Objects {
             landed: row_form(self.rows.landed()),
             landings: self.rows.landings(),
             pending: row_form(self.rows.pending()),
-            own: self.own.values().map(own_form).collect(),
+            own: self.own.iter().map(own_form).collect(),
         }
     }
 
@@ -471,11 +280,13 @@ impl snapshot::Held for Objects {
                 given.landings,
                 row_of(given.pending)?,
             ),
-            own: given
-                .own
-                .into_iter()
-                .map(|form| own_of(form).map(|own| (own.object.name.clone(), own)))
-                .collect::<Result<_, _>>()?,
+            own: Writes::of(
+                &given
+                    .own
+                    .into_iter()
+                    .map(own_of)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
         })
     }
 }
@@ -546,16 +357,16 @@ fn object_of(form: ObjectForm) -> Result<Object, String> {
     })
 }
 
-fn own_form(own: &Own) -> OwnForm {
+fn own_form(own: &Own<Object>) -> OwnForm {
     OwnForm {
-        object: object_form(&own.object),
+        object: object_form(&own.node),
         answer: own.answer.clone(),
     }
 }
 
-fn own_of(form: OwnForm) -> Result<Own, String> {
+fn own_of(form: OwnForm) -> Result<Own<Object>, String> {
     Ok(Own {
-        object: object_of(form.object)?,
+        node: object_of(form.object)?,
         answer: form.answer,
     })
 }

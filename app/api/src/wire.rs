@@ -162,6 +162,36 @@ impl StoreName {
     }
 }
 
+/// A store a tab writes, as its row says (`Kind::writer`), which the tab's hand-over names; a test
+/// holds it to the rows whose writer is `Tab`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
+pub enum WrittenName {
+    #[serde(rename = "topics")]
+    Topics,
+    #[serde(rename = "topic-aliases")]
+    TopicAliases,
+}
+
+impl WrittenName {
+    pub const ALL: [WrittenName; 2] = [WrittenName::Topics, WrittenName::TopicAliases];
+
+    /// The store a path segment names, where a tab writes it.
+    #[must_use]
+    pub fn named(segment: &str) -> Option<WrittenName> {
+        WrittenName::ALL
+            .into_iter()
+            .find(|written| written.store().kind().name() == segment)
+    }
+
+    #[must_use]
+    pub const fn store(self) -> StoreName {
+        match self {
+            WrittenName::Topics => StoreName::Topics,
+            WrittenName::TopicAliases => StoreName::TopicAliases,
+        }
+    }
+}
+
 /// One frame of `GET /api/stores/events`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct StoreFrame {
@@ -981,6 +1011,7 @@ fn answers(visit: &mut impl TypeVisitor) {
 /// What a page sends, decoded by the box alone.
 fn bodies(visit: &mut impl TypeVisitor) {
     visit.visit::<Authoring>();
+    visit.visit::<WrittenName>();
     visit.visit::<Titling>();
     visit.visit::<crate::secretary::routes::Erasing>();
     visit.visit::<Saying>();
@@ -1065,6 +1096,21 @@ mod tests {
             assert_eq!(back, value);
         }
         assert!(serde_json::from_str::<Fulfillment>("\"none\"").is_err());
+    }
+
+    /// The stores the tab hands its writes to are exactly the rows whose writer is `Tab`.
+    #[test]
+    fn the_written_names_are_the_rows_a_tab_writes() {
+        use suzatary_core::stores::Writer;
+        let rows: Vec<StoreName> = StoreName::ALL
+            .into_iter()
+            .filter(|store| store.kind().writer() == Writer::Tab)
+            .collect();
+        let named: Vec<StoreName> = WrittenName::ALL
+            .into_iter()
+            .map(WrittenName::store)
+            .collect();
+        assert_eq!(named, rows);
     }
 
     /// Every answer has a decoder, folded from the text `wire.ts` holds.
