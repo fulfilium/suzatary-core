@@ -1,21 +1,21 @@
-# The brotli bytes a first visit downloads for each wasm module the web app ships, at most, by the
-# Nix system that builds it: each module is `packages.${system}`'s, and an aarch64 build of the
-# same revision is not byte for byte an x86_64 one (typst-wasm: 6,276,915 bytes brotli on
-# aarch64-linux, 6,271,632 on x86_64-linux, each reproduced by `nix build --rebuild`). Each line is
-# its system's figure, as `nix build` and build-web.sh's `brotli -q 11` make it, rounded up to a
-# thousand bytes so a change that moves a module by less need not move its line.
-# scripts/build-web.sh refuses a module over its system's line, or one with no line. A line only
-# moves down: app/cli/tests/guards/wasm_budget.rs refuses one raised against the merge base.
+# The bytes of each wasm module the web app ships, at most, as it ships: after wasm-opt, before
+# compression, by the Nix system that builds it. Each module is `packages.${system}`'s, and an
+# aarch64 build of the same revision is not byte for byte an x86_64 one. The size after wasm-opt
+# moves with the code by about the bytes the code adds; the brotli size of nearly the same code
+# moved by 2.8 KB for 300 bytes added, so build-web.sh prints the brotli bytes, what a first visit
+# downloads, and judges nothing by them.
+#
+# A line is its system's figure for the merged tree, as `nix build` makes it, rounded up to the
+# next multiple of 10,000 bytes. scripts/build-web.sh refuses a module over its system's line, or
+# one with no line. A line only moves down: app/cli/tests/guards/wasm_budget.rs refuses one raised
+# against the merge base by more than 16,000 bytes, unless the pull request says why on a
+# `Wasm-growth: <module> +<bytes>: <reason>` line (AGENTS.md, "Releases and `Completes:`").
 #
 # <module> <system> <bytes>
-# Stages 7 and 8 (#341) raise views_bg and prodrome_bg: the todo list, a todo and the Typst list in
-# the pages' module, and the list's tree grown in the core's. x86_64 is measured; aarch64 is x86_64
-# plus the gap master's lines kept, until an aarch64 build of the merge measures it.
-# localwrites stage 1 (#462) raises prodrome_bg by the asks store's replica and the topic stores'
-# signing and refusals, measured as +22,117 bytes brotli before wasm-opt on x86_64.
-views_bg.wasm x86_64-linux 615000
-prodrome_bg.wasm x86_64-linux 1152000
-typst_bg.wasm x86_64-linux 6272000
-views_bg.wasm aarch64-linux 622000
-prodrome_bg.wasm aarch64-linux 1167000
-typst_bg.wasm aarch64-linux 6277000
+# #510 set every line on 2026-11-15: x86_64 by `nix build`, aarch64 from the runners' gate run.
+views_bg.wasm x86_64-linux 3460000
+prodrome_bg.wasm x86_64-linux 4710000
+typst_bg.wasm x86_64-linux 22020000
+views_bg.wasm aarch64-linux 3460000
+prodrome_bg.wasm aarch64-linux 4710000
+typst_bg.wasm aarch64-linux 22090000

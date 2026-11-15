@@ -123,7 +123,7 @@ cp -r web/static/fonts web/dist/
 echo "==> suzatary-wasm from $SUZATARY_PRODROME_WASM"
 cp "$SUZATARY_PRODROME_WASM/web/prodrome.js" "$SUZATARY_PRODROME_WASM/web/prodrome_bg.wasm" web/dist/
 chmod u+w web/dist/prodrome.js web/dist/prodrome_bg.wasm
-echo "    prodrome_bg.wasm: $(du -h web/dist/prodrome_bg.wasm | cut -f1)"
+sed 's/^/    /' "$SUZATARY_PRODROME_WASM/SIZES"
 
 echo "==> suzatary-views-wasm from $SUZATARY_VIEWS_WASM"
 cp "$SUZATARY_VIEWS_WASM/web/views.js" "$SUZATARY_VIEWS_WASM/web/views_bg.wasm" web/dist/
@@ -154,33 +154,31 @@ for br in web/dist/*.br web/dist/*/*.br; do
   [[ -e "$br" ]] || continue
   if [[ $(stat -c %s "$br") -ge $(stat -c %s "${br%.br}") ]]; then rm "$br"; fi
 done
-for f in typst_bg.wasm prodrome_bg.wasm app.js; do
-  echo "    $f: $(stat -c %s "web/dist/$f") bytes raw, $(stat -c %s "web/dist/$f.br") bytes brotli"
-done
+echo "    app.js: $(stat -c %s web/dist/app.js) bytes, $(stat -c %s web/dist/app.js.br) bytes brotli"
 
-# What a phone downloads on a deploy's first load: each shipped wasm module's brotli bytes against
-# its line of web/wasm-budget for the system that built it (stdenv's `system`, set in a derivation
-# and in `nix develop` alike), which only moves down; not of the development modules, which ship
-# nowhere.
+# Each shipped wasm module's bytes against its line of web/wasm-budget for the system that built it
+# (stdenv's `system`, set in a derivation and in `nix develop` alike); its brotli bytes are printed,
+# not judged. The development modules ship nowhere and have no line.
 case "${SUZATARY_WASM:-optimised}" in
   optimised) ;;
   development) echo "==> no budget for the development modules (.#suzatary-web judges the deploy's)"; exit 0 ;;
   *) echo "build-web.sh: SUZATARY_WASM is optimised or development" >&2; exit 64 ;;
 esac
-echo "==> every wasm module within its brotli budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
+echo "==> every wasm module within its budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
 over=0
 for wasm in web/dist/*.wasm; do
   name=$(basename "$wasm")
   budget=$(grep -v '^#' web/wasm-budget | awk -v n="$name" -v s="$system" '$1 == n && $2 == s { print $3 }')
-  size=$(stat -c %s "$wasm.br")
+  size=$(stat -c %s "$wasm")
+  brotli=$(stat -c %s "$wasm.br")
   if [[ -z "$budget" ]]; then
-    echo "build-web.sh: $name has no line for $system in web/wasm-budget" >&2
+    echo "build-web.sh: $name has no line for $system in web/wasm-budget ($size bytes, $brotli brotli)" >&2
     over=1
   elif ((size > budget)); then
-    echo "build-web.sh: $name is $size bytes brotli, over its $system budget of $budget (web/wasm-budget)" >&2
+    echo "build-web.sh: $name is $size bytes, over its $system budget of $budget (web/wasm-budget; $brotli brotli)" >&2
     over=1
   else
-    echo "    $name: $size of $budget bytes brotli"
+    echo "    $name: $size of $budget bytes, $brotli brotli"
   fi
 done
 ((over == 0)) || exit 1

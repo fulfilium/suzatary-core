@@ -1,10 +1,10 @@
-//! The shipped wasm modules' brotli budget (`web/wasm-budget`): `scripts/build-web.sh` refuses a
-//! module over its line, and this refuses a line raised against the merge base with `origin/master`
-//! by more than [`ALLOWANCE`], unless a commit since the merge base declares the growth on a
-//! `Wasm-growth: <module> +<bytes>: <reason>` line. A pull request says it on such a line of its
-//! description, which `scripts/train.sh` writes into its merge commit; a branch may say it in a
-//! commit of its own. So a module grows past the allowance only by a change that says why where a
-//! reviewer reads it.
+//! The shipped wasm modules' budget (`web/wasm-budget`), in bytes after wasm-opt:
+//! `scripts/build-web.sh` refuses a module over its line, and this refuses a line raised against
+//! the merge base with `origin/master` by more than [`ALLOWANCE`], unless a commit since the merge
+//! base declares the growth on a `Wasm-growth: <module> +<bytes>: <reason>` line. A pull request
+//! says it on such a line of its description, which `scripts/train.sh` writes into its merge
+//! commit; a branch may say it in a commit of its own. So a module grows past the allowance only by
+//! a change that says why where a reviewer reads it.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -13,9 +13,13 @@ use super::repo;
 
 const BUDGET: &str = "web/wasm-budget";
 
-/// The brotli bytes a line may rise by against the merge base without a word, per module and
-/// system: a feature's code, not a new dependency.
-const ALLOWANCE: u64 = 4000;
+/// The bytes a line may rise by against the merge base without a word, per module and system: a
+/// feature's code, not a new dependency. More than [`STEP`], since a line moves by a whole
+/// step when its module crosses a multiple of one.
+const ALLOWANCE: u64 = 16_000;
+
+/// Every line is a multiple of this: its system's measured figure rounded up to the next one.
+const STEP: u64 = 10_000;
 
 /// `Wasm-growth:` lines: what each declares a module may grow by, summed over the lines naming it.
 /// A line naming no number of bytes, or no reason, fails here, so a declaration is never read as
@@ -130,6 +134,16 @@ fn wasm_budget_no_module_s_line_rises() {
         "{BUDGET} has no line for:\n{}",
         missing.join("\n")
     );
+    let unrounded: Vec<String> = now
+        .iter()
+        .filter(|(_, bytes)| *bytes % STEP != 0)
+        .map(|((m, s), bytes)| format!("{m} {s} {bytes}"))
+        .collect();
+    assert!(
+        unrounded.is_empty(),
+        "{BUDGET}: lines not rounded up to a multiple of {STEP}:\n{}",
+        unrounded.join("\n")
+    );
     let Some(base) = git(&["merge-base", "HEAD", "origin/master"]) else {
         eprintln!("skipped: this checkout has no origin/master to compare with");
         return;
@@ -157,7 +171,7 @@ fn wasm_budget_a_line_rises_by_the_allowance_or_by_what_is_declared() {
         line("prodrome_bg.wasm", 1_100_000),
     ]);
     let within = BTreeMap::from([
-        line("views_bg.wasm", 494_000),
+        line("views_bg.wasm", 490_000 + ALLOWANCE),
         line("prodrome_bg.wasm", 1_090_000),
     ]);
     assert!(
@@ -165,7 +179,7 @@ fn wasm_budget_a_line_rises_by_the_allowance_or_by_what_is_declared() {
         "the allowance, and a fall"
     );
     let past = BTreeMap::from([
-        line("views_bg.wasm", 494_001),
+        line("views_bg.wasm", 490_000 + ALLOWANCE + 1),
         line("prodrome_bg.wasm", 1_100_000),
     ]);
     assert_eq!(
