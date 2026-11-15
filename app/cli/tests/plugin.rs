@@ -184,7 +184,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
     );
     assert_eq!(
         files(&plugins.cache.join("plugins/ics")),
-        ["cursor", "store"]
+        [".store.lock", "cursor", "store"]
     );
     let healths = health.healths().expect("the health reads");
     assert!(synced(&healths, manifest.name(), "PLUGIN_ICS_HOME").is_some());

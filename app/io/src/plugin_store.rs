@@ -16,23 +16,36 @@ pub struct PluginStore {
     root: PathBuf,
 }
 
-/// The store as a sync begins it.
-#[derive(Debug)]
-pub enum Begun {
+/// How a sync found the store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum How {
     /// At the schema it already held: everything learned before still reads.
-    Kept(Objects<Declared>),
+    Kept,
     /// Empty, at a schema it did not hold before: what was learned at another schema is dropped,
     /// and a cursor kept for it is no longer the store's.
-    Afresh(Objects<Declared>),
+    Afresh,
+}
+
+/// The store as a sync begins it, held: no other sync begins it (and so none empties it) until
+/// this is dropped, so a sync keeps it for as long as it writes.
+#[derive(Debug)]
+pub struct Begun {
+    how: How,
+    store: Objects<Declared>,
+    _held: crate::durable::Held,
 }
 
 impl Begun {
-    /// The store, however it began.
+    /// How the store was found.
     #[must_use]
-    pub fn store(self) -> Objects<Declared> {
-        match self {
-            Begun::Kept(store) | Begun::Afresh(store) => store,
-        }
+    pub fn how(&self) -> How {
+        self.how
+    }
+
+    /// The store, however it began, for as long as it is held.
+    #[must_use]
+    pub fn store(&self) -> &Objects<Declared> {
+        &self.store
     }
 }
 
@@ -67,19 +80,36 @@ impl PluginStore {
         Ok(Some(Objects::plugin(&self.root, schema)))
     }
 
-    /// The store at `schema`: kept where it already holds that schema, else emptied and begun
-    /// at it, the schema's text written first.
+    /// The lock a sync holds from its `begin` to its last write: beside the store, never in it,
+    /// since a `begin` at another schema removes the store's directory and every lock inside it.
+    fn hold(&self) -> std::path::PathBuf {
+        let name = self.root.file_name().map_or_else(
+            || "store".into(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        self.root.with_file_name(format!(".{name}.lock"))
+    }
+
+    /// The store at `schema`, held: kept where it already holds that schema, else emptied and
+    /// begun at it, the schema's text written first. The hold is taken first, so a sync that
+    /// empties the store waits for every other sync's writes to end, and none writes into a
+    /// store being emptied.
     ///
     /// # Errors
-    /// A schema file that cannot be read, a directory that cannot be emptied or a schema that
-    /// cannot be written.
+    /// The hold not taken, a schema file that cannot be read, a directory that cannot be
+    /// emptied or a schema that cannot be written.
     pub fn begin(&self, schema: &Declaration) -> Result<Begun, StoreError> {
-        if self.schema()?.as_deref() == Some(schema.text()) {
-            return Ok(Begun::Kept(Objects::plugin(&self.root, schema.clone())));
-        }
         let unwritable = |why: std::io::Error| {
             StoreError::not_appended("plugin", format!("{}: {why}", self.root.display()))
         };
+        let held = crate::durable::hold(&self.hold()).map_err(unwritable)?;
+        if self.schema()?.as_deref() == Some(schema.text()) {
+            return Ok(Begun {
+                how: How::Kept,
+                store: Objects::plugin(&self.root, schema.clone()),
+                _held: held,
+            });
+        }
         std::fs::remove_dir_all(&self.root)
             .present()
             .map_err(unwritable)?;
@@ -89,7 +119,11 @@ impl PluginStore {
             crate::durable::Mode::Readable,
         )
         .map_err(unwritable)?;
-        Ok(Begun::Afresh(Objects::plugin(&self.root, schema.clone())))
+        Ok(Begun {
+            how: How::Afresh,
+            store: Objects::plugin(&self.root, schema.clone()),
+            _held: held,
+        })
     }
 }
 
@@ -116,23 +150,27 @@ mod tests {
             "nothing learned yet"
         );
         let schema = Declaration::admit(SCHEMA).expect("lawful");
-        let store = match place.begin(&schema).expect("begins") {
-            Begun::Afresh(store) => store,
-            Begun::Kept(_) => panic!("a store never begun is begun afresh"),
-        };
+        let begun = place.begin(&schema).expect("begins");
+        assert_eq!(
+            begun.how(),
+            How::Afresh,
+            "a store never begun is begun afresh"
+        );
+        let store = begun.store();
         let seen = parse_event(
             &schema,
             "Seen(door='front', at=datetime(2026, 10, 5, 10, 0, 0), actor='probe', state='open')",
         )
         .expect("an event");
-        learn(&store, vec![seen]).expect("learns");
+        learn(store, vec![seen]).expect("learns");
+        drop(begun);
         let read = place.read().expect("reads").expect("a store");
         assert_eq!(
             read.objects().expect("reads").len(),
             2,
             "its genesis and the event"
         );
-        assert!(matches!(place.begin(&schema), Ok(Begun::Kept(_))));
+        assert_eq!(place.begin(&schema).expect("begins").how(), How::Kept);
         let mut names: Vec<String> = std::fs::read_dir(dir.path().join("store"))
             .expect("lists")
             .map(|entry| {
@@ -150,13 +188,65 @@ mod tests {
         );
 
         let other = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");
-        let Begun::Afresh(store) = place.begin(&other).expect("begins") else {
-            panic!("another schema begins the store afresh");
-        };
-        assert!(store.objects().expect("reads").is_empty());
+        let begun = place.begin(&other).expect("begins");
+        assert_eq!(
+            begun.how(),
+            How::Afresh,
+            "another schema begins the store afresh"
+        );
+        assert!(begun.store().objects().expect("reads").is_empty());
         assert_eq!(
             std::fs::read_to_string(dir.path().join("store/schema")).expect("reads"),
             other.text()
+        );
+    }
+
+    /// LAW: a `begin` at another schema, asked while a sync holds the store, waits for it: the
+    /// holder's appends all land in the store it began, and the store is emptied at the other
+    /// schema only once the holder lets go.
+    #[test]
+    fn a_begin_at_another_schema_waits_for_the_sync_that_holds_the_store() {
+        let dir = tempfile::tempdir().expect("a scratch dir");
+        let place = PluginStore::at(dir.path().join("store"));
+        let schema = Declaration::admit(SCHEMA).expect("lawful");
+        let other = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");
+        let seen = |hour: u32| {
+            parse_event(
+                &schema,
+                &format!(
+                    "Seen(door='door{hour}', at=datetime(2026, 10, 5, {hour}, 0, 0), actor='probe', \
+                     state='open')"
+                ),
+            )
+            .expect("an event")
+        };
+        let begun = place.begin(&schema).expect("begins");
+        let emptying = std::thread::spawn({
+            let place = place.clone();
+            move || {
+                let begun = place.begin(&other).expect("begins");
+                (begun.how(), begun.store().objects().expect("reads").len())
+            }
+        });
+        for hour in 10..13 {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            learn(begun.store(), vec![seen(hour)]).expect("learns while another begin waits");
+        }
+        assert_eq!(
+            begun.store().objects().expect("reads").len(),
+            4,
+            "a genesis and three"
+        );
+        assert!(
+            !emptying.is_finished(),
+            "the other begin waits for the holder"
+        );
+        drop(begun);
+        let (how, held) = emptying.join().expect("the other begin");
+        assert_eq!(
+            (how, held),
+            (How::Afresh, 0),
+            "emptied at the other schema, after"
         );
     }
 }

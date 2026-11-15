@@ -129,6 +129,7 @@ fn the_template_begins_a_deployment_whose_every_file_is_shipped_staged_or_ignore
         secretary.renders.join(format!("{name}.html")),
         instance.decisions().join("decisions.lock"),
         instance.plugins.cache.join("plugins/ics/store/store.lock"),
+        instance.plugins.cache.join("plugins/ics/.store.lock"),
         instance.plugins.cache.join("plugins/ics/cursor"),
         instance.mail.root.join("her-at-example-test/Inbox/cur/1"),
         instance.mail.heartbeat.clone(),

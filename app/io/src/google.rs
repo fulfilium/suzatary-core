@@ -390,10 +390,11 @@ pub fn learn(
     use prodrome_core::store::Replica as _;
     let schema = prodrome_core::declared::Declaration::admit(suzatary_core::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
-    let store = crate::plugin_store::PluginStore::at(root)
+    // Held until the learning ends, so no sync at another schema empties the store under it.
+    let begun = crate::plugin_store::PluginStore::at(root)
         .begin(&schema)
-        .map_err(|failed| failed.to_string())?
-        .store();
+        .map_err(|failed| failed.to_string())?;
+    let store = begun.store();
     let actor = prodrome_core::event::Actor::new(suzatary_core::google::ACTOR)
         .map_err(|refused| refused.to_string())?;
     let items = occurrences
@@ -401,7 +402,7 @@ pub fn learn(
         .map(|occurrence| occurrence.event(store.inner().schema(), at, &actor))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|refused| refused.to_string())?;
-    suzatary_store::store::learn(&store, items).map_err(|failed| failed.to_string())
+    suzatary_store::store::learn(store, items).map_err(|failed| failed.to_string())
 }
 
 /// lieer's credentials file in the account's maildir, in the authorized-user form lieer loads

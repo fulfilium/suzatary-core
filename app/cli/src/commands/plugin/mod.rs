@@ -18,7 +18,7 @@ use suzatary_io::clock::SystemClock;
 use suzatary_io::durable;
 use suzatary_io::http::Ureq;
 use suzatary_io::objects::Objects;
-use suzatary_io::plugin_store::{Begun, PluginStore};
+use suzatary_io::plugin_store::{How, PluginStore};
 use suzatary_io::present::Present as _;
 use suzatary_plugin::{Budget, Effects, Fetch, Host, Run, Source};
 use suzatary_store::store::{Learnt, learn};
@@ -214,22 +214,27 @@ fn sync_once(
         Ok(source) => source,
         Err(why) => return failed(why),
     };
-    let (store, cursor) = match PluginStore::at(plugins.store(name)).begin(source.schema()) {
-        // A store begun afresh holds nothing its cursor says was learned, so the run starts
-        // from no cursor and reports everything in its window again.
-        Ok(Begun::Afresh(store)) => (store, None),
-        Ok(Begun::Kept(store)) => match std::fs::read(dir.join("cursor")).present() {
-            Ok(cursor) => (store, cursor),
-            Err(err) => return failed(format!("its cursor could not be read: {err}")),
-        },
+    // Held until the run's writes end, so no sync at another schema empties the store under it.
+    let begun = match PluginStore::at(plugins.store(name)).begin(source.schema()) {
+        Ok(begun) => begun,
         Err(err) => return failed(format!("its store could not begin: {err}")),
     };
+    let cursor = match begun.how() {
+        // A store begun afresh holds nothing its cursor says was learned, so the run starts
+        // from no cursor and reports everything in its window again.
+        How::Afresh => None,
+        How::Kept => match std::fs::read(dir.join("cursor")).present() {
+            Ok(cursor) => cursor,
+            Err(err) => return failed(format!("its cursor could not be read: {err}")),
+        },
+    };
+    let store = begun.store();
     let run = source.sync(effects, cursor.as_deref());
     for said in &run.said {
         eprintln!("plugin {name} said: {said}");
     }
     let fetches: Vec<(CredentialName, Answer)> = run.fetches.iter().filter_map(link).collect();
-    let (learnt, what) = match learned(&source, &store, &dir, &run) {
+    let (learnt, what) = match learned(&source, store, &dir, &run) {
         Ok((learnt, what)) => (Some(learnt), what),
         Err(what) => (None, what),
     };

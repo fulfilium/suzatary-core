@@ -481,11 +481,11 @@ fn calendar(root: &Path) {
     use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
     use suzatary_store::store::learn;
 
-    let store = PluginStore::at(root.join(CALENDAR))
+    let begun = PluginStore::at(root.join(CALENDAR))
         .begin(&calendar_schema())
-        .expect("begins")
-        .store();
-    rooted(&store, "plugin");
+        .expect("begins");
+    let store = begun.store();
+    rooted(store, "plugin");
     let review = |status| Occurrence {
         id: OccurrenceId::new(
             CalendarName::parse("PLUGIN_ICS_WORK").expect("a name"),
@@ -507,7 +507,7 @@ fn calendar(root: &Path) {
         let event = review(status)
             .event(&calendar_schema(), at(14, minute), &ics)
             .expect("an event");
-        learn(&store, vec![event]).expect("learns");
+        learn(store, vec![event]).expect("learns");
     };
     learned(Status::Confirmed, 0);
     learned(Status::Confirmed, 15);

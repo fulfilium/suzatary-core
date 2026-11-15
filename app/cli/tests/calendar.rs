@@ -36,14 +36,14 @@ fn occurrence(uid: &str, start: &str, title: &str, status: Status) -> Occurrence
 fn a_week_reads_the_store_and_a_bad_day_is_refused() {
     let fakes = Fakes::new("calendar");
     let schema = Declaration::admit(include_str!("../../plugin-ics/ics.schema")).expect("lawful");
-    let store = PluginStore::at(fakes.root.join("cache/plugins/ics/store"))
+    let begun = PluginStore::at(fakes.root.join("cache/plugins/ics/store"))
         .begin(&schema)
-        .expect("begins")
-        .store();
+        .expect("begins");
+    let store = begun.store();
     let at = Datetime::new(2026, 10, 5, 10, 0, 0, 0).expect("an instant");
     let ics = Actor::new("ics").expect("an actor");
     learn(
-        &store,
+        store,
         [
             occurrence(
                 "review",

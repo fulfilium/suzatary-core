@@ -1719,6 +1719,7 @@ fn safe_push_never_carries_the_cache_tier() {
         "cache/plugins/ics/store/store.lock".to_owned(),
         "cache/plugins/ics/store/schema".to_owned(),
         "cache/plugins/ics/store/.lock".to_owned(),
+        "cache/plugins/ics/.store.lock".to_owned(),
         "cache/plugins/ics/cursor".to_owned(),
     ] {
         assert!(
