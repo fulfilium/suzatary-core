@@ -59,7 +59,6 @@ const todosIn = (n: Node): string[] => [...(n.todo === undefined ? [] : [n.todo]
 
 app.scene("the page's groups are the box's tree: the same groups, order and values, in all three groupings", async () => {
   await app.open(BASE);
-  try {
   for (const by of ["category", "urgency", "flat"]) {
     await groupBy(by);
     const root = await served(by);
@@ -86,10 +85,7 @@ app.scene("the page's groups are the box's tree: the same groups, order and valu
       `${by}: the lines, in the box's order`,
     );
   }
-  } finally {
-    // Kept on the device, and the next scene reads by category.
-    await groupBy("category");
-  }
+  await groupBy("category");
 });
 
 app.scene("on a phone the first line starts in the top third, under one control that searches, filters and groups", async () => {
@@ -122,7 +118,8 @@ app.scene("on a phone the first line starts in the top third, under one control 
 
 app.scene("a fold is the viewer's and stays on this device", async () => {
   await app.open(BASE);
-  await drawn("category");
+  // The grouping is kept on the device, so a scene before this one may have left another.
+  await groupBy("category");
   await app.page.click(`.tree section.group[data-group="c:home"] .grouphead`);
   await app.page.waitFor(`document.querySelector('${row(todos.flat.id)}') === null`);
   const peek = await app.page.evaluate<string>(`document.querySelector('section.group[data-group="c:home"] .peek').textContent`);

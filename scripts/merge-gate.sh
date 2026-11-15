@@ -484,7 +484,15 @@ lane=history
 # Unkept: its answer is a function of origin/master, not of the tree; without it, it passes.
 # shellcheck disable=SC2329
 changelog_entry() {
-  local base head=HEAD added
+  local base head=HEAD added app rev
+  # Every fragment, read by the cut's app (train.sh's resolve_app).
+  app="$({ rev="$(git rev-parse -q --verify origin/master)" &&
+    { SUZATARY_APP_REV="$rev" scripts/app-bin.sh || scripts/app-bin.sh --deployed; }; } 2>/dev/null)/bin/suzatary" || true
+  if ! "$app" release fragments --help >/dev/null 2>&1; then
+    echo "changelog: no app of origin/master reads fragments"
+  elif ! "$app" release fragments --tree .; then
+    return 1
+  fi
   base="$(git merge-base HEAD origin/master 2>/dev/null)" ||
     { echo "changelog: skipped: no origin/master to compare with"; return 0; }
   # On master (the nightly), the range is the train since the release before HEAD.

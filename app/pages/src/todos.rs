@@ -150,10 +150,10 @@ impl Grouping {
     }
 }
 
-const GROUPINGS: [(Grouping, &str, &str); 3] = [
-    (Grouping::Category, "category", "Category"),
-    (Grouping::Urgency, "urgency", "Urgency"),
-    (Grouping::Flat, "flat", "Flat"),
+const GROUPINGS: [(Grouping, &str); 3] = [
+    (Grouping::Category, "Category"),
+    (Grouping::Urgency, "Urgency"),
+    (Grouping::Flat, "Flat"),
 ];
 
 /// Which lifecycle states the list shows.
@@ -2111,8 +2111,8 @@ impl Model {
             },
             &[],
         );
-        let pills = GROUPINGS.map(|(g, by, label)| {
-            view! { Button "pill" {Type => "button", Data("by") => by, AriaPressed => if self.by == g { "true" } else { "false" }} @click(Msg::By(g)) [label] }
+        let pills = GROUPINGS.map(|(g, label)| {
+            view! { Button "pill" {Type => "button", Data("by") => g.key(), AriaPressed => if self.by == g { "true" } else { "false" }} @click(Msg::By(g)) [label] }
         });
         view! { Div "finder" {Id => "finder", Hidden => self.find == Find::Shut} [
             view! { Div "filterbar" [

@@ -5,7 +5,7 @@
 //! declared reads must cover what it reads, and the gate run with a stub in every step's place
 //! runs exactly the steps whose inputs moved.
 
-use super::{Scratch, repo};
+use super::{Scratch, binary, repo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -2768,6 +2768,61 @@ fn the_changelog_step_wants_a_fragment_beside_a_change() {
     assert!(
         !bare.step(),
         "a train with no entry fails even under its release"
+    );
+}
+
+/// This tree's own fragments, read by this tree's binary as a cut reads them: where a fragment is
+/// written, the gate's step has no app to read it with, and a train's cut removes it first.
+#[test]
+fn this_tree_s_fragments_are_read_as_a_cut_reads_them() {
+    let out = Command::new(binary::path())
+        .args(["release", "fragments", "--tree"])
+        .arg(repo())
+        .output()
+        .expect("the binary runs");
+    assert!(
+        out.status.success(),
+        "a fragment a release cut would refuse:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Every fragment is read by origin/master's app as the release cut reads it, whatever changed:
+/// one under no `### <kind>` heading fails the step, even with no `app/` or `web/` change.
+#[test]
+fn the_changelog_step_reads_every_fragment_as_the_cut_does() {
+    let repo = ChangelogRepo::new("gate-changelog-parse");
+    let app = repo.0.join("app-out");
+    std::fs::create_dir_all(app.join("bin")).expect("a bin dir");
+    let real = std::fs::canonicalize(binary::path()).expect("the binary");
+    std::os::unix::fs::symlink(real, app.join("bin/suzatary")).expect("the app");
+    repo.commit(
+        "the cut's app, as scripts/app-bin.sh prints it",
+        &[(
+            "scripts/app-bin.sh",
+            &format!("#!/bin/sh\necho '{}'\n", app.display()),
+        )],
+        &[],
+    );
+    std::fs::set_permissions(
+        repo.0.join("scripts/app-bin.sh"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .expect("executable");
+    repo.commit(
+        "a fragment",
+        &[("changelog.d/one.md", "### Fixed\n- one\n")],
+        &[],
+    );
+    assert!(repo.step(), "a fragment the cut reads");
+    repo.commit(
+        "a bare fragment",
+        &[("changelog.d/two.md", "- under no kind\n")],
+        &[],
+    );
+    assert!(
+        !repo.step(),
+        "a fragment the cut refuses, with no app/ change"
     );
 }
 

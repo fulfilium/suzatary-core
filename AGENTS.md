@@ -36,6 +36,10 @@ says what was decided, who decided it, when, and why. `CLAUDE.md` names a rule's
 ## Commands
 
 1. Before your first commit in a clone, run `git config core.hooksPath scripts/hooks`.
+   In a cloud session, also run `scripts/prefetch-inputs.sh` before your first Nix command:
+   the environment's proxy refuses Nix's own download of GitHub inputs. If a Nix command still
+   fails, say so in the pull request, name the command that could not run, and do not claim
+   its check.
 2. Before you push, run `nix develop .#triage -c scripts/merge-gate.sh --no-live`.
 3. While you work, run only the step that you change: `cargo test -p <crate>`,
    `scripts/web-test.sh` or `scripts/web-e2e.sh <scene>`.

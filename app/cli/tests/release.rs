@@ -651,3 +651,36 @@ fn the_release_is_read_from_the_file_beside_the_binary() {
         "a release file that holds no release is named, never read as dev"
     );
 }
+
+/// `release fragments` reads `changelog.d/` as a cut does, with no instance or chain: what the
+/// merge gate's `changelog` step asks. A fragment the cut refuses, it refuses, naming the file.
+#[test]
+fn fragments_are_read_as_a_cut_reads_them() {
+    let root = common::scratch("release-fragments");
+    let tree = a_checkout(&root);
+    let tree_arg = tree.to_string_lossy().into_owned();
+    let nowhere = root.join("no-instance.toml");
+    let read = suzatary(&nowhere, &["release", "fragments", "--tree", &tree_arg]);
+    assert!(
+        read.status.success(),
+        "{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    assert!(String::from_utf8_lossy(&read.stdout).starts_with("2 fragment(s)"));
+
+    std::fs::write(tree.join("changelog.d/c-bare.md"), "- under no kind\n").expect("a fragment");
+    let refused = suzatary(&nowhere, &["release", "fragments", "--tree", &tree_arg]);
+    let said = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        !refused.status.success() && said.contains("c-bare.md"),
+        "{said}"
+    );
+    a_project_chain(&root);
+    let instance = an_instance(&root);
+    let cut = suzatary(&instance, &["release", "cut", "--tree", &tree_arg]);
+    let said = String::from_utf8_lossy(&cut.stderr);
+    assert!(
+        !cut.status.success() && said.contains("c-bare.md"),
+        "the cut refuses the same fragment: {said}"
+    );
+}

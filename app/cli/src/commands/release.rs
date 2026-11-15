@@ -67,11 +67,9 @@ pub enum Action {
         #[arg(required = true)]
         todos: Vec<String>,
     },
-    /// Write the next release into a checkout: `app/release.toml` (its version and what it
-    /// completed) and the changelog's Unreleased section closed under it, with every fragment of
-    /// `changelog.d/` folded in and removed. The
-    /// version is read as the chain will be once `--completes` are recorded done, which the
-    /// train's land does; nothing is written to the chain here.
+    /// Write the next release into a checkout: `app/release.toml` and the changelog's Unreleased
+    /// section closed under it, `changelog.d/` folded in and removed. The version is the chain's
+    /// once `--completes` are recorded done (a land's work); nothing is written to the chain.
     Cut {
         /// A todo this release completes, on the plan's chain; once per todo.
         #[arg(long = "completes", value_name = "TODO")]
@@ -83,16 +81,12 @@ pub enum Action {
         #[arg(long, default_value = ".")]
         tree: PathBuf,
         /// The last release (origin/master's newest `Release:` trailer); absent before the
-        /// first, which is `major.minor.0` of what the chain reads. A version the checkout
-        /// declares that is not the last release was never released: its section joins this
-        /// release.
+        /// first. A version the checkout declares past it was never released: its section joins.
         #[arg(long, value_name = "VERSION")]
         last: Option<Version>,
     },
-    /// Record done, as `--actor`, each todo the checkout's release completed that the chain does
-    /// not yet hold completed, under the chain's write lock: what a land does once origin holds
-    /// the release. A todo already done is not written again, so recording twice is recording
-    /// once.
+    /// Record done, as `--actor` and under the chain's write lock, each todo the checkout's
+    /// release completed and the chain does not hold done: a land's last step, idempotent.
     Record {
         /// The release's files (its plan and `app/release.toml`), checked out or extracted.
         #[arg(long, default_value = ".")]
@@ -112,6 +106,12 @@ pub enum Action {
         #[arg(long, default_value = ".")]
         tree: PathBuf,
     },
+    /// Read the checkout's `changelog.d/` as a cut does: the merge gate's `changelog` step.
+    Fragments {
+        /// The checkout to read.
+        #[arg(long, default_value = ".")]
+        tree: PathBuf,
+    },
 }
 
 /// `suzatary release <action>`.
@@ -119,10 +119,10 @@ pub enum Action {
 /// # Errors
 /// The instance, the chain, the plan or the tree.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    let instance = Instance::open(path)?;
     // A release is cut and checked by the plan of the tree it is written into, so a train
     // that changes the plan is read by its own; the reading serves the compiled one.
     let plan = match &args.action {
+        Action::Fragments { tree } => return read_fragments(tree),
         Action::Read { .. } | Action::Items { .. } => {
             Plan::declared().context("the release plan this build carries")?
         }
@@ -131,6 +131,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         | Action::Check { tree, .. }
         | Action::Record { tree, .. } => Plan::parse(&readable(&Files::of(tree).plan)?)?,
     };
+    let instance = Instance::open(path)?;
     let dir = instance.chain(Some(plan.chain()))?;
     let nodes = store_of(dir).nodes().context("reading the project chain")?;
     let chain = Chain {
@@ -177,6 +178,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             },
         ),
         Action::Check { tree } => check(&plan, &chain, tree),
+        Action::Fragments { tree } => read_fragments(tree),
         Action::Record { tree, notes, actor } => {
             record(&instance, &plan, &chain, tree, notes, actor)
         }
@@ -448,6 +450,12 @@ fn fragments(dir: &Path) -> anyhow::Result<(Vec<PathBuf>, Fragment)> {
         folded = folded.append(fragment);
     }
     Ok((paths, folded))
+}
+
+fn read_fragments(tree: &Path) -> anyhow::Result<()> {
+    let (paths, _) = fragments(&Files::of(tree).fragments)?;
+    println!("{} fragment(s) read as a cut reads them", paths.len());
+    Ok(())
 }
 
 fn readable(path: &Path) -> anyhow::Result<String> {
