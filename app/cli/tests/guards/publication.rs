@@ -161,22 +161,26 @@ fn publication_cache_runs_only_masters_code_over_the_tree() {
         "suzatary-wasm-dev",
         "suzatary-views-wasm-dev",
     ];
-    let mut outputs = BTreeSet::new();
-    for line in build.lines().filter(|l| l.contains("nix build")) {
-        let line = line.trim();
-        let attr = line.rsplit_once(" ./tree#").map(|(_, attr)| attr);
-        assert!(
-            line.starts_with("nix build --option accept-flake-config false --no-update-lock-file ")
-                && attr.is_some_and(|a| allowed.contains(&a)),
-            "a build of an output the list does not name, or without its flake configuration or a \
-             lock written: {line}"
-        );
-        outputs.extend(attr);
-    }
+    let builds: Vec<&str> = build
+        .lines()
+        .filter(|l| l.contains("nix build --"))
+        .collect();
+    assert_eq!(builds.len(), 1, "one build: {builds:?}");
+    assert!(
+        builds[0].contains(
+            "nix build --option accept-flake-config false --no-update-lock-file \
+             --print-build-logs --no-link --json \"${outputs[@]/#*=/./tree#}\""
+        ),
+        "the build of the outputs listed, with no flake configuration of its own and no lock \
+         written: {}",
+        builds[0]
+    );
     assert_eq!(
-        outputs,
-        allowed.into_iter().collect(),
-        "every allowed output is built"
+        published_outputs(&text)
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        allowed.iter().map(|a| (*a).to_owned()).collect(),
+        "every allowed output is built, and nothing else"
     );
     let code: Vec<&str> = text
         .lines()
@@ -200,6 +204,16 @@ fn publication_cache_runs_only_masters_code_over_the_tree() {
         import.find("nix-store --realise") < import.find("nix-store --import"),
         "the served references come from the caches first"
     );
+}
+
+/// The flake outputs publication.yml's build job lists (`outputs=(<link>=<output> ...)`).
+pub(super) fn published_outputs(text: &str) -> Vec<String> {
+    let start = text.find("outputs=(").expect("the build lists its outputs") + "outputs=(".len();
+    let end = start + text[start..].find(')').expect("the list ends");
+    text[start..end]
+        .split_whitespace()
+        .filter_map(|o| o.split_once('=').map(|(_, output)| output.to_owned()))
+        .collect()
 }
 
 /// `scripts/public-source.sh` passes a checkout none of whose files `.gitattributes` marks

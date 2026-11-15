@@ -592,13 +592,10 @@ fn publication_builds_what_the_live_web_step_reads() {
         "the fixture is the public tree's"
     );
     let publication = code(".github/workflows/publication.yml");
-    let built: Vec<&str> = publication
-        .lines()
-        .filter_map(|l| l.trim().rsplit_once(" ./tree#").map(|(_, attr)| attr))
-        .collect();
+    let built = super::publication::published_outputs(&publication);
     for output in outputs.iter().chain(&["suzatary-fixture"]) {
         assert!(
-            built.contains(output),
+            built.iter().any(|b| b == output),
             "publication.yml does not build {output}"
         );
     }

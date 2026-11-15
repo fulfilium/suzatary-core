@@ -115,6 +115,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = false
+            max-jobs = auto
             extra-substituters = https://bmabsout.cachix.org
             extra-trusted-public-keys = bmabsout.cachix.org-1:/GhCEayGQ3NHMIlJiUelQrLtHHXVdGjHtyDz32xNAo4=
 
@@ -132,34 +133,26 @@ jobs:
       - name: The tree holds no private history
         run: scripts/public-source.sh tree
 
-      # The attributes scripts/app-builds.sh builds, from the same tree: the
-      # store path of a checkout is the path the box fetches the commit to, so
-      # every output here is the one the box asks for. Evaluation only, and
-      # builds in the sandbox: no `nix run` or `nix develop` of the tree, no
-      # flake configuration of its own, and no lock file written, so no input
-      # is locked from the runner's disk.
-      - name: Build what a deploy builds
+      # The attributes scripts/app-builds.sh builds, from the same tree, and what the gate's live
+      # half reads from it (merge-gate.sh's web-live, and the development wasm modules its tests
+      # read), so the box substitutes them: the store path of a checkout is the path the box
+      # fetches the commit to. In ONE `nix build`, so Nix builds them side by side on the
+      # runner's cores (eleven builds one after another took most of a run); each output is then
+      # linked, from `--json`, which lists them in the order asked. Evaluation only, and builds in
+      # the sandbox: no `nix run` or `nix develop` of the tree, no flake configuration of its own,
+      # and no lock file written, so no input is locked from the runner's disk.
+      - name: Build what a deploy builds and what the gate's live half reads
         run: |
           set -euo pipefail
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-bin ./tree#suzatary
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-dist ./tree#suzatary-web
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-plugins ./tree#suzatary-plugins
-
-      # What the gate's live half reads from the same tree (merge-gate.sh's web-live), so the box
-      # substitutes it. Never deployed.
-      - name: Build what the gate's live half reads
-        run: |
-          set -euo pipefail
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-fixture ./tree#suzatary-fixture
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-web-ts ./tree#suzatary-web-ts
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-vector-json ./tree#suzatary-vector-json
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-wasm ./tree#suzatary-wasm
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-views-wasm ./tree#suzatary-views-wasm
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-typst-wasm ./tree#suzatary-typst-wasm
-          # The development modules the gate's tests and scenes read, so a later gate of a tree
-          # whose modules' sources this one shares substitutes them.
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-wasm-dev ./tree#suzatary-wasm-dev
-          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-views-wasm-dev ./tree#suzatary-views-wasm-dev
+          outputs=(bin=suzatary dist=suzatary-web plugins=suzatary-plugins
+            live-suzatary-fixture=suzatary-fixture live-suzatary-web-ts=suzatary-web-ts
+            live-suzatary-vector-json=suzatary-vector-json live-suzatary-wasm=suzatary-wasm
+            live-suzatary-views-wasm=suzatary-views-wasm live-suzatary-typst-wasm=suzatary-typst-wasm
+            live-suzatary-wasm-dev=suzatary-wasm-dev live-suzatary-views-wasm-dev=suzatary-views-wasm-dev)
+          built="$(nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --no-link --json "${outputs[@]/#*=/./tree#}")"
+          mapfile -t paths < <(jq -r '.[].outputs.out' <<<"$built")
+          ((${#paths[@]} == ${#outputs[@]})) || { echo "::error::nix build named ${#paths[@]} outputs for ${#outputs[@]} asked"; exit 1; }
+          for i in "${!outputs[@]}"; do ln -sfn "${paths[i]}" "result-${outputs[i]%%=*}"; done
 
       # What the push adds to the cache: every path of the built closures that
       # neither cache.nixos.org nor the cache already serves, by its NAR size
