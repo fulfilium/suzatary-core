@@ -157,6 +157,18 @@ fn train_runs_every_live_step_once_in_two_runs() {
     );
 }
 
+/// A nightly's branch (train.sh's `nightly_remote`) runs every lane --nightly.
+#[test]
+fn gate_yml_runs_a_nightly_branch_full() {
+    let gate = code(".github/workflows/gate.yml");
+    assert!(
+        gate.contains("case \"$GITHUB_REF_NAME\" in gate/nightly-*) full=(--nightly) ;; esac")
+            && gate.contains("scripts/merge-gate.sh --no-live \"${full[@]}\" --steps \"$STEPS\""),
+        "the gate step runs a nightly branch --nightly"
+    );
+    assert!(read("scripts/train.sh").contains("gate_prefix=gate/nightly-"));
+}
+
 /// The e2e jobs are the timed scenes' part and the parts 1/n to n/n of one n, each once, and only
 /// they run e2e.
 #[test]

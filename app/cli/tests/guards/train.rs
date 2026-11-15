@@ -3712,3 +3712,78 @@ fn train_gate_github_red_early_live_steps_stop_the_tree_half() {
     assert!(text(&t.train(&["land"]).stderr).contains("live: failed"));
     assert_eq!(t.origin_master(), seed, "nothing landed");
 }
+
+/// With `core` on GitHub, the nightly's tree half runs there on a `gate/nightly-` branch, and the
+/// box's runs keep a train's order.
+#[test]
+fn train_nightly_with_core_on_github_runs_its_tree_half_there() {
+    let t = Train::new("nightly-github");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    t.on_github();
+    t.master_moves(&[("a.txt", "a\n")]);
+    let master = t.origin_master();
+    let out = t.train_with(&["nightly"], &env);
+    let stderr = text(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    assert!(stderr.contains("the nightly gate passed"), "{stderr}");
+    let branch = format!("refs/heads/gate/nightly-{master} ");
+    let refs = t.core_pushes();
+    assert!(
+        refs.len() == 2 && refs[0].starts_with(&branch) && refs[1].ends_with(ZERO),
+        "one push of gate/nightly-<master>, then its deletion: {refs:?}"
+    );
+    let order: Vec<String> = t
+        .gate_args()
+        .into_iter()
+        .filter(|a| a != "--no-live --steps cloud")
+        .map(|a| a.split(' ').take(4).collect::<Vec<_>>().join(" "))
+        .collect();
+    let at = |prefix: &str| {
+        order
+            .iter()
+            .position(|a| a.starts_with(prefix))
+            .unwrap_or_else(|| panic!("{prefix} in {order:?}"))
+    };
+    assert!(
+        at("--nightly --no-live --steps fmt,changelog") < at("dispatch master")
+            && at("dispatch master")
+                < at("--nightly --only-live --steps live,live-all,live-guards")
+            && at("--nightly --only-live --steps live,live-all,live-guards") < at("publication")
+            && at("publication") < at("--nightly --no-live --steps public-tree,deployed-shape")
+            && at("--nightly --no-live --steps public-tree,deployed-shape")
+                < at("--nightly --only-live --steps web-live,deploy-build,push-dry,public-check"),
+        "the box's runs, one at a time: {order:?}"
+    );
+    assert!(Train::nightly_todos(&data).is_empty());
+}
+
+/// On GitHub, a red early live run stops neither the runners nor the late live steps, and the
+/// night is red; the tree half's green stands beside it.
+#[test]
+fn train_nightly_with_core_on_github_red_live_stops_nothing() {
+    let t = Train::new("nightly-github-red");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    t.on_github();
+    t.master_moves(&[("broken-live-early", "x\n")]);
+    let out = t.train_with(&["nightly"], &env);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "a red night fails: {stderr}");
+    assert!(
+        t.gate_args()
+            .iter()
+            .any(|a| a.starts_with("--nightly --only-live --steps web-live")),
+        "the late live steps ran: {:?}",
+        t.gate_args()
+    );
+    assert!(
+        stderr.contains("live: failed") || stderr.contains("filed todo"),
+        "{stderr}"
+    );
+    assert_eq!(Train::nightly_todos(&data).len(), 1, "{stderr}");
+}

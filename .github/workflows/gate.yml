@@ -157,8 +157,9 @@ jobs:
           SUZATARY_WASM: ${{ matrix.wasm }}
           SUZATARY_E2E_SHOTS: ${{ runner.temp }}/e2e-shots
         run: |
-          code=0
-          nix develop .#triage -c scripts/merge-gate.sh --no-live --steps "$STEPS" || code=$?
+          code=0 full=()
+          case "$GITHUB_REF_NAME" in gate/nightly-*) full=(--nightly) ;; esac
+          nix develop .#triage -c scripts/merge-gate.sh --no-live "${full[@]}" --steps "$STEPS" || code=$?
           echo "code=$code" >>"$GITHUB_OUTPUT"
 
       # A failed scene's screenshot, page and trace (web/e2e/harness.ts) are on the runner alone.
