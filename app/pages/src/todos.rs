@@ -50,7 +50,6 @@ pub struct Flags {
     pub now: i64,
 }
 
-/// The page's held questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "TodosHold")]
@@ -94,7 +93,6 @@ const KEPT: [Kept; 7] = [
     Kept::Draft,
 ];
 
-/// What the page asks once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
 #[ts(rename = "TodosAsk")]
@@ -127,7 +125,6 @@ pub enum Ask {
     },
 }
 
-/// The streams the page listens to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "TodosListen")]
 pub enum Listen {
@@ -141,6 +138,16 @@ pub enum Grouping {
     Category,
     Urgency,
     Flat,
+}
+
+impl Grouping {
+    fn key(self) -> &'static str {
+        match self {
+            Grouping::Category => "category",
+            Grouping::Urgency => "urgency",
+            Grouping::Flat => "flat",
+        }
+    }
 }
 
 const GROUPINGS: [(Grouping, &str, &str); 3] = [
@@ -549,7 +556,6 @@ enum About {
     Whole,
 }
 
-/// The add sheet's draft.
 #[derive(Debug, Clone)]
 struct Sheet {
     body: Markup,
@@ -609,7 +615,6 @@ enum Pane {
     Todo(Box<todo::Model>),
 }
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -646,7 +651,6 @@ pub struct Model {
     pane: Pane,
 }
 
-/// A move of the add sheet.
 #[derive(Debug, Clone)]
 pub enum SheetMsg {
     Handle,
@@ -659,7 +663,6 @@ pub enum SheetMsg {
     Add,
 }
 
-/// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
     Host(Box<Input<Hold, Ask, Listen>>),
@@ -676,7 +679,6 @@ pub enum Msg {
     Retry,
 }
 
-/// A move of the filter.
 #[derive(Debug, Clone)]
 pub enum Narrow {
     Query(String),
@@ -712,7 +714,6 @@ impl Narrow {
     }
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum Todos {}
 
@@ -927,12 +928,7 @@ impl Model {
         let question = Core::Tree {
             basis: self.basis_question(),
             members: q.members.clone(),
-            by: match q.by {
-                Grouping::Category => "category",
-                Grouping::Urgency => "urgency",
-                Grouping::Flat => "flat",
-            }
-            .to_owned(),
+            by: q.by.key().to_owned(),
         };
         self.wants = Wants::Asking(n, q);
         vec![Effect::Core {
@@ -2229,6 +2225,14 @@ impl Model {
         }
     }
 
+    /// The grouping the drawn tree answers; the pill runs ahead of it.
+    fn drawn_by(&self) -> &'static str {
+        match &self.grown {
+            Drawn::Tree(_, _, q) => q.by.key(),
+            Drawn::Unpriced => "",
+        }
+    }
+
     fn view(&self) -> Node<Msg> {
         let waiting = self.fold.is_none() || matches!(self.grown, Drawn::Unpriced);
         let status = match (&self.problem, waiting) {
@@ -2250,10 +2254,9 @@ impl Model {
             shape: Shape::Rows,
         };
         let cards = self.cards();
-        let tree = view! { Div "tree" {Data("at") => match &self.grown { Drawn::Tree(_, PricedBy::Read(at), _) => at.clone(), Drawn::Tree(_, PricedBy::Rows, _) | Drawn::Unpriced => String::new() }} => cards.iter().map(|c| (c.key.clone(), self.card(c))) };
+        let tree = view! { Div "tree" {Data("at") => match &self.grown { Drawn::Tree(_, PricedBy::Read(at), _) => at.clone(), Drawn::Tree(_, PricedBy::Rows, _) | Drawn::Unpriced => String::new() }, Data("by") => self.drawn_by()} => cards.iter().map(|c| (c.key.clone(), self.card(c))) };
         // The notices stand in one node ahead of the list, so one answering late never moves the
-        // list's place among its siblings: a moved list would be drawn anew, and the focused
-        // cursor with it.
+        // list, which would be drawn anew with its focused cursor.
         let notes: Vec<Node<Msg>> = [
             match &self.setup {
                 Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark(crate::part::Mark::Chevron)] }] }),
@@ -2388,9 +2391,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn an_answer_to_a_replaced_ask_draws_nothing() {
-        let (mut m, _) = Model::open(Flags {
+    fn writer() -> Model {
+        Model::open(Flags {
             context: Context {
                 gate: Gate::Writes,
                 reach: crate::runtime::Reach::Writes,
@@ -2400,7 +2402,13 @@ mod tests {
             },
             chain: "life".to_owned(),
             now: 0,
-        });
+        })
+        .0
+    }
+
+    #[test]
+    fn an_answer_to_a_replaced_ask_draws_nothing() {
+        let mut m = writer();
         m.asked = 2;
         m.wants = Wants::Asking(2, m.question());
         let worth = |v: f64| Answer::Done {
@@ -2410,6 +2418,20 @@ mod tests {
         assert!(matches!(m.grown, Drawn::Unpriced));
         m.tree(2, worth(0.66));
         assert!(matches!(&m.grown, Drawn::Tree(t, ..) if t.node.worth == Worth::Value(0.66)));
+    }
+
+    #[test]
+    fn the_tree_says_which_grouping_it_drew() {
+        let mut m = writer();
+        assert_eq!(m.drawn_by(), "", "nothing drawn says no grouping");
+        m.asked = 1;
+        m.wants = Wants::Asking(1, m.question());
+        m.tree(1, Answer::Done {
+            body: json!({"place": {"type": "All"}, "term": {"kind": "flat", "value": 0.5}, "priced": {"type": "Value", "v": 0.5}, "children": []}),
+        });
+        assert_eq!(m.drawn_by(), "category");
+        m.by = Grouping::Urgency;
+        assert_eq!(m.drawn_by(), "category", "the pill moved, the tree did not");
     }
 
     #[test]

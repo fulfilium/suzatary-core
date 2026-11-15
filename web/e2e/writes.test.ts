@@ -485,9 +485,11 @@ app.scene("the toast's Undo button reopens what was just completed, and U redoes
     { timeout: 15000 },
   );
 
-  // Open again, so it is back on the list — focus its line and redo with U.
-  await app.page.waitFor(`document.querySelector('${row(todos.agents.id)}') !== null`, { timeout: 8000 });
-  await app.page.evaluate(`document.querySelector('${row(todos.agents.id)} .rowmain').focus()`);
+  // Open again: focus its settled line (a pending one can leave the list until the next reading) and redo with U.
+  await app.page.waitFor(
+    `(() => { const m = document.querySelector('${row(todos.agents.id)}:not(.pending) .rowmain'); m?.focus(); return m !== null && document.activeElement === m; })()`,
+    { timeout: 8000 },
+  );
   await app.page.press("U");
   await app.page.waitFor(
     `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${todos.agents.id}" && e.state === "completed"))`,

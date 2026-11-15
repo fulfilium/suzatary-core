@@ -35,9 +35,20 @@ interface Node {
 /** A worth's number, or null for `∅` and for a term that does not link: the page prints the same. */
 const numberOf = (worth: Worth): number | null => (typeof worth === "object" && "value" in worth ? worth.value : null);
 
+/** Until the tree drawn is `by`'s, priced by a reading: the pill flips first. */
+async function drawn(by: string): Promise<void> {
+  await app.page.waitFor(`(() => { const t = document.querySelector(".tree"); return t?.getAttribute("data-by") === "${by}" && t.getAttribute("data-at") !== ""; })()`, { timeout: 30000 });
+}
+
+async function groupBy(by: string): Promise<void> {
+  await openFinder(app.page);
+  await app.page.click(`.pill[data-by="${by}"]`);
+  await drawn(by);
+}
+
 /** `/api/tree` at the instant the page priced its own, fetched by the page. */
 async function served(by: string): Promise<Node> {
-  await app.page.waitFor(`document.querySelector(".tree")?.getAttribute("data-at") !== ""`, { timeout: 30000 });
+  await drawn(by);
   const answer = await app.page.evaluate<string>(
     `fetch("/api/tree?by=${by}&t=" + document.querySelector(".tree").getAttribute("data-at")).then((r) => r.text())`,
   );
@@ -48,10 +59,9 @@ const todosIn = (n: Node): string[] => [...(n.todo === undefined ? [] : [n.todo]
 
 app.scene("the page's groups are the box's tree: the same groups, order and values, in all three groupings", async () => {
   await app.open(BASE);
+  try {
   for (const by of ["category", "urgency", "flat"]) {
-    await openFinder(app.page);
-    await app.page.click(`.pill[data-by="${by}"]`);
-    await app.page.waitFor(`document.querySelector('.pill[data-by="${by}"]').getAttribute("aria-pressed") === "true"`);
+    await groupBy(by);
     const root = await served(by);
     const cards = by === "flat" ? [{ ...root, label: "all" }] : root.children;
     const shown = await app.page.evaluate<[string, number | null][]>(
@@ -76,8 +86,10 @@ app.scene("the page's groups are the box's tree: the same groups, order and valu
       `${by}: the lines, in the box's order`,
     );
   }
-  await openFinder(app.page);
-  await app.page.click(`.pill[data-by="category"]`);
+  } finally {
+    // Kept on the device, and the next scene reads by category.
+    await groupBy("category");
+  }
 });
 
 app.scene("on a phone the first line starts in the top third, under one control that searches, filters and groups", async () => {
@@ -110,6 +122,7 @@ app.scene("on a phone the first line starts in the top third, under one control 
 
 app.scene("a fold is the viewer's and stays on this device", async () => {
   await app.open(BASE);
+  await drawn("category");
   await app.page.click(`.tree section.group[data-group="c:home"] .grouphead`);
   await app.page.waitFor(`document.querySelector('${row(todos.flat.id)}') === null`);
   const peek = await app.page.evaluate<string>(`document.querySelector('section.group[data-group="c:home"] .peek').textContent`);
