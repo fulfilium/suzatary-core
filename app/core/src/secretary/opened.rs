@@ -72,7 +72,8 @@ impl Opened {
         self.fold().lines.key_ring().holds(name)
     }
 
-    /// `read` of the fold once it holds `graph`'s objects.
+    /// `read` of the fold once it holds `graph`'s objects. A feed that drops a key forgets every
+    /// summary's words kept too, as [`Opened::forget`] does, before the fold is read.
     ///
     /// # Errors
     /// The key store unreadable; nothing is fed then.
@@ -83,8 +84,13 @@ impl Opened {
         read: impl FnOnce(&mut HeldLines<TheBox>) -> T,
     ) -> Result<T, StoreError> {
         let mut fold = self.fold();
-        if fold.heads != *graph.heads() {
-            fold.feed(graph, keys)?;
+        if fold.heads != *graph.heads() && !fold.feed(graph, keys)?.is_empty() {
+            drop(fold);
+            self.said
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clear();
+            fold = self.fold();
         }
         Ok(read(&mut fold.lines))
     }
@@ -92,17 +98,19 @@ impl Opened {
 
 impl Fold {
     /// What `graph` holds and the fold does not, with the keys it names; every key a line kills
-    /// dropped.
+    /// dropped. The keys dropped.
     fn feed(
         &mut self,
         graph: &Graph<LineEvent>,
         keys: &dyn Gets<KeyName, TextKey>,
-    ) -> Result<(), StoreError> {
-        let fresh: Vec<_> = graph
-            .objects()
-            .filter(|(name, _)| !self.lines.holds(name))
-            .map(|(name, object)| (name.clone(), object.clone()))
-            .collect();
+    ) -> Result<Vec<KeyName>, StoreError> {
+        let fresh: Vec<_> = crate::first_read::part("fresh", || {
+            graph
+                .objects()
+                .filter(|(name, _)| !self.lines.holds(name))
+                .map(|(name, object)| (name.clone(), object.clone()))
+                .collect()
+        });
         let mut given = BTreeMap::new();
         let named = fresh
             .iter()
@@ -116,21 +124,23 @@ impl Fold {
                 given.insert(name.clone(), spelled(&key));
             }
         }
-        let gone: Vec<Hash> = self
-            .lines
-            .names()
-            .filter(|name| graph.dag().get(name).is_none())
-            .cloned()
-            .collect();
-        self.lines.keys(&given, &[]);
+        let gone: Vec<Hash> = crate::first_read::part("gone", || {
+            self.lines
+                .names()
+                .filter(|name| graph.dag().get(name).is_none())
+                .cloned()
+                .collect()
+        });
+        crate::first_read::part("ring", || self.lines.keys(&given, &[]));
         crate::first_read::part("hold", || self.lines.hold_objects(fresh, &gone));
-        let dead: Vec<KeyName> = crate::first_read::part("nodes", || self.lines.dead())
-            .into_iter()
-            .filter(|name| self.lines.key_ring().holds(name))
-            .collect();
+        let ring = self.lines.key_ring();
+        let dead: Vec<KeyName> =
+            crate::first_read::part("dead", || self.lines.dead(&|name| ring.holds(name)))
+                .into_iter()
+                .collect();
         self.lines.keys(&BTreeMap::new(), &dead);
         self.heads.clone_from(graph.heads());
-        Ok(())
+        Ok(dead)
     }
 }
 

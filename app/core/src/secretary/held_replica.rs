@@ -247,7 +247,7 @@ impl HeldReplica {
         let ring = self.kept.rows.holding().keys().clone();
         // A key still held may be dead already, retired by a line held or a reseal the rows
         // read, and waiting on its purge, which fetches the lines naming it first.
-        let mut dead = self.lines.dead();
+        let mut dead = self.lines.dead(&|key| ring.holds(key));
         dead.extend(self.outlines.retired(&pending, &|key| ring.holds(key)));
         let husked = given
             .into_iter()
@@ -426,7 +426,7 @@ impl HeldReplica {
         let holding = self.kept.rows.holding().into_owned();
         let ring = holding.keys();
         let pending = self.pending();
-        let mut dead = self.lines.dead();
+        let mut dead = self.lines.dead(&|key| ring.holds(key));
         dead.extend(self.outlines.retired(&pending, &|key| ring.holds(key)));
         dead.extend(told.iter().cloned());
         let owed: BTreeSet<KeyName> = ring

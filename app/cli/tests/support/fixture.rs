@@ -1229,6 +1229,11 @@ pub struct Bulk {
     /// line, each a line of its own after the conversation's last.
     #[arg(long, default_value_t = 0, requires = "lines")]
     reseals: usize,
+    /// How many times each resealed slot is sealed again, each seal from the one before, as a
+    /// store reads after that many changes to the rules: a box whose sweep has run holds every
+    /// seal but the last as a husk (`migrate-scrub --apply` sweeps and husks them).
+    #[arg(long, default_value_t = 1, requires = "reseals")]
+    depth: usize,
     /// How many of the generated rounds carry a topic, the newest first, one each from eight
     /// names in turn, so the stream reads a topic store of the live shape.
     #[arg(long, default_value_t = 0, requires = "lines")]
@@ -1255,6 +1260,7 @@ impl Bulk {
             &sizes(self.lines, self.conversations, self.heavy, self.wide),
             self.sealed,
             Resealing::of(self.reseals, self.heavy),
+            self.depth,
         )?;
         bulk_topics(read, self.topics)
     }
@@ -1339,12 +1345,13 @@ impl Resealing {
 /// as the box locks them: a model's answer of about 6 kB in three blocks and a person's question,
 /// alternating, in words outside ASCII and with digits, the text the scrub is slowest on;
 /// `wide-0` onwards, if any, hold their opening line alone. Each is sealed as `sealed` says, and
-/// `reseals` of their slots are sealed again.
+/// `reseals` of their slots are sealed again, each `depth` times.
 fn bulk_lines(
     read: &crate::instance::Instance,
     sizes: &[(String, usize)],
     sealed: Sealed,
     reseals: Resealing,
+    depth: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
@@ -1358,7 +1365,8 @@ fn bulk_lines(
     let stores = read.conversation_stores();
     let conversations = stores.conversations();
     // Through the store itself first, which begins it if nothing has.
-    let start = fpl::instant_of(SystemClock.now()) - Duration::seconds(i64::try_from(count)? + 60);
+    let start = fpl::instant_of(SystemClock.now())
+        - Duration::seconds(i64::try_from(count + reseals.total() * depth)? + 60);
     suzatary_core::secretary::transcript::start(
         conversations,
         &ConversationId::new("bulk-0")?,
@@ -1401,21 +1409,27 @@ fn bulk_lines(
             }
             events.push(event);
         }
-        for (held, (key, words)) in (u32::try_from(*size)?..).zip(slots) {
-            written += 1;
-            let at = fpl::datetime_of(start + Duration::seconds(i64::from(written)))?;
-            let (event, opens) = LineEvent::reseal(
-                id.clone(),
-                at,
-                writer.clone(),
-                held,
-                key.name(),
-                key.name(),
-                &words,
-                conversations.entropy,
-            )?;
-            conversations.keys.set(&opens.name(), &opens)?;
-            events.push(event);
+        let mut held = u32::try_from(*size)?;
+        for (key, words) in slots {
+            let mut from = key.name();
+            for _ in 0..depth {
+                written += 1;
+                let at = fpl::datetime_of(start + Duration::seconds(i64::from(written)))?;
+                let (event, opens) = LineEvent::reseal(
+                    id.clone(),
+                    at,
+                    writer.clone(),
+                    held,
+                    key.name(),
+                    from,
+                    &words,
+                    conversations.entropy,
+                )?;
+                conversations.keys.set(&opens.name(), &opens)?;
+                events.push(event);
+                from = opens.name();
+                held += 1;
+            }
             resealing -= 1;
         }
     }

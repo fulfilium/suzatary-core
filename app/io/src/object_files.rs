@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use prodrome_core::dag::{Dag, Finding};
+use prodrome_core::dag::{Dag, Finding, Heads};
 use prodrome_core::event::Hash;
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::policy::Untrusted;
@@ -19,6 +19,15 @@ pub trait ObjectFiles<E: Schema>: Replica<E> + Send + Sync {
     /// # Errors
     /// `objects/` not listed.
     fn dag(&self) -> Result<Arc<Dag<E>>, ProdromeError>;
+
+    /// The heads the store records, where it can say them with no listing of `objects/`; `None`
+    /// where it records none it can say so.
+    ///
+    /// # Errors
+    /// The store unreadable.
+    fn recorded(&self) -> Result<Option<Heads>, ProdromeError> {
+        self.heads().map(Some)
+    }
 
     fn findings(&self) -> Vec<Finding>;
 

@@ -1041,6 +1041,8 @@ async fn started_up(
     started.0.push(("default", at.elapsed()));
     let at = std::time::Instant::now();
     notice_from_now_on(state.clone(), moved).await;
+    started.0.push(("notice", at.elapsed()));
+    let at = std::time::Instant::now();
     resume_waiting(state).await;
     started.0.push(("waiting", at.elapsed()));
     started.log(starting.elapsed());

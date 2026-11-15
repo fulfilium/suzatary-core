@@ -182,17 +182,26 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// heads until the record moves (the Prodrome's law 62), and through a new handle as the
     /// files: a process that opens a store never serves a reading older than its files.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
-        let heads =
-            prodrome_core::store::Replica::heads(&self.events).map_err(|e| Self::unreadable(e))?;
+        let recorded = suzatary_core::first_read::part("record", || self.events.recorded())
+            .map_err(|e| Self::unreadable(e))?;
         let mut slot = self
             .remembered
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        if let Some(held) = slot.as_mut().filter(|held| held.heads == heads) {
+        if let Some(held) = slot
+            .as_mut()
+            .filter(|held| recorded.as_ref() == Some(&held.heads))
+        {
             return Ok(look(held));
         }
         let dag = self.events.dag().map_err(|e| Self::unreadable(e))?;
-        let excluded = suzatary_store::store::left_out(&dag);
+        // Without a record the heads are read off the history: one look at the files.
+        let heads = recorded.unwrap_or_else(|| dag.heads());
+        if let Some(held) = slot.as_mut().filter(|held| held.heads == heads) {
+            return Ok(look(held));
+        }
+        let excluded =
+            suzatary_core::first_read::part("excluded", || suzatary_store::store::left_out(&dag));
         Ok(look(slot.insert(Remembered {
             heads,
             graph: std::sync::Arc::new(suzatary_core::first_read::part("graph", || {

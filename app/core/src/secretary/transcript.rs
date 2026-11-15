@@ -372,6 +372,15 @@ pub fn superseded<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
     slots: &impl Slots,
 ) -> BTreeSet<KeyName> {
+    superseded_among(lines, &|_| true, slots)
+}
+
+/// The keys of [`superseded`] that `asked` admits; no other key opens a reseal.
+pub fn superseded_among<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+    asked: &dyn Fn(&KeyName) -> bool,
+    slots: &impl Slots,
+) -> BTreeSet<KeyName> {
     let resealed = resealed_from(lines);
     let from = |key: &KeyName| -> Vec<&'l LineEvent> {
         resealed
@@ -383,7 +392,7 @@ pub fn superseded<'l>(
     };
     resealed
         .keys()
-        .filter(|key| supersedes(key, from, slots))
+        .filter(|key| asked(key) && supersedes(key, from, slots))
         .map(|key| (*key).clone())
         .collect()
 }
@@ -669,11 +678,20 @@ pub fn dead<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
     slots: &impl Slots,
 ) -> Vec<(&'l LineEvent, usize, &'l KeyName)> {
+    dead_among(lines, &|_| true, slots)
+}
+
+/// The slots of [`dead`] whose key `asked` admits; no other key opens a reseal.
+pub fn dead_among<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+    asked: &dyn Fn(&KeyName) -> bool,
+    slots: &impl Slots,
+) -> Vec<(&'l LineEvent, usize, &'l KeyName)> {
     by_conversation(lines)
         .into_values()
         .flat_map(|lines| {
             let erased = erasures(lines.iter().copied());
-            let superseded = superseded(lines.iter().copied(), slots);
+            let superseded = superseded_among(lines.iter().copied(), asked, slots);
             lines
                 .into_iter()
                 .flat_map(|(_, line)| {
@@ -681,7 +699,9 @@ pub fn dead<'l>(
                         .enumerate()
                         .map(move |(slot, key)| (line, slot, key))
                 })
-                .filter(|(_, _, key)| erased.contains_key(*key) || superseded.contains(*key))
+                .filter(|(_, _, key)| {
+                    asked(key) && (erased.contains_key(*key) || superseded.contains(*key))
+                })
                 .collect::<Vec<_>>()
         })
         .collect()
@@ -928,11 +948,15 @@ pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, Sto
 /// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a copy of its
 /// words may still be on disk; the next sweep tries again.
 pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
-    let objects = conversations.lines.objects()?;
+    let graph = conversations.lines.graph()?;
+    // A key neither holds has nothing left to empty; an unreadable store is asked, and refuses.
+    let held = |name: &KeyName| {
+        conversations.opened.holds(name) || !matches!(conversations.keys.get(name), Ok(None))
+    };
     destroy(
         conversations,
-        &sessions(lines_of(&objects)),
-        dead(lines_of(&objects), &|name: &KeyName| {
+        &sessions(lines_of(graph.objects())),
+        dead_among(lines_of(graph.objects()), &held, &|name: &KeyName| {
             conversations.reads().key(name)
         }),
     )

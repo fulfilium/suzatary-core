@@ -22,9 +22,9 @@ license = "MIT OR Apache-2.0"
 # NEVER BY BRANCH: the three `rev`s here, `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url`
 # and `flake.lock` move together, ONE sha, so the binary and the browser's wasm read SPEC.md
 # alike. ⚠️ No default features: the reference payload is not linked; the record is ours.
-prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
+prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "16f1ba25352becaffcd40fde0e028f469d667837", default-features = false }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
-prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa" }
+prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "16f1ba25352becaffcd40fde0e028f469d667837" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
 suzatary-store = { path = "store" }
@@ -118,7 +118,7 @@ ts-rs = "11"
 typst-syntax = "=0.15.1"
 # THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm without `html` and
 # `plugin`, the crate the tab fetches, at `prodrome_core`'s revision.
-prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
+prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "16f1ba25352becaffcd40fde0e028f469d667837", default-features = false }
 
 # CLIPPY PEDANTIC IS ON, AND EACH ALLOW SAYS WHY.
 [workspace.lints.clippy]

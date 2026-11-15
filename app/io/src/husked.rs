@@ -17,7 +17,7 @@ use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::policy::{Policy, Untrusted};
 use prodrome_core::store::{EventStore, Held, Overlay, Replica};
-use suzatary_store::store::{HuskObject, Husking};
+use suzatary_store::store::{Hashed, HuskObject, Husking};
 
 use crate::durable;
 use crate::heads_record;
@@ -43,8 +43,38 @@ enum Kept<E: Husking> {
 /// next process, and `verify` reads every file afresh.
 struct Memory<E: Husking> {
     files: BTreeMap<Hash, (u64, Kept<E>)>,
-    /// The files as last read whole, under what this store wrote or took since.
-    read: Option<Overlay<E, Read<E>>>,
+    /// The files as last read whole, and what this store wrote or took since.
+    looked: Option<Looked<E>>,
+}
+
+/// The files' history, and the overlay a write decides over, made at the first write or `held`.
+struct Looked<E: Husking> {
+    dag: Arc<Dag<E>>,
+    writes: Option<Overlay<E, Read<E>>>,
+}
+
+impl<E: Husking<Vocabulary: Clone>> Looked<E> {
+    fn writes(&mut self, schema: &E::Vocabulary) -> Result<&Overlay<E, Read<E>>, ProdromeError> {
+        let writes = if let Some(writes) = self.writes.take() {
+            writes
+        } else {
+            let dag = Arc::clone(&self.dag);
+            let nodes = suzatary_core::first_read::part("history", || dag.nodes())?;
+            let folded = suzatary_core::first_read::part("registers", || {
+                Arc::new(prodrome_core::registers::fold(&nodes))
+            });
+            let held = Held {
+                tips: dag.tips(),
+                dag,
+                folded,
+            };
+            Overlay::new(Read {
+                held,
+                schema: schema.clone(),
+            })
+        };
+        Ok(self.writes.insert(writes))
+    }
 }
 
 struct Read<E: Husking> {
@@ -66,7 +96,7 @@ impl<E: Husking<Vocabulary: Clone + Default>> Husked<E> {
             schema: E::Vocabulary::default(),
             memory: Mutex::new(Memory {
                 files: BTreeMap::new(),
-                read: None,
+                looked: None,
             }),
         }
     }
@@ -114,23 +144,13 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
                 || !matches!(memory.files.get(name), Some((_, Kept::Unread(_))))
         });
         if memory.files.len() != before || moved {
-            memory.read = None;
+            memory.looked = None;
         }
-        memory.files.extend(read);
-        if memory.read.is_none() {
+        suzatary_core::first_read::part("files", || memory.files.extend(read));
+        if memory.looked.is_none() {
             let dag =
                 suzatary_core::first_read::part("dag", || Arc::new(Self::history(&memory.files).0));
-            let nodes = dag.nodes()?;
-            let folded = suzatary_core::first_read::part("registers", || {
-                Arc::new(prodrome_core::registers::fold(&nodes))
-            });
-            let held = Held {
-                tips: dag.tips(),
-                dag,
-                folded,
-            };
-            let schema = self.schema.clone();
-            memory.read = Some(Overlay::new(Read { held, schema }));
+            memory.looked = Some(Looked { dag, writes: None });
         }
         Ok(memory)
     }
@@ -163,14 +183,14 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
             Ok(Err(_)) => return Kept::Unread("not text".to_owned()),
             Err(e) => return Kept::Unread(failed(&path, &e).to_string()),
         };
-        if hashes_to(name, text.as_bytes()) {
-            return parse_envelope(&self.schema, &text)
-                .map_or_else(|e| Kept::Unread(e.to_string()), Kept::Whole);
+        match Hashed::of(name, &text) {
+            Hashed::Whole(whole) => parse_envelope(&self.schema, whole)
+                .map_or_else(|e| Kept::Unread(e.to_string()), Kept::Whole),
+            Hashed::Other(other) => HuskObject::of_other(other).map_or_else(
+                |e| Kept::Unread(format!("does not hash to its name, and {e}")),
+                Kept::Husk,
+            ),
         }
-        HuskObject::read(name, &text).map_or_else(
-            |e| Kept::Unread(format!("does not hash to its name, and {e}")),
-            Kept::Husk,
-        )
     }
 
     /// The history of `files`, and a finding for each that is neither a whole nor a husk.
@@ -235,12 +255,14 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
                 name.as_str()
             )));
         }
-        let read = memory.read.as_ref().expect("made by `memory`");
+        let Memory { files, looked } = &mut *memory;
+        let looked = looked.as_mut().expect("made by `memory`");
+        let read = looked.writes(&self.schema)?;
         let taken = write(read)?;
         let held = read.held()?;
         // The record of heads goes before any object is placed, and is written again once all
         // of them are, as the Prodrome's store keeps it: a stop between leaves no record.
-        let placing = taken.iter().any(|name| !memory.files.contains_key(name));
+        let placing = taken.iter().any(|name| !files.contains_key(name));
         if placing {
             heads_record::remove(&self.root)?;
         }
@@ -257,9 +279,10 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
                 .ino();
             placed.push((name.clone(), (ino, Kept::Whole(object.clone()))));
         }
-        memory.files.extend(placed);
+        files.extend(placed);
+        looked.dag = held.dag;
         if placing {
-            let heads = memory.read.as_ref().expect("made by `memory`").heads()?;
+            let heads = looked.dag.heads();
             // A record not written leaves none, so the next reader derives the heads.
             let _ = heads_record::write(&self.root, &heads);
         }
@@ -273,30 +296,22 @@ impl<E: Husking<Vocabulary: Clone>> Replica<E> for Husked<E> {
     }
 
     fn held(&self) -> Result<Held<E>, ProdromeError> {
-        self.memory()?
-            .read
-            .as_ref()
-            .expect("made by `memory`")
-            .held()
+        let mut memory = self.memory()?;
+        let looked = memory.looked.as_mut().expect("made by `memory`");
+        looked.writes(&self.schema)?.held()
     }
 
     fn tips(&self) -> Result<BTreeSet<Hash>, ProdromeError> {
-        Ok(self.held()?.tips)
+        Ok(ObjectFiles::dag(self)?.tips())
     }
 
     /// The record, `root/.heads`, with one `stat` per recorded tip and no listing, where it reads
     /// and every recorded tip's file is there; the heads derived otherwise (the Prodrome's rule).
     fn heads(&self) -> Result<Heads, ProdromeError> {
-        if let Some(recorded) = heads_record::read(&self.root)
-            .filter(|recorded| recorded.tips().iter().all(|tip| self.path(tip).exists()))
-        {
-            return Ok(recorded);
+        match ObjectFiles::recorded(self)? {
+            Some(recorded) => Ok(recorded),
+            None => Ok(ObjectFiles::dag(self)?.heads()),
         }
-        self.memory()?
-            .read
-            .as_ref()
-            .expect("made by `memory`")
-            .heads()
     }
 
     /// A husk holds no bytes its name is the hash of.
@@ -332,7 +347,17 @@ impl<E: Husking<Vocabulary: Clone + Send + Sync>> ObjectFiles<E> for Husked<E> {
     }
 
     fn dag(&self) -> Result<Arc<Dag<E>>, ProdromeError> {
-        Ok(self.held()?.dag)
+        let memory = self.memory()?;
+        Ok(Arc::clone(
+            &memory.looked.as_ref().expect("made by `memory`").dag,
+        ))
+    }
+
+    /// The record, `root/.heads`, with one `stat` per recorded tip, where it reads and every
+    /// recorded tip's file is there.
+    fn recorded(&self) -> Result<Option<Heads>, ProdromeError> {
+        Ok(heads_record::read(&self.root)
+            .filter(|recorded| recorded.tips().iter().all(|tip| self.path(tip).exists())))
     }
 
     /// Of a cold read: each whole rehashed and each husk read, and a record of heads that is
@@ -358,20 +383,10 @@ impl<E: Husking<Vocabulary: Clone + Send + Sync>> ObjectFiles<E> for Husked<E> {
                 .into_iter()
                 .map(|file| Finding::Garbage(format!("objects/{file}"))),
         );
-        let derived = prodrome_core::store::Replica::heads(&Read {
-            held: Held {
-                tips: dag.tips(),
-                folded: Arc::new(prodrome_core::registers::fold(
-                    &dag.nodes().unwrap_or_default(),
-                )),
-                dag: Arc::new(dag),
-            },
-            schema: self.schema.clone(),
-        });
-        if let (Some(recorded), Ok(derived)) = (
-            recorded.filter(|before| heads_record::read(&self.root).as_ref() == Some(before)),
-            derived,
-        ) && recorded != derived
+        let derived = dag.heads();
+        if let Some(recorded) =
+            recorded.filter(|before| heads_record::read(&self.root).as_ref() == Some(before))
+            && recorded != derived
         {
             findings.push(Finding::StaleHeads { recorded, derived });
         }

@@ -171,11 +171,8 @@ enum Built {
     /// Its lines or the keys of their words moved since it was built: rebuilt before it is read.
     /// `cached` names the node its last build left in the cache.
     Stale { cached: Hash },
-    /// Current, with every slot of its lines an erasure of its own names.
-    Fresh {
-        node: Arc<Node>,
-        dead: BTreeSet<KeyName>,
-    },
+    /// Current.
+    Fresh { node: Arc<Node> },
 }
 
 /// A node of the tree the fold walks.
@@ -265,7 +262,8 @@ impl<S: Slots> Slots for Once<S> {
         if let Some(words) = self.read.borrow().get(name) {
             return words.clone();
         }
-        let words = self.slots.words(name, binding, sealed, open);
+        let words =
+            crate::first_read::part("words", || self.slots.words(name, binding, sealed, open));
         self.read.borrow_mut().insert(name.clone(), words.clone());
         words
     }
@@ -575,7 +573,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
                         object: leaf.object.clone(),
                         line: Arc::clone(&leaf.line),
                         parents: leaf.parents.clone(),
-                        entry: crate::first_read::part("open", || leaf.line.entry(&read)),
+                        entry: crate::first_read::around("open", || leaf.line.entry(&read)),
                     })],
                     closed: BTreeMap::new(),
                     gathered: F::Gathered::default(),
@@ -959,15 +957,17 @@ impl<F: Folds> HeldLines<F> {
             name: name.clone(),
             conversations,
         };
-        let folded = memo::fold(
-            &Reading {
-                reader: &self.algebra,
-                keys: &self.keys,
-                folds: std::marker::PhantomData,
-            },
-            &store,
-            &mut self.cache,
-        );
+        let folded = crate::first_read::around("fold", || {
+            memo::fold(
+                &Reading {
+                    reader: &self.algebra,
+                    keys: &self.keys,
+                    folds: std::marker::PhantomData,
+                },
+                &store,
+                &mut self.cache,
+            )
+        });
         if let Some(was) = self.root.replace(name.clone()).filter(|was| *was != name) {
             self.forget([was]);
         }
@@ -998,17 +998,33 @@ impl<F: Folds> HeldLines<F> {
         read.closed.remove(id)
     }
 
-    /// Every key an erasure line of its own conversation names: what a replica forgets.
-    pub fn dead(&mut self) -> BTreeSet<KeyName> {
-        let ids: Vec<ConversationId> = self.conversations.keys().cloned().collect();
-        for id in &ids {
-            self.built(id);
-        }
+    /// Every key `held` admits that a line of its conversation names and an erasure of it names
+    /// or a reseal of it supersedes: what a replica forgets. No other key opens a reseal.
+    pub fn dead(&self, held: &dyn Fn(&KeyName) -> bool) -> BTreeSet<KeyName> {
+        let slots = |name: &KeyName| self.keys.key(name);
         self.conversations
             .values()
-            .flat_map(|conversation| match &conversation.built {
-                Built::Fresh { dead, .. } => dead.iter().cloned().collect::<Vec<_>>(),
-                Built::Stale { .. } | Built::Unbuilt => Vec::new(),
+            .flat_map(|conversation| {
+                let lines: Vec<(&Hash, &LineEvent)> = conversation
+                    .lines
+                    .iter()
+                    .filter_map(|name| match self.prints.get(name) {
+                        Some(Print::Line { line, .. }) => Some((name, &**line)),
+                        Some(Print::Structure { .. } | Print::Unread(_)) | None => None,
+                    })
+                    .collect();
+                let named: BTreeSet<&KeyName> = lines
+                    .iter()
+                    .flat_map(|(_, line)| line.keys())
+                    .filter(|key| held(key))
+                    .collect();
+                let erasers = transcript::erasers(lines.iter().copied());
+                let superseded = transcript::superseded_among(lines.iter().copied(), held, &slots);
+                named
+                    .into_iter()
+                    .filter(|key| erasers.contains_key(*key) || superseded.contains(*key))
+                    .cloned()
+                    .collect::<Vec<_>>()
             })
             .collect()
     }
@@ -1206,7 +1222,7 @@ impl<F: Folds> HeldLines<F> {
             let cached = match conversation.built {
                 Built::Unbuilt => None,
                 Built::Stale { cached } => Some(cached),
-                Built::Fresh { node, .. } => Some(node.name().clone()),
+                Built::Fresh { node } => Some(node.name().clone()),
             };
             match self.conversations.get_mut(&id) {
                 Some(now) => {
@@ -1227,7 +1243,7 @@ impl<F: Folds> HeldLines<F> {
     /// Conversation `id` read again before its next reading.
     fn stale(&mut self, id: &ConversationId) {
         if let Some(conversation) = self.conversations.get_mut(id)
-            && let Built::Fresh { node, .. } = &conversation.built
+            && let Built::Fresh { node } = &conversation.built
         {
             conversation.built = Built::Stale {
                 cached: node.name().clone(),
@@ -1240,11 +1256,13 @@ impl<F: Folds> HeldLines<F> {
     fn built(&mut self, id: &ConversationId) -> Option<Arc<Node>> {
         let conversation = self.conversations.get_mut(id)?;
         let was = match &conversation.built {
-            Built::Fresh { node, .. } => return Some(Arc::clone(node)),
+            Built::Fresh { node } => return Some(Arc::clone(node)),
             Built::Stale { cached } => Some(cached.clone()),
             Built::Unbuilt => None,
         };
-        let (node, dead, leaves) = build(&self.prints, &self.keys, id, conversation);
+        let (node, leaves) = crate::first_read::part("nodes", || {
+            build(&self.prints, &self.keys, id, conversation)
+        });
         let gone: Vec<Hash> = conversation
             .leaves
             .iter()
@@ -1255,7 +1273,6 @@ impl<F: Folds> HeldLines<F> {
         conversation.leaves = leaves;
         conversation.built = Built::Fresh {
             node: Arc::clone(&node),
-            dead,
         };
         self.forget(gone);
         Some(node)
@@ -1309,14 +1326,14 @@ impl HeldLines<TheBox> {
     }
 }
 
-/// The node of conversation `id` over its lines in the history, every key of them an erasure of
-/// its own names, and each line's leaf, the one it had wherever its slots read the same.
+/// The node of conversation `id` over its lines in the history, and each line's leaf, the one it
+/// had wherever its slots read the same.
 fn build(
     prints: &BTreeMap<Hash, Print>,
     keys: &KeyRing,
     id: &ConversationId,
     conversation: &Conversation,
-) -> (Arc<Node>, BTreeSet<KeyName>, BTreeMap<Hash, Arc<Node>>) {
+) -> (Arc<Node>, BTreeMap<Hash, Arc<Node>>) {
     let lines: Vec<HeldLine<'_>> = conversation
         .lines
         .iter()
@@ -1324,17 +1341,6 @@ fn build(
             Some(Print::Line { line, parents }) => Some((name, line, parents)),
             Some(Print::Structure { .. } | Print::Unread(_)) | None => None,
         })
-        .collect();
-    let erasers = transcript::erasers(lines.iter().map(|(name, line, _)| (*name, &***line)));
-    let superseded = transcript::superseded(
-        lines.iter().map(|(name, line, _)| (*name, &***line)),
-        &|name: &KeyName| keys.key(name),
-    );
-    let dead: BTreeSet<KeyName> = lines
-        .iter()
-        .flat_map(|(_, line, _)| line.keys())
-        .filter(|key| erasers.contains_key(*key) || superseded.contains(*key))
-        .cloned()
         .collect();
     let leaves = leaves(keys, &lines, &conversation.leaves);
     let name = memo::name(
@@ -1346,7 +1352,7 @@ fn build(
         id: id.clone(),
         lines: leaves.values().cloned().collect(),
     });
-    (node, dead, leaves)
+    (node, leaves)
 }
 
 /// Each of `lines`' leaf, reading its slots as one conversation holding exactly `lines` reads
@@ -1599,7 +1605,7 @@ mod tests {
         assert_eq!(*read[0], boxed);
         assert!(!format!("{boxed:?}").contains("s3cret"), "{boxed:?}");
         assert_eq!(
-            lines.dead().len(),
+            lines.dead(&|_| true).len(),
             2,
             "a replica forgets each key a reseal replaced"
         );
@@ -1679,7 +1685,10 @@ mod tests {
             scrubs,
             "no replaced seal is opened"
         );
-        let dead: Vec<KeyName> = lines.dead().into_iter().collect();
+        let dead: Vec<KeyName> = lines
+            .dead(&|key| lines.key_ring().holds(key))
+            .into_iter()
+            .collect();
         lines.keys(&BTreeMap::new(), &dead);
         let kept: BTreeSet<KeyName> = before
             .into_keys()

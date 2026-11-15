@@ -28,7 +28,7 @@ pub use doc::{Doc, Gets};
 pub use error::StoreError;
 pub use graph::Graph;
 pub use hold::{Hold, InMemoryHold, Once};
-pub use husk::{Husk, HuskObject, Husking, NotAHusk};
+pub use husk::{Hashed, Husk, HuskObject, Husking, NotAHusk, Other};
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory_doc::InMemoryDoc;
 #[cfg(any(test, feature = "nothing"))]

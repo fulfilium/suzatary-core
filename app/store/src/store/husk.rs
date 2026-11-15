@@ -159,9 +159,18 @@ impl<E: Husking> HuskObject<E> {
     /// [`NotAHusk`] for a print that hashes to `name` (a whole), or that is not a `Change` whose
     /// event is a husk.
     pub fn read(name: &Hash, text: &str) -> Result<Self, NotAHusk> {
-        if hex::encode(<sha2::Sha256 as sha2::Digest>::digest(text)) == name.as_str() {
-            return Err(NotAHusk(format!("{} is its whole", name.as_str())));
+        match Hashed::of(name, text) {
+            Hashed::Whole(_) => Err(NotAHusk(format!("{} is its whole", name.as_str()))),
+            Hashed::Other(other) => Self::of_other(other),
         }
+    }
+
+    /// The husk object `other` prints, a print already found not to hash to its name.
+    ///
+    /// # Errors
+    /// [`NotAHusk`] for a print that is not a `Change` whose event is a husk.
+    pub fn of_other(other: Other<'_>) -> Result<Self, NotAHusk> {
+        let text = other.0;
         let value = parse_literal(text, &ObjectVocabulary(E::Husks::default())).map_err(refused)?;
         let fields = Fields::of(&value, CHANGE).map_err(refused)?;
         let deps = fields
@@ -181,6 +190,28 @@ impl<E: Husking> HuskObject<E> {
             deps,
             husk,
         })
+    }
+}
+
+/// A print, hashed once against its name: the whole, or another print, which can only be a husk.
+pub enum Hashed<'t> {
+    Whole(&'t str),
+    Other(Other<'t>),
+}
+
+/// A print that does not hash to the name it is kept under; made only by [`Hashed::of`].
+#[derive(Clone, Copy)]
+pub struct Other<'t>(&'t str);
+
+impl<'t> Hashed<'t> {
+    /// `text`, kept under `name`, hashed.
+    #[must_use]
+    pub fn of(name: &Hash, text: &'t str) -> Self {
+        if hex::encode(<sha2::Sha256 as sha2::Digest>::digest(text)) == name.as_str() {
+            Self::Whole(text)
+        } else {
+            Self::Other(Other(text))
+        }
     }
 }
 

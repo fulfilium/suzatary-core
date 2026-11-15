@@ -11,9 +11,9 @@ pub const FIRST_READ: &str = "suzatary::first_read";
 // `wasm32-unknown-unknown`), so there every function is a no-op the compiler removes, and the
 // module ships none of this: two bodies, chosen by target here, never at a call site.
 #[cfg(target_arch = "wasm32")]
-pub use browser::{add_part, begins, done, mine, part};
+pub use browser::{add_part, around, begins, done, mine, part};
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{add_part, begins, done, mine, part};
+pub use native::{add_part, around, begins, done, mine, part};
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
@@ -73,6 +73,23 @@ mod native {
         let started = Instant::now();
         let answer = run();
         add_part(part, started.elapsed());
+        answer
+    }
+
+    /// [`part`] of work that runs parts of its own: `run`'s answer, its time less theirs added to
+    /// `part`, so the sum still counts each moment once.
+    pub fn around<T>(part: &'static str, run: impl FnOnce() -> T) -> T {
+        if !mine() {
+            return run();
+        }
+        let inside = || match &*first() {
+            First::Reading { parts, .. } => parts.iter().map(|(_, spent, _)| *spent).sum(),
+            First::Waiting | First::Told => std::time::Duration::ZERO,
+        };
+        let (started, before) = (Instant::now(), inside());
+        let answer = run();
+        let theirs = inside().saturating_sub(before);
+        add_part(part, started.elapsed().saturating_sub(theirs));
         answer
     }
 
@@ -163,6 +180,11 @@ mod browser {
 
     /// `run`'s answer, untimed.
     pub fn part<T>(_: &'static str, run: impl FnOnce() -> T) -> T {
+        run()
+    }
+
+    /// `run`'s answer, untimed.
+    pub fn around<T>(_: &'static str, run: impl FnOnce() -> T) -> T {
         run()
     }
 
