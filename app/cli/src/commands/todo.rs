@@ -17,8 +17,10 @@ use suzatary_signatures::signatures::Signers;
 use suzatary_store::store::{Prodrome, Signing};
 use suzatary_todo::{authoring, view};
 
-use super::store_of;
+use super::store_at::StoreAt;
 use crate::instance::{ChainDir, Instance};
+use suzatary_base::chains::ChainName;
+use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;
 
 /// Which `todo` act, and its own arguments.
@@ -27,21 +29,29 @@ pub struct Args {
     /// Which act.
     #[command(subcommand)]
     action: Action,
-    /// WHICH CHAIN this act touches. Absent is the
-    /// FIRST chain the instance file names — `life`, the owner's own todos — so
-    /// every command written before there were two means what it always did.
-    /// `--chain suzatary` writes to this project's own store: the roadmap, and
-    /// the issues the system has about itself.
-    ///
-    /// A todo lives in ONE chain and cannot be moved: the Prodrome does not
-    /// rewrite, so this is decided before the write and not afterwards.
+    /// The chain this act touches; absent is the instance file's first. A todo lives in one
+    /// chain and cannot be moved, since the Prodrome does not rewrite.
     #[arg(long, global = true, value_name = "NAME")]
     chain: Option<String>,
 }
 
-/// EVERY `todo` ACT.
+/// EVERY `todo` act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
+    /// One todo as the chain holds it: its block, its fields, its authorship.
+    Show {
+        /// The todo.
+        id: String,
+        #[command(flatten)]
+        store: StoreAt,
+    },
+    #[command(flatten)]
+    Act(Box<Act>),
+}
+
+/// The `todo` acts on an instance's chain.
+#[derive(Debug, Subcommand)]
+pub enum Act {
     /// Confirm a triage-authored todo: re-append its content, trusted.
     ///
     /// HUMAN-ONLY, structurally, exactly like sending — there is no MCP twin
@@ -63,7 +73,7 @@ pub enum Action {
         /// The action line, as Typst markup, checked in the closed world before it is stored.
         #[arg(long)]
         body: String,
-        /// WHY this priority, in one sentence. Required, and not decoration.
+        /// Why this priority, in one sentence.
         #[arg(long)]
         rationale: String,
         /// `todo` (needs a category), `ekaTodo` or `suzateryTodo`.
@@ -120,13 +130,6 @@ pub enum Action {
         #[arg(long)]
         actor: Option<String>,
     },
-    /// One todo as the chain holds it: its block, its fields, its authorship.
-    Show {
-        /// The todo.
-        id: String,
-    },
-    /// Every open todo, ascending in fulfillment — LOW is urgent.
-    List,
     /// Record it completed — TRUSTED, so it binds evaluation at once.
     Done(Lifecycle),
     /// Record it cancelled: moot rather than done.
@@ -136,17 +139,13 @@ pub enum Action {
     /// Record a pass at a recurring todo — TRUSTED, like `done`, and the todo
     /// stays open: a `Recur` in its price restarts from this instant.
     Tend(Lifecycle),
-    /// Undo the LAST event on this todo — its inverse, appended
-    /// (`authoring::undo`). The chain never rewrites, so this is one more
-    /// event, not a rewound one; history keeps every step.
+    /// Undo the last event on this todo by appending its inverse (`authoring::undo`).
     Undo(UndoRedo),
-    /// Redo the event an undo just undid — recognised STRUCTURALLY, with no
-    /// flag and no stored marker (`authoring::redo`).
+    /// Redo the event an undo just undid (`authoring::redo`).
     Redo(UndoRedo),
 }
 
-/// A PRICE, AS FLAGS — every spelling `todo add` and `todo update` take, read
-/// into one [`todo::Price`] by `PriceFlags::price`.
+/// Every spelling of a price that `todo add` and `todo update` take.
 #[derive(Debug, clap::Args)]
 pub struct PriceFlags {
     /// A flat fulfillment as a whole percentage. LOW is urgent.
@@ -236,21 +235,18 @@ impl PriceFlags {
     }
 }
 
-/// What `undo` and `redo` take: the todo and who is asking. No `--note` —
-/// the note is computed from what is being undone or redone, exactly like
-/// `confirm`'s two refusals are one function so the words cannot fork.
+/// What `undo` and `redo` take: the todo and who is asking. The note is computed from what is
+/// undone or redone.
 #[derive(Debug, clap::Args)]
 pub struct UndoRedo {
     /// The todo. It must be an id the chain already mentions.
     id: String,
-    /// Who is undoing or redoing. A trusted actor, unlike the agent — which
-    /// has no undo verb at all (OPERATOR.md, SECRETARY.md). The chain's owner when absent.
+    /// Who is undoing or redoing, a trusted actor; the chain's owner when absent.
     #[arg(long)]
     actor: Option<String>,
 }
 
-/// What the four lifecycle verbs take — the same shape, because they are the
-/// same event with four names.
+/// What the four lifecycle verbs take.
 #[derive(Debug, clap::Args)]
 pub struct Lifecycle {
     /// The todo. It must be an id the chain already mentions.
@@ -258,21 +254,28 @@ pub struct Lifecycle {
     /// A why, recorded on the event.
     #[arg(long, default_value = "")]
     note: String,
-    /// Who is recording. A trusted actor, unlike the agent's `record`. The chain's owner when
-    /// absent.
+    /// Who is recording, a trusted actor; the chain's owner when absent.
     #[arg(long)]
     actor: Option<String>,
 }
 
 /// `suzatary todo <act>`.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
+    match args.action {
+        Action::Show { id, store } => show(&store.todos(path, args.chain.as_deref())?, &id),
+        Action::Act(act) => act_on(path, args.chain.as_deref(), *act),
+    }
+}
+
+/// One act on the instance's chain `chain`, else its first.
+fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
-    let chain = instance.chain(args.chain.as_deref())?;
+    let chain = instance.chain(chain)?;
     let keys = &instance.signers();
     let who = |actor: Option<String>| actor.unwrap_or_else(|| chain.owner.as_str().to_owned());
-    match args.action {
-        Action::Confirm { id, actor, note } => confirm(chain, keys, &id, &who(actor), &note),
-        Action::Add {
+    match act {
+        Act::Confirm { id, actor, note } => confirm(chain, keys, &id, &who(actor), &note),
+        Act::Add {
             id,
             body,
             rationale,
@@ -303,7 +306,7 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
                 actor: who(actor),
             },
         ),
-        Action::Update {
+        Act::Update {
             id,
             rationale,
             price,
@@ -332,18 +335,12 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
                 ..todo::TodoPatch::default()
             },
         ),
-        Action::Show { id } => show(chain, &id),
-        Action::List => list(chain),
-        Action::Done(event) => lifecycle(chain, keys, "done", mk_completed, &event),
-        Action::Cancel(event) => lifecycle(chain, keys, "cancel", mk_cancelled, &event),
-        Action::Reopen(event) => lifecycle(chain, keys, "reopen", mk_reopened, &event),
-        Action::Tend(event) => lifecycle(chain, keys, "tend", mk_tended, &event),
-        Action::Undo(UndoRedo { id, actor }) => {
-            undo_redo(chain, keys, Turn::Undo, &id, &who(actor))
-        }
-        Action::Redo(UndoRedo { id, actor }) => {
-            undo_redo(chain, keys, Turn::Redo, &id, &who(actor))
-        }
+        Act::Done(event) => lifecycle(chain, keys, "done", mk_completed, &event),
+        Act::Cancel(event) => lifecycle(chain, keys, "cancel", mk_cancelled, &event),
+        Act::Reopen(event) => lifecycle(chain, keys, "reopen", mk_reopened, &event),
+        Act::Tend(event) => lifecycle(chain, keys, "tend", mk_tended, &event),
+        Act::Undo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Undo, &id, &who(actor)),
+        Act::Redo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Redo, &id, &who(actor)),
     }
 }
 
@@ -603,14 +600,14 @@ fn appended(
     Ok(())
 }
 
-fn show(chain: &ChainDir, id: &str) -> anyhow::Result<()> {
-    let store = store_of(chain);
+fn show((read, name): &(Read, ChainName), id: &str) -> anyhow::Result<()> {
     let now = SystemClock.now();
-    let nodes = store.nodes().context("reading the chain")?;
-    let Some(found) = suzatary_todo::todos::current(&nodes, now, id) else {
+    let set = read.set(now);
+    let held = set.held(name).context("reading the chain")?;
+    let Some(found) = suzatary_todo::todos::current(held.nodes, now, id) else {
         bail!("no todo with id {id:?} on the chain");
     };
-    let block = suzatary_todo::todos::render_current(&nodes, now, &chain.policy.untrusted, &found)
+    let block = suzatary_todo::todos::render_current(held.nodes, now, held.untrusted, &found)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     println!(
         "{}",
@@ -620,38 +617,6 @@ fn show(chain: &ChainDir, id: &str) -> anyhow::Result<()> {
             "authored_by": found.actor.as_str(),
             "block": block,
         })
-    );
-    Ok(())
-}
-
-/// `suzatary todo list`: every open todo, ascending in fulfillment.
-fn list(chain: &ChainDir) -> anyhow::Result<()> {
-    let store = store_of(chain);
-    let now = SystemClock.now();
-    let nodes = store.nodes().context("reading the chain")?;
-    let mut open = suzatary_todo::todos::open_todos(&nodes, now, &chain.policy.untrusted)
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    // A todo with no spec is unpriced, not fulfilled, and sorts last.
-    open.sort_by(|a, b| {
-        percent_of(a.priority.as_deref())
-            .partial_cmp(&percent_of(b.priority.as_deref()))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    println!(
-        "{}",
-        serde_json::json!(
-            open.iter()
-                .map(|t| serde_json::json!({
-                    "id": t.id,
-                    "kind": t.kind,
-                    "category": t.category,
-                    "priority": t.priority,
-                    "body": t.body,
-                    "waiting_on": t.waiting_on,
-                    "authored_by": t.authored_by,
-                }))
-                .collect::<Vec<_>>()
-        )
     );
     Ok(())
 }
@@ -759,12 +724,4 @@ fn undo_redo(
         })
     );
     Ok(())
-}
-
-/// `"12.34%"` as the number it is, and `f64::INFINITY` for absence.
-fn percent_of(shown: Option<&str>) -> f64 {
-    shown
-        .and_then(|text| text.strip_suffix('%'))
-        .and_then(|digits| digits.parse::<f64>().ok())
-        .unwrap_or(f64::INFINITY)
 }

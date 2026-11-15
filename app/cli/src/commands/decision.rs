@@ -15,7 +15,7 @@ use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
 use suzatary_todo::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 
-use crate::instance::Instance;
+use super::store_at::StoreAt;
 
 /// Which `decision` act, and its own arguments.
 #[derive(Debug, clap::Args)]
@@ -23,9 +23,8 @@ pub struct Args {
     /// Which act.
     #[command(subcommand)]
     action: Action,
-    /// The store to read and write; absent is `decisions/` in the data tree.
-    #[arg(long, global = true, value_name = "DIR")]
-    store: Option<PathBuf>,
+    #[command(flatten)]
+    store: StoreAt,
 }
 
 /// EVERY `decision` act.
@@ -99,10 +98,11 @@ pub struct Stated {
 /// # Errors
 /// The instance file, the store, or the act's refusal.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    let root = match &args.store {
-        Some(root) => root.clone(),
-        None => Instance::open(path)?.decisions(),
-    };
+    let root = args.store.or_instance(
+        path,
+        |dir| Ok(dir.to_owned()),
+        |instance| Ok(instance.decisions()),
+    )?;
     let store = Objects::open(root);
     let decisions = Decisions { store: &store };
     let typeset = suzatary_io::typeset::Closed::this_binary();

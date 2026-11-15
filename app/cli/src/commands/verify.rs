@@ -10,9 +10,11 @@ use anyhow::bail;
 use suzatary_base::chains::ChainName;
 use suzatary_core::stores::{Database, Kind};
 
+use super::store_at::StoreAt;
 use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
+use suzatary_store::store::Reads as _;
 
 /// What `suzatary verify` checks.
 #[derive(Debug, clap::Args)]
@@ -20,17 +22,34 @@ pub struct Args {
     /// Check instead each line this directory holds, `<name>.py` as the last commit held it,
     /// against the lines' store: the commit held the whole its name hashes, the store keeps that
     /// whole's husk, and no key opens a word of it, now or later.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "store")]
     husked: Option<std::path::PathBuf>,
+    #[command(flatten)]
+    store: StoreAt,
 }
 
-/// Fsck every store the data push stages, or check the lines husked since the last commit. The
-/// plugins' stores are cache tier, never pushed, so they are not checked.
+/// Fsck the todo store `--store` names, or every store the data push stages, or check the lines
+/// husked since the last commit.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    let instance = Instance::open(path)?;
-    if let Some(was) = &args.husked {
-        return husked(&instance, was);
-    }
+    args.store.or_instance(
+        path,
+        |dir| {
+            let store = super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none());
+            let what = Kind::Chain.name().to_owned();
+            reported(
+                &[(what.clone(), store.verify())],
+                &BTreeMap::from([(what, dir.to_owned())]),
+            )
+        },
+        |instance| match &args.husked {
+            Some(was) => husked(&instance, was),
+            None => every_store(&instance),
+        },
+    )
+}
+
+/// The plugins' stores are cache tier, never pushed, so they are not checked.
+fn every_store(instance: &Instance) -> anyhow::Result<()> {
     let mut findings: Vec<(String, Vec<String>)> = Vec::new();
     let stores: Vec<_> = instance
         .chains
@@ -49,8 +68,8 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let triage = suzatary_io::state::State::open(instance.mail.state.clone());
     let triage_local = suzatary_io::state::Local::open(instance.local.mail());
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
-    let uploads = upload_store(&instance);
-    let kept = file_store(&instance);
+    let uploads = upload_store(instance);
+    let kept = file_store(instance);
     let chains: BTreeMap<ChainName, &dyn suzatary_store::store::Prodrome<_>> = stores
         .iter()
         .map(|(name, store)| {
@@ -94,9 +113,17 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         .iter()
         .flat_map(|kind| instance.directories(*kind))
         .collect();
+    reported(&findings, &roots)
+}
 
+/// Each store's findings, and an OK line naming its root for a store with none; an error when
+/// there is a finding.
+fn reported(
+    findings: &[(String, Vec<String>)],
+    roots: &BTreeMap<String, PathBuf>,
+) -> anyhow::Result<()> {
     let mut total = 0;
-    for (what, problems) in &findings {
+    for (what, problems) in findings {
         total += problems.len();
         if problems.is_empty() {
             match roots.get(what) {
@@ -111,7 +138,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     if total == 0 {
         return Ok(());
     }
-    bail!("{total} problem(s) across the stores the data push stages")
+    bail!("{total} problem(s) across the stores checked")
 }
 
 /// `verify --husked <was>`.

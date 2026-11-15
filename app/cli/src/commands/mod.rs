@@ -25,11 +25,13 @@ pub mod mcp;
 pub mod notify;
 pub mod outbound;
 pub mod plugin;
+pub mod prodrome;
 pub mod ran;
 pub mod release;
 pub mod secretary;
 pub mod secretspec;
 pub mod serve;
+pub(crate) mod store_at;
 pub mod tap;
 pub mod todo;
 pub mod todos;
@@ -47,10 +49,15 @@ use crate::instance::{ChainDir, Instance};
 
 /// The store one chain writes to, with that same chain's trust policy.
 pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_record::record::TodoEvent> {
-    Objects::chain(EventStore::new(
-        chain.events.clone(),
-        chain.policy.untrusted.clone(),
-    ))
+    chain_at(chain.events.clone(), chain.policy.untrusted.clone())
+}
+
+/// The todo store at `events`, not believing `untrusted`.
+pub(crate) fn chain_at(
+    events: std::path::PathBuf,
+    untrusted: prodrome_core::policy::Untrusted,
+) -> Objects<suzatary_record::record::TodoEvent> {
+    Objects::chain(EventStore::new(events, untrusted))
 }
 
 /// Every chain this instance serves, each store read once: the set every row and proposal is

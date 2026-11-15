@@ -400,22 +400,20 @@ fn provider_of(answer: &str) -> anyhow::Result<Provider> {
 /// Each chain begun with its `Genesis`, the prodrome every writer writes into.
 fn begin_chains(data: &Path) -> anyhow::Result<()> {
     for (_, events) in onboarding::CHAINS {
-        let chain = suzatary_record::record::EventStore::new(
-            data.join(events),
-            prodrome_core::policy::Untrusted::none(),
-        );
-        // A chain `--force` finds begun stays the chain it is.
-        if chain
-            .tips()
-            .with_context(|| format!("reading {events}"))?
-            .is_empty()
-        {
-            chain
-                .init(suzatary_record::record::GENESIS)
-                .with_context(|| format!("beginning {events}"))?;
-        }
+        begin_chain(&data.join(events))?;
     }
     Ok(())
+}
+
+/// The todo store at `events` begun with its `Genesis`. A store found begun (`--force`, or a
+/// clone) stays the store it is.
+///
+/// # Errors
+/// The store unreadable, or its `Genesis` not written.
+pub(crate) fn begin_chain(events: &Path) -> anyhow::Result<()> {
+    super::chain_at(events.to_owned(), prodrome_core::policy::Untrusted::none())
+        .begin()
+        .with_context(|| format!("beginning {}", events.display()))
 }
 
 #[cfg(test)]

@@ -6,8 +6,8 @@ use clap::Subcommand;
 
 use crate::commands::{
     call, coding, context, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp,
-    notify, plugin, ran, release, secretary, secretspec, serve, tap, todo, todos, typeset, up,
-    vault, verify, weather,
+    notify, plugin, prodrome, ran, release, secretary, secretspec, serve, tap, todo, todos,
+    typeset, up, vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -32,6 +32,8 @@ pub enum Verb {
     Todos(todos::Args),
     /// Record, revise, withdraw, list and view the recorded decisions (designs and plans).
     Decision(decision::Args),
+    /// Begin a todo store at a path, such as a project's roadmap, with no instance file.
+    Prodrome(prodrome::Args),
     /// The version the project chain reads, and the release a train cuts from it.
     Release(release::Args),
     /// Who may write: the box's signing keys, and the device keys trusted or revoked.
@@ -111,6 +113,7 @@ impl Verb {
             Verb::Todo(args) => todo::run(path, args),
             Verb::Todos(args) => todos::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
+            Verb::Prodrome(args) => prodrome::run(&args),
             Verb::Release(args) => release::run(path, &args),
             Verb::Device(args) => device::run(path, &args),
             Verb::Sync => mail::sync(path),

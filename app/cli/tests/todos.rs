@@ -307,3 +307,168 @@ fn each_write_is_signed_by_the_key_its_actor_owns() {
     assert_eq!(signer_of("parkingpermit"), public(&own));
     assert_eq!(signer_of("settletriagebatchdb12e3b7onlife"), public(&agent));
 }
+
+/// A lifecycle event's `(todo, at, actor, note)` constructor.
+type Lifecycle =
+    fn(
+        &str,
+        Datetime,
+        &str,
+        &str,
+    ) -> Result<suzatary_record::record::TodoEvent, prodrome_core::literal::ProdromeError>;
+
+/// One step of a generated history: a todo authored at a flat price, or a lifecycle event.
+#[derive(Debug, Clone)]
+enum Step {
+    Authored(f64, String),
+    Event(Lifecycle),
+}
+
+const IDS: [&str; 3] = ["permit", "taxes", "garden"];
+
+fn step() -> impl proptest::strategy::Strategy<Value = (usize, &'static str, Step)> {
+    use proptest::prelude::*;
+    let lifecycle: [Lifecycle; 3] = [
+        prodrome_core::event::mk_completed,
+        prodrome_core::event::mk_cancelled,
+        prodrome_core::event::mk_reopened,
+    ];
+    let step = prop_oneof![
+        (1u32..100, "[a-z]{1,12}( [a-z]{1,12}){0,3}")
+            .prop_map(|(percent, body)| Step::Authored(f64::from(percent) / 100.0, body)),
+        prop::sample::select(lifecycle.to_vec()).prop_map(Step::Event),
+    ];
+    (
+        0..IDS.len(),
+        prop::sample::select(vec!["ada", "assistant"]),
+        step,
+    )
+}
+
+/// Each reading verb's status and stdout.
+fn readings(instance: &Path, store: &[&str]) -> Vec<(bool, Vec<u8>)> {
+    let mut verbs = vec![vec!["todos", "open", "--json"], vec!["todos", "open"]];
+    verbs.extend(IDS.iter().map(|id| vec!["todo", "show", id]));
+    verbs
+        .into_iter()
+        .map(|verb| {
+            let output = crate::binary::keyed()
+                .args(["--instance", &instance.to_string_lossy()])
+                .args(verb)
+                .args(store)
+                .output()
+                .expect("the binary runs");
+            (output.status.success(), output.stdout)
+        })
+        .collect()
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(12))]
+
+    /// `onequery` across the two doors: a store read by its path, with no instance file, reads as
+    /// the same store mounted in an instance whose policy believes every writer.
+    #[test]
+    fn a_store_read_by_its_path_reads_as_the_same_store_mounted(
+        steps in proptest::collection::vec(step(), 0..12)
+    ) {
+        let root = scratch("by-path");
+        let events = root.join("events");
+        let store = EventStore::new(&events, prodrome_core::policy::Untrusted::none());
+        for (day, (id, actor, step)) in (1..).zip(&steps) {
+            let (todo, when) = (IDS[*id], at(day));
+            let event = match step {
+                Step::Authored(value, body) => mk_authored(
+                    todo, when, actor, "todo", when,
+                    suzatary_record::record::MarkupSource::escaped(body),
+                    fpl::mk_flat(*value).expect("a term"),
+                    vec!["generated".to_owned()], "home", "",
+                    suzatary_record::record::MarkupSource::empty(),
+                    None, Vec::new(), Vec::new(), "",
+                ),
+                Step::Event(build) => build(todo, when, actor, ""),
+            };
+            suzatary_store::store::append_to(
+                &store,
+                suzatary_record::record::GENESIS,
+                event.expect("valid"),
+            )
+            .expect("appends");
+        }
+        let instance = an_instance(&root);
+        let mounted = std::fs::read_to_string(&instance)
+            .expect("reads")
+            .replace(r#"untrusted = ["triage"]"#, "untrusted = []");
+        std::fs::write(&instance, mounted).expect("writes");
+
+        let by_path = readings(
+            &root.join("no-instance.toml"),
+            &["--store", &events.to_string_lossy()],
+        );
+        proptest::prop_assert_eq!(&by_path, &readings(&instance, &[]));
+        proptest::prop_assert!(by_path[0].0, "{}", String::from_utf8_lossy(&by_path[0].1));
+    }
+}
+
+/// In a directory `prodrome init` began, git ignores the store's heads record and lock, and
+/// never `flake.lock`, the lock that pins the application. Its charter, a stored format, reads
+/// back as written, and a charter with anything but its one field is refused.
+#[test]
+fn prodrome_init_ignores_the_stores_derived_files_and_keeps_its_charter() {
+    let root = scratch("prodrome-ignores");
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(args)
+            .status()
+            .expect("git runs")
+            .success()
+    };
+    assert!(git(&["init", "-q"]));
+    let began = crate::binary::suzatary()
+        .args([
+            "prodrome",
+            "init",
+            "--public",
+            "--store",
+            &root.to_string_lossy(),
+        ])
+        .output()
+        .expect("the binary runs");
+    assert!(
+        began.status.success(),
+        "{}",
+        String::from_utf8_lossy(&began.stderr)
+    );
+    for derived in [".heads", ".lock"] {
+        assert!(
+            git(&["check-ignore", "-q", derived]),
+            "{derived} is not ignored"
+        );
+    }
+    assert!(
+        !git(&["check-ignore", "-q", "flake.lock"]),
+        "flake.lock is ignored"
+    );
+
+    let charter = root.join("charter.toml");
+    assert_eq!(
+        std::fs::read_to_string(&charter).expect("written"),
+        "public = true\n"
+    );
+    let init = |public: &[&str]| {
+        crate::binary::suzatary()
+            .args(["prodrome", "init", "--store", &root.to_string_lossy()])
+            .args(public)
+            .status()
+            .expect("the binary runs")
+            .success()
+    };
+    assert!(init(&["--public"]), "a second run under the same charter");
+    assert!(!init(&[]), "a run under another charter");
+    for refused in ["public = 1\n", "public = true\nmembers = []\n"] {
+        std::fs::write(&charter, refused).expect("writes");
+        assert!(!init(&["--public"]), "{refused:?} read as a charter");
+    }
+}

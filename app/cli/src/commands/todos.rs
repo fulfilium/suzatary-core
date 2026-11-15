@@ -12,7 +12,9 @@ use suzatary_io::clock::SystemClock;
 use suzatary_record::record::Entry;
 use suzatary_signatures::believed::one_outcome;
 
-use crate::instance::{ChainDir, Instance};
+use super::store_at::StoreAt;
+use suzatary_base::chains::ChainName;
+use suzatary_signatures::chain_set::Read;
 
 /// Which reading of the todo list.
 #[derive(Debug, clap::Args)]
@@ -20,15 +22,13 @@ pub struct Args {
     /// Which reading.
     #[command(subcommand)]
     action: Action,
-    /// WHICH CHAIN to read. Absent is the FIRST
-    /// chain the instance file names — `life`, the owner's own todos — which is
-    /// what the briefing reads and what this verb has always meant.
+    /// The chain to read; absent is the instance file's first, which the briefing reads.
     #[arg(long, value_name = "NAME")]
     chain: Option<String>,
+    #[command(flatten)]
+    store: StoreAt,
 }
 
-/// WHICH READING of the todo list. One so far, and a subcommand rather than a
-/// bare verb because `todos` is a family and the next reading joins it here.
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// Every open todo, ascending in fulfillment — LOW MEANS URGENT.
@@ -41,24 +41,17 @@ pub enum Action {
 
 /// `suzatary todos <reading>`.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    let instance = Instance::open(path)?;
-    let chain = instance.chain(args.chain.as_deref())?;
+    let read = args.store.todos(path, args.chain.as_deref())?;
     match args.action {
-        Action::Open { json } => open_todos(&instance, chain, json),
+        Action::Open { json } => open_todos(read, json),
     }
 }
 
 /// `suzatary todos open`: every open todo, ascending in fulfillment (low is urgent).
-fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Result<()> {
-    let read = super::chains_read(instance);
+fn open_todos((read, name): (Read, ChainName), json: bool) -> anyhow::Result<()> {
     let set = read.set(SystemClock.now());
-    let nodes = set
-        .held(&chain.policy.name)
-        .context("reading the chain")?
-        .nodes;
-    let entries = set
-        .entries(&chain.policy.name)
-        .context("folding the chain")?;
+    let nodes = set.held(&name).context("reading the chain")?.nodes;
+    let entries = set.entries(&name).context("folding the chain")?;
     let records = suzatary_record::decoration::records_of(nodes);
 
     // The Inbox's held-batch decisions fold like todos and are dropped, as the web app does.
