@@ -841,7 +841,14 @@ mod tests {
         beside.sort();
         assert_eq!(
             beside,
-            [".gitattributes", ".lock", "memory.lock", "objects"]
+            [
+                ".gitattributes",
+                ".gitignore",
+                ".heads",
+                ".lock",
+                "memory.lock",
+                "objects"
+            ]
         );
         let every_byte = |dir: &std::path::Path| -> String {
             std::fs::read_dir(dir)

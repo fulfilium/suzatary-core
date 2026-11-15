@@ -743,10 +743,10 @@ mod tests {
         prodrome_core::dag::Dag::from_iter(by_name.clone())
             .linearise()
             .expect("a closed set linearises")
-            .into_iter()
+            .iter()
             .map(|name| {
-                let envelope = by_name[&name].clone();
-                (name, envelope)
+                let envelope = by_name[name].clone();
+                (name.clone(), envelope)
             })
             .collect()
     }

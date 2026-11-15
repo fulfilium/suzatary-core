@@ -12,7 +12,7 @@ use std::os::unix::fs::{DirEntryExt as _, MetadataExt as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use prodrome_core::dag::{Dag, Finding};
+use prodrome_core::dag::{Dag, Finding, Heads};
 use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::policy::{Policy, Untrusted};
@@ -20,6 +20,7 @@ use prodrome_core::store::{EventStore, Held, Overlay, Replica};
 use suzatary_store::store::{HuskObject, Husking};
 
 use crate::durable;
+use crate::heads_record;
 use crate::object_files::ObjectFiles;
 
 /// A store whose names hold wholes or husks.
@@ -228,6 +229,12 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
         let read = memory.read.as_ref().expect("made by `memory`");
         let taken = write(read)?;
         let held = read.held()?;
+        // The record of heads goes before any object is placed, and is written again once all
+        // of them are, as the Prodrome's store keeps it: a stop between leaves no record.
+        let placing = taken.iter().any(|name| !memory.files.contains_key(name));
+        if placing {
+            heads_record::remove(&self.root)?;
+        }
         let mut placed = Vec::new();
         for name in &taken {
             let (Some(object), Some(print)) = (held.dag.get(name), read.print(name)) else {
@@ -242,6 +249,11 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
             placed.push((name.clone(), (ino, Kept::Whole(object.clone()))));
         }
         memory.files.extend(placed);
+        if placing {
+            let heads = memory.read.as_ref().expect("made by `memory`").heads()?;
+            // A record not written leaves none, so the next reader derives the heads.
+            let _ = heads_record::write(&self.root, &heads);
+        }
         Ok(taken)
     }
 }
@@ -261,6 +273,21 @@ impl<E: Husking<Vocabulary: Clone>> Replica<E> for Husked<E> {
 
     fn tips(&self) -> Result<BTreeSet<Hash>, ProdromeError> {
         Ok(self.held()?.tips)
+    }
+
+    /// The record, `root/.heads`, with one `stat` per recorded tip and no listing, where it reads
+    /// and every recorded tip's file is there; the heads derived otherwise (the Prodrome's rule).
+    fn heads(&self) -> Result<Heads, ProdromeError> {
+        if let Some(recorded) = heads_record::read(&self.root)
+            .filter(|recorded| recorded.tips().iter().all(|tip| self.path(tip).exists()))
+        {
+            return Ok(recorded);
+        }
+        self.memory()?
+            .read
+            .as_ref()
+            .expect("made by `memory`")
+            .heads()
     }
 
     /// A husk holds no bytes its name is the hash of.
@@ -299,8 +326,11 @@ impl<E: Husking<Vocabulary: Clone + Send + Sync>> ObjectFiles<E> for Husked<E> {
         Ok(self.held()?.dag)
     }
 
-    /// Of a cold read: each whole rehashed and each husk read.
+    /// Of a cold read: each whole rehashed and each husk read, and a record of heads that is
+    /// not the derived heads, read before the cold read and after it (no lock is taken, so a
+    /// record both reads found is one no write of the store crossed).
     fn findings(&self) -> Vec<Finding> {
+        let recorded = heads_record::read(&self.root);
         let (listed, garbage) = match self.listing() {
             Ok(listing) => listing,
             Err(e) => return vec![Finding::Io(e)],
@@ -319,6 +349,23 @@ impl<E: Husking<Vocabulary: Clone + Send + Sync>> ObjectFiles<E> for Husked<E> {
                 .into_iter()
                 .map(|file| Finding::Garbage(format!("objects/{file}"))),
         );
+        let derived = prodrome_core::store::Replica::heads(&Read {
+            held: Held {
+                tips: dag.tips(),
+                folded: Arc::new(prodrome_core::registers::fold(
+                    &dag.nodes().unwrap_or_default(),
+                )),
+                dag: Arc::new(dag),
+            },
+            schema: self.schema.clone(),
+        });
+        if let (Some(recorded), Ok(derived)) = (
+            recorded.filter(|before| heads_record::read(&self.root).as_ref() == Some(before)),
+            derived,
+        ) && recorded != derived
+        {
+            findings.push(Finding::StaleHeads { recorded, derived });
+        }
         findings
     }
 

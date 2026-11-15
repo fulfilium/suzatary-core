@@ -158,14 +158,16 @@ fn owner() -> Actor {
     Actor::new(CAST.owner.actor).expect("an actor")
 }
 
-/// Every file under `root`, by its path relative to it.
+/// Every file under `root`, by its path relative to it, but a store's record of its heads: a
+/// record is derived from the objects beside it and local to one machine, so it is checked
+/// against them ([`records_are_the_derived_heads`]) and never pinned or copied.
 fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, into: &mut BTreeMap<String, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).expect("a directory") {
             let path = entry.expect("an entry").path();
             if path.is_dir() {
                 walk(root, &path, into);
-            } else {
+            } else if path.file_name() != Some(std::ffi::OsStr::new(".heads")) {
                 let name = path.strip_prefix(root).expect("under root");
                 into.insert(
                     name.to_string_lossy().into_owned(),
@@ -705,6 +707,7 @@ fn write_every_store(root: &Path) {
 fn every_store_writes_the_pinned_bytes() {
     let dir = tempfile::tempdir().expect("a scratch dir");
     write_every_store(dir.path());
+    records_are_the_derived_heads(dir.path());
     let found = tree(dir.path());
     let pinned = pinned();
     if found != pinned {
@@ -713,6 +716,54 @@ fn every_store_writes_the_pinned_bytes() {
             "the stores wrote other bytes than the pins (left at {}):\n{}",
             kept.display(),
             differences(&found, &pinned)
+        );
+    }
+}
+
+/// Every store under `root` (a directory holding `objects/`) holds a record of its heads that
+/// parses, names a present file for each tip and counts as many objects as `objects/` holds,
+/// beside a `.gitignore` of `/.heads` alone.
+fn records_are_the_derived_heads(root: &Path) {
+    fn stores(dir: &Path, into: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("a directory") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                if path.file_name() == Some(std::ffi::OsStr::new("objects")) {
+                    into.push(dir.to_path_buf());
+                } else {
+                    stores(&path, into);
+                }
+            }
+        }
+    }
+    let mut found = Vec::new();
+    stores(root, &mut found);
+    assert!(!found.is_empty(), "stores were written");
+    for store in found {
+        let recorded = prodrome_core::dag::Heads::parse(
+            &std::fs::read_to_string(store.join(".heads"))
+                .unwrap_or_else(|_| panic!("{} holds a record", store.display())),
+        )
+        .expect("the record parses");
+        let objects = std::fs::read_dir(store.join("objects"))
+            .expect("objects")
+            .count();
+        assert_eq!(recorded.count(), objects, "{}", store.display());
+        for tip in recorded.tips() {
+            assert!(
+                store
+                    .join("objects")
+                    .join(format!("{}.py", tip.as_str()))
+                    .exists(),
+                "{} names a present tip",
+                store.display()
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(store.join(".gitignore")).expect("its gitignore"),
+            "/.heads\n",
+            "{}",
+            store.display()
         );
     }
 }
@@ -1505,4 +1556,171 @@ fn a_rules_change_over_a_stored_digest() {
         "{}",
         suzatary_core::secretary::digest_census::Census::of(&reading, &rule)
     );
+}
+
+/// The lines written by one handle into `dir` and read by another, as the box's serve and a
+/// command share the store: `(reader, writer, push)`, where `push(k)` says line `k`.
+fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
+    let (reader, _) = lines_at(dir);
+    let (writer, keys) = lines_at(dir);
+    let writer: &'static Lines = Box::leak(Box::new(writer));
+    let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(keys));
+    let entropy: &'static Counted = Box::leak(Box::default());
+    let opened: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
+    let stores = suzatary_core::secretary::conversations::Conversations {
+        lines: writer,
+        keys,
+        entropy,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
+        opened,
+    };
+    let id = ConversationId::new("2026-11-15-heads").expect("a slug");
+    transcript::start(
+        stores,
+        &id,
+        &Entry::Opened {
+            at: at(10, 0),
+            title: suzatary_core::secretary::words::Words::kept("Heads".to_owned()),
+            model: "claude-cli/haiku".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+    )
+    .or_else(|refused| {
+        // A copy of a store that holds it already goes on from where it stands.
+        format!("{refused:?}")
+            .contains("Taken")
+            .then_some(())
+            .ok_or(refused)
+    })
+    .expect("started");
+    let push = move |k: u32| {
+        transcript::push(
+            stores,
+            &id,
+            &Entry::Said {
+                at: at(10, k),
+                turn: Turn::Person {
+                    text: format!("line {k}"),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: Some("ada".into()),
+            },
+        )
+        .expect("said");
+    };
+    (reader, writer, push)
+}
+
+/// The heads a fresh handle derives from the files, with no record to read.
+fn derived(dir: &Path) -> prodrome_core::dag::Heads {
+    let fresh = lines_at(dir).0;
+    let held = prodrome_core::store::Replica::held(fresh.inner()).expect("held");
+    let recorded = std::fs::read(dir.join(LINES).join(".heads")).ok();
+    let _ = std::fs::remove_file(dir.join(LINES).join(".heads"));
+    let heads = prodrome_core::store::Replica::heads(lines_at(dir).0.inner()).expect("heads");
+    if let Some(bytes) = recorded {
+        std::fs::write(dir.join(LINES).join(".heads"), bytes).expect("restored");
+    }
+    assert_eq!(heads.tips(), &held.tips);
+    heads
+}
+
+/// LAW (the Prodrome's 60, for the husked store): after lines written by two handles in turn and
+/// a husk, the record on disk is the derived heads, so `heads()` serves it; the store's root
+/// holds a `.gitignore` of `/.heads` alone.
+#[test]
+fn the_husked_store_records_the_derived_heads() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let (reader, writer, push) = two_handles(dir.path());
+    let root = dir.path().join(LINES);
+    let record = || {
+        prodrome_core::dag::Heads::parse(
+            &std::fs::read_to_string(root.join(".heads")).expect("a record"),
+        )
+        .expect("it parses")
+    };
+    for k in 1..4 {
+        push(k);
+        assert_eq!(record(), derived(dir.path()), "after line {k}");
+    }
+    let names = suzatary_io::object_files::ObjectFiles::dag(writer.inner())
+        .expect("reads")
+        .objects()
+        .keys()
+        .cloned()
+        .collect();
+    assert!(
+        writer.husk(&names).expect("husked").objects > 0,
+        "a whole was husked"
+    );
+    assert_eq!(record(), derived(dir.path()), "a husk keeps every name");
+    assert_eq!(
+        prodrome_core::store::Replica::heads(reader.inner()).expect("heads"),
+        record()
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(".gitignore")).expect("its gitignore"),
+        "/.heads\n"
+    );
+    assert!(
+        suzatary_io::object_files::ObjectFiles::findings(writer.inner()).is_empty(),
+        "no finding"
+    );
+}
+
+/// LAW (the Prodrome's 62 and 63, for the husked store): an object brought into `objects/` by
+/// another door reads as the older heads, and `verify` reports the record, until the heads are
+/// recorded again or the record is deleted; a record naming a head whose file is gone is not
+/// served.
+#[test]
+fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let elsewhere = tempfile::tempdir().expect("a second store");
+    let (reader, _, push) = two_handles(dir.path());
+    push(1);
+    let recorded = derived(dir.path());
+    // The same conversation, one line further, in a copy of the store; its newest object is
+    // then copied in by hand, as a checkout or a copy would bring it.
+    let objects = dir.path().join(LINES).join("objects");
+    let theirs = elsewhere.path().join(LINES).join("objects");
+    std::fs::create_dir_all(&theirs).expect("a copy");
+    for entry in std::fs::read_dir(&objects).expect("lists") {
+        let entry = entry.expect("an entry");
+        std::fs::copy(entry.path(), theirs.join(entry.file_name())).expect("copied");
+    }
+    let keys_from = dir.path().join(LINE_KEYS);
+    copy(&keys_from, &elsewhere.path().join(LINE_KEYS));
+    let (_, other, push_there) = two_handles(elsewhere.path());
+    push_there(2);
+    let mut brought = 0;
+    for entry in std::fs::read_dir(&theirs).expect("lists") {
+        let entry = entry.expect("an entry");
+        if !objects.join(entry.file_name()).exists() {
+            std::fs::copy(entry.path(), objects.join(entry.file_name())).expect("brought in");
+            brought += 1;
+        }
+    }
+    assert!(brought > 0, "the other door brought objects in");
+    let _ = other;
+    let heads = || prodrome_core::store::Replica::heads(reader.inner()).expect("heads");
+    assert_eq!(heads(), recorded, "the older heads, read with no listing");
+    assert!(
+        suzatary_io::object_files::ObjectFiles::findings(reader.inner())
+            .iter()
+            .any(|finding| matches!(finding, prodrome_core::dag::Finding::StaleHeads { .. })),
+        "verify reports the stale record"
+    );
+    let now = derived(dir.path());
+    assert_ne!(now, recorded);
+    std::fs::remove_file(dir.path().join(LINES).join(".heads")).expect("deleted");
+    assert_eq!(heads(), now, "a deleted record: the heads derived");
+
+    // A record naming a head whose file is gone is not served.
+    std::fs::write(dir.path().join(LINES).join(".heads"), now.print()).expect("recorded");
+    let tip = now.tips().iter().next().expect("a tip").clone();
+    std::fs::remove_file(objects.join(format!("{}.py", tip.as_str()))).expect("removed");
+    assert_ne!(heads(), now, "the record names an absent head");
+    assert_eq!(heads(), derived(dir.path()));
 }

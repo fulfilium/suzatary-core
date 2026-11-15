@@ -22,6 +22,7 @@ pub mod frontiers;
 pub mod github_tokens;
 pub mod gmail;
 pub mod google;
+mod heads_record;
 pub mod health_file;
 pub mod http;
 pub mod husked;

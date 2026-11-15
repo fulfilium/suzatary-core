@@ -30,9 +30,9 @@ license = "MIT OR Apache-2.0"
 #
 # ⚠️ `default-features = false` TURNS OFF THE REFERENCE PAYLOAD: this application's record is
 # `suzatary_record::record::Record`, so the example is not linked.
-prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "85ccc75fc360113528dbc95d11d666a037ea1a7e", default-features = false }
+prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
-prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "85ccc75fc360113528dbc95d11d666a037ea1a7e" }
+prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
 suzatary-store = { path = "store" }
@@ -139,7 +139,7 @@ typst-syntax = "=0.15.1"
 # THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm, without `html` and
 # `plugin`, the same crate the tab fetches as WebAssembly. The same revision as
 # `prodrome_core`; no default features.
-prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "85ccc75fc360113528dbc95d11d666a037ea1a7e", default-features = false }
+prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
 
 # CLIPPY PEDANTIC IS ON, AND EACH ALLOW SAYS WHY.
 [workspace.lints.clippy]

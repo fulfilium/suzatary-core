@@ -163,19 +163,22 @@ mod tests {
             .token;
         assert_eq!(token, Token::of(&[name.clone()].into()));
         let since = Since::Frontier(token.clone());
-        let reached = |frontiers: Frontiers| {
-            frontiers
-                .answer("store/topics", &since, &dag)
-                .expect("answered")
-                .reached()
-                .clone()
+        // What the answer reached, by name: a reach borrows the answer it is read from.
+        let reached = |frontiers: Frontiers| match frontiers
+            .answer("store/topics", &since, &dag)
+            .expect("answered")
+            .reached()
+        {
+            Reached::Everything => "everything",
+            Reached::Known(_) => "known",
+            Reached::Unknown => "unknown",
         };
-        assert_eq!(reached(open(dir.path().to_path_buf())), Reached::Everything);
+        assert_eq!(reached(open(dir.path().to_path_buf())), "everything");
         std::fs::write(
             dir.path().join("store-topics").join(token.as_str()),
             format!("{}\n", "b".repeat(64)),
         )
         .expect("rewritten");
-        assert_eq!(reached(open(dir.path().to_path_buf())), Reached::Unknown);
+        assert_eq!(reached(open(dir.path().to_path_buf())), "unknown");
     }
 }

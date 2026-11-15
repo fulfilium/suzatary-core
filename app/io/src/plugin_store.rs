@@ -184,7 +184,15 @@ mod tests {
         names.sort();
         assert_eq!(
             names,
-            [".gitattributes", ".lock", "objects", "schema", "store.lock"]
+            [
+                ".gitattributes",
+                ".gitignore",
+                ".heads",
+                ".lock",
+                "objects",
+                "schema",
+                "store.lock"
+            ]
         );
 
         let other = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");

@@ -336,7 +336,7 @@ impl Tab {
             .expect("reads");
         let reached: BTreeSet<prodrome_core::event::Hash> = match lacking.reached() {
             Reached::Everything => dag.objects().keys().cloned().collect(),
-            Reached::Known(reached) => reached.clone(),
+            Reached::Known(reached) => reached.iter().cloned().collect(),
             Reached::Unknown => {
                 return Err(TestCaseError::fail("the answer's frontier is recorded"));
             }

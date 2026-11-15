@@ -1692,6 +1692,69 @@ fn safe_push_carries_each_store_s_own_gitattributes() {
     ));
 }
 
+/// Each pushed store's own `.gitignore` is committed beside its objects: the Prodrome's store
+/// writes it, holding `/.heads`, before it first records its heads (SPEC §3), so every clone of
+/// the data keeps the record out. The record itself is never admitted.
+#[test]
+fn safe_push_carries_each_store_s_own_gitignore_and_never_its_record() {
+    let pattern = agent_pattern();
+    for store in [
+        "events",
+        "events-suzatary",
+        "inbox",
+        "secretary-lines",
+        "memory",
+        "digests",
+        "decisions",
+    ] {
+        let ignore = format!("{store}/.gitignore");
+        assert!(
+            matches_allowed_pattern(&pattern, &ignore),
+            "the pattern refuses {ignore}"
+        );
+        let record = format!("{store}/.heads");
+        assert!(
+            !matches_allowed_pattern(&pattern, &record),
+            "the pattern admits {record}"
+        );
+    }
+}
+
+/// A store's `.gitignore` is committed while it holds `/.heads` alone, and the record it keeps
+/// out stays on the box; one that ignores more commits nothing, since it could keep the store's
+/// objects out of every push.
+#[test]
+fn safe_push_commits_a_store_s_gitignore_only_as_the_store_writes_it() {
+    let fixture = PushFixture::new("push-gitignore", Verification::Passes);
+    fixture.write(&format!("inbox/objects/{}.py", "a".repeat(64)));
+    std::fs::write(fixture.data().join("inbox/.gitignore"), "/.heads\n").expect("written");
+    std::fs::write(
+        fixture.data().join("inbox/.heads"),
+        "Heads(count=1, tips=())",
+    )
+    .expect("written");
+    let out = fixture.push();
+    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    assert_eq!(code(&out), 0, "{said}");
+    assert_eq!(fixture.commits(), 2, "{said}");
+    let tracked = git(&fixture.data(), &["ls-files", "inbox"], None);
+    let tracked = String::from_utf8_lossy(&tracked.stdout).into_owned();
+    assert!(tracked.contains("inbox/.gitignore"), "{tracked}");
+    assert!(
+        !tracked.contains("inbox/.heads"),
+        "the record was committed: {tracked}"
+    );
+
+    let wider = PushFixture::new("push-gitignore-wider", Verification::Passes);
+    wider.write(&format!("inbox/objects/{}.py", "b".repeat(64)));
+    std::fs::write(wider.data().join("inbox/.gitignore"), "/.heads\nobjects/\n").expect("written");
+    let out = wider.push();
+    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    assert_ne!(code(&out), 0, "a wider ignore was committed: {said}");
+    assert!(said.contains("inbox/.gitignore holds more"), "{said}");
+    assert_eq!(wider.commits(), 1, "{said}");
+}
+
 /// The cache tier never leaves the box through the push: a plugin's store, cursor and ledger
 /// are a replica of an outside truth, rebuilt by syncing again (`[cache]`, `cache/` under the
 /// data root by default). No staged path reaches it, the data repository's extra paths
@@ -1720,6 +1783,7 @@ fn safe_push_never_carries_the_cache_tier() {
         "cache/plugins/ics/store/schema".to_owned(),
         "cache/plugins/ics/store/.lock".to_owned(),
         "cache/plugins/ics/.store.lock".to_owned(),
+        "cache/plugins/ics/store/.heads".to_owned(),
         "cache/plugins/ics/cursor".to_owned(),
     ] {
         assert!(

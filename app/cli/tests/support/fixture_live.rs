@@ -96,8 +96,10 @@ fn no_certificate(root: &Path) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-/// `from`'s tree copied under `to`, its symbolic links as links, without the repository's `.git`
-/// and without the directory `except`.
+/// `from`'s tree copied under `to`, its symbolic links as links, without the repository's `.git`,
+/// without the directory `except`, and without any store's record of heads: the copy takes no
+/// store's lock, so a record copied beside objects copied at another instant could name another
+/// history, and a store with no record derives its heads.
 fn copy_tree(from: &Path, to: &Path, except: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
@@ -110,7 +112,7 @@ fn copy_tree(from: &Path, to: &Path, except: &Path) -> std::io::Result<()> {
             if entry.file_name() != ".git" && source != except {
                 copy_tree(&source, &target, except)?;
             }
-        } else {
+        } else if entry.file_name() != ".heads" {
             std::fs::copy(&source, &target)?;
         }
     }

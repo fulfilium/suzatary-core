@@ -50,8 +50,8 @@ fn admitted((kind, path): &(Kind, String)) -> String {
     let objects = r"objects/[0-9a-f]{64}\.py";
     let dir = literal(path);
     match kind.files() {
-        Files::Chain => format!(r"{dir}/({objects}|\.lock|\.gitattributes)"),
-        Files::Objects => format!(r"{dir}/({objects}|\.gitattributes)"),
+        Files::Chain => format!(r"{dir}/({objects}|\.lock|\.gitattributes|\.gitignore)"),
+        Files::Objects => format!(r"{dir}/({objects}|\.gitattributes|\.gitignore)"),
         Files::Records => format!(r"{dir}/([0-9a-f]{{64}}\.json|\.gitignore)"),
         Files::File => dir,
         Files::Directory => format!("{dir}/.+"),

@@ -434,9 +434,9 @@ fn written(n: usize) -> Vec<Object> {
     held.dag
         .linearise()
         .expect("a closed set linearises")
-        .into_iter()
+        .iter()
         .map(|name| {
-            let print = canonical_envelope(held.dag.get(&name).expect("held"));
+            let print = canonical_envelope(held.dag.get(name).expect("held"));
             Object::read::<MembershipEvent>(&MembershipVocabulary::default(), print)
         })
         .collect()

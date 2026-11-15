@@ -39,7 +39,8 @@ impl<E: Schema> Graph<E> {
     pub fn over(dag: Arc<Dag<E>>) -> Result<Self, StoreError> {
         let order = dag
             .linearise()
-            .map_err(|cycle| StoreError::unreadable("store", cycle))?;
+            .map_err(|cycle| StoreError::unreadable("store", cycle))?
+            .to_vec();
         Ok(Self::ordered(dag, order))
     }
 

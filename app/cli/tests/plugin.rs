@@ -180,7 +180,15 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
     assert!(!first.line.contains("s3cret"), "the link is never said");
     assert_eq!(
         files(&plugins.cache.join("plugins/ics/store")),
-        [".gitattributes", ".lock", "objects", "schema", "store.lock"]
+        [
+            ".gitattributes",
+            ".gitignore",
+            ".heads",
+            ".lock",
+            "objects",
+            "schema",
+            "store.lock"
+        ]
     );
     assert_eq!(
         files(&plugins.cache.join("plugins/ics")),

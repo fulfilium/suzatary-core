@@ -64,10 +64,10 @@ impl<E: Store> Reads<E> for InMemory<E> {
         Ok(dag
             .linearise()
             .map_err(unreadable)?
-            .into_iter()
+            .iter()
             .map(|name| {
-                let object = dag.objects()[&name].clone();
-                (name, object)
+                let object = dag.objects()[name].clone();
+                (name.clone(), object)
             })
             .collect())
     }

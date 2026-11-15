@@ -63,10 +63,10 @@ pub fn linearised<E: Schema, Pol: Policy<E>>(
     let dag = store.dag()?;
     Ok(dag
         .linearise()?
-        .into_iter()
+        .iter()
         .map(|name| {
-            let object = dag.objects()[&name].clone();
-            (name, object)
+            let object = dag.objects()[name].clone();
+            (name.clone(), object)
         })
         .collect())
 }

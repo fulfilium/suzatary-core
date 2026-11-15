@@ -62,7 +62,7 @@ cd "$DATA"
 #
 # The three lists are the stores' rows (`suzatary_core::store::Kind`), spelled out so a quiet
 # pass runs no program but git; app/cli/tests/guards/lists.rs pins each.
-ALLOWED_PATTERN='^(events/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|events-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|inbox/(objects/[0-9a-f]{64}\.py|\.gitattributes)|secretary-lines/(objects/[0-9a-f]{64}\.py|\.gitattributes)|memory/(objects/[0-9a-f]{64}\.py|\.gitattributes)|digests/(objects/[0-9a-f]{64}\.py|\.gitattributes)|decisions/(objects/[0-9a-f]{64}\.py|\.gitattributes)|state\.json|requests/([0-9a-f]{64}\.json|\.gitignore))$'
+ALLOWED_PATTERN='^(events/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes|\.gitignore)|events-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes|\.gitignore)|inbox/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|secretary-lines/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|memory/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|digests/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|decisions/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|state\.json|requests/([0-9a-f]{64}\.json|\.gitignore))$'
 ADD_PATHS='events/ events-suzatary/ inbox/ secretary-lines/ memory/ digests/ decisions/ state.json requests/'
 WALKED='events/objects/ events-suzatary/objects/ inbox/objects/ secretary-lines/objects/ memory/objects/ digests/objects/ decisions/objects/ requests/'
 # Never while the data tree is this checkout, where those files are a human's.
@@ -157,6 +157,16 @@ if [ -n "$REFUSED" ]; then
   echo "$REFUSED" >&2
   exit 1
 fi
+# A store writes its own `.gitignore` (the Prodrome's SPEC §3) holding `/.heads` alone, so its
+# record of heads stays on the box; one that ignored more could keep the store's objects out of
+# every push, so a staged one holding anything else commits nothing.
+for ignore in $(GIT_INDEX_FILE="$JUDGED" git diff --cached --no-renames --name-only \
+  | grep -E '^[a-z-]+/\.gitignore$' | grep -v '^requests/' || true); do
+  if [ "$(GIT_INDEX_FILE="$JUDGED" git show ":$ignore" 2>/dev/null)" != "/.heads" ]; then
+    echo "safe-push: $ignore holds more than the store's \`/.heads\`, so nothing is committed" >&2
+    exit 1
+  fi
+done
 # Else an empty commit would fail a clean run.
 if GIT_INDEX_FILE="$JUDGED" git diff --cached --quiet; then
   echo "safe-push: nothing in $ADD_PATHS changed — nothing to commit"

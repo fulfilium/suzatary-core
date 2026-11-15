@@ -1051,7 +1051,7 @@ struct Pulled<E: prodrome_core::schema::Schema, T> {
 }
 
 /// Whether the box knew the frontier a pull named.
-fn since_read(reached: &prodrome_core::store::frontier::Reached) -> SinceRead {
+fn since_read(reached: prodrome_core::store::frontier::Reached<'_>) -> SinceRead {
     match reached {
         prodrome_core::store::frontier::Reached::Everything
         | prodrome_core::store::frontier::Reached::Known(_) => SinceRead::Known,
