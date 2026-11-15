@@ -219,7 +219,9 @@ say "building ${rev:0:12} ($app) before moving the lock"
 # the Prodrome pin cdf394c on and by none before it, so after a rollback the record can be older than
 # the objects the older binary wrote, and `verify` below would report it. Deleting every record is
 # always safe: the next reader derives the heads and the next write of the store records them.
-find "$user" -name .heads -type f -not -path '*/.git/*' -delete \
+# Only a store's record: a `.heads` beside an `objects/` directory, and nothing else of that name.
+find "$user" -path '*/.git' -prune -o -type d -name objects -print \
+  | while IFS= read -r dir; do rm -f "${dir%/objects}/.heads"; done \
   || die "could not delete the stores' records of heads under $user. Nothing moved."
 
 # `verify` writes nothing. An instance or store the new app refuses would crash-loop every unit

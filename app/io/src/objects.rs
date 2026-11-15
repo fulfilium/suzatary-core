@@ -36,7 +36,7 @@ type Door<E> = Box<dyn Fn(&E) -> Result<(), String> + Send + Sync>;
 
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
-    heads: Vec<Hash>,
+    heads: prodrome_core::dag::Heads,
     graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
@@ -172,9 +172,18 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     }
 
     /// `look` at what this head set reads: what the same heads already produced, or the store
-    /// read again.
+    /// read again. The heads are the store's record of them where it holds one (the Prodrome's
+    /// `heads()`: one small file and a `stat` per tip, no listing), so a store whose heads have not
+    /// moved is read with no listing of its objects.
+    ///
+    /// The record is only the key: what is kept is read from the files themselves, so a handle's
+    /// first read is what the files hold, whatever the record says. A door that changes
+    /// `objects/` without the store reads, through a handle that already read, as the recorded
+    /// heads until the record moves (the Prodrome's law 62), and through a new handle as the
+    /// files: a process that opens a store never serves a reading older than its files.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
-        let heads = self.tips()?;
+        let heads =
+            prodrome_core::store::Replica::heads(&self.events).map_err(|e| Self::unreadable(e))?;
         let mut slot = self
             .remembered
             .lock()

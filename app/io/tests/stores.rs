@@ -3,7 +3,7 @@
 //! regenerated (a difference is a migration); prodromes that write `Change`s are pinned in
 //! `tests/stores-changes/`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
@@ -1613,6 +1613,39 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
     (reader, writer, push)
 }
 
+/// Line `k` of the conversation `two_handles` began, written through `lines`, a handle of its own
+/// on the same store, with keys drawn at random so they never meet the first handle's.
+fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
+    let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(lines_at(dir).1));
+    let entropy: &'static suzatary_io::texts::SystemEntropy = Box::leak(Box::default());
+    let opened: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
+    let stores = suzatary_core::secretary::conversations::Conversations {
+        lines,
+        keys,
+        entropy,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
+        opened,
+    };
+    let id = ConversationId::new("2026-11-15-heads").expect("a slug");
+    move |k: u32| {
+        transcript::push(
+            stores,
+            &id,
+            &Entry::Said {
+                at: at(10, k),
+                turn: Turn::Person {
+                    text: format!("line {k}, from the other handle"),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: Some("ada".into()),
+            },
+        )
+        .expect("said");
+    }
+}
+
 /// The heads a fresh handle derives from the files, with no record to read.
 fn derived(dir: &Path) -> prodrome_core::dag::Heads {
     let fresh = lines_at(dir).0;
@@ -1627,13 +1660,15 @@ fn derived(dir: &Path) -> prodrome_core::dag::Heads {
     heads
 }
 
-/// LAW (the Prodrome's 60, for the husked store): after lines written by two handles in turn and
-/// a husk, the record on disk is the derived heads, so `heads()` serves it; the store's root
-/// holds a `.gitignore` of `/.heads` alone.
+/// LAW (the Prodrome's 60, for the husked store): after lines written by two handles of one store
+/// in turn, each taking the lock for its own write, and a husk, the record on disk is the derived
+/// heads, so `heads()` serves it; the store's root holds a `.gitignore` of `/.heads` alone.
 #[test]
 fn the_husked_store_records_the_derived_heads() {
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (reader, writer, push) = two_handles(dir.path());
+    let other: &'static Lines = Box::leak(Box::new(lines_at(dir.path()).0));
+    let push_other = said_through(other, dir.path());
     let root = dir.path().join(LINES);
     let record = || {
         prodrome_core::dag::Heads::parse(
@@ -1642,8 +1677,15 @@ fn the_husked_store_records_the_derived_heads() {
         .expect("it parses")
     };
     for k in 1..4 {
-        push(k);
-        assert_eq!(record(), derived(dir.path()), "after line {k}");
+        push(2 * k);
+        assert_eq!(record(), derived(dir.path()), "after line {}", 2 * k);
+        push_other(2 * k + 1);
+        assert_eq!(
+            record(),
+            derived(dir.path()),
+            "after line {}, from the other handle",
+            2 * k + 1
+        );
     }
     let names = suzatary_io::object_files::ObjectFiles::dag(writer.inner())
         .expect("reads")
@@ -1723,4 +1765,64 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
     std::fs::remove_file(objects.join(format!("{}.py", tip.as_str()))).expect("removed");
     assert_ne!(heads(), now, "the record names an absent head");
     assert_eq!(heads(), derived(dir.path()));
+}
+
+/// LAW: the lines' reading is kept by the store's recorded heads, and it is read from the files.
+/// A handle that read keeps its reading while the record stands, so objects another door brings in
+/// read, through it, as the recorded heads (the Prodrome's law 62); a new handle, as a new process
+/// opens the store, reads the files, door and all; and once the record is deleted the first handle
+/// reads the files too. So no process that opens a store serves a reading older than its files.
+#[test]
+fn the_lines_reading_is_kept_by_the_record_and_read_from_the_files() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let elsewhere = tempfile::tempdir().expect("a second store");
+    let (reader, _, push) = two_handles(dir.path());
+    push(1);
+    let names = |store: &Lines| -> BTreeSet<Hash> {
+        store
+            .objects()
+            .expect("reads")
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    };
+    let before = names(&reader);
+    // The same conversation, one line further, in a copy of the store; its new objects are then
+    // copied in by hand, as a checkout or a copy would bring them.
+    let objects = dir.path().join(LINES).join("objects");
+    let theirs = elsewhere.path().join(LINES).join("objects");
+    std::fs::create_dir_all(&theirs).expect("a copy");
+    for entry in std::fs::read_dir(&objects).expect("lists") {
+        let entry = entry.expect("an entry");
+        std::fs::copy(entry.path(), theirs.join(entry.file_name())).expect("copied");
+    }
+    copy(
+        &dir.path().join(LINE_KEYS),
+        &elsewhere.path().join(LINE_KEYS),
+    );
+    let (_, _, push_there) = two_handles(elsewhere.path());
+    push_there(2);
+    for entry in std::fs::read_dir(&theirs).expect("lists") {
+        let entry = entry.expect("an entry");
+        if !objects.join(entry.file_name()).exists() {
+            std::fs::copy(entry.path(), objects.join(entry.file_name())).expect("brought in");
+        }
+    }
+    let files = names(&lines_at(dir.path()).0);
+    assert!(
+        files.is_superset(&before) && files.len() > before.len(),
+        "the door brought objects"
+    );
+    assert_eq!(
+        names(&reader),
+        before,
+        "the handle that read keeps the recorded heads' reading"
+    );
+    assert_eq!(
+        names(&lines_at(dir.path()).0),
+        files,
+        "a new handle reads the files"
+    );
+    std::fs::remove_file(dir.path().join(LINES).join(".heads")).expect("deleted");
+    assert_eq!(names(&reader), files, "with the record deleted, the files");
 }
