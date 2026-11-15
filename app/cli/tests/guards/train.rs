@@ -134,7 +134,8 @@ esac
 /// full run noted in `<TRAIN_PROBES>.full` with its flag last. A red run names its one step,
 /// `stub`, in a summary row. With `GATE_HOLD` set, the tree half says so on the `<GATE_HOLD>.up`
 /// fifo and waits on `<GATE_HOLD>` to go on, and with `GATE_HOLD_LIVE` the live half does the
-/// same, its pid written to `<GATE_HOLD_LIVE>.pid` first. A full run of a tree holding `missed` fails, as a selection that missed a step would.
+/// same, its pid written to `<GATE_HOLD_LIVE>.pid` first, on the live half's run beside the runners
+/// (its early run, `--steps live,…`, is red on a tree holding `broken-live-early` and never held). A full run of a tree holding `missed` fails, as a selection that missed a step would.
 /// With `GATE_RED_TEXT` set, the tree half is red on a tree whose CHANGELOG.md holds that text.
 /// Each run writes the environment it was handed to `<TRAIN_PROBES>.env`, and its arguments, a
 /// line, to `<TRAIN_PROBES>.args`. Run with `--steps` naming `changelog`, the box's part of a
@@ -149,7 +150,6 @@ if [ "$1" = --full ] || [ "$1" = --nightly ]; then full="$1"; shift; echo "$1 $(
 echo "$1 $(git rev-parse HEAD) $(pwd)" >>"$TRAIN_PROBES"
 [ -z "$full" ] || [ ! -e missed ] || { echo "missed is in the tree" >&2; exit 1; }
 [ -z "$GATE_HOLD" ] || [ "$1" != --no-live ] || { echo up >"$GATE_HOLD.up"; cat "$GATE_HOLD" >/dev/null; }
-[ -z "$GATE_HOLD_LIVE" ] || [ "$1" != --only-live ] || { echo $$ >"$GATE_HOLD_LIVE.pid"; echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
 case "$1" in
   --no-live)
     bad=broken
@@ -157,9 +157,12 @@ case "$1" in
       "--steps "*changelog*) bad=broken-box ;;
       "--steps "*public-tree*) bad=broken-build ;;
     esac ;;
-  --only-live) bad=broken-live ;;
+  --only-live)
+    bad=broken-live
+    case "$2 $3" in "--steps live,"*) bad=broken-live-early ;; esac ;;
   *) exit 64 ;;
 esac
+[ -z "$GATE_HOLD_LIVE" ] || [ "$bad" != broken-live ] || { echo $$ >"$GATE_HOLD_LIVE.pid"; echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
 [ -z "$GATE_RED_TEXT" ] || [ "$1" != --no-live ] || ! grep -qs "$GATE_RED_TEXT" CHANGELOG.md || bad=CHANGELOG.md
 test -e "$bad" || exit 0
 printf 'stub             FAILED (1)\n==> the failing steps'"'"' last lines\n--- stub\n%s is in the tree\n' "$bad" >&2
@@ -1413,11 +1416,13 @@ fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green
         [
             "--no-live --steps fmt,changelog".to_owned(),
             format!("dispatch master {pushed}"),
+            "--only-live --steps live,live-all,live-guards".to_owned(),
             format!("publication {pushed}"),
             "--no-live --steps public-tree,deployed-shape".to_owned(),
-            "--only-live".to_owned(),
+            "--only-live --steps web-live,deploy-build,push-dry,public-check".to_owned(),
         ],
-        "the box dispatches master's publication run and builds the public tree once it ended"
+        "the box dispatches master's publication run, runs the live steps that read none of its \
+         builds while it builds, and builds the public tree once it ended"
     );
     assert_eq!(
         t.core(&["rev-parse", "master"]),
@@ -1751,7 +1756,15 @@ fn train_gate_github_red_build_on_the_box_is_the_halfs_red() {
         "no gate run is waited on: {:?}",
         t.github_calls()
     );
-    assert_eq!(t.probes("--only-live"), 0, "and the live half never starts");
+    assert_eq!(
+        t.gate_args()
+            .iter()
+            .filter(|a| a.starts_with("--only-live"))
+            .cloned()
+            .collect::<Vec<_>>(),
+        ["--only-live --steps live,live-all,live-guards"],
+        "the live half's early steps ran beside the publication run, and its others never start"
+    );
     assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
     assert!(text(&t.train(&["land"]).stderr).contains("tree: failed"));
     assert_eq!(t.origin_master(), seed, "nothing landed");
@@ -3660,4 +3673,42 @@ fn train_gate_github_reads_its_public_tree_with_the_deployed_app() {
         !matcher.is_empty() && matcher.lines().all(|bin| Path::new(bin) == want),
         "every leak guard read with the deployed app: {matcher}"
     );
+}
+
+/// The live half's early steps red, while the publication run builds: the live half is red, the
+/// tree half says nothing (the box builds no public tree and waits on no run of the gate), the
+/// runs are cancelled with the branch deleted, and nothing lands.
+#[test]
+fn train_gate_github_red_early_live_steps_stop_the_tree_half() {
+    let t = Train::new("github-live-early-red");
+    t.on_github();
+    t.pr(1, "the first", &[("broken-live-early", "x\n")]);
+    let seed = t.origin_master();
+    assert!(t.train(&["build", "1"]).status.success());
+
+    let out = t.train(&["gate", "--remote", "github"]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success());
+    assert!(
+        stderr.contains("the live half's early steps gave no green, so the tree half is stopped")
+            && stderr.contains("live half: failed")
+            && stderr.contains("tree half: unknown")
+            && stderr.contains("broken-live-early is in the tree"),
+        "{stderr}"
+    );
+    assert!(
+        !t.gate_args().iter().any(|a| a.contains("public-tree")),
+        "the box builds no public tree: {:?}",
+        t.gate_args()
+    );
+    assert!(
+        !t.github_calls()
+            .iter()
+            .any(|call| call.contains("head_sha")),
+        "no gate run is waited on: {:?}",
+        t.github_calls()
+    );
+    assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
+    assert!(text(&t.train(&["land"]).stderr).contains("live: failed"));
+    assert_eq!(t.origin_master(), seed, "nothing landed");
 }

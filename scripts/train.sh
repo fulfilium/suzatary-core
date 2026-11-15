@@ -13,20 +13,12 @@
 #   publish [--skip <sha>]... [--admit <path>]... [<rev>]
 #                    core's master += the public tree of each landed commit up to <rev>
 #
-# `--remote github` runs the tree half on core's GitHub runners, sending only the public tree, once
-# its leak guard passes, to a `gate/` branch; the box keeps the steps that read this repository and
-# the live half. Run inside `nix develop .#triage`, from a clean checkout; it reaches GitHub
-# through `gh`, and never promotes or touches the data repository.
+# `--remote github` runs the tree half on core's runners (only a public tree its leak guard passed
+# leaves the box); the box keeps the steps that read this repository and the live half. Run inside
+# `nix develop .#triage`, from a clean checkout; it never touches the data repository.
 #
-# Publication: core's master holds one commit per landed first-parent commit, its public tree. It
-# only climbs; a tree is published only once its leak guard passes whole; a path no row held waits
-# for `publish --admit` at a terminal (a land publishes none); `publish --skip` passes over a commit
-# that can never pass, and scripts/deploy.sh refuses it.
-#
-# A train's PRs are a set, merged in an order that is a function of their heads, so one set over
-# one master builds one tree, which ends with the release the project chain reads. Verdicts are
-# appended to .git/train/gates/, keyed by half and tree; a key holding both is a flake, and nothing
-# lands over it. Each half runs in its own worktree at the commit read once, with that tree's gate.
+# Core's master holds each landed commit's public tree, once its leak guard passes (`publish`).
+# Verdicts go to .git/train/gates/, keyed by half and tree; a key holding both is a flake.
 #
 # Test seams: the SUZATARY_TRAIN_ names of `train_reads`; a stub gate's verdicts are keyed by its
 # own bytes, so a stub's green never lands a train.
@@ -53,8 +45,8 @@ cd "$root"
 # In .git, never in the tree.
 state="$(git rev-parse --path-format=absolute --git-common-dir)/train"
 mkdir -p "$state"
-# One train at a time: runs share this checkout, its verdict table and its worktree. The nightly
-# gate waits for a running train instead of refusing; a check touches none of them.
+# One train at a time (the checkout, verdicts and worktree are shared); the nightly waits, a check
+# touches none.
 if [[ "${1:-}" != check ]]; then
   exec 9>>"$state/lock"
   if [[ "${1:-}" == nightly ]]; then
@@ -173,8 +165,7 @@ last_release() {
 }
 
 newest_release() {
-  # awk reads to the end: one that left early would SIGPIPE git log, which pipefail and
-  # errexit turn into a silent exit 141.
+  # awk reads to the end: leaving early would SIGPIPE git log into a silent 141.
   git log --first-parent --format='%H %(trailers:key=Release,valueonly,separator=)' "$1" \
     | awk 'NF > 1 && !found { print $1; found = 1 }'
 }
@@ -452,7 +443,7 @@ run_half() {
     cloud_half "$commit"
     return
   fi
-  run_here "$half" "$commit" || code=$?
+  run_here "$half" "$commit" "${@:3}" || code=$?
   record "$half" "$commit" "$code"
 }
 
@@ -477,8 +468,8 @@ train_reads=(SUZATARY_TRAIN_BIN SUZATARY_TRAIN_GATE SUZATARY_TRAIN_GH SUZATARY_T
 # Variables the gate's steps read: an inherited one would be judged beside the tree.
 gate_reads='^(SUZATARY_|CARGO|RUST|PROPTEST_|TYPST|NODE_OPTIONS$|LD_PRELOAD$|LD_LIBRARY_PATH$|LIBRARY_PATH$)'
 
-# Refused outside `.#triage` or with a `gate_reads` variable beyond the shell's, the data tree's,
-# SUZATARY_GATE_SERIAL's and the train's. SUZATARY_INSTANCE is made absolute for the worktree.
+# Refused outside `.#triage` or with a `gate_reads` variable the shell, data tree, SERIAL or train
+# does not set; SUZATARY_INSTANCE made absolute for the worktree.
 gate_environment() {
   [[ -n "${IN_NIX_SHELL:-}" && "${SUZATARY_SHELL:-}" == triage ]] \
     || die "a gate runs inside the .#triage shell, whose tools are what it tests with: nix develop .#triage -c scripts/train.sh $*"
@@ -507,10 +498,14 @@ remote_opt() {
   esac
 }
 
-# The tree half's steps that read this repository run on the box, before the push and after the
-# publication run; every other is a job in gate.yml (a guard test holds the lists whole).
+# The tree half's steps that read this repository, on the box before the push and after the
+# publication run; the rest are gate.yml's jobs.
 box_before="fmt,changelog"
 box_after="public-tree,deployed-shape"
+# The live half's steps that read no publication build run while it builds, the rest beside the
+# runners (a guard test holds the two lists whole).
+live_early="live,live-all,live-guards"
+live_after="web-live,deploy-build,push-dry,public-check"
 # A run not ended in six hours (GitHub's job limit) is no verdict.
 gate_workflow=.github/workflows/gate.yml
 cloud_hours=6
@@ -530,7 +525,8 @@ cloud_half() {
   local commit="$1" pushed code=0
   pushed="$(cloud_push "$commit")" || return
   gate_branch="gate/$commit" gate_pushed="$pushed"
-  cloud_build "$commit" "$pushed" || code=$?
+  cloud_dispatch "$pushed"
+  cloud_after "$commit" "$pushed" || code=$?
   ((code)) || cloud_wait "$commit" "$pushed" || code=$?
   cloud_close
   return "$code"
@@ -579,14 +575,23 @@ gate_push() {
   echo "$pushed"
 }
 
-# The box's steps after master's publication run of <pushed> answers (a gate branch's workflow never
-# holds the cache token): 0 when they pass, else the verdict recorded.
-cloud_build() {
+# Starts master's publication run of <pushed> (no gate branch's workflow holds the cache token).
+dispatched=""
+cloud_dispatch() {
+  local repo
+  repo="$(core_repo)"
+  if timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$1" >&2; then
+    dispatched="$1"
+  else
+    say "could not start the publication run of ${1:0:12} on $repo (above): the box builds the public tree itself"
+  fi
+}
+
+# The box's steps once the dispatched run of <pushed> ends: 0 when they pass, else recorded.
+cloud_after() {
   local commit="$1" pushed="$2" repo run code=0
   repo="$(core_repo)"
-  if ! timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$pushed" >&2; then
-    say "could not start the publication run of ${pushed:0:12} on $repo (above): the box builds the public tree itself"
-  else
+  if [[ "$dispatched" == "$pushed" ]]; then
     say "waiting for the publication run of ${pushed:0:12} in $repo before the box builds the public tree (at most ${cache_timeout}s)"
     run="$("$scripts/publication-run.sh" "$gh" "$repo" workflow_dispatch "$pushed" "$cache_appear" "$cache_timeout" "${SUZATARY_TRAIN_POLL:-60}")"
     case "$run" in
@@ -667,8 +672,7 @@ gate_run() {
   return 1
 }
 
-# Cancels the gate commit's unfinished runs (no red tree's builds reach the cache), then deletes
-# its branch.
+# Cancels the gate commit's unfinished runs (no red tree's builds reach the cache); deletes its branch.
 cloud_close() {
   local repo id
   if repo="$(core_repo)" && [[ -n "$gate_pushed" ]]; then
@@ -697,7 +701,7 @@ train_commit() {
 # Monitor mode makes its pid a process group, which live_stop stops by pid, never by a pattern.
 live_start() {
   set -m
-  run_half live "$1" </dev/null &
+  run_half live "$@" </dev/null &
   live=$!
   set +m
 }
@@ -713,10 +717,10 @@ live_stop() {
   worktree_close
 }
 
-# beside <commit>: the live half beside the background tree half ($there); a red one stops the other.
+# beside <commit> [gate args...]: the live half beside the background tree half ($there); a red one stops the other.
 beside() {
   local commit="$1" ended code=0
-  live_start "$commit"
+  live_start "$@"
   wait -n -p ended "$there" "$live" || code=$?
   if [[ "$ended" == "$there" ]]; then
     there=""
@@ -752,21 +756,33 @@ gate() {
   local code=0
   if [[ -n "$cloud" ]]; then
     # The box's steps first, so the live half's deploy-build finds their builds in the store.
-    local pushed
+    local pushed early=""
     pushed="$(cloud_push "$commit")" || code=$?
     if ((code == 0)); then
       gate_branch="gate/$commit" gate_pushed="$pushed"
-      cloud_build "$commit" "$pushed" || code=$?
-      if ((code == 0)); then
-        cloud_wait "$commit" "$pushed" &
-        there=$!
-        beside "$commit"
+      cloud_dispatch "$pushed"
+      early=0
+      run_here live "$commit" --steps "$live_early" || early=$?
+      if ((early)); then
+        record live "$commit" "$early" || say "the live half's early steps gave no green, so the tree half is stopped"
+      else
+        cloud_after "$commit" "$pushed" || code=$?
+        if ((code == 0)); then
+          cloud_wait "$commit" "$pushed" &
+          there=$!
+          beside "$commit" --steps "$live_after"
+        fi
       fi
       cloud_close
     fi
     case "$code" in
-      1) say "the tree half is red on the box, so the live half does not run" ;;
-      2) run_half live "$commit" || true ;;
+      1) say "the tree half is red on the box, so the live half's other steps do not run" ;;
+      2)
+        case "$early" in
+          "") run_half live "$commit" || true ;;
+          0) run_half live "$commit" --steps "$live_after" || true ;;
+        esac
+        ;;
     esac
   else
     run_half tree "$commit" || code=$?
@@ -780,7 +796,7 @@ gate() {
 }
 
 # Per `--- job` section of <log>: the gate's failing-lines block, else its last 20 error lines and
-# each failed test with its `Error`, `waited` and `last:` lines, once each, uncoloured.
+# failed tests with their `Error`, `waited` and `last:` lines, once, uncoloured.
 failing_lines() {
   awk '
     function flush(  i) {
@@ -822,8 +838,7 @@ pr_of() { git log -1 --format=%s "$1" | sed -n 's/^Merge #\([0-9]*\):.*/\1/p'; }
 # Its own PR, then those it carried.
 prs_of() { pr_of "$1" && trailer_of "$1" Carries | tr ' ' '\n' | sed '/^$/d'; }
 
-# The longest prefix of a red train's merges that its first red half passes (gated prefixes read
-# from the table), assuming a red prefix stays red.
+# The longest prefix of a red train's merges its first red half passes, assuming red stays red.
 bisect() {
   gate_environment bisect "$@"
   remote_opt "$@"
@@ -1141,8 +1156,7 @@ newest() {
     "refs/remotes/core/$core_branch" | awk 'NF && !n++'
 }
 
-# Publishes the rows core lacks up to <rev> (origin/master), oldest first; the first whose leak
-# guard fails stops the walk.
+# Publishes core's missing rows up to <rev> (origin/master), oldest first, until a leak guard fails.
 publish() {
   local rev heads last source sources=() skips=() skipped=() at
   # Read by `row`.
@@ -1321,8 +1335,8 @@ public_commit() {
     git commit-tree "$1" ${2:+-p "$2"} -m "$4" -m "$5"
 }
 
-# One row: <source>'s checked public tree, committed on core's master and pushed, and only a
-# commit is pushed (an empty name would delete core's master).
+# One row: <source>'s checked public tree, committed on core's master and pushed (only a commit:
+# an empty name deletes master).
 row() {
   local source="$1" dir tree parent commit when trailers s new held every path line
   # One paragraph, so git reads every line as a trailer.

@@ -44,9 +44,15 @@ fn jobs() -> BTreeMap<String, (Vec<String>, String)> {
 /// The steps `scripts/train.sh` runs on the box, each list one run of the gate: `box_before`,
 /// before the push, and `box_after`, after it.
 fn box_runs() -> Vec<(&'static str, Vec<String>)> {
+    train_lists(&["box_before", "box_after"])
+}
+
+/// The step lists `scripts/train.sh` names, each `<name>="<step>,<step>..."`.
+fn train_lists(names: &[&'static str]) -> Vec<(&'static str, Vec<String>)> {
     let train = read("scripts/train.sh");
-    ["box_before", "box_after"]
-        .into_iter()
+    names
+        .iter()
+        .copied()
         .map(|name| {
             let steps = train
                 .lines()
@@ -123,6 +129,32 @@ fn gate_yml_and_the_box_run_every_tree_step() {
             "{name} runs in {holding:?}, more than once for itself and not in parts"
         );
     }
+}
+
+/// With the tree half on GitHub's runners, the box runs the live half in two runs, `live_early`
+/// while the publication run builds and `live_after` beside the runners: together every live step,
+/// each once. The one name beyond `--list` they may hold is `live`, the live pins' step, which a
+/// public tree (no pins) does not declare.
+#[test]
+fn train_runs_every_live_step_once_in_two_runs() {
+    let live: BTreeSet<String> = steps()
+        .into_iter()
+        .filter(|s| s.half == "live")
+        .map(|s| s.name)
+        .collect();
+    let runs = train_lists(&["live_early", "live_after"]);
+    let named: Vec<String> = runs.iter().flat_map(|(_, s)| s.clone()).collect();
+    let held: BTreeSet<String> = named.iter().cloned().collect();
+    assert!(
+        held.is_superset(&live),
+        "the two runs hold every live step: {held:?}"
+    );
+    assert_eq!(named.len(), held.len(), "each once: {named:?}");
+    let beyond: Vec<&String> = held.difference(&live).collect();
+    assert!(
+        beyond.iter().all(|name| *name == "live"),
+        "only the live pins' step may be beyond --list: {beyond:?}"
+    );
 }
 
 /// The e2e jobs are the timed scenes' part and the parts 1/n to n/n of one n, each once, and only
