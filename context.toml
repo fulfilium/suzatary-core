@@ -179,24 +179,31 @@ depends = ["base", "prodrome-core", "record", "signatures", "store"]
 scripts = []
 
 [[unit]]
+name = "held"
+path = "app/held"
+shape = "crate"
+depends = ["base", "prodrome-core", "store"]
+scripts = []
+
+[[unit]]
 name = "core"
 path = "app/core"
 shape = "crate"
-depends = ["base", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
+depends = ["base", "held", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
 scripts = []
 
 [[unit]]
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "core", "prodrome-core", "record", "signatures", "store", "todo"]
+depends = ["base", "core", "held", "prodrome-core", "record", "signatures", "store", "todo"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["base", "core", "prodrome-core", "prodrome-typst-wasm", "record", "signatures", "store", "todo"]
+depends = ["base", "core", "held", "prodrome-core", "prodrome-typst-wasm", "record", "signatures", "store", "todo"]
 scripts = []
 
 [[unit]]
@@ -210,14 +217,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "core", "io", "plugin", "prodrome-core", "record", "signatures", "store", "todo"]
+depends = ["api", "base", "core", "held", "io", "plugin", "prodrome-core", "record", "signatures", "store", "todo"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["api", "base", "core", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
+depends = ["api", "base", "core", "held", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]

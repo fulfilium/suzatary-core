@@ -5,10 +5,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::Draft;
-use crate::held_value::Original;
 use crate::mail::StoredMessage;
-use crate::message_part::Attachment;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use suzatary_held::held_value::Original;
+use suzatary_held::message_part::Attachment;
 
 /// A forward as proposed: the message around the original, and the original by its record.
 ///

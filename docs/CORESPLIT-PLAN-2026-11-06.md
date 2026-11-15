@@ -318,6 +318,19 @@ their test support and `husk`; USE 19.8k. The crate depends on base and the Prod
   the trait's crate. The rendering guard reads `rendering.rs` in `app/todo/src`; its include paths
   resolve alike from there, so no kept render is renamed.
 
+**PR 17 (held).** `attachment`, `enclosed`, `excerpt`, `file_read`, `for_model`, `held_file`,
+`held_value`, `leak`, `mail_error`, `message_part`, `pdf_text`, `redact`, `upload`,
+`upload_index`, `vault` and `secretary/{attached, attachment_source, upload_standing}` move to
+`app/held`, the last three under `suzatary_held::secretary`, so no path but the crate's changes.
+- **`cast`, `priced` and `verb` stay in core** for PR 16's reason, and take the memory cut, now
+  the lowest in core.
+- **`first_read`** (#497, a process's timing accumulator) stays in core in the memory cut too:
+  in base it measured 24.9k of base's 25k USE, and it keeps process state where base keeps names.
+- **Nothing widens.** Every crate-private item of the crate is read only inside it.
+- **Two test modules move to core's integration tests**, because they read higher cuts:
+  `attachment`'s two transcript tests (`secretary::model::Turn`) and `vault`'s (`drive::allowed`).
+- **The inert upload index and PDF reader** for base's `Nothing` move with their traits.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

@@ -145,7 +145,7 @@ fn marked_mail() -> suzatary_core::mail::MailMessage {
             container: "inbox".to_owned(),
             account: ADA.to_owned(),
             disposition: suzatary_core::mail::Disposed::Undecided,
-            held: suzatary_core::held_value::Kinds::empty(),
+            held: suzatary_held::held_value::Kinds::empty(),
         },
         thread: "000000000000c3fb".to_owned(),
         headers: Vec::new(),

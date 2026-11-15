@@ -8,14 +8,14 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::attachment::{Attachment, AttachmentId};
-use crate::enclosed::{Enclosed, Enclosure};
 use crate::secretary::line_words::{AttachmentWords, LineWords};
 use crate::secretary::model::{ToolCall, Turn};
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::words::{Gone, Words};
 use suzatary_base::reference::Reference;
+use suzatary_held::attachment::{Attachment, AttachmentId};
+use suzatary_held::enclosed::{Enclosed, Enclosure};
 
 /// A turn's shape, by who said it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

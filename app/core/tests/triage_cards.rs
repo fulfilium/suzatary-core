@@ -349,7 +349,7 @@ impl Corpus for Forged {
             timestamp: None,
             container: "inbox".to_owned(),
             sources: 1,
-            held: suzatary_core::held_value::Kinds::default(),
+            held: suzatary_held::held_value::Kinds::default(),
         }])
     }
     fn search(

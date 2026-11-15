@@ -19,7 +19,7 @@ pub trait Drive: Sync {
     ///
     /// # Errors
     /// [`DriveFailure`].
-    fn read(&self, file: &DrivePath) -> Result<crate::file_read::FileRead, DriveFailure>;
+    fn read(&self, file: &DrivePath) -> Result<suzatary_held::file_read::FileRead, DriveFailure>;
 
     /// The Drive as a round reaches it unasked: downloads inside the allowed folders alone, the
     /// private folder never listed, nothing written.

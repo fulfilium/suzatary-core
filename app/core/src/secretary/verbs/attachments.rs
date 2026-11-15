@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::held_value::HeldFile;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verbs::{kept, mail_refusal};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_held::held_value::HeldFile;
 
 /// A message's attachments, or one of them read.
 pub struct Attachments;

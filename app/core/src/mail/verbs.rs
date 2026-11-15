@@ -33,7 +33,7 @@ pub struct Summary {
     /// accounts is one row with `sources: 3`.
     pub sources: usize,
     /// The kinds of held value it names (`["ssn", "passport"]`), never a value or its digits.
-    pub held: crate::held_value::Kinds,
+    pub held: suzatary_held::held_value::Kinds,
 }
 
 /// A link as it appeared in the mail; the label is what tells "Modify

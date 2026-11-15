@@ -409,7 +409,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/release.rs", "CHANGELOG.md"),
     ("app/cli/tests/release.rs", "changelog.d"),
     ("app/core/src/coding.rs", "docs"),
-    ("app/core/src/leak.rs", "docs"),
+    ("app/held/src/leak.rs", "docs"),
     ("app/base/src/repo_ids.rs", "docs"),
     ("app/core/tests/act_literal.rs", "docs"),
     ("app/api/tests/web_vectors.rs", "docs"),
@@ -2288,12 +2288,13 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 }
 
 /// The crates the core's library is cut into; a new one joins with its `flake.nix` lines.
-const LIBRARY_CRATES: [&str; 7] = [
+const LIBRARY_CRATES: [&str; 8] = [
     "app/base",
     "app/record",
     "app/store",
     "app/signatures",
     "app/todo",
+    "app/held",
     "app/core",
     "app/api",
 ];

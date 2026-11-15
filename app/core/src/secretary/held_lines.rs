@@ -1544,13 +1544,13 @@ mod tests {
             transcript::push(held.conversations(), &id, &said).expect("pushed");
         }
         let mut lines = HeldLines::new();
-        let before = crate::redact::scrubs();
+        let before = suzatary_held::redact::scrubs();
         assert!(before > 40, "each write scrubbed its words");
         lines.keys(&given(&held), &[]);
         lines.hold(prints(&held), &[]);
         let read = lines.read().0.expect("reads");
         assert_eq!(read[0].turns.len(), 40, "every line opened");
-        assert_eq!(crate::redact::scrubs(), before, "and none scrubbed");
+        assert_eq!(suzatary_held::redact::scrubs(), before, "and none scrubbed");
     }
 
     /// A replica reads a conversation whose stale slots were sealed again, and whose replaced
@@ -1654,10 +1654,10 @@ mod tests {
                 .map(|(_, read)| read.expect("folds").stored().clone())
                 .collect()
         };
-        let scrubs = crate::redact::scrubs();
+        let scrubs = suzatary_held::redact::scrubs();
         let unswept = read_by_box();
         assert_eq!(
-            crate::redact::scrubs(),
+            suzatary_held::redact::scrubs(),
             scrubs,
             "the box, before its sweep, opens no replaced seal"
         );
@@ -1665,7 +1665,7 @@ mod tests {
         let boxed: BTreeSet<KeyName> = held.keys.names().into_iter().collect();
         let read_by_box = read_by_box();
         assert_eq!(read_by_box, unswept);
-        let scrubs = crate::redact::scrubs();
+        let scrubs = suzatary_held::redact::scrubs();
         let mut lines = HeldLines::new();
         lines.keys(&before, &[]);
         lines.hold(prints(&held), &[]);
@@ -1675,7 +1675,7 @@ mod tests {
         };
         assert_eq!(read(&mut lines), read_by_box);
         assert_eq!(
-            crate::redact::scrubs(),
+            suzatary_held::redact::scrubs(),
             scrubs,
             "no replaced seal is opened"
         );
@@ -1687,7 +1687,7 @@ mod tests {
             .collect();
         assert_eq!(kept, boxed, "the replica's sweep leaves it the box's keys");
         assert_eq!(read(&mut lines), read_by_box);
-        assert_eq!(crate::redact::scrubs(), scrubs);
+        assert_eq!(suzatary_held::redact::scrubs(), scrubs);
     }
 
     /// A key taken out takes what was opened with it out of the cache at once, before any reading,
@@ -1743,7 +1743,7 @@ mod tests {
             .repeat(12);
         let at = |n: u32| Datetime::new(2026, 10, 25, 9, n / 60, n % 60, 0).expect("an instant");
         for under in [
-            ScrubbedUnder::Version(crate::redact::Rules::current(()).clone()),
+            ScrubbedUnder::Version(suzatary_held::redact::Rules::current(()).clone()),
             ScrubbedUnder::Unversioned,
         ] {
             let held = InMemory::default();

@@ -4140,6 +4140,7 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-held",
  "suzatary-io",
  "suzatary-plugin",
  "suzatary-record",
@@ -4171,6 +4172,7 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-held",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4217,13 +4219,13 @@ dependencies = [
  "prodrome-wasm-exports",
  "proptest",
  "regex",
- "regex-syntax",
  "schemars",
  "serde",
  "serde_json",
  "sha2",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-held",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4233,9 +4235,30 @@ dependencies = [
  "tracing",
  "ts-rs",
  "typst-syntax",
- "unicode-general-category",
  "unicode-normalization",
  "zeroize",
+]
+
+[[package]]
+name = "suzatary-held"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "regex",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-held",
+ "suzatary-store",
+ "thiserror",
+ "ts-rs",
+ "unicode-general-category",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -4263,6 +4286,7 @@ dependencies = [
  "sha2",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-held",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4424,6 +4448,7 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-held",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",

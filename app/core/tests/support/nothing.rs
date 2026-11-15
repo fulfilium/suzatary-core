@@ -8,7 +8,6 @@ use crate::mail::state::Decision;
 use crate::mail::sync_report::SyncReport;
 use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
-use crate::mail_error::MailError;
 use crate::notify::{Delivered, Notify, NotifyError, Push};
 use crate::repos::{Patch, RepoRow, Visibility};
 use crate::repositories::{RepoFailure, Repositories};
@@ -24,6 +23,7 @@ use suzatary_base::capability::{Datetime, Nothing};
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_held::mail_error::MailError;
 use suzatary_store::store::StoreError;
 use suzatary_todo::render::Html;
 
@@ -212,7 +212,7 @@ impl Mailbox for Nothing {
         &self,
         _id: &str,
         name: &str,
-    ) -> Result<crate::file_read::FileRead, MailError> {
+    ) -> Result<suzatary_held::file_read::FileRead, MailError> {
         Err(absent("attachment", name))
     }
 }
@@ -369,7 +369,7 @@ impl Drive for Nothing {
     fn read(
         &self,
         file: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<crate::file_read::FileRead, DriveFailure> {
+    ) -> Result<suzatary_held::file_read::FileRead, DriveFailure> {
         Err(DriveFailure::Missing(file.to_string()))
     }
 }
@@ -431,35 +431,6 @@ impl crate::mail::older_mail::OlderMail for Nothing {
                 ),
             })
             .collect()
-    }
-}
-
-impl crate::upload_index::UploadIndex for Nothing {
-    fn refresh(
-        &self,
-        named: &std::collections::BTreeSet<crate::attachment::AttachmentId>,
-    ) -> Result<
-        std::collections::BTreeMap<
-            crate::attachment::AttachmentId,
-            crate::secretary::upload_standing::UploadStanding,
-        >,
-        crate::upload_index::IndexError,
-    > {
-        Ok(named
-            .iter()
-            .map(|id| {
-                (
-                    id.clone(),
-                    crate::secretary::upload_standing::UploadStanding::Erased,
-                )
-            })
-            .collect())
-    }
-    fn open(
-        &self,
-        _id: &crate::attachment::AttachmentId,
-    ) -> Result<Option<crate::file_read::FileRead>, crate::upload_index::IndexError> {
-        Ok(None)
     }
 }
 
@@ -548,11 +519,5 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
         crate::secretary::responded::Performed::Tried(crate::secretary::responded::Tried::NotSent {
             reason: "nothing opens a sign-in with Google here".to_owned(),
         })
-    }
-}
-
-impl crate::pdf_text::PdfText for Nothing {
-    fn layer(&self, _: &[u8]) -> Result<crate::file_read::Layer, String> {
-        Err("this test reads no PDF".to_owned())
     }
 }

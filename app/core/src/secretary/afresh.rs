@@ -103,7 +103,7 @@ mod tests {
         Entry::Said { at: at(), turn, by }
     }
 
-    fn person(text: &str, attachments: Vec<crate::attachment::Attachment>) -> Turn {
+    fn person(text: &str, attachments: Vec<suzatary_held::attachment::Attachment>) -> Turn {
         Turn::Person {
             text: text.to_owned(),
             references: Vec::new(),
@@ -164,9 +164,9 @@ mod tests {
             Request::in_round(&stored(vec![said(
                 person(
                     "see the file",
-                    vec![crate::attachment::Attachment {
-                        id: crate::attachment::AttachmentId::of(b"a scan"),
-                        media_type: crate::enclosed::Enclosure::Pdf,
+                    vec![suzatary_held::attachment::Attachment {
+                        id: suzatary_held::attachment::AttachmentId::of(b"a scan"),
+                        media_type: suzatary_held::enclosed::Enclosure::Pdf,
                         name: None,
                         private: None,
                     }]

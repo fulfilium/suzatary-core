@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::held_value::{Handle, HeldFile, Holder};
-use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::model::Turn;
 use crate::secretary::store::Stored;
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::verb_name::VerbName;
+use suzatary_held::held_value::{Handle, HeldFile, Holder};
+use suzatary_held::secretary::attachment_source::AttachmentSource;
 
 /// The notmuch ids of every message a `show`, a `search` or a reference the person pointed at
 /// answered in a conversation, by the answers' `id` fields, and the source of every file a

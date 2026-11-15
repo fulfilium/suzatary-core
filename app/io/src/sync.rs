@@ -265,10 +265,10 @@ fn notmuch_line(indexed: &str, untagged: impl Iterator<Item = String>) -> String
         .join("; ")
 }
 
-/// The last line of some output, as an [`Excerpt`](suzatary_core::excerpt::Excerpt): it is kept in
+/// The last line of some output, as an [`Excerpt`](suzatary_held::excerpt::Excerpt): it is kept in
 /// the sync report and read by the agent, so it names no address.
 pub(crate) fn tail(text: &str) -> String {
-    suzatary_core::excerpt::Excerpt::of(text.trim().lines().next_back().unwrap_or(""))
+    suzatary_held::excerpt::Excerpt::of(text.trim().lines().next_back().unwrap_or(""))
         .as_str()
         .to_owned()
 }

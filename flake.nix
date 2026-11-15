@@ -62,16 +62,12 @@
     let
       inherit (nixpkgs) lib;
 
-      # THE APP'S VERSION IS DERIVED FROM THE TREE, NEVER TYPED TWICE.
-      #
-      # versionName is the release's version (`app/release.toml`) plus the commit, so a phone's
-      # About screen names a commit. versionCode is the commit count, which only increases on
-      # master; a dirty tree gets 0, so a hand-built APK never installs over one from CI. Both
-      # are inputs, so the derivation's hash moves exactly when they do.
-      #
-      # THE RELEASE IS `app/release.toml`, which `suzatary release cut` writes and no crate
-      # compiles: `suzatary-app` copies the binary and installs the file beside it, where the
-      # binary reads it at run time (`app/cli/src/stamp.rs`), so a train rebuilds no binary.
+      # THE APP'S VERSION IS DERIVED FROM THE TREE, NEVER TYPED TWICE. versionName is
+      # `app/release.toml`'s version plus the commit, so a phone's About screen names one;
+      # versionCode is the commit count, which only grows on master, and 0 for a dirty tree, so
+      # a hand-built APK never installs over CI's. No crate compiles the release file:
+      # `suzatary-app` installs it beside the binary, which reads it at run time, so a train
+      # rebuilds no binary.
       appRelease = builtins.readFile ./app/release.toml;
       appVersion =
         let
@@ -145,16 +141,11 @@
             build (apkProfile path);
 
 
-        # =====================================================================
-        # THE APPLICATION (docs/ARCHITECTURE.md). Everything above it is either
-        # this repository's own scaffolding or the ONE line that takes the
-        # database off the input, because `app/` is where Suzatary moves and the
-        # Prodrome is the database it is built on — one direction (§1, §2).
-        # =====================================================================
+        # ===== THE APPLICATION (docs/ARCHITECTURE.md); above it, scaffolding and the ONE line
+        # that takes the database, the Prodrome, off the input — one direction (§1, §2).
 
-        # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ, NOT THE REPOSITORY: a `fileset`, so a
-        # briefing, a commit or a document does not change this hash, and `target/` never
-        # reaches the store.
+        # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ: a `fileset`, so a briefing, a commit
+        # or a document does not change this hash, and `target/` never reaches the store.
         appSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -167,6 +158,7 @@
             ./app/store
             ./app/signatures
             ./app/todo
+            ./app/held
             ./app/api
             ./app/io
             ./app/plugin
@@ -187,17 +179,13 @@
           ];
         };
 
-        # THE BUILD STAMP TRACKS `appSrc`, NOT THE WHOLE TREE: its store path is a hash of exactly
-        # the files the binary reads, so `build` on `GET /api/about` changes when the binary's
-        # inputs do, never on a chain write or a doc.
+        # THE BUILD STAMP IS `appSrc`'s hash, so `GET /api/about`'s `build` moves with the
+        # binary's inputs, never on a chain write or a doc.
         appSrcBuild = builtins.substring 0 8 (builtins.baseNameOf (toString appSrc));
 
-        # ONE DEPENDENCY BUILD, SHARED BY EVERY DERIVATION BELOW: `cargoArtifacts` is the
-        # dependencies compiled against a dummy copy of the crates, so its hash moves only with
-        # `app/Cargo.lock` or the toolchain. The git dependency is vendored at the lock's rev.
-        #
-        # THE WORKSPACE IS ONE LEVEL IN: crane restores the dependencies into `./target`, so cargo
-        # writes there, not to `app/target`, where it would rebuild them all.
+        # ONE DEPENDENCY BUILD FOR EVERY DERIVATION BELOW, against a dummy copy of the crates, so
+        # its hash moves only with `app/Cargo.lock` or the toolchain. Crane restores it into
+        # `./target`, inside `app/`, where cargo writes, so nothing rebuilds.
         craneLib = crane.mkLib pkgs;
         # The plugins' toolchain: rustup's 1.98.1, nixpkgs' version at this lock, with the
         # wasm32-wasip2 std, whose linker writes the component itself.
@@ -205,12 +193,9 @@
           ((rust-overlay.lib.mkRustBin { } pkgs).stable."1.98.1".minimal.override {
             targets = [ "wasm32-wasip2" ];
           });
-        # Every phase runs INSIDE `app/` (`sourceRoot`), the workspace's own
-        # directory, rather than teaching each of crane's hooks a
-        # `--manifest-path`: the install hook runs `cargo metadata` from the
-        # working directory and knows no such flag. The tree above `app/` is
-        # still unpacked, so the three files the tests read by `../../` stay
-        # where they read them.
+        # Every phase runs INSIDE `app/` (`sourceRoot`): crane's install hook runs `cargo
+        # metadata` from the working directory and takes no `--manifest-path`. The tree above is
+        # still unpacked, so the files the tests read by `../../` stay put.
         commonArgs = {
           pname = "suzatary";
           src = appSrc;
@@ -253,6 +238,7 @@
           ./app/store/Cargo.toml
           ./app/signatures/Cargo.toml
           ./app/todo/Cargo.toml
+          ./app/held/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
@@ -260,6 +246,7 @@
           ./app/store/src
           ./app/signatures/src
           ./app/todo/src
+          ./app/held/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
@@ -268,6 +255,7 @@
           ./app/store/tests/support
           ./app/signatures/tests/support
           ./app/todo/tests/support
+          ./app/held/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -291,9 +279,8 @@
         # `nix build .#suzatary-bin`, the one binary: vendored from app/Cargo.lock, offline, no
         # OpenSSL. `doCheck` is off: the laws are `checks.suzatary-core`, from the same artifacts.
         #
-        # IT DOES NOT READ THE RELEASE: no attribute here names `app/release.toml`, and
-        # `appSrc` does not hold it, so a train's release commit leaves this derivation
-        # as it was and nothing recompiles (scripts/release-free.sh is the gate's proof).
+        # IT DOES NOT READ THE RELEASE (`appSrc` lacks `app/release.toml`), so a release commit
+        # recompiles nothing (scripts/release-free.sh is the gate's proof).
         suzatary-bin = appCrate {
           pname = "suzatary";
           doCheck = false;
@@ -325,12 +312,11 @@
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';
 
-        # `suzatary-dev`: EVERY VERB OF THE BINARY, PLUS THE END-TO-END FIXTURE, as a SECOND
-        # DERIVATION, not a flag: a flag in the shipped program is a write path for anything that
-        # sets an environment variable (CLAUDE.md, Containment). `--whois-fixture` makes every
-        # peer one login, since a headless Chromium arrives from 127.0.0.1, which no daemon names.
-        # `.#suzatary` does not enable it, so the deployed program does not contain the code.
-        # `scripts/web-e2e.sh` reaches for this one by store path.
+        # `suzatary-dev`: EVERY VERB PLUS THE END-TO-END FIXTURE, as a SECOND DERIVATION, not a
+        # flag, which would be a write path for anything that sets an environment variable.
+        # `--whois-fixture` makes every peer one login (headless Chromium arrives from 127.0.0.1,
+        # which no daemon names); `.#suzatary` does not contain the code. `scripts/web-e2e.sh`
+        # reaches for it by store path.
         suzatary-fixture = appCrate {
           pname = "suzatary-fixture";
           doCheck = false;
@@ -343,11 +329,10 @@
         };
 
         # THE BROWSER MODULES: `package` compiled to wasm32 from the manifests, the core and
-        # `crates` (so a server edit rebuilds none), in one of `wasmBuilds`: the deploy's, or the
-        # gate's tests' and scenes' (no LTO, no wasm-opt). Dependencies are built once per lock;
-        # `wasm-bindgen` is the patch the crate pins; the glues are `web/` and `nodejs/` (for
-        # scripts/web-test.sh); panic locations are remapped off the vendor directory. The core's
-        # module (`app/wasm`) and the pages' are its instances.
+        # `crates` (a server edit rebuilds none), the deploy's build or the gate's (no LTO, no
+        # wasm-opt). Dependencies build once per lock; the glues are `web/` and `nodejs/`; panic
+        # locations are remapped off the vendor directory. `app/wasm` and the pages' are its
+        # instances.
         wasmBuilds = {
           optimised = { profile = "wasm-release"; suffix = ""; wasmOpt = true; };
           development = { profile = "wasm-dev"; suffix = "-dev"; wasmOpt = false; };
@@ -376,6 +361,7 @@
                 ./app/store/Cargo.toml
                 ./app/signatures/Cargo.toml
                 ./app/todo/Cargo.toml
+                ./app/held/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
@@ -383,6 +369,7 @@
                 ./app/store/src
                 ./app/signatures/src
                 ./app/todo/src
+                ./app/held/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -461,12 +448,10 @@
         suzatary-views-wasm-dev-deps = (viewsModule "development").deps;
         suzatary-views-wasm-dev = (viewsModule "development").module;
 
-        # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`): `app/plugin-fence`,
-        # whose every mode tries to break one of the host's fences (`app/plugin/tests/fence.rs`).
-        # `fence.wasm` targets the source world; `escapee.wasm` also imports a filesystem and a
-        # network, which the host must refuse to load. Built for wasm32-unknown-unknown and
-        # wrapped by `wasm-tools component new`, so nothing of WASI is linked in. A test fixture,
-        # never loaded by the app.
+        # THE PLUGIN HOST'S ADVERSARY: `app/plugin-fence`, each mode trying one of the host's
+        # fences (`app/plugin/tests/fence.rs`); `escapee.wasm` also imports a filesystem and a
+        # network, which the host must refuse. Built for wasm32-unknown-unknown and wrapped by
+        # `wasm-tools component new`, so no WASI is linked. A test fixture, never loaded.
         suzatary-plugin-fence = craneLib.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugin-fence";
           src = lib.fileset.toSource {
@@ -482,6 +467,7 @@
               ./app/store/Cargo.toml
               ./app/signatures/Cargo.toml
               ./app/todo/Cargo.toml
+              ./app/held/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -531,6 +517,7 @@
               ./app/store/Cargo.toml
               ./app/signatures/Cargo.toml
               ./app/todo/Cargo.toml
+              ./app/held/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml

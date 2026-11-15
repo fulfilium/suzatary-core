@@ -431,7 +431,7 @@ pub fn message(
     let id = check_mail_id(id)?;
     let found = match mail.message(id) {
         Ok(found) => found,
-        Err(suzatary_core::mail_error::MailError::Absent { .. }) => {
+        Err(suzatary_held::mail_error::MailError::Absent { .. }) => {
             return Err(Refusal::not_found(gone(chain, set, id)?));
         }
         Err(other) => return Err(Refusal::internal(other.to_string())),
@@ -472,7 +472,7 @@ pub fn thread(
 ) -> Answered<wire::ThreadPayload> {
     let id = check_thread_id(id)?;
     let found = mail.thread(id, limit).map_err(|e| match e {
-        suzatary_core::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
+        suzatary_held::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
             "{}: conversation {}",
             suzatary_core::mail::gone::SAID,
             shown(id)

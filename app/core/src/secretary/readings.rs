@@ -5,8 +5,6 @@ use suzatary_signatures::chain_set::ChainSet;
 
 use crate::secretary::acts::Act;
 use crate::secretary::answers::{AnswerError, Answers};
-use crate::secretary::attached;
-use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::Changeset;
 use crate::secretary::inbox;
 use crate::secretary::inbox_reading::{Reading, Words};
@@ -27,6 +25,8 @@ use suzatary_base::answer::Renderable;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::{Answered, Refusal};
+use suzatary_held::secretary::attached;
+use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_todo::render::Html;
 use suzatary_todo::wire::todo::Fulfillment;
 
@@ -92,7 +92,7 @@ pub trait Draw {
     /// How the person reaches the app at a terminal.
     fn reach(&self) -> &crate::connect::Reach;
     /// In the box's words: a message by sender, subject and date, a file by its source.
-    fn source(&self, handle: &crate::held_value::Handle) -> String;
+    fn source(&self, handle: &suzatary_held::held_value::Handle) -> String;
 }
 
 struct Unrendered;
@@ -126,7 +126,7 @@ impl Draw for Undrawn {
         &crate::connect::PLAIN
     }
 
-    fn source(&self, _: &crate::held_value::Handle) -> String {
+    fn source(&self, _: &suzatary_held::held_value::Handle) -> String {
         UNREAD_SOURCE.to_owned()
     }
 }
@@ -135,7 +135,7 @@ impl Draw for Undrawn {
 pub const UNREAD_SOURCE: &str = "from a message this reading does not look up";
 
 fn held_in(body: &str, draws: &dyn Draw) -> HeldIn {
-    use crate::held_value::{Reach, Written};
+    use suzatary_held::held_value::{Reach, Written};
     match Written::parse(body) {
         Ok(written) => HeldIn::Read {
             values: written
@@ -1032,7 +1032,7 @@ fn forward_on_wire(forward: &Forward) -> ProposedAct {
         held: file
             .held
             .iter()
-            .map(crate::held_value::Held::said)
+            .map(suzatary_held::held_value::Held::said)
             .collect(),
     }
 }

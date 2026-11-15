@@ -8,11 +8,11 @@ use suzatary_api::secretary::routes as secretary_routes;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_core::attachment::{Attachment, AttachmentId};
-use suzatary_core::file_read::Withheld;
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
 use suzatary_core::wire::topics as wire;
+use suzatary_held::attachment::{Attachment, AttachmentId};
+use suzatary_held::file_read::Withheld;
 use suzatary_io::attachments::{Stored, UploadError};
 use suzatary_signatures::signatures::Seat;
 
@@ -57,7 +57,7 @@ pub struct Served(Attachment, Vec<u8>);
 const MAX_SAY_BYTES: usize = 32_768;
 
 /// The largest PDF as base64, plus JSON room.
-const MAX_UPLOAD_BYTES: usize = suzatary_core::file_read::MAX_PDF / 3 * 4 + 65_536;
+const MAX_UPLOAD_BYTES: usize = suzatary_held::file_read::MAX_PDF / 3 * 4 + 65_536;
 
 /// The `conversation` segment.
 pub fn conversation_named(asked: &Asked) -> Result<ConversationId, Refusal> {
@@ -111,7 +111,7 @@ impl Params for prodrome_core::event::Hash {
 impl Params for AttachmentId {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         asked.segment("id")?.parse().map_err(
-            |failed: suzatary_core::attachment::AttachmentError| {
+            |failed: suzatary_held::attachment::AttachmentError| {
                 Refusal::bad_request(failed.to_string())
             },
         )
@@ -496,7 +496,7 @@ pub fn upload(
         Err(UploadError::Withheld(why @ (Withheld::HeldNumber | Withheld::Form))) => {
             Ok(Json(suzatary_api::wire::Uploaded::Sensitive {
                 why: why.to_string(),
-                folder: suzatary_core::vault::FOLDER.to_owned(),
+                folder: suzatary_held::vault::FOLDER.to_owned(),
             }))
         }
         Err(

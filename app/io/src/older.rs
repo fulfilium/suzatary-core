@@ -646,7 +646,7 @@ mod tests {
                     timestamp: None,
                     container: String::new(),
                     sources: 1,
-                    held: suzatary_core::held_value::Kinds::empty(),
+                    held: suzatary_held::held_value::Kinds::empty(),
                 })
                 .collect())
         }

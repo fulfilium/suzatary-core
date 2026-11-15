@@ -6,9 +6,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::enclosed::Enclosure;
 use suzatary_core::mail::AttachmentMeta;
 use suzatary_core::secretary::model::Turn;
+use suzatary_held::enclosed::Enclosure;
 
 const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
@@ -26,7 +26,7 @@ fn holding(id: &str) -> FakeMailbox {
                 container: "inbox".to_owned(),
                 account: "ada@example.com".to_owned(),
                 disposition: suzatary_core::mail::Disposed::Undecided,
-                held: suzatary_core::held_value::Kinds::empty(),
+                held: suzatary_held::held_value::Kinds::empty(),
             },
             thread: "000000000000c3fd".to_owned(),
             headers: Vec::new(),
@@ -38,8 +38,8 @@ fn holding(id: &str) -> FakeMailbox {
 }
 
 /// The source of attachment `name` on message `id`, as `attachments` names it.
-fn mail(id: &str, name: &str) -> suzatary_core::held_value::HeldFile {
-    suzatary_core::held_value::HeldFile::Mail {
+fn mail(id: &str, name: &str) -> suzatary_held::held_value::HeldFile {
+    suzatary_held::held_value::HeldFile::Mail {
         message: id.to_owned(),
         name: name.to_owned(),
     }
@@ -75,7 +75,7 @@ fn answers(payload: &serde_json::Value, verb: &str) -> Vec<(String, bool)> {
 }
 
 /// Every file a turn the model was handed carries, across whole conversations and resumes.
-fn handed(model: &FakeModel) -> Vec<suzatary_core::enclosed::Enclosed> {
+fn handed(model: &FakeModel) -> Vec<suzatary_held::enclosed::Enclosed> {
     model
         .asked()
         .into_iter()
@@ -168,7 +168,7 @@ fn attachments_lists_then_reads_a_named_one() {
         .expect("one file was handed over");
     assert_eq!(file.name, "offer.pdf");
     assert_eq!(file.media, Enclosure::Pdf);
-    assert_eq!(file.id, suzatary_core::attachment::AttachmentId::of(PDF));
+    assert_eq!(file.id, suzatary_held::attachment::AttachmentId::of(PDF));
     assert!(
         file.text.contains("70,000"),
         "the text layer rides beside it"
@@ -248,7 +248,7 @@ fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_t
         .expect("one file was handed over");
     assert_eq!(
         file.media,
-        Enclosure::Image(suzatary_core::attachment::MediaType::Jpeg)
+        Enclosure::Image(suzatary_held::attachment::MediaType::Jpeg)
     );
     let (docx, refused) = &calls[1];
     assert!(

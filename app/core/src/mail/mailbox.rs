@@ -2,7 +2,7 @@
 //! conversation.
 
 use super::Datetime;
-use crate::mail_error::MailError;
+use suzatary_held::mail_error::MailError;
 
 /// A notmuch query; an empty one is a mistake, not a search for everything.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +76,7 @@ pub trait Mailbox: Sync {
     fn attachments(&self, id: &str) -> Result<Vec<crate::mail::AttachmentMeta>, MailError>;
 
     /// One message file, by its notmuch id, recorded for a forward and never its bytes, which
-    /// only the owner's tap reads ([`crate::held_value::Reveal`]); a file over `cap` bytes is
+    /// only the owner's tap reads ([`suzatary_held::held_value::Reveal`]); a file over `cap` bytes is
     /// not read.
     fn stored(&self, id: &str, cap: u64) -> Result<crate::mail::Stored, MailError>;
 
@@ -89,5 +89,5 @@ pub trait Mailbox: Sync {
         &self,
         id: &str,
         name: &str,
-    ) -> Result<crate::file_read::FileRead, MailError>;
+    ) -> Result<suzatary_held::file_read::FileRead, MailError>;
 }

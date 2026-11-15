@@ -1,4 +1,4 @@
-//! `POST /api/held/reveal`: one held value (`suzatary_core::held_value`), a number or a file, for
+//! `POST /api/held/reveal`: one held value (`suzatary_held::held_value`), a number or a file, for
 //! the owner's tap.
 //!
 //! The answer carries the value or the file once. The box keeps only `{"type":"NotKept"}` for a
@@ -8,9 +8,9 @@ use axum::Json;
 use suzatary_api::wire::{self, RevealPayload};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::held_value::{Handle, Holder, Holders, Place};
 use suzatary_core::secretary::opening::Opening;
 use suzatary_core::secretary::read_holders::ReadHolders;
+use suzatary_held::held_value::{Handle, Holder, Holders, Place};
 use suzatary_signatures::signatures::Tap;
 
 use super::State;

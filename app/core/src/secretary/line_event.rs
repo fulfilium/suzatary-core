@@ -22,7 +22,6 @@ use prodrome_core::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::redact::Rules;
 use crate::secretary::carried::Carried;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::line_shape::{self, LineShape};
@@ -36,6 +35,7 @@ use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_held::redact::Rules;
 
 /// One line: which conversation, when, who wrote it, how many lines its writer held, where it
 /// came from, its shape, and its words locked.

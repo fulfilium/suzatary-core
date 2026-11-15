@@ -812,7 +812,7 @@ fn the_client_vector_holds_the_box_s_minimum() {
 /// print it: `web/src/view/heldvalue.ts` reads placeholders and draws rows by the same names.
 #[test]
 fn the_held_kinds_vector_names_every_kind() {
-    use suzatary_core::redact::Kind;
+    use suzatary_held::redact::Kind;
     let named: BTreeMap<&str, &str> = Kind::ALL
         .into_iter()
         .map(|kind| (kind.word(), kind.name()))
@@ -2011,8 +2011,8 @@ fn mail_row() -> suzatary_core::mail::MailRow {
             todo: CAST.todos.agents.id.to_owned(),
         },
         held: [
-            suzatary_core::redact::Kind::Ssn,
-            suzatary_core::redact::Kind::Passport,
+            suzatary_held::redact::Kind::Ssn,
+            suzatary_held::redact::Kind::Passport,
         ]
         .into_iter()
         .collect(),
@@ -2723,7 +2723,7 @@ fn the_answers_vector_holds_every_answer() {
             message: suzatary_core::mail::MailMessage {
                 row: mail_row(),
                 thread: "000000000000c3fb".to_owned(),
-                headers: vec![suzatary_core::message_part::MailHeader {
+                headers: vec![suzatary_held::message_part::MailHeader {
                     name: "From".to_owned(),
                     value: CAST.counsel.email.to_owned(),
                 }],
@@ -2981,9 +2981,9 @@ fn failed_chain() -> suzatary_signatures::wire::signatures::FailedChain {
 /// data binds is the hex this build names.
 #[test]
 fn a_stored_slot_is_under_the_rules_this_build_names() {
-    use suzatary_core::redact::Rules;
     use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
     use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_held::redact::Rules;
 
     let text = std::fs::read_to_string(vector("replicas.json")).expect("the replicas vector");
     let vectors: serde_json::Value = serde_json::from_str(&text).expect("json");

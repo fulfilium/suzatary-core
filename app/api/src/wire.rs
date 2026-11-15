@@ -406,7 +406,7 @@ pub struct Saying {
 pub struct PickedFile {
     /// 64 hex.
     #[ts(as = "String")]
-    pub id: suzatary_core::attachment::AttachmentId,
+    pub id: suzatary_held::attachment::AttachmentId,
     /// `""` for a photo.
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
@@ -513,31 +513,31 @@ pub enum RevealPayload {
 
 impl RevealPayload {
     /// # Errors
-    /// A file over [`suzatary_core::held_value::MAX_OPENED`], which no answer carries.
+    /// A file over [`suzatary_held::held_value::MAX_OPENED`], which no answer carries.
     pub fn of(
-        read: suzatary_core::held_value::Revealed,
+        read: suzatary_held::held_value::Revealed,
     ) -> Result<Self, suzatary_base::refusal::Refusal> {
         use base64::Engine as _;
         match read {
-            suzatary_core::held_value::Revealed::Value(shown) => Ok(Self::Shown {
+            suzatary_held::held_value::Revealed::Value(shown) => Ok(Self::Shown {
                 value: shown.into_string(),
             }),
-            suzatary_core::held_value::Revealed::File(opened) => Ok(Self::File {
+            suzatary_held::held_value::Revealed::File(opened) => Ok(Self::File {
                 name: opened.name,
                 media: opened.media,
                 bytes: base64::engine::general_purpose::STANDARD.encode(opened.bytes),
             }),
-            suzatary_core::held_value::Revealed::TooLarge(size) => {
+            suzatary_held::held_value::Revealed::TooLarge(size) => {
                 Err(suzatary_base::refusal::Refusal::new(
                     suzatary_base::refusal::Status::UnprocessableEntity,
                     format!(
                         "the file is {size} bytes; a tap opens at most {} here, so open it where \
                      it is kept",
-                        suzatary_core::held_value::MAX_OPENED
+                        suzatary_held::held_value::MAX_OPENED
                     ),
                 ))
             }
-            suzatary_core::held_value::Revealed::Gone => Ok(Self::Gone),
+            suzatary_held::held_value::Revealed::Gone => Ok(Self::Gone),
         }
     }
 }

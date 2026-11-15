@@ -156,7 +156,7 @@ fn destinations() -> Vec<Destination> {
                        box-local tier); and a file you choose to keep private, at "
                 .to_owned()
                 + "`"
-                + suzatary_core::vault::FOLDER
+                + suzatary_held::vault::FOLDER
                 + "`.",
             off: "Disable the vault timer and set no `drive_cli`; then a lost box loses \
                   what only it held."

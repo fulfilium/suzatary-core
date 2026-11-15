@@ -39,8 +39,8 @@ pub mod triage;
 pub mod verbs;
 pub mod watch;
 
-use crate::message_part::MailHeader;
 use serde::{Deserialize, Serialize};
+use suzatary_held::message_part::MailHeader;
 use ts_rs::TS;
 
 use suzatary_base::capability::Datetime;
@@ -76,8 +76,8 @@ pub struct MailRow {
     /// What triage decided about this hash.
     pub disposition: Disposed,
     /// The kinds of held value it names, which the row says and never their values.
-    #[ts(as = "Vec<crate::redact::Kind>")]
-    pub held: crate::held_value::Kinds,
+    #[ts(as = "Vec<suzatary_held::redact::Kind>")]
+    pub held: suzatary_held::held_value::Kinds,
 }
 
 /// What triage decided about a message, as a row shows it: nothing yet, or its decision, the
@@ -176,9 +176,9 @@ pub struct StoredMessage {
     /// The file's size in bytes.
     pub size: u64,
     /// The SHA-256 of the file.
-    pub sha256: crate::attachment::AttachmentId,
+    pub sha256: suzatary_held::attachment::AttachmentId,
     /// The held values in its text, in order.
-    pub held: Vec<crate::held_value::Held>,
+    pub held: Vec<suzatary_held::held_value::Held>,
     /// Its attachments, in the file's order.
     pub parts: Vec<StoredPart>,
 }
@@ -193,7 +193,7 @@ pub struct StoredPart {
     /// Its decoded size in bytes.
     pub size: u64,
     /// The SHA-256 of its decoded bytes.
-    pub sha256: crate::attachment::AttachmentId,
+    pub sha256: suzatary_held::attachment::AttachmentId,
 }
 
 /// `StoredMessage(id, size, sha256, held, parts)`.
@@ -409,7 +409,7 @@ mod tests {
             container: "inbox".to_owned(),
             account: "me@example.test".to_owned(),
             disposition: Disposed::Undecided,
-            held: crate::held_value::Kinds::empty(),
+            held: suzatary_held::held_value::Kinds::empty(),
         };
         assert_eq!(
             serde_json::to_value(&row).expect("serialises"),

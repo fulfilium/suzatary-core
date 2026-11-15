@@ -18,6 +18,7 @@ suzatary-record.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
+suzatary-held.workspace = true
 suzatary-core.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

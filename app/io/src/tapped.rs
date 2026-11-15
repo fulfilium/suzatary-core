@@ -5,9 +5,9 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::attachment::AttachmentId;
-use suzatary_core::held_value::HeldFile;
-use suzatary_core::secretary::attached::Attached;
+use suzatary_held::attachment::AttachmentId;
+use suzatary_held::held_value::HeldFile;
+use suzatary_held::secretary::attached::Attached;
 
 use crate::docs::{DocCodec, Docs};
 

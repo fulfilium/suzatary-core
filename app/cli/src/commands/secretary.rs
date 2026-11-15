@@ -8,13 +8,13 @@ use suzatary_api::secretary::routes::Post;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::conversation::round::Ending;
-use suzatary_core::excerpt::Excerpt;
-use suzatary_core::held_value::Filled;
 use suzatary_core::mail::send::{Composed, Outgoing};
 use suzatary_core::secretary::Secretary;
-use suzatary_core::secretary::attached::Checked;
 use suzatary_core::secretary::proposal::Draft;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
+use suzatary_held::excerpt::Excerpt;
+use suzatary_held::held_value::Filled;
+use suzatary_held::secretary::attached::Checked;
 
 use crate::instance::Instance;
 
@@ -763,14 +763,14 @@ fn keep_tapped(
     kept: &suzatary_io::blobs::Blobs,
     path: &suzatary_base::drive_path::DrivePath,
     size: u64,
-    digest: &suzatary_core::attachment::AttachmentId,
+    digest: &suzatary_held::attachment::AttachmentId,
 ) {
     use suzatary_store::store::Doc as _;
-    let file = suzatary_core::held_value::HeldFile::Drive { path: path.clone() };
-    let kept_it = suzatary_core::secretary::attached::Attached::known(
+    let file = suzatary_held::held_value::HeldFile::Drive { path: path.clone() };
+    let kept_it = suzatary_held::secretary::attached::Attached::known(
         file.source(),
         path.name().unwrap_or_default(),
-        suzatary_core::enclosed::Enclosure::Pdf.as_str(),
+        suzatary_held::enclosed::Enclosure::Pdf.as_str(),
         size,
         digest.clone(),
     )
@@ -783,7 +783,7 @@ fn keep_tapped(
     if let Err(failed) = kept_it {
         tracing::warn!(
             "secretary: could not keep what the tap read of {}: {}",
-            suzatary_core::for_model::ForModel::file_name(&path.to_string()).as_str(),
+            suzatary_held::for_model::ForModel::file_name(&path.to_string()).as_str(),
             Excerpt::of(&failed)
         );
     }
@@ -794,13 +794,13 @@ fn drive_turn(
     kept: &suzatary_io::blobs::Blobs,
     id: &suzatary_base::conversation_id::ConversationId,
     path: &suzatary_base::drive_path::DrivePath,
-    read: Result<suzatary_core::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
+    read: Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
 ) -> Performed {
     use suzatary_base::capability::Clock as _;
     use suzatary_base::refusal::Refusal;
-    use suzatary_core::file_read::FileRead;
     use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::verb_answer::VerbAnswer;
+    use suzatary_held::file_read::FileRead;
 
     if let Ok(FileRead::Withheld { size, digest, .. }) = &read {
         keep_tapped(kept, path, *size, digest);
@@ -818,7 +818,7 @@ fn drive_turn(
             head.insert("path".to_owned(), serde_json::Value::from(path.to_string()));
             let answered = VerbAnswer::reading(
                 head,
-                &suzatary_core::held_value::HeldFile::Drive { path: path.clone() },
+                &suzatary_held::held_value::HeldFile::Drive { path: path.clone() },
                 path.name().unwrap_or_default(),
                 read,
                 |bytes| kept.put(bytes).map_err(|failed| failed.to_string()),
@@ -1430,8 +1430,8 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                         instance.secretary.compactors.first().clone(),
                     );
                     let mut asked =
-                        |system: &suzatary_core::for_model::ForModel,
-                         text: suzatary_core::for_model::ForModel| {
+                        |system: &suzatary_held::for_model::ForModel,
+                         text: suzatary_held::for_model::ForModel| {
                             model.ask(system, text)
                         };
                     backfill_plan(&instance, plan.as_deref(), &mut asked, out)
@@ -1463,8 +1463,8 @@ pub fn backfill_plan(
     instance: &Instance,
     file: Option<&std::path::Path>,
     model: &mut dyn FnMut(
-        &suzatary_core::for_model::ForModel,
-        suzatary_core::for_model::ForModel,
+        &suzatary_held::for_model::ForModel,
+        suzatary_held::for_model::ForModel,
     ) -> Result<String, suzatary_core::secretary::model::ModelError>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
@@ -1790,7 +1790,7 @@ pub fn migrate_scrub(
     writeln!(
         out,
         "the current rules are {}",
-        suzatary_core::redact::Rules::current(())
+        suzatary_held::redact::Rules::current(())
     )?;
     if !apply {
         let counted = rescrub::census(stores.conversations())?;

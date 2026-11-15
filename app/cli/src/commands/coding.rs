@@ -244,7 +244,7 @@ pub async fn poll_once(
         Ok(Err(failed)) => {
             tracing::warn!(
                 "coding poll: {}",
-                suzatary_core::excerpt::Excerpt::of(&format!("{failed:#}"))
+                suzatary_held::excerpt::Excerpt::of(&format!("{failed:#}"))
             );
             0
         }

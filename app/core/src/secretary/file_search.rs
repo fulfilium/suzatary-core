@@ -5,13 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
-use crate::attachment::AttachmentId;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::model::Turn;
 use crate::secretary::search::around;
 use crate::secretary::store::Stored;
-use crate::secretary::upload_standing::UploadStanding;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_held::attachment::AttachmentId;
+use suzatary_held::secretary::upload_standing::UploadStanding;
 
 /// One file that matched, on the turn it came in on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -63,7 +63,7 @@ pub fn named(conversations: &[Stored]) -> BTreeSet<AttachmentId> {
 /// [`suzatary_base::refusal::Refusal::internal`] when the conversations or the index cannot be read.
 pub fn reindex(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    index: &dyn crate::upload_index::UploadIndex,
+    index: &dyn suzatary_held::upload_index::UploadIndex,
 ) -> Result<usize, suzatary_base::refusal::Refusal> {
     let standings = index
         .refresh(&named(&crate::secretary::conversations::list(
@@ -137,7 +137,7 @@ pub fn find(
 /// turn was never delivered, and an erased turn keeps only its uploads' ids, so neither counts.
 fn sent(
     conversations: &[Stored],
-) -> impl Iterator<Item = (&Stored, usize, &crate::attachment::Attachment)> {
+) -> impl Iterator<Item = (&Stored, usize, &suzatary_held::attachment::Attachment)> {
     conversations.iter().flat_map(|stored| {
         stored
             .turns
@@ -145,7 +145,7 @@ fn sent(
             .enumerate()
             .filter(|(index, _)| stored.is_live(*index))
             .flat_map(move |(index, said)| {
-                let attachments: &[crate::attachment::Attachment] = match &said.turn {
+                let attachments: &[suzatary_held::attachment::Attachment] = match &said.turn {
                     Turn::Person { attachments, .. } => attachments,
                     Turn::Model { .. }
                     | Turn::Tool { .. }
@@ -168,9 +168,9 @@ fn cut(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::attachment::Attachment;
     use crate::mail::mailbox::Query;
     use crate::secretary::store::Entry;
+    use suzatary_held::attachment::Attachment;
 
     const PDF: &[u8] = b"%PDF-1.7\n%%EOF\n";
 

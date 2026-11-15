@@ -21,7 +21,6 @@ use suzatary_base::escape::Escaped;
 use suzatary_cli::serve::{self, Chained, State};
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::junk;
 use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
@@ -30,7 +29,6 @@ use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
-use suzatary_core::mail_error::MailError;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
 use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -38,6 +36,8 @@ use suzatary_core::secretary::model::{
     Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
     Sessions, Turn,
 };
+use suzatary_held::file_read::FileRead;
+use suzatary_held::mail_error::MailError;
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
@@ -1321,7 +1321,7 @@ fn row(message: &FakeMessage) -> Summary {
         timestamp: Some(message.timestamp.clone()),
         container: "inbox".to_owned(),
         sources: 1,
-        held: suzatary_core::held_value::Kinds::empty(),
+        held: suzatary_held::held_value::Kinds::empty(),
     }
 }
 
@@ -1435,7 +1435,7 @@ impl Manuals for FakeManuals {
 #[derive(Default)]
 pub struct Recorder {
     sent: Mutex<Vec<suzatary_core::secretary::proposal::Draft>>,
-    parts: Mutex<Vec<Vec<suzatary_core::message_part::Attachment>>>,
+    parts: Mutex<Vec<Vec<suzatary_held::message_part::Attachment>>>,
 }
 
 impl Recorder {
@@ -1453,7 +1453,7 @@ impl Recorder {
 
     /// The attachments each send carried, checked, in the same order.
     #[must_use]
-    pub fn parts(&self) -> Vec<Vec<suzatary_core::message_part::Attachment>> {
+    pub fn parts(&self) -> Vec<Vec<suzatary_held::message_part::Attachment>> {
         self.parts.lock().expect("not poisoned").clone()
     }
 }
@@ -1955,8 +1955,8 @@ impl suzatary_api::secretary::routes::Post for Recorder {
     fn send(
         &self,
         draft: &suzatary_core::secretary::proposal::Draft,
-        body: suzatary_core::held_value::Filled,
-        attachments: suzatary_core::secretary::attached::Checked,
+        body: suzatary_held::held_value::Filled,
+        attachments: suzatary_held::secretary::attached::Checked,
     ) -> suzatary_core::secretary::responded::Performed {
         // What went on the wire: the body with its held values written in.
         self.sent
@@ -1989,8 +1989,8 @@ impl suzatary_api::secretary::routes::Post for FailsFirst {
     fn send(
         &self,
         draft: &suzatary_core::secretary::proposal::Draft,
-        body: suzatary_core::held_value::Filled,
-        attachments: suzatary_core::secretary::attached::Checked,
+        body: suzatary_held::held_value::Filled,
+        attachments: suzatary_held::secretary::attached::Checked,
     ) -> suzatary_core::secretary::responded::Performed {
         match self.failures.lock().expect("not poisoned").pop_front() {
             Some(failed) => failed,
@@ -2194,8 +2194,8 @@ pub struct Fakes {
     pub pdf: FakePdf,
     /// What the taps read of withheld documents, where `Acting` keeps it.
     pub tapped: suzatary_io::docs::Docs<
-        suzatary_core::held_value::HeldFile,
-        suzatary_core::secretary::attached::Attached,
+        suzatary_held::held_value::HeldFile,
+        suzatary_held::secretary::attached::Attached,
     >,
     /// The secretary's conversation store.
     pub conversations: Conversations,
@@ -2591,44 +2591,44 @@ impl suzatary_core::drive::Port for NoDrive {
 #[derive(Default)]
 pub struct FakeFiles {
     /// Uploads by id.
-    pub uploads: HashMap<suzatary_core::attachment::AttachmentId, suzatary_core::upload::Upload>,
+    pub uploads: HashMap<suzatary_held::attachment::AttachmentId, suzatary_held::upload::Upload>,
     /// Every file a verb kept for the model, in order.
     pub kept: Mutex<Vec<Vec<u8>>>,
 }
 
 impl
     suzatary_store::store::Gets<
-        suzatary_core::attachment::AttachmentId,
-        suzatary_core::upload::Upload,
+        suzatary_held::attachment::AttachmentId,
+        suzatary_held::upload::Upload,
     > for FakeFiles
 {
     fn get(
         &self,
-        id: &suzatary_core::attachment::AttachmentId,
-    ) -> Result<Option<suzatary_core::upload::Upload>, suzatary_store::store::StoreError> {
+        id: &suzatary_held::attachment::AttachmentId,
+    ) -> Result<Option<suzatary_held::upload::Upload>, suzatary_store::store::StoreError> {
         Ok(self.uploads.get(id).cloned())
     }
 }
 
-impl suzatary_store::store::Gets<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
+impl suzatary_store::store::Gets<suzatary_held::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn get(
         &self,
-        id: &suzatary_core::attachment::AttachmentId,
+        id: &suzatary_held::attachment::AttachmentId,
     ) -> Result<Option<Vec<u8>>, suzatary_store::store::StoreError> {
         Ok(self
             .kept
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
-            .find(|bytes| &suzatary_core::attachment::AttachmentId::of(bytes) == id)
+            .find(|bytes| &suzatary_held::attachment::AttachmentId::of(bytes) == id)
             .cloned())
     }
 }
 
-impl suzatary_store::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
+impl suzatary_store::store::Doc<suzatary_held::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn set(
         &self,
-        _id: &suzatary_core::attachment::AttachmentId,
+        _id: &suzatary_held::attachment::AttachmentId,
         bytes: &Vec<u8>,
     ) -> Result<(), suzatary_store::store::StoreError> {
         self.kept
@@ -2640,12 +2640,12 @@ impl suzatary_store::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>
 
     fn remove(
         &self,
-        id: &suzatary_core::attachment::AttachmentId,
+        id: &suzatary_held::attachment::AttachmentId,
     ) -> Result<(), suzatary_store::store::StoreError> {
         self.kept
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|bytes| &suzatary_core::attachment::AttachmentId::of(bytes) != id);
+            .retain(|bytes| &suzatary_held::attachment::AttachmentId::of(bytes) != id);
         Ok(())
     }
 }
@@ -2714,7 +2714,7 @@ pub struct Server {
     checks: Option<Arc<CheckRecorder>>,
     watching: Option<PathBuf>,
     google: Googled,
-    reveal: Option<Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>>,
+    reveal: Option<Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>>,
 }
 
 /// Where a test server asks Google and keeps what a sign-in with Google keeps: Google's own and
@@ -2854,7 +2854,7 @@ impl Running {
 #[derive(Default)]
 pub struct FakeVault(pub Mutex<Vec<(String, Vec<u8>)>>);
 
-impl suzatary_core::vault::Vault for FakeVault {
+impl suzatary_held::vault::Vault for FakeVault {
     fn keep(
         &self,
         name: &str,
@@ -2864,7 +2864,7 @@ impl suzatary_core::vault::Vault for FakeVault {
             .lock()
             .expect("unpoisoned")
             .push((name.to_owned(), bytes.to_vec()));
-        suzatary_core::vault::folder()
+        suzatary_held::vault::folder()
             .join(name)
             .map_err(|failed| suzatary_base::drive_path::DriveFailure::Refused(failed.to_string()))
     }
@@ -2897,7 +2897,7 @@ impl Server {
     }
 
     /// Reading held values back through `reveal`, as a box over its mail does.
-    pub fn reveal(self, reveal: Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>) -> Self {
+    pub fn reveal(self, reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>) -> Self {
         Self {
             reveal: Some(reveal),
             ..self
@@ -4227,12 +4227,12 @@ pub fn never_stored(root: &std::path::Path, value: &str) {
 #[derive(Default)]
 pub struct FakePdf(Option<String>);
 
-impl suzatary_core::pdf_text::PdfText for FakePdf {
-    fn layer(&self, _: &[u8]) -> Result<suzatary_core::file_read::Layer, String> {
+impl suzatary_held::pdf_text::PdfText for FakePdf {
+    fn layer(&self, _: &[u8]) -> Result<suzatary_held::file_read::Layer, String> {
         self.0
             .clone()
             .map(|text| {
-                suzatary_core::file_read::Layer::read(text, suzatary_core::file_read::Form::Absent)
+                suzatary_held::file_read::Layer::read(text, suzatary_held::file_read::Form::Absent)
             })
             .ok_or_else(|| "this fake reads no PDF".to_owned())
     }
@@ -4318,18 +4318,18 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
 
 /// A file read for the model, a PDF with `layer` as its text.
 pub fn file_read(
-    file: &suzatary_core::held_value::HeldFile,
+    file: &suzatary_held::held_value::HeldFile,
     name: &str,
     mime: &str,
     bytes: Vec<u8>,
     layer: &str,
-) -> suzatary_core::file_read::FileRead {
-    let Ok(read) = suzatary_core::file_read::FileRead::of(
+) -> suzatary_held::file_read::FileRead {
+    let Ok(read) = suzatary_held::file_read::FileRead::of(
         file,
         name,
         mime,
         bytes,
-        suzatary_core::file_read::read(layer),
+        suzatary_held::file_read::read(layer),
     );
     read
 }

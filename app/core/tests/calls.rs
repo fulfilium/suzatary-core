@@ -25,12 +25,12 @@ use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_core::mail::mailbox::{Mailbox, Query};
 use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
-use suzatary_core::mail_error::MailError;
 use suzatary_core::repos::{Patch, RepoRow, Visibility};
 use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
+use suzatary_held::mail_error::MailError;
 use suzatary_record::record::{Envelope, EventStore, TodoEvent};
 use suzatary_store::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 
@@ -270,7 +270,7 @@ impl Mailbox for Fixed {
         &self,
         id: &str,
         name: &str,
-    ) -> Result<suzatary_core::file_read::FileRead, MailError> {
+    ) -> Result<suzatary_held::file_read::FileRead, MailError> {
         Nothing.read_attachment(id, name)
     }
 }

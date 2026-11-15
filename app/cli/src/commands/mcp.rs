@@ -14,8 +14,8 @@ use rmcp::{RoleServer, ServerHandler, ServiceExt};
 use suzatary_core::agent;
 use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::filed::TriageCards;
+use suzatary_held::for_model::ForModel;
 
 /// The server's name, which the tool guard matches as `mcp__suzatary__*`.
 pub const NAME: &str = "suzatary";

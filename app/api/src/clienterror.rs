@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::excerpt::Excerpt;
+use suzatary_held::excerpt::Excerpt;
 
 /// The most a report's body may carry, in bytes.
 pub const MAX_BODY_BYTES: usize = 16_384;

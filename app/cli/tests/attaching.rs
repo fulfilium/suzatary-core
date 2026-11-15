@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
 use suzatary_core::mail::{AttachmentFile, MailMessage, MailRow};
-use suzatary_core::secretary::attachment_source::AttachmentSource;
 use suzatary_core::secretary::proposal::Proposal;
+use suzatary_held::secretary::attachment_source::AttachmentSource;
 
 const NOTICE: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
@@ -33,7 +33,7 @@ fn message(id: &str) -> MailMessage {
             container: "inbox".to_owned(),
             account: "ada@example.com".to_owned(),
             disposition: suzatary_core::mail::Disposed::Undecided,
-            held: suzatary_core::held_value::Kinds::empty(),
+            held: suzatary_held::held_value::Kinds::empty(),
         },
         thread: "000000000000c3fb".to_owned(),
         headers: Vec::new(),
@@ -150,7 +150,7 @@ fn a_mail_attachment_is_recorded_with_its_digest() {
     assert_eq!(attached.size, NOTICE.len() as u64);
     assert_eq!(
         attached.sha256,
-        suzatary_core::attachment::AttachmentId::of(NOTICE)
+        suzatary_held::attachment::AttachmentId::of(NOTICE)
     );
 }
 
@@ -331,7 +331,7 @@ fn a_missing_attachment_refuses_the_send_with_nothing_sent() {
 /// and sends exactly those bytes.
 #[test]
 fn a_private_file_is_attached_unread_and_fetched_by_the_tap() {
-    use suzatary_core::attachment::AttachmentId;
+    use suzatary_held::attachment::AttachmentId;
     let id = AttachmentId::of(NOTICE);
     let name = format!("{} w2.pdf", &id.as_str()[..8]);
     let drive = common::FakeDrive::new("attaching-private").holding_private(&name, NOTICE);
@@ -344,11 +344,11 @@ fn a_private_file_is_attached_unread_and_fetched_by_the_tap() {
         ]));
     fakes.files.uploads.insert(
         id.clone(),
-        suzatary_core::upload::Upload::Private {
-            media: suzatary_core::enclosed::Enclosure::Pdf,
+        suzatary_held::upload::Upload::Private {
+            media: suzatary_held::enclosed::Enclosure::Pdf,
             name: "w2.pdf".to_owned(),
-            copy: suzatary_core::vault::PrivateCopy {
-                path: suzatary_core::vault::folder().join(&name).expect("a path"),
+            copy: suzatary_held::vault::PrivateCopy {
+                path: suzatary_held::vault::folder().join(&name).expect("a path"),
                 size: NOTICE.len() as u64,
                 text: "Form W-2. SSN [redacted].".to_owned(),
             },
@@ -400,8 +400,8 @@ fn a_private_file_is_attached_unread_and_fetched_by_the_tap() {
 /// those bytes.
 #[test]
 fn a_file_read_here_attaches_from_its_kept_copy_and_nothing_else_does() {
-    let id = suzatary_core::attachment::AttachmentId::of(NOTICE);
-    let never_read = suzatary_core::attachment::AttachmentId::of(b"never read here");
+    let id = suzatary_held::attachment::AttachmentId::of(NOTICE);
+    let never_read = suzatary_held::attachment::AttachmentId::of(b"never read here");
     let fakes = Arc::new(
         Fakes::new("attaching-kept")
             .whois(common::FakeWhois::new().naming(common::v4(), ada()))
@@ -409,7 +409,7 @@ fn a_file_read_here_attaches_from_its_kept_copy_and_nothing_else_does() {
                 "notice@example.test",
                 "notice.pdf",
                 common::file_read(
-                    &suzatary_core::held_value::HeldFile::Mail {
+                    &suzatary_held::held_value::HeldFile::Mail {
                         message: "notice@example.test".to_owned(),
                         name: "notice.pdf".to_owned(),
                     },

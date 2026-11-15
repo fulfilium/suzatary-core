@@ -1074,8 +1074,8 @@ mod tests {
             unreachable!("asked builds an email");
         };
         draft.attachments = vec![
-            crate::secretary::attached::Attached::of(
-                crate::secretary::attachment_source::AttachmentSource::Mail {
+            suzatary_held::secretary::attached::Attached::of(
+                suzatary_held::secretary::attachment_source::AttachmentSource::Mail {
                     message: "m1@example.test".to_owned(),
                     name: "notice.pdf".to_owned(),
                 },

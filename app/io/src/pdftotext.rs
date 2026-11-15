@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use suzatary_core::file_read::{Form, Layer};
+use suzatary_held::file_read::{Form, Layer};
 
 use crate::run::{RunError, succeed};
 
@@ -80,7 +80,7 @@ pub(crate) enum Unlayered {
     Box(String),
 }
 
-impl suzatary_core::pdf_text::PdfText for Pdftotext {
+impl suzatary_held::pdf_text::PdfText for Pdftotext {
     fn layer(&self, pdf: &[u8]) -> Result<Layer, String> {
         self.read(pdf)
     }

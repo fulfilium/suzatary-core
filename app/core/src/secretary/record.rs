@@ -101,17 +101,20 @@ pub struct Secretary<'a> {
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
-    pub uploads: &'a dyn suzatary_store::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
+    pub uploads: &'a dyn suzatary_store::store::Gets<
+        suzatary_held::attachment::AttachmentId,
+        suzatary_held::upload::Upload,
+    >,
     /// The words of the uploads, for its search.
-    pub upload_index: &'a dyn crate::upload_index::UploadIndex,
+    pub upload_index: &'a dyn suzatary_held::upload_index::UploadIndex,
     /// The files a verb keeps for the model.
-    pub kept: &'a dyn suzatary_store::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
+    pub kept: &'a dyn suzatary_store::store::Doc<suzatary_held::attachment::AttachmentId, Vec<u8>>,
     /// A PDF's text layer, which a held file's numbers are read back from.
-    pub pdf: &'a dyn crate::pdf_text::PdfText,
+    pub pdf: &'a dyn suzatary_held::pdf_text::PdfText,
     /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
     pub tapped: &'a dyn suzatary_store::store::Gets<
-        crate::held_value::HeldFile,
-        crate::secretary::attached::Attached,
+        suzatary_held::held_value::HeldFile,
+        suzatary_held::secretary::attached::Attached,
     >,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
     pub configuration: &'a dyn crate::settings::Configuration,

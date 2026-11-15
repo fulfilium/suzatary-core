@@ -1,19 +1,16 @@
-# THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the only one in the repository. The
-# Prodrome is the database, a dependency by REVISION (→ `prodromedependency`).
-#
-# Arrows point down only: cli → plugin → io → core → todo → signatures → store, record → base →
-# prodrome-core.
-# `wasm` is the browser's module, depended on by nothing. `plugin` is the plugin host
-# (docs/PLUGINS-PLAN-2026-10-02.md), its own crate because wasmtime is the largest tree here.
-# `plugin-fence` is a hostile plugin the flake builds for wasm32 and the workspace only lints.
-# `testkit` is a dev-dependency of `io` and `cli`: the programs their tests run.
+# THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the repository's only one; the Prodrome
+# is a dependency by REVISION (→ `prodromedependency`). Arrows point down only: cli → plugin →
+# io → core → {todo → signatures, held} → store, record → base → prodrome-core. `wasm` is the
+# browser's module; `plugin` the plugin host, alone because wasmtime is the largest tree here;
+# `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` the programs `io`'s and
+# `cli`'s tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "store", "signatures", "todo", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "signatures", "todo", "held", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
-# FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the binary reads `app/release.toml` at
-# run time, and a version here would move every crate's inputs on every train.
+# FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
+# would move every crate's inputs on every train.
 version = "0.0.0"
 # `rust-version` is the toolchain the flake ships, the only one there is.
 edition = "2024"
@@ -21,15 +18,10 @@ rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# The package is `prodrome-core`, its `[lib] name` `prodrome`; renamed so the code and
-# ARCHITECTURE spell it one way.
-#
-# ⚠️ BY REVISION, NEVER BY BRANCH. Moving the pin edits the three `rev`s here,
-# `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url` and `flake.lock` together: ONE sha,
-# because the crate the binary links and the wasm the browser fetches must read SPEC.md alike.
-#
-# ⚠️ `default-features = false` TURNS OFF THE REFERENCE PAYLOAD: this application's record is
-# `suzatary_record::record::Record`, so the example is not linked.
+# Renamed from `prodrome`, its `[lib] name`, so the code spells it one way. ⚠️ BY REVISION,
+# NEVER BY BRANCH: the three `rev`s here, `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url`
+# and `flake.lock` move together, ONE sha, so the binary and the browser's wasm read SPEC.md
+# alike. ⚠️ No default features: the reference payload is not linked; the record is ours.
 prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
 prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa" }
@@ -38,12 +30,12 @@ suzatary-record = { path = "record" }
 suzatary-store = { path = "store" }
 suzatary-signatures = { path = "signatures" }
 suzatary-todo = { path = "todo" }
+suzatary-held = { path = "held" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }
 suzatary-plugin = { path = "plugin" }
-# The evaluator's time type; "serde" because a changeset act's `Priority::Deadline` is stored
-# as JSON, and there is one date type.
+# The evaluator's time type; "serde" for a changeset act's stored `Priority::Deadline`.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 # The owner's zone by name (`suzatary_base::zone`), the database the calendar plugin reads.
 chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
@@ -52,11 +44,8 @@ proptest = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# --- THE SERVER.
-#
-# ⚠️ rustls AND NEVER OpenSSL. Everything that touches TLS resolves to ONE rustls with the
-# `ring` provider: `aws-lc-rs` wants cmake and Go in the offline Nix build, and two crypto
-# providers in one binary are two things to keep patched.
+# --- THE SERVER. ⚠️ ONE rustls with `ring`, NEVER OpenSSL: `aws-lc-rs` wants cmake and Go in
+# the offline Nix build, and two crypto providers are two things to keep patched.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 # The runtime, HERE AND NOWHERE ELSE.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
@@ -67,21 +56,18 @@ axum-server = { version = "0.8", default-features = false, features = ["tls-rust
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 # The instance file; only the binary parses it.
 toml = "0.9"
-# THE ONE PLACE `instance.toml` IS EDITED RATHER THAN REWRITTEN: it keeps every comment, so a
-# tapped card adds a table without disturbing the rest of the file.
+# The one place `instance.toml` is EDITED, keeping every comment, when a tapped card adds a table.
 toml_edit = "0.22"
 # The binary's edge only; a library returns typed errors.
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-# ONE BLOCKING HTTP CLIENT, for FCM and ntfy: `Notify::push` is sync, and ureq brings no second
-# runtime. `webpki-roots` rather than the platform's store.
+# ONE BLOCKING HTTP CLIENT, for FCM and ntfy: `Notify::push` is sync; no second runtime.
+# `webpki-roots`, not the platform's store.
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
-# THE PLUGIN RUNTIME (`suzatary-plugin`): the component model under cranelift, and none of
-# wasmtime's other defaults.
+# THE PLUGIN RUNTIME: the component model under cranelift, no other default.
 wasmtime = { version = "49", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
-# Preview 2 only: the host links clocks, random numbers, streams and environment, never a
-# filesystem or a socket.
+# Preview 2: clocks, randomness, streams and environment, never a filesystem or a socket.
 wasmtime-wasi = { version = "49", default-features = false, features = ["p2"] }
 # The guest side of the same worlds, for `plugin-fence`.
 wit-bindgen = { version = "0.62", default-features = false, features = ["macros", "realloc", "std"] }
@@ -96,12 +82,12 @@ hex = "0.4"
 # The system's random generator, already in the tree under `rustls`.
 ring = "0.17"
 base64 = "0.22"
-# THE ONE AEAD (`secretary::locked_text`): ChaCha20-Poly1305, pure Rust, so the box and the
-# tab's wasm open with one function; a key is drawn through `Entropy`.
+# THE ONE AEAD (`secretary::locked_text`), pure Rust: the box and the tab open with one function;
+# a key is drawn through `Entropy`.
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
 # A dropped key's bytes are overwritten.
 zeroize = { version = "1", default-features = false }
-# A held replica's snapshot (`suzatary_core::snapshot`), binary and without field names.
+# A held replica's snapshot (`suzatary_store::snapshot`), binary and without field names.
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 regex = "1"
 # Unicode's word characters for the scrub's ASCII copy (`redact`), the version `regex` links.
@@ -112,33 +98,26 @@ rmcp = { version = "=3.2.0", default-features = false, features = ["server", "tr
 # A verb's input schema is DERIVED from its argument type.
 schemars = { version = "1.2", default-features = false, features = ["derive", "std"] }
 
-# --- MAIL.
-#
-# ⚠️ ONE rustls, STILL. `lettre`'s `rustls-tls` is the same rustls 0.23 with `ring`. `imap`
-# takes NO tls feature (its `rustls-tls` pins rustls 0.22): `suzatary_io::imap` hands it a stream
-# this workspace's own rustls built.
+# --- MAIL. ⚠️ ONE rustls, STILL: `lettre`'s is the same 0.23 with `ring`; `imap` takes NO tls
+# feature (it pins 0.22), and `suzatary_io::imap` hands it a stream our rustls built.
 imap = { version = "3.0.0-alpha.15", default-features = false }
-# SMTP with XOAUTH2 and STARTTLS, Microsoft's send path. Not Proton Bridge's: its self-signed
-# certificate is marked a CA, so `suzatary_io::smtp::submission` speaks to it over a pinned
-# certificate. No `builder`: the MIME is the core's, because it is pure.
+# SMTP with XOAUTH2 and STARTTLS, Microsoft's path (Proton Bridge's CA-marked certificate is
+# pinned in `suzatary_io::smtp::submission`). No `builder`: the MIME is the pure core's.
 lettre = { version = "0.11", default-features = false, features = [
   "smtp-transport",
   "rustls-tls",
   "hostname",
 ] }
-# THE MIME, in the pure core, by the authors of `mail-parser`, so what is written and what is
-# read agree.
+# THE MIME, by `mail-parser`'s authors, so what is written and what is read agree.
 mail-builder = { version = "0.5", default-features = false }
 
 # THE TYPESCRIPT IS GENERATED FROM THE RUST: a second declaration drifts.
 ts-rs = "11"
 
-# TYPST'S OWN PARSER, PINNED TO THE `typst` THE `.#triage` SHELL CARRIES, so there is one
-# reading of the language.
+# TYPST'S OWN PARSER, pinned to `.#triage`'s `typst`: one reading of the language.
 typst-syntax = "=0.15.1"
-# THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm, without `html` and
-# `plugin`, the same crate the tab fetches as WebAssembly. The same revision as
-# `prodrome_core`; no default features.
+# THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm without `html` and
+# `plugin`, the crate the tab fetches, at `prodrome_core`'s revision.
 prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "cdf394c13d934149e87a688aafd0cba2c8e31daa", default-features = false }
 
 # CLIPPY PEDANTIC IS ON, AND EACH ALLOW SAYS WHY.
@@ -170,10 +149,9 @@ opt-level = 3
 [profile.dev.package.sha2]
 opt-level = 3
 
-# THE DEPLOYED BINARY (`.#suzatary`), measured 2026-10-04 (PR #72). `opt-level = "s"` for a
-# small binary; sixteen codegen units (a core change rebuilt in 252 s against 340 with one); LTO
-# off (thin grew the binary, fat cost six times the rebuild); `panic` unwinds, so a handler's
-# panic ends its task and not the server.
+# THE DEPLOYED BINARY (`.#suzatary`, measured in #72): small; sixteen units (252 s against 340
+# with one); no LTO (thin grew it, fat cost six times the rebuild); a handler's panic unwinds,
+# ending its task and not the server.
 [profile.release]
 opt-level = "s"
 codegen-units = 16

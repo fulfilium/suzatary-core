@@ -4,7 +4,7 @@ use super::{DriveEntry, DrivePath, Port, allowed};
 use suzatary_base::drive_path::DriveFailure;
 
 /// `port` as the secretary reaches it unasked: it downloads only inside `allowed` folders and
-/// never lists or shows the owner's private folder ([`crate::vault::FOLDER`]). It is a read port
+/// never lists or shows the owner's private folder ([`suzatary_held::vault::FOLDER`]). It is a read port
 /// only, so writing through it does not typecheck.
 /// Every refusal is decided here, before `port` is called, so no implementation can weaken it;
 /// where the fence admits, it is `port` itself (`conformance::drive`'s laws).
@@ -24,14 +24,14 @@ impl<P: Port> Fenced<P> {
 
 impl<P: Port> Port for Fenced<P> {
     fn list(&self, folder: &DrivePath) -> Result<Vec<DriveEntry>, DriveFailure> {
-        if crate::vault::holds(folder) {
+        if suzatary_held::vault::holds(folder) {
             return Err(DriveFailure::Refused(format!(
                 "{folder} is the owner's private folder: it is never listed, and a file in it \
                  is read only on his tap"
             )));
         }
         let mut entries = self.port.list(folder)?;
-        entries.retain(|entry| !crate::vault::holds(&entry.path));
+        entries.retain(|entry| !suzatary_held::vault::holds(&entry.path));
         Ok(entries)
     }
 

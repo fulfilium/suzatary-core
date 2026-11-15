@@ -16,7 +16,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::{Duration, Instant};
 
-use suzatary_core::excerpt::Excerpt;
+use suzatary_held::excerpt::Excerpt;
 
 const POLL: Duration = Duration::from_millis(20);
 

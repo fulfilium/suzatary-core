@@ -931,7 +931,7 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
             return (serde_json::json!({ "code": "BCDF-GHJK" }), seed('7'));
         }
         "held/reveal" => serde_json::json!({
-            "handle": suzatary_core::held_value::Handle::new(MARKER, 0).expect("a handle").print(),
+            "handle": suzatary_held::held_value::Handle::new(MARKER, 0).expect("a handle").print(),
         }),
         "author" => serde_json::json!({ "add": {
             "body": MARKER, "category": "home",

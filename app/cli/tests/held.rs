@@ -8,9 +8,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
-use suzatary_core::held_value::{Handle, HeldFile, Reopened, Reveal, Shown};
-use suzatary_core::mail_error::MailError;
-use suzatary_core::redact::Kind;
+use suzatary_held::held_value::{Handle, HeldFile, Reopened, Reveal, Shown};
+use suzatary_held::mail_error::MailError;
+use suzatary_held::redact::Kind;
 
 /// A synthetic SSN no person holds.
 const SSN: &str = "000-12-3456";
@@ -319,7 +319,7 @@ fn w2_mailbox() -> common::FakeMailbox {
                         container: "inbox".to_owned(),
                         account: "ada@example.com".to_owned(),
                         disposition: suzatary_core::mail::Disposed::Undecided,
-                        held: suzatary_core::held_value::Kinds::empty(),
+                        held: suzatary_held::held_value::Kinds::empty(),
                     },
                     thread: "000000000000c3fc".to_owned(),
                     headers: Vec::new(),
@@ -354,7 +354,7 @@ fn w2_mailbox() -> common::FakeMailbox {
 /// The placeholders the box writes for the withheld PDF on `message`: the file itself, and the
 /// SSN at the first place of its text layer.
 fn w2_placeholders(message: &str) -> (String, String) {
-    use suzatary_core::held_value::{Holder, Place, Placeholder, Reach};
+    use suzatary_held::held_value::{Holder, Place, Placeholder, Reach};
     (
         Placeholder::file(&attached(message), "w2.pdf", W2.len() as u64).print(),
         Placeholder::of(
@@ -412,7 +412,7 @@ fn reading_the_w2() -> FakeModel {
 #[test]
 fn a_trusted_device_opens_a_held_file_its_conversation_read_and_the_box_keeps_none_of_it() {
     use base64::Engine as _;
-    use suzatary_core::held_value::{Holder, Place};
+    use suzatary_held::held_value::{Holder, Place};
     let (_fakes, running) = serving_files("held-file-reveal", reading_the_w2());
     let id = conversation(&running.base, "what is on my W-2");
     let url = format!("{}/api/held/reveal", running.base);

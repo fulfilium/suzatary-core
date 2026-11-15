@@ -72,7 +72,7 @@ pub fn call(
     let caps = records.get(chain.name.as_str()).ok_or_else(|| {
         Refusal::internal(format!("no interpreters are bound to chain {}", chain.name))
     })?;
-    // No identity number reaches the agent, whatever a verb read (`crate::held_value`).
+    // No identity number reaches the agent, whatever a verb read (`suzatary_held::held_value`).
     request
         .call
         .run(&Call {
@@ -81,7 +81,7 @@ pub fn call(
             chain,
             cards,
         })
-        .map(crate::held_value::withheld_value)
+        .map(suzatary_held::held_value::withheld_value)
 }
 
 /// Any effect's failure, as the words the agent reads.

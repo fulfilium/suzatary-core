@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail};
 use clap::Subcommand;
-use suzatary_core::excerpt::Excerpt;
 use suzatary_core::mail::account::{AccountName, MailAccount, Sender};
 use suzatary_core::mail::corpus::Corpus as _;
 use suzatary_core::mail::idle;
@@ -21,7 +20,8 @@ use suzatary_core::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
 use suzatary_core::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::transport::Transport as _;
-use suzatary_core::message_part::Attachment;
+use suzatary_held::excerpt::Excerpt;
+use suzatary_held::message_part::Attachment;
 use suzatary_io::corpus::Operator;
 use suzatary_io::imap::{IMAP_HOST, IMAP_PORT, Outlook};
 use suzatary_io::mail_sync::{TRIAGE_UNIT, Timer};

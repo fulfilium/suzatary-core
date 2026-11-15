@@ -475,8 +475,8 @@ fn always_allow_writes_the_folder_and_reads_the_document() {
 #[cfg(feature = "fixture")]
 #[test]
 fn a_tapped_document_s_number_reveals_and_sends_from_its_conversation() {
-    use suzatary_core::held_value::{Handle, HeldFile, Holder, Place, Placeholder, Reach};
-    use suzatary_core::redact::Kind;
+    use suzatary_held::held_value::{Handle, HeldFile, Holder, Place, Placeholder, Reach};
+    use suzatary_held::redact::Kind;
     const PATH: &str = "/shared-with-me/Ada Documents/w2.txt";
     let place = Place::new(
         Holder::File(HeldFile::Drive {
@@ -557,10 +557,10 @@ fn a_tapped_document_s_number_reveals_and_sends_from_its_conversation() {
 #[cfg(feature = "fixture")]
 #[test]
 fn a_tapped_private_file_is_proposed_without_a_read_and_sent_on_the_tap() {
-    use suzatary_core::held_value::{HeldFile, Placeholder};
+    use suzatary_held::held_value::{HeldFile, Placeholder};
     const PATH: &str = "/my-files/Suzatary/Private/w2.pdf";
     let pdf = common::pdf_saying("SSN 123-45-6789");
-    let digest = suzatary_core::attachment::AttachmentId::of(&pdf);
+    let digest = suzatary_held::attachment::AttachmentId::of(&pdf);
     let file = Placeholder::file(
         &HeldFile::Drive {
             path: PATH.parse().expect("a path"),

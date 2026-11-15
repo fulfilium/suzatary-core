@@ -8,8 +8,6 @@ pub mod acts;
 pub mod afresh;
 pub mod answering;
 pub mod answers;
-pub mod attached;
-pub mod attachment_source;
 pub mod bootstrap;
 pub mod briefings;
 pub mod briefs;
@@ -130,7 +128,6 @@ pub mod transcript;
 pub mod turn_shape;
 pub mod two_phase;
 pub mod undo;
-pub mod upload_standing;
 pub mod verb_answer;
 pub mod verb_name;
 pub mod verbs;
@@ -597,7 +594,7 @@ pub fn run(
             conversation: id,
         })
         .map(|answer| VerbAnswer {
-            value: crate::held_value::withheld_value(answer.value),
+            value: suzatary_held::held_value::withheld_value(answer.value),
             ..answer
         })
 }

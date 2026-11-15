@@ -4,7 +4,6 @@ use prodrome_core::declared::Declared;
 
 use super::{Kind, Store};
 use crate::asks::AskEvent;
-use crate::attachment::AttachmentId;
 use crate::health::plugin::PluginName;
 use crate::mail::local_state::LocalState;
 use crate::mail::state::TriageState;
@@ -18,8 +17,9 @@ use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
-use crate::upload::Upload;
 use suzatary_base::chains::ChainName;
+use suzatary_held::attachment::AttachmentId;
+use suzatary_held::upload::Upload;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::{Doc, Gets, Log, Prodrome};

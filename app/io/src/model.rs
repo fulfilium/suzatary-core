@@ -15,12 +15,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use suzatary_base::capability::{Clock, Secret};
-use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::model::{
     Conversation, Delta, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel,
     Sessioned, TokenUsage, Turn,
 };
 use suzatary_core::secretary::stamp::stamp;
+use suzatary_held::for_model::ForModel;
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;
@@ -625,9 +625,9 @@ pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::for_model::ForModel;
+    use suzatary_held::for_model::ForModel;
 
-    use suzatary_core::attachment::Attachment;
+    use suzatary_held::attachment::Attachment;
 
     /// A CLI that met a limit exits 1 with nothing on stderr and says why on stdout; each shape
     /// it prints reaches the caller as its class, on the stateless, plain and session paths
@@ -754,7 +754,7 @@ mod tests {
 
     #[test]
     fn a_pdf_a_verb_handed_over_goes_down_stream_json_as_a_document_block() {
-        use suzatary_core::enclosed::{Enclosed, Enclosure};
+        use suzatary_held::enclosed::{Enclosed, Enclosure};
         let dir = tempfile::tempdir().expect("scratch");
         let files = Blobs::open(dir.path().to_path_buf());
         let pdf = b"%PDF-1.7\n%%EOF\n";

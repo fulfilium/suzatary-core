@@ -2,7 +2,7 @@
 //! mask that writes a handle and the reveal that reads one count the same values.
 
 use mail_parser::{Address, HeaderValue, Message, MessageParser, MimeHeaders as _, PartType};
-use suzatary_core::held_value::Values;
+use suzatary_held::held_value::Values;
 
 /// The values of `raw` and then of `shown`, the texts a reader built of it (its header values by
 /// name, its body); a file that does not parse is read as text.
@@ -85,7 +85,7 @@ fn value_text(value: &HeaderValue<'_>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::redact::Kind;
+    use suzatary_held::redact::Kind;
 
     /// Synthetic numbers no person holds.
     const SSN: &str = "000-12-3456";

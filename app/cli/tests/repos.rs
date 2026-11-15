@@ -297,7 +297,7 @@ fn a_file_from_a_repository_is_sent_as_the_card_showed_it() {
     assert_eq!(file["media"], "application/pdf");
     assert_eq!(
         file["sha256"],
-        suzatary_core::attachment::AttachmentId::of(common::CV_PDF).as_str()
+        suzatary_held::attachment::AttachmentId::of(common::CV_PDF).as_str()
     );
     assert_eq!(file["from"]["kind"], "repo");
     assert_eq!(file["from"]["repo"], "bmabsout/cv");

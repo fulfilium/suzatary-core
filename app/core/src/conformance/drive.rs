@@ -155,7 +155,7 @@ pub fn fence<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     let file = port
         .keep(folder, name, bytes)
         .map_err(|failed| Broken::of(Law::Transparent, failed.to_string()))?;
-    let private = crate::vault::folder();
+    let private = suzatary_held::vault::folder();
     port.keep(&private, name, bytes)
         .map_err(|failed| Broken::of(Law::FencedPrivate, failed.to_string()))?;
     let spy = Spy::new(port);

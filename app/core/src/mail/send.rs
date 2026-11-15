@@ -3,8 +3,8 @@
 //! No transport lives here, and there is no Bcc, so the envelope names exactly the
 //! people the headers do.
 
-use crate::message_part::Attachment;
 use mail_builder::MessageBuilder;
+use suzatary_held::message_part::Attachment;
 
 use super::address::EmailAddress;
 

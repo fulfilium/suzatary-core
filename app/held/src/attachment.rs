@@ -278,37 +278,6 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_without_photos_reads_and_writes_as_it_always_did() {
-        use crate::secretary::model::Turn;
-        let old = r#"{"who":"person","text":"hi","references":[]}"#;
-        let turn: Turn = serde_json::from_str(old).expect("a transcript from before photos");
-        assert!(matches!(&turn, Turn::Person { attachments, .. } if attachments.is_empty()));
-        assert_eq!(serde_json::to_string(&turn).expect("serialises"), old);
-
-        let photo = Attachment::accept(PNG).expect("a png");
-        let with = Turn::Person {
-            text: "look".to_owned(),
-            references: Vec::new(),
-            attachments: vec![photo.clone()],
-        };
-        let line = serde_json::to_string(&with).expect("serialises");
-        assert!(line.contains(r#""media_type":"image/png""#), "{line}");
-        let back: Turn = serde_json::from_str(&line).expect("round trip");
-        assert_eq!(back, with);
-    }
-
-    #[test]
-    fn a_stored_photo_turn_reads_and_writes_byte_for_byte() {
-        use crate::secretary::model::Turn;
-        let id = AttachmentId::of(PNG);
-        let stored = format!(
-            r#"{{"who":"person","text":"look","references":[],"attachments":[{{"id":"{id}","media_type":"image/png"}}]}}"#
-        );
-        let turn: Turn = serde_json::from_str(&stored).expect("a transcript line from before PDFs");
-        assert_eq!(serde_json::to_string(&turn).expect("serialises"), stored);
-    }
-
-    #[test]
     fn a_pdf_is_a_pdf_by_its_bytes_and_keeps_the_name_it_was_picked_with() {
         let pdf = b"%PDF-1.7\n%%EOF\n";
         let accepted = Attachment::accept(pdf).expect("a pdf");

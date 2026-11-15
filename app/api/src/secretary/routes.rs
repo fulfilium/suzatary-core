@@ -10,13 +10,10 @@ use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::health::plugin::{Origin, PluginName};
-use suzatary_core::held_value::{self, Filled, Reveal};
 use suzatary_core::mail::oauth::Consent;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::act_lines::ActLine;
 use suzatary_core::secretary::acts::Act;
-use suzatary_core::secretary::attached::{self, Checked};
-use suzatary_core::secretary::attachment_source::AttachmentSource;
 use suzatary_core::secretary::changes::{self, Changeset};
 use suzatary_core::secretary::conversations;
 use suzatary_core::secretary::decide;
@@ -33,6 +30,9 @@ use suzatary_core::secretary::transcript;
 use suzatary_core::secrets::Secrets;
 use suzatary_core::settings::{Edits, Settable, Settables, Writes};
 use suzatary_core::wire::topics as wire;
+use suzatary_held::held_value::{self, Filled, Reveal};
+use suzatary_held::secretary::attached::{self, Checked};
+use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Tap;
 
@@ -515,7 +515,7 @@ pub fn say(
     id: &ConversationId,
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_core::attachment::Attachment],
+    attachments: &[suzatary_held::attachment::Attachment],
     by: suzatary_core::secretary::stamp::Stamp,
     after: Option<usize>,
 ) -> Answered<crate::wire::SayPayload> {
@@ -567,7 +567,7 @@ fn asked(
 fn question(
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_core::attachment::Attachment],
+    attachments: &[suzatary_held::attachment::Attachment],
 ) -> Result<Turn, Refusal> {
     if said.trim().is_empty() && attachments.is_empty() {
         return Err(Refusal::bad_request("say something"));
@@ -617,7 +617,7 @@ pub fn edit(
     id: &ConversationId,
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_core::attachment::Attachment],
+    attachments: &[suzatary_held::attachment::Attachment],
     by: &prodrome_core::event::Actor,
     stamped: suzatary_core::secretary::stamp::Stamp,
 ) -> Answered<wire::ConversationPayload> {
@@ -1992,8 +1992,8 @@ fn forwarded(
     id: &ConversationId,
     forward: &suzatary_core::secretary::proposal::Forward,
 ) -> Performed {
-    use suzatary_core::held_value::Reopened;
     use suzatary_core::secretary::proposal::Style;
+    use suzatary_held::held_value::Reopened;
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
     let file = &forward.message.file;
     let read = match conversations::read(caps.secretary.conversations, id) {
@@ -2035,7 +2035,7 @@ fn forwarded(
         Style::Inline => note.then(&forward.quoted(&original)),
         Style::Attached => note,
     };
-    let read = suzatary_core::attachment::AttachmentId::of(&original.raw);
+    let read = suzatary_held::attachment::AttachmentId::of(&original.raw);
     match attached::read_from(&file.sha256, &read, forward.parts(original)) {
         Ok(parts) => effectors.post.send(&forward.draft(), body, parts),
         Err(changed) => not_sent(changed.to_string()),

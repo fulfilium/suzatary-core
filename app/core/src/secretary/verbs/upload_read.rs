@@ -2,16 +2,16 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::attachment::AttachmentId;
-use crate::held_value::HeldFile;
 use crate::secretary::file_search;
 use crate::secretary::model::Turn;
-use crate::secretary::upload_standing::UploadStanding;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verbs::kept;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_held::attachment::AttachmentId;
+use suzatary_held::held_value::HeldFile;
+use suzatary_held::secretary::upload_standing::UploadStanding;
 
 /// Open one file the owner sent in a chat.
 pub struct UploadRead;
@@ -49,7 +49,7 @@ impl Verb for UploadRead {
         }
         let index = call.caps.upload_index;
         let failed =
-            |failed: crate::upload_index::IndexError| Refusal::internal(failed.to_string());
+            |failed: suzatary_held::upload_index::IndexError| Refusal::internal(failed.to_string());
         match index.refresh(&named).map_err(failed)?.get(&id) {
             Some(UploadStanding::Indexed(_)) => {}
             Some(UploadStanding::Held) => {

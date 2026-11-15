@@ -33,10 +33,6 @@ pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
 use self::message::NotmuchMessage;
 use suzatary_base::capability::Datetime;
 use suzatary_base::spelling::clip;
-use suzatary_core::enclosed::Enclosure;
-use suzatary_core::file_read::FileRead;
-use suzatary_core::held_value::HeldFile;
-use suzatary_core::held_value::{self, Reopened, Reveal};
 use suzatary_core::mail::account::{MailAccount, Roster};
 use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
@@ -46,7 +42,11 @@ use suzatary_core::mail::{
     AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,
     headers_of, web_links,
 };
-use suzatary_core::mail_error::MailError;
+use suzatary_held::enclosed::Enclosure;
+use suzatary_held::file_read::FileRead;
+use suzatary_held::held_value::HeldFile;
+use suzatary_held::held_value::{self, Reopened, Reveal};
+use suzatary_held::mail_error::MailError;
 
 /// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].
 pub struct Notmuch {
@@ -969,8 +969,8 @@ pub(crate) mod fixture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::held_value::{Handle, Holder};
-    use suzatary_core::redact::Kind;
+    use suzatary_held::held_value::{Handle, Holder};
+    use suzatary_held::redact::Kind;
 
     /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
     const SSN: &str = "000-12-3456";

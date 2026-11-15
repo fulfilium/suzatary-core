@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::redact::Scrubbed;
 use crate::secretary::salted_text::Words;
+use suzatary_held::redact::Scrubbed;
 
 /// The words of one slot, by what the slot is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,7 +116,7 @@ pub struct AttachmentWords {
     /// The name it was picked under; `None` for a photo, which has none.
     pub name: Option<String>,
     /// Where a private file is kept, and its redacted text.
-    pub private: Option<crate::vault::PrivateCopy>,
+    pub private: Option<suzatary_held::vault::PrivateCopy>,
 }
 
 /// Printed as canonical JSON (struct fields in declared order, maps sorted), and read back as
@@ -155,8 +155,8 @@ impl LineWords {
     /// These words through the redaction door.
     ///
     /// # Errors
-    /// [`crate::redact::Unscrubbable`] for words whose scrubbed strings no longer make them.
-    pub fn scrubbed(&self) -> Result<Self, crate::redact::Unscrubbable> {
+    /// [`suzatary_held::redact::Unscrubbable`] for words whose scrubbed strings no longer make them.
+    pub fn scrubbed(&self) -> Result<Self, suzatary_held::redact::Unscrubbable> {
         Scrubbed::of(self).map(Scrubbed::into_inner)
     }
 }

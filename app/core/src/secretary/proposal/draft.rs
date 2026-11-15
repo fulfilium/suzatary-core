@@ -20,7 +20,7 @@ pub struct Draft {
     /// The files it carries; omitted from the serde form when none, as every draft proposed
     /// before attachments was stored.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub attachments: Vec<crate::secretary::attached::Attached>,
+    pub attachments: Vec<suzatary_held::secretary::attached::Attached>,
 }
 
 /// `Email(account, to, cc, subject, body, attachments)`.

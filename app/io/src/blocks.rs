@@ -1,10 +1,10 @@
 //! The photos and PDFs one request carries, as the `claude` CLI's stream-json blocks.
 
 use serde_json::{Value, json};
-use suzatary_core::attachment::{Attachment, AttachmentId};
-use suzatary_core::enclosed::{Enclosed, Enclosure};
-use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::model::{ModelError, Turn};
+use suzatary_held::attachment::{Attachment, AttachmentId};
+use suzatary_held::enclosed::{Enclosed, Enclosure};
+use suzatary_held::for_model::ForModel;
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;
@@ -159,7 +159,7 @@ fn read(store: &Blobs, id: &AttachmentId) -> Result<Vec<u8>, ModelError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::attachment::MediaType;
+    use suzatary_held::attachment::MediaType;
 
     const PDF: &[u8] = b"%PDF-1.7\n%%EOF\n";
     const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1];

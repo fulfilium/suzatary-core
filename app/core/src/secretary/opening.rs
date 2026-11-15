@@ -2,14 +2,14 @@
 //! sends and what a reveal answers all come from [`open`].
 
 use crate::drive::Port as _;
-use crate::enclosed::Enclosure;
-use crate::held_value::{Files, HeldFile, Opened};
 use crate::secretary::Secretary;
-use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::{drive_refusal, mail_refusal, refused_by};
-use crate::upload::Upload;
 use suzatary_base::refusal::Refusal;
+use suzatary_held::enclosed::Enclosure;
+use suzatary_held::held_value::{Files, HeldFile, Opened};
+use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_held::upload::Upload;
 
 /// The file `file` names, as its source holds it now. A Drive file is read through the fence
 /// while its folder is allowed, and otherwise only when a file reader of this conversation
@@ -81,19 +81,22 @@ pub fn open(
 }
 
 /// An upload, on the box or in the owner's Drive.
-fn upload(caps: &Secretary<'_>, id: &crate::attachment::AttachmentId) -> Result<Opened, Refusal> {
+fn upload(
+    caps: &Secretary<'_>,
+    id: &suzatary_held::attachment::AttachmentId,
+) -> Result<Opened, Refusal> {
     match caps
         .uploads
         .get(id)?
         .ok_or_else(|| Refusal::not_found(format!("no file {id} was uploaded")))?
     {
         Upload::Here { media, bytes } => Ok(Opened {
-            name: crate::attachment::called(id, media, None),
+            name: suzatary_held::attachment::called(id, media, None),
             media: media.as_str().to_owned(),
             bytes,
         }),
         Upload::Private { media, name, copy } => Ok(Opened {
-            name: crate::attachment::called(id, media, Some(&name)),
+            name: suzatary_held::attachment::called(id, media, Some(&name)),
             media: media.as_str().to_owned(),
             bytes: caps
                 .drive
@@ -161,7 +164,7 @@ impl Files for Opening<'_, '_> {
         }
     }
 
-    fn layer(&self, pdf: &[u8]) -> Result<crate::file_read::Layer, String> {
+    fn layer(&self, pdf: &[u8]) -> Result<suzatary_held::file_read::Layer, String> {
         self.caps.pdf.layer(pdf)
     }
 }

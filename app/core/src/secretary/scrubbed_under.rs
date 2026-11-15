@@ -7,8 +7,8 @@
 //! from before lines recorded their rules is stored in the form `Locked(key, box)`, and reads as
 //! unversioned.
 
-use crate::redact::Scrub;
 use suzatary_base::rule_version::Under;
+use suzatary_held::redact::Scrub;
 
 /// The rules a slot's words passed.
 pub type ScrubbedUnder = Under<Scrub>;

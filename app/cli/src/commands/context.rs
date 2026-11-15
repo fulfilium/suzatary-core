@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
-use suzatary_core::for_model::ForModel;
+use suzatary_held::for_model::ForModel;
 use suzatary_io::model::{ClaudeCli, Fence};
 
 use self::finding::{Finding, findings};

@@ -1,0 +1,37 @@
+[package]
+name = "suzatary-held"
+description = "Suzatary's held values: what a model sees only by placeholder (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_held"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-store.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+regex.workspace = true
+regex-syntax.workspace = true
+unicode-normalization = "0.1"
+unicode-general-category = "1"
+base64.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-store/nothing"]
+
+[dev-dependencies]
+suzatary-held = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -104,10 +104,10 @@ mod tests {
     use crate::mail::mailbox::{Mailbox, Query};
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
     use crate::mail::older_mail::OlderMail;
-    use crate::mail_error::MailError;
     use crate::secretary::Secretary;
     use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_held::mail_error::MailError;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]
@@ -194,7 +194,7 @@ mod tests {
             &self,
             id: &str,
             _: &str,
-        ) -> Result<crate::file_read::FileRead, MailError> {
+        ) -> Result<suzatary_held::file_read::FileRead, MailError> {
             Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),

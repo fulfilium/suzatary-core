@@ -25,7 +25,7 @@ pub enum Turn {
         references: Vec<Reference>,
         /// The photos he attached.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        attachments: Vec<crate::attachment::Attachment>,
+        attachments: Vec<suzatary_held::attachment::Attachment>,
     },
     /// What the model answered: its words, and the calls it wants made.
     Model {
@@ -45,7 +45,7 @@ pub enum Turn {
         outcome: crate::secretary::outcome::Outcome,
         /// Files the answer hands the model as themselves, named by their digest.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        files: Vec<crate::enclosed::Enclosed>,
+        files: Vec<suzatary_held::enclosed::Enclosed>,
     },
     /// What the owner did rather than said, such as dismissing a proposal.
     ///

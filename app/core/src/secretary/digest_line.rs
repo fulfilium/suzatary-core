@@ -4,8 +4,8 @@
 //! wrote, so a summary can hold no line break, no identity number and no link's credential: what
 //! a conversation line could not be stored with, its summary cannot either.
 
-use crate::redact::Scrubbed;
 use crate::secretary::salted_text::Words;
+use suzatary_held::redact::Scrubbed;
 
 /// The most bytes a summary may hold: a node of the digest costs at most this in a view.
 pub(crate) const NODE_BYTES: usize = 512;

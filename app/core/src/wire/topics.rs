@@ -397,8 +397,8 @@ pub struct ConversationsPayload {
     pub conversations: Vec<ConversationRow>,
 }
 
-impl From<&crate::attachment::Attachment> for AttachmentRow {
-    fn from(attachment: &crate::attachment::Attachment) -> Self {
+impl From<&suzatary_held::attachment::Attachment> for AttachmentRow {
+    fn from(attachment: &suzatary_held::attachment::Attachment) -> Self {
         Self {
             id: attachment.id.to_string(),
             media_type: attachment.media_type.as_str().to_owned(),

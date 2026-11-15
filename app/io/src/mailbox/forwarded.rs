@@ -2,11 +2,11 @@
 //! one read of one file, attachments by their place in it.
 
 use mail_parser::{Address, HeaderValue, Message, MessageParser, MimeHeaders as _};
-use suzatary_core::attachment::AttachmentId;
-use suzatary_core::held_value::Original;
 use suzatary_core::mail::{StoredMessage, StoredPart};
-use suzatary_core::message_part::Attachment;
-use suzatary_core::message_part::MailHeader;
+use suzatary_held::attachment::AttachmentId;
+use suzatary_held::held_value::Original;
+use suzatary_held::message_part::Attachment;
+use suzatary_held::message_part::MailHeader;
 
 /// `raw`, the file of the message `id`, as a forward records it: its digest, the held values in
 /// its text and its attachments.

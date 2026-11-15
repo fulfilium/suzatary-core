@@ -44,7 +44,7 @@ impl Corpus for Raw {
             timestamp: None,
             container: "sent".to_owned(),
             sources: 1,
-            held: suzatary_core::held_value::Kinds::one(suzatary_core::redact::Kind::Ssn),
+            held: suzatary_held::held_value::Kinds::one(suzatary_held::redact::Kind::Ssn),
         }])
     }
     fn show(&self, id: &str) -> Result<Show, CorpusError> {

@@ -19,10 +19,10 @@ pub use probe::probe;
 pub const MAX_FILE: u64 = 25 * 1024 * 1024;
 
 /// Whether any of `folders` holds `path`; never inside the owner's private folder
-/// ([`crate::vault::FOLDER`]), whose files are read only on a tap.
+/// ([`suzatary_held::vault::FOLDER`]), whose files are read only on a tap.
 #[must_use]
 pub fn allowed(folders: &[DrivePath], path: &DrivePath) -> bool {
-    !crate::vault::holds(path) && folders.iter().any(|folder| path.is_under(folder))
+    !suzatary_held::vault::holds(path) && folders.iter().any(|folder| path.is_under(folder))
 }
 
 /// What a listed entry is.

@@ -2168,7 +2168,7 @@ fn a_search_answer_is_stored_within_the_cap_and_keeps_its_files() {
 #[test]
 fn upload_read_opens_a_file_a_turn_sent_and_no_other() {
     let lease_pdf = common::pdf_saying("Lease for unit 4");
-    let never = suzatary_core::attachment::AttachmentId::of(b"never sent");
+    let never = suzatary_held::attachment::AttachmentId::of(b"never sent");
     let model = FakeModel::saying_owned([
         r#"{"say": "Kept."}"#.to_owned(),
         format!(
@@ -2176,7 +2176,7 @@ fn upload_read_opens_a_file_a_turn_sent_and_no_other() {
                 {{"verb": "upload_read", "args": {{"file": "{}"}}}},
                 {{"verb": "upload_read", "args": {{"file": "{never}"}}}}
             ]}}"#,
-            suzatary_core::attachment::AttachmentId::of(&lease_pdf)
+            suzatary_held::attachment::AttachmentId::of(&lease_pdf)
         ),
         r#"{"say": "Read it."}"#.to_owned(),
     ]);

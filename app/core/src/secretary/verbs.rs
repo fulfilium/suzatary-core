@@ -8,12 +8,12 @@ use super::proposer::Proposer;
 use super::responded::Withdrawal;
 use super::verb_name::Binding;
 use crate::agent::verbs;
-use crate::mail_error::MailError;
 use crate::secretary::Secretary;
 use crate::secretary::{conversations, transcript};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_held::mail_error::MailError;
 
 mod add_topics;
 mod attachments;
@@ -116,8 +116,11 @@ pub use web::Web;
 pub(crate) use withdraw_proposal::WithdrawProposal;
 
 /// Keep a file for the model, in the box's words when it cannot be.
-fn kept(caps: &Secretary<'_>, bytes: &[u8]) -> Result<crate::attachment::AttachmentId, String> {
-    let id = crate::attachment::AttachmentId::of(bytes);
+fn kept(
+    caps: &Secretary<'_>,
+    bytes: &[u8],
+) -> Result<suzatary_held::attachment::AttachmentId, String> {
+    let id = suzatary_held::attachment::AttachmentId::of(bytes);
     caps.kept
         .set(&id, &bytes.to_vec())
         .map_err(|failed| failed.to_string())?;

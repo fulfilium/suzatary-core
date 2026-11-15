@@ -1,6 +1,6 @@
 //! The owner's Drive through the Proton Drive CLI, as a [`Port`]: every invocation is a
 //! `Command`, a closed enum of two reads and two writes. The writes serve only the owner's
-//! confirmed private upload (`suzatary_core::vault`).
+//! confirmed private upload (`suzatary_held::vault`).
 //!
 //! A download lands in a private scratch directory removed before returning; a read redacts.
 
@@ -13,7 +13,7 @@ use suzatary_base::drive_path::DrivePath;
 use suzatary_core::drive::{
     DriveEntry, EntryKind, MAX_FILE, Port, WritePort, extension_of, mime_of,
 };
-use suzatary_core::file_read::FileRead;
+use suzatary_held::file_read::FileRead;
 
 use crate::run::{Cmd, RunError, succeed};
 use crate::scratch::Scratch;
@@ -132,7 +132,7 @@ impl ProtonDrive {
             });
         };
         let bytes = self.download(file)?;
-        let source = suzatary_core::held_value::HeldFile::Drive { path: file.clone() };
+        let source = suzatary_held::held_value::HeldFile::Drive { path: file.clone() };
         crate::mailbox::read_of(&source, name, mime, bytes, &self.pdftotext)
             .map_err(DriveFailure::Unreachable)
     }
@@ -499,7 +499,7 @@ mod tests {
         let kept = fake
             .drive()
             .keep(
-                &suzatary_core::vault::folder(),
+                &suzatary_held::vault::folder(),
                 "1a2b3c4d w2.pdf",
                 b"%PDF-1.7 w2",
             )
@@ -533,7 +533,7 @@ mod tests {
         assert!(fake.scratch_is_empty(), "the local copy was removed");
         assert!(
             fake.drive()
-                .keep(&suzatary_core::vault::folder(), "a/b.pdf", b"%PDF")
+                .keep(&suzatary_held::vault::folder(), "a/b.pdf", b"%PDF")
                 .is_err(),
             "a name is one path segment"
         );

@@ -5,7 +5,7 @@ pub use crate::repos::{Patch, Visibility};
 pub use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 
 /// What one email may carry, in bytes.
-pub const MAX_FILE_BYTES: u64 = crate::secretary::attached::MAX_TOTAL;
+pub const MAX_FILE_BYTES: u64 = suzatary_held::secretary::attached::MAX_TOTAL;
 
 /// The most of one file [`readable`] shows, in bytes.
 pub const MAX_TEXT_BYTES: usize = 100 * 1024;

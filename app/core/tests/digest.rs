@@ -2165,7 +2165,7 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
 /// nothing the scrub takes.
 fn fixture_rules() -> suzatary_core::secretary::scrubbed_under::ScrubbedUnder {
     suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Version(
-        suzatary_core::redact::Rules::new(
+        suzatary_held::redact::Rules::new(
             "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a",
         )
         .expect("a rules name"),

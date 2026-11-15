@@ -1,8 +1,9 @@
 //! The vocabulary a proposal's act is stored in: every constructor an act prints, from the
 //! proposal down to its leaves' records, each declared beside the type it prints.
 
-use crate::secretary::{acts, attached, attachment_source, changes, proposal};
+use crate::secretary::{acts, changes, proposal};
 use prodrome_core::literal::codec::Constructor;
+use suzatary_held::secretary::{attached, attachment_source};
 use suzatary_record::todo::price;
 
 /// Every constructor of a stored act, with its fields in printed order. None is a term's or an
@@ -62,5 +63,5 @@ pub const SIGNATURES: &[Constructor] = &[
     attachment_source::FROM_REPO,
     crate::mail::STORED_MESSAGE,
     crate::mail::STORED_PART,
-    crate::held_value::HELD,
+    suzatary_held::held_value::HELD,
 ];

@@ -69,7 +69,7 @@ pub use world::World;
 /// The owner's uploads; only his confirm reaches the vault.
 pub struct Uploads {
     pub store: suzatary_io::attachments::AttachmentStore,
-    pub vault: Arc<dyn suzatary_core::vault::Vault>,
+    pub vault: Arc<dyn suzatary_held::vault::Vault>,
 }
 
 #[derive(Clone)]
@@ -132,7 +132,7 @@ pub struct Inner {
     /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_core::mail::cache::Forget + Send + Sync>,
     /// Reads a held value back for a tap; outside every record, so no agent verb can.
-    pub reveal: Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>,
+    pub reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
     /// Syncs a plugin after a tap.
     pub checks: checks::Checks,
     pub reach: Arc<suzatary_core::connect::Reach>,
@@ -361,7 +361,7 @@ impl State {
             declares,
             edits,
             forget: Arc::new(mail_cache::Unkept(None)),
-            reveal: Arc::new(suzatary_core::held_value::Unread),
+            reveal: Arc::new(suzatary_held::held_value::Unread),
             checks: Arc::new(checks::Unsynced),
             reach: Arc::new(suzatary_core::connect::PLAIN.clone()),
             uploads: None,
@@ -531,7 +531,7 @@ impl State {
     #[must_use]
     pub fn with_reveal(
         mut self,
-        reveal: Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>,
+        reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
     ) -> Self {
         self.building().reveal = reveal;
         self
@@ -625,7 +625,7 @@ impl State {
     pub fn with_uploads(
         mut self,
         store: suzatary_io::attachments::AttachmentStore,
-        vault: Arc<dyn suzatary_core::vault::Vault>,
+        vault: Arc<dyn suzatary_held::vault::Vault>,
     ) -> Self {
         self.building().uploads = Some(Arc::new(Uploads { store, vault }));
         self
@@ -659,7 +659,7 @@ impl State {
             Err(failed) => {
                 tracing::warn!(
                     "noticed: the model health: {}",
-                    suzatary_core::excerpt::Excerpt::of(&failed.to_string())
+                    suzatary_held::excerpt::Excerpt::of(&failed.to_string())
                 );
                 return;
             }

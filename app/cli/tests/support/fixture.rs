@@ -284,7 +284,7 @@ fn write_seed_message(cur: &Path, mail: &cast::Mail) -> anyhow::Result<()> {
 /// The notice: its text and its PDF, built by the same MIME builder a send uses.
 fn write_notice(cur: &Path, notice: &cast::Notice) -> anyhow::Result<()> {
     use suzatary_core::mail::send::{Composed, Outgoing, build_mime};
-    use suzatary_core::message_part::Attachment;
+    use suzatary_held::message_part::Attachment;
     let cast::Notice { mail, file } = notice;
     let out = Outgoing::new(Composed {
         sender: mail.from.email.to_owned(),
@@ -2043,7 +2043,7 @@ mod tests {
     fn forgotten_mail_reads_as_no_longer_stored_at_once() {
         use suzatary_core::mail::cache::Forget as _;
         use suzatary_core::mail::mailbox::Mailbox as _;
-        use suzatary_core::mail_error::MailError;
+        use suzatary_held::mail_error::MailError;
 
         let root = scratch("forgotten");
         let config = mail_fixture(&root, false)

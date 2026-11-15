@@ -1,4 +1,4 @@
-//! `suzatary leaks`: the leak guard's matcher (`suzatary_core::leak`) over files, or over the
+//! `suzatary leaks`: the leak guard's matcher (`suzatary_held::leak`) over files, or over the
 //! paths on stdin, printing each hit as `file:line` on stdout and its layer on stderr, and
 //! nothing of what it matched; `suzatary leaks scan-copy` writes the copy the secret scanner
 //! reads. `scripts/public-tree.sh --check` walks the tree and calls both.
@@ -7,7 +7,7 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use suzatary_core::leak::{Admitted, Findings, Matcher, Opaque, Scope, Vouch, placeheld};
+use suzatary_held::leak::{Admitted, Findings, Matcher, Opaque, Scope, Vouch, placeheld};
 
 /// The rules a scan applies, as `--scope` spells them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

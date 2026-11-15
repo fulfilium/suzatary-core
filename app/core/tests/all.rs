@@ -6,6 +6,8 @@
 
 #[path = "act_literal.rs"]
 mod act_literal;
+#[path = "attachment.rs"]
+mod attachment;
 #[path = "calls.rs"]
 mod calls;
 #[path = "card_stages.rs"]
@@ -80,3 +82,5 @@ mod tree;
 mod triage_cards;
 #[path = "triage_memory.rs"]
 mod triage_memory;
+#[path = "vault.rs"]
+mod vault;

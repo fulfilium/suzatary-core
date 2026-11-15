@@ -627,8 +627,8 @@ fn planning(
     sent: &mut Vec<String>,
 ) -> (usize, Vec<String>) {
     let mut said = Vec::new();
-    let mut model = |system: &suzatary_core::for_model::ForModel,
-                     text: suzatary_core::for_model::ForModel| {
+    let mut model = |system: &suzatary_held::for_model::ForModel,
+                     text: suzatary_held::for_model::ForModel| {
         sent.push(format!("{system}\n{text}"));
         answer()
     };

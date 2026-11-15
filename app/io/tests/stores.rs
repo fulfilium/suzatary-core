@@ -207,9 +207,9 @@ fn copy(from: &Path, to: &Path) {
 
 struct Vault;
 
-impl suzatary_core::vault::Vault for Vault {
+impl suzatary_held::vault::Vault for Vault {
     fn keep(&self, name: &str, _bytes: &[u8]) -> Result<DrivePath, DriveFailure> {
-        Ok(suzatary_core::vault::folder()
+        Ok(suzatary_held::vault::folder()
             .join(name)
             .expect("a Drive name"))
     }
@@ -806,8 +806,8 @@ fn copy_pins(root: &Path) -> PathBuf {
 #[test]
 fn reading_a_copy_of_every_store_writes_nothing() {
     use suzatary_base::chains::ChainName;
-    use suzatary_core::attachment::AttachmentId;
     use suzatary_core::stores::Database;
+    use suzatary_held::attachment::AttachmentId;
 
     let dir = tempfile::tempdir().expect("a scratch dir");
     let root = dir.path();
@@ -1515,7 +1515,7 @@ fn a_rules_change_over_a_stored_digest() {
         println!("{what}: {:?}", started.elapsed());
     };
     let warm: &'static Opened = Box::leak(Box::default());
-    let scrubs = suzatary_core::redact::scrubs();
+    let scrubs = suzatary_held::redact::scrubs();
     time("the lines' fold, cold", &mut || {
         stores(warm)
             .reads()
@@ -1543,7 +1543,7 @@ fn a_rules_change_over_a_stored_digest() {
     });
     println!(
         "values scrubbed while reading: {}",
-        suzatary_core::redact::scrubs() - scrubs
+        suzatary_held::redact::scrubs() - scrubs
     );
     let read = format!(
         "{:?}",

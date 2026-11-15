@@ -18,6 +18,7 @@ suzatary-record.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
+suzatary-held.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -26,16 +27,11 @@ serde_json.workspace = true
 toml.workspace = true
 schemars.workspace = true
 ts-rs.workspace = true
-# `view.references`' one alternation over every long id, and the classes the routes refuse.
+# The sweep reads a code out of a message (`secretary::sweep::candidates`).
 regex.workspace = true
-regex-syntax.workspace = true
-# THE LEAK GUARD READS TEXT AS WORDS (`leak`): folded to its letters without accents or
-# Unicode's invisible format characters, so neither hides a term.
+# A topic's text is NFC (`secretary::topics::topic`).
 unicode-normalization = "0.1"
-unicode-general-category = "1"
-# Base64 is read in three places: the leak guard reads a file's integrity hashes (`sha256-…`,
-# Go's `h1:…`) and a sealed slot's box for whether their bytes are text (random bytes hide no
-# word), and a line's literal in `secretary::line_event` carries bytes as base64.
+# A sealed slot's box and a line's literal (`secretary::line_event`), and PKCE's verifier.
 base64.workspace = true
 # A window's arithmetic, on `prodrome::fpl::Instant`: the chrono prodrome-core takes.
 chrono.workspace = true
@@ -61,7 +57,7 @@ prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
 fixture = []
 # The browser module's view of this crate's schemas; `app/wasm` alone enables it.

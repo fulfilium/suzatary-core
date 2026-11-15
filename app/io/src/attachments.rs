@@ -4,13 +4,13 @@
 use std::path::PathBuf;
 
 use suzatary_base::drive_path::DriveFailure;
-use suzatary_core::attachment::{Attachment, AttachmentError, AttachmentId};
-use suzatary_core::enclosed::Enclosure;
-use suzatary_core::file_read::{FileRead, Withheld};
-use suzatary_core::held_value::HeldFile;
-use suzatary_core::vault::{PrivateCopy, Vault};
+use suzatary_held::attachment::{Attachment, AttachmentError, AttachmentId};
+use suzatary_held::enclosed::Enclosure;
+use suzatary_held::file_read::{FileRead, Withheld};
+use suzatary_held::held_value::HeldFile;
+use suzatary_held::vault::{PrivateCopy, Vault};
 
-use suzatary_core::upload::Upload;
+use suzatary_held::upload::Upload;
 use suzatary_store::store::{Doc, Gets, StoreError};
 
 use crate::blobs::Blobs;
@@ -199,7 +199,7 @@ impl AttachmentStore {
     }
 
     /// A PDF's text layer and form, read as the store read them when it kept the PDF.
-    pub fn layer(&self, pdf: &[u8]) -> Result<suzatary_core::file_read::Layer, String> {
+    pub fn layer(&self, pdf: &[u8]) -> Result<suzatary_held::file_read::Layer, String> {
         self.pdftotext.read(pdf)
     }
 
@@ -355,7 +355,7 @@ mod tests {
                 .lock()
                 .expect("unpoisoned")
                 .push((name.to_owned(), bytes.to_vec()));
-            suzatary_core::vault::folder()
+            suzatary_held::vault::folder()
                 .join(name)
                 .map_err(|failed| DriveFailure::Refused(failed.to_string()))
         }

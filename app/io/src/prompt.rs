@@ -4,10 +4,10 @@
 use std::fmt::Write as _;
 
 use suzatary_base::reference::Reference;
-use suzatary_core::enclosed::{Enclosed, Enclosure};
-use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::model::{Conversation, Delta, Turn};
 use suzatary_core::secretary::turn_shape::{self, TurnShape};
+use suzatary_held::enclosed::{Enclosed, Enclosure};
+use suzatary_held::for_model::ForModel;
 
 /// The whole conversation as a system and a user piece.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,13 +323,13 @@ mod tests {
     /// A private file is its redacted text and where it is, never the file.
     #[test]
     fn a_private_file_is_marked_with_where_it_is_and_its_redacted_text() {
-        let w2 = suzatary_core::attachment::Attachment::accept(b"%PDF-1.7 w2")
+        let w2 = suzatary_held::attachment::Attachment::accept(b"%PDF-1.7 w2")
             .expect("a pdf")
             .named("w2.pdf")
             .expect("a name");
-        let private = suzatary_core::attachment::Attachment {
-            private: Some(suzatary_core::vault::PrivateCopy {
-                path: suzatary_core::vault::folder()
+        let private = suzatary_held::attachment::Attachment {
+            private: Some(suzatary_held::vault::PrivateCopy {
+                path: suzatary_held::vault::folder()
                     .join("1a2b3c4d w2.pdf")
                     .expect("a path"),
                 size: 11,

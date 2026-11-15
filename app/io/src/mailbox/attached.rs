@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use sha2::{Digest as _, Sha256};
-use suzatary_core::held_value::{Kinds, MAX_OPENED, Values};
-use suzatary_core::mail_error::MailError;
+use suzatary_held::held_value::{Kinds, MAX_OPENED, Values};
+use suzatary_held::mail_error::MailError;
 use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
@@ -47,7 +47,7 @@ impl Attached {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::redact::Kind;
+    use suzatary_held::redact::Kind;
 
     /// A synthetic number no person holds: SSN area 000.
     const SSN: &str = "000-12-3456";

@@ -19,7 +19,7 @@ pub struct PrivateCopy {
     pub text: String,
 }
 
-/// The folder private files are kept in. [`crate::drive::allowed`] never answers yes inside
+/// The folder private files are kept in. `suzatary_core::drive::allowed` never answers yes inside
 /// it, whatever `drive_allow` says, so reading one is always a tap.
 pub const FOLDER: &str = "/my-files/Suzatary/Private";
 
@@ -48,38 +48,4 @@ pub trait Vault: Send + Sync {
     /// # Errors
     /// [`DriveFailure`].
     fn keep(&self, name: &str, bytes: &[u8]) -> Result<DrivePath, DriveFailure>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_folder_is_a_drive_path_no_allowance_opens() {
-        let inside = folder().join("w2.pdf").expect("a name");
-        assert!(!crate::drive::allowed(
-            &["/my-files".parse().expect("a path")],
-            &inside
-        ));
-        assert!(!crate::drive::allowed(&[folder()], &inside));
-    }
-
-    #[test]
-    fn the_folder_is_held_whatever_its_case() {
-        for path in [
-            "/my-files/Suzatary/Private",
-            "/my-files/Suzatary/PRIVATE/w2.pdf",
-            "/MY-FILES/suzatary/private/a/b.pdf",
-        ] {
-            let path: DrivePath = path.parse().expect("a path");
-            assert!(holds(&path), "{path}");
-            assert!(
-                !crate::drive::allowed(&["/my-files".parse().expect("a path")], &path),
-                "{path}"
-            );
-        }
-        for path in ["/my-files/Suzatary", "/my-files/Suzatary/Privately/a.pdf"] {
-            assert!(!holds(&path.parse().expect("a path")), "{path}");
-        }
-    }
 }

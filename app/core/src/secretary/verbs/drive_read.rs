@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::held_value::HeldFile;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verb_answer::VerbAnswer;
@@ -10,6 +9,7 @@ use crate::secretary::verbs::{Reasoned, drive_path, drive_refusal, kept, propose
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_held::held_value::HeldFile;
 
 /// Read one document of the owner's Drive, or ask to.
 pub struct DriveRead;
@@ -62,7 +62,7 @@ impl Verb for DriveRead {
         // there. Inside it nothing is listed: every name answers with the same card, there or
         // not, so no answer tells the model which private files exist, and the owner's tap is
         // the only read.
-        let size = if crate::vault::holds(&path) {
+        let size = if suzatary_held::vault::holds(&path) {
             None
         } else {
             call.caps

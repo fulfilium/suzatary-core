@@ -2,9 +2,10 @@
 # The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
 # modules, never a higher one's. A file is in the cut of the longest module path below that
 # holds it. A cut that is its own crate (`app/base`, `app/record`, `app/store`, `app/signatures`,
-# `app/todo`, `app/api`) is held by the compiler. The guard layers.rs beside this file reads it;
-# the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
-order = ["held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
+# `app/todo`, `app/held`, `app/api`) is held by the compiler. The guard layers.rs beside this file
+# reads it; the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is
+# where it is.
+order = ["memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
@@ -38,15 +39,11 @@ rendering = [
 ]
 
 [layers.modules]
-held = ["attachment", "cast", "enclosed", "excerpt", "file_read", "first_read", "for_model", "held_file",
-  "held_value", "leak", "mail_error", "message_part", "pdf_text", "priced", "redact",
-  "secretary/attached", "secretary/attachment_source", "secretary/upload_standing", "upload",
-  "upload_index", "vault", "verb"]
-memory = ["coding_report", "secretary/carried", "secretary/erasure", "secretary/fact_life",
-  "secretary/key_ring", "secretary/line_words", "secretary/locked_text", "secretary/memory",
-  "secretary/memory_event", "secretary/opened", "secretary/provenance", "secretary/salted_text",
-  "secretary/scrubbed_under", "secretary/slots", "secretary/texts", "secretary/two_phase",
-  "secretary/words"]
+memory = ["cast", "coding_report", "first_read", "priced", "secretary/carried",
+  "secretary/erasure", "secretary/fact_life", "secretary/key_ring", "secretary/line_words",
+  "secretary/locked_text", "secretary/memory", "secretary/memory_event", "secretary/opened",
+  "secretary/provenance", "secretary/salted_text", "secretary/scrubbed_under", "secretary/slots",
+  "secretary/texts", "secretary/two_phase", "secretary/words", "verb"]
 mail = ["mail", "outcome"]
 health = ["health"]
 triage = ["mail/corpus", "mail/gone", "mail/heartbeat", "mail/junk", "mail/junk_folder",

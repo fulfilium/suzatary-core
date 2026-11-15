@@ -436,7 +436,7 @@ impl suzatary_core::drive::Drive for DriveAccess {
     fn read(
         &self,
         file: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<suzatary_core::file_read::FileRead, suzatary_base::drive_path::DriveFailure> {
+    ) -> Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure> {
         self.drive.read(file)
     }
 }
@@ -444,13 +444,13 @@ impl suzatary_core::drive::Drive for DriveAccess {
 /// The owner's Drive as the vault a private upload goes to.
 pub struct DriveVault(suzatary_io::drive::ProtonDrive);
 
-impl suzatary_core::vault::Vault for DriveVault {
+impl suzatary_held::vault::Vault for DriveVault {
     fn keep(
         &self,
         name: &str,
         bytes: &[u8],
     ) -> Result<suzatary_base::drive_path::DrivePath, suzatary_base::drive_path::DriveFailure> {
-        self.0.keep(&suzatary_core::vault::folder(), name, bytes)
+        self.0.keep(&suzatary_held::vault::folder(), name, bytes)
     }
 }
 
@@ -666,8 +666,8 @@ impl CompactorModel {
     /// or the CLI's own failure.
     pub fn ask(
         &self,
-        system: &suzatary_core::for_model::ForModel,
-        text: suzatary_core::for_model::ForModel,
+        system: &suzatary_held::for_model::ForModel,
+        text: suzatary_held::for_model::ForModel,
     ) -> Result<String, ModelError> {
         if !subscription_has_room(&five_hour(&self.allowance), self.reserve) {
             return Err(ModelError::Unreachable(
@@ -688,8 +688,8 @@ impl Compact for CompactorModel {
         ask: &suzatary_core::secretary::compact_ask::Ask,
     ) -> Result<String, ModelError> {
         self.ask(
-            &suzatary_core::for_model::ForModel::of(suzatary_core::secretary::compact_ask::PROMPT),
-            suzatary_core::for_model::ForModel::of(&ask.text()),
+            &suzatary_held::for_model::ForModel::of(suzatary_core::secretary::compact_ask::PROMPT),
+            suzatary_held::for_model::ForModel::of(&ask.text()),
         )
     }
 }

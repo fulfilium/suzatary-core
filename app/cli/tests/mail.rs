@@ -7,7 +7,7 @@ mod common;
 
 use common::Fakes;
 use suzatary_core::mail::{MailLink, MailMessage, MailRow};
-use suzatary_core::message_part::MailHeader;
+use suzatary_held::message_part::MailHeader;
 
 fn a_row(hash: &str, account: &str) -> MailRow {
     MailRow {
@@ -19,7 +19,7 @@ fn a_row(hash: &str, account: &str) -> MailRow {
         container: "inbox".to_owned(),
         account: account.to_owned(),
         disposition: suzatary_core::mail::Disposed::Undecided,
-        held: suzatary_core::held_value::Kinds::empty(),
+        held: suzatary_held::held_value::Kinds::empty(),
     }
 }
 

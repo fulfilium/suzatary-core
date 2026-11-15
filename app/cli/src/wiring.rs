@@ -349,8 +349,8 @@ pub struct Opened {
     pub(crate) kept: suzatary_io::blobs::Blobs,
     pub(crate) pdf: suzatary_io::pdftotext::Pdftotext,
     pub(crate) tapped: suzatary_io::docs::Docs<
-        suzatary_core::held_value::HeldFile,
-        suzatary_core::secretary::attached::Attached,
+        suzatary_held::held_value::HeldFile,
+        suzatary_held::secretary::attached::Attached,
     >,
     pub(crate) configuration: crate::instance::InstanceEdits,
     pub(crate) watches: suzatary_io::watches::Watches,

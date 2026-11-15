@@ -2,11 +2,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::held_value::HeldFile;
 use crate::secretary;
 use crate::secretary::Secretary;
-use crate::secretary::attached::{self, Attached};
-use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::model::Turn;
 use crate::secretary::opening;
 use crate::secretary::proposal::{Draft, Proposal};
@@ -14,9 +11,12 @@ use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::store::Stored;
 use crate::secretary::verbs::{FilingArgs, kept, mail_refusal, refused_by};
 use crate::secretary::{Call, SecretarySurface};
-use crate::upload::Upload;
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_held::held_value::HeldFile;
+use suzatary_held::secretary::attached::{self, Attached};
+use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_held::upload::Upload;
 
 /// Propose a message, which only a tap sends.
 pub struct ProposeEmail;
@@ -60,8 +60,8 @@ fn held_in(
     subject: &str,
     body: &str,
 ) -> Result<(Vec<String>, Vec<HeldFile>), Refusal> {
-    use crate::held_value::{Handle, Placeholder, Reach, Written};
-    use crate::redact::Kind;
+    use suzatary_held::held_value::{Handle, Placeholder, Reach, Written};
+    use suzatary_held::redact::Kind;
     let written = |text: &str| {
         Written::parse(text).map_err(|malformed| Refusal::bad_request(malformed.to_string()))
     };
@@ -120,7 +120,7 @@ fn held_in(
 /// Refuse a file's placeholder in `draft`'s body that does not print as the file's record does: a
 /// name or size the model changed would go on the card and into the sent body.
 fn as_recorded(draft: &Draft) -> Result<(), Refusal> {
-    use crate::held_value::{Placeholder, Reach, Written};
+    use suzatary_held::held_value::{Placeholder, Reach, Written};
     let written = Written::parse(&draft.body)
         .map_err(|malformed| Refusal::bad_request(malformed.to_string()))?;
     for placeholder in written.held() {
@@ -260,7 +260,7 @@ fn recorded(
     if let AttachmentSource::Upload { id } = &source
         && let Some(Upload::Private { media, name, copy }) = caps.uploads.get(id)?
     {
-        let name = crate::attachment::called(id, media, Some(&name));
+        let name = suzatary_held::attachment::called(id, media, Some(&name));
         let id = id.clone();
         return Attached::known(source, &name, media.as_str(), copy.size, id).map_err(unrecorded);
     }
@@ -298,7 +298,7 @@ fn repo_file(
 fn kept_copy(
     caps: &Secretary<'_>,
     stored: &Stored,
-    id: &crate::attachment::AttachmentId,
+    id: &suzatary_held::attachment::AttachmentId,
 ) -> Result<Attached, Refusal> {
     let file = stored
         .turns
