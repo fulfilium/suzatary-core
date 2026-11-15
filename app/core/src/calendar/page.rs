@@ -1,6 +1,6 @@
 //! The calendar's days as `reading`'s page and as plain text.
 
-use crate::reading::{CalendarDay, CalendarPage, CalendarRow};
+use suzatary_todo::reading::{CalendarDay, CalendarPage, CalendarRow};
 
 /// The calendar's page.
 #[must_use]

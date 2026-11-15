@@ -13,7 +13,6 @@ use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
 
 use crate::asks::AskEvent;
-use crate::decisions::DecisionEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::line_event::LineEvent;
@@ -23,6 +22,7 @@ use crate::secretary::topics::reading::MembershipEvent;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::admission::{Admission, Shared};
 use suzatary_store::store::Hold;
+use suzatary_todo::decisions::DecisionEvent;
 
 pub use database::Database;
 #[cfg(any(test, feature = "nothing"))]

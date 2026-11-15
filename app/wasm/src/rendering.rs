@@ -1,7 +1,7 @@
 //! The keys the box keeps rendered blocks under, named by the same core the box runs.
 
 use suzatary_base::answer::Renderable;
-use suzatary_core::rendering::ANSWER;
+use suzatary_todo::rendering::ANSWER;
 use wasm_bindgen::prelude::*;
 
 /// The answer template's key at `source`, as the box prints it beside the block's HTML.
@@ -20,7 +20,7 @@ pub fn answer_key(source: &str) -> Result<String, JsError> {
 #[wasm_bindgen]
 pub fn kept_functions() -> Result<String, JsError> {
     crate::json(
-        &suzatary_core::rendering::kept()
+        &suzatary_todo::rendering::kept()
             .map(prodrome_core::event::Hash::as_str)
             .to_vec(),
     )

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use rustix::process::Signal;
 use suzatary_base::capability::{Rejected, Typeset};
-use suzatary_core::template::Job;
+use suzatary_todo::template::Job;
 
 use super::Compiler;
 use crate::run::{Cmd, RunError, succeed};

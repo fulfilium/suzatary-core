@@ -79,8 +79,8 @@ impl Fixed {
         let root = std::env::temp_dir().join(format!("suzatary-calls-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let events = EventStore::new(root.join("events"), chain().untrusted);
-        let alpha = suzatary_core::authoring::build_todo(
-            &suzatary_core::authoring::NewTodo {
+        let alpha = suzatary_todo::authoring::build_todo(
+            &suzatary_todo::authoring::NewTodo {
                 todo: "alpha".to_owned(),
                 fields: suzatary_record::todo::TodoFields {
                     body: "Book the flight".to_owned(),

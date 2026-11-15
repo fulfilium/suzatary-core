@@ -32,7 +32,7 @@ pub fn acts(
     expiring: &[(Settable, crate::health::Instant)],
     (settings, category): (&str, &str),
 ) -> Result<Vec<Act>, Refusal> {
-    let open = crate::todos::open_todos(nodes, at, untrusted)?;
+    let open = suzatary_todo::todos::open_todos(nodes, at, untrusted)?;
     let mut acts = Vec::new();
     for (name, expires) in expiring {
         let day = expires.date();
@@ -46,7 +46,7 @@ pub fn acts(
                     note: format!("GitHub now says {label} expires on {day}, so it was replaced."),
                 }),
         );
-        if crate::todos::current(nodes, at, &id).is_some() {
+        if suzatary_todo::todos::current(nodes, at, &id).is_some() {
             continue;
         }
         acts.push(Act::Add {
@@ -184,7 +184,7 @@ mod tests {
                 if *old == todo(&name, day(1)) && *new == todo(&name, day(20))),
             "{later:?}"
         );
-        let open = crate::todos::open_todos(chain.nodes(), at, &untrusted).expect("folds");
+        let open = suzatary_todo::todos::open_todos(chain.nodes(), at, &untrusted).expect("folds");
         let ids: Vec<&str> = open.iter().map(|todo| todo.id.as_str()).collect();
         assert_eq!(ids, [todo(&name, day(20))]);
     }

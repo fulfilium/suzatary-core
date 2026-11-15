@@ -29,7 +29,6 @@ use suzatary_base::escape::Escaped;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::render::{Html, Render};
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::about;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -53,6 +52,7 @@ use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
+use suzatary_todo::render::{Html, Render};
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -502,7 +502,7 @@ impl Render for Bundle {
         markup.len()
     }
 
-    fn page(&self, page: &suzatary_core::template::Called) -> Result<Html, RenderError> {
+    fn page(&self, page: &suzatary_todo::template::Called) -> Result<Html, RenderError> {
         Ok(Html::from_render(page.job().state.clone()))
     }
 }
@@ -533,7 +533,7 @@ impl Answers for Bundle {
     fn block(
         &self,
         _block: &suzatary_base::answer::Renderable,
-    ) -> Result<suzatary_core::render::Html, AnswerError> {
+    ) -> Result<suzatary_todo::render::Html, AnswerError> {
         Err(AnswerError(
             "the vectors fixture renders nothing; every block is its source".to_owned(),
         ))
@@ -735,16 +735,16 @@ struct FoldAnswer {
 }
 
 fn fold_answer(payload: &suzatary_api::wire::FoldPayload) -> FoldAnswer {
-    let mut open: Vec<&suzatary_core::wire::todo::Entry> = payload
+    let mut open: Vec<&suzatary_todo::wire::todo::Entry> = payload
         .entries
         .iter()
-        .filter(|entry| entry.state == suzatary_core::wire::todo::EntryState::Open)
+        .filter(|entry| entry.state == suzatary_todo::wire::todo::EntryState::Open)
         .collect();
     open.sort_by(|a, b| {
-        let number = |entry: &suzatary_core::wire::todo::Entry| {
+        let number = |entry: &suzatary_todo::wire::todo::Entry| {
             entry
                 .value
-                .and_then(suzatary_core::wire::todo::Fulfillment::number)
+                .and_then(suzatary_todo::wire::todo::Fulfillment::number)
         };
         let left = number(a).unwrap_or(f64::INFINITY);
         let right = number(b).unwrap_or(f64::INFINITY);
@@ -1527,7 +1527,7 @@ fn forgotten(
             suzatary_core::secretary::transcript::fed(line, slot, key)
                 .iter()
                 .map(|block| {
-                    suzatary_core::rendering::ANSWER
+                    suzatary_todo::rendering::ANSWER
                         .key(block)
                         .expect("a block prints")
                 })
@@ -2066,7 +2066,7 @@ fn the_answers_vector_holds_every_answer() {
     )
     .expect("a todo");
     let heads = chain.heads.clone();
-    samples.add([suzatary_core::wire::todo::FieldChange {
+    samples.add([suzatary_todo::wire::todo::FieldChange {
         field: "body".to_owned(),
         before: String::new(),
         after: "'Reply'".to_owned(),
@@ -2183,10 +2183,10 @@ fn the_answers_vector_holds_every_answer() {
     }]);
     let held = |todo: &str, title: &str, state, value: Option<f64>| {
         Some(suzatary_core::wire::cards::HeldTodo {
-            row: suzatary_core::wire::todo::Neighbour {
+            row: suzatary_todo::wire::todo::Neighbour {
                 todo: todo.to_owned(),
                 state,
-                value: Some(suzatary_core::wire::todo::Fulfillment::of_value(value)),
+                value: Some(suzatary_todo::wire::todo::Fulfillment::of_value(value)),
                 unconfirmed: false,
             },
             title: title.to_owned(),
@@ -2203,7 +2203,7 @@ fn the_answers_vector_holds_every_answer() {
                 held: held(
                     "calendarlinks",
                     "calendar links",
-                    suzatary_core::wire::todo::EntryState::Completed,
+                    suzatary_todo::wire::todo::EntryState::Completed,
                     Some(1.0),
                 ),
             },
@@ -2229,7 +2229,7 @@ fn the_answers_vector_holds_every_answer() {
                 held: held(
                     "suzatarytwo",
                     "Suzatary 2.0",
-                    suzatary_core::wire::todo::EntryState::Open,
+                    suzatary_todo::wire::todo::EntryState::Open,
                     Some(0.42),
                 ),
                 version: "2.0".to_owned(),
@@ -2239,7 +2239,7 @@ fn the_answers_vector_holds_every_answer() {
                     item(
                         "portsuites",
                         "ports as suites",
-                        suzatary_core::wire::todo::EntryState::Open,
+                        suzatary_todo::wire::todo::EntryState::Open,
                         Some(0.55),
                         suzatary_core::release::Lot::Open,
                         suzatary_core::release::Named::Current,
@@ -2247,7 +2247,7 @@ fn the_answers_vector_holds_every_answer() {
                     item(
                         "calendarlinks",
                         "calendar links",
-                        suzatary_core::wire::todo::EntryState::Completed,
+                        suzatary_todo::wire::todo::EntryState::Completed,
                         Some(1.0),
                         suzatary_core::release::Lot::Completed,
                         suzatary_core::release::Named::Current,
@@ -2255,7 +2255,7 @@ fn the_answers_vector_holds_every_answer() {
                     item(
                         "wireonce",
                         "the wire once",
-                        suzatary_core::wire::todo::EntryState::Open,
+                        suzatary_todo::wire::todo::EntryState::Open,
                         Some(0.6),
                         suzatary_core::release::Lot::Completed,
                         suzatary_core::release::Named::Current,
@@ -2263,7 +2263,7 @@ fn the_answers_vector_holds_every_answer() {
                     item(
                         "instancesplit",
                         "split the instance",
-                        suzatary_core::wire::todo::EntryState::Cancelled,
+                        suzatary_todo::wire::todo::EntryState::Cancelled,
                         Some(1.0),
                         suzatary_core::release::Lot::Cancelled,
                         suzatary_core::release::Named::Current,
@@ -2271,7 +2271,7 @@ fn the_answers_vector_holds_every_answer() {
                     item(
                         "onboarding",
                         "onboarding",
-                        suzatary_core::wire::todo::EntryState::Open,
+                        suzatary_todo::wire::todo::EntryState::Open,
                         Some(0.5),
                         suzatary_core::release::Lot::Open,
                         suzatary_core::release::Named::Dropped,
@@ -2616,7 +2616,7 @@ fn the_answers_vector_holds_every_answer() {
     ]);
     samples.add([suzatary_api::wire::BlockRender {
         html: "<h2>Plan</h2>".to_owned(),
-        key: suzatary_core::rendering::ANSWER
+        key: suzatary_todo::rendering::ANSWER
             .key(&suzatary_base::answer::Renderable::of("= Plan"))
             .expect("a block prints"),
     }]);

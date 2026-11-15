@@ -4,8 +4,8 @@
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Rejected, Typeset};
 use suzatary_base::escape::Escaped;
-use suzatary_core::render::{Html, Render};
-use suzatary_core::template::Called;
+use suzatary_todo::render::{Html, Render};
+use suzatary_todo::template::Called;
 
 /// Compiles nothing and holds nothing.
 pub struct Unrendered;

@@ -2,10 +2,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::decisions::{DecisionId, Ledger};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_todo::decisions::{DecisionId, Ledger};
 
 /// The recorded decisions: every one in its lineage, or one whole.
 pub struct Decisions;

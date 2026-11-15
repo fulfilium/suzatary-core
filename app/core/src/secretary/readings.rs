@@ -3,7 +3,6 @@
 
 use suzatary_signatures::chain_set::ChainSet;
 
-use crate::render::Html;
 use crate::secretary::acts::Act;
 use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::attached;
@@ -23,12 +22,13 @@ use crate::wire::inbox::{
     Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
     ProposedObject, RememberWords, ReplacedFact,
 };
-use crate::wire::todo::Fulfillment;
 use crate::wire::topics as wire;
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::{Answered, Refusal};
+use suzatary_todo::render::Html;
+use suzatary_todo::wire::todo::Fulfillment;
 
 /// At most `limit` turns before `before` (newest when `None`), narrowed to rounds touching `about`.
 #[derive(Debug, Clone, PartialEq, Eq)]

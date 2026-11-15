@@ -10,7 +10,6 @@ use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::mail_error::MailError;
 use crate::notify::{Delivered, Notify, NotifyError, Push};
-use crate::render::{Html, Render};
 use crate::repos::{Patch, RepoRow, Visibility};
 use crate::repositories::{RepoFailure, Repositories};
 use crate::repository::{Repository, RepositoryError};
@@ -21,13 +20,12 @@ use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use crate::secrets::{MailGrants, Secrets};
 use crate::weather::{Weather, WeatherError};
 use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
-use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Datetime, Nothing};
 use suzatary_base::drive_path::DriveFailure;
-use suzatary_base::escape::Escaped;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_store::store::StoreError;
+use suzatary_todo::render::Html;
 
 impl Agent<'static> {
     /// The agent's record, every field inert.
@@ -100,7 +98,7 @@ impl Secretary<'static> {
             conversations: crate::secretary::conversations::Conversations::nothing(),
             inbox: &Nothing,
             memories: crate::secretary::memories::Memories::nothing(),
-            decisions: crate::decisions::Decisions { store: &Nothing },
+            decisions: suzatary_todo::decisions::Decisions { store: &Nothing },
             topics: crate::secretary::topics::stores::TopicStores {
                 memberships: &Nothing,
                 aliases: &Nothing,
@@ -225,21 +223,6 @@ impl Repository for Nothing {
     }
 }
 
-impl Render for Nothing {
-    fn html(&self, markup: &Escaped) -> Result<Html, RenderError> {
-        Ok(Html::from_render(markup.as_str()))
-    }
-    fn cached(&self, markup: &Escaped) -> Option<Html> {
-        Some(Html::from_render(markup.as_str()))
-    }
-    fn warm(&self, markup: &[Escaped]) -> usize {
-        markup.len()
-    }
-    fn page(&self, page: &crate::template::Called) -> Result<Html, RenderError> {
-        Ok(Html::from_render(page.job().state.clone()))
-    }
-}
-
 impl Model for Nothing {
     fn name(&self) -> String {
         "nothing".to_owned()
@@ -278,13 +261,6 @@ impl crate::calendar::effect::Calendar for Nothing {
                 entries: Vec::new(),
             })
             .collect())
-    }
-}
-
-/// Nothing is rendered, so nothing is kept to forget.
-impl crate::render_cache::RenderCache for Nothing {
-    fn forget(&self, _: &suzatary_base::answer::Renderable) -> Result<(), String> {
-        Ok(())
     }
 }
 

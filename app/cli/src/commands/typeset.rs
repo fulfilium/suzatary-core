@@ -1,4 +1,4 @@
-//! `suzatary typeset`: one job on stdin (`suzatary_core::template::Job`) compiled, its answer on stdout.
+//! `suzatary typeset`: one job on stdin (`suzatary_todo::template::Job`) compiled, its answer on stdout.
 //!
 //! The box runs this as a child of itself (`suzatary_io::typeset::Closed`). The child caps its
 //! own CPU time (a looping text is stopped by the kernel) and address space (an endless
@@ -38,7 +38,7 @@ pub fn run() -> anyhow::Result<()> {
     std::io::stdin()
         .read_to_string(&mut job)
         .context("reading the job")?;
-    let answer = serde_json::from_str::<suzatary_core::template::Job>(&job)
+    let answer = serde_json::from_str::<suzatary_todo::template::Job>(&job)
         .map_err(|e| {
             suzatary_base::capability::Rejected::whole(format!("the job does not parse: {e}"))
         })

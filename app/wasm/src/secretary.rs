@@ -264,7 +264,7 @@ impl Lines {
     pub fn admits(&mut self, keys: &str) -> Result<String, JsError> {
         let keys: Vec<String> =
             serde_json::from_str(keys).map_err(|e| refused(format!("keys: {e}")))?;
-        let answer = format!("{} ", suzatary_core::rendering::ANSWER.function().as_str());
+        let answer = format!("{} ", suzatary_todo::rendering::ANSWER.function().as_str());
         let fed = self.0.lines.fed();
         json(
             &keys

@@ -370,7 +370,7 @@ pub fn block(
         )));
     };
     let block = suzatary_base::answer::Renderable::of(&source);
-    let key = suzatary_core::rendering::ANSWER
+    let key = suzatary_todo::rendering::ANSWER
         .key(&block)
         .map_err(|e| Refusal::internal(e.to_string()))?;
     call.chain

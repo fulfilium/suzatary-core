@@ -938,7 +938,7 @@ fn not_an_undo(todo: &str) -> Refusal {
 
 /// What an undo or a redo reverses: the object it names, which its note spells as
 /// `undo of <hash>` or `redo of <hash>`. Printed by [`Reversal::note`] alone and read back by
-/// `Reversal::of_note` alone, so the note has one spelling.
+/// [`Reversal::of_note`] alone, so the note has one spelling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reversal {
     /// The inverse of the object named.
@@ -968,7 +968,7 @@ impl Reversal {
 
     /// The reversal a note names, or `None` for an ordinary event's note.
     #[must_use]
-    pub(crate) fn of_note(note: &str) -> Option<Self> {
+    pub fn of_note(note: &str) -> Option<Self> {
         if let Some(of) = note.strip_prefix(Self::UNDO) {
             return Hash::new(of).ok().map(|of| Self::Undo { of });
         }

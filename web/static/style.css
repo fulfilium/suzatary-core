@@ -2817,7 +2817,7 @@ h1[tabindex="-1"]:focus {
 
 /* --- the calendar --------------------------------------------------------- */
 
-/* Typst's HTML for a week (`suzatary_core::reading::calendar`): a day a section, an
+/* Typst's HTML for a week (`suzatary_todo::reading::calendar`): a day a section, an
    occurrence a row of its time, title, place and calendar, a cancelled one struck. */
 .calendarsteps {
   font: var(--t-small) / 1.4 var(--f-sans);
@@ -4222,7 +4222,7 @@ h1[tabindex="-1"]:focus {
 }
 
 /* "Why this number": typst's section of the reading part
-   (`suzatary_core::reading`), in the callout's material, its heading the
+   (`suzatary_todo::reading`), in the callout's material, its heading the
    callout's title. The HTML carries the classes; every colour is a token. */
 .whytree {
   margin: var(--s-6) 0;

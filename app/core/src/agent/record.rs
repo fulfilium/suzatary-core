@@ -1,11 +1,11 @@
 use crate::mail::corpus::Corpus;
 use crate::mail::mailbox::Mailbox;
-use crate::render::Render;
 use crate::repository::Repository;
 use crate::secretary::recollection::Recollection;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Reads;
+use suzatary_todo::render::Render;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
 /// sends, notifies, names a peer or performs a card, and its `chain` is only read.

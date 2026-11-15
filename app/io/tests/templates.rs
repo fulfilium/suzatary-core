@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use suzatary_base::tripwire::suspicious;
-use suzatary_core::rendering;
-use suzatary_core::template::{Checked, Job};
 use suzatary_io::typeset::compile;
+use suzatary_todo::rendering;
+use suzatary_todo::template::{Checked, Job};
 
 /// Whether every example of `template` compiles, with `world` in place of its own files.
 fn compiles(template: &dyn Checked, world: &BTreeMap<String, String>) -> bool {

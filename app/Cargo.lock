@@ -4146,6 +4146,7 @@ dependencies = [
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-testkit",
+ "suzatary-todo",
  "tempfile",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
@@ -4173,6 +4174,7 @@ dependencies = [
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
+ "suzatary-todo",
  "thiserror",
  "tracing",
  "ts-rs",
@@ -4225,6 +4227,7 @@ dependencies = [
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
+ "suzatary-todo",
  "thiserror",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
@@ -4264,6 +4267,7 @@ dependencies = [
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-testkit",
+ "suzatary-todo",
  "tempfile",
  "thiserror",
  "toml 0.9.12+spec-1.1.0",
@@ -4284,6 +4288,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-core",
  "suzatary-record",
+ "suzatary-todo",
  "ts-rs",
  "viewtree",
  "wasm-bindgen",
@@ -4389,6 +4394,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-todo"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "prodrome-core",
+ "proptest",
+ "regex",
+ "schemars",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-record",
+ "suzatary-signatures",
+ "suzatary-store",
+ "suzatary-todo",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
 name = "suzatary-wasm"
 version = "0.0.0"
 dependencies = [
@@ -4402,6 +4427,7 @@ dependencies = [
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
+ "suzatary-todo",
  "wasm-bindgen",
 ]
 

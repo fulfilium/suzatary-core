@@ -11,13 +11,13 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 use suzatary_base::wire::base::ErrorPayload;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Overview};
 use suzatary_core::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
-use suzatary_core::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use suzatary_core::wire::topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
     MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
 };
 use suzatary_core::wire::triage::WatchesPayload;
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
+use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 
 /// `GET /api/chain`: every object in the linearisation's order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -81,7 +81,7 @@ pub struct TodoPayload {
     pub at: String,
     pub entry: Entry,
     /// Why its number is what it is, part by part.
-    pub why: suzatary_core::reading::Why,
+    pub why: suzatary_todo::reading::Why,
     /// In causal order.
     pub stream: Vec<Link>,
     /// By that event's hash.
@@ -729,7 +729,7 @@ pub enum Frame {
 pub struct BlockRender {
     /// Through the render tripwire.
     pub html: String,
-    /// [`suzatary_core::template::Template::key`] of the answer template at the block.
+    /// [`suzatary_todo::template::Template::key`] of the answer template at the block.
     pub key: String,
 }
 
@@ -1055,8 +1055,8 @@ impl TypeVisitor for Declarations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::wire::todo::{Block, Fulfillment};
     use suzatary_signatures::wire::signatures::Registering;
+    use suzatary_todo::wire::todo::{Block, Fulfillment};
 
     /// `decision` alone is a decision; every other name a todo that keeps its name for the chip.
     #[test]

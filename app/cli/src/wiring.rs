@@ -10,9 +10,7 @@ use suzatary_base::chains::ChainPolicy;
 use suzatary_base::persona::Persona;
 use suzatary_base::zone::Zone;
 use suzatary_core::agent::Agent;
-use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::mail::account::Roster;
-use suzatary_core::render_cache::RenderCache;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::digest_event::DigestEvent;
@@ -31,6 +29,8 @@ use suzatary_io::unrendered::Unrendered;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::signatures::Signers;
 use suzatary_store::store::{Only, Reads, Signing};
+use suzatary_todo::decisions::{DecisionEvent, Decisions};
+use suzatary_todo::render_cache::RenderCache;
 
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};

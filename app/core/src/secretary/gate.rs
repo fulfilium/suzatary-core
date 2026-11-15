@@ -108,7 +108,7 @@ pub fn apply(
             .ahead(event.clone())
             .map_err(|failed| Unapplied::Refused(Refusal::internal(failed.to_string())))?;
         if let TodoEvent::Authored(record) = event {
-            crate::todos::render_current(preview.nodes(), at, &policy.untrusted, record)
+            suzatary_todo::todos::render_current(preview.nodes(), at, &policy.untrusted, record)
                 .map_err(Unapplied::Refused)?;
         }
     }

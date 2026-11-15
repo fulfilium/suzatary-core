@@ -10,12 +10,12 @@ use clap::Subcommand;
 use prodrome_core::event::{Actor, TodoId, mk_cancelled, mk_completed, mk_reopened, mk_tended};
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Clock;
-use suzatary_core::{authoring, view};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::todo;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Signers;
 use suzatary_store::store::{Prodrome, Signing};
+use suzatary_todo::{authoring, view};
 
 use super::store_of;
 use crate::instance::{ChainDir, Instance};
@@ -372,7 +372,7 @@ fn confirm(
     let _held = store.locked().context("taking the chain's write lock")?;
     let nodes = store.nodes().context("reading the chain")?;
     TodoId::new(id).map_err(|e| anyhow::anyhow!("{id:?} is not a todo id: {e}"))?;
-    let Some(before) = suzatary_core::todos::current(&nodes, now, id) else {
+    let Some(before) = suzatary_todo::todos::current(&nodes, now, id) else {
         bail!("unknown todo id {id:?} — the chain holds no content for it");
     };
     let from = before.actor.as_str().to_owned();
@@ -448,7 +448,7 @@ fn add(
     let _held = store.locked().context("taking the chain's write lock")?;
     let mut preview =
         Preview::of(store.objects().context("reading the chain")?).context("reading the chain")?;
-    if suzatary_core::todos::current(preview.nodes(), now, &new.id).is_some() {
+    if suzatary_todo::todos::current(preview.nodes(), now, &new.id).is_some() {
         bail!(
             "todo {:?} already exists — `todo update` it, or choose another id",
             new.id
@@ -491,7 +491,7 @@ fn add(
             .map_err(refused)?,
         ],
         Some(parent) => {
-            let Some(parent) = suzatary_core::todos::current(preview.nodes(), now, parent) else {
+            let Some(parent) = suzatary_todo::todos::current(preview.nodes(), now, parent) else {
                 bail!("no todo with id {parent:?} on the chain to be a parent");
             };
             let believed = suzatary_signatures::believed::Believed::of(
@@ -532,7 +532,7 @@ fn update(
     let _held = store.locked().context("taking the chain's write lock")?;
     let mut preview =
         Preview::of(store.objects().context("reading the chain")?).context("reading the chain")?;
-    let Some(before) = suzatary_core::todos::current(preview.nodes(), now, id) else {
+    let Some(before) = suzatary_todo::todos::current(preview.nodes(), now, id) else {
         bail!("no todo with id {id:?} on the chain");
     };
     let known: Vec<&str> = instance
@@ -580,7 +580,7 @@ fn appended(
         let suzatary_record::record::TodoEvent::Authored(record) = event else {
             bail!("authoring answers an Authored");
         };
-        let block = suzatary_core::todos::render_current(preview.nodes(), now, untrusted, record)
+        let block = suzatary_todo::todos::render_current(preview.nodes(), now, untrusted, record)
             .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
         blocks.push((
             record.todo.as_str().to_owned(),
@@ -607,10 +607,10 @@ fn show(chain: &ChainDir, id: &str) -> anyhow::Result<()> {
     let store = store_of(chain);
     let now = SystemClock.now();
     let nodes = store.nodes().context("reading the chain")?;
-    let Some(found) = suzatary_core::todos::current(&nodes, now, id) else {
+    let Some(found) = suzatary_todo::todos::current(&nodes, now, id) else {
         bail!("no todo with id {id:?} on the chain");
     };
-    let block = suzatary_core::todos::render_current(&nodes, now, &chain.policy.untrusted, &found)
+    let block = suzatary_todo::todos::render_current(&nodes, now, &chain.policy.untrusted, &found)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     println!(
         "{}",
@@ -629,7 +629,7 @@ fn list(chain: &ChainDir) -> anyhow::Result<()> {
     let store = store_of(chain);
     let now = SystemClock.now();
     let nodes = store.nodes().context("reading the chain")?;
-    let mut open = suzatary_core::todos::open_todos(&nodes, now, &chain.policy.untrusted)
+    let mut open = suzatary_todo::todos::open_todos(&nodes, now, &chain.policy.untrusted)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     // A todo with no spec is unpriced, not fulfilled, and sorts last.
     open.sort_by(|a, b| {

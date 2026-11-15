@@ -11,9 +11,9 @@ use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Clock;
-use suzatary_core::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
+use suzatary_todo::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 
 use crate::instance::Instance;
 
@@ -160,8 +160,8 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         }
         Action::View { html } => {
             use suzatary_io::typeset::Compiler as _;
-            let called = suzatary_core::rendering::DECISIONS
-                .call(&suzatary_core::decisions::document(&decisions.ledger()?))?;
+            let called = suzatary_todo::rendering::DECISIONS
+                .call(&suzatary_todo::decisions::document(&decisions.ledger()?))?;
             let page = typeset.compile(called.job()).map_err(|rejected| {
                 anyhow::anyhow!("{}", rejected.said(called.job().main_text()))
             })?;

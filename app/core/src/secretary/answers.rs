@@ -18,5 +18,5 @@ pub trait Answers: Sync {
     fn block(
         &self,
         block: &suzatary_base::answer::Renderable,
-    ) -> Result<crate::render::Html, AnswerError>;
+    ) -> Result<suzatary_todo::render::Html, AnswerError>;
 }

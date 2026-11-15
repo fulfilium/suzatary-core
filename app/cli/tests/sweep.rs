@@ -12,7 +12,6 @@ use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
 use prodrome_core::event::mk_completed;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Datetime;
-use suzatary_core::authoring::{NewTodo, build_todo};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::daily::Run;
@@ -20,6 +19,7 @@ use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sweep::{Swept, dry_run};
 use suzatary_record::record::{EventStore, TodoEvent, mk_source};
 use suzatary_store::store::Reads as _;
+use suzatary_todo::authoring::{NewTodo, build_todo};
 
 /// The sweep run to its end; a scripted model is under no limit, so it always starts.
 fn sweep(

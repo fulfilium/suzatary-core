@@ -95,7 +95,7 @@ pub fn propose_persistent(
         .healths()
         .map_err(|failed| Refusal::internal(format!("the sources' health register: {failed}")))?;
     let nodes = caps.chain.nodes()?;
-    let held = crate::view::events_of(&nodes);
+    let held = suzatary_todo::view::events_of(&nodes);
     let mut proposed = Vec::new();
     for (source, reading) in healths.readings() {
         let (SourceKey::Mail(account), Reading::Failing { words, since, .. }) = (source, &reading)

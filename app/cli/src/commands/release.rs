@@ -211,7 +211,7 @@ impl Chain<'_> {
 
     /// A todo's action line as plain text, `None` when the chain holds no record of it.
     fn title(&self, todo: &TodoId) -> Option<String> {
-        suzatary_core::todos::current(self.nodes, self.now, todo.as_str())
+        suzatary_todo::todos::current(self.nodes, self.now, todo.as_str())
             .map(|record| markup_text(record.payload.body.as_str()))
     }
 
@@ -289,7 +289,7 @@ fn items(
     );
     let _held = writer.locked().context("taking the chain's write lock")?;
     let nodes = writer.nodes().context("reading the project chain")?;
-    let Some(parent) = suzatary_core::todos::current(&nodes, chain.now, release) else {
+    let Some(parent) = suzatary_todo::todos::current(&nodes, chain.now, release) else {
         bail!("no todo {release:?} on the {} chain", plan.chain());
     };
     let functions =
@@ -297,7 +297,7 @@ fn items(
             .context("folding the project chain")?
             .linkable();
     let event =
-        suzatary_core::authoring::rescope(&parent, add, remove, &functions, chain.now, actor)
+        suzatary_todo::authoring::rescope(&parent, add, remove, &functions, chain.now, actor)
             .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     writer.append(event).context("appending the revision")?;
     let after = writer.nodes().context("re-reading the project chain")?;

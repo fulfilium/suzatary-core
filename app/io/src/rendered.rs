@@ -213,7 +213,7 @@ mod tests {
     fn key(function: &Hash, source: &str) -> Key {
         Key {
             function: function.clone(),
-            argument: suzatary_core::template::named(source),
+            argument: suzatary_todo::template::named(source),
         }
     }
 

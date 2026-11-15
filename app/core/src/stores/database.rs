@@ -5,7 +5,6 @@ use prodrome_core::declared::Declared;
 use super::{Kind, Store};
 use crate::asks::AskEvent;
 use crate::attachment::AttachmentId;
-use crate::decisions::DecisionEvent;
 use crate::health::plugin::PluginName;
 use crate::mail::local_state::LocalState;
 use crate::mail::state::TriageState;
@@ -24,6 +23,7 @@ use suzatary_base::chains::ChainName;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::{Doc, Gets, Log, Prodrome};
+use suzatary_todo::decisions::DecisionEvent;
 
 /// The whole store, as one value: every chain, and the box's own stores.
 #[derive(Clone)]

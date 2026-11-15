@@ -134,7 +134,7 @@ impl Verb for BriefingDelta {
             })?,
         };
         let nodes = call.caps.chain.nodes()?;
-        let events = crate::view::events_of(&nodes);
+        let events = suzatary_todo::view::events_of(&nodes);
 
         // Todos that existed before the window, so a revision is not read as a new todo.
         let older: std::collections::BTreeSet<&str> = events

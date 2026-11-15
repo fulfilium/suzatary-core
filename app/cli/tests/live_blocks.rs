@@ -34,7 +34,7 @@ fn every_live_record_renders_verified() {
         {
             seen += 1;
             if let Err(refusal) =
-                suzatary_core::todos::render_current(&nodes, now, &chain.policy.untrusted, &record)
+                suzatary_todo::todos::render_current(&nodes, now, &chain.policy.untrusted, &record)
             {
                 refused.push(format!("{}: {}", record.todo.as_str(), refusal.message()));
             }

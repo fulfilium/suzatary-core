@@ -6,7 +6,7 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
-use suzatary_core::decisions::{DecisionId, Decisions};
+use suzatary_todo::decisions::{DecisionId, Decisions};
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")

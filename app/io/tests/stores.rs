@@ -593,7 +593,7 @@ fn digests(root: &Path) {
 
 /// The recorded decisions: one decided, a second superseding it, and the first withdrawn.
 fn decisions(root: &Path) {
-    use suzatary_core::decisions::{DecisionEvent, DecisionId, Statement};
+    use suzatary_todo::decisions::{DecisionEvent, DecisionId, Statement};
     let store = Objects::<DecisionEvent>::open(root.join(DECISIONS));
     rooted(&store, "decisions");
     let id = |name: &str| DecisionId::new(name).expect("an id");
@@ -606,7 +606,7 @@ fn decisions(root: &Path) {
         .expect("a statement")
     };
     let decided = |name: &str, minute, supersedes: &[&str]| {
-        suzatary_core::decisions::decided(
+        suzatary_todo::decisions::decided(
             id(name),
             at(15, minute),
             owner(),
@@ -621,7 +621,7 @@ fn decisions(root: &Path) {
         .expect("appends");
     store
         .append(
-            suzatary_core::decisions::withdrawn(id("first"), at(15, 2), owner(), "Replaced.")
+            suzatary_todo::decisions::withdrawn(id("first"), at(15, 2), owner(), "Replaced.")
                 .expect("a withdrawal"),
         )
         .expect("appends");
@@ -859,7 +859,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
 
 /// Both decisions and the one topic still on its round read back.
 fn decisions_and_topics_read(database: &suzatary_core::stores::Database<'_>) {
-    let ledger = suzatary_core::decisions::Decisions {
+    let ledger = suzatary_todo::decisions::Decisions {
         store: database.decisions,
     }
     .ledger()

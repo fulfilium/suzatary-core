@@ -1,7 +1,7 @@
 # THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the only one in the repository. The
 # Prodrome is the database, a dependency by REVISION (→ `prodromedependency`).
 #
-# Arrows point down only: cli → plugin → io → core → signatures → store, record → base →
+# Arrows point down only: cli → plugin → io → core → todo → signatures → store, record → base →
 # prodrome-core.
 # `wasm` is the browser's module, depended on by nothing. `plugin` is the plugin host
 # (docs/PLUGINS-PLAN-2026-10-02.md), its own crate because wasmtime is the largest tree here.
@@ -9,7 +9,7 @@
 # `testkit` is a dev-dependency of `io` and `cli`: the programs their tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "store", "signatures", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "signatures", "todo", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the binary reads `app/release.toml` at
@@ -37,6 +37,7 @@ suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
 suzatary-store = { path = "store" }
 suzatary-signatures = { path = "signatures" }
+suzatary-todo = { path = "todo" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }

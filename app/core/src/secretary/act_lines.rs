@@ -143,7 +143,7 @@ pub fn heard_from_objects(
             TodoEvent::Tended(l) => moved(l, "tended"),
             TodoEvent::Created(_) | TodoEvent::SpecRevised(_) => None,
             TodoEvent::Authored(r)
-                if crate::authoring::Reversal::of_note(&r.payload.note).is_some() =>
+                if suzatary_todo::authoring::Reversal::of_note(&r.payload.note).is_some() =>
             {
                 None
             }
@@ -561,7 +561,7 @@ mod tests {
         assert_eq!(verbs(posted("File it now", "seen"), true), ["updated"]);
         assert!(verbs(posted("File it", "seen"), false).is_empty());
         let of = prodrome_core::event::Hash::new("a".repeat(64)).expect("a hash");
-        let undo = crate::authoring::Reversal::Undo { of }.note();
+        let undo = suzatary_todo::authoring::Reversal::Undo { of }.note();
         assert!(verbs(posted("File it now", &undo), true).is_empty());
     }
 }

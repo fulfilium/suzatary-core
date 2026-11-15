@@ -1,5 +1,5 @@
 //! Every effect the application performs is a trait, one per file, here when it is the base's
-//! and otherwise beside its domain (as `suzatary_core::render` or `suzatary_core::mail::mailbox`), or a store in one of `suzatary_store::store`'s three shapes, and a
+//! and otherwise beside its domain (as `suzatary_todo::render` or `suzatary_core::mail::mailbox`), or a store in one of `suzatary_store::store`'s three shapes, and a
 //! role's effects are a record of them passed as a value: `suzatary_core::agent::Agent`,
 //! `suzatary_core::secretary::Secretary`, `suzatary_core::server::Server`.
 //! `suzatary-io` implements the traits, the binary assembles the records, tests fill
@@ -7,7 +7,7 @@
 //!
 //! - The triage agent cannot send, notify or name a peer: `suzatary_core::agent::Agent` has no such field.
 //! - Reading mail never yields a send token: [`ImapToken`] and [`SmtpToken`] are two types.
-//! - Rendered means confirmed: `suzatary_core::render::Render::html` takes an [`Escaped`], which only
+//! - Rendered means confirmed: `suzatary_todo::render::Render::html` takes an [`Escaped`], which only
 //!   [`Content::Confirmed`] yields.
 //! - Loopback never writes: an actor is a [`Login`], and only [`Whois`] mints one.
 
@@ -138,7 +138,7 @@ impl SmtpToken {
 
 /// A todo's prose, tagged by whether a trusted actor wrote it.
 ///
-/// Only [`Content::Confirmed`] yields an [`Escaped`], which `suzatary_core::render::Render::html` requires.
+/// Only [`Content::Confirmed`] yields an [`Escaped`], which `suzatary_todo::render::Render::html` requires.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
     /// A trusted actor's markup. Renders.
@@ -148,7 +148,7 @@ pub enum Content {
 }
 
 impl Content {
-    /// The markup a `suzatary_core::render::Render` may take, `None` for the provisional arm.
+    /// The markup a `suzatary_todo::render::Render` may take, `None` for the provisional arm.
     #[must_use]
     pub fn escaped(&self) -> Option<&Escaped> {
         match self {

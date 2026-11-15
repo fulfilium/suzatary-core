@@ -337,7 +337,7 @@ fn a_streaming_block_renders_by_its_sha() {
         common::body_json(&mut rendered),
         serde_json::json!({
             "html": "<p>*Due* Friday.</p>",
-            "key": suzatary_core::rendering::ANSWER.key(&suzatary_base::answer::Renderable::of("*Due* Friday.\n\n")).expect("a block prints"),
+            "key": suzatary_todo::rendering::ANSWER.key(&suzatary_base::answer::Renderable::of("*Due* Friday.\n\n")).expect("a block prints"),
         }),
         "the fake renderer's answer for exactly the block the model wrote"
     );

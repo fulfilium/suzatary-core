@@ -392,13 +392,13 @@ fn no_module_names_a_higher_cut_s() {
 #[test]
 fn the_sources_a_render_is_named_by_are_pinned() {
     let layers = layers();
-    let rendering = core().join("rendering.rs");
-    let text = std::fs::read_to_string(&rendering).expect("rendering.rs");
+    let src = repo().join("app/todo/src");
+    let text = std::fs::read_to_string(src.join("rendering.rs")).expect("rendering.rs");
     let mut hashed = BTreeMap::new();
     for (at, _) in text.match_indices("include_str!(\"") {
         let rest = &text[at + "include_str!(\"".len()..];
         let literal = &rest[..rest.find('"').expect("a closed literal")];
-        let bytes = std::fs::read(core().join(literal)).expect("a hashed source");
+        let bytes = std::fs::read(src.join(literal)).expect("a hashed source");
         hashed.insert(literal.to_owned(), format!("{:x}", Sha256::digest(bytes)));
     }
     assert_eq!(

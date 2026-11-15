@@ -165,7 +165,7 @@ impl Holds for TriageSurface {
         let at = call.caps.clock.now();
         let nodes = call.caps.chain.nodes()?;
         // A card about a todo the chain holds is priced as that todo is.
-        let serves = crate::todos::current(&nodes, at, act.todo())
+        let serves = suzatary_todo::todos::current(&nodes, at, act.todo())
             .map(|_| TodoId::new(act.todo()))
             .transpose()
             .map_err(|failed| Refusal::bad_request(failed.to_string()))?

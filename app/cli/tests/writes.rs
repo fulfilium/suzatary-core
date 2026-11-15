@@ -595,7 +595,7 @@ fn production_callers(needle: &str) -> Vec<String> {
 #[test]
 fn the_markup_door_is_opened_by_authoring_alone() {
     let needle = ["MarkupSource::", "checked("].concat();
-    assert_eq!(production_callers(&needle), vec!["core/src/authoring.rs"]);
+    assert_eq!(production_callers(&needle), vec!["todo/src/authoring.rs"]);
 }
 
 /// Stored bytes are markup without a door only where they are READ: a record's literal, a
@@ -607,8 +607,8 @@ fn stored_markup_is_minted_only_where_it_is_read() {
         production_callers(&needle),
         vec![
             "cli/tests/support/fixture.rs",
-            "core/src/decisions/event.rs",
             "record/src/record.rs",
+            "todo/src/decisions/event.rs",
         ]
     );
 }
@@ -643,7 +643,7 @@ fn the_closed_world_is_the_one_world_and_library_built_here() {
     }
     assert_eq!(
         production_callers(&["Library::", "Open,"].concat()),
-        vec!["core/src/rendering.rs"]
+        vec!["todo/src/rendering.rs"]
     );
 }
 

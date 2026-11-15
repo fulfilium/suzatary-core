@@ -18,11 +18,11 @@ fn the_child_answers_as_the_compile_does_in_process() {
     for source in ["Renew *passport*", "#html.elem(\"b\")[x]", "a ] b"] {
         assert_eq!(
             closed.closed(source),
-            suzatary_io::typeset::compile(&suzatary_core::template::Job::text(source)),
+            suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(source)),
             "{source}"
         );
     }
-    for template in suzatary_core::rendering::all() {
+    for template in suzatary_todo::rendering::all() {
         for job in template.examples() {
             assert_eq!(
                 closed.compile(&job),
@@ -88,7 +88,7 @@ fn a_short_text_compiles_while_the_box_is_busy() {
     for _ in 0..5 {
         assert_eq!(
             closed.closed("Renew *passport*"),
-            suzatary_io::typeset::compile(&suzatary_core::template::Job::text("Renew *passport*"))
+            suzatary_io::typeset::compile(&suzatary_todo::template::Job::text("Renew *passport*"))
         );
     }
     drop(load);
@@ -109,7 +109,7 @@ fn a_slow_start_is_not_counted_against_the_text() {
     );
     assert_eq!(
         Closed::new(&script, BACKSTOP).closed("Renew *passport*"),
-        suzatary_io::typeset::compile(&suzatary_core::template::Job::text("Renew *passport*"))
+        suzatary_io::typeset::compile(&suzatary_todo::template::Job::text("Renew *passport*"))
     );
 }
 

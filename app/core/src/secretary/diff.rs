@@ -1,7 +1,7 @@
 //! A changeset as a person deciding about it reads it: each event its acts build, as a row with
 //! its before and after.
 //!
-//! Fields are shown as prose, not as `crate::view::authored_diff`'s canonical prints (which are
+//! Fields are shown as prose, not as `suzatary_todo::view::authored_diff`'s canonical prints (which are
 //! evidence against the bytes): a person accepting a sentence is shown the sentence, and a price
 //! is the fulfillment it evaluates to, at the record's own instant (the number the writer meant)
 //! under the empty environment (a proposal is not on the chain).
@@ -143,7 +143,7 @@ fn changed(before: Option<&Authored>, after: &Authored) -> Vec<wire::ProposedCha
             suzatary_base::escape::markup_text(&r.payload.rationale.join(" "))
         }),
         ("waiting_on", |r| {
-            crate::view::string_text(r.payload.waiting_on.as_str())
+            suzatary_todo::view::string_text(r.payload.waiting_on.as_str())
         }),
         ("category", |r| {
             r.payload
@@ -183,11 +183,14 @@ fn price(record: &Authored) -> String {
             |value| format!("{:.0}%", value * 100.0),
         )
     });
-    [number, crate::authoring::recurrence_words(term, now)]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join("; ")
+    [
+        number,
+        suzatary_todo::authoring::recurrence_words(term, now),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join("; ")
 }
 
 /// An instant through `fpl::iso`, the one spelling every `at` on the wire uses.

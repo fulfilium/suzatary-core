@@ -23,11 +23,11 @@ use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::stores::InMemory;
-use suzatary_core::wire::todo::Fulfillment;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::chain_set::{ChainSet, Read};
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
+use suzatary_todo::wire::todo::Fulfillment;
 
 fn at(hour: i64) -> Datetime {
     let base = Datetime::new(2026, 10, 4, 0, 0, 0, 0).expect("an instant");

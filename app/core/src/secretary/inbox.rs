@@ -30,9 +30,12 @@ use suzatary_store::store::Prodrome;
 
 /// Its fulfillment at the set's instant, priced through `set`.
 #[must_use]
-pub fn value(object: &Object, set: &ChainSet<'_>) -> Option<crate::wire::todo::Fulfillment> {
+pub fn value(
+    object: &Object,
+    set: &ChainSet<'_>,
+) -> Option<suzatary_todo::wire::todo::Fulfillment> {
     let price = object.price.as_ref().ok()?;
-    crate::wire::todo::Fulfillment::of(
+    suzatary_todo::wire::todo::Fulfillment::of(
         link_in(price, &BTreeMap::new(), set.stores())
             .map(|closed| prodrome_core::fpl::fulfillment(&closed, set.instant(), &Env::new())),
     )

@@ -305,6 +305,19 @@ their test support and `husk`; USE 19.8k. The crate depends on base and the Prod
 - **The inert device log** for base's `Nothing` moves with `Device`: the orphan rule gives its impl
   to the type's crate.
 
+**PR 16 (todo).** `authoring`, `decisions`, `reading`, `render`, `render_cache`, `rendering`
+(with its typst sources), `template`, `todos`, `view` and `wire/todo` move to `app/todo`; USE
+22.4k.
+- **Four modules stay in core**, since nothing in the crate names them: `cast`, `priced` and `verb`
+  take the held cut, and `release` the connect cut, where `deployment` reads it. Core calls
+  `verbs!` and `Priced`, which are crate-private, so moving `verb` and `priced` would have widened
+  them. Keeping `release` also keeps the train's `app/core/releases.toml` where it is.
+- **One item widens:** `Reversal::of_note` becomes `pub`, as its printer `note()` already is,
+  because `secretary::act_lines` in core reads a reversal's note.
+- **The inert renderer** for base's `Nothing` moves with `Render`: the orphan rule gives its impl to
+  the trait's crate. The rendering guard reads `rendering.rs` in `app/todo/src`; its include paths
+  resolve alike from there, so no kept render is renamed.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

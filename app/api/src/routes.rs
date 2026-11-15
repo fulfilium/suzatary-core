@@ -20,23 +20,24 @@ use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
 use suzatary_core::deployment::Deployment;
+use suzatary_core::mail;
 use suzatary_core::mail::mailbox::{Mailbox, Query};
-use suzatary_core::render::Render;
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
 use suzatary_core::secretary::line_form::line_header;
 use suzatary_core::secretary::step::Step;
-use suzatary_core::view;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use suzatary_core::wire::lines::{
     Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
     SkeletonNode, SkeletonPayload, StoredObject,
 };
-use suzatary_core::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
-use suzatary_core::{mail, reading};
 use suzatary_store::store::Prodrome;
 use suzatary_store::wire::store::SinceRead;
+use suzatary_todo::reading;
+use suzatary_todo::render::Render;
+use suzatary_todo::view;
+use suzatary_todo::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
 
 /// Every head, sorted, with none of them picked.
 pub(crate) fn head_set<E: prodrome_core::schema::Schema>(
@@ -1468,7 +1469,7 @@ pub fn receive_objects(
         &taken,
         actor,
         &chain.name,
-        &|posted| suzatary_core::todos::current(&shown, posted.at, posted.todo.as_str()),
+        &|posted| suzatary_todo::todos::current(&shown, posted.at, posted.todo.as_str()),
     );
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
@@ -1830,7 +1831,7 @@ pub fn author(
         wire::Authoring::Update(update) => {
             let wire::UpdateTodo { todo, patch, note } = &**update;
             let id = todo_id(todo)?.to_owned();
-            let Some(before) = suzatary_core::todos::current(&nodes, at, &id) else {
+            let Some(before) = suzatary_todo::todos::current(&nodes, at, &id) else {
                 return Err(Refusal::not_found(format!(
                     "no todo with id {} on the chain",
                     shown(&id)
@@ -1838,7 +1839,7 @@ pub fn author(
             };
             capped_patch(patch)?;
             let known: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
-            let event = suzatary_core::authoring::update_todo(
+            let event = suzatary_todo::authoring::update_todo(
                 &before,
                 patch,
                 suzatary_base::zone::Moment {
@@ -1854,13 +1855,13 @@ pub fn author(
         }
         wire::Authoring::Confirm(wire::ConfirmTodo { todo, note }) => {
             let id = todo_id(todo)?.to_owned();
-            let Some(before) = suzatary_core::todos::current(&nodes, at, &id) else {
+            let Some(before) = suzatary_todo::todos::current(&nodes, at, &id) else {
                 return Err(Refusal::not_found(format!(
                     "the chain holds no content for todo {}",
                     shown(&id)
                 )));
             };
-            let event = suzatary_core::authoring::confirm_todo(
+            let event = suzatary_todo::authoring::confirm_todo(
                 &before,
                 at,
                 actor.as_str(),
@@ -1873,14 +1874,14 @@ pub fn author(
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
             let event =
-                suzatary_core::authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+                suzatary_todo::authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
         wire::Authoring::Redo(todo) => {
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
             let event =
-                suzatary_core::authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+                suzatary_todo::authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
     };
@@ -1925,8 +1926,8 @@ fn add(
         .map(|e| e.todo().as_str().to_owned())
         .collect();
     let todo = match &new.id {
-        None => suzatary_core::authoring::fresh_id(
-            &suzatary_core::authoring::slug(&fields.body)?,
+        None => suzatary_todo::authoring::fresh_id(
+            &suzatary_todo::authoring::slug(&fields.body)?,
             &taken,
         )?,
         Some(named) => {
@@ -1940,7 +1941,7 @@ fn add(
             named
         }
     };
-    let new_todo = suzatary_core::authoring::NewTodo {
+    let new_todo = suzatary_todo::authoring::NewTodo {
         todo: todo.clone(),
         fields,
         source: None,
@@ -1952,10 +1953,10 @@ fn add(
             zone: deployment.zone,
         };
         let event =
-            suzatary_core::authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
+            suzatary_todo::authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
         return Ok((todo, event, None));
     };
-    let Some(record) = suzatary_core::todos::current(nodes, at, todo_id(parent)?) else {
+    let Some(record) = suzatary_todo::todos::current(nodes, at, todo_id(parent)?) else {
         return Err(Refusal::not_found(format!(
             "no todo with id {} on the chain to be a parent",
             shown(parent)
@@ -1963,7 +1964,7 @@ fn add(
     };
     let believed =
         Believed::of(nodes, at, &chain.untrusted).map_err(|e| Refusal::internal(e.to_string()))?;
-    let (event, revision) = suzatary_core::authoring::build_subtodo(
+    let (event, revision) = suzatary_todo::authoring::build_subtodo(
         &new_todo,
         &record,
         &believed.linkable(),
@@ -2080,7 +2081,7 @@ pub fn calendar(
         from: from.to_string(),
         days: DAYS,
         text: suzatary_core::calendar::page::calendar_text(&days),
-        rich: suzatary_core::rendering::CALENDAR
+        rich: suzatary_todo::rendering::CALENDAR
             .call(&suzatary_core::calendar::page::calendar(&days))
             .ok()
             .and_then(|page| render.page(&page).ok())

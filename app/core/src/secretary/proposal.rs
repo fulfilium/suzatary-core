@@ -48,7 +48,7 @@ pub enum Proposal {
         replaces: crate::secretary::memory::Replaces,
     },
     /// A decision to record, whole, as the owner's own once he taps it.
-    Decide(crate::decisions::Draft),
+    Decide(suzatary_todo::decisions::Draft),
 }
 
 impl Proposal {
@@ -230,7 +230,7 @@ impl prodrome_core::literal::codec::Literal for Proposal {
                     replaces: Replaces::Facts(fields.get("from")?),
                 }
             }
-            "Decide" => Proposal::Decide(crate::decisions::Draft::from_value(value)?),
+            "Decide" => Proposal::Decide(suzatary_todo::decisions::Draft::from_value(value)?),
             _ => Proposal::Act(crate::secretary::acts::Act::from_value(value)?),
         })
     }

@@ -19,11 +19,11 @@ use prodrome_core::registers::Node;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
-use suzatary_core::decisions::{
-    self, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
-};
 use suzatary_record::record::MarkupSource;
 use suzatary_store::store::linearised;
+use suzatary_todo::decisions::{
+    self, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
+};
 
 type Disk = EventStore<DecisionEvent, Everything>;
 
@@ -419,7 +419,7 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
     let decision = moved(prodrome_core::schema::Schema::key(event));
     let when = prodrome_core::schema::Schema::at(event);
     match event.body() {
-        suzatary_core::decisions::Said::Decided {
+        suzatary_todo::decisions::Said::Decided {
             statement,
             supersedes,
         } => decisions::decided(
@@ -429,7 +429,7 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
             statement.clone(),
             supersedes.iter().map(moved).collect(),
         ),
-        suzatary_core::decisions::Said::Revised {
+        suzatary_todo::decisions::Said::Revised {
             statement,
             supersedes,
         } => decisions::revised(
@@ -439,7 +439,7 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
             statement.clone(),
             supersedes.iter().map(moved).collect(),
         ),
-        suzatary_core::decisions::Said::Withdrawn { reason } => {
+        suzatary_todo::decisions::Said::Withdrawn { reason } => {
             decisions::withdrawn(decision, when, ada(), reason.as_str())
         }
     }

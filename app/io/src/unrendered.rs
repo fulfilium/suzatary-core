@@ -2,7 +2,7 @@
 //! and opening it touches no directory.
 
 use suzatary_base::answer::Renderable;
-use suzatary_core::render_cache::RenderCache;
+use suzatary_todo::render_cache::RenderCache;
 
 /// Keeps nothing.
 #[derive(Debug, Clone, Copy, Default)]

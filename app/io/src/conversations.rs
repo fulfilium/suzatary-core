@@ -4,11 +4,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::render_cache::RenderCache;
 use suzatary_core::secretary::conversations::Conversations;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::model_sessions::ModelSessions;
 use suzatary_core::secretary::opened::Opened;
+use suzatary_todo::render_cache::RenderCache;
 
 use crate::objects;
 use crate::text_keys::{self, TextKeys};

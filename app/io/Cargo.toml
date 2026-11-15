@@ -16,6 +16,7 @@ suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
 suzatary-core.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true

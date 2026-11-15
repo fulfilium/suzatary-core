@@ -17,6 +17,7 @@ crate-type = ["cdylib", "rlib"]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-core.workspace = true
+suzatary-todo.workspace = true
 suzatary-api.workspace = true
 prodrome_core.workspace = true
 viewtree = { path = "../viewtree", features = ["host"] }

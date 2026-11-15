@@ -6,7 +6,8 @@ use suzatary_api::routes;
 use suzatary_api::server::Server;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::{notify, view};
+use suzatary_core::notify;
+use suzatary_todo::view;
 
 use super::watched::{Pace, Watched};
 

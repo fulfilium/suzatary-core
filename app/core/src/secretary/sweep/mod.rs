@@ -259,7 +259,7 @@ fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded,
     let now = chain.caps.clock.now();
     let nodes = chain.caps.chain.nodes()?;
     let records = suzatary_record::decoration::records_of(&nodes);
-    let events = crate::view::events_of(&nodes);
+    let events = suzatary_todo::view::events_of(&nodes);
     let mut open = Vec::new();
     for entry in prodrome_core::view::entries(&nodes, now, &chain.policy.untrusted)
         .map_err(|failed| Refusal::internal(failed.to_string()))?

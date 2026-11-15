@@ -3,7 +3,7 @@
 use suzatary_api::wire::{ReleaseItem, ReleaseRow, ReleasesPayload};
 use suzatary_core::release::{Lot, Named, Place};
 use suzatary_core::wire::cards::HeldTodo;
-use suzatary_core::wire::todo::Fulfillment;
+use suzatary_todo::wire::todo::Fulfillment;
 use viewtree::Attr::{Class, Data};
 use viewtree::kit::Reading;
 use viewtree::{Node, view};

@@ -13,7 +13,7 @@ pub const SIGNATURES: &[Constructor] = &[
     proposal::FORWARDED,
     proposal::REMEMBER,
     proposal::CONSOLIDATE,
-    crate::decisions::DECIDE,
+    suzatary_todo::decisions::DECIDE,
     changes::CHANGES,
     changes::ADD,
     changes::ADD_FROM,

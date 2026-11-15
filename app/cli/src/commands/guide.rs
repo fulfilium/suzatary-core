@@ -121,7 +121,7 @@ fn flags() -> String {
 /// # Errors
 /// The text does not compile there, or the tripwire refuses what it made.
 pub fn html(guide: &str) -> anyhow::Result<String> {
-    let html = suzatary_io::typeset::compile(&suzatary_core::template::Job::text(&source(
+    let html = suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(&source(
         World::Closed,
         guide,
     )?))

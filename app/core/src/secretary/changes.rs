@@ -9,7 +9,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::authoring::{self, NewTodo};
 use crate::priced::{PRICE_SPELLINGS, Priced};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::capability::{Datetime, Typeset};
@@ -19,6 +18,7 @@ use suzatary_base::zone::Moment;
 use suzatary_record::record::{Node, Source, TodoEvent};
 use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
 use suzatary_signatures::believed::{Believed, Preview};
+use suzatary_todo::authoring::{self, NewTodo};
 
 /// One chain act, each arm backed by an existing builder.
 ///
@@ -277,7 +277,7 @@ impl Act {
         let at = now.at;
         match self {
             Act::Add { todo, fields, from } => {
-                if crate::todos::current(nodes, at, todo).is_some() {
+                if suzatary_todo::todos::current(nodes, at, todo).is_some() {
                     return Err(Refusal::conflict(format!(
                         "todo {} already exists — update it instead of adding it again",
                         quoted(todo)
@@ -384,7 +384,7 @@ fn existing(
     at: Datetime,
     todo: &str,
 ) -> Result<suzatary_record::record::Authored, Refusal> {
-    crate::todos::current(nodes, at, todo)
+    suzatary_todo::todos::current(nodes, at, todo)
         .ok_or_else(|| Refusal::not_found(format!("no todo with id {} on the chain", quoted(todo))))
 }
 

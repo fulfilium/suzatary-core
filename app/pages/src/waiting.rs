@@ -8,10 +8,10 @@ use serde::Deserialize;
 use suzatary_api::wire::{DrawnPayload, FoldPayload, WaitingPayload};
 use suzatary_base::reference::Reference;
 use suzatary_core::secretary::store::Unheld;
-use suzatary_core::wire::todo::{Block, Entry, EntryState};
 use suzatary_core::wire::topics::{
     InboxProposal, InboxProposalsPayload, InboxState, ProposalRow, UnplacedProposal,
 };
+use suzatary_todo::wire::todo::{Block, Entry, EntryState};
 use ts_rs::TS;
 use viewtree::kit::Reading;
 
@@ -157,7 +157,7 @@ impl<'a> Waiting<'a> {
         };
         match (
             self.unpriced(),
-            value.and_then(suzatary_core::wire::todo::Fulfillment::number),
+            value.and_then(suzatary_todo::wire::todo::Fulfillment::number),
         ) {
             (Some(_), _) => (2, 0.0),
             (None, None) => (1, 0.0),

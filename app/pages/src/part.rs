@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use suzatary_base::answer::Kind;
-use suzatary_core::wire::todo::Entry;
 use suzatary_core::wire::topics::Speaker;
+use suzatary_todo::wire::todo::Entry;
 use ts_rs::TS;
 use viewtree::Node;
 use viewtree::node::foreign;

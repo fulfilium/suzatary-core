@@ -96,7 +96,7 @@ pub(crate) fn answered<T: serde::Serialize>(value: &T) -> Result<serde_json::Val
 
 fn events_of(chain: &dyn Reads<TodoEvent>) -> Result<Vec<TodoEvent>, Refusal> {
     let nodes = chain.nodes()?;
-    Ok(crate::view::events_of(&nodes))
+    Ok(suzatary_todo::view::events_of(&nodes))
 }
 
 #[cfg(test)]

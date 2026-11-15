@@ -17,10 +17,10 @@ use suzatary_base::escape::Escaped;
 use suzatary_base::narrowing::narrowed;
 use suzatary_base::table::Table;
 use suzatary_base::tripwire::suspicious;
-use suzatary_core::render::{Html, Render};
-use suzatary_core::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
-use suzatary_core::template::{Called, Job, Kept, Output, Unprintable, named};
+use suzatary_todo::render::{Html, Render};
+use suzatary_todo::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
+use suzatary_todo::template::{Called, Job, Kept, Output, Unprintable, named};
 
 use crate::rendered::Rendered;
 use crate::typeset::Compiler;
@@ -175,7 +175,7 @@ impl Render for Typst {
     }
 }
 
-impl suzatary_core::render_cache::RenderCache for Typst {
+impl suzatary_todo::render_cache::RenderCache for Typst {
     fn forget(&self, block: &Renderable) -> Result<(), String> {
         let key = ANSWER.key_of(block).map_err(|e| e.to_string())?;
         self.fragments
@@ -203,8 +203,8 @@ fn unprintable(failed: &Unprintable) -> RenderError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::reading::CalendarPage;
-    use suzatary_core::rendering::CALENDAR;
+    use suzatary_todo::reading::CalendarPage;
+    use suzatary_todo::rendering::CALENDAR;
 
     fn scratch_cache(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -333,9 +333,9 @@ mod tests {
         let (typst, cache) = typst_at("todo-page");
         let stranger = "Review\"] #eval(\"x\") [<script>";
         let calendar = CalendarPage {
-            days: vec![suzatary_core::reading::CalendarDay {
+            days: vec![suzatary_todo::reading::CalendarDay {
                 heading: "Monday 5 October".to_owned(),
-                entries: vec![suzatary_core::reading::CalendarRow {
+                entries: vec![suzatary_todo::reading::CalendarRow {
                     time: "09:00–10:00".to_owned(),
                     title: stranger.to_owned(),
                     place: Some("Room #4".to_owned()),
@@ -364,7 +364,7 @@ mod tests {
     fn a_page_read_at_two_instants_writes_nothing_under_the_cache() {
         let (typst, cache) = typst_at("pages-stay-in-memory");
         let at = |heading: &str| CalendarPage {
-            days: vec![suzatary_core::reading::CalendarDay {
+            days: vec![suzatary_todo::reading::CalendarDay {
                 heading: heading.to_owned(),
                 entries: Vec::new(),
             }],

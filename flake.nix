@@ -64,18 +64,10 @@
 
       # THE APP'S VERSION IS DERIVED FROM THE TREE, NEVER TYPED TWICE.
       #
-      # versionName is the RELEASE's version (`app/release.toml`, below) plus the
-      # commit it was built from, so a phone's About screen names a commit
-      # somebody can check out.
-      #
-      # versionCode is the COMMIT COUNT: Android's only requirement is that it
-      # increase, and the count does that on master for free, with no bump to
-      # forget. A dirty tree has no count and gets 0, which is below every
-      # release — so a hand-built APK can never present itself to the installer
-      # as newer than one that came out of CI.
-      #
-      # Both are inputs to the derivation, so its hash moves exactly when they
-      # do, which is what makes "rebuild only on a change" mean something.
+      # versionName is the release's version (`app/release.toml`) plus the commit, so a phone's
+      # About screen names a commit. versionCode is the commit count, which only increases on
+      # master; a dirty tree gets 0, so a hand-built APK never installs over one from CI. Both
+      # are inputs, so the derivation's hash moves exactly when they do.
       #
       # THE RELEASE IS `app/release.toml`, which `suzatary release cut` writes and no crate
       # compiles: `suzatary-app` copies the binary and installs the file beside it, where the
@@ -174,6 +166,7 @@
             ./app/record
             ./app/store
             ./app/signatures
+            ./app/todo
             ./app/api
             ./app/io
             ./app/plugin
@@ -196,8 +189,7 @@
 
         # THE BUILD STAMP TRACKS `appSrc`, NOT THE WHOLE TREE: its store path is a hash of exactly
         # the files the binary reads, so `build` on `GET /api/about` changes when the binary's
-        # inputs do, never on a chain write or a doc. An APK's version still names a git commit,
-        # so the two are no longer compared by eye.
+        # inputs do, never on a chain write or a doc.
         appSrcBuild = builtins.substring 0 8 (builtins.baseNameOf (toString appSrc));
 
         # ONE DEPENDENCY BUILD, SHARED BY EVERY DERIVATION BELOW: `cargoArtifacts` is the
@@ -260,12 +252,14 @@
           ./app/record/Cargo.toml
           ./app/store/Cargo.toml
           ./app/signatures/Cargo.toml
+          ./app/todo/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
           ./app/record/src
           ./app/store/src
           ./app/signatures/src
+          ./app/todo/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
@@ -273,6 +267,7 @@
           ./app/base/tests/support
           ./app/store/tests/support
           ./app/signatures/tests/support
+          ./app/todo/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -311,14 +306,10 @@
           };
         };
 
-        # `nix build .#suzatary` — the application (docs/ARCHITECTURE.md): the
-        # binary above, copied, with `app/release.toml` installed beside it at
-        # `share/suzatary/release.toml`, where the binary reads its release at run
-        # time (`GET /api/about`, `--version`). A COPY, not a link: the binary finds
-        # the file from its own resolved path, and a link would resolve to
-        # `suzatary-bin`, which holds no release. A release commit rebuilds this copy
-        # and nothing else. It runs `--version` before it ships, so a release file the
-        # binary does not read never ships.
+        # `nix build .#suzatary` — the application (docs/ARCHITECTURE.md): the binary above,
+        # COPIED (a link would resolve to `suzatary-bin`, which holds no release), with
+        # `app/release.toml` beside it at `share/suzatary/release.toml`, read at run time. A
+        # release commit rebuilds this copy alone, and `--version` runs before it ships.
         suzatary-app = pkgs.runCommand "suzatary-${appVersion}" {
           release = ./app/release.toml;
           meta = {
@@ -334,18 +325,12 @@
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';
 
-        # `suzatary-dev`: EVERY VERB OF THE BINARY, PLUS THE END-TO-END FIXTURE, and it is a
-        # SECOND DERIVATION rather than a flag on the first for the reason
-        # CLAUDE.md's Containment section gives: a flag in the shipped program
-        # is a write path reachable by anything that can set an environment
-        # variable on this box. `--whois-fixture` makes every peer one login,
-        # which is what puts the write surface inside a browser test's reach —
-        # a headless Chromium here arrives from 127.0.0.1 whatever address it
-        # dialled, which no daemon names, so without it every request is refused.
-        #
-        # `.#suzatary` does NOT enable the feature, so the deployed program
-        # does not contain the code at all. Removal is checkable; a blocklist
-        # is not. `scripts/web-e2e.sh` reaches for this one by store path.
+        # `suzatary-dev`: EVERY VERB OF THE BINARY, PLUS THE END-TO-END FIXTURE, as a SECOND
+        # DERIVATION, not a flag: a flag in the shipped program is a write path for anything that
+        # sets an environment variable (CLAUDE.md, Containment). `--whois-fixture` makes every
+        # peer one login, since a headless Chromium arrives from 127.0.0.1, which no daemon names.
+        # `.#suzatary` does not enable it, so the deployed program does not contain the code.
+        # `scripts/web-e2e.sh` reaches for this one by store path.
         suzatary-fixture = appCrate {
           pname = "suzatary-fixture";
           doCheck = false;
@@ -390,12 +375,14 @@
                 ./app/record/Cargo.toml
                 ./app/store/Cargo.toml
                 ./app/signatures/Cargo.toml
+                ./app/todo/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
                 ./app/record/src
                 ./app/store/src
                 ./app/signatures/src
+                ./app/todo/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -474,16 +461,12 @@
         suzatary-views-wasm-dev-deps = (viewsModule "development").deps;
         suzatary-views-wasm-dev = (viewsModule "development").module;
 
-        # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`):
-        # `app/plugin-fence`, a plugin whose every mode tries to break one of the
-        # host's fences, as the two components `app/plugin/tests/fence.rs` loads.
-        # `fence.wasm` targets the source world; `escapee.wasm` is the same
-        # plugin built against a world that also imports a filesystem and a
-        # network, which the host must refuse to load. Built for
-        # wasm32-unknown-unknown and wrapped by `wasm-tools component new`, so
-        # nothing of WASI is linked in and the components import exactly what
-        # their worlds name. A test fixture, never loaded by the app; its
-        # dependencies are wit-bindgen's few, so it shares no dependency build.
+        # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`): `app/plugin-fence`,
+        # whose every mode tries to break one of the host's fences (`app/plugin/tests/fence.rs`).
+        # `fence.wasm` targets the source world; `escapee.wasm` also imports a filesystem and a
+        # network, which the host must refuse to load. Built for wasm32-unknown-unknown and
+        # wrapped by `wasm-tools component new`, so nothing of WASI is linked in. A test fixture,
+        # never loaded by the app.
         suzatary-plugin-fence = craneLib.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugin-fence";
           src = lib.fileset.toSource {
@@ -498,6 +481,7 @@
               ./app/record/Cargo.toml
               ./app/store/Cargo.toml
               ./app/signatures/Cargo.toml
+              ./app/todo/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -528,14 +512,10 @@
           meta.description = "The plugin host's fence tests' adversary: two components, never loaded by the app";
         });
 
-        # THE APP'S REFERENCE PLUGINS (`nix build .#suzatary-plugins`): `ics.wasm`,
-        # the calendar's source (`app/plugin-ics`), beside its schema. Built for
-        # wasm32-wasip2 with the plugins' toolchain, whose linker writes the
-        # component; it imports `fetch` and the WASI clocks, random numbers and
-        # standard streams the host links. The box's plugin timer roots this output
-        # and resolves a manifest's `component` against it (`scripts/plugin-sync.sh`);
-        # the fence tests load it too, so a reference plugin is held to the same
-        # fences as the adversary.
+        # THE APP'S REFERENCE PLUGINS (`nix build .#suzatary-plugins`): `ics.wasm`, the calendar's
+        # source (`app/plugin-ics`), beside its schema, built for wasm32-wasip2; it imports
+        # `fetch` and the WASI the host links. The plugin timer roots it (`scripts/plugin-sync.sh`),
+        # and the fence tests load it, so it is held to the adversary's fences.
         suzatary-plugins = craneWasi.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugins";
           src = lib.fileset.toSource {
@@ -550,6 +530,7 @@
               ./app/record/Cargo.toml
               ./app/store/Cargo.toml
               ./app/signatures/Cargo.toml
+              ./app/todo/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
@@ -715,13 +696,10 @@
           meta.description = "fpl/series conformance vectors, regenerated from prodrome's own literal grammar for web/test/wasm.test.ts";
         };
 
-        # `nix build .#suzatary-junk-seed`: THE MONTHLY JUNK SWEEP'S CHURN SEED. It normalises the
-        # two public lists above into one sorted, deduplicated `domains.txt`, plus a `sources.txt`
-        # naming each source's rev and count. `SUZATARY_JUNK_SEED` (`nix/nixos-module.nix`) points
-        # a deployment at it, and the binary reads it fresh at each digest. No network at run
-        # time: both sources are flake inputs, locked by hash. It runs `cargo run --example
-        # junk_seed` over `suzatary_core::mail::junk::normalize_seed_file`, so the build and the
-        # digest share one tested normaliser.
+        # `nix build .#suzatary-junk-seed`: THE MONTHLY JUNK SWEEP'S CHURN SEED, the two public
+        # lists above as one sorted `domains.txt` and a `sources.txt` of revs and counts, read at
+        # each digest through `SUZATARY_JUNK_SEED`. Both lists are flake inputs, locked by hash;
+        # `suzatary_core::mail::junk::normalize_seed_file` is the one normaliser.
         suzatary-junk-seed = appCrate {
           pname = "suzatary-junk-seed";
           doCheck = false;
@@ -994,14 +972,10 @@
           # fall back to. DejaVu Sans alone is the one font this box holds, so
           # the e2e suite measures the same text on both.
           FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts.minimal ]; };
-          # A SHELL IS TOOLS, NOT BUILDS: everything here comes from nixpkgs, so entering it builds
-          # nothing of this repository's. The scripts that need the Prodrome's wasm or the vectors
-          # resolve them when they run, or are handed them.
-          # Every command in this repo runs through this shell, so this is
-          # where the commit-msg hook gets wired — not a README step and not
-          # a value some tool can clobber for a day (memory/, decision hookspath:
-          # the worktree harness kept setting it absolute). Relative resolves
-          # against the worktree root, so it is right in every worktree.
+          # A SHELL IS TOOLS, NOT BUILDS: everything comes from nixpkgs, so entering it builds
+          # nothing of this repository's; the scripts resolve the wasm and vectors they need.
+          # Every command runs through this shell, so the commit-msg hook is wired here, relative
+          # so it is right in every worktree (→ `hookspath`).
           shellHook = ''
             if git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
                && [ -d scripts/hooks ] \
@@ -1014,12 +988,8 @@
             # bundle, no npm, tsc as the type gate, node for the unit tests.
             #
             # ⚠️ NO INTERPRETER HERE: decisions over JSON are verbs of the binary.
-            # ⚠️ `nodejs_24` BY NAME, not the unversioned alias. Three places
-            # assert node 24 out loud — scripts/web-test.sh (`--test` semantics
-            # and `crypto.subtle`), scripts/web-e2e.sh (a global `WebSocket` is
-            # the whole CDP client) and the browser comment below — and an
-            # alias moves when nixpkgs moves, with only a test failure to say
-            # so.
+            # ⚠️ `nodejs_24` BY NAME, not the alias, which moves with nixpkgs: web-test.sh
+            # (`--test`, `crypto.subtle`) and web-e2e.sh (a global `WebSocket`) need node 24.
             esbuild typescript nodejs_24
             # brotli: scripts/build-web.sh precompresses the frontend at
             # quality 11, so the server never compresses a file per request.

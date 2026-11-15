@@ -1424,7 +1424,7 @@ mod tests {
     /// A cache that cannot forget.
     struct Stuck;
 
-    impl crate::render_cache::RenderCache for Stuck {
+    impl suzatary_todo::render_cache::RenderCache for Stuck {
         fn forget(&self, _: &suzatary_base::answer::Renderable) -> Result<(), String> {
             Err("the disk said no".to_owned())
         }

@@ -791,7 +791,7 @@ enum Prepared<'p, 'c> {
         held: suzatary_core::secretary::memories::Held<'c>,
         node: &'p prodrome_core::event::Hash,
     },
-    Decide(&'p suzatary_core::decisions::Draft),
+    Decide(&'p suzatary_todo::decisions::Draft),
     GoogleClient {
         redirect: &'p suzatary_core::google::RedirectUri,
         file: &'p Secret,
@@ -2801,7 +2801,7 @@ mod tests {
         fn block(
             &self,
             _block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_core::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
         {
             panic!("a turn that is not the model's was rendered");
         }
@@ -2988,9 +2988,9 @@ mod tests {
         fn block(
             &self,
             block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_core::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
         {
-            Ok(suzatary_core::render::Html::from_render(format!(
+            Ok(suzatary_todo::render::Html::from_render(format!(
                 "<p>{}</p>",
                 block.as_str().trim()
             )))
@@ -3002,7 +3002,7 @@ mod tests {
         fn block(
             &self,
             _block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_core::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
         {
             Err(suzatary_core::secretary::answers::AnswerError(
                 "typst refused".to_owned(),

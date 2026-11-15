@@ -149,7 +149,7 @@ impl Stamp {
 
 /// The stamp the gate's `speaker` puts on a line pointing at `references`, as `set` reads the chains
 /// when the line is written: the actor's own, unless a reference names a todo whose content is
-/// still an untrusted writer's ([`crate::view::provisional_content`]), or one the set cannot show
+/// still an untrusted writer's ([`suzatary_todo::view::provisional_content`]), or one the set cannot show
 /// to be otherwise, which makes it [`Stamp::Unconfirmed`]. What decides is who wrote the todo's
 /// words, its id among them; an untrusted claim about a todo he wrote leaves them his.
 #[must_use]
@@ -163,8 +163,9 @@ pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) 
     let confirmed = todos.into_iter().all(|(chain, ids)| {
         set.entries(chain).is_ok_and(|rows| {
             ids.iter().all(|id| {
-                rows.iter()
-                    .any(|row| row.key.as_str() == *id && !crate::view::provisional_content(row))
+                rows.iter().any(|row| {
+                    row.key.as_str() == *id && !suzatary_todo::view::provisional_content(row)
+                })
             })
         })
     });

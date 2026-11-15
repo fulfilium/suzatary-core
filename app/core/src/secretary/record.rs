@@ -6,7 +6,6 @@ use crate::mail::junk_folder::Junk;
 use crate::mail::mail_sync::MailSync;
 use crate::mail::mailbox::Mailbox;
 use crate::mail::older_mail::OlderMail;
-use crate::render::Render;
 use crate::repositories::Repositories;
 use crate::repository::Repository;
 use crate::secretary::briefings::Briefings;
@@ -17,6 +16,7 @@ use crate::web::Web;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Prodrome;
+use suzatary_todo::render::Render;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its
@@ -75,7 +75,7 @@ pub struct Secretary<'a> {
     /// cannot become durable.
     pub memories: crate::secretary::memories::Memories<'a>,
     /// The recorded decisions: a verb reads them; only the owner's tap on a proposal writes.
-    pub decisions: crate::decisions::Decisions<'a>,
+    pub decisions: suzatary_todo::decisions::Decisions<'a>,
     /// The topics on its rounds and notes, box-local: the topic verbs write its suggestions.
     pub topics: crate::secretary::topics::stores::TopicStores<'a>,
     pub briefings: &'a dyn Briefings,
@@ -145,7 +145,7 @@ impl<'a> Secretary<'a> {
     pub fn decides(
         &self,
     ) -> (
-        &crate::decisions::Decisions<'a>,
+        &suzatary_todo::decisions::Decisions<'a>,
         &'a dyn Clock,
         &'a dyn Render,
     ) {

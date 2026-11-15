@@ -49,8 +49,8 @@ fn the_owners_chain() -> InMemory<TodoEvent> {
     let chain = InMemory::<TodoEvent>::default();
     chain
         .append(
-            suzatary_core::authoring::build_todo(
-                &suzatary_core::authoring::NewTodo {
+            suzatary_todo::authoring::build_todo(
+                &suzatary_todo::authoring::NewTodo {
                     todo: "alpha".to_owned(),
                     fields: suzatary_record::todo::TodoFields {
                         body: "Renew the permit".to_owned(),

@@ -32,7 +32,6 @@ use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::mail_error::MailError;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_core::render::{Html, Render};
 use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::model::{
@@ -43,6 +42,7 @@ use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
 use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_todo::render::{Html, Render};
 
 /// The one IPv4 identity every real connection from this process presents as.
 #[must_use]
@@ -590,7 +590,7 @@ impl FakeRender {
 /// The real closed world: a door a test drives is the door the box has.
 impl suzatary_base::capability::Typeset for FakeRender {
     fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
-        suzatary_io::typeset::compile(&suzatary_core::template::Job::text(source))
+        suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(source))
     }
 }
 
@@ -621,7 +621,7 @@ impl Render for FakeRender {
         markup.iter().filter(|m| self.html(m).is_ok()).count()
     }
 
-    fn page(&self, page: &suzatary_core::template::Called) -> Result<Html, RenderError> {
+    fn page(&self, page: &suzatary_todo::template::Called) -> Result<Html, RenderError> {
         Ok(Html::from_render(format!(
             "<pre>{}</pre>",
             page.job().state
@@ -2204,7 +2204,7 @@ pub struct Fakes {
     /// The secretary's memory, its history beside the conversations.
     pub memory: suzatary_io::objects::Objects<suzatary_core::secretary::memory_event::MemoryEvent>,
     /// The recorded decisions, beside the memory.
-    pub decisions: suzatary_io::objects::Objects<suzatary_core::decisions::DecisionEvent>,
+    pub decisions: suzatary_io::objects::Objects<suzatary_todo::decisions::DecisionEvent>,
     /// The memory's texts, beside its history.
     pub memory_texts: suzatary_io::texts::Texts<suzatary_core::secretary::memory::Fact>,
     /// The digest's history, beside the memory.
@@ -2458,7 +2458,7 @@ impl Fakes {
             conversations: self.conversations.conversations(),
             inbox: &self.inbox,
             memories: self.memories(),
-            decisions: suzatary_core::decisions::Decisions {
+            decisions: suzatary_todo::decisions::Decisions {
                 store: &self.decisions,
             },
             topics: self.topics.stores(),

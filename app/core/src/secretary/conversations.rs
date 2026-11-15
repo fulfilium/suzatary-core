@@ -6,7 +6,6 @@
 //! written through [`crate::secretary::transcript::push`] alone, which keeps each key before the
 //! line that names it is appended, and never takes it back: an orphan key opens nothing.
 
-use crate::render_cache::RenderCache;
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KeyName, TextKey};
@@ -21,6 +20,7 @@ use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, Status};
 use suzatary_store::store::{Doc, Gets, Prodrome, Reads, StoreError};
+use suzatary_todo::render_cache::RenderCache;
 
 /// The conversations: their lines, their keys, and the source of fresh keys.
 #[derive(Clone, Copy)]

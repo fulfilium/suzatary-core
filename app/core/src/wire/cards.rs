@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::todo::Neighbour;
+use suzatary_todo::wire::todo::Neighbour;
 
 /// `GET /api/about`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

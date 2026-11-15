@@ -12,7 +12,7 @@ pub use closed::Closed;
 use prodrome_typst_wasm::Project;
 use serde::Deserialize;
 use suzatary_base::capability::{Diagnostic, Rejected, Typeset};
-use suzatary_core::template::{Job, Library};
+use suzatary_todo::template::{Job, Library};
 
 /// Compiling a job: a template called with a value, or a lone text.
 pub trait Compiler: Sync + Send {
