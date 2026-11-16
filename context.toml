@@ -24,7 +24,9 @@ allowance = 2000
 # downward.
 # 2026-11-12: raised by hand by 15,065 for the lines' husked store (linesprune); husked.rs and object_files.rs leave with huskstoreup, when it comes down by their tokens.
 # 2026-11-16: raised by hand to the merged tree's figure for door 1, a public store's write guard (+5,451, a new security boundary).
-reading = 2949899
+# 2026-11-16: raised by hand to the figure of the tree merged with 2.1.148 for `prodrome carry` (+20,175), a verb stage 4 of the public tasks plan deletes; accepted at the review of #520.
+# 2026-11-16: raised by hand to the figure of the tree merged with #520 for the start that folds no conversations (#521, +614 on top of #520's figure, about 5 s off every start).
+reading = 2972635
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

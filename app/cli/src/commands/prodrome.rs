@@ -1,4 +1,8 @@
-//! `suzatary prodrome init`: a todo store begun at a path, such as a project's roadmap.
+//! `suzatary prodrome init|carry`: a todo store begun at a path, such as a project's roadmap,
+//! and the upkeep chain's project todos carried to it.
+
+mod carry;
+mod list;
 
 use std::path::Path;
 
@@ -24,18 +28,44 @@ pub enum Action {
         #[arg(long)]
         public: bool,
     },
+    /// Carry the upkeep chain's open todos that the carried list carries, and its releases, to a
+    /// public store. Without `--apply` it prints what it would write, to stdout alone.
+    Carry(Carrying),
 }
 
-pub fn run(args: &Args) -> anyhow::Result<()> {
-    let Action::Init { store, public } = &args.action;
-    init(
-        store,
-        if *public {
-            Charter::Public
-        } else {
-            Charter::Private
-        },
-    )
+/// What `prodrome carry` takes.
+#[derive(Debug, clap::Args)]
+pub struct Carrying {
+    /// The public store, begun with `prodrome init --public`.
+    #[arg(long, value_name = "DIR")]
+    to: std::path::PathBuf,
+    /// The carried list; absent is the box-local tier's `carried-list.toml`.
+    #[arg(long, value_name = "FILE")]
+    list: Option<std::path::PathBuf>,
+    /// The name the deployment will mount the public store as, which each successor's
+    /// reference names.
+    #[arg(long, value_name = "NAME", default_value = "roadmap")]
+    named: String,
+    /// Who restates and cancels; the upkeep chain's owner when absent.
+    #[arg(long)]
+    actor: Option<String>,
+    /// Write it: the destination first, then each source's `Cancelled`.
+    #[arg(long)]
+    apply: bool,
+}
+
+pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
+    match &args.action {
+        Action::Init { store, public } => init(
+            store,
+            if *public {
+                Charter::Public
+            } else {
+                Charter::Private
+            },
+        ),
+        Action::Carry(carrying) => carry::run(path, carrying),
+    }
 }
 
 /// Refuses a store begun under another charter, or none, so no object reaches a public store

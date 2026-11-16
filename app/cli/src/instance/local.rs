@@ -14,13 +14,14 @@ impl Local {
     /// The tier's directory, under the data root.
     pub const DIR: &str = "local";
 
-    pub const FILES: [&str; 6] = [
+    pub const FILES: [&str; 7] = [
         "persona.toml",
         "personal-terms.txt",
         "context-terms.txt",
         "mail.json",
         "triage-notes.md",
         "watches",
+        "carried-list.toml",
     ];
 
     #[must_use]
@@ -57,6 +58,13 @@ impl Local {
     #[must_use]
     pub fn watches(&self) -> PathBuf {
         self.0.join(Self::FILES[5])
+    }
+
+    /// The carried list `suzatary prodrome carry` reads: words of the owner and the main session
+    /// that are published only once the owner has read them.
+    #[must_use]
+    pub fn carried_list(&self) -> PathBuf {
+        self.0.join(Self::FILES[6])
     }
 
     /// The prose, or the default when the file is absent.

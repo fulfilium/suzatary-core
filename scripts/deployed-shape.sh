@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # HEAD's public tree run as a deploy runs it: a read-only store path, files dated 1970, no
 # `.git`, a `-source` basename, and the units' PATH with no dev shell. It typesets the decisions
-# page, runs `safe-push.sh --dry` over a fresh deployment (no cargo on PATH), and stores a
-# calendar's link with `secretspec` beside the read-only tree.
+# page, runs `safe-push.sh --dry` over a fresh deployment (no cargo on PATH), writes to a public
+# chain through door 1 with the package's own gitleaks (none on PATH), and stores a calendar's
+# link with `secretspec` beside the read-only tree.
 #
 #   nix develop .#triage -c scripts/deployed-shape.sh
 set -euo pipefail
@@ -46,7 +47,7 @@ path=""
 for package in "${packages[@]}"; do
   [[ ! -d "$package/bin" ]] || path="${path:+$path:}$package/bin"
 done
-for tool in typst cargo; do
+for tool in typst cargo gitleaks; do
   if PATH="$path" command -v "$tool" >/dev/null; then
     echo "deployed-shape: $tool is on the units' PATH, so its fallback goes untested" >&2
     exit 1
@@ -112,6 +113,26 @@ echo "==> the data push, dry, from the tree" >&2
 "${units[@]}" git -C "$scratch/data" init -q
 "${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" "SUZATARY_BIN=$scratch/suzatary" \
   "$tree/scripts/safe-push.sh" --dry
+
+# After the push, whose allowlist admits no charter in the data tree's stores. The package's
+# binary, not the copy: its gitleaks and rules lie beside it in the package.
+echo "==> a public chain's write, judged by the package's own gitleaks" >&2
+"${units[@]}" sh -c 'printf "public = true\n" >"$1/events-suzatary/charter.toml" &&
+  mkdir -p "$1/local" && printf "zzperson\n" >"$1/local/personal-terms.txt" &&
+  printf "zzcontext\n" >"$1/local/context-terms.txt"' sh "$scratch/data"
+public=("${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" "$suzatary" todo add
+  --chain suzatary --category project --priority 70)
+"${public[@]}" zzclean --body "Water the garden" --rationale "A plain reason" >/dev/null ||
+  { echo "deployed-shape: door 1 refused a clean write to a public chain" >&2; exit 1; }
+token="gh""p_$(seed | cut -c1-36)"
+if said="$("${public[@]}" zzsecret --body "Water the garden" --rationale "token = $token" 2>&1)"; then
+  echo "deployed-shape: door 1 took a secret on a public chain" >&2
+  exit 1
+fi
+case "$said" in
+  *"holds a secret"*) ;;
+  *) echo "deployed-shape: door 1 did not judge the secret: $said" >&2; exit 1 ;;
+esac
 
 # The file `suzatary secretspec` names must lie under the state directory: the tree is
 # read-only. The provider is this run's own, so no store of the box's is reached.

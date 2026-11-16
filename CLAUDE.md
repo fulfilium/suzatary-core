@@ -161,7 +161,8 @@ confirm. Everything below derives from this.
   signs, every write route asks `Trust::admits`, the one door, and the
   readings still fold under `Untrusted`. A key is revoked at the terminal alone
   (`suzatary device revoke`); the wipe (`410`) clears a device's copy, and
-  removing the device from the tailnet is the real cut-off (→ `signatures`).
+  removing the device from the tailnet is the real cut-off. A public store holds
+  no signature or key object: the push right proves its writes (→ `signatures`).
 - **Ancestry is a bitset per object** (`prodrome_core::registers`): per
   (genesis, todo) for changes, over every object for legacy ones — O(n²) bits
   for a legacy store, fine at thousands; the core states the same limit.

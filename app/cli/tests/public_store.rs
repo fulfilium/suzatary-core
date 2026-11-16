@@ -1,16 +1,16 @@
 //! Door 1 of a public store (`docs/PUBLICTASKS-PLAN-2026-11-15.md` §3.1, stage 2), a security
 //! boundary: a store whose charter says `public = true` takes no event that names a term of the
-//! lists, a tailnet, a home path, an address, a telephone number or a secret, and nothing at all
-//! while it cannot read the lists. The refusal names the field and the rule's kind, never the
-//! words. From the box it takes no write by the in-app secretary, and from anyone no signature
-//! object. A private store takes the same writes. The lists are scratch ones written here, and
-//! every sample is cut in two so no line of this file holds one.
+//! lists, a name of the deployment's own, a tailnet, a home path, an address, a telephone number
+//! or a secret, and nothing at all while it cannot read the lists. The refusal names the field
+//! and the rule's kind, never the words. From the box it takes no write by the in-app secretary,
+//! and from anyone no signature object. A private store takes the same writes. The lists are
+//! scratch ones written here, and every sample is cut in two so no line of this file holds one.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use prodrome_core::event::{Envelope, canonical_envelope, mk_completed, seal_hash};
-use suzatary_cli::commands::door::Opened;
+use suzatary_cli::commands::door::{Door, Opened};
 use suzatary_cli::instance::Instance;
 use suzatary_store::store::Prodrome as _;
 
@@ -33,6 +33,7 @@ fn a_box(name: &str, public: bool) -> (PathBuf, PathBuf) {
     )
     .expect("terms");
     std::fs::write(root.join("local/context-terms.txt"), "zzcontext\n").expect("context");
+    std::fs::write(root.join("FETCHER"), "zzfetch\n").expect("the box's name");
     std::fs::create_dir_all(root.join("scripts")).expect("scripts");
     std::fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/secret-rules.toml"),
@@ -103,12 +104,18 @@ fn a_token() -> String {
 #[test]
 fn a_public_store_refuses_each_kind_of_hit_before_it_holds_it() {
     let token = a_token();
-    let hits: [(&str, String, &str, &str); 6] = [
+    let hits: [(&str, String, &str, &str); 7] = [
         (
             "term",
             "Ask zzperson about it".to_owned(),
             "names a term of the lists",
             "zzperson",
+        ),
+        (
+            "name",
+            "Ask the zzfetch box".to_owned(),
+            "names a name of this deployment",
+            "zzfetch",
         ),
         (
             "tailnet",
@@ -175,6 +182,132 @@ fn a_public_store_refuses_each_kind_of_hit_before_it_holds_it() {
     );
     let new: Vec<String> = held(&public).difference(&before).cloned().collect();
     assert_eq!(new.len(), 1, "one unsigned change, no signature: {new:?}");
+}
+
+/// The package's own gitleaks and rules judge a write to a public store, with nothing on `PATH`
+/// and no rules under the code root: a binary installed as the flake installs it
+/// (`suzatary_cli::stamp`) takes a clean write and refuses a secret.
+#[test]
+fn a_packaged_binary_judges_a_public_write_with_its_own_gitleaks() {
+    let (root, instance) = a_box("door-packaged", true);
+    std::fs::remove_file(root.join("scripts/secret-rules.toml")).expect("removed");
+    let out = root.join("package");
+    let exe = out.join("bin/suzatary");
+    std::fs::create_dir_all(exe.parent().expect("bin")).expect("bin");
+    suzatary_testkit::copy_program(Path::new(crate::binary::path()), &exe);
+    let rules = out.join(suzatary_cli::stamp::SECRET_RULES);
+    std::fs::create_dir_all(rules.parent().expect("share")).expect("share");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/secret-rules.toml"),
+        &rules,
+    )
+    .expect("the rules");
+    let gitleaks = out.join(suzatary_cli::stamp::GITLEAKS);
+    std::fs::create_dir_all(gitleaks.parent().expect("libexec")).expect("libexec");
+    let found = std::env::split_paths(&std::env::var_os("PATH").expect("a PATH"))
+        .map(|dir| dir.join("gitleaks"))
+        .find(|candidate| candidate.is_file())
+        .expect("gitleaks on the suite's PATH");
+    std::os::unix::fs::symlink(found, &gitleaks).expect("the package's gitleaks");
+
+    let packaged = |id: &str, rationale: &str| {
+        crate::binary::run(&exe)
+            .env("PATH", root.join("nothing"))
+            .env("HOME", root.join("home"))
+            .env(suzatary_signatures::signatures::BOX_KEY, SEED)
+            .env(suzatary_signatures::signatures::AGENT_KEY, "8".repeat(64))
+            .args(["--instance", &instance.to_string_lossy(), "todo", "add", id])
+            .args(["--body", "Water the garden", "--rationale", rationale])
+            .args(["--category", "home", "--priority", "70"])
+            .output()
+            .expect("the package's binary runs")
+    };
+    let before = held(&root);
+    let taken = packaged("zzclean", "A plain reason");
+    assert!(
+        taken.status.success(),
+        "{}",
+        String::from_utf8_lossy(&taken.stderr)
+    );
+    assert_eq!(held(&root).len(), before.len() + 1, "one change");
+    let refused = packaged("zzsecret", &format!("token = {}", a_token()));
+    let said = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        !refused.status.success() && said.contains("holds a secret"),
+        "{said}"
+    );
+}
+
+/// Door 1 judges a batch as it judges each event alone: the lists read once and gitleaks run
+/// once give each event the verdict the store's per-event rule gives it, whatever the batch
+/// holds around it.
+#[test]
+fn door_1_judges_a_batch_as_each_event_alone() {
+    use proptest::prelude::*;
+    let (root, path) = a_box("door-batch", true);
+    let instance = Instance::read(&path, &suzatary_cli::paths::Env::under(&root, &root))
+        .expect("the instance reads");
+    let chain = instance.chain(None).expect("life");
+    let suzatary_cli::instance::Charted::Public(lists) = &chain.charter else {
+        panic!("the box's chain is chartered public");
+    };
+    let door = Door::of(lists.clone(), &chain.policy, Opened::AtTerminal);
+    let token = a_token();
+    let texts = [
+        "A plain reason".to_owned(),
+        "Ask zzperson about it".to_owned(),
+        "Ask the zzfetch box".to_owned(),
+        concat!("Notes in /ho", "me/zzuser/notes").to_owned(),
+        format!("token = {token}"),
+        format!("first line\ntoken = {token}"),
+        concat!("Reach box.zztail.ts", ".net").to_owned(),
+    ];
+    let event = |(actor, text): (usize, usize)| {
+        suzatary_record::record::mk_authored(
+            "zzbatch",
+            prodrome_core::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant"),
+            ["ada", "assistant", "triage"][actor],
+            "todo",
+            prodrome_core::literal::Datetime::new(2026, 11, 15, 0, 0, 0, 0).expect("a day"),
+            suzatary_record::record::MarkupSource::escaped("Water the garden"),
+            prodrome_core::fpl::mk_flat(0.7).expect("a term"),
+            vec![texts[text].clone()],
+            "home",
+            "",
+            suzatary_record::record::MarkupSource::empty(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "",
+        )
+        .expect("an event")
+    };
+    let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+        cases: 12,
+        ..ProptestConfig::default()
+    });
+    runner
+        .run(
+            &proptest::collection::vec((0..3usize, 0..texts.len()), 1..6),
+            |picked| {
+                let events: Vec<_> = picked.into_iter().map(event).collect();
+                let all: Vec<&_> = events.iter().collect();
+                let mut batch: Vec<_> = all.iter().map(|_| Ok(())).collect();
+                door.judge(&all, &mut batch);
+                let alone: Vec<_> = all
+                    .iter()
+                    .map(|one| {
+                        let mut verdict = [Ok(())];
+                        door.judge(&[one], &mut verdict);
+                        let [verdict] = verdict;
+                        verdict
+                    })
+                    .collect();
+                prop_assert_eq!(batch, alone);
+                Ok(())
+            },
+        )
+        .expect("the law holds");
 }
 
 /// The lists are read at each write and only a deployment's machine holds them: where one cannot

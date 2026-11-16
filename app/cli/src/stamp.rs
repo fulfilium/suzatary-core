@@ -1,14 +1,48 @@
-//! What this binary runs as: its release, read at run time from the file beside it ([`BESIDE`])
-//! so a release cut rebuilds nothing, and its build (`SUZATARY_BUILD`, a source hash the flake
-//! sets). A cargo build has neither and says `dev`.
+//! What this binary runs as: the package it was installed from, its release, read at run time
+//! from the file beside it ([`BESIDE`]) so a release cut rebuilds nothing, and its build
+//! (`SUZATARY_BUILD`, a source hash the flake sets). A cargo build has none of them and says
+//! `dev`.
 
 use std::path::{Path, PathBuf};
 
 use suzatary_core::release::{Released, ReleasedError};
 
-/// Where the release file is installed, relative to the directory above the executable's own
-/// (`<out>/bin/suzatary` reads `<out>/share/suzatary/release.toml`).
+/// Where the release file is installed, relative to the package's `<out>`.
 pub const BESIDE: &str = "share/suzatary/release.toml";
+
+/// Where the package installs gitleaks, which door 1 runs, relative to its `<out>`.
+pub const GITLEAKS: &str = "libexec/suzatary/gitleaks";
+
+/// Where the package installs gitleaks's rules, relative to its `<out>`.
+pub const SECRET_RULES: &str = "share/suzatary/secret-rules.toml";
+
+/// The package an executable was installed from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Package {
+    /// No `share/suzatary` above the executable: a cargo build, or a binary copied out alone.
+    Dev,
+    /// `<out>`, whose `bin/suzatary` the executable is.
+    Installed(PathBuf),
+}
+
+impl Package {
+    /// The package of the executable at `exe`.
+    #[must_use]
+    pub fn of(exe: &Path) -> Package {
+        exe.parent()
+            .and_then(Path::parent)
+            .filter(|out| out.join("share/suzatary").is_dir())
+            .map_or(Package::Dev, |out| Package::Installed(out.to_owned()))
+    }
+
+    /// The running executable's package, looked up once.
+    #[must_use]
+    pub fn running() -> &'static Package {
+        static PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new();
+        PACKAGE
+            .get_or_init(|| std::env::current_exe().map_or(Package::Dev, |exe| Package::of(&exe)))
+    }
+}
 
 /// The release a binary runs as.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,10 +82,10 @@ impl Release {
     /// # Errors
     /// A release file that cannot be read or does not hold a release.
     pub fn beside(exe: &Path) -> Result<Release, Unread> {
-        let Some(prefix) = exe.parent().and_then(Path::parent) else {
+        let Package::Installed(out) = Package::of(exe) else {
             return Ok(Release::Dev);
         };
-        let path = prefix.join(BESIDE);
+        let path = out.join(BESIDE);
         match std::fs::read_to_string(&path) {
             Ok(text) => Released::parse(&text)
                 .map(Release::Released)

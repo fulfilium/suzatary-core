@@ -38,6 +38,9 @@ enum Action {
         /// The value.
         value: String,
     },
+    /// Print this deployment's own words, one per line: the words the leak guard and door 1
+    /// refuse beside the term lists. Read from the file as written, as `get` reads it.
+    Words,
 }
 
 /// A key of the instance file: TOML's dotted key, a segment that is a number naming a member of
@@ -85,7 +88,81 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             Ok(())
         }
         Action::Set { key, value } => set(path, key, value, &Env::read()?),
+        Action::Words => {
+            for word in words(path)? {
+                println!("{word}");
+            }
+            Ok(())
+        }
     }
+}
+
+/// This deployment's own words, lowercase, each of `[a-z0-9_-]` alone: the box's name in
+/// `FETCHER` beside the instance file, the labels of `web.app_url`'s host but the generic ones,
+/// and the Unix user of a home path that the file's real path, `repo` or `data` lies under.
+///
+/// # Errors
+/// The instance file unreadable or not TOML, or `FETCHER` there and unreadable.
+pub fn words(path: &Path) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let real = std::fs::canonicalize(path)
+        .with_context(|| format!("reading the instance file {}", path.display()))?;
+    let raw = |key: &str| get(path, &Key(vec![key.to_owned()]));
+    let fetcher = match std::fs::read_to_string(real.with_file_name("FETCHER")) {
+        Ok(text) => vec![text.split_whitespace().collect::<String>()],
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e).context("reading FETCHER beside the instance file"),
+    };
+    let url = get(path, &"web.app_url".parse().map_err(anyhow::Error::msg)?)?;
+    let labels = url
+        .as_deref()
+        .and_then(host)
+        .into_iter()
+        .flat_map(|host| host.split('.').map(str::to_owned).collect::<Vec<_>>())
+        .filter(|label| !generic(label));
+    let homes = [
+        Some(real.to_string_lossy().into_owned()),
+        raw("repo")?,
+        raw("data")?,
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|path| home_user(&path).map(str::to_owned));
+    Ok(fetcher
+        .into_iter()
+        .chain(labels)
+        .chain(homes)
+        .map(|word| word.to_lowercase())
+        .filter(|word| {
+            !word.is_empty()
+                && word
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+        })
+        .collect())
+}
+
+/// A URL's host: what follows a lowercase scheme's `://`, up to a `/` or a `:`.
+fn host(url: &str) -> Option<&str> {
+    let (scheme, rest) = url.split_once("://")?;
+    if !scheme.bytes().all(|b| b.is_ascii_lowercase()) {
+        return None;
+    }
+    let host = rest.split(['/', ':']).next().unwrap_or_default();
+    (!host.is_empty()).then_some(host)
+}
+
+/// A label every deployment's host may hold, spelled as the file spells it.
+fn generic(label: &str) -> bool {
+    matches!(label, "ts" | "net" | "com" | "org" | "www" | "localhost")
+        || (!label.is_empty() && label.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The user of `/home/<user>/…` or `/Users/<user>/…`.
+fn home_user(path: &str) -> Option<&str> {
+    let rest = path
+        .strip_prefix("/home/")
+        .or_else(|| path.strip_prefix("/Users/"))?;
+    Some(rest.split('/').next().unwrap_or_default())
 }
 
 /// The value at `key` in the file at `path`, as `get` prints it; `None` where the file holds no

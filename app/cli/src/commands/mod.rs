@@ -63,7 +63,7 @@ pub(crate) fn opened(
     match &chain.charter {
         crate::instance::Charted::Private => store,
         crate::instance::Charted::Public(lists) => {
-            store.public(door::rule(lists.clone(), &chain.policy, opened))
+            store.public(door::Door::of(lists.clone(), &chain.policy, opened).rule())
         }
     }
 }

@@ -466,7 +466,7 @@ impl Instance {
         ));
         let data = DataRoot(Self::data_beside(path, &file.data));
         let local = Local(data.under(Path::new(Local::DIR)));
-        let lists = crate::commands::door::Lists::of(&local, code.as_path());
+        let lists = crate::commands::door::Lists::of(&local, code.as_path(), path);
         let chains = ChainDirs::of(path, &data, file.chains, &file.signatures.root, &lists)?;
         // Derived from `chains`, so the policies and the stores cannot name different chains.
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())

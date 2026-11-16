@@ -186,6 +186,23 @@ impl<'a> Memories<'a> {
     pub fn sweep(&self) -> Result<usize, Refusal> {
         crate::parts::part("lock", || self.hold())?.sweep()
     }
+
+    /// [`Memories::sweep`] of `which` alone, refused as the whole sweep is.
+    ///
+    /// # Errors
+    /// As [`Held::sweep`].
+    pub fn sweep_only(&self, which: Texts) -> Result<usize, Refusal> {
+        let held = crate::parts::part("lock", || self.hold())?;
+        held.wholes()?;
+        held.dead(which)
+    }
+}
+
+/// A fact's or a card's words are served while kept, a summary's only while live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Texts {
+    Facts,
+    Summaries,
 }
 
 impl Held<'_> {
@@ -405,6 +422,11 @@ impl Held<'_> {
     /// # Errors
     /// [`Refusal::conflict`] naming a store whose read left anything out; the stores' own.
     pub fn sweep(&self) -> Result<usize, Refusal> {
+        self.wholes()?;
+        Ok(self.dead(Texts::Facts)? + self.dead(Texts::Summaries)?)
+    }
+
+    fn wholes(&self) -> Result<(), Refusal> {
         use crate::parts::part;
         let memories = &self.memories;
         part("whole.memory", || whole(memories.history, "memory"))?;
@@ -414,19 +436,29 @@ impl Held<'_> {
         })?;
         part("whole.lines", || {
             whole(memories.digests.lines.lines, "conversations")
-        })?;
-        let facts = texts::dead([
-            part("facts", || memories.reads().history())?.naming(),
-            part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
-        ]);
-        let summaries = texts::dead([part("summaries", || memories.digests.reads().naming())?]);
-        for name in &facts {
-            part("delete", || memories.texts.remove(name))?;
+        })
+    }
+
+    /// Delete the dead texts of `which`, every naming of them read first.
+    fn dead(&self, which: Texts) -> Result<usize, Refusal> {
+        use crate::parts::part;
+        let memories = &self.memories;
+        let dead = match which {
+            Texts::Facts => texts::dead([
+                part("facts", || memories.reads().history())?.naming(),
+                part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
+            ]),
+            Texts::Summaries => {
+                texts::dead([part("summaries", || memories.digests.reads().naming())?])
+            }
+        };
+        for name in &dead {
+            part("delete", || match which {
+                Texts::Facts => memories.texts.remove(name),
+                Texts::Summaries => memories.digests.texts.remove(name),
+            })?;
         }
-        for name in &summaries {
-            part("delete", || memories.digests.texts.remove(name))?;
-        }
-        Ok(facts.len() + summaries.len())
+        Ok(dead.len())
     }
 
     /// Erase from its conversation what every forgotten fact's writing provably copied, and offer
@@ -919,6 +951,9 @@ mod tests {
                 memories.sweep().is_err(),
                 "the sweep says it could not read"
             );
+            for half in [Texts::Facts, Texts::Summaries] {
+                assert!(memories.sweep_only(half).is_err(), "and so does each half");
+            }
             assert_eq!(texts.keys().len(), 1, "and deletes nothing");
             failing.store(false, Ordering::Relaxed);
         }

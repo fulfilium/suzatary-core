@@ -290,18 +290,23 @@
         # `nix build .#suzatary` — the application (docs/ARCHITECTURE.md): the binary above,
         # COPIED (a link would resolve to `suzatary-bin`, which holds no release), with
         # `app/release.toml` beside it at `share/suzatary/release.toml`, read at run time. A
-        # release commit rebuilds this copy alone, and `--version` runs before it ships.
+        # release commit rebuilds this copy alone, and `--version` runs before it ships. Door 1
+        # runs `libexec/suzatary/gitleaks` over `share/suzatary/secret-rules.toml`
+        # (`suzatary_cli::stamp`), so no unit's PATH needs gitleaks.
         suzatary-app = pkgs.runCommand "suzatary-${appVersion}" {
           release = ./app/release.toml;
+          rules = ./scripts/secret-rules.toml;
           meta = {
             description = "Suzatary: FPL-driven todos and mail triage over the Prodrome";
             longDescription = "See docs/ARCHITECTURE.md in the Suzatary repository.";
             mainProgram = "suzatary";
           };
         } ''
-          mkdir -p $out/bin $out/share/suzatary
+          mkdir -p $out/bin $out/share/suzatary $out/libexec/suzatary
           cp ${suzatary-bin}/bin/* $out/bin/
           cp $release $out/share/suzatary/release.toml
+          cp $rules $out/share/suzatary/secret-rules.toml
+          ln -s ${pkgs.gitleaks}/bin/gitleaks $out/libexec/suzatary/gitleaks
           [ "$($out/bin/suzatary --version)" = "suzatary ${appVersion}" ] \
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';

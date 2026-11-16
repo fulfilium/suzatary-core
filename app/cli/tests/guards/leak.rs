@@ -111,6 +111,93 @@ fn public_tree_is_a_fixpoint_of_itself() {
     );
 }
 
+/// The deployment's own words are one function (`suzatary instance words`, which door 1 reads),
+/// and it gives the words `public-tree.sh`'s own pipeline gives, read live from the script, over
+/// instance files that vary each input of that pipeline.
+#[test]
+fn the_deployments_words_are_the_words_the_script_derived() {
+    let script = std::fs::read_to_string(public_tree_script()).expect("the script");
+    let lines: Vec<&str> = script.lines().collect();
+    let fetcher = lines
+        .iter()
+        .position(|line| line.contains(r#"[ -f "$data/FETCHER" ]"#))
+        .expect("the script's words pipeline");
+    let last = (fetcher..lines.len())
+        .find(|&at| lines[at].contains(r#">"$words""#))
+        .expect("the pipeline's end");
+    let pipeline = lines[fetcher - 1..=last]
+        .join("\n")
+        .replace(r#" >"$words""#, "");
+    let (home, users, tailnet) = (
+        concat!("/ho", "me"),
+        concat!("/Use", "rs"),
+        concat!(".ts", ".net"),
+    );
+    let cases: [(&str, Option<&str>); 5] = [
+        (
+            &format!(
+                "repo = \"{home}/zzuser/code\"\ndata = \"{users}/ZzMac/data\"\n[web]\n\
+                 app_url = \"https://zzbox.ZzNet{tailnet}:8443/app\"\n"
+            ),
+            Some(" zz fetch\n"),
+        ),
+        (
+            "repo = \"relative/code\"\n[web]\napp_url = \"http://www.10.localhost\"\n",
+            None,
+        ),
+        (
+            "repo = \"/srv/code\"\n[web]\napp_url = \"HTTPS://zzupper.example.org\"\n",
+            Some("zzhost"),
+        ),
+        (
+            &format!("repo = \"{home}//x\"\n[web]\napp_url = \"://zz..odd_label\"\n"),
+            Some(""),
+        ),
+        ("repo = \"/srv/code\"\n", Some("zz.box-1\n")),
+    ];
+    for (i, (text, fetcher)) in cases.iter().enumerate() {
+        let scratch = Scratch::new(&format!("words-{i}"));
+        let instance = scratch.join("instance.toml");
+        std::fs::write(&instance, text).expect("the instance");
+        if let Some(fetcher) = fetcher {
+            std::fs::write(scratch.join("FETCHER"), fetcher).expect("FETCHER");
+        }
+        let repo = binary::run(Path::new(binary::path()))
+            .args([
+                "--instance",
+                &instance.to_string_lossy(),
+                "instance",
+                "get",
+                "repo",
+            ])
+            .output()
+            .expect("the binary runs");
+        let scripted = Command::new("bash")
+            .args(["-c", &pipeline])
+            .env("bin", binary::path())
+            .env("instance", &instance)
+            .env("data", &*scratch)
+            .env("repo", String::from_utf8_lossy(&repo.stdout).trim_end())
+            .output()
+            .expect("bash runs");
+        let function = binary::run(Path::new(binary::path()))
+            .args([
+                "--instance",
+                &instance.to_string_lossy(),
+                "instance",
+                "words",
+            ])
+            .output()
+            .expect("the binary runs");
+        assert!(function.status.success(), "{}", stderr(&function));
+        assert_eq!(
+            String::from_utf8_lossy(&function.stdout),
+            String::from_utf8_lossy(&scripted.stdout),
+            "case {i}"
+        );
+    }
+}
+
 /// The matcher itself, over a throwaway tree and a throwaway deployment, never the real ones.
 /// Every leak is spelled in pieces, so the tree this guard reads does not hold them.
 #[test]

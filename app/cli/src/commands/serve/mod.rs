@@ -56,6 +56,7 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::google::Endpoints;
 use suzatary_core::parts::Parts;
 use suzatary_core::secretary::compacting::Compacting;
+use suzatary_core::secretary::memories::Texts;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -1003,9 +1004,12 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
         &instance.deployment.app_url,
     ));
+    started_up(&first, &rest).await;
+    // Its first round folds the conversations, which a start step would wait for.
     let state = compaction::started(state, instance, serving.compacting);
-
-    started_up(&first, &rest, &state).await;
+    erase_after_start(&first);
+    let waiting = state.clone();
+    tokio::spawn(after_start("waiting", move || resume_waiting(&waiting)));
     notice_from_now_on(&state, serving.moved);
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
     watch_from_now_on(instance, stores, &state, &first, rest);
@@ -1016,8 +1020,9 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     serve_on(serving.listening, listener, service).await
 }
 
-/// Everything serve does before it listens, each step timed ([`Started`]).
-async fn started_up(first: &Chained, rest: &[Chained], state: &State) {
+/// Everything serve does before it listens, each step timed ([`Started`]); none folds the
+/// conversations, whose first fold reads the whole store.
+async fn started_up(first: &Chained, rest: &[Chained]) {
     let starting = Instant::now();
     let mut started = Started::default();
     started.step("warm", || {
@@ -1032,9 +1037,6 @@ async fn started_up(first: &Chained, rest: &[Chained], state: &State) {
     let at = Instant::now();
     open_default(first).await;
     started.took("default", at.elapsed(), Parts::default());
-    let at = Instant::now();
-    resume_waiting(state).await;
-    started.took("waiting", at.elapsed(), Parts::default());
     started.log("serve start", starting.elapsed());
 }
 
@@ -1617,7 +1619,7 @@ pub async fn instance_watched(state: State, path: PathBuf) {
     }
 }
 
-async fn resume_waiting(state: &State) {
+fn resume_waiting(state: &State) {
     let caps = state.first.caps;
     let answered = match state.answered.healths() {
         Ok(answered) => answered,
@@ -1629,16 +1631,12 @@ async fn resume_waiting(state: &State) {
         }
     };
     let model = state.models.recorded();
-    match tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::transcript::waiting(
-            caps.secretary.conversations,
-            suzatary_core::health::reading_of(&answered, model.as_str()).as_ref(),
-            caps.secretary.clock.now(),
-        )
-    })
-    .await
-    {
-        Ok(Ok(waiting)) => {
+    match suzatary_core::secretary::transcript::waiting(
+        caps.secretary.conversations,
+        suzatary_core::health::reading_of(&answered, model.as_str()).as_ref(),
+        caps.secretary.clock.now(),
+    ) {
+        Ok(waiting) => {
             if !waiting.is_empty() {
                 tracing::info!(
                     "secretary: resuming {} unanswered conversation(s)",
@@ -1649,12 +1647,7 @@ async fn resume_waiting(state: &State) {
                 state.heard(id);
             }
         }
-        Ok(Err(failed)) => tracing::warn!("secretary: unanswered conversations: {failed}"),
-        Err(join_error) => {
-            tracing::warn!(
-                "secretary: reading unanswered conversations did not finish: {join_error}"
-            );
-        }
+        Err(failed) => tracing::warn!("secretary: unanswered conversations: {failed}"),
     }
 }
 
@@ -1715,19 +1708,14 @@ async fn erase_at_startup(chain: &Chained, timed: &mut Started) {
             suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
                 .map_err(Refusal::from)
         });
-        let texts = spent.step("erase.texts", || caps.secretary.memories.sweep());
-        let indexed = spent.step("erase.uploads", || {
-            suzatary_core::secretary::file_search::reindex(
-                caps.secretary.conversations,
-                caps.secretary.upload_index,
-            )
+        let texts = spent.step("erase.texts", || {
+            caps.secretary.memories.sweep_only(Texts::Facts)
         });
         (
             [
                 ("erased by forgetting", erased),
                 ("keys destroyed", lines),
                 ("texts deleted", texts),
-                ("uploads in the search index", indexed),
             ],
             spent,
         )
@@ -1737,20 +1725,47 @@ async fn erase_at_startup(chain: &Chained, timed: &mut Started) {
         Ok((steps, spent)) => {
             timed.0.extend(spent.0);
             for (what, step) in steps {
-                match step {
-                    Ok(0) => {}
-                    Ok(n) => tracing::info!("secretary: at startup, {n} {what}"),
-                    Err(failed) => {
-                        tracing::warn!(
-                            "secretary: at startup, {what} failed: {}",
-                            failed.message()
-                        );
-                    }
-                }
+                erased_at_startup(what, step);
             }
         }
         Err(join_error) => {
             tracing::warn!("secretary: erasing at startup did not finish: {join_error}");
+        }
+    }
+}
+
+/// The erasures that fold the conversations, in order after [`erase_at_startup`]. No read serves
+/// what they remove meanwhile: a dead summary ([`Texts`]), an erased upload (search walks live
+/// conversations).
+fn erase_after_start(chain: &Chained) {
+    let caps = chain.caps;
+    tokio::spawn(async move {
+        after_start("erase.summaries", move || {
+            erased_at_startup(
+                "summaries' texts deleted",
+                caps.secretary.memories.sweep_only(Texts::Summaries),
+            );
+        })
+        .await;
+        after_start("erase.uploads", move || {
+            erased_at_startup(
+                "uploads in the search index",
+                suzatary_core::secretary::file_search::reindex(
+                    caps.secretary.conversations,
+                    caps.secretary.upload_index,
+                ),
+            );
+        })
+        .await;
+    });
+}
+
+fn erased_at_startup(what: &str, step: Result<usize, Refusal>) {
+    match step {
+        Ok(0) => {}
+        Ok(n) => tracing::info!("secretary: at startup, {n} {what}"),
+        Err(failed) => {
+            tracing::warn!("secretary: at startup, {what} failed: {}", failed.message());
         }
     }
 }
