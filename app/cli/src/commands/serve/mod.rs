@@ -1005,7 +1005,8 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     ));
     let state = compaction::started(state, instance, serving.compacting);
 
-    started_up(&first, &rest, &state, serving.moved).await;
+    started_up(&first, &rest, &state).await;
+    notice_from_now_on(&state, serving.moved);
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
     watch_from_now_on(instance, stores, &state, &first, rest);
 
@@ -1015,15 +1016,8 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     serve_on(serving.listening, listener, service).await
 }
 
-/// Everything serve does before it listens, each step timed, and the steps logged as one line
-/// ([`Started`]): the markup warmed, orphaned acts reconciled, the startup's erasures, the default
-/// conversation opened, the box's own cards filed, and the conversations left waiting resumed.
-async fn started_up(
-    first: &Chained,
-    rest: &[Chained],
-    state: &State,
-    moved: Arc<tokio::sync::Notify>,
-) {
+/// Everything serve does before it listens, each step timed ([`Started`]).
+async fn started_up(first: &Chained, rest: &[Chained], state: &State) {
     let starting = Instant::now();
     let mut started = Started::default();
     started.step("warm", || {
@@ -1039,17 +1033,13 @@ async fn started_up(
     open_default(first).await;
     started.took("default", at.elapsed(), Parts::default());
     let at = Instant::now();
-    let parts = notice_from_now_on(state.clone(), moved).await;
-    started.took("notice", at.elapsed(), parts);
-    let at = Instant::now();
     resume_waiting(state).await;
     started.took("waiting", at.elapsed(), Parts::default());
-    started.log(starting.elapsed());
+    started.log("serve start", starting.elapsed());
 }
 
-/// Each step of serve's start and its parts, logged once at `suzatary::start` before the server
-/// listens: `<step>.<part> <ms>` each, then the step's time no part took, so the line sums to the
-/// start. It names no store's content.
+/// Steps and their parts, one line at `suzatary::start`: `<step>.<part> <ms>`, then the time no part
+/// took, so a line sums to its whole. It names no store's content.
 #[derive(Default)]
 struct Started(Vec<(&'static str, Parts, Duration)>);
 
@@ -1066,7 +1056,7 @@ impl Started {
         self.0.push((step, parts, own));
     }
 
-    fn log(&self, whole: Duration) {
+    fn log(&self, said: &str, whole: Duration) {
         let steps = self
             .0
             .iter()
@@ -1082,7 +1072,7 @@ impl Started {
         tracing::info!(
             target: "suzatary::start",
             whole = whole.as_millis(),
-            "serve start: {steps}"
+            "{said}: {steps}"
         );
     }
 }
@@ -1546,16 +1536,8 @@ fn heard(
         })
 }
 
-/// File owed cards now, hourly and on `moved`: the parts of the filing now.
-async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) -> Parts {
-    let first = state.clone();
-    let parts =
-        tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(|| first.notice()).1)
-            .await
-            .unwrap_or_else(|join_error| {
-                tracing::warn!("noticed: the first filing did not finish: {join_error}");
-                Parts::default()
-            });
+/// File owed cards hourly, the first at once, and on `moved`; the start waits for none.
+fn notice_from_now_on(state: &State, moved: Arc<tokio::sync::Notify>) {
     let ringing = state.clone();
     tokio::spawn(async move {
         loop {
@@ -1568,9 +1550,16 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) -> Pa
             }
         }
     });
+    let state = state.clone();
     tokio::spawn(async move {
-        // The first tick is at once.
         let mut every = tokio::time::interval(Duration::from_hours(1));
+        every.tick().await;
+        let first = state.clone();
+        after_start("notice", move || {
+            first.hear();
+            first.notice();
+        })
+        .await;
         loop {
             every.tick().await;
             let noticing = state.clone();
@@ -1584,7 +1573,19 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) -> Pa
             }
         }
     });
-    parts
+}
+
+/// `work` once the server listens, logged as `step` on an `after start` line.
+async fn after_start(step: &'static str, work: impl FnOnce() + Send + 'static) {
+    let at = Instant::now();
+    match tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(work).1).await {
+        Ok(parts) => {
+            let mut after = Started::default();
+            after.took(step, at.elapsed(), parts);
+            after.log("after start", at.elapsed());
+        }
+        Err(join_error) => tracing::warn!("{step} after the start did not finish: {join_error}"),
+    }
 }
 
 const INSTANCE_POLL: Duration = Duration::from_secs(1);
