@@ -77,6 +77,11 @@ impl viewtree::host::Hosted for todos::Todos {
     fn input(input: Self::Input) -> todos::Msg {
         todos::Msg::Host(Box::new(input))
     }
+    /// Flags alone: the page a visit opens on is constructed, painted and freed, so leaving it
+    /// for the stream compiles nothing on the page's thread.
+    fn rehearsal() -> Option<&'static str> {
+        Some(include_str!("../tests/rehearsal/todos.json"))
+    }
 }
 
 impl viewtree::host::Hosted for conversation::Conversation {

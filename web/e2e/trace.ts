@@ -43,3 +43,20 @@ export const layoutsOf = (complete: readonly TraceEvent[]): readonly Layout[] =>
   complete
     .filter((e) => e.name === "Layout")
     .map((e) => ({ at: e.ts, us: e.dur ?? 0, cpuUs: e.tdur ?? 0, dirty: counted(e, "dirtyObjects"), total: counted(e, "totalObjects") }));
+
+/** Each User Timing measure named `name` the page took: when it began and ended (µs, the trace's clock) and its detail
+ * as JSON (`"null"` without one). */
+export const measured = (events: readonly TraceEvent[], name: string): readonly (readonly [number, number, string])[] => {
+  const begun = new Map<string, TraceEvent>();
+  const out: (readonly [number, number, string])[] = [];
+  for (const e of events) {
+    if (e.name !== name || !e.cat.includes("user_timing")) continue;
+    const id = `${e.id ?? ""}:${e.id2?.local ?? e.id2?.global ?? ""}`;
+    if (e.ph === "b") begun.set(id, e);
+    else if (e.ph === "e") {
+      const b = begun.get(id);
+      if (b !== undefined) out.push([b.ts, e.ts, b.args?.detail ?? "null"]);
+    }
+  }
+  return out;
+};

@@ -137,6 +137,8 @@ function flags(profile: string): string[] {
     // 0: the kernel picks, and DevToolsActivePort in the profile says which —
     // a fixed port is a collision between two runs on one box.
     "--remote-debugging-port=0",
+    // V8's own switches for a measurement (`--no-wasm-lazy-compilation`, say); no scene sets it.
+    ...((process.env["SUZATARY_E2E_JS_FLAGS"] ?? "") === "" ? [] : [`--js-flags=${process.env["SUZATARY_E2E_JS_FLAGS"]}`]),
     "about:blank",
   ];
 }
@@ -1305,6 +1307,8 @@ export interface TraceEvent {
     readonly endData?: Record<string, unknown>;
     readonly elementCount?: number;
     readonly detail?: string;
+    /** A `wasm.CompileLazy` event's function. */
+    readonly func_index?: number;
   };
 }
 

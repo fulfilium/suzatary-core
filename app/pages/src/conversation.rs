@@ -962,6 +962,26 @@ fn rounds_held(m: &Model) -> usize {
     }
 }
 
+/// The bytes of the words the `i`-th round held draws, its turns' (`slices::WORDS`).
+fn round_words(held: &Held, i: usize) -> usize {
+    match held {
+        Held::Loaded { grouped, .. } => grouped.rounds.get(i).map_or(0, |s| {
+            let p = &grouped.payload;
+            let turns = s
+                .opening
+                .iter()
+                .chain(&s.trace)
+                .chain(&s.answer)
+                .chain(&s.earlier);
+            turns
+                .filter_map(|i| p.turns.iter().find(|t| t.index == *i))
+                .map(answer::words)
+                .sum()
+        }),
+        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => 0,
+    }
+}
+
 /// Asks the next slice while rounds are left; after the last, moves the box.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds_held(m)) {
@@ -1123,7 +1143,7 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
             composed(m, outs)
         }
         Ask::Slice => {
-            m.shown.more(rounds_held(m));
+            m.shown.more(rounds_held(m), |i| round_words(&m.held, i));
             drawn(m)
         }
         Ask::Search(chats::Asking::Rested(n)) => m.search.rested(n, Hold::Found),

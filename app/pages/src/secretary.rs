@@ -13,7 +13,8 @@ use viewtree::Attr::{
     Spellcheck, Title, Type, Value,
 };
 use viewtree::kit::{Reading, para};
-use viewtree::{Key, Node, Program, view};
+use viewtree::node::lazy;
+use viewtree::{Key, Node, Printed, Program, view};
 
 use crate::answer;
 use crate::chats::{self, Search, Searching};
@@ -70,8 +71,27 @@ pub(crate) type Input = runtime::Input<Hold, Ask>;
 /// `Local::Stream`.
 #[derive(Debug, Clone, Deserialize, TS)]
 pub struct StreamRead {
-    pub(crate) stream: StreamPayload,
+    #[ts(as = "StreamPayload")]
+    pub(crate) stream: Stream,
     pub(crate) bar: TopicsPayload,
+}
+
+/// The stream as the page holds it: each round printed once, as it is read, so a later step
+/// draws a round it drew before by comparing one number (`viewtree::node::lazy`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "StreamPayload")]
+pub(crate) struct Stream {
+    rounds: Vec<Printed<StreamRound>>,
+    total: usize,
+}
+
+impl From<StreamPayload> for Stream {
+    fn from(p: StreamPayload) -> Self {
+        Self {
+            rounds: p.rounds.into_iter().map(Printed::new).collect(),
+            total: p.total,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,7 +407,7 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
         Input::Answered {
             ask: Ask::Slice, ..
         } => {
-            m.shown.more(rounds(m));
+            m.shown.more(rounds(m), |i| round_words(&m.stream, i));
             drawn(m)
         }
         Input::Answered {
@@ -410,6 +430,17 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
 fn rounds(m: &Model) -> usize {
     match &m.stream {
         Reading::Val { v } => v.stream.rounds.len(),
+        Reading::Loading | Reading::Error { .. } => 0,
+    }
+}
+
+/// The bytes of the words the `i`-th round held draws, its opening's and its answer's
+/// (`slices::WORDS`).
+fn round_words(stream: &Reading<StreamRead>, i: usize) -> usize {
+    match stream {
+        Reading::Val { v } => v.stream.rounds.get(i).map_or(0, |r| {
+            answer::words(&r.opening) + r.answer.as_ref().map_or(0, answer::words)
+        }),
         Reading::Loading | Reading::Error { .. } => 0,
     }
 }
@@ -507,7 +538,10 @@ fn stream(m: &Model) -> Vec<Node<Msg>> {
         Some(topic_bar(bar, &m.chosen, writes(m))),
         said(s, &m.chosen),
         (s.total == 0).then(|| chrome::empty(&nothing)),
-        Some(view! { Div "streamrounds" => s.rounds[s.rounds.len().saturating_sub(m.shown.shown())..].iter().map(|r| (r.target.clone(), round(m, r, today))) }),
+        Some(view! { Div "streamrounds" => s.rounds[s.rounds.len().saturating_sub(m.shown.shown())..].iter().map(|r| {
+            let when = recent(&m.context.offsets, &r.opening.at, today);
+            (r.target.clone(), lazy(round, (r.clone(), when, writes(m))))
+        }) }),
         sheet(m, bar),
     ]
     .into_iter()
@@ -548,7 +582,7 @@ fn topic_bar(topics: &[TopicInUse], chosen: &[String], writes: bool) -> Node<Msg
 }
 
 /// Earlier is shown while some rounds are not drawn.
-fn said(s: &StreamPayload, chosen: &[String]) -> Option<Node<Msg>> {
+fn said(s: &Stream, chosen: &[String]) -> Option<Node<Msg>> {
     let shown = s.rounds.len();
     let more = shown < s.total;
     if chosen.is_empty() && !more {
@@ -583,8 +617,9 @@ fn said(s: &StreamPayload, chosen: &[String]) -> Option<Node<Msg>> {
     ] })
 }
 
-fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
-    let when = recent(&m.context.offsets, &r.opening.at, today);
+/// A round, with when it was opened as the stream says it and whether the owner writes.
+fn round((r, when, writes): &(Printed<StreamRound>, String, bool)) -> Node<Msg> {
+    let writes = *writes;
     let meta = |class: &'static str, name: &str| {
         view! { P {Class => class} [
             view! { A {Href => Place::Conversation { id: &r.conversation, reference: "", focus: false, at: u32::try_from(r.turn).ok() }.href()} [name] },
@@ -631,7 +666,6 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
             view! { Div "turntext" [a.text.as_str()] }
         }
     });
-    let writes = writes(m);
     let topics = (!r.topics.is_empty() || writes).then(|| {
         view! { Div "roundtopics" [
             r.topics.iter().map(|t| topic_chip(&r.target, t, writes)).collect::<Vec<_>>(),

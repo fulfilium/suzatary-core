@@ -1,6 +1,9 @@
 /**
- * A CONVERSATION OPENING, TRACED: what the page's thread runs inside the longest task of an opening over the bigstore
- * scene's store. Each opening is traced (`Page.trace`: the browser's timeline events, V8's CPU samples and the page's
+ * A PHASE OF THE BIGSTORE SCENE, TRACED: what the page's thread runs inside the longest task of a conversation opening,
+ * or of the stream of conversations drawn, over the bigstore scene's store. `SUZATARY_OPENPROF_PHASE=opening` (the
+ * default) traces from the hash change to `#/secretary/bulk-0` until its window is placed; `stream` traces from the hash
+ * change to `#/secretary` until the stream's rounds are drawn, each visit a new document (the first `cold`, the device
+ * holding nothing). Either ends once the page has run no long task and no painter's step for 1.5 s. Each phase is traced (`Page.trace`: the browser's timeline events, V8's CPU samples and the page's
  * User Timing, on the trace's clock), and the longest task of the page's thread is broken down by the timeline events'
  * own time, by each layout's dirty objects, and by the sampled functions read through the bundle's source maps. Each
  * opening also prints its ORDER: every task of the page's thread from the hash change to the window placed, with the
@@ -17,7 +20,10 @@
  * `SUZATARY_OPENPROF_PRESSURE=1` sends a critical memory-pressure notice once an opening settles and traces 2 s more:
  * the browser then drops caches it can rebuild. `SUZATARY_OPENPROF_LATE_FONT=<fragment of a font's URL>` holds that
  * font's request, with the cache off, until the opening settles. `SUZATARY_OPENPROF_NEW_DOCUMENT=1` loads each warm
- * visit as a new document. Every `document.fonts` event of a visit is logged.
+ * opening's visit as a new document. Every `document.fonts` event of a visit is logged. `SUZATARY_E2E_JS_FLAGS` hands
+ * V8 its switches (`--no-wasm-lazy-compilation`, say). Each visit also prints the longest task's time by kind (`kinds`:
+ * script, compilation, layout, style, garbage collection, HTML parsing, painting) and how many functions the page's
+ * thread compiled from the phase's start on (`compiled`: wasm and JavaScript).
  */
 
 import assert from "node:assert/strict"
@@ -26,16 +32,21 @@ import { writeFileSync } from "node:fs"
 import marks from "../src/chat/marks"
 import type { TraceEvent } from "./cdp"
 import { PHONE, STEP_MS, suite, trustThisDevice } from "./harness"
+import { BULK, OBSERVE as LONG, placed, settle as settled } from "./longtasks"
 import { mapped } from "./sourcemap"
-import { layoutsOf, pageThread, threadKey } from "./trace"
+import { layoutsOf, measured, pageThread, threadKey } from "./trace"
 
 const LINES_BASE = process.env["E2E_BASE_LINES"] ?? ""
 const LINES_INSTANCE = process.env["E2E_LINES_INSTANCE"] ?? ""
 const OUT = process.env["SUZATARY_OPENPROF"] ?? ""
 const VISITS = Number(process.env["SUZATARY_OPENPROF_VISITS"] ?? "6")
 const RATE = Number(process.env["SUZATARY_OPENPROF_RATE"] ?? "1")
-const QUIET_MS = 1500
-// Marked as the opening starts: the trace is read from it on.
+type Phase = "opening" | "stream"
+const PHASE: Phase = ((p: string): Phase => {
+  if (p === "opening" || p === "stream") return p
+  throw new Error(`SUZATARY_OPENPROF_PHASE is opening or stream, not ${p}`)
+})(process.env["SUZATARY_OPENPROF_PHASE"] ?? "opening")
+// Marked as the phase starts: the trace is read from it on.
 const OPEN = "openprof:open"
 // After an opening settles: a critical memory-pressure notice, and the trace kept for PRESSURE_MS more.
 const PRESSURE = process.env["SUZATARY_OPENPROF_PRESSURE"] === "1"
@@ -69,6 +80,41 @@ const CATEGORIES = [
 
 const ms = (us: number): number => Math.round(us / 100) / 10
 
+// What a timeline event's own time was spent on. `wasm` is V8 compiling a wasm function (lazily, on its first call, or
+// tiering it up); `js` is V8 parsing or compiling JavaScript; `parse` is the HTML parser (typst's HTML through
+// `rich.ts`); `script` is the rest of a call into JavaScript and the wasm it runs.
+const KINDS = ["script", "wasm", "js", "layout", "style", "gc", "parse", "paint", "other"] as const
+type Kind = (typeof KINDS)[number]
+const kindOf = (name: string): Kind =>
+  /^wasm\.|^v8\.wasm\./i.test(name) ? "wasm"
+  : /Compile|Parse(?!HTML)|Deserialize|Ignition|Sparkplug|Maglev|Turbofan|Optimize/i.test(name) && !/^Parse(HTML|AuthorStyleSheet)/.test(name) ? "js"
+  : name === "Layout" || name === "UpdateLayoutTree" ? (name === "Layout" ? "layout" : "style")
+  : /GC|Scavenge|MarkCompact|Sweep/i.test(name) ? "gc"
+  : name === "ParseHTML" || name === "ParseAuthorStyleSheet" ? "parse"
+  : /Paint|Commit|Composite|Layerize|PrePaint|UpdateLayer|Raster|HitTest|IntersectionObserver/.test(name) ? "paint"
+  : /FunctionCall|EvaluateScript|v8\.run|V8\.Execute|RunMicrotasks|FireAnimationFrame|EventDispatch|TimerFire|v8\.callFunction|TimerInstall|RequestAnimationFrame|v8\.evaluateModule/.test(name) || name.startsWith("FunctionCall") || name.startsWith("EvaluateScript") ? "script"
+  : "other"
+
+// Functions the page's thread compiled from the phase's start on: each wasm function's first compilation (a lazy one)
+// and each JavaScript compilation, counted by its trace event, and the index of each wasm function compiled lazily
+// (`lazy`), which a build of the module that keeps its name section names.
+type Compiled = { readonly wasm: number; readonly wasmMs: number; readonly js: number; readonly jsMs: number; readonly names: readonly (readonly [string, number])[]; readonly lazy: readonly number[] }
+const compiledOf = (events: readonly Ev[]): Compiled => {
+  const from = openedAt(events)
+  const all = pageThread(events).complete.filter((e) => e.ts >= from)
+  const by = new Map<string, number>()
+  let [wasm, wasmUs, js, jsUs] = [0, 0, 0, 0]
+  for (const e of all) {
+    const k = kindOf(e.name)
+    if (k !== "wasm" && k !== "js") continue
+    by.set(e.name, (by.get(e.name) ?? 0) + 1)
+    if (k === "wasm") [wasm, wasmUs] = [wasm + 1, wasmUs + (e.dur ?? 0)]
+    else [js, jsUs] = [js + 1, jsUs + (e.dur ?? 0)]
+  }
+  const lazy = all.filter((e) => e.name === "wasm.CompileLazy").map((e) => e.args?.func_index ?? -1)
+  return { wasm, wasmMs: ms(wasmUs), js, jsMs: ms(jsUs), names: [...by].sort((a, b) => b[1] - a[1]).slice(0, 12), lazy }
+}
+
 const labelOf = (e: Ev): string => {
   const d = e.args?.data
   if (d === undefined) return e.name
@@ -87,6 +133,8 @@ type Broken = {
   // Each style recalculation inside it: [ms, elements].
   readonly styles?: readonly (readonly [number, number])[]
   readonly tasksOver50: readonly number[]
+  // The task's events' own time by kind (`kindOf`), in ms.
+  readonly kinds?: Readonly<Record<Kind, number>>
   readonly events: readonly (readonly [string, number])[]
   readonly sampledMs: number
   readonly self: readonly (readonly [string, number])[]
@@ -98,26 +146,11 @@ type Broken = {
 // patches), `style <elements>`, `layout <dirty>/<all> <ms>`, `gc`, and `placed` (the window's mark).
 type Ran = readonly [number, number, string]
 
-const pairs = (events: readonly Ev[], name: string): readonly (readonly [number, number, string])[] => {
-  const begun = new Map<string, Ev>()
-  const out: (readonly [number, number, string])[] = []
-  for (const e of events) {
-    if (e.name !== name || !e.cat.includes("user_timing")) continue
-    const id = `${e.id ?? ""}:${e.id2?.local ?? e.id2?.global ?? ""}`
-    if (e.ph === "b") begun.set(id, e)
-    else if (e.ph === "e") {
-      const b = begun.get(id)
-      if (b !== undefined) out.push([b.ts, e.ts, b.args?.detail ?? "null"])
-    }
-  }
-  return out
-}
-
 const order = (events: readonly Ev[]): readonly Ran[] => {
   const thread = pageThread(events).complete
   const layouts = new Map(layoutsOf(thread).map((l) => [l.at, l]))
   const begin = openedAt(events)
-  const steps = pairs(events, "painter:step")
+  const steps = measured(events, "painter:step")
   const placedAt = events.filter((e) => e.name === marks.PLACED).map((e) => e.ts)
   const tasks = thread.filter((e) => e.name === "RunTask" && e.ts >= begin).sort((a, b) => a.ts - b.ts)
   return tasks.flatMap((t): Ran[] => {
@@ -148,26 +181,13 @@ const openedAt = (events: readonly Ev[]): number => {
   return mark.ts
 }
 
-const analyse = async (events: readonly Ev[]): Promise<Broken> => {
-  const { main, complete } = pageThread(events)
-  const from = openedAt(events)
-  const tasks = complete.filter((e) => e.name === "RunTask" && e.ts >= from).sort((a, b) => (b.dur ?? 0) - (a.dur ?? 0))
-  const task = tasks[0]
-  if (task === undefined) return { taskMs: 0, tasksOver50: [], events: [], sampledMs: 0, self: [], on: [] }
-  const t0 = task.ts
-  const t1 = task.ts + (task.dur ?? 0)
-  const inside = complete.filter((e) => e.ts >= t0 && e.ts + (e.dur ?? 0) <= t1).sort((a, b) => a.ts - b.ts || (b.dur ?? 0) - (a.dur ?? 0))
-  const self = new Map<string, number>()
-  const stack: { readonly end: number; readonly label: string }[] = []
-  for (const e of inside) {
-    while (stack.length > 0 && (stack.at(-1)?.end ?? 0) <= e.ts) stack.pop()
-    const label = labelOf(e)
-    self.set(label, (self.get(label) ?? 0) + (e.dur ?? 0))
-    const parent = stack.at(-1)
-    if (parent !== undefined) self.set(parent.label, (self.get(parent.label) ?? 0) - (e.dur ?? 0))
-    stack.push({ end: e.ts + (e.dur ?? 0), label })
-  }
-  // V8's samples of the page's thread, on the trace's clock.
+// V8's samples of the thread `main` inside `windows` (µs, the trace's clock): each function's own time (`top`), the time
+// on the stack of each of the app's functions and of the wasm modules (`on`), and the time sampled.
+const sampledIn = async (
+  events: readonly Ev[],
+  main: string,
+  windows: readonly (readonly [number, number])[],
+): Promise<{ readonly top: ReadonlyMap<string, number>; readonly on: ReadonlyMap<string, number>; readonly sampled: number }> => {
   const profiles = events.filter((e) => e.name === "Profile" && threadKey(e) === main)
   const top = new Map<string, number>()
   const on = new Map<string, number>()
@@ -185,7 +205,7 @@ const analyse = async (events: readonly Ev[]): Promise<Broken> => {
       for (let i = 0; i < samples.length; i += 1) {
         const delta = deltas[i] ?? 0
         at += delta
-        if (at < t0 || at > t1) continue
+        if (!windows.some(([w0, w1]) => at >= w0 && at <= w1)) continue
         sampled += delta
         const named = async (frame: Frame): Promise<string> => {
           const fn = frame.functionName === undefined || frame.functionName === "" ? "(anonymous)" : frame.functionName
@@ -216,17 +236,73 @@ const analyse = async (events: readonly Ev[]): Promise<Broken> => {
       }
     }
   }
-  const ranked = (m: Map<string, number>, n: number): (readonly [string, number])[] =>
-    [...m]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, n)
-      .map(([k, v]): readonly [string, number] => [k.slice(0, 110), ms(v)])
+  return { top, on, sampled }
+}
+
+const ranked = (m: ReadonlyMap<string, number>, n: number): (readonly [string, number])[] =>
+  [...m]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([k, v]): readonly [string, number] => [k.slice(0, 110), ms(v)])
+
+// The events inside `task`, and each label's own time in µs: its time less the events nested in it.
+const selfOf = (complete: readonly Ev[], task: Ev): { readonly inside: readonly Ev[]; readonly self: ReadonlyMap<string, number> } => {
+  const [t0, t1] = [task.ts, task.ts + (task.dur ?? 0)]
+  const inside = complete.filter((e) => e.ts >= t0 && e.ts + (e.dur ?? 0) <= t1).sort((a, b) => a.ts - b.ts || (b.dur ?? 0) - (a.dur ?? 0))
+  const self = new Map<string, number>()
+  const stack: { readonly end: number; readonly label: string }[] = []
+  for (const e of inside) {
+    while (stack.length > 0 && (stack.at(-1)?.end ?? 0) <= e.ts) stack.pop()
+    const label = labelOf(e)
+    self.set(label, (self.get(label) ?? 0) + (e.dur ?? 0))
+    const parent = stack.at(-1)
+    if (parent !== undefined) self.set(parent.label, (self.get(parent.label) ?? 0) - (e.dur ?? 0))
+    stack.push({ end: e.ts + (e.dur ?? 0), label })
+  }
+  return { inside, self }
+}
+
+const kindsOf = (self: ReadonlyMap<string, number>): Record<Kind, number> =>
+  Object.fromEntries(KINDS.map((k) => [k, ms([...self].filter(([name]) => kindOf(name.split(" ")[0] ?? "") === k).reduce((a, [, us]) => a + us, 0))])) as Record<Kind, number>
+
+// Each task of the phase that holds a painter's step: [ms since the phase began, ms, its kinds, its layouts' dirty
+// objects, its style recalculations' elements, the steps' patch bytes].
+type Stepped = readonly [number, number, Readonly<Record<Kind, number>>, readonly number[], readonly number[], readonly number[]]
+// With the sampled functions summed over every one of those tasks (`self` and `on` as `Broken`'s).
+type Steps = { readonly tasks: readonly Stepped[]; readonly self: readonly (readonly [string, number])[]; readonly on: readonly (readonly [string, number])[] }
+const steppedOf = async (events: readonly Ev[]): Promise<Steps> => {
+  const { main, complete } = pageThread(events)
+  const begin = openedAt(events)
+  const steps = measured(events, "painter:step")
+  const holding = complete
+    .filter((t) => t.name === "RunTask" && t.ts >= begin && steps.some(([b]) => b >= t.ts && b <= t.ts + (t.dur ?? 0)))
+    .sort((a, b) => a.ts - b.ts)
+  const tasks = holding.map((t): Stepped => {
+    const { inside, self } = selfOf(complete, t)
+    const bytes = steps.filter(([b]) => b >= t.ts && b <= t.ts + (t.dur ?? 0)).map(([, , d]) => (JSON.parse(d) as { readonly bytes?: number } | null)?.bytes ?? 0)
+    return [ms(t.ts - begin), ms(t.dur ?? 0), kindsOf(self), layoutsOf(inside).map((l) => l.dirty), inside.filter((e) => e.name === "UpdateLayoutTree").map((e) => Number(e.args?.elementCount ?? -1)), bytes]
+  })
+  const { top, on } = await sampledIn(events, main, holding.map((t) => [t.ts, t.ts + (t.dur ?? 0)] as const))
+  return { tasks, self: ranked(top, 24), on: ranked(on, 16) }
+}
+
+const analyse = async (events: readonly Ev[]): Promise<Broken> => {
+  const { main, complete } = pageThread(events)
+  const from = openedAt(events)
+  const tasks = complete.filter((e) => e.name === "RunTask" && e.ts >= from).sort((a, b) => (b.dur ?? 0) - (a.dur ?? 0))
+  const task = tasks[0]
+  if (task === undefined) return { taskMs: 0, tasksOver50: [], events: [], sampledMs: 0, self: [], on: [] }
+  const t0 = task.ts
+  const t1 = task.ts + (task.dur ?? 0)
+  const { inside, self } = selfOf(complete, task)
+  const { top, on, sampled } = await sampledIn(events, main, [[t0, t1]])
   return {
     taskMs: ms(task.dur ?? 0),
     taskCpuMs: ms(task.tdur ?? -1000),
     layouts: layoutsOf(inside).map((l) => [ms(l.us), ms(l.cpuUs), l.dirty, l.total] as const),
     styles: inside.filter((e) => e.name === "UpdateLayoutTree").map((e) => [ms(e.dur ?? 0), Number(e.args?.elementCount ?? -1)] as const),
     tasksOver50: tasks.filter((t) => (t.dur ?? 0) > 50_000).map((t) => ms(t.dur ?? 0)),
+    kinds: kindsOf(self),
     events: ranked(self, 14).filter(([, v]) => v >= 1),
     sampledMs: ms(sampled),
     self: ranked(top, 16).filter(([, v]) => v >= 1),
@@ -256,7 +332,6 @@ const FACES = `(() => {
 // The census: each child of `body`, of `main#view` and of `main#view`'s children as [parent, tag#id.class, display,
 // descendants].
 const OBSERVE = `(() => {
-  window.__long = []
   window.__fonts = []
   for (const type of ["loading", "loadingdone", "loadingerror"])
     document.fonts.addEventListener(type, (e) =>
@@ -271,12 +346,8 @@ const OBSERVE = `(() => {
       for (const e of parent.children) rows.push([named(parent), named(e), getComputedStyle(e).display, e.querySelectorAll("*").length])
     window.__censuses.push({ at: Math.round(at), ms: Math.round(ms), rows })
   }
-  new PerformanceObserver((list) => {
-    for (const e of list.getEntries()) {
-      window.__long.push([e.startTime, e.duration])
-      window.__census(e.startTime, e.duration)
-    }
-  }).observe({ type: "longtask", buffered: true })
+  new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__census(e.startTime, e.duration) })
+    .observe({ type: "longtask", buffered: true })
 })()`
 
 // What the opening's largest layout laid out, and the tasks of the page's thread between the window's placing and it:
@@ -361,26 +432,19 @@ const largestOf = async (events: readonly Ev[]): Promise<Largest | null> => {
     between,
   }
 }
-const placed = `(performance.getEntriesByName(${JSON.stringify(marks.PLACED)}).at(-1)?.startTime ?? -1)`
-const quiet = (drawn: number): string =>
-  `(() => { const l = window.__long.at(-1); return performance.now() - Math.max(${drawn}, l === undefined ? 0 : l[0] + l[1]) > ${QUIET_MS} })()`
+const settle = async (until: string): Promise<void> => void (await settled(app.page, until, STEP_MS))
 
-const settle = async (until: string): Promise<void> => {
-  await app.page.waitFor(until, { timeout: STEP_MS })
-  const drawn = await app.page.evaluate<number>(`performance.now()`)
-  await app.page.waitFor(quiet(drawn), { timeout: STEP_MS })
-}
-
-// The window an opening drew: its turns and rounds, how many of each meet the view, and the elements under `.turns`.
+// What a phase drew: an opening's turns and rounds, or the stream's rounds, how many of each meet the view, and the
+// elements under their box.
 type Shape = { readonly turns: number; readonly turnsInView: number; readonly rounds: number; readonly roundsInView: number; readonly elements: number; readonly scrollHeight: number; readonly clientHeight: number }
-const SHAPE = `(() => {
+const SHAPE = ((box: string, round: string): string => `(() => {
   const box = document.scrollingElement
   const seen = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight }
   const turns = [...document.querySelectorAll(".turns .turn")]
-  const rounds = [...document.querySelectorAll(".turns .round")]
+  const rounds = [...document.querySelectorAll(${JSON.stringify(round)})]
   return { turns: turns.length, turnsInView: turns.filter(seen).length, rounds: rounds.length, roundsInView: rounds.filter(seen).length,
-    elements: document.querySelectorAll(".turns *").length, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight }
-})()`
+    elements: document.querySelectorAll(${JSON.stringify(`${box} *`)}).length, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight }
+})()`)(PHASE === "stream" ? ".streamrounds" : ".turns", PHASE === "stream" ? ".streamround" : ".turns .round")
 
 type Census = { readonly at: number; readonly ms: number; readonly rows: readonly (readonly [string, string, string, number])[] }
 type Opening = {
@@ -395,8 +459,10 @@ type Opening = {
   readonly fonts: readonly unknown[]
   // Each face the document declares, with its status once the opening is over.
   readonly faces: readonly unknown[]
-  // Which face each text uses on the stream page before the opening and in the opened conversation (`FACES`).
-  readonly uses: { readonly stream: unknown; readonly opened: unknown }
+  // Which face each text of the page uses before the phase and once it is over (`FACES`).
+  readonly uses: { readonly before: unknown; readonly after: unknown }
+  readonly compiled: Compiled
+  readonly stepped: Steps
 } & Broken
 
 const visit = async (load: string): Promise<Opening> => {
@@ -404,16 +470,25 @@ const visit = async (load: string): Promise<Opening> => {
   const release = LATE_FONT === "" ? null : await app.page.holdRequests([LATE_FONT])
   await app.page.navigate(`${LINES_BASE}/?${load}#/`)
   await settle(`document.querySelectorAll(".tree .row").length > 0`)
-  await app.page.evaluate(`void (location.hash = "#/secretary")`)
-  await settle(`document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`)
-  const was = await app.page.evaluate<number>(placed)
-  const streamFaces = await app.page.evaluate<unknown>(FACES)
+  const [to, drawn] = await (async (): Promise<readonly [string, string]> => {
+    switch (PHASE) {
+      case "stream":
+        return ["#/secretary", BULK]
+      case "opening": {
+        await app.page.evaluate(`void (location.hash = "#/secretary")`)
+        await settle(BULK)
+        const was = await app.page.evaluate<number>(placed)
+        return ["#/secretary/bulk-0", `document.querySelectorAll(".turns .turn").length > 0 && ${placed} > ${was}`]
+      }
+    }
+  })()
+  const before = await app.page.evaluate<unknown>(FACES)
   const stop = await app.page.trace(CATEGORIES)
-  // The profiler starts in a long task of its own, which is the trace's and no opening's.
+  // The profiler starts in a long task of its own, which is the trace's and no phase's.
   await settle("true")
   const since = await app.page.evaluate<number>(`performance.now()`)
-  await app.page.evaluate(`void (performance.mark(${JSON.stringify(OPEN)}), (location.hash = "#/secretary/bulk-0"))`)
-  await settle(`document.querySelectorAll(".turns .turn").length > 0 && ${placed} > ${was}`)
+  await app.page.evaluate(`void (performance.mark(${JSON.stringify(OPEN)}), (location.hash = ${JSON.stringify(to)}))`)
+  await settle(drawn)
   if (release !== null) {
     await release()
     await app.page.cold(false)
@@ -427,7 +502,7 @@ const visit = async (load: string): Promise<Opening> => {
   const events = await stop()
   const fonts = await app.page.evaluate<unknown[]>(`window.__fonts.map(([at, type, faces]) => [at - ${since}, type, faces])`)
   const faces = await app.page.evaluate<unknown[]>(`[...document.fonts].map((f) => f.family + " " + f.style + " " + f.status)`)
-  const uses = { stream: streamFaces, opened: await app.page.evaluate<unknown>(FACES) }
+  const uses = { before, after: await app.page.evaluate<unknown>(FACES) }
   const largest = await largestOf(events)
   await app.page.evaluate(`window.__census(performance.now(), 0)`)
   const censuses = await app.page.evaluate<Census[]>(`window.__censuses.filter((c) => c.at >= ${since})`)
@@ -442,19 +517,19 @@ const visit = async (load: string): Promise<Opening> => {
   .map((m) => [m.name, Math.round(m.duration)])`)
   const broken = await analyse(events)
   const shape = await app.page.evaluate<Shape>(SHAPE)
-  const opening = { load, longtaskMs: Math.round(longest?.[1] ?? 0), within, shape, order: order(events), largest, censuses, fonts, faces, uses, ...broken }
+  const opening = { load, longtaskMs: Math.round(longest?.[1] ?? 0), within, shape, order: order(events), largest, censuses, fonts, faces, uses, compiled: compiledOf(events), stepped: await steppedOf(events), ...broken }
   console.log(`openprof: ${JSON.stringify(opening)}`)
   return opening
 }
 
-app.scene("measured: what the page's thread runs inside the longest task of a conversation opening", async () => {
+app.scene(`measured: what the page's thread runs inside the longest task of a phase (${PHASE})`, async () => {
   assert.notEqual(LINES_BASE, "", "E2E_BASE_LINES is unset — scripts/web-e2e.sh sets it")
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
-  const unobserve = await app.page.beforeEveryDocument(OBSERVE)
+  const unobserve = await app.page.beforeEveryDocument(`${LONG}; ${OBSERVE}`)
   await app.page.throttle(RATE)
   try {
     const openings: Opening[] = [await visit("cold")]
-    for (let i = 0; i < VISITS; i += 1) openings.push(await visit(NEW_DOCUMENT ? `warm${i}` : "warm"))
+    for (let i = 0; i < VISITS; i += 1) openings.push(await visit(NEW_DOCUMENT || PHASE === "stream" ? `warm${i}` : "warm"))
     if (OUT !== "") writeFileSync(OUT, `${JSON.stringify(openings, null, 2)}\n`)
   } finally {
     await app.page.throttle(1)

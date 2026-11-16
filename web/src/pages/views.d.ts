@@ -18,8 +18,8 @@ declare class Page {
   /** A JSON array, since last asked. */
   effects(): string;
   free(): void;
-  /** Runs the page's rehearsal (`Hosted::rehearsal`) and drops it; throws when a step of it fails. */
-  static rehearse(): void;
+  /** `{"flags": …, "inputs": […]}` (`Hosted::rehearsal`), or undefined for a page that has none. */
+  static rehearsal(): string | undefined;
 }
 
 export class MailPage extends Page {}

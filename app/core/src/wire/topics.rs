@@ -7,7 +7,7 @@ use suzatary_signatures::wire::signatures::FailedChain;
 use suzatary_todo::wire::todo::Fulfillment;
 
 /// The route's match over `Turn` has no wildcard.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "who", rename_all = "lowercase")]
 pub enum Speaker {
     Person {
@@ -35,14 +35,14 @@ pub enum Speaker {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Attempt {
     Current,
     Earlier,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct AttachmentRow {
     pub id: String,
     /// `application/pdf` or an image type.
@@ -54,7 +54,7 @@ pub struct AttachmentRow {
 }
 
 /// Tagged by speaker. `text` is the least trusted string served and is drawn as text.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct TurnRow {
     /// Absolute; an `?about=` window has gaps.
     pub index: usize,
@@ -69,7 +69,7 @@ pub struct TurnRow {
     pub who: Speaker,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "why", rename_all = "lowercase")]
 pub enum TurnGone {
     Asked {
@@ -94,7 +94,18 @@ pub struct BlockRow {
     pub html: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// By hand: `Kind`'s source is one of the sources an answer's render is named by
+/// (`suzatary_todo::rendering`), so it derives no more than it must.
+impl std::hash::Hash for BlockRow {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.source.hash(h);
+        self.plain.hash(h);
+        std::mem::discriminant(&self.kind).hash(h);
+        self.html.hash(h);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "is", rename_all = "lowercase")]
 pub enum VerbOutcome {
     Answered,
@@ -103,7 +114,7 @@ pub enum VerbOutcome {
 }
 
 /// Its words are read from the memory by number, so a forgotten fact's receipt has none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum Receipt {
     Standing {
@@ -345,7 +356,7 @@ pub struct StreamPayload {
     pub total: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct StreamRound {
     /// `round:<conversation>/<turn>`, the target its topics are on.
     pub target: String,
@@ -361,13 +372,13 @@ pub struct StreamRound {
     pub room: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct RoundTopic {
     pub topic: String,
     pub by: crate::secretary::topics::provenance::Provenance,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "by", rename_all = "lowercase")]
 pub enum RoundAsked {
     Person {},

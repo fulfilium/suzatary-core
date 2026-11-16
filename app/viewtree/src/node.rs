@@ -535,6 +535,48 @@ pub fn lazy<M: 'static, A: Hash + 'static>(draw: fn(&A) -> Node<M>, a: A) -> Nod
     })
 }
 
+/// A value hashed once, where it is read, so a [`lazy`] part over it hashes one number on each
+/// step instead of the whole value. Two values with one print are drawn alike, as two values
+/// with one hash are for any lazy part.
+#[derive(Debug)]
+pub struct Printed<T> {
+    print: u64,
+    value: Rc<T>,
+}
+
+impl<T: Hash> Printed<T> {
+    pub fn new(value: T) -> Self {
+        let mut h = DefaultHasher::new();
+        value.hash(&mut h);
+        Self {
+            print: h.finish(),
+            value: Rc::new(value),
+        }
+    }
+}
+
+impl<T> Clone for Printed<T> {
+    fn clone(&self) -> Self {
+        Self {
+            print: self.print,
+            value: Rc::clone(&self.value),
+        }
+    }
+}
+
+impl<T> Hash for Printed<T> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.print.hash(h);
+    }
+}
+
+impl<T> std::ops::Deref for Printed<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Element<M, I = (), L = Lazy<M>> {
     pub id: I,

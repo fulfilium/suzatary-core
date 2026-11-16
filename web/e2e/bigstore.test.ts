@@ -13,8 +13,8 @@
  * the first draw.
  *
  * A phase ends once what it waits for is drawn whole (a conversation is marked `marks.PLACED` when its window is
- * drawn and placed) and the page has run no long task for a second and a half since, so a later slice or placing is
- * counted in the phase it belongs to.
+ * drawn and placed) and the page has run no long task and no painter's step for a second and a half since
+ * (`longtasks.ts`), so a later slice or placing is counted in the phase it belongs to.
  *
  * As a measurement: `SUZATARY_E2E_LINES=6000 SUZATARY_E2E_CONVERSATIONS=1500 SUZATARY_LINES_RATE=6
  * SUZATARY_E2E_SCENE_MS=1800000 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh bigstore` runs it at a 6x CPU throttle and writes each phase's longest
@@ -26,9 +26,10 @@
 import assert from "node:assert/strict"
 import { writeFileSync } from "node:fs"
 
-import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
 import type { Recorded } from "./harness"
+import { BULK, OBSERVE, placed, settle } from "./longtasks"
+import { layoutsOf, measured, pageThread, threadKey } from "./trace"
 import { PHONE, REPLICA_ROWS, SIGNED_POST, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
@@ -53,23 +54,7 @@ const LINES_INSTANCE = required("E2E_LINES_INSTANCE")
 const RATE = Number(process.env["SUZATARY_LINES_RATE"] ?? "1")
 // The longest task the scene allows on the page's thread while the stream, a conversation and a new line are read.
 const LONGEST_MS = 100
-// How long the page runs no long task before a phase is over.
-const QUIET_MS = 1500
-
 const app = await suite("bigstore", PHONE)
-
-// Every long task the page's thread ran since the document started, kept in the page.
-const OBSERVE = `(() => {
-  window.__long = []
-  new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__long.push([e.startTime, e.duration]) })
-    .observe({ type: "longtask", buffered: true })
-})()`
-
-// When the latest conversation's window was placed, or -1 before any.
-const placed = `(performance.getEntriesByName(${JSON.stringify(marks.PLACED)}).at(-1)?.startTime ?? -1)`
-// Whether the page has run no long task for `QUIET_MS`, counted from `drawn` at the earliest.
-const quiet = (drawn: number): string =>
-  `(() => { const l = window.__long.at(-1); return performance.now() - Math.max(${drawn}, l === undefined ? 0 : l[0] + l[1]) > ${QUIET_MS} })()`
 
 // A measure the page's own code took (`page:draw`, `painter:step`, `typst:draw`, …), as the browser kept it.
 type Held = { readonly name: string; readonly ms: number; readonly detail: unknown }
@@ -87,9 +72,7 @@ const measuresIn = (at: number, ms: number): string => `performance.getEntriesBy
 // how long until `until` held, and what the page's code measured inside the longest of them.
 const phase = async (until: string, from?: number, timeout = STEP_MS): Promise<Phase> => {
   const since = from ?? (await app.page.evaluate<number>(`performance.now()`))
-  await app.page.waitFor(until, { timeout })
-  const drawn = await app.page.evaluate<number>(`performance.now()`)
-  await app.page.waitFor(quiet(drawn), { timeout })
+  const drawn = await settle(app.page, until, timeout)
   const tasks = await app.page.evaluate<[number, number][]>(`window.__long.filter(([at]) => at >= ${since})`)
   const longest = tasks.reduce<[number, number] | null>((a, t) => (a === null || t[1] > a[1] ? t : a), null)
   const within = longest === null ? [] : await app.page.evaluate<Held[]>(measuresIn(longest[0], longest[1]))
@@ -101,7 +84,7 @@ const visit = async (load: string): Promise<{ readonly boot: Phase; readonly str
   await app.page.navigate(`${LINES_BASE}/?${load}#/`)
   const boot = await phase(`document.querySelectorAll(".tree .row").length > 0`, 0)
   await app.page.evaluate(`void (location.hash = "#/secretary")`)
-  const stream = await phase(`document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`)
+  const stream = await phase(BULK)
   const was = await app.page.evaluate<number>(placed)
   await app.page.evaluate(`void (location.hash = "#/secretary/bulk-0")`)
   const opened = await phase(`document.querySelectorAll(".turns .turn").length > 0 && ${placed} > ${was}`)
@@ -148,6 +131,46 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
   }
 })
 
+// The most layout objects one frame of the stream's slices lays out: a slice's rounds (their words within the page's
+// `slices::WORDS`, or one round alone) and what inserting them dirties around them. One of the store's rounds is 58;
+// two, the slice before words bounded it, were 91.
+const SLICE_OBJECTS = 70
+// The wasm functions the page's thread compiles on their first call while the stream draws, at most. The rehearsal
+// worker compiles the stream's and the todo list's it leaves (`web/src/pages/rehearse.ts`); before it reached them the
+// page's thread compiled 33. One standard B-tree step that the store's own row keys reach still compiles here.
+const COMPILED_ON_THE_PAGE = 2
+
+app.scene("a frame of the stream lays out one slice, and the rehearsal compiled the stream's functions before it draws", async () => {
+  await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  const unobserve = await app.page.beforeEveryDocument(OBSERVE)
+  try {
+    await app.page.navigate(`${LINES_BASE}/?traced#/`)
+    await settle(app.page, `document.querySelectorAll(".tree .row").length > 0`, STEP_MS)
+    const stop = await app.page.trace(["devtools.timeline", "disabled-by-default-devtools.timeline", "v8.wasm", "blink.user_timing"])
+    await app.page.evaluate(`void (location.hash = "#/secretary")`)
+    await settle(app.page, BULK, STEP_MS)
+    const events = await stop()
+    const { main, complete } = pageThread(events)
+    const slices = measured(events, "painter:step").filter(([, , d]) => (JSON.parse(d) as { readonly step?: string } | null)?.step === `Answered {"type":"Slice"}`)
+    // What each slice's patches dirtied: the layouts of its frame after its step. A layout inside the step lays out what
+    // an earlier step left, read before the patches are applied.
+    const frames = slices.map(([, end]) => {
+      const task = complete.find((t) => t.name === "RunTask" && t.ts <= end && end <= t.ts + (t.dur ?? 0))
+      const after = complete.filter((e) => task !== undefined && e.ts >= end && e.ts + (e.dur ?? 0) <= task.ts + (task.dur ?? 0))
+      return layoutsOf(after).reduce((n, l) => n + l.dirty, 0)
+    })
+    const compiled = events.filter((e) => e.name === "wasm.CompileLazy" && threadKey(e) === main).map((e) => e.args?.func_index ?? -1)
+    console.log(JSON.stringify({ sliceFrames: frames, compiledOnThePage: compiled }))
+    // The first slice's frame also lays out what the page's own first step left, its topic bar among it.
+    const later = frames.slice(1)
+    assert.ok(later.length > 0, "the stream drew its rounds in slices")
+    assert.ok(Math.max(...later) <= SLICE_OBJECTS, `a frame of the stream laid out ${Math.max(...later)} objects (at most ${SLICE_OBJECTS}): ${frames.join(", ")}`)
+    assert.ok(compiled.length <= COMPILED_ON_THE_PAGE, `the page's thread compiled ${compiled.length} wasm functions as the stream drew (at most ${COMPILED_ON_THE_PAGE}): ${compiled.join(", ")}`)
+  } finally {
+    await unobserve()
+  }
+})
+
 // A closed fold holds nothing in layout: under a closed <details>, no element but its summary has a box. Chromium keeps
 // a closed fold's content laid out behind a lock and lays all of it out at once when the lock is lifted (it does under
 // memory pressure), so the largest conversation's folds would cost one layout of every fold together.
@@ -177,9 +200,6 @@ app.scene("a conversation's closed folds hold no layout box once it is opened", 
 // The API reads open now, less the event streams, which stay open for a page's life; a build's own files are the shell's
 // worker's to answer.
 const reads = (open: readonly string[]): string[] => open.filter((r) => r.includes(" /api/") && !r.endsWith("/events"))
-
-// A round of the generated conversations, drawn in the stream.
-const BULK = `document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`
 
 // The conversations the stream drew rounds of, by their links.
 const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streammeta a")].map((a) => decodeURIComponent(/secretary\\/([^/?#&@]+)/.exec(a.getAttribute("href"))?.[1] ?? "")))]`

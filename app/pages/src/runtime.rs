@@ -753,12 +753,16 @@ pub(crate) fn read<T: DeserializeOwned>(r: Reading<Answer>) -> Reading<T> {
     }
 }
 
+/// The words a page shows for an answer in a shape it does not read.
+pub const UNREAD: &str = "the box answered in a shape this page does not read";
+
 /// # Errors
 /// The box refused it, or answered in another shape.
 pub(crate) fn answered<T: DeserializeOwned>(a: Answer) -> Result<T, String> {
     match a {
-        Answer::Done { body } => serde_json::from_value(body)
-            .map_err(|e| format!("the box answered in a shape this page does not read ({e})")),
+        Answer::Done { body } => {
+            serde_json::from_value(body).map_err(|e| format!("{UNREAD} ({e})"))
+        }
         Answer::Refused { words, .. } => Err(words),
     }
 }

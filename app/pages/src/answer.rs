@@ -2,7 +2,7 @@
 //! the source as text, each with its Copy, and the references it names linked under it.
 
 use suzatary_base::reference::mentions;
-use suzatary_core::wire::topics::BlockRow;
+use suzatary_core::wire::topics::{BlockRow, Speaker, TurnRow};
 use viewtree::Attr::{AriaLabel, Class, Href, Open, Title, Type};
 use viewtree::{Node, view};
 
@@ -27,6 +27,23 @@ pub(crate) fn blocks<M: Clone>(
         ] }).collect::<Vec<_>>(),
         (!found.is_empty()).then(|| view! { Div "turnrefs" [found.iter().map(|r| view! { A {Class => format!("reflink turnref ref-{}", r.scheme()), Href => Place::Reference(r).href()} [r.to_string()] }).collect::<Vec<_>>()] }),
     ] }
+}
+
+/// The bytes of the words a turn draws: a model's blocks as typst's HTML or their source,
+/// anything else as its text. What bounds a slice (`slices::WORDS`).
+#[must_use]
+pub(crate) fn words(t: &TurnRow) -> usize {
+    match &t.who {
+        Speaker::Model { blocks } if !blocks.is_empty() => blocks
+            .iter()
+            .map(|b| b.html.as_ref().map_or(b.source.len(), String::len))
+            .sum(),
+        Speaker::Model { .. }
+        | Speaker::Person { .. }
+        | Speaker::Verb { .. }
+        | Speaker::Act { .. }
+        | Speaker::Box { .. } => t.text.len(),
+    }
 }
 
 /// What Copy copies.
