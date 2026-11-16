@@ -46,7 +46,9 @@ fn a_card_is_asked_for_what_the_rows_name() {
         inbox::Msg::Host(Box::new(Input::Held {
             ask: inbox::Hold::Rows(Watched::Proposals),
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))
@@ -94,7 +96,9 @@ fn a_failed_ask_keeps_the_cards_that_stood() {
         inbox::Msg::Host(Box::new(Input::Held {
             ask: inbox::Hold::Rows(Watched::Proposals),
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))
@@ -120,7 +124,7 @@ fn a_failed_ask_keeps_the_cards_that_stood() {
         &mut m,
         cards(Reading::Val {
             v: Answer::Done {
-                body: json!({"title": "A", "proposals": [row]}),
+                body: Text::printed(&json!({"title": "A", "proposals": [row]})),
             },
         }),
     );

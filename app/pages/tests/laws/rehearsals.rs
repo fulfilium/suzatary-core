@@ -2,6 +2,14 @@ use crate::common::*;
 use suzatary_pages::runtime::UNREAD;
 use viewtree::host::{Host, Hosted};
 
+/// `input` as the host hands it over.
+fn deliver<P: Hosted>(host: &mut Host<P>, input: &Value) -> Vec<u8> {
+    match delivered(input) {
+        Delivered::Whole(v) => host.input(&v.to_string()).expect("an input it takes"),
+        Delivered::Reply(r, text) => host.reply(&r.to_string(), text).expect("a reply it takes"),
+    }
+}
+
 /// Drives `P` through its rehearsal as the rehearsal worker does, and answers each step whose
 /// patches say a reading did not read.
 fn unread<P: Hosted>() -> Vec<String> {
@@ -12,7 +20,7 @@ fn unread<P: Hosted>() -> Vec<String> {
     let (mut host, first) = Host::<P>::start(&rehearsal["flags"].to_string()).expect("its flags");
     let mut steps = vec![first];
     for input in rehearsal["inputs"].as_array().expect("its inputs") {
-        steps.push(host.input(&input.to_string()).expect("an input it takes"));
+        steps.push(deliver(&mut host, input));
     }
     steps
         .iter()

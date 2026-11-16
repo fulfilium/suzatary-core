@@ -24,7 +24,9 @@ fn typst_msg() -> impl Strategy<Value = typstlist::Msg> {
                 phase: suzatary_pages::todoparts::Phase::Sealed(Seal::Event)
             },
             answer: Answer::Done {
-                body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+                body: Text::printed(
+                    &json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+                )
             },
         })),
     ]

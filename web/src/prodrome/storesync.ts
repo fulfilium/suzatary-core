@@ -28,6 +28,7 @@ import d from "../wire/decoder"
 import payload from "../wire/generated/payload"
 import type { ConversationsPayload, InboxProposalsPayload, MemoryPayload, SearchPayload } from "../wire/generated/wire"
 import { measure } from "../app/perf"
+import text from "../wire/text"
 
 export namespace storesync {
   const bars = sources.create<progress.T, progress.Event>(progress.NONE, progress.step)
@@ -54,9 +55,9 @@ export namespace storesync {
 
   // The Inbox's rows at `at` and the chains they were priced through, read from the inbox alone: it never pulls the lines.
   export type Proposals = { readonly payload: InboxProposalsPayload; readonly held: readonly string[] }
-  export const proposals = async (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<Proposals> => {
+  export const proposals = async (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<text.Text<Proposals>> => {
     const { held, answer } = await askHeld(() => ({ type: "Proposals", at, memory }), lane)
-    return { payload: answer, held: held.held.map(c => c.name) }
+    return text.object<Proposals>({ payload: answer, held: text.printed(held.held.map(c => c.name)) })
   }
 
   // Asked of the worker, which answers once every store it reads is ready and every line it reads is held; measured as
@@ -104,8 +105,14 @@ export namespace storesync {
   export const notHere = (lines: number, of: string, why: string): string => `Not on this device yet: ${lines} ${lines === 1 ? "line" : "lines"} of ${of} (${why}).`
 
   // The same, read back to the turn it must reach, grouped into rounds on the owner's days in `zone`.
-  export const window = (id: string, window: grouped.Asked, memory: MemoryPayload | null, zone: time.Zone, lane: lanes.Lane): Promise<questions.Grouped> =>
-    over({ type: "Window", id, window, memory, zone }, false, lane)
+  export const window = (
+    id: string,
+    window: grouped.Asked,
+    memory: MemoryPayload | null,
+    drawn: readonly questions.Drawn[],
+    zone: time.Zone,
+    lane: lanes.Lane,
+  ): Promise<questions.Grouped> => over({ type: "Window", id, window, memory, drawn, zone }, false, lane)
 
   // A conversation read where the box holds none of it, in the words the core refuses one with.
   export const absent = (id: string): never => {

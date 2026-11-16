@@ -5,15 +5,15 @@ import type {
   ConversationPayload,
   ConversationsPayload,
   FoldPayload,
+  ProposalRow,
   InboxProposalsPayload,
   MemoryPayload,
   SearchPayload,
   SpecNode,
-  StreamPayload,
-  TopicsPayload,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, CorePlaced, CoreSpot, Standing, Todos, Window } from "./core"
+import type { Dressed, Streamed, Windowed as PageWindow } from "../wire/generated/pages"
+import type { Acted, AnsweredBlock, Chains, Core, CoreEnv, CoreFold, Linker, Named, CorePlaced, Beside, CoreSpot, Standing, Todos, Window } from "./core"
 import { grow } from "./core"
 import {
   appendTo,
@@ -53,6 +53,7 @@ import grouped from "../chat/grouped"
 import rendered from "../app/rendered"
 import type time from "../app/time"
 import { measure } from "../app/perf"
+import text from "../wire/text"
 
 export namespace questions {
   // `whole` replaces what the worker holds: sent after a refused holding, since nothing then says what it took.
@@ -86,9 +87,17 @@ export namespace questions {
   const UNHEARD: Unheard = { type: "Unheard" }
 
   export type One = Unheld | { readonly type: "Held"; readonly payload: ConversationPayload } | NotHere
-  export type Keyed = Readonly<Record<string, string>>
 
-  export type Grouped = Unheld | { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: Keyed } | NotHere
+  // A reading as its page parses it, dressed with what the device holds of what only the box says: its model blocks'
+  // HTML, and a conversation's proposals as the box drew them (`Drawn`, which the page holds and hands over). Beside it,
+  // what the device lacks: blocks it holds no HTML of (`missing`), proposals not drawn (`drawing`), and how many of its
+  // rows read the memory's words (`receipts`), which the page reads from the box and asks with again.
+  export type Worded<T> = { readonly text: text.Text<T>; readonly missing: readonly AnsweredBlock[] }
+  export type Windowed = Worded<PageWindow> & { readonly drawing: readonly ProposalRow[]; readonly receipts: number }
+  // A proposal as the box drew it, and the print of the row it drew it from: kept while that row stands.
+  export type Drawn = { readonly from: string; readonly row: ProposalRow }
+
+  export type Grouped = Unheld | ({ readonly type: "Held" } & Windowed) | NotHere
 
   // `null` is ∅.
   export type Priced = { readonly type: "Value"; readonly v: number | null } | { readonly type: "Refused"; readonly why: string }
@@ -103,10 +112,10 @@ export namespace questions {
     List: { q: { readonly chain: string; readonly at: string | null }; a: FoldPayload }
     Act: { q: { readonly chain: string; readonly event: string; readonly at: string }; a: Acted }
     // Kept while the set and the instant stand.
-    Reading: { q: { readonly chain: string; readonly at: string }; a: Read }
+    Reading: { q: { readonly chain: string; readonly at: string }; a: text.Text<Read> }
     Price: { q: { readonly basis: Basis; readonly terms: readonly SpecNode[] }; a: readonly Priced[] }
-    Tree: { q: { readonly basis: Basis; readonly members: readonly Placed[]; readonly by: string }; a: Line }
-    Thirty: { q: { readonly chain: string; readonly id: string; readonly ms: number }; a: thirty.Thirty }
+    Tree: { q: { readonly basis: Basis; readonly members: readonly Placed[]; readonly by: string }; a: text.Text<Line> }
+    Thirty: { q: { readonly chain: string; readonly id: string; readonly ms: number }; a: text.Text<thirty.Thirty> }
     Standing: { q: { readonly chain: string; readonly root: string | null; readonly actor: string; readonly key: string }; a: Standing }
     // Pulls every store now and after every word of the box's stream; true when every pull ended whole.
     Pull: { q: Record<never, never>; a: boolean }
@@ -117,11 +126,15 @@ export namespace questions {
     Shown: { q: { readonly on: boolean }; a: null }
     // Answers with what the reset could not do.
     Reset: { q: { readonly store: stores.Name }; a: readonly string[] }
-    Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: InboxProposalsPayload }
+    // Says what it was priced without as the inbox's reader.
+    Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: text.Text<InboxProposalsPayload> }
     Conversations: { q: Record<never, never>; a: Whole<ConversationsPayload> }
     Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: One }
     // Read back to the turn it must reach (`grouped.covering`), grouped into rounds on the owner's days in `zone`.
-    Window: { q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly zone: time.Zone }; a: Grouped }
+    Window: {
+      q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly drawn: readonly Drawn[]; readonly zone: time.Zone }
+      a: Grouped
+    }
     Search: { q: { readonly q: string }; a: Whole<SearchPayload> }
     Left: { q: Record<never, never>; a: excluded.T }
     // The device's rendered blocks: the worker alone reads and writes them.
@@ -129,7 +142,7 @@ export namespace questions {
     KeepBlocks: { q: { readonly pairs: readonly (readonly [string, string])[] }; a: string[] }
     BlocksUsage: { q: Record<never, never>; a: rendered.Usage }
     // Answered once the lines of the conversations the rounds are in are held.
-    Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<{ readonly stream: StreamPayload; readonly bar: TopicsPayload; readonly keys: Keyed }> }
+    Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<Worded<Dressed<Streamed>>> }
     // A refusal fails in the box's words.
     Topic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: null }
   }
@@ -145,6 +158,15 @@ export namespace questions {
   // `Unloaded`: the core did not load.
   export type Said = storeset.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
   export type Out = Answered | { readonly said: Said }
+
+  // A proposal the box draws against its chain, whose card counts what it draws: its whole row is the box's.
+  const drawnByTheBox = (p: ProposalRow): boolean =>
+    p.act.kind === "changes" || p.act.kind === "secret" || p.act.kind === "connect" || p.coding?.state === "reported"
+
+  // The rows of a window that read the memory's words: a remembered verb, and a card that remembers or consolidates.
+  const receiptsOf = (w: ConversationPayload): number =>
+    w.turns.filter(t => t.who === "verb" && t.outcome.is === "remembered").length +
+    w.proposals.filter(p => p.act.kind === "remember" || p.act.kind === "consolidate").length
 
   // The page's reading, and the one it replaced while a page still reads it.
   const KEPT = 4
@@ -250,12 +272,20 @@ export namespace questions {
 
     // Read again only once the inbox, the chains held or the memory moved; until then an ask gets the first reading,
     // whose `at` names its instant.
-    const inbox = last.of<{ readonly version: number; readonly set: string; readonly memory: string }, InboxProposalsPayload>(
+    const inbox = last.of<{ readonly version: number; readonly set: string; readonly memory: string }, Beside<InboxProposalsPayload, InboxProposalsPayload["failed"]>>(
       (a, b) => a.version === b.version && a.set === b.set && a.memory === b.memory,
     )
 
-    const keyed = (turns: readonly TurnRow[]): Keyed =>
-      Object.fromEntries(turns.flatMap(t => (t.who === "model" ? t.blocks.map(b => [b.source, core.answer_key(b.source)]) : [])))
+    const blocksOf = (conversation: string, turns: readonly TurnRow[]): AnsweredBlock[] =>
+      turns.flatMap(t => (t.who === "model" ? t.blocks.map(b => ({ conversation, source: b.source, key: core.answer_key(b.source) })) : []))
+
+    // The reading set whole beside the HTML the device holds of its blocks and the proposals drawn; the blocks it lacks.
+    const dressing = async <T>(read: text.Text<T>, bs: readonly AnsweredBlock[], drawn: readonly ProposalRow[]): Promise<Worded<Dressed<T>>> => {
+      const got = bs.length === 0 ? [] : await blocks.get(bs.map(b => b.key))
+      const html = Object.fromEntries(bs.flatMap((b, i) => { const h = got[i]; return h === null || h === undefined ? [] : [[b.source, h]] }))
+      const missing = bs.filter((_, i) => got[i] === null || got[i] === undefined)
+      return { text: text.object<Dressed<T>>({ read, html: text.printed(html), drawn: text.printed(drawn) }), missing }
+    }
 
     const hold = (holding: readonly Holding[]): null => {
       for (const h of holding) {
@@ -287,7 +317,7 @@ export namespace questions {
       }
     }
 
-    const reading = (chain: string, at: string): Answer<"Reading"> => {
+    const reading = (chain: string, at: string): Read => {
       const name: Name = { chain, set: setNow(), at }
       const known = kept(name)
       if (known !== undefined) return known.answer
@@ -334,19 +364,19 @@ export namespace questions {
         case "Act":
           return act(q.chain, q.event, q.at)
         case "Reading":
-          return reading(q.chain, q.at)
+          return text.printed(reading(q.chain, q.at))
         case "Price":
           return price(q.basis, q.terms)
         case "Tree": {
           // The core grows it, so the pages' module links no term and no trie; each term priced as `Price` prices it.
           const grown = grow(core, q.members, q.by)
           const prices = (g: ReturnType<typeof grow>): Line => ({ place: g.place, term: g.term, priced: price(q.basis, [g.term])[0] ?? { type: "Refused", why: "not priced" }, children: g.children.map(prices) })
-          return prices(grown)
+          return text.printed(prices(grown))
         }
         case "Thirty": {
           setNow()
           const c = chains.get(q.chain)
-          return c === undefined ? thirty.unheld : thirty.sample(core, set, todosOf(c), c.untrusted, q.id, q.ms)
+          return text.printed(c === undefined ? thirty.unheld : thirty.sample(core, set, todosOf(c), c.untrusted, q.id, q.ms))
         }
         case "Standing":
           return standingIn(todosOf(named(q.chain)), q.root, q.actor, q.key)
@@ -365,7 +395,9 @@ export namespace questions {
         case "Proposals":
           return ready("Inbox", turn).then(() => {
             const of = proposals()
-            return inbox({ version: of.version(), set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
+            const read = inbox({ version: of.version(), set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
+            say({ type: "Told", reader: "inbox", left: excluded.left(excluded.NONE, read.said) })
+            return read.text
           })
         case "Conversations":
           return whole(turn, () => listOfLines(held, proposals()))
@@ -375,14 +407,23 @@ export namespace questions {
             .catch((e: unknown): One => notHere(lines.one(id), e))
         }
         case "Window": {
-          const { id, window, memory, zone } = q
+          const { id, window, memory, drawn, zone } = q
           const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
-          return conversation(id, turn, () =>
-            sync.over(() => lines.one(id), (): Grouped => {
-              const payload = grouped.of(grouped.covering(window, read), zone)
-              return { type: "Held", payload, keys: keyed(payload.turns) }
-            }),
-          )
+          const given = new Map(drawn.map(d => [d.from, d.row]))
+          return conversation(id, turn, () => sync.over(() => lines.one(id), () => grouped.of(grouped.covering(window, read), zone)))
+            .then(async (payload): Promise<Grouped> => {
+              if ("type" in payload) return payload
+              const drawing = payload.proposals.filter(drawnByTheBox)
+              const rows = drawing.flatMap(p => given.get(JSON.stringify(p)) ?? [])
+              const dressed = await dressing(text.printed(payload), blocksOf(id, payload.turns), rows)
+              return {
+                type: "Held",
+                text: text.object<PageWindow & { readonly type: "Read" }>({ type: text.printed("Read"), payload: dressed.text }),
+                missing: dressed.missing,
+                drawing: drawing.filter(p => !given.has(JSON.stringify(p))),
+                receipts: receiptsOf(payload),
+              }
+            })
             .catch((e: unknown): Grouped => notHere(lines.one(id), e))
         }
         case "Search":
@@ -409,11 +450,11 @@ export namespace questions {
               const read = stores.topics()
               const stream = streamOf(held, read.reading, q.chosen, q.pages)
               phases.mark("stream drawn")
-              const answer = { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+              const answer = { read: text.object<Streamed>({ stream: stream.text, bar: barOf(read.reading) }), blocks: stream.said }
               measure("stream:read", start)
               return answer
             },
-          )
+          ).then(async (w): Promise<Whole<Worded<Dressed<Streamed>>>> => (w.type === "Held" ? { type: "Held", v: await dressing(w.v.read, w.v.blocks, []) } : w))
         case "Topic":
           return stores.write(q.write, q.at, q.actor).then(() => null)
       }

@@ -80,3 +80,22 @@ test("every instant falls in the owner's day it reads as, between its start and 
       assert.equal(time.daysBetween(today, time.date(zone, time.nextDay(zone, t))), 1, "and the next is the following day")
     }),
   ))
+
+// The offset in force at `t`: the last that starts at or before it.
+const inForce = (os: readonly time.Offset[], t: number): number => os.filter(o => o.from <= t).at(-1)?.minutes ?? NaN
+
+test("law: the offsets read the owner's wall clock, every day of ten years and every minute a change starts", () => {
+  const to = Date.UTC(2026, 10, 16)
+  const from = to - 10 * 365 * 86_400_000
+  for (const name of ["America/Santiago", "America/New_York", "Africa/Casablanca", "Australia/Lord_Howe", "Asia/Kolkata", "UTC"]) {
+    const z = time.zoneOf(name)
+    assert.ok(z !== null, name)
+    const os = time.offsets(z, from, to)
+    const reads = (t: number): string => new Date(t + inForce(os, t) * 60_000).toISOString().slice(0, 16).replace("T", " ")
+    for (let t = from; t <= to; t += 86_400_000) assert.equal(reads(t), time.minute(z, t), `${name} at ${new Date(t).toISOString()}`)
+    for (const o of os.slice(1)) {
+      assert.equal(reads(o.from), time.minute(z, o.from), `${name}: the change at ${new Date(o.from).toISOString()}`)
+      assert.notEqual(inForce(os, o.from - 60_000), o.minutes, `${name}: a change starts where the offset moves`)
+    }
+  }
+})

@@ -11,6 +11,7 @@ declare class Page {
   /** Once. */
   first(): Uint8Array;
   input(json: string): Uint8Array;
+  reply(json: string, text: Uint8Array): Uint8Array;
   /** undefined when no handler took the event. */
   event(id: number, on: number, words: string): Uint8Array | undefined;
   /** The current view drawn from nothing, for a new painter. */

@@ -5,6 +5,8 @@
 // exports and its drop included. Whatever happens it then says it is done and closes: a rehearsal that fails costs the
 // page nothing but that warmth.
 
+import deliver, { type Written, written } from "../painter/deliver"
+
 type Glue = typeof import("./views.js")
 
 // The worker's own scope, typed by what this file uses of it (the program's lib is the DOM's).
@@ -14,7 +16,7 @@ type Scope = {
 }
 const scope: Scope = self
 
-type Rehearsal = { readonly flags: unknown; readonly inputs: readonly unknown[] }
+type Rehearsal = { readonly flags: unknown; readonly inputs: readonly Written[] }
 
 const rehearse = async (module: WebAssembly.Module): Promise<void> => {
   const glue: Glue = await import("./views.js")
@@ -31,7 +33,7 @@ const rehearse = async (module: WebAssembly.Module): Promise<void> => {
       page.first()
       page.effects()
       for (const input of inputs) {
-        page.input(JSON.stringify(input))
+        deliver(page, written(input))
         page.effects()
       }
     } catch (e) {

@@ -48,9 +48,13 @@ pub mod zone;
 macro_rules! hosted {
     ($($page:ident :: $program:ident $(= $rehearsal:literal)?),*) => {$(
         impl viewtree::host::Hosted for $page::$program {
-            type Input = runtime::Input<$page::Hold, $page::Ask>;
+            type Input = runtime::Input<$page::Hold, $page::Ask, runtime::Never, runtime::Beside>;
             fn input(input: Self::Input) -> $page::Msg {
-                $page::Msg::Host(Box::new(input))
+                $page::Msg::Host(Box::new(input.bare()))
+            }
+            type Reply = runtime::Reply<$page::Hold, $page::Ask>;
+            fn reply(reply: Self::Reply, text: Vec<u8>) -> $page::Msg {
+                $page::Msg::Host(Box::new(reply.with(text)))
             }
             $(fn rehearsal() -> Option<&'static str> {
                 Some(include_str!(concat!("../tests/rehearsal/", $rehearsal)))
@@ -73,9 +77,13 @@ hosted!(
 );
 
 impl viewtree::host::Hosted for todos::Todos {
-    type Input = runtime::Input<todos::Hold, todos::Ask, todos::Listen>;
+    type Input = runtime::Input<todos::Hold, todos::Ask, todos::Listen, runtime::Beside>;
     fn input(input: Self::Input) -> todos::Msg {
-        todos::Msg::Host(Box::new(input))
+        todos::Msg::Host(Box::new(input.bare()))
+    }
+    type Reply = runtime::Reply<todos::Hold, todos::Ask>;
+    fn reply(reply: Self::Reply, text: Vec<u8>) -> todos::Msg {
+        todos::Msg::Host(Box::new(reply.with(text)))
     }
     /// Flags alone: the page a visit opens on is constructed, painted and freed, so leaving it
     /// for the stream compiles nothing on the page's thread.
@@ -85,9 +93,18 @@ impl viewtree::host::Hosted for todos::Todos {
 }
 
 impl viewtree::host::Hosted for conversation::Conversation {
-    type Input = conversation::Input;
-    fn input(input: conversation::Input) -> conversation::Msg {
-        conversation::Msg::Host(Box::new(input))
+    type Input = runtime::Input<
+        conversation::Hold,
+        conversation::Ask,
+        conversation::Stream,
+        runtime::Beside,
+    >;
+    fn input(input: Self::Input) -> conversation::Msg {
+        conversation::Msg::Host(Box::new(input.bare()))
+    }
+    type Reply = runtime::Reply<conversation::Hold, conversation::Ask>;
+    fn reply(reply: Self::Reply, text: Vec<u8>) -> conversation::Msg {
+        conversation::Msg::Host(Box::new(reply.with(text)))
     }
     fn rehearsal() -> Option<&'static str> {
         Some(include_str!("../tests/rehearsal/conversation.json"))
@@ -95,9 +112,13 @@ impl viewtree::host::Hosted for conversation::Conversation {
 }
 
 impl<V: reading::View> viewtree::host::Hosted for reading::One<V> {
-    type Input = runtime::Input<reading::Hold, runtime::Never>;
+    type Input = runtime::Input<reading::Hold, runtime::Never, runtime::Never, runtime::Beside>;
     fn input(input: Self::Input) -> reading::Msg {
-        reading::Msg::Host(Box::new(input))
+        reading::Msg::Host(Box::new(input.bare()))
+    }
+    type Reply = runtime::Reply<reading::Hold, runtime::Never>;
+    fn reply(reply: Self::Reply, text: Vec<u8>) -> reading::Msg {
+        reading::Msg::Host(Box::new(reply.with(text)))
     }
 }
 

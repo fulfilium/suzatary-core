@@ -19,32 +19,49 @@ use suzatary_core::secretary::outlines::Scope;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::Stored;
 use suzatary_core::secretary::stream;
-use suzatary_core::wire::topics::MemoryPayload;
+use suzatary_core::wire::topics::{MemoryPayload, Speaker};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use wasm_bindgen::prelude::*;
 
-use crate::{Chains, Proposals, json, refused};
+use crate::{Chains, Proposals, Read, json, read, refused};
+
+/// A block of a model's answer as a page asks the box for its HTML.
+#[derive(serde::Serialize)]
+struct AnsweredBlock<'a> {
+    conversation: &'a str,
+    source: &'a str,
+    key: String,
+}
+
+fn answered_block<'a>(
+    conversation: &'a str,
+    source: &'a str,
+) -> Result<AnsweredBlock<'a>, JsError> {
+    Ok(AnsweredBlock {
+        conversation,
+        source,
+        key: crate::rendering::answer_key(source)?,
+    })
+}
 
 #[wasm_bindgen]
 impl Proposals {
     /// Every proposal, oldest first, with its state and its value at `at` (ISO), each priced
     /// through `chains` by the todo it serves: what the Inbox lists. A remember card's words are
-    /// found in the memory as its route answers it, or read as unread for `undefined`.
+    /// found in the memory as its route answers it, or read as unread for `undefined`. Said
+    /// beside it: the chains it was priced without (`failed`).
     pub fn inbox(
         &self,
         at: &str,
         chains: &Chains,
         memory: Option<String>,
-    ) -> Result<String, JsError> {
+    ) -> Result<Read, JsError> {
         let at = parse_instant("at", at).map_err(refused)?;
         let now = datetime_of(at).map_err(|e| refused(format!("at: {e}")))?;
         let memory = memory_of(memory)?;
-        json(&readings::inbox(
-            &self.fold()?,
-            &chains.set(now, None),
-            memory.as_ref(),
-        ))
+        let inbox = readings::inbox(&self.fold()?, &chains.set(now, None), memory.as_ref());
+        read(&inbox, &inbox.failed)
     }
 }
 
@@ -230,27 +247,43 @@ impl Lines {
 
     /// The newest `pages` pages of the rounds of every conversation carrying each topic of
     /// `chosen` (a JSON array), oldest first, with how many the filter shows in all: chosen by
-    /// the skeleton's outlines, each drawn from the lines held that it reads.
+    /// the skeleton's outlines, each drawn from the lines held that it reads. Said beside it: each
+    /// block of the rounds' answers, `{conversation, source, key}`, `key` the one the box keeps
+    /// its HTML under.
     pub fn stream(
         &mut self,
         topics: &crate::topics::TopicReading,
         chosen: &str,
         pages: u32,
-    ) -> Result<String, JsError> {
+    ) -> Result<Read, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
         let pages = pages_of(pages)?;
         let (outlines, held) = self.0.reading();
-        json(
-            &stream::stream(
-                outlines.outlines(),
-                |id, turn, objects| held.round(id, turn, objects),
-                &topics.0,
-                &chosen,
-                pages,
-                &Dress::BARE,
-            )
-            .map_err(|e| refused(e.to_string()))?,
+        let stream = stream::stream(
+            outlines.outlines(),
+            |id, turn, objects| held.round(id, turn, objects),
+            &topics.0,
+            &chosen,
+            pages,
+            &Dress::BARE,
         )
+        .map_err(|e| refused(e.to_string()))?;
+        let blocks = stream
+            .rounds
+            .iter()
+            .flat_map(|r| r.answer.iter().map(move |a| (r.conversation.as_str(), a)))
+            .flat_map(|(conversation, a)| match &a.who {
+                Speaker::Model { blocks } => blocks
+                    .iter()
+                    .map(|b| answered_block(conversation, &b.source))
+                    .collect(),
+                Speaker::Person { .. }
+                | Speaker::Verb { .. }
+                | Speaker::Act { .. }
+                | Speaker::Box { .. } => Vec::new(),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        read(&stream, &blocks)
     }
 
     /// Every conversation's turns holding `q`, newest first: only words this reading opened.

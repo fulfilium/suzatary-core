@@ -1,7 +1,7 @@
 //! The device section offers a new key wherever this device holds a key row, read or not, and
 //! nowhere else; and the code from the box only to a key nobody trusts yet.
 
-use suzatary_pages::runtime::{Answer, Context, Gate, Input, Reach};
+use suzatary_pages::runtime::{Answer, Context, Gate, Input, Reach, Text};
 use suzatary_pages::settings::{Flags, Hold, Model, Msg, Settings};
 use viewtree::kit::Reading;
 use viewtree::{Attr, Kids, Node, Program};
@@ -20,7 +20,9 @@ fn model(signing: &serde_json::Value) -> Model {
         Msg::Host(Box::new(Input::Held {
             ask,
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))

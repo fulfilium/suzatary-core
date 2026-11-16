@@ -460,7 +460,7 @@ pub struct LocalAnswers {
     decisions: suzatary_api::wire::FoldPayload,
     conversations: suzatary_core::wire::topics::ConversationsPayload,
     search: suzatary_core::wire::topics::SearchPayload,
-    stream: crate::secretary::StreamRead,
+    stream: crate::answer::Dressed<crate::secretary::Streamed>,
     window: crate::conversation::Windowed,
     cards: suzatary_api::wire::DrawnPayload,
     fold: Option<crate::held::Folded>,
@@ -704,12 +704,40 @@ pub struct Behind {
     pub since: i64,
 }
 
+/// The JSON text of an answer's body, in UTF-8, as the box, the core's worker or the host printed
+/// it. The page that reads it parses it once, into the type it reads (`answered`).
+#[derive(Debug, Clone, PartialEq, Eq, TS)]
+#[ts(type = "Uint8Array")]
+pub struct Text(Vec<u8>);
+
+impl Text {
+    /// A text the host handed over beside its input (`Hosted::reply`).
+    #[must_use]
+    pub fn of(text: Vec<u8>) -> Self {
+        Text(text)
+    }
+
+    /// `value` printed, as the host prints a value it made.
+    ///
+    /// # Panics
+    /// `value` does not print as JSON, as a map with keys that are not strings.
+    #[must_use]
+    pub fn printed(value: &impl Serialize) -> Self {
+        Text(serde_json::to_vec(value).expect("an answer prints as JSON"))
+    }
+}
+
+/// Where an input's answer's body lies when the host prints the input: beside it
+/// (`Hosted::reply`), never inside it, so an input that prints one is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum Beside {}
+
 #[derive(Debug, Clone, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Answer {
+#[ts(concrete(B = Text))]
+pub enum Answer<B = Text> {
     Done {
-        #[ts(type = "unknown")]
-        body: serde_json::Value,
+        body: B,
     },
     Refused {
         /// 0 when no answer came.
@@ -720,16 +748,17 @@ pub enum Answer {
 
 #[derive(Debug, Clone, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Input<H, A, S = Never> {
+#[ts(concrete(B = Text))]
+pub enum Input<H, A, S = Never, B = Text> {
     Context(Context),
     Held {
         ask: H,
-        reading: Reading<Answer>,
+        reading: Reading<Answer<B>>,
         behind: Option<Behind>,
     },
     Answered {
         ask: A,
-        answer: Answer,
+        answer: Answer<B>,
     },
     Heard {
         ask: S,
@@ -738,6 +767,64 @@ pub enum Input<H, A, S = Never> {
     Opened {
         ask: S,
     },
+}
+
+impl<H, A, S> Input<H, A, S, Beside> {
+    /// The input as a page reads it; it carries no answer's body.
+    #[must_use]
+    pub fn bare(self) -> Input<H, A, S> {
+        fn refused(a: Answer<Beside>) -> Answer {
+            match a {
+                Answer::Done { body } => match body {},
+                Answer::Refused { status, words } => Answer::Refused { status, words },
+            }
+        }
+        match self {
+            Input::Context(c) => Input::Context(c),
+            Input::Held {
+                ask,
+                reading,
+                behind,
+            } => Input::Held {
+                ask,
+                reading: reading.map(refused),
+                behind,
+            },
+            Input::Answered { ask, answer } => Input::Answered {
+                ask,
+                answer: refused(answer),
+            },
+            Input::Heard { ask, frame } => Input::Heard { ask, frame },
+            Input::Opened { ask } => Input::Opened { ask },
+        }
+    }
+}
+
+/// An input whose answer the host hands over beside it as JSON text (`Hosted::reply`): a held
+/// reading's, or a one-time ask's.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Reply<H, A> {
+    Held { ask: H, behind: Option<Behind> },
+    Answered { ask: A },
+}
+
+impl<H, A> Reply<H, A> {
+    /// The input it is, with `text` as its answer's body.
+    #[must_use]
+    pub fn with<S>(self, text: Vec<u8>) -> Input<H, A, S> {
+        let answer = Answer::Done {
+            body: Text::of(text),
+        };
+        match self {
+            Reply::Held { ask, behind } => Input::Held {
+                ask,
+                reading: Reading::Val { v: answer },
+                behind,
+            },
+            Reply::Answered { ask } => Input::Answered { ask, answer },
+        }
+    }
 }
 
 /// A refusal, or an answer of another shape, is an error in its words.
@@ -761,7 +848,8 @@ pub const UNREAD: &str = "the box answered in a shape this page does not read";
 pub(crate) fn answered<T: DeserializeOwned>(a: Answer) -> Result<T, String> {
     match a {
         Answer::Done { body } => {
-            serde_json::from_value(body).map_err(|e| format!("{UNREAD} ({e})"))
+            let text = std::str::from_utf8(&body.0).map_err(|e| format!("{UNREAD} ({e})"))?;
+            serde_json::from_str(text).map_err(|e| format!("{UNREAD} ({e})"))
         }
         Answer::Refused { words, .. } => Err(words),
     }

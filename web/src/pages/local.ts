@@ -14,8 +14,6 @@ import signer from "../prodrome/signer"
 import storesync from "../prodrome/storesync"
 import intentsync from "../prodrome/intentsync"
 import intents from "../prodrome/intents"
-import readings from "../prodrome/readings"
-import excluded from "../prodrome/excluded"
 import reading from "../algebra/reading"
 import dressed from "../chat/dressed"
 import drafts from "../chat/drafts"
@@ -25,12 +23,12 @@ import scroll from "../painter/scroll"
 import d from "../wire/decoder"
 import { drawnProposals } from "../wire/api"
 import lanes from "../prodrome/lanes"
+import text from "../wire/text"
 
 export namespace local {
   type Kind = Local["type"]
   // The generated answer, read-only all the way down as the tab's own values are.
-  type Frozen<T> = T extends readonly (infer U)[] ? readonly Frozen<U>[] : T extends object ? { readonly [P in keyof T]: Frozen<T[P]> } : T
-  type Answer<K extends Kind> = Frozen<LocalAnswers[K]>
+  type Answer<K extends Kind> = text.Frozen<LocalAnswers[K]>
 
   // Keyed by the `Local` as decoded.
   const watchers = lanes.watchers()
@@ -50,13 +48,9 @@ export namespace local {
 
   const here = reading.map(reading.both(kept, signing), ([k, s]) => (k === null ? null : { ...k, signing: s }))
 
-  // What it was priced without goes to the shell's line of what the device left out.
+  // The worker says what it was priced without as the inbox's reader.
   const proposals = reading.againOn(
-    asked.question(async () => {
-      const read = await dressed.inbox(time.moment(), await dressed.asked(), laneOf({ type: "Proposals" }))
-      readings.told("inbox", excluded.left(excluded.NONE, read.payload.failed))
-      return read
-    }),
+    asked.question(async () => dressed.inbox(time.moment(), await dressed.asked(), laneOf({ type: "Proposals" }))),
     storesync.watch,
   )
 
@@ -74,7 +68,7 @@ export namespace local {
   type Stream = Extract<Local, { type: "Stream" }>
   const streams = asked.family(
     (s: Stream) => JSON.stringify([s.chosen, s.pages]),
-    (s: Stream) => dressed.stream(s.chosen, s.pages, laneOf(s)).then(r => ({ stream: r.stream, bar: r.bar })),
+    (s: Stream) => dressed.stream(s.chosen, s.pages, laneOf(s)),
   )
 
   type Window = Extract<Local, { type: "Window" }>
@@ -174,31 +168,33 @@ export namespace local {
   }
 
   type Of = { readonly [K in Kind]: Extract<Local, { readonly type: K }> }
-  type Readers = { readonly [K in Kind]: (l: Of[K], box: Element) => reading.Reading<Answer<K>> }
+  // Each answer as the text the page parses: the core worker's as it printed it, a value of this tab's printed here.
+  type Readers = { readonly [K in Kind]: (l: Of[K], box: Element) => reading.Reading<text.Text<Answer<K>>> }
+  const printed = <V>(r: reading.Reading<V>): reading.Reading<text.Text<V>> => reading.map(r, text.printed)
 
   const readers: Readers = {
-    Device: () => here,
+    Device: () => printed(here),
     Proposals: () => proposals,
-    Decisions: l => reading.againOn(decisions(l.chain), watchOthers),
-    Conversations: () => listed,
-    Search: l => searches(l),
+    Decisions: l => printed(reading.againOn(decisions(l.chain), watchOthers)),
+    Conversations: () => printed(listed),
+    Search: l => printed(searches(l)),
     Stream: l => reading.againOn(streams(l), storesync.watch),
     Window: l => reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard)),
     // Asked again when the box moves, never when this tab's copies land.
-    Cards: l => reading.againOn(cards(l), storesync.watchBox),
-    Intents: () => asking,
-    Titles: () => titles,
-    Draft: l => draftOf(l.id),
-    Ui: l => page(l.key),
-    Scroll: (_, box) => scroll.of(box),
-    Route: () => route,
-    Fold: () => folded,
-    Unsent: () => unsent,
-    Waiting: () => waiting,
-    Kept: l => onDevice(l.key),
+    Cards: l => printed(reading.againOn(cards(l), storesync.watchBox)),
+    Intents: () => printed(asking),
+    Titles: () => printed(titles),
+    Draft: l => printed(draftOf(l.id)),
+    Ui: l => printed(page(l.key)),
+    Scroll: (_, box) => printed(scroll.of(box)),
+    Route: () => printed(route),
+    Fold: () => printed(folded),
+    Unsent: () => printed(unsent),
+    Waiting: () => printed(waiting),
+    Kept: l => printed(onDevice(l.key)),
   }
 
-  export const of = <K extends Kind>(kind: K, l: Of[K], box: Element): reading.Reading<Answer<K>> => readers[kind](l, box)
+  export const of = <K extends Kind>(kind: K, l: Of[K], box: Element): reading.Reading<text.Text<Answer<K>>> => readers[kind](l, box)
 
   const drafted = d.obj({ type: d.oneOf({ Typed: null, Settled: null }), text: d.str })
 

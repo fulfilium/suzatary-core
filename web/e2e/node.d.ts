@@ -74,6 +74,9 @@ declare module "node:fs" {
   /** A bundle's file set aside and put back: `web/e2e/shell.test.ts` deploys a build whose files differ. */
   export function copyFileSync(from: string, to: string): void;
   export function renameSync(from: string, to: string): void;
+  /** What the browser prints, kept for `web/e2e/collections.bench.ts` (`cdp.ts`). */
+  export function appendFileSync(path: string, data: string): void;
+  export function statSync(path: string): { readonly size: number };
 }
 
 declare module "node:os" {

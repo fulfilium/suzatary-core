@@ -1,8 +1,12 @@
 //! A model's answer as every page draws it: block by block, typst's HTML through the tripwire or
 //! the source as text, each with its Copy, and the references it names linked under it.
 
+use std::collections::BTreeMap;
+
+use serde::Deserialize;
 use suzatary_base::reference::mentions;
-use suzatary_core::wire::topics::{BlockRow, Speaker, TurnRow};
+use suzatary_core::wire::topics::{BlockRow, ProposalRow, Speaker, TurnRow};
+use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Href, Open, Title, Type};
 use viewtree::{Node, view};
 
@@ -79,4 +83,64 @@ pub(crate) fn more<M>(items: Vec<Node<M>>, open: bool) -> Option<Node<M>> {
             view! { Div "turnmenu" [items] },
         ] }
     })
+}
+
+/// A reading as the host dressed it with what only the box says (`web/src/chat/dressed.ts`): the
+/// HTML each model block renders to, by its source, and each proposal it holds as the box drew it
+/// against its chain, by its index. What the box did not say stays as the replicas read it.
+#[derive(Debug, Clone, Deserialize, TS)]
+pub(crate) struct Dressed<T> {
+    pub(crate) read: T,
+    pub(crate) html: BTreeMap<String, String>,
+    pub(crate) drawn: Vec<ProposalRow>,
+}
+
+/// A reading that holds model turns, and proposals the box draws.
+pub(crate) trait Dressable {
+    fn turns(&mut self) -> impl Iterator<Item = &mut TurnRow>;
+    fn proposals(&mut self) -> impl Iterator<Item = &mut ProposalRow>;
+}
+
+impl<T: Dressable> Dressed<T> {
+    /// The reading with its blocks' HTML and its proposals' rows in place.
+    pub(crate) fn worn(self) -> T {
+        let Dressed {
+            mut read,
+            html,
+            drawn,
+        } = self;
+        for t in read.turns() {
+            match &mut t.who {
+                Speaker::Model { blocks } => {
+                    for b in blocks {
+                        if let Some(h) = html.get(&b.source) {
+                            b.html = Some(h.clone());
+                        }
+                    }
+                }
+                Speaker::Person { .. }
+                | Speaker::Verb { .. }
+                | Speaker::Act { .. }
+                | Speaker::Box { .. } => {}
+            }
+        }
+        let mut drawn: BTreeMap<usize, ProposalRow> =
+            drawn.into_iter().map(|p| (p.index, p)).collect();
+        for p in read.proposals() {
+            if let Some(row) = drawn.remove(&p.index) {
+                *p = row;
+            }
+        }
+        read
+    }
+}
+
+/// A dressed reading as a page holds it: worn once, as it is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Worn<T>(pub(crate) Box<T>);
+
+impl<'de, T: Dressable + Deserialize<'de>> Deserialize<'de> for Worn<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Dressed::<T>::deserialize(d).map(|t| Worn(Box::new(t.worn())))
+    }
 }

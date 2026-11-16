@@ -43,6 +43,21 @@ fn json(value: &impl serde::Serialize) -> Result<String, JsError> {
     serde_json::to_string(value).map_err(|e| refused(format!("could not print the answer: {e}")))
 }
 
+/// A reading printed whole for a page, in UTF-8, which the page parses once
+/// (`web/src/wire/text.ts`), and beside it, as JSON, the little of it the worker reads itself.
+#[wasm_bindgen::prelude::wasm_bindgen(getter_with_clone)]
+pub struct Read {
+    pub text: Vec<u8>,
+    pub said: String,
+}
+
+fn read(value: &impl serde::Serialize, said: &impl serde::Serialize) -> Result<Read, JsError> {
+    Ok(Read {
+        text: json(value)?.into_bytes(),
+        said: json(said)?,
+    })
+}
+
 fn printed(value: &serde_json::Value) -> Result<String, JsError> {
     prodrome_wasm_exports::printed(value).map_err(refused)
 }

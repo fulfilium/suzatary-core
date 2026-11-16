@@ -1035,7 +1035,8 @@ impl TypeVisitor for Names {
     }
 }
 
-/// Each type's declaration after its dependencies'; `out` is what the walk declared, in order.
+/// Each type's declaration after its dependencies'; `out` is what the walk declared, in order. A
+/// generic type visited at two arguments has one declaration, declared once.
 #[derive(Default)]
 pub struct Declarations {
     seen: std::collections::BTreeSet<std::any::TypeId>,
@@ -1048,7 +1049,10 @@ impl TypeVisitor for Declarations {
             return;
         }
         T::visit_dependencies(self);
-        self.out.push(T::decl());
+        let decl = T::decl();
+        if !self.out.contains(&decl) {
+            self.out.push(decl);
+        }
     }
 }
 

@@ -8,7 +8,7 @@ fn draft_msg() -> impl Strategy<Value = draft::Msg> {
             .prop_map(|t| draft::Msg::Named(t.to_owned())),
         prop::sample::select(vec![
             Answer::Done {
-                body: json!({"id": "2026-10-05-1"})
+                body: Text::printed(&json!({"id": "2026-10-05-1"}))
             },
             Answer::Refused {
                 status: 403,

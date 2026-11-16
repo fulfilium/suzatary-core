@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs"
 import type { Chains, Core, Lines, Named, Window } from "../src/prodrome/core"
 import { conversationOf, erasedOf, inboxOf, listOfLines, objectsOf } from "../src/prodrome/core"
 import { parentsOf } from "../src/prodrome/replica"
-import type { MemoryPayload } from "../src/wire/generated/wire"
+import type { InboxProposalsPayload, MemoryPayload } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
 import { heldChain, holdAll, storeOf } from "./held"
 import { keyed } from "./keyed"
@@ -57,7 +57,13 @@ const read = (i: readonly Named[], t: Lines, held = chains): string[] => {
     for (const h of held) priced.hold(h.name, objectsOf(h.objects), JSON.stringify(h.untrusted))
     const memory = JSON.stringify(box.memory)
     return [
-      p.inbox(box.at, priced, memory),
+      ((r): string => {
+        try {
+          return new TextDecoder().decode(r.text)
+        } finally {
+          r.free()
+        }
+      })(p.inbox(box.at, priced, memory)),
       t.list(p),
       ...box.windows.map(w =>
         t.conversation(w.id, p, w.before ?? undefined, w.limit ?? undefined, w.about ?? undefined, w.memory ? memory : undefined)),
@@ -187,7 +193,7 @@ test("the decoded readings are the wire's shapes", () => {
   const p = storeOf(new core.Proposals(), inbox)
   const held = holdAll(new core.Chains(), chains.map(c => heldChain(c.name, c.objects, c.untrusted)))
   const s = {
-    inbox: (at: string, memory: MemoryPayload | null, chains: typeof held) => inboxOf(p, at, memory, chains),
+    inbox: (at: string, memory: MemoryPayload | null, chains: typeof held): InboxProposalsPayload => JSON.parse(new TextDecoder().decode(inboxOf(p, at, memory, chains).text.bytes)),
     list: () => listOfLines(lines, p),
     conversation: (id: string, w: Window, memory: MemoryPayload | null) => conversationOf(lines, p, id, w, memory),
   }

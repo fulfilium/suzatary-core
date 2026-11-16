@@ -26,7 +26,8 @@ allowance = 2000
 # 2026-11-16: raised by hand to the merged tree's figure for door 1, a public store's write guard (+5,451, a new security boundary).
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.148 for `prodrome carry` (+20,175), a verb stage 4 of the public tasks plan deletes; accepted at the review of #520.
 # 2026-11-16: raised by hand to the figure of the tree merged with #520 for the start that folds no conversations (#521, +614 on top of #520's figure, about 5 s off every start).
-reading = 2972635
+# 2026-11-16: raised by hand to the figure of the tree merged with 2.1.149 for a page's reading as its JSON's bytes, parsed once (#522, +7,899: the collections bench, `Text`, `Hosted::reply` and the worker's dressing); accepted at the review of #522.
+reading = 2980534
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

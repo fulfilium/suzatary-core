@@ -4,7 +4,8 @@
 
 import painter from "../src/painter/painter";
 import run from "../src/painter/run";
-import type { Input } from "../src/wire/generated/pages";
+import deliver, { type Written, written } from "../src/painter/deliver";
+
 
 export namespace painterlaws {
   // A program's class as `viewtree::export!` makes it, with the fresh draw the laws compare against.
@@ -13,7 +14,7 @@ export namespace painterlaws {
   // What one step does: hand the program an input of the runtime's, tap the `at`-th button, type into the `at`-th field,
   // or answer the `at`-th act still waiting.
   export type Step =
-    | { readonly type: "input"; readonly input: Input<unknown, unknown, unknown> }
+    | { readonly type: "input"; readonly input: Written }
     | { readonly type: "click"; readonly at: number }
     | { readonly type: "type"; readonly at: number; readonly words: string }
     | { readonly type: "answer"; readonly at: number; readonly body: unknown; readonly refused: string | null };
@@ -72,7 +73,7 @@ export namespace painterlaws {
     readonly effects: readonly unknown[];
     readonly program: Program;
     readonly step: (s: Step) => void;
-    readonly again: (input: unknown) => number;
+    readonly again: (input: Written) => number;
     readonly destroy: () => void;
   };
 
@@ -91,7 +92,7 @@ export namespace painterlaws {
     const step = (s: Step): void => {
       switch (s.type) {
         case "input":
-          return page.send(s.input);
+          return page.send(written(s.input));
         case "click": {
           const buttons = root.querySelectorAll("button");
           return buttons.length === 0 ? undefined : buttons[s.at % buttons.length]?.click();
@@ -106,12 +107,12 @@ export namespace painterlaws {
         case "answer": {
           const [ask] = waiting.length === 0 ? [] : waiting.splice(s.at % waiting.length, 1);
           if (ask === undefined) return;
-          return page.send({ type: "Answered", ask: ask.ask, answer: s.refused === null ? { type: "Done", body: s.body } : { type: "Refused", status: 403, words: s.refused } });
+          return page.send(written({ type: "Answered", ask: ask.ask, answer: s.refused === null ? { type: "Done", body: s.body } : { type: "Refused", status: 403, words: s.refused } }));
         }
       }
     };
     // The bytes an input handed a second time patches: none, if painting a view again patches nothing.
-    const again = (input: unknown): number => program.input(JSON.stringify(input)).length;
+    const again = (input: Written): number => deliver(program, written(input)).length;
     return { root, effects, program, step, again, destroy: page.destroy };
   };
 

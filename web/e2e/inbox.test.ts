@@ -278,7 +278,12 @@ async function decisionOf(conversation: string): Promise<string | undefined> {
       inbox.land().free();
       const chains = new core.Chains();
       try {
-        return JSON.parse(inbox.inbox(new Date().toISOString().slice(0, 19), chains)).proposals;
+        const read = inbox.inbox(new Date().toISOString().slice(0, 19), chains);
+        try {
+          return JSON.parse(new TextDecoder().decode(read.text)).proposals;
+        } finally {
+          read.free();
+        }
       } finally {
         chains.free();
         inbox.free();

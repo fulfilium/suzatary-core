@@ -16,7 +16,7 @@ use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Typ
 use viewtree::kit::{Reading, para};
 use viewtree::{Key, Node, Program, view};
 
-use crate::answer;
+use crate::answer::{self, Dressable, Dressed, Worn};
 use crate::card::{self, Cards, Drawn, Placed, Titles};
 use crate::chats::{self, Searching};
 use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, prose};
@@ -137,18 +137,25 @@ pub(crate) struct Grouped {
     pub(crate) rounds: Vec<Shape_>,
 }
 
+impl Dressable for Grouped {
+    fn turns(&mut self) -> impl Iterator<Item = &mut TurnRow> {
+        self.payload.turns.iter_mut()
+    }
+    fn proposals(&mut self) -> impl Iterator<Item = &mut ProposalRow> {
+        self.payload.proposals.iter_mut()
+    }
+}
+
 /// `Local::Window`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Windowed {
     Read {
-        payload: Box<Grouped>,
+        #[ts(as = "Dressed<Grouped>")]
+        payload: Worn<Grouped>,
     },
     /// Lines of it are not on this device and could not be fetched.
-    NotHere {
-        lines: u32,
-        why: String,
-    },
+    NotHere { lines: u32, why: String },
     /// The device holds no line of it, and the box has not said whether it holds one.
     Unheard,
 }
@@ -890,7 +897,9 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
                 m.held = Held::Unheard;
             }
         }
-        Windowed::Read { payload } => {
+        Windowed::Read {
+            payload: Worn(payload),
+        } => {
             if about(&m.at).is_some() && !m.fallback && payload.payload.turns.is_empty() {
                 m.fallback = true;
                 m.asked = asking(m, 0);
@@ -1659,6 +1668,7 @@ fn transcript(m: &Model) -> Node<Msg> {
 
 #[cfg(test)]
 mod tests {
+    use crate::runtime::Text;
     use proptest::prelude::*;
     use serde_json::json;
     use viewtree::Runtime;
@@ -1720,12 +1730,14 @@ mod tests {
         let rounds: Vec<_> = (0..turns)
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
-        let body = json!({"type": "Read", "payload": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
-            "proposals": [], "unplaced": [], "state": "idle", "first": 0, "total": turns, "again": null, "rounds": rounds}});
+        let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
+            "proposals": [], "unplaced": [], "state": "idle", "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Window,
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))
@@ -1736,7 +1748,9 @@ mod tests {
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Scroll,
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))
@@ -1761,7 +1775,7 @@ mod tests {
                 .step(Msg::Host(Box::new(Input::Answered {
                     ask: Ask::Slice,
                     answer: Answer::Done {
-                        body: serde_json::Value::Null,
+                        body: Text::printed(&serde_json::Value::Null),
                     },
                 })))
                 .1;

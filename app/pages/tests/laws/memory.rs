@@ -82,7 +82,9 @@ fn a_forget_runs_once_until_it_is_answered() {
     assert_eq!(rt.step(tap()).1, Vec::new());
     let done = Input::Answered {
         ask: memory::Act::Forget(FactId(3)),
-        answer: Answer::Done { body: json!({}) },
+        answer: Answer::Done {
+            body: Text::printed(&json!({})),
+        },
     };
     assert_eq!(
         rt.step(memory::Msg::Host(Box::new(done))).1,
@@ -128,7 +130,7 @@ proptest! {
         let held = |ask, reading| {
             memory::Msg::Host(Box::new(Input::Held { ask, reading, behind: None }))
         };
-        let answered = Reading::Val { v: Answer::Done { body: facts.clone() } };
+        let answered = Reading::Val { v: Answer::Done { body: Text::printed(&facts.clone()) } };
         rt.step(held(memory::Hold::Memory, answered));
         rt.step(held(memory::Hold::Record, record.clone()));
         let drawn = format!(

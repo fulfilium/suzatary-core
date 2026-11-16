@@ -11,7 +11,7 @@ pub(crate) use suzatary_core::wire::topics::{BlockRow, FactRow, FactSaid, Memory
 pub(crate) use suzatary_memory::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_pages::reading::{Nothing, One, Opened};
 pub(crate) use suzatary_pages::runtime::{
-    Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Untrusted,
+    Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Text, Untrusted,
 };
 pub(crate) use suzatary_pages::todoparts::{Seal, Verb};
 pub(crate) use suzatary_pages::waiting::Watched;
@@ -117,11 +117,13 @@ pub(crate) fn reading(
         }),
         Just(Reading::Val {
             v: Answer::Done {
-                body: json!({"shape": "another"})
+                body: Text::printed(&json!({"shape": "another"}))
             }
         }),
         answer.prop_map(|body| Reading::Val {
-            v: Answer::Done { body }
+            v: Answer::Done {
+                body: Text::printed(&body)
+            }
         }),
     ]
 }
@@ -199,7 +201,9 @@ pub(crate) fn todo_asked() -> impl Strategy<Value = (todo::Ask, Answer)> {
             _ => (todo::Ask::Undo, Value::Null),
         };
         let answer = if ok {
-            Answer::Done { body: done }
+            Answer::Done {
+                body: Text::printed(&done),
+            }
         } else {
             refused.clone()
         };
@@ -277,7 +281,9 @@ pub(crate) fn answered<H: std::fmt::Debug, A: Clone + std::fmt::Debug + 'static>
     (ask, any::<bool>()).prop_map(|(ask, done)| Input::Answered {
         ask,
         answer: if done {
-            Answer::Done { body: json!({}) }
+            Answer::Done {
+                body: Text::printed(&json!({})),
+            }
         } else {
             Answer::Refused {
                 status: 409,
@@ -319,16 +325,22 @@ pub(crate) fn turn_row(index: usize) -> impl Strategy<Value = Value> {
 pub(crate) fn outcome() -> impl Strategy<Value = Answer> {
     prop::sample::select(vec![
         Answer::Done {
-            body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+            body: Text::printed(
+                &json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+            ),
         },
         Answer::Done {
-            body: json!({"type": "Answered", "answer": {"type": "Refused", "e": "the box refused this topic"}, "held": false}),
+            body: Text::printed(
+                &json!({"type": "Answered", "answer": {"type": "Refused", "e": "the box refused this topic"}, "held": false}),
+            ),
         },
         Answer::Done {
-            body: json!({"type": "Answered", "answer": {"type": "Lost", "e": "offline"}, "held": true}),
+            body: Text::printed(
+                &json!({"type": "Answered", "answer": {"type": "Lost", "e": "offline"}, "held": true}),
+            ),
         },
         Answer::Done {
-            body: json!({"type": "Already"}),
+            body: Text::printed(&json!({"type": "Already"})),
         },
         Answer::Refused {
             status: 0,
@@ -357,4 +369,35 @@ pub(crate) fn composer_ev() -> impl Strategy<Value = composer::Ev> {
         Just(composer::Ev::Stop),
         Just(composer::Ev::Up),
     ]
+}
+
+/// A recorded input as the host hands it over (`web/src/painter/deliver.ts`): an answer's body
+/// as text beside the rest, anything else whole.
+pub(crate) enum Delivered {
+    Whole(Value),
+    Reply(Value, Vec<u8>),
+}
+
+pub(crate) fn delivered(input: &Value) -> Delivered {
+    match (&input["type"], &input["reading"]["v"], &input["answer"]) {
+        (t, v, _) if t == "Held" && v["type"] == "Done" => Delivered::Reply(
+            json!({"type": "Held", "ask": input["ask"], "behind": input["behind"]}),
+            v["body"].to_string().into_bytes(),
+        ),
+        (t, _, a) if t == "Answered" && a["type"] == "Done" => Delivered::Reply(
+            json!({"type": "Answered", "ask": input["ask"]}),
+            a["body"].to_string().into_bytes(),
+        ),
+        _ => Delivered::Whole(input.clone()),
+    }
+}
+
+/// A recorded input as the message its page's host makes of it.
+pub(crate) fn hosted<P: viewtree::host::Hosted>(input: &Value) -> P::Msg {
+    match delivered(input) {
+        Delivered::Whole(v) => P::input(serde_json::from_value(v).expect("an input it takes")),
+        Delivered::Reply(r, text) => {
+            P::reply(serde_json::from_value(r).expect("a reply it takes"), text)
+        }
+    }
 }

@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::topics::provenance::Provenance;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::wire::topics::{
-    RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload,
+    ProposalRow, RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload,
+    TurnRow,
 };
 use ts_rs::TS;
 use viewtree::Attr::{
@@ -16,7 +17,7 @@ use viewtree::kit::{Reading, para};
 use viewtree::node::lazy;
 use viewtree::{Key, Node, Printed, Program, view};
 
-use crate::answer;
+use crate::answer::{self, Dressable, Dressed};
 use crate::chats::{self, Search, Searching};
 use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, pie, prose};
 use crate::part::Who;
@@ -68,18 +69,46 @@ pub struct Wrote {
 pub(crate) type Effect = runtime::Effect<Hold, Ask>;
 pub(crate) type Input = runtime::Input<Hold, Ask>;
 
-/// `Local::Stream`.
-#[derive(Debug, Clone, Deserialize, TS)]
+/// `Local::Stream`, read from its dressed text (`answer::Dressed`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "Dressed<Streamed>")]
 pub struct StreamRead {
-    #[ts(as = "StreamPayload")]
     pub(crate) stream: Stream,
     pub(crate) bar: TopicsPayload,
 }
 
+/// The stream a filter shows and the topics in use, as the core's worker reads them.
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct Streamed {
+    stream: StreamPayload,
+    bar: TopicsPayload,
+}
+
+impl Dressable for Streamed {
+    fn turns(&mut self) -> impl Iterator<Item = &mut TurnRow> {
+        self.stream
+            .rounds
+            .iter_mut()
+            .filter_map(|r| r.answer.as_mut())
+    }
+    fn proposals(&mut self) -> impl Iterator<Item = &mut ProposalRow> {
+        std::iter::empty()
+    }
+}
+
+impl From<Dressed<Streamed>> for StreamRead {
+    fn from(d: Dressed<Streamed>) -> Self {
+        let Streamed { stream, bar } = d.worn();
+        StreamRead {
+            stream: stream.into(),
+            bar,
+        }
+    }
+}
+
 /// The stream as the page holds it: each round printed once, as it is read, so a later step
 /// draws a round it drew before by comparing one number (`viewtree::node::lazy`).
-#[derive(Debug, Clone, Deserialize)]
-#[serde(from = "StreamPayload")]
+#[derive(Debug, Clone)]
 pub(crate) struct Stream {
     rounds: Vec<Printed<StreamRound>>,
     total: usize,

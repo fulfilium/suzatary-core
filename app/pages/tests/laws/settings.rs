@@ -79,7 +79,7 @@ fn settings_msg() -> impl Strategy<Value = settings::Msg> {
             ask: settings::Ask::Run(ask),
             answer: if done {
                 Answer::Done {
-                    body: json!({"id": "setup-1"}),
+                    body: Text::printed(&json!({"id": "setup-1"})),
                 }
             } else {
                 Answer::Refused {
@@ -113,7 +113,9 @@ fn a_card_that_changes_asks_the_overview_again() {
         settings::Msg::Host(Box::new(Input::Held {
             ask: settings::Hold::Rows(Watched::Cards("setup".to_owned())),
             reading: Reading::Val {
-                v: Answer::Done { body },
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
             },
             behind: None,
         }))
@@ -164,7 +166,9 @@ fn a_card_tap_answered_asks_the_overview_again() {
             signed: "standing:0:".to_owned(),
         }),
         answer: Answer::Done {
-            body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+            body: Text::printed(
+                &json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+            ),
         },
     }));
     let effects = rt.step(answered).1;
@@ -194,7 +198,9 @@ fn a_fix_answered_leaves_the_app_or_goes_to_a_place_as_its_link_says() {
                 signed: "failed:1:".to_owned(),
             }),
             answer: Answer::Done {
-                body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+                body: Text::printed(
+                    &json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+                ),
             },
         })))
         .1
@@ -230,12 +236,8 @@ fn a_fix_answered_leaves_the_app_or_goes_to_a_place_as_its_link_says() {
 /// overview read after it, and the answer (train 229 lost the resend in that order).
 #[test]
 fn a_grant_answered_after_its_line_moved_still_sends_its_link() {
-    type In = suzatary_pages::runtime::Input<settings::Hold, settings::Ask>;
     let recorded: Value = serde_json::from_str(include_str!("allow.json")).expect("the recording");
-    let input = |v: &Value| -> settings::Msg {
-        let read: In = serde_json::from_value(v.clone()).expect("a Settings input");
-        settings::Msg::Host(Box::new(read))
-    };
+    let input = |v: &Value| -> settings::Msg { hosted::<settings::Settings>(v) };
     let link = card::Key {
         conversation: "setup".to_owned(),
         index: 0,

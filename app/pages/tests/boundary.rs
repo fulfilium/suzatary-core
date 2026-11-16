@@ -12,6 +12,7 @@ fn generates_the_pages_boundary_types() {
     let mut d = Declarations::default();
     d.visit::<runtime::Effect<runtime::Never, runtime::Never>>();
     d.visit::<runtime::Input<runtime::Never, runtime::Never>>();
+    d.visit::<runtime::Reply<runtime::Never, runtime::Never>>();
     d.visit::<mail::Flags>();
     d.visit::<mail::Hold>();
     d.visit::<mail::Ask>();
@@ -29,7 +30,7 @@ fn generates_the_pages_boundary_types() {
     d.visit::<suzatary_pages::secretary::Flags>();
     d.visit::<suzatary_pages::secretary::Hold>();
     d.visit::<suzatary_pages::secretary::Ask>();
-    d.visit::<suzatary_pages::secretary::StreamRead>();
+    d.visit::<suzatary_pages::secretary::Streamed>();
     d.visit::<suzatary_pages::conversation::Flags>();
     d.visit::<suzatary_pages::conversation::Hold>();
     d.visit::<suzatary_pages::conversation::Ask>();

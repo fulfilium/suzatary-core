@@ -19,6 +19,7 @@ import once from "../algebra/once";
 import register from "../algebra/register";
 import d from "../wire/decoder";
 import payload from "../wire/generated/payload";
+import text from "../wire/text";
 import content from "./content";
 import excluded from "./excluded";
 import type lines from "./lines";
@@ -113,7 +114,7 @@ export interface ObjectStore extends Written {
 }
 
 export interface Proposals extends ObjectStore {
-  inbox: (at: string, chains: Chains, memory?: string) => string;
+  inbox: (at: string, chains: Chains, memory?: string) => Printed;
 }
 
 /** The todo chains held. */
@@ -204,7 +205,7 @@ export interface Lines {
   snapshot: () => Uint8Array;
   /** The replica replaced by a snapshot, then `frames`: the conversations moved. */
   load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
-  stream: (topics: TopicReading, chosen: string, pages: number) => string;
+  stream: (topics: TopicReading, chosen: string, pages: number) => Printed;
   /** Every key an erasure names, with the blocks its words fed where `keys` opens it. */
   erased: (keys: string, told: string) => string;
   excluded: () => string;
@@ -214,6 +215,13 @@ export interface Lines {
 export type TopicStore = ObjectStore;
 
 /** The topics both replicas read as, and their planned events. */
+/** A reading printed whole for a page, and beside it the little the worker reads of it (`said`, JSON). */
+export interface Printed {
+  readonly text: Uint8Array;
+  readonly said: string;
+  free: () => void;
+}
+
 export interface TopicReading {
   bar: () => string;
   add: (target: string, topic: string, at: string, actor: string) => string | undefined;
@@ -605,8 +613,24 @@ export const linesLeft = (lines: Lines): excluded.T => checked("excluded", lines
 
 const memoryOf = (memory: MemoryPayload | null): string | undefined => (memory === null ? undefined : JSON.stringify(memory));
 
-export const inboxOf = (proposals: Proposals, at: string, memory: MemoryPayload | null, chains: Chains): InboxProposalsPayload =>
-  checked("inbox", proposals.inbox(at, chains, memoryOf(memory)), payload.InboxProposalsPayload);
+/** A model's answer's block, by the conversation it is in, as the box renders it: `key` is the one it keeps its HTML under. */
+export type AnsweredBlock = { readonly conversation: string; readonly source: string; readonly key: string };
+const AnsweredBlocks: d.Decoder<AnsweredBlock[]> = arr(obj<AnsweredBlock>({ conversation: str, source: str, key: str }));
+
+/** The text a page parses, and what the worker reads beside it. */
+export type Beside<T, S> = { readonly text: text.Text<T>; readonly said: S };
+
+function said<T, S>(what: string, read: Printed, decoder: d.Decoder<S>): Beside<T, S> {
+  try {
+    return { text: text.of(read.text), said: checked(what, read.said, decoder) };
+  } finally {
+    read.free();
+  }
+}
+
+/** Said beside it: the chains it was priced without. */
+export const inboxOf = (proposals: Proposals, at: string, memory: MemoryPayload | null, chains: Chains): Beside<InboxProposalsPayload, InboxProposalsPayload["failed"]> =>
+  said("inbox", proposals.inbox(at, chains, memoryOf(memory)), arr(payload.FailedChain));
 
 export const listOfLines = (lines: Lines, inbox: Proposals): ConversationsPayload => checked("list", lines.list(inbox), payload.ConversationsPayload);
 
@@ -645,10 +669,11 @@ export const planOf = (lines: Lines, budget: number): { readonly keep: readonly 
 export const chosenOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): readonly SkeletonNode[] =>
   checked("chosen", lines.chosen(topics, JSON.stringify(chosen), pages), arr(payload.SkeletonNode));
 
-export const streamOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): StreamPayload =>
-  checked("stream", lines.stream(topics, JSON.stringify(chosen), pages), payload.StreamPayload);
+/** Said beside it: every block of its rounds' answers. */
+export const streamOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): Beside<StreamPayload, readonly AnsweredBlock[]> =>
+  said("stream", lines.stream(topics, JSON.stringify(chosen), pages), AnsweredBlocks);
 
-export const barOf = (topics: TopicReading): TopicsPayload => checked("topics", topics.bar(), payload.TopicsPayload);
+export const barOf = (topics: TopicReading): text.Text<TopicsPayload> => text.said(topics.bar());
 
 /** `transcript::dead`. */
 export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, told: readonly string[]): Erased =>

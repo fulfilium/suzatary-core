@@ -140,7 +140,7 @@ after(async () => {
 // The conversation read through the worker, as the page reads it.
 const read = async (w: ReturnType<typeof worker>): Promise<void> => {
   assert.equal(await w.ask({ type: "Pull" }), true, "the pull ends whole")
-  const window = await w.ask({ type: "Window", id: conversation, window: {}, memory: null, zone: time.UTC })
+  const window = await w.ask({ type: "Window", id: conversation, window: {}, memory: null, drawn: [], zone: time.UTC })
   assert.equal(window.type, "Held")
 }
 

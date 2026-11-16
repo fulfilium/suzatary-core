@@ -10,6 +10,10 @@ use crate::program::{Frame, Program, Runtime};
 pub trait Hosted: Program<Flags: DeserializeOwned, Effect: Serialize> {
     type Input: DeserializeOwned;
     fn input(input: Self::Input) -> Self::Msg;
+    /// An input whose answer the host hands over beside it as text, in UTF-8: the program parses
+    /// that text once, into the type that reads it, and no answer is printed inside an input's JSON.
+    type Reply: DeserializeOwned;
+    fn reply(reply: Self::Reply, text: Vec<u8>) -> Self::Msg;
 
     /// `{"flags": …, "inputs": […]}` that a worker hands the page's class on the same module
     /// (`web/src/pages/rehearse.ts`), so the code a page's first readings run, its class's
@@ -43,6 +47,15 @@ impl<P: Hosted> Host<P> {
         Ok(self.took(frame))
     }
 
+    /// A bad reply steps nothing; its text is the program's to parse.
+    pub fn reply(&mut self, reply: &str, text: Vec<u8>) -> Result<Vec<u8>, String> {
+        let reply = serde_json::from_str::<serde_json::Value>(reply)
+            .and_then(serde_json::from_value)
+            .map_err(|e| format!("reply: {e}"))?;
+        let frame = self.runtime.send(P::reply(reply, text));
+        Ok(self.took(frame))
+    }
+
     /// `None` when no handler took it, so the painter leaves it to the browser.
     pub fn event(&mut self, id: u32, on: u8, words: String) -> Option<Vec<u8>> {
         let frame = self.runtime.event(id, On::of(on)?, words)?;
@@ -67,7 +80,7 @@ impl<P: Hosted> Host<P> {
 }
 
 /// A wasm-bindgen class `$class` over `$program`: `new(flags)`, `first()` (the first paint),
-/// `input(json)`, `event(id, on, words)`, `fresh()`, `effects()`, and the static `rehearsal()`.
+/// `input(json)`, `reply(json, text)`, `event(id, on, words)`, `fresh()`, `effects()`, and the static `rehearsal()`.
 /// Needs `wasm-bindgen`.
 #[macro_export]
 macro_rules! export {
@@ -94,6 +107,16 @@ macro_rules! export {
             pub fn input(&mut self, input: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
                 self.host
                     .input(input)
+                    .map_err(|e| wasm_bindgen::JsError::new(&e))
+            }
+
+            pub fn reply(
+                &mut self,
+                reply: &str,
+                text: Vec<u8>,
+            ) -> Result<Vec<u8>, wasm_bindgen::JsError> {
+                self.host
+                    .reply(reply, text)
                     .map_err(|e| wasm_bindgen::JsError::new(&e))
             }
 

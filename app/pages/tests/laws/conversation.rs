@@ -17,7 +17,7 @@ fn windowed() -> impl Strategy<Value = Value> {
                 c["total"] = json!(total);
                 c["state"] = json!(state);
                 c["again"] = if total > 0 { json!(0) } else { json!(null) };
-                json!({"type": "Read", "payload": c})
+                json!({"type": "Read", "payload": {"read": c, "html": {}, "drawn": []}})
             })
         }),
         1 => Just(json!({"type": "NotHere", "lines": 3, "why": "offline"})),
@@ -41,10 +41,14 @@ fn frame() -> impl Strategy<Value = String> {
 fn uploaded() -> impl Strategy<Value = Answer> {
     prop::sample::select(vec![
         Answer::Done {
-            body: json!({"kind": "kept", "file": {"id": "f1", "media_type": "application/pdf", "name": "w2.pdf", "private": ""}}),
+            body: Text::printed(
+                &json!({"kind": "kept", "file": {"id": "f1", "media_type": "application/pdf", "name": "w2.pdf", "private": ""}}),
+            ),
         },
         Answer::Done {
-            body: json!({"kind": "sensitive", "why": "its text names an identity number", "folder": "/my-files/Suzatary/Private"}),
+            body: Text::printed(
+                &json!({"kind": "sensitive", "why": "its text names an identity number", "folder": "/my-files/Suzatary/Private"}),
+            ),
         },
         Answer::Refused {
             status: 413,
@@ -83,7 +87,7 @@ fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
         (prop::sample::select(vec!["A name", "Another"]), outcome()).prop_map(move |(title, answer)| host(Input::Answered { ask: Ask::Rename { title: title.to_owned() }, answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Upload(n)), answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Keep(n)), answer })),
-        Just(host(Input::Answered { ask: Ask::Slice, answer: Answer::Done { body: json!(1_790_000_005_000_i64) } })),
+        Just(host(Input::Answered { ask: Ask::Slice, answer: Answer::Done { body: Text::printed(&json!(1_790_000_005_000_i64)) } })),
         Just(host(Input::Opened { ask: conversation::Stream::Conversation })),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]

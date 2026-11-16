@@ -349,13 +349,15 @@ test("a husk one tab's purge kept stands through another tab's compaction, and a
   await settled()
 })
 
+const utf8 = new TextDecoder()
 // The Inbox's rows and the topics in use as a tab's worker reads them, at one instant.
 const AT = "2026-11-03T09:00:00"
 const storesRead = async (t: Tab): Promise<string> => {
   const rows = await t.ask({ type: "Proposals", at: AT, memory: null })
   const stream = await t.ask({ type: "Stream", chosen: [], pages: 1 })
   assert.equal(stream.type, "Held", JSON.stringify(stream))
-  return JSON.stringify({ rows, bar: stream.type === "Held" ? stream.v.bar : null })
+  const bar: unknown = stream.type === "Held" ? JSON.parse(utf8.decode(stream.v.text.bytes)).read.bar : null
+  return JSON.stringify({ rows: JSON.parse(utf8.decode(rows.bytes)), bar })
 }
 // The same, as cores handed the box's whole stores, cold, read them.
 const storesCold = (): string => {
@@ -363,7 +365,7 @@ const storesCold = (): string => {
   const chains = new core.Chains()
   const reading = new core.TopicReading(m, a)
   try {
-    return JSON.stringify({ rows: inboxOf(i, AT, null, chains), bar: barOf(reading) })
+    return JSON.stringify({ rows: JSON.parse(utf8.decode(inboxOf(i, AT, null, chains).text.bytes)), bar: JSON.parse(utf8.decode(barOf(reading).bytes)) })
   } finally {
     for (const x of [reading, chains, i, m, a]) x.free()
   }

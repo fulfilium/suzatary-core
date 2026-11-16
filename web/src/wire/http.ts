@@ -7,6 +7,7 @@ import kv from "../app/kv"
 import inflight from "../app/inflight"
 import primed from "../app/primed"
 import wait from "./wait"
+import text from "./text"
 
 export namespace http {
   // `status` is 0 when the answer came and its shape was wrong, so a page can tell a 404 from a drift without reading prose.
@@ -138,7 +139,13 @@ export namespace http {
   }
 
   // A read is signed too, so a device whose key was revoked is told to wipe itself however it next asks.
-  export const get = async <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<A> => {
+  export const get = <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<A> =>
+    body(path, bound, keeping).then(t => decoded(path, decoder, JSON.parse(t)))
+
+  // The box's body as it came, for a reader that parses it itself.
+  export const read = (path: string, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<text.Text<unknown>> => body(path, bound, keeping).then(text.said)
+
+  const body = async (path: string, bound: Bound, keeping: Keeping): Promise<string> => {
     const timer = bound.type === "Wall" ? { signal: AbortSignal.timeout(wait.MS), heard: () => undefined, done: () => undefined } : silence(path, bound.ms)
     try {
       const [response, had] = await answer(path, timer.signal)
@@ -146,17 +153,17 @@ export namespace http {
       if (response.status === OUTDATED) stale()
       if (response.status === NOT_MODIFIED && had !== undefined) {
         keep(path, had)
-        return decoded(path, decoder, JSON.parse(had.text))
+        return had.text
       }
       if (!response.ok) {
         const answer: unknown = await response.json().catch(() => null)
         throw new ApiError(errorOf(answer) ?? `${path} → HTTP ${response.status}`, response.status)
       }
-      const text = await textOf(response, timer.signal, timer.heard).catch(wait.waited(path))
+      const got = await textOf(response, timer.signal, timer.heard).catch(wait.waited(path))
       const tag = response.headers.get("etag")
       if (tag === null || keeping === "Never") kept.delete(path)
-      else keep(path, { tag, text })
-      return decoded(path, decoder, JSON.parse(text))
+      else keep(path, { tag, text: got })
+      return got
     } finally {
       timer.done()
     }
@@ -224,9 +231,21 @@ export namespace http {
 
   // `bound` is how long, in ms, an act waits for its answer; a caller that sets one asks the box what happened instead of waiting forever.
   export const act = <A>(path: string, body: unknown, decoder: d.Decoder<A>, bound?: number): Promise<A> =>
-    inflight.held(acting(path, body, decoder, bound))
+    inflight.held(acting(path, body, bound)).then(t => decoded(path, decoder, JSON.parse(t)))
 
-  const acting = async <A>(path: string, body: unknown, decoder: d.Decoder<A>, bound?: number): Promise<A> => {
+  // The box's answer as it came, for a reader that parses it itself.
+  export const acted = (path: string, body: unknown, bound?: number): Promise<text.Text<unknown>> => inflight.held(acting(path, body, bound)).then(text.said)
+
+  // A refusal's body, whose error the box words, or null where it is not JSON.
+  const parsedOrNull = (body: string): unknown => {
+    try {
+      return JSON.parse(body)
+    } catch {
+      return null
+    }
+  }
+
+  const acting = async (path: string, body: unknown, bound?: number): Promise<string> => {
     const [init, trace] = await signed(path, actRequest(body))
     const sent = performance.now()
     const response = await fetch(path, { ...init, signal: bound === undefined ? null : AbortSignal.timeout(bound) }).catch((e: unknown) => {
@@ -234,15 +253,15 @@ export namespace http {
       throw e
     })
     said(path, trace, response.status, performance.now() - sent)
-    const answer: unknown = await response.json().catch(() => null)
+    const answer = await response.text().catch(() => "null")
     if (response.status === GONE) gone()
     // In the page's words, not the box's: the act can be sent again from the build the Reload loads.
     if (response.status === OUTDATED) {
       stale()
       throw new ApiError(NOT_SENT, OUTDATED)
     }
-    if (!response.ok) throw new ApiError(errorOf(answer) ?? `${path} → HTTP ${response.status}`, response.status)
-    return decoded(path, decoder, answer)
+    if (!response.ok) throw new ApiError(errorOf(parsedOrNull(answer)) ?? `${path} → HTTP ${response.status}`, response.status)
+    return answer
   }
 }
 export default http

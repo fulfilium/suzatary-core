@@ -1251,9 +1251,7 @@ impl Model {
             Input::Heard {
                 ask: Listen::Keys,
                 frame,
-            } => match serde_json::from_str::<serde_json::Value>(&frame)
-                .and_then(serde_json::from_value::<Keyed>)
-            {
+            } => match serde_json::from_str::<Keyed>(&frame) {
                 Ok(k) => self.key(k),
                 Err(_) => Vec::new(),
             },
@@ -2308,6 +2306,7 @@ impl Program for Todos {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::Text;
 
     #[test]
     fn the_kept_filter_is_parsed_rather_than_trusted() {
@@ -2405,7 +2404,9 @@ mod tests {
         m.asked = 2;
         m.wants = Wants::Asking(2, m.question());
         let worth = |v: f64| Answer::Done {
-            body: json!({"place": {"type": "All"}, "term": {"kind": "flat", "value": v}, "priced": {"type": "Value", "v": v}, "children": []}),
+            body: Text::printed(
+                &json!({"place": {"type": "All"}, "term": {"kind": "flat", "value": v}, "priced": {"type": "Value", "v": v}, "children": []}),
+            ),
         };
         m.tree(1, worth(0.88));
         assert!(matches!(m.grown, Drawn::Unpriced));
@@ -2420,7 +2421,7 @@ mod tests {
         m.asked = 1;
         m.wants = Wants::Asking(1, m.question());
         m.tree(1, Answer::Done {
-            body: json!({"place": {"type": "All"}, "term": {"kind": "flat", "value": 0.5}, "priced": {"type": "Value", "v": 0.5}, "children": []}),
+            body: Text::printed(&json!({"place": {"type": "All"}, "term": {"kind": "flat", "value": 0.5}, "priced": {"type": "Value", "v": 0.5}, "children": []})),
         });
         assert_eq!(m.drawn_by(), "category");
         m.by = Grouping::Urgency;

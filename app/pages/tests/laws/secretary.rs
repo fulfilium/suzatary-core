@@ -12,7 +12,7 @@ fn stream_read() -> impl Strategy<Value = Value> {
             })
             .collect();
         let total = rounds.len() + 1;
-        json!({"stream": {"rounds": rounds, "total": total}, "bar": {"topics": [{"topic": "garden", "rounds": 2, "disputed": []}, {"topic": "trip", "rounds": 1, "disputed": ["travel"]}]}})
+        json!({"read": {"stream": {"rounds": rounds, "total": total}, "bar": {"topics": [{"topic": "garden", "rounds": 2, "disputed": []}, {"topic": "trip", "rounds": 1, "disputed": ["travel"]}]}}, "html": {}, "drawn": []})
     })
 }
 
@@ -32,7 +32,7 @@ fn secretary_msg() -> impl Strategy<Value = secretary::Msg> {
         Just(secretary::Msg::Submit),
         Just(secretary::Msg::Close),
         prop::sample::select(vec!["", "zephyr", " zephyr "]).prop_map(|t| secretary::Msg::Searched(t.to_owned())),
-        (0u32..4).prop_map(move |n| host(Input::Answered { ask: secretary::Ask::Search(chats::Asking::Rested(n)), answer: Answer::Done { body: json!(1_790_000_000_000_i64) } })),
+        (0u32..4).prop_map(move |n| host(Input::Answered { ask: secretary::Ask::Search(chats::Asking::Rested(n)), answer: Answer::Done { body: Text::printed(&json!(1_790_000_000_000_i64)) } })),
         (prop::sample::select(vec![None, Some(("garden".to_owned(), "yard".to_owned()))]), outcome()).prop_map(move |(renamed, answer)| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed }), answer })),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]

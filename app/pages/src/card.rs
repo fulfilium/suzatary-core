@@ -1217,6 +1217,7 @@ pub(crate) fn taken(a: &Answer) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::Text;
 
     /// A row of the sign-in card at `state`, with `outcome`.
     fn row(state: &str, outcome: &str) -> ProposalRow {
@@ -1261,7 +1262,7 @@ mod tests {
             &signature(&standing),
             &then,
             Answer::Done {
-                body: serde_json::json!({"type": "Answered", "answer": {"type": "Lost", "e": "signal timed out"}, "held": true}),
+                body: Text::printed(&serde_json::json!({"type": "Answered", "answer": {"type": "Lost", "e": "signal timed out"}, "held": true})),
             },
         );
         assert!(

@@ -1,6 +1,7 @@
 // A Rust program in the tab: its patches painted, each effect handed to the host, one input at a time.
 
 import type { Input } from "../wire/generated/pages"
+import deliver from "./deliver"
 import mailbox from "./mailbox"
 import painter from "./painter"
 import scroll from "./scroll"
@@ -9,6 +10,7 @@ export namespace run {
   export type Module = {
     readonly first: () => Uint8Array
     readonly input: (json: string) => Uint8Array
+    readonly reply: (json: string, text: Uint8Array) => Uint8Array
     readonly event: (id: number, on: number, words: string) => Uint8Array | undefined
     readonly effects: () => string
     readonly free: () => void
@@ -37,7 +39,7 @@ export namespace run {
     refresh?: painter.Refresh,
   ): T<I> => {
     let live = true
-    const inputs = mailbox.of<I>(input => void step(named(input), () => page.input(JSON.stringify(input))))
+    const inputs = mailbox.of<I>(input => void step(named(input), () => deliver(page, input)))
     const step = (name: string, patches: () => Uint8Array | undefined): boolean =>
       inputs.turn(() => {
         if (!live) return false

@@ -78,11 +78,23 @@ export namespace time {
     return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"), ((t % 1000) + 1000) % 1000)
   }
 
+  // The zone's offset from UTC at `t`, in minutes, as the browser names it (`GMT+05:30`, or `GMT` for none): one
+  // string for each reading, where the wall clock's face is seven parts.
+  const offsetFaces = new Map<string, Intl.DateTimeFormat>()
+  const offsetAt = (z: Zone, t: number): number => {
+    const known = offsetFaces.get(z.name) ?? new Intl.DateTimeFormat("en-US", { timeZone: z.name, timeZoneName: "longOffset" })
+    offsetFaces.set(z.name, known)
+    const m = /GMT(?:([+-])(\d\d):(\d\d)(?::(\d\d))?)?$/.exec(known.format(t))
+    if (m === null) return Math.round((wall(z, t) - t) / MINUTE_MS)
+    const [, sign, h = "0", min = "0", sec = "0"] = m
+    return (sign === "-" ? -1 : 1) * Math.round(Number(h) * 60 + Number(min) + Number(sec) / 60)
+  }
+
   // A zone's offsets from UTC over [from, to], in minutes, each from the instant it starts: read by the day, and each
   // change found to the minute, so a reader of the offsets alone (a Rust page) needs no zone database of its own.
   export type Offset = { readonly from: number; readonly minutes: number }
   export const offsets = (z: Zone, from: number, to: number): readonly Offset[] => {
-    const at = (t: number): number => Math.round((wall(z, t) - t) / MINUTE_MS)
+    const at = (t: number): number => offsetAt(z, t)
     const out: Offset[] = [{ from, minutes: at(from) }]
     for (let t = from + DAY_MS; t < to + DAY_MS; t += DAY_MS) {
       const was = out[out.length - 1]?.minutes

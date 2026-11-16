@@ -30,7 +30,7 @@
 
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import http from "../src/wire/http";
@@ -1184,6 +1184,15 @@ export class Page {
     await this.command("ServiceWorker.stopAllWorkers", {});
   }
 
+  /** What the page's main thread allocates from now until the returned stop, sampled every `intervalBytes` by V8's heap
+   * profiler (no CPU sampling), what was collected since included: each sampled allocation's size under the stack that
+   * made it, as DevTools answers it. */
+  async allocations(intervalBytes = 16384): Promise<() => Promise<HeapProfile>> {
+    await this.command("HeapProfiler.enable", {});
+    await this.command("HeapProfiler.startSampling", { samplingInterval: intervalBytes, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+    return async () => (await this.command("HeapProfiler.stopSampling", {}))["profile"] as HeapProfile;
+  }
+
   /** The page's main thread sampled from now until the returned stop, which answers DevTools' CPU profile. */
   async profile(intervalUs = 200): Promise<() => Promise<CpuProfile>> {
     await this.command("Profiler.enable", {});
@@ -1277,6 +1286,16 @@ export class Page {
 }
 
 /** DevTools' CPU profile: each node a frame under its parent, and the samples' nodes with the microseconds between them. */
+/** A sampled allocation profile: each node a call frame, `selfSize` the bytes sampled as allocated there. */
+export interface HeapProfile {
+  readonly head: HeapNode;
+}
+export interface HeapNode {
+  readonly callFrame: { readonly functionName: string; readonly url: string; readonly lineNumber: number; readonly columnNumber: number };
+  readonly selfSize: number;
+  readonly children: readonly HeapNode[];
+}
+
 export interface CpuProfile {
   readonly nodes: readonly {
     readonly id: number;
@@ -1364,6 +1383,12 @@ export async function launch(): Promise<Browser> {
   child.stderr?.on("data", (chunk) => {
     said += chunk.toString();
   });
+  // What the browser and its renderers print (V8's `--trace-gc`, say), appended to `$SUZATARY_E2E_BROWSER_LOG`; without
+  // it the output is read and dropped, so a full pipe never stops a renderer.
+  const log = process.env["SUZATARY_E2E_BROWSER_LOG"] ?? "";
+  const printed = (chunk: { toString: () => string }): void => (log === "" ? undefined : appendFileSync(log, chunk.toString()));
+  child.stdout?.on("data", printed);
+  child.stderr?.on("data", printed);
   child.on("error", (error: Error) => {
     said += `\n${error.message}`;
   });

@@ -10,7 +10,6 @@ import asked from "../app/asked"
 import app from "../app/app"
 import time from "../app/time"
 import lo from "../algebra/lo"
-import type reading from "../algebra/reading"
 import once from "../algebra/once"
 import stream from "../algebra/stream"
 import { toast } from "../view/toast"
@@ -37,6 +36,7 @@ import type { KeyTarget } from "../shell/keyboard"
 import { clearKeyTarget, setKeyTarget } from "../shell/keyboard"
 import local from "./local"
 import { measure } from "../app/perf"
+import text from "../wire/text"
 
 export namespace program {
   // Once per tab; the load is a User Timing measure the bench reads.
@@ -89,26 +89,24 @@ export namespace program {
   }
 
   // A 4xx is the box deciding no, an answer the page reads; no answer, or a 5xx, is a failure.
-  const answer = (p: Promise<unknown>): Promise<Answer> =>
+  const answer = (p: Promise<text.Text<unknown>>): Promise<Answer> =>
     p.then(
-      (body): Answer => ({ type: "Done", body }),
+      (body): Answer => ({ type: "Done", body: body.bytes }),
       (e: unknown): Answer => {
         if (e instanceof http.ApiError && !http.unanswered(e)) return { type: "Refused", status: e.status, words: e.message }
         throw e
       },
     )
 
-  const settled = (p: Promise<unknown>): Promise<Answer> =>
+  const settled = (p: Promise<text.Text<unknown>>): Promise<Answer> =>
     answer(p).catch((e: unknown): Answer => ({ type: "Refused", status: e instanceof http.ApiError ? e.status : 0, words: lo.reason(e) }))
 
   // One register per path, so a page opened again draws what the tab last read.
   const held = asked.family(
     (path: string) => path,
-    (path: string) => answer(http.get(path, d.unknown)),
+    (path: string) => answer(http.read(path)),
   )
-
-  export const read = (path: string): reading.Reading<Answer> => held(path)
-  export const decoded = <A>(a: Answer, decoder: d.Decoder<A>): lo.Settled<A> => (a.type === "Refused" ? lo.error(a.words) : decoder(a.body))
+  const done = (v: unknown): Answer => ({ type: "Done", body: text.printed(v).bytes })
 
   // Kept in this tab's memory only (no register, replica or storage) so a later act resends it; the page never holds it.
   const secrets = new Map<string, string>()
@@ -152,10 +150,12 @@ export namespace program {
     worth: d.sum<questions.Placed["worth"], "type">("type", { Value: { v: d.nullable(d.num) }, Unlinked: {} }),
     specs: d.arr(payload.SpecNode),
   })
-  const core = (q: Core, lane: lanes.Lane): Promise<unknown> => {
+  const core = (q: Core, lane: lanes.Lane): Promise<text.Text<unknown>> => {
     switch (q.type) {
       case "Reading":
-        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), lane).then(({ held: h, answer: read }) => ({ held: h.held.map(c => c.name), read }))
+        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), lane).then(({ held: h, answer: read }) =>
+          text.object({ held: text.printed(h.held.map(c => c.name)), read }),
+        )
       case "Thirty":
         return askHeld(() => ({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }), lane).then(r => r.answer)
       case "Tree": {
@@ -237,7 +237,7 @@ export namespace program {
             const unwatch = local.watching(e.local, lane)
             const r = local.of(e.local.type, e.local, box())
             const tell = (): void => {
-              const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body }))
+              const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body: body.bytes }))
               drawn(now)
               send({ type: "Held", ask: e.ask, reading: now, behind: null })
             }
@@ -276,31 +276,31 @@ export namespace program {
           case "Rendered":
             return void blocks.store.join(e.pairs).catch(() => [])
           case "Get":
-            return void settled(http.get(e.path, d.unknown)).then(answered(e.ask))
+            return void settled(http.read(e.path)).then(answered(e.ask))
           case "Post":
-            return void settled(http.act(e.path, e.body, d.unknown)).then(answered(e.ask))
+            return void settled(http.acted(e.path, e.body)).then(answered(e.ask))
           case "NewKey":
-            return void settled(signer.renew().then(() => null)).then(answered(e.ask))
+            return void settled(signer.renew().then(() => text.printed(null))).then(answered(e.ask))
           case "Act": {
             const secret = secretOf(root, e.secret)
-            if (secret === null) return answered(e.ask)({ type: "Done", body: { type: "Already" } })
+            if (secret === null) return answered(e.ask)(done({ type: "Already" }))
             // Told as answered, a taken answer reaches the page before the read-back; anything else waits for it.
             let told = false
             const heard = (a: intents.Answer): void => {
               if (e.told !== "Answered" || a.type !== "Taken") return
               told = true
-              answered(e.ask)({ type: "Done", body: { type: "Answered", answer: a, held: false } })
+              answered(e.ask)(done({ type: "Answered", answer: a, held: false }))
             }
-            return void settled(ask(e.act).then(a => intentsync.ask(a, secret.value, heard))).then(a => (told ? undefined : answered(e.ask)(a)))
+            return void settled(ask(e.act).then(a => intentsync.ask(a, secret.value, heard)).then(text.printed)).then(a => (told ? undefined : answered(e.ask)(a)))
           }
           case "Endorse":
-            return void settled(vouch.endorsement(e.actor, e.key)).then(answered(e.ask))
+            return void settled(vouch.endorsement(e.actor, e.key).then(text.printed)).then(answered(e.ask))
           case "Timer": {
-            const t = setTimeout(() => (timers.delete(t), answered(e.ask)({ type: "Done", body: time.now() })), e.after)
+            const t = setTimeout(() => (timers.delete(t), answered(e.ask)(done(time.now()))), e.after)
             return void timers.add(t)
           }
           case "Frame": {
-            const f = requestAnimationFrame(() => (frames.delete(f), answered(e.ask)({ type: "Done", body: null })))
+            const f = requestAnimationFrame(() => (frames.delete(f), answered(e.ask)(done(null))))
             return void frames.add(f)
           }
           case "Focus": {
@@ -328,7 +328,7 @@ export namespace program {
           case "Toast":
             return void toast(e.words)
           case "Offer":
-            return void toast(e.words, { label: e.label, onClick: () => answered(e.ask)({ type: "Done", body: null }) })
+            return void toast(e.words, { label: e.label, onClick: () => answered(e.ask)(done(null)) })
           case "Core":
             return void settled(core(e.question, lane)).then(answered(e.ask))
           case "Reset":
@@ -341,10 +341,16 @@ export namespace program {
       }
       // The painter draws into an empty root; the page before left its own.
       root.replaceChildren()
+      // Its parts, in ms: the flags printed (the context, its zone's offsets among it), the class made (the flags read and
+      // the first view drawn), and the first step painted with its effects handed out.
       const t0 = performance.now()
-      const program = new glue[page](JSON.stringify({ ...args, context: context(), now: time.now() }))
+      const flags = JSON.stringify({ ...args, context: context(), now: time.now() })
+      const t1 = performance.now()
+      const program = new glue[page](flags)
+      const t2 = performance.now()
       const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box, parts.refresh)
-      performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
+      const t3 = performance.now()
+      performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
       const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
       return {
         ...(around.absorbs === undefined ? {} : { absorb: around.absorbs }),

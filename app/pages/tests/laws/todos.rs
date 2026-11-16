@@ -29,7 +29,7 @@ fn list_prices() -> impl Strategy<Value = Input<todos::Hold, todos::Ask, todos::
             Input::Answered {
                 ask: todos::Ask::Tree { n },
                 answer: Answer::Done {
-                    body: node(json!({"type": "All"}), &p[0], vec![home, work]),
+                    body: Text::printed(&node(json!({"type": "All"}), &p[0], vec![home, work])),
                 },
             }
         })
@@ -42,7 +42,9 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
     let host = |i: In| Msg::Host(Box::new(i));
     let done = |ask: Ask, body: Value| Input::Answered {
         ask,
-        answer: Answer::Done { body },
+        answer: Answer::Done {
+            body: Text::printed(&body),
+        },
     };
     let route = (prop::sample::select(vec!["", "a", "b"]), prop::sample::select(vec!["", "Shared words"]))
         .prop_map(|(selected, shared)| json!({"page": "todos", "conversation": "", "selected": selected, "shared": shared}));
@@ -84,7 +86,7 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
         kept.prop_map(move |(k, v)| host(Input::Held {
             ask: Hold::Kept(k),
             reading: Reading::Val {
-                v: Answer::Done { body: v }
+                v: Answer::Done { body: Text::printed(&v) }
             },
             behind: None
         })),
@@ -188,7 +190,7 @@ proptest! {
         done["states"] = json!(["completed"]);
         let held = |ask: todos::Hold, v: Value| todos::Msg::Host(Box::new(Input::Held {
             ask,
-            reading: Reading::Val { v: Answer::Done { body: v } },
+            reading: Reading::Val { v: Answer::Done { body: Text::printed(&v) } },
             behind: None,
         }));
         let unsent = |todos: Value| held(todos::Hold::Unsent, json!({"todos": todos, "refused": [], "blocked": 0, "stranded": 0, "losses": [], "waiting": 0}));
@@ -203,7 +205,7 @@ proptest! {
     fn a_pane_answer_never_acts_on_the_todo_shown_now(asked in proptest::collection::vec(todo_asked(), 1..6)) {
         let route = |selected: &str| todos::Msg::Host(Box::new(Input::Held {
             ask: todos::Hold::Route,
-            reading: Reading::Val { v: Answer::Done { body: json!({"page": "todos", "conversation": "", "selected": selected, "shared": ""}) } },
+            reading: Reading::Val { v: Answer::Done { body: Text::printed(&json!({"page": "todos", "conversation": "", "selected": selected, "shared": ""})) } },
             behind: None,
         }));
         let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
@@ -232,7 +234,7 @@ proptest! {
     fn a_notice_above_the_list_never_draws_the_list_again(entry in list_entry("c", &[])) {
         let held = |ask: todos::Hold, v: Value| todos::Msg::Host(Box::new(Input::Held {
             ask,
-            reading: Reading::Val { v: Answer::Done { body: v } },
+            reading: Reading::Val { v: Answer::Done { body: Text::printed(&v) } },
             behind: None,
         }));
         let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
@@ -258,7 +260,7 @@ proptest! {
         )]);
         page.step(todos::Msg::Host(Box::new(Input::Answered {
             ask: todos::Ask::Tree { n },
-            answer: Answer::Done { body: tree },
+            answer: Answer::Done { body: Text::printed(&tree) },
         })));
         let (_, moved) = page.step(todos::Msg::Host(Box::new(Input::Heard {
             ask: todos::Listen::Keys,
