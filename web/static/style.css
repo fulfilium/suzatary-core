@@ -4,7 +4,9 @@
    only for short uppercase labels, frosted sheets with no border and no
    shadow, capsule buttons, and a fulfillment always drawn in one of three
    states. One type scale (×1.2) and one spacing scale; a rule that wants a
-   size between two of them wants one of the two.
+   size between two of them wants one of the two. A length off the scales is 0 or is
+   marked where it stands (an em beside a glyph, a hairline); scripts/web-static.sh
+   counts them.
 
    A wide rule sits right after the base rule it changes, in its own
    `@media (min-width: …)` block. A base rule written later with the same
@@ -60,10 +62,14 @@
   --f-display: "Crimson Pro", Georgia, serif;
   --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* --- space: 4px, doubling ----------------------------------------------- */
+  /* --- space: `--s-N` is N×4px, `--s-Nh` half a step more ---------------- */
+  --s-0h: 0.125rem;
   --s-1: 0.25rem;
+  --s-1h: 0.375rem;
   --s-2: 0.5rem;
+  --s-2h: 0.625rem;
   --s-3: 0.75rem;
+  --s-3h: 0.875rem;
   --s-4: 1rem;
   --s-6: 1.5rem;
   --s-8: 2rem;
@@ -78,6 +84,10 @@
   --tap: 2.75rem;
   /* The phone's tab bar, above the home indicator: what a thing pinned to the foot rides above. */
   --tabbar: max(var(--tap), 3.5rem);
+  /* What a page or a sheet leaves free at a phone's foot: the tab bar, a step, the home indicator. */
+  --foot-room: calc(var(--tabbar) + var(--s-4) + env(safe-area-inset-bottom));
+  /* The secretary panel's toggle, fixed at the header's right end: the header leaves it this width. */
+  --panel-toggle: 7rem;
   /* A tree row's fold column, and what each level of depth adds. */
   --fold: 20px;
   --indent: 12px;
@@ -120,14 +130,14 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--s-1);
 }
 
 /* The todo page's thirty days (web/src/todo/curve.ts `line`): one thick line in its own value's colour,
    4px whatever the width, inside a frame from 0 to 100%, the past faded. */
 .curve {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--s-1h);
   margin: var(--s-2) 0 var(--s-4);
 }
 
@@ -156,7 +166,7 @@
   position: relative;
   height: 8rem;
   border: 1px solid var(--grid);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
 }
 
 .curvehalf {
@@ -200,14 +210,14 @@
   position: absolute;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   transform: translate(-50%, -50%);
   box-shadow: 0 0 0 2px var(--sheet-solid);
 }
 
 .curvedates {
   position: relative;
-  margin-top: 6px;
+  margin-top: var(--s-1h);
   height: 1em;
   container-type: inline-size;
 }
@@ -269,7 +279,7 @@ body {
   margin: 0;
   /* The tab bar is fixed over the bottom of the page; nothing may hide beneath
      it, home indicator included. */
-  padding: 0 1rem calc(4.6rem + env(safe-area-inset-bottom));
+  padding: 0 var(--s-4) var(--foot-room);
   background: var(--ground);
   color: var(--ink);
   font: var(--t-body)/1.55 var(--f-serif);
@@ -291,7 +301,7 @@ header {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: calc(0.6rem + env(safe-area-inset-top)) 0 0.55rem;
+  padding: calc(var(--s-2h) + env(safe-area-inset-top)) 0 var(--s-2);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -336,7 +346,7 @@ header::before {
 }
 
 /* A link or a quiet control a finger presses is 44 px tall however small its
-   words (the 2026-10-13 audit, X19): an answer's Copy and Reply. The brand and
+   words: an answer's Copy and Reply. The brand and
    a hash link stand in a line, the header's or a sentence's, so they reach
    the height with padding their negative margin gives back, and the line
    keeps its own height. */
@@ -368,7 +378,7 @@ header::before {
   width: 0.6rem;
   height: 0.6rem;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   background: var(--ink-muted);
 }
 
@@ -401,8 +411,8 @@ header::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3em;
-  padding: 0.4rem 0 0;
+  gap: 0.3em; /* em: beside a glyph */
+  padding: var(--s-1h) 0 0;
   border: 0;
   border-radius: 0;
   background: none;
@@ -419,7 +429,7 @@ header::before {
 
 /* The flex gap is 0.3em, so the diamond's own 0.4em on the word's side. */
 .tab > .diamond {
-  margin: 0 0.1em 0 0;
+  margin: 0 0.1em 0 0; /* em: beside a glyph */
 }
 
 /* What waits on the owner, beside the Inbox's word. Absent at zero; the link's
@@ -447,27 +457,23 @@ header::before {
   }
 }
 
-/* ONE GRID FOR EVERY PAGE AT 62rem AND UP (the 2026-10-13 audit, X4). The
-   header spans the window, so the brand and the words stand in the same place
-   on every page, with room on the right for the secretary's toggle whether or
-   not a page has one. Everything under it starts at the brand's edge and runs
-   to the secretary panel when that is open (`--aside`), or to the window's
-   edge; a page's own columns divide that width, the thing being read taking
-   what the list leaves. The widths are at the end of this file, after every
-   base rule they override. */
+/* ONE GRID FOR EVERY PAGE AT 62rem AND UP. The header spans the window, with room
+   on the right for the secretary's toggle; everything under it starts at the brand's
+   edge and runs to the open panel (`--aside`) or the window's edge. The widths are at
+   the end of this file, after every base rule they override. */
 @media (min-width: 62rem) {
   :root {
     --aside: 0px;
   }
 
   body {
-    padding-bottom: 3rem;
+    padding-bottom: var(--s-8);
   }
 
   header {
     gap: var(--s-8);
-    padding-top: calc(0.9rem + env(safe-area-inset-top));
-    padding-right: calc(7rem + var(--s-3));
+    padding-top: calc(var(--s-3h) + env(safe-area-inset-top));
+    padding-right: calc(var(--panel-toggle) + var(--s-3));
   }
 
   /* The same words across the top, the sheet dropping from "More". */
@@ -532,7 +538,7 @@ h1,
   font-size: var(--t-head2);
   font-weight: 700;
   color: var(--ink);
-  margin: 1.1rem 0 0.35rem;
+  margin: var(--s-4) 0 var(--s-1h);
   line-height: 1.25;
 }
 
@@ -554,14 +560,14 @@ h2,
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--primary);
-  margin: 1.8rem 0 0.6rem;
+  margin: var(--s-8) 0 var(--s-2h);
 }
 
 h3 {
   font-size: var(--t-body);
   font-weight: 700;
   color: var(--primary-soft);
-  margin: 1rem 0 0.35rem;
+  margin: var(--s-4) 0 var(--s-1h);
 }
 
 /* An inline link in running text is underlined; navigation never is. */
@@ -592,7 +598,7 @@ a.chipbtn,
   width: calc(100% - 2px);
   height: 4px;
   overflow: visible;
-  margin: 0.35rem 0 var(--s-4);
+  margin: var(--s-1h) 0 var(--s-4);
   stroke: var(--rule);
 }
 
@@ -605,16 +611,16 @@ a.chipbtn,
   width: 0.5em;
   height: 0.5em;
   border: 0.1em solid var(--mark-line);
-  border-radius: 0.15em;
+  border-radius: 0.15em; /* em: beside a glyph */
   background: var(--mark-fill);
   transform: rotate(45deg);
-  margin: 0 0.4em;
+  margin: 0 0.4em; /* em: beside a glyph */
   vertical-align: 0.1em;
 }
 
 .cardmeta > .chip + .chip::before {
   content: "";
-  margin: 0 0.7em 0 0.1em;
+  margin: 0 0.7em 0 0.1em; /* em: beside a glyph */
 }
 
 .callout {
@@ -668,7 +674,7 @@ a.chipbtn,
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s-2);
-  margin: 0.6rem 0 0.35rem;
+  margin: var(--s-2h) 0 var(--s-1h);
   font-size: var(--t-body);
   color: var(--ink-muted);
 }
@@ -753,11 +759,8 @@ a.chipbtn,
   background: var(--tint);
 }
 
-/* A RESOLVED CARD DIMS AND STAYS PUT. It is only ever on screen because the
-   reader asked for `done` or `all`, so hiding it would be answering a different
-   question — and moving it to the bottom would break the one ordering this app
-   has. Dimming is the whole treatment. It comes off on hover and focus so a row
-   somebody is actually reading is readable. */
+/* A RESOLVED CARD DIMS AND STAYS PUT, so the list keeps its one order; the dimming
+   comes off on hover and focus. */
 .card.resolved {
   opacity: 0.62;
 }
@@ -778,7 +781,7 @@ a.chipbtn,
 /* A todo's page shows its number in ink; its thirty-day line is in the price box below. */
 .todofulfil {
   float: right;
-  margin: 0.2rem 0 var(--s-2) var(--s-4);
+  margin: var(--s-1) 0 var(--s-2) var(--s-4);
 }
 
 .todopct {
@@ -802,7 +805,7 @@ a.chipbtn,
   display: block;
   width: 100%;
   margin: 0;
-  padding: 0.45rem 0.85rem 0.6rem;
+  padding: var(--s-2) var(--s-3h) var(--s-2h);
   text-align: left;
   background: none;
   border: 0;
@@ -838,8 +841,8 @@ a.chipbtn,
 /* The padding is horizontal only: `overflow: hidden` clips at the PADDING edge,
    so a bottom padding would let the clamped third line show through it. */
 .waiting {
-  padding: 0 0.85rem;
-  margin-bottom: 0.6rem;
+  padding: 0 var(--s-3h);
+  margin-bottom: var(--s-2h);
   font-size: var(--t-small);
   color: var(--ink-muted);
   display: -webkit-box;
@@ -860,7 +863,7 @@ a.chipbtn,
   align-items: center;
   justify-content: flex-end;
   gap: var(--s-2);
-  padding: 0 0.85rem 0.7rem;
+  padding: 0 var(--s-3h) var(--s-3);
 }
 
 /* The one control on a card that is not an act: it swaps the clamped line for
@@ -869,7 +872,7 @@ a.chipbtn,
 .srcbtn {
   flex: none;
   min-height: 2.25rem;
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   border-radius: var(--r-pill);
   font-size: var(--t-small);
   font-style: italic;
@@ -896,7 +899,7 @@ a.chipbtn,
   justify-content: center;
   gap: var(--s-2);
   min-height: var(--tap);
-  padding: 0 1.1rem;
+  padding: 0 var(--s-4);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: transparent;
@@ -937,11 +940,8 @@ a.chipbtn,
   min-height: 2.25rem;
 }
 
-/* PINNED. A todo's detail runs to a screen and a half, and the four verbs are
-   the reason the page is open — scrolling to the bottom of a checklist and then
-   back up to say "done" is the app asking for a favour. It rides just under the
-   header (`--sticky-top`), and inside a detail pane it pins to the pane's own
-   top instead. */
+/* PINNED: the four verbs ride just under the header (`--sticky-top`), and inside a
+   detail pane at the pane's own top. */
 .actrow {
   display: flex;
   flex-wrap: wrap;
@@ -949,8 +949,8 @@ a.chipbtn,
   position: sticky;
   top: var(--sticky-top);
   z-index: 6;
-  margin: 0.75rem 0 0.6rem;
-  padding: 0.5rem 0;
+  margin: var(--s-3) 0 var(--s-2h);
+  padding: var(--s-2) 0;
   background: var(--ground);
   border-bottom: 1px solid var(--rule);
 }
@@ -959,15 +959,12 @@ a.chipbtn,
   flex: 1 1 auto;
 }
 
-/* THE ONE-LINE FIELD BESIDE EVERY ACT (`noteline.ts`, commit 12): it takes
-   the row's slack like `.dismissreason` already does, so it sits inline
-   where there is room and wraps to its own line under the buttons on a
-   narrow phone — `.actrow`/`.editactions`/`.proposalact-row` all already
-   `flex-wrap: wrap`, so nothing else has to change for it to fall there. */
+/* THE ONE-LINE FIELD BESIDE EVERY ACT (`noteline.ts`): it takes the row's slack, and
+   wraps under the buttons on a narrow phone, since every act row wraps. */
 .noteline {
   flex: 1 1 12rem;
   min-height: var(--tap);
-  padding: 0 0.6rem;
+  padding: 0 var(--s-2h);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -980,8 +977,8 @@ a.chipbtn,
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s-2);
-  margin: 1.4rem 0 0.4rem;
-  padding-top: 0.6rem;
+  margin: var(--s-6) 0 var(--s-1h);
+  padding-top: var(--s-2h);
   border-top: 1px solid var(--rule);
   font: 600 var(--t-tiny) / 1.4 var(--f-sans);
   color: var(--ink-muted);
@@ -1009,7 +1006,7 @@ textarea {
 
 input,
 select {
-  padding: 0.35rem 0.6rem;
+  padding: var(--s-1h) var(--s-2h);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -1026,7 +1023,7 @@ details:not([open]) > :not(summary) {
 /* A button is a capsule: secondary is outlined, the primary act is filled. */
 button {
   cursor: pointer;
-  padding: 0.35rem 1rem;
+  padding: var(--s-1h) var(--s-4);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: transparent;
@@ -1035,14 +1032,14 @@ button {
 }
 
 .searchbox {
-  margin: 0.2rem 0 0.6rem;
+  margin: var(--s-1) 0 var(--s-2h);
 }
 
 input.search {
   width: 100%;
   min-height: var(--tap);
   border-radius: var(--r-card);
-  padding: 0 0.8rem;
+  padding: 0 var(--s-3);
 }
 
 .segmented {
@@ -1071,7 +1068,7 @@ input.search {
 }
 
 .facets {
-  margin-top: 0.5rem;
+  margin-top: var(--s-2);
 }
 
 .chiprow {
@@ -1079,7 +1076,7 @@ input.search {
   gap: var(--s-2);
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  padding: 0.25rem 0;
+  padding: var(--s-1) 0;
   scrollbar-width: none;
 }
 
@@ -1107,7 +1104,7 @@ input.search {
 .chipbtn {
   flex: none;
   min-height: var(--tap);
-  padding: 0 0.85rem;
+  padding: 0 var(--s-3h);
   border-radius: var(--r-pill);
   font-size: var(--t-small);
   font-weight: 400;
@@ -1130,8 +1127,8 @@ input.search {
   align-items: center;
   gap: var(--s-1);
   min-height: var(--tap);
-  margin: 0.5rem 0 0.2rem;
-  padding: 0 0.7rem 0 0.4rem;
+  margin: var(--s-2) 0 var(--s-1);
+  padding: 0 var(--s-3) 0 var(--s-1h);
   border: 0;
   background: none;
   color: var(--primary);
@@ -1145,7 +1142,7 @@ input.search {
 }
 
 .todohead {
-  margin: 0.3rem 0 0.6rem;
+  margin: var(--s-1) 0 var(--s-2h);
 }
 
 /* The body leads and the slug is its subtitle (docs/AUDIT-UX-2026-09-12.md
@@ -1154,7 +1151,7 @@ input.search {
   font-size: var(--t-head);
   font-weight: 600;
   line-height: 1.3;
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--s-1h);
 }
 
 .todoid {
@@ -1164,7 +1161,7 @@ input.search {
   font-weight: 500;
   color: var(--ink-muted);
   word-break: break-all;
-  margin-bottom: 0.45rem;
+  margin-bottom: var(--s-2);
 }
 
 .todohead .cardmeta {
@@ -1175,7 +1172,7 @@ input.search {
   font-size: var(--t-small);
   color: var(--ink-muted);
   border-left: 3px solid var(--primary);
-  padding: 0.35rem 0 0.35rem 0.65rem;
+  padding: var(--s-1h) 0 var(--s-1h) var(--s-2h);
 }
 
 .todobody {
@@ -1183,20 +1180,20 @@ input.search {
   word-break: break-word;
   font-size: var(--t-body);
   line-height: 1.55;
-  margin: 0.5rem 0 1rem;
+  margin: var(--s-2) 0 var(--s-4);
 }
 
 .waitingbody {
   font-size: var(--t-body);
   color: var(--ink-muted);
   border-left: 3px solid var(--primary);
-  padding-left: 0.7rem;
+  padding-left: var(--s-3);
 }
 
 .checklist,
 .rationale {
   list-style: none;
-  margin: 0.4rem 0 1rem;
+  margin: var(--s-1h) 0 var(--s-4);
   padding: 0;
 }
 
@@ -1204,7 +1201,7 @@ input.search {
 .rationale li {
   display: flex;
   gap: var(--s-2);
-  padding: 0.3rem 0;
+  padding: var(--s-1) 0;
   border-bottom: 1px solid var(--rule);
   font-size: var(--t-body);
 }
@@ -1213,7 +1210,7 @@ input.search {
   color: var(--ink-muted);
   display: list-item;
   list-style: disc;
-  margin-left: 1.1rem;
+  margin-left: var(--s-4);
 }
 
 .checklist .box {
@@ -1240,7 +1237,7 @@ input.search {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  padding-top: 0.4rem;
+  padding-top: var(--s-1h);
 }
 
 .editrepricelabel {
@@ -1297,7 +1294,7 @@ input.search {
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
-  margin: 1rem 0;
+  margin: var(--s-4) 0;
 }
 
 .why > summary {
@@ -1305,7 +1302,7 @@ input.search {
   align-items: center;
   gap: var(--s-2);
   min-height: var(--tap);
-  padding: 0 0.85rem;
+  padding: 0 var(--s-3h);
   cursor: pointer;
   font-weight: 600;
   font-size: var(--t-body);
@@ -1329,33 +1326,34 @@ input.search {
 }
 
 .why > *:not(summary) {
-  padding: 0 0.85rem 0.8rem;
+  padding: 0 var(--s-3h) var(--s-3);
 }
 
 .why h2 {
-  margin-top: 0.2rem;
+  margin-top: var(--s-1);
 }
 
 .timeline {
   list-style: none;
-  margin: 0.6rem 0 0 0.4rem;
-  padding: 0 0 0 1.35rem;
+  margin: var(--s-2h) 0 0 var(--s-1h);
+  padding: 0 0 0 var(--s-6);
   border-left: 2px solid var(--line);
 }
 
 .tlitem {
   position: relative;
-  padding: 0 0 1rem 0;
+  padding: 0 0 var(--s-4) 0;
 }
 
 .tlitem::before {
   content: "";
   position: absolute;
-  left: -1.78rem;
+  /* Centred on .timeline's border: moves with its padding-left. */
+  left: -1.93rem;
   top: 0.35rem;
   width: 0.6rem;
   height: 0.6rem;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   background: var(--primary);
   border: 2px solid var(--ground);
 }
@@ -1373,7 +1371,7 @@ input.search {
   font-size: var(--t-tiny);
   color: var(--ink-muted);
   word-break: break-all;
-  margin-top: 0.3rem;
+  margin-top: var(--s-1);
 }
 
 .hashlink,
@@ -1387,21 +1385,21 @@ code.hash {
    is one line of a few hundred characters) scrolls in its own box, so the
    evidence is whole and the page is never wider than the screen. */
 dl.diff {
-  margin: 0.3rem 0;
+  margin: var(--s-1) 0;
   font-size: var(--t-small);
   min-width: 0;
 }
 
 dl.diff dt {
   color: var(--ink-muted);
-  margin-top: 0.3rem;
+  margin-top: var(--s-1);
 }
 
 dl.diff dd {
   display: flex;
   gap: var(--s-1);
   align-items: baseline;
-  margin: 0.1rem 0 0 0.6rem;
+  margin: var(--s-0h) 0 0 var(--s-2h);
   min-width: 0;
 }
 
@@ -1427,17 +1425,17 @@ dl.diff code.literal {
   white-space: pre;
   font-family: var(--f-mono);
   font-size: var(--t-tiny);
-  padding: 0.2rem 0.4rem;
+  padding: var(--s-1) var(--s-1h);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--sheet);
 }
 
 dl.facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--s-1) 0.9rem;
-  margin: 0.5rem 0 1rem;
+  gap: var(--s-1) var(--s-3h);
+  margin: var(--s-2) 0 var(--s-4);
   font-size: var(--t-body);
 }
 
@@ -1453,11 +1451,8 @@ dl.facts dd {
 /* A `#link("todo:<id>")` inside rendered prose points back INTO this app, and
    is marked as such rather than as an outbound link: the accent and a dotted
    underline, where an outbound one is underlined solid. Nothing about it says
-   "leaves this page", because it does not.
-
-   No ground and no padding. The chip look was tried first and put a visible
-   gap between the link and the punctuation after it — an inline box's padding
-   is space in the sentence, and a sentence is what this is inside. */
+   "leaves this page", because it does not. No ground and no padding: an inline
+   box's padding is space in the sentence. */
 
 .rich a.todolink {
   color: var(--primary);
@@ -1478,7 +1473,7 @@ dl.facts dd {
    number and a 3px rail on the left, the same vocabulary the cards use. */
 
 .linksection {
-  margin-top: 1.4rem;
+  margin-top: var(--s-6);
 }
 
 .linkhead {
@@ -1487,7 +1482,7 @@ dl.facts dd {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--ink-muted);
-  margin: 0.9rem 0 0.35rem;
+  margin: var(--s-3h) 0 var(--s-1h);
 }
 
 .linklist {
@@ -1499,9 +1494,9 @@ dl.facts dd {
 .linkrow {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--s-2);
   min-height: var(--tap);
-  padding: 0.35rem 0.6rem;
+  padding: var(--s-1h) var(--s-2h);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -1542,7 +1537,7 @@ dl.facts dd {
   gap: var(--s-2);
   width: 100%;
   min-height: 3.25rem;
-  padding: 0 0.85rem;
+  padding: 0 var(--s-3h);
   border: 0;
   border-radius: var(--r-card) var(--r-card) 0 0;
   background: transparent;
@@ -1570,7 +1565,7 @@ dl.facts dd {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  padding-bottom: 0.85rem;
+  padding-bottom: var(--s-3h);
 }
 
 /* 16px MINIMUM, everywhere a finger lands: iOS zooms the page in on a focused
@@ -1579,7 +1574,7 @@ dl.facts dd {
 .draftfield {
   width: 100%;
   min-height: var(--tap);
-  padding: 0.55rem 0.7rem;
+  padding: var(--s-2) var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -1619,7 +1614,7 @@ dl.facts dd {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.3rem;
+  gap: var(--s-1);
   min-width: 4.6rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1674,7 +1669,7 @@ dl.facts dd {
 }
 
 .pickerhead {
-  padding: 0 0.75rem;
+  padding: 0 var(--s-3);
 }
 
 .sheetspacer {
@@ -1738,7 +1733,7 @@ dl.facts dd {
      same reading column the cards use. */
   .addsheet {
     max-width: 42rem;
-    margin: 1.2rem auto 2rem;
+    margin: var(--s-4) auto var(--s-8);
   }
 }
 
@@ -1747,7 +1742,7 @@ dl.facts dd {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
-  margin: 0.6rem 0;
+  margin: var(--s-2h) 0;
 }
 
 .controls label {
@@ -1773,7 +1768,7 @@ table {
 th,
 td {
   text-align: left;
-  padding: 0.4rem 0.55rem;
+  padding: var(--s-1h) var(--s-2);
   border-bottom: 1px solid var(--rule);
   vertical-align: top;
   white-space: nowrap;
@@ -1804,7 +1799,7 @@ pre {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.6rem 0.7rem;
+  padding: var(--s-2h) var(--s-3);
   overflow-x: auto;
   font-size: var(--t-small);
   white-space: pre-wrap;
@@ -1815,12 +1810,12 @@ ul.tree,
 ul.tree ul {
   list-style: none;
   margin: 0;
-  padding-left: 0.9rem;
+  padding-left: var(--s-3h);
   border-left: 1px solid var(--rule);
 }
 
 ul.tree > li {
-  margin: 0.2rem 0;
+  margin: var(--s-1) 0;
 }
 
 .node {
@@ -1830,9 +1825,9 @@ ul.tree > li {
 footer {
   color: var(--ink-muted);
   font-size: var(--t-small);
-  margin-top: 2.5rem;
+  margin-top: var(--s-8);
   border-top: 1px solid var(--rule);
-  padding-top: 0.6rem;
+  padding-top: var(--s-2h);
 }
 
 /* --- master and detail ----------------------------------------------------- */
@@ -1852,14 +1847,14 @@ footer {
 }
 
 .panehint {
-  padding: 3.5rem 1rem;
+  padding: var(--s-8) var(--s-4);
   text-align: center;
 }
 
 .panehintlead {
   font-size: var(--t-body);
   color: var(--ink-muted);
-  margin: 0 0 0.3rem;
+  margin: 0 0 var(--s-1);
 }
 
 @media (min-width: 62rem) {
@@ -1868,7 +1863,7 @@ footer {
     /* `minmax(0, …)` on the detail track, not `1fr`: a plain `1fr` has an AUTO
        minimum, and one unbroken hash in the timeline would widen it. */
     grid-template-columns: 27rem minmax(0, 1fr);
-    gap: 1.5rem;
+    gap: var(--s-6);
     align-items: start;
   }
 
@@ -1896,13 +1891,13 @@ footer {
     max-width: none;
     margin: 0;
     /* Room for a focus ring against the scroller. */
-    padding: 0 0.4rem;
+    padding: 0 var(--s-1h);
   }
 
   .detailpane {
     display: block;
     border-left: 1px solid var(--rule);
-    padding-left: 1.5rem;
+    padding-left: var(--s-6);
   }
 
   /* The pane IS the column; a second max-width inside it would strand the
@@ -1918,7 +1913,7 @@ footer {
   }
 
   .detailpane .pagetitle {
-    margin-top: 0.2rem;
+    margin-top: var(--s-1);
   }
 }
 
@@ -1928,8 +1923,7 @@ footer {
    `web/src/rich.ts` puts `.rich` on a block holding typst's HTML and
    `.assource` on one holding the stored source as text, so those two classes
    are the whole difference between "read this" and "read what is stored".
-   Everything below is the first case; `.assource` keeps the pre-wrapped,
-   source-shaped look the app had before typst rendered anything. */
+   Everything below is the first case; `.assource` keeps the source's shape. */
 
 .assource {
   white-space: pre-wrap;
@@ -1955,22 +1949,23 @@ footer {
   margin-bottom: 0;
 }
 
+/* The rhythm of typst's prose is in em, the scale's steps (0.125em to 2em) in its own text's size. */
 .rich p {
-  margin: 0 0 0.55em;
+  margin: 0 0 0.5em;
 }
 
 .rich ul,
 .rich ol {
-  margin: 0.4em 0 0.7em;
-  padding-left: 1.35em;
+  margin: 0.375em 0 0.75em;
+  padding-left: 1.5em;
 }
 
 .rich li {
-  margin: 0.15em 0;
+  margin: 0.125em 0;
 }
 
 .rich dl {
-  margin: 0.4em 0 0.7em;
+  margin: 0.375em 0 0.75em;
 }
 
 .rich dt {
@@ -1978,7 +1973,7 @@ footer {
 }
 
 .rich dd {
-  margin: 0 0 0.35em 1.1em;
+  margin: 0 0 0.375em 1em;
   color: var(--ink-muted);
 }
 
@@ -1988,7 +1983,7 @@ footer {
 .rich h4 {
   font-size: var(--t-body);
   font-weight: 650;
-  margin: 0.9em 0 0.35em;
+  margin: 0.875em 0 0.375em;
 }
 
 .rich strong {
@@ -2003,21 +1998,22 @@ footer {
 
 .rich code {
   font-family: var(--f-mono);
-  font-size: 0.88em;
+  /* A monospace face looks a size larger than the serif beside it. */
+  font-size: 0.875em;
   background: var(--tint);
   border: 2px solid var(--line);
-  border-radius: 4px;
-  padding: 0.05em 0.3em;
+  border-radius: var(--r-sm);
+  padding: 0.05em 0.3em; /* em: beside a glyph */
 }
 
 /* A code BLOCK owns the whole line, so it scrolls rather than forcing the
    column wider — the same rule the diff tables keep. */
 .rich pre {
-  margin: 0.5em 0 0.8em;
-  padding: 0.55rem 0.7rem;
+  margin: 0.5em 0 0.75em;
+  padding: var(--s-2) var(--s-3);
   background: var(--tint);
   border: 2px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
 }
 
@@ -2025,13 +2021,12 @@ footer {
   background: none;
   border: 0;
   padding: 0;
-  font-size: 0.86em;
   white-space: pre;
 }
 
 .rich blockquote {
-  margin: 0.5em 0 0.8em;
-  padding: 0.1em 0 0.1em 0.7rem;
+  margin: 0.5em 0 0.75em;
+  padding: 0.125em 0 0.125em var(--s-3);
   border-left: 3px solid var(--line);
   color: var(--ink-muted);
 }
@@ -2040,10 +2035,8 @@ footer {
   color: var(--ink-muted);
 }
 
-/* A CARD IS A PREVIEW, so its rendering collapses to one run of inline text and
-   lets `-webkit-line-clamp` do the deciding — the same three lines
-   `todos.preview` used to hand it, with the emphasis intact. Block margins
-   inside a clamped box would spend those three lines on air. */
+/* A CARD IS A PREVIEW: its rendering is one run of inline text that
+   `-webkit-line-clamp` cuts at three lines, which block margins would spend on air. */
 /* NOT `.cardbody .rich { display: inline }`: on a card the rich block IS the
    `.clamp` element, and an `inline` here would outrank `.clamp`'s
    `-webkit-box` (0,2,0 beats 0,1,0) and silently unclamp every card. Only the
@@ -2107,7 +2100,7 @@ a.chipbtn {
 
 .mailpage .pagetitle svg {
   vertical-align: -0.15em;
-  margin-right: 0.35rem;
+  margin-right: var(--s-1h);
   color: var(--primary);
 }
 
@@ -2122,7 +2115,7 @@ a.chipbtn {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.55rem 0.75rem;
+  padding: var(--s-2) var(--s-3);
   color: inherit;
   text-decoration: none;
   /* A row is a tap target before it is a list item. */
@@ -2162,7 +2155,7 @@ a.chipbtn {
 }
 
 .mailsubject {
-  margin: 0.15rem 0 0.3rem;
+  margin: var(--s-0h) 0 var(--s-1);
   font-size: var(--t-body);
   line-height: 1.35;
   display: -webkit-box;
@@ -2181,7 +2174,7 @@ a.chipbtn {
 .mailfoot {
   display: flex;
   justify-content: center;
-  margin: 0.9rem 0 0.4rem;
+  margin: var(--s-3h) 0 var(--s-1h);
 }
 
 .morebtn {
@@ -2189,7 +2182,7 @@ a.chipbtn {
   align-items: center;
   gap: var(--s-2);
   min-height: var(--tap);
-  padding: 0 1.1rem;
+  padding: 0 var(--s-4);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--sheet);
@@ -2216,8 +2209,8 @@ a.chipbtn {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.8rem 0.9rem;
-  margin: 0.4rem 0 0.8rem;
+  padding: var(--s-3) var(--s-3h);
+  margin: var(--s-1h) 0 var(--s-3);
 }
 
 .mailfacts {
@@ -2234,7 +2227,7 @@ a.chipbtn {
 .maillinks {
   list-style: none;
   padding: 0;
-  margin: 0.3rem 0 1rem;
+  margin: var(--s-1) 0 var(--s-4);
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
@@ -2289,8 +2282,8 @@ a.chipbtn {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.55rem 0.75rem;
-  margin: 0.4rem 0 0.2rem;
+  padding: var(--s-2) var(--s-3);
+  margin: var(--s-1h) 0 var(--s-1);
   min-height: var(--tap);
   color: inherit;
   text-decoration: none;
@@ -2325,10 +2318,8 @@ a.chipbtn {
 }
 
 /* --- the More sheet ------------------------------------------------------- */
-/* Six destinations, five slots. The overflow is a sheet above the bar rather
-   than a sixth 65 px tab, which would be under the 44 px target once its label
-   is set. It is transient page furniture and carries no hash: a URL that meant
-   "a menu was open" would be a page nobody can share. */
+/* Six destinations, five slots: the sixth is a sheet above the bar, since a sixth tab
+   would be under the 44 px target. It carries no hash. */
 
 .moresheet {
   position: absolute;
@@ -2369,7 +2360,7 @@ a.chipbtn {
 .chainpick {
   flex: 1;
   min-height: var(--tap);
-  padding: 0 0.75rem;
+  padding: 0 var(--s-3);
   border: 0;
   background: none;
   color: var(--ink-muted);
@@ -2469,7 +2460,7 @@ a.chipbtn {
 
 @media (min-width: 62rem) {
   .mailrow {
-    padding: 0.6rem 0.85rem;
+    padding: var(--s-2h) var(--s-3h);
   }
 
   /* Seven addresses do not fit on one line at any width worth targeting, and a
@@ -2493,7 +2484,7 @@ a.chipbtn {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0 0 calc(4.6rem + env(safe-area-inset-bottom));
+  padding: 0 0 var(--foot-room);
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -2504,19 +2495,19 @@ a.chipbtn {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card) var(--r-card) 0 0;
-  padding: 0.9rem 0.95rem 1.1rem;
+  padding: var(--s-3h) var(--s-4) var(--s-4);
 }
 
 .overlaytitle {
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--s-2h);
   font-size: var(--t-body);
 }
 
 .shortcutlist {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: var(--s-2) 0.8rem;
-  margin: 0 0 0.7rem;
+  gap: var(--s-2) var(--s-3);
+  margin: 0 0 var(--s-3);
 }
 
 .shortcutlist dt {
@@ -2533,13 +2524,11 @@ kbd {
   background: var(--tint);
   border: 2px solid var(--line);
   border-radius: var(--r-sm);
-  padding: 0.1rem 0.35rem;
+  padding: var(--s-0h) var(--s-1h);
   white-space: nowrap;
 }
 
-/* The keyboard cursor is the focus ring, deliberately: the browser draws it,
-   screen readers announce the card, and there is no second highlight to keep in
-   step with it. This only makes it unmissable on a card. */
+/* The keyboard cursor is the focus ring, made unmissable on a card. */
 .card:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -2549,7 +2538,7 @@ kbd {
 @media (min-width: 62rem) {
   .overlay {
     align-items: flex-start;
-    padding: 6vh 1rem 1rem;
+    padding: 6vh var(--s-4) var(--s-4); /* vh: a share of the window down */
   }
 
   .overlaybox {
@@ -2591,7 +2580,7 @@ kbd {
   background: none;
   color: inherit;
   font: inherit;
-  padding: 0.35rem 0.5rem;
+  padding: var(--s-1h) var(--s-2);
   cursor: pointer;
 }
 
@@ -2622,8 +2611,7 @@ kbd {
 
 /* --- focus and the skip link --------------------------------------------- */
 
-/* Off-screen until it has the keyboard, which is the whole of what it is for:
-   nine navigation links before the content is a page nobody Tabs into. */
+/* Off-screen until it has the keyboard. */
 .skip {
   position: fixed;
   top: 0;
@@ -2632,8 +2620,8 @@ kbd {
   transform: translateY(-140%);
   background: var(--primary);
   color: var(--on-primary);
-  padding: 0.5rem 0.9rem;
-  border-radius: 0 0 0.5rem 0;
+  padding: var(--s-2) var(--s-3h);
+  border-radius: 0 0 var(--r-card) 0;
   text-decoration: none;
 }
 
@@ -2652,25 +2640,24 @@ h1[tabindex="-1"]:focus {
 
 /* --- what changed since you looked ---------------------------------------- */
 
-/* The answer to a queued act's `base`: what the chain did to this todo while
-   the reader was away. Dismissible, unlike the stale banner, because it is news
-   about a moment rather than a label on what is underneath it. */
+/* The answer to a queued act's `base`: what the chain did to this todo while the
+   reader was away. Dismissible: it is news about a moment. */
 .sincebox {
   border: 1px solid var(--primary);
   border-radius: var(--r-card);
-  padding: 0.6rem 0.75rem;
-  margin: 0.6rem 0;
+  padding: var(--s-2h) var(--s-3);
+  margin: var(--s-2h) 0;
   font-size: var(--t-small);
 }
 
 .sincewhat {
-  margin: 0 0 0.3rem;
+  margin: 0 0 var(--s-1);
   color: var(--primary);
 }
 
 .sincelist {
   list-style: none;
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--s-1h);
   padding: 0;
 }
 
@@ -2681,7 +2668,7 @@ h1[tabindex="-1"]:focus {
   color: var(--primary);
   font: inherit;
   font-size: var(--t-small);
-  padding: 0.2rem 0.6rem;
+  padding: var(--s-1) var(--s-2h);
   min-height: var(--tap);
   cursor: pointer;
 }
@@ -2695,19 +2682,19 @@ h1[tabindex="-1"]:focus {
 .conflictbox {
   border: 1px solid var(--primary);
   border-radius: var(--r-card);
-  padding: 0.6rem 0.75rem;
-  margin: 0.6rem 0;
+  padding: var(--s-2h) var(--s-3);
+  margin: var(--s-2h) 0;
   font-size: var(--t-small);
 }
 
 .conflictbox h2 {
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--s-1h);
   font-size: var(--t-body);
 }
 
 .conflictlist {
   list-style: none;
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--s-1h);
   padding: 0;
 }
 
@@ -2718,12 +2705,12 @@ h1[tabindex="-1"]:focus {
 
 /* Each version of a content conflict, one above the other: none is the page's pick. */
 .candidates {
-  margin: 0 0 0.4rem;
-  padding-left: 1.2rem;
+  margin: 0 0 var(--s-1h);
+  padding-left: var(--s-4);
 }
 
 .candidates li + li {
-  margin-top: 0.4rem;
+  margin-top: var(--s-1h);
 }
 
 .candidates .legend {
@@ -2731,7 +2718,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .conflictstate {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--s-1h);
 }
 
 /* --- briefings -------------------------------------------------------------- */
@@ -2740,7 +2727,7 @@ h1[tabindex="-1"]:focus {
    exists. */
 .todaybriefing,
 .setupunfinished {
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--s-2h);
 }
 
 .setupunfinished a,
@@ -2773,7 +2760,7 @@ h1[tabindex="-1"]:focus {
   background: var(--sheet);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.55rem 0.75rem;
+  padding: var(--s-2) var(--s-3);
   color: inherit;
   text-decoration: none;
   min-height: 3.25rem;
@@ -2805,7 +2792,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .briefingtitle {
-  margin: 0.15rem 0 0;
+  margin: var(--s-0h) 0 0;
   font-size: var(--t-body);
   line-height: 1.35;
 }
@@ -2875,15 +2862,9 @@ h1[tabindex="-1"]:focus {
 
 /* Pinned under the header, in the warning colour, and never dismissible: it is
    not a notification, it is a label on what is underneath it. */
-/* ⚠️ THE SENTENCES ARE `web/src/shell/stale.ts`'S AND ARE TESTED; this is the only
-   thing about the banner that may change. It was a solid block of warning
-   colour across the top of every page, which on a phone is a wall — and a wall
-   that is up whenever the network is, which is often, trains a reader to look
-   past exactly the line that must not be looked past. So it is a bordered
-   notice on the warning colour's tint instead: the same weight the conflict box
-   and the refusal notice carry, the same words, still sticky under the header,
-   still never dismissible. The rule the redesign must not break is that a
-   number on screen always says where it came from. */
+/* ⚠️ THE SENTENCES ARE `web/src/shell/stale.ts`'S AND ARE TESTED; only the look may
+   change. A notice on the warning tint, sticky under the header and never
+   dismissible: a number on screen always says where it came from. */
 .stalebar {
   position: sticky;
   top: var(--sticky-top);
@@ -3051,11 +3032,8 @@ h1[tabindex="-1"]:focus {
   border-style: dashed;
 }
 
-/* A verb's answer is REFERENCE, not conversation: it is what the box told the
-   secretary, and it is set smaller and dimmer so a reader's eye goes to the
-   sentences a person and the model exchanged. It is still shown, because a
-   transcript that hid what the model was told would be a transcript nobody
-   could check. */
+/* A verb's answer is REFERENCE, not conversation: smaller and dimmer, and still shown,
+   so a reader can check what the model was told. */
 .turn-verb .turntext {
   font-family: var(--f-mono);
   font-size: var(--t-small);
@@ -3069,7 +3047,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .queuedmark {
-  margin-left: 0.4em;
+  margin-left: 0.4em; /* em: beside a glyph */
   font-weight: 400;
   text-transform: none;
   color: var(--ink-muted);
@@ -3087,7 +3065,7 @@ h1[tabindex="-1"]:focus {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--ink-muted);
-  margin-bottom: 0.2rem;
+  margin-bottom: var(--s-1);
 }
 
 .turntext {
@@ -3275,7 +3253,7 @@ h1[tabindex="-1"]:focus {
    body — a reader should not have to expand a trace to learn that a verb
    was declined. */
 .roundfoldrefused {
-  margin-left: 0.5em;
+  margin-left: 0.5em; /* em: beside a glyph */
   font-weight: 600;
   color: var(--primary);
 }
@@ -3308,7 +3286,7 @@ h1[tabindex="-1"]:focus {
   align-self: center;
   margin-bottom: var(--s-2);
   min-height: var(--tap);
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--sheet);
@@ -3332,7 +3310,7 @@ h1[tabindex="-1"]:focus {
 .stopanswer,
 .againbutton {
   min-height: var(--tap);
-  padding: 0 1rem;
+  padding: 0 var(--s-4);
   background: var(--sheet);
 }
 
@@ -3361,7 +3339,7 @@ h1[tabindex="-1"]:focus {
 
 .composecancel {
   min-height: var(--tap);
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   font-size: var(--t-small);
 }
 
@@ -3382,24 +3360,21 @@ h1[tabindex="-1"]:focus {
 .composekeep {
   min-height: var(--tap);
   max-width: 100%;
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   text-align: start;
   font-size: var(--t-small);
 }
 
-/* THE "↓ new answer" PILL — a round landed while the reader had scrolled up
-   more than a screen, so the page held still instead of yanking them down;
-   this is the one thing that moves it, on request. Fixed to the viewport's
-   own bottom edge, above the composer, so it never depends on where in the
-   transcript the reader currently is. */
+/* THE "↓ new answer" PILL: a round landed while the reader was scrolled up more than a
+   screen. Fixed above the composer, so it never depends on where the reader is. */
 .newanswerpill {
   position: sticky;
   bottom: var(--s-3);
   align-self: center;
   min-height: var(--tap);
-  padding: 0 1rem;
+  padding: 0 var(--s-4);
   border: 1px solid var(--primary);
   border-radius: var(--r-pill);
   background: var(--tint);
@@ -3419,13 +3394,13 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  margin-top: 0.8rem;
+  margin-top: var(--s-3);
 }
 
 .proposal {
   border: 1px solid var(--primary);
   border-radius: var(--r-card);
-  padding: 0.65rem 0.8rem;
+  padding: var(--s-2h) var(--s-3);
   background: var(--sheet);
 }
 
@@ -3438,13 +3413,10 @@ h1[tabindex="-1"]:focus {
   opacity: 0.75;
 }
 
-/* WHY, ABOVE THE BODY (2026-09-10). The owner, on the first two drafts: "maybe
-   with the email there should be some sort of explanation and sources around
-   it." It reads first because the message means nothing until you know what it
-   is answering, so it is set at body size and not dimmed — the recipients and
-   the subject are the reference material here, and the reason is the argument. */
+/* WHY, ABOVE THE BODY, at body size and not dimmed: the message means nothing until
+   you know what it answers. */
 .proposalwhy {
-  margin: 0.4rem 0 0.5rem;
+  margin: var(--s-1h) 0 var(--s-2);
   line-height: 1.5;
 }
 
@@ -3453,7 +3425,7 @@ h1[tabindex="-1"]:focus {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s-2);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--s-2);
   font-size: var(--t-small);
 }
 
@@ -3536,8 +3508,8 @@ h1[tabindex="-1"]:focus {
 }
 
 .proposalbody {
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0.6rem;
+  margin: var(--s-2) 0 0;
+  padding: var(--s-2) var(--s-2h);
   background: var(--tint);
   border-radius: var(--r-card);
   white-space: pre-wrap;
@@ -3549,7 +3521,7 @@ h1[tabindex="-1"]:focus {
 
 .proposalfiles {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: var(--s-2) 0 0;
   padding: 0;
   display: grid;
   gap: var(--s-1);
@@ -3560,7 +3532,7 @@ h1[tabindex="-1"]:focus {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s-2);
-  padding: 0.4rem 0.6rem;
+  padding: var(--s-1h) var(--s-2h);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   font-size: var(--t-small);
@@ -3583,7 +3555,7 @@ h1[tabindex="-1"]:focus {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--s-2);
-  margin-top: 0.6rem;
+  margin-top: var(--s-2h);
 }
 
 .proposalconfirm {
@@ -3592,7 +3564,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .proposaloutcome {
-  margin-top: 0.5rem;
+  margin-top: var(--s-2);
   font-size: var(--t-small);
   color: var(--ink-muted);
   overflow-wrap: anywhere;
@@ -3602,14 +3574,14 @@ h1[tabindex="-1"]:focus {
    (docs/CODINGSESSION-PLAN-2026-09-27.md): its state, the branch's diff stat
    and report as the session wrote them, and its two answers. */
 .codingsession {
-  margin-top: 0.6rem;
-  padding-top: 0.5rem;
+  margin-top: var(--s-2h);
+  padding-top: var(--s-2);
   border-top: 1px solid var(--line);
   font-size: var(--t-small);
 }
 
 .codinghead {
-  margin: 0 0 0.3rem;
+  margin: 0 0 var(--s-1);
   font-weight: 600;
 }
 
@@ -3621,8 +3593,8 @@ h1[tabindex="-1"]:focus {
 }
 
 .codingfiles {
-  margin: 0.2rem 0 0;
-  padding-left: 1.1rem;
+  margin: var(--s-1) 0 0;
+  padding-left: var(--s-4);
 }
 
 .codinglines,
@@ -3636,7 +3608,7 @@ h1[tabindex="-1"]:focus {
 .dismissreason {
   flex: 1 1 10rem;
   min-height: var(--tap);
-  padding: 0 0.6rem;
+  padding: 0 var(--s-2h);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -3654,8 +3626,8 @@ h1[tabindex="-1"]:focus {
 .heldvalue {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.4em;
-  padding: 0 0.4em;
+  gap: 0.4em; /* em: beside a glyph */
+  padding: 0 0.4em; /* em: beside a glyph */
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   font-family: var(--f-mono);
@@ -3689,14 +3661,14 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
-  margin-top: 0.4rem;
+  margin-top: var(--s-1h);
 }
 
 /* Reply on a turn is a QUOTE into the compose box, so it is a quiet control
    rather than an act: it changes nothing and reaches nothing. */
 .turnreply {
-  margin-top: 0.4rem;
-  padding: 0 0.4rem;
+  margin-top: var(--s-1h);
+  padding: 0 var(--s-1h);
   border: 0;
   background: none;
   color: var(--ink-muted);
@@ -3725,7 +3697,7 @@ h1[tabindex="-1"]:focus {
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--s-1);
-  margin-top: 0.4rem;
+  margin-top: var(--s-1h);
 }
 
 .turncontrols > .turnreply {
@@ -3740,7 +3712,7 @@ h1[tabindex="-1"]:focus {
   display: inline-flex;
   align-items: center;
   min-height: var(--tap);
-  padding: 0 0.6rem;
+  padding: 0 var(--s-2h);
   border-radius: var(--r-sm);
   color: var(--ink-muted);
   font-size: var(--t-small);
@@ -3777,11 +3749,11 @@ h1[tabindex="-1"]:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
-  margin-top: 0.4rem;
+  margin-top: var(--s-1h);
 }
 
 .turnerase > .act-erase:not(.confirming) {
-  padding: 0 0.4rem;
+  padding: 0 var(--s-1h);
   border: 0;
   background: none;
   color: var(--ink-muted);
@@ -3795,14 +3767,14 @@ h1[tabindex="-1"]:focus {
 .askrow {
   display: flex;
   justify-content: flex-end;
-  margin: 0.2rem 0 0.4rem;
+  margin: var(--s-1) 0 var(--s-1h);
 }
 
 .asksecretary {
   min-height: var(--tap);
   display: inline-flex;
   align-items: center;
-  padding: 0 0.7rem;
+  padding: 0 var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   color: var(--primary);
@@ -3816,7 +3788,7 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  margin-top: 0.8rem;
+  margin-top: var(--s-3);
 }
 
 /* Where the box would be for a login that may not write: what this device may do and where to write from. */
@@ -3860,9 +3832,7 @@ h1[tabindex="-1"]:focus {
   }
 }
 
-/* The chips take the whole first row of the composer, because a chip list that
-   shared a line with the textarea would squeeze whichever of the two the reader
-   was actually using. */
+/* The chips take the composer's whole first row, so they never squeeze the textarea. */
 .composechips {
   display: flex;
   flex-wrap: wrap;
@@ -3876,8 +3846,8 @@ h1[tabindex="-1"]:focus {
 .composechip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.2rem 0.15rem 0.5rem;
+  gap: var(--s-1);
+  padding: var(--s-0h) var(--s-1) var(--s-0h) var(--s-2);
   border: 1px solid var(--primary);
   border-radius: var(--r-pill);
   background: var(--tint);
@@ -3894,7 +3864,7 @@ h1[tabindex="-1"]:focus {
   color: inherit;
   font: inherit;
   line-height: 1;
-  padding: 0.2rem 0.3rem;
+  padding: var(--s-1) var(--s-1);
   cursor: pointer;
   opacity: 0.7;
 }
@@ -3910,10 +3880,11 @@ h1[tabindex="-1"]:focus {
 .composefield {
   display: flex;
   align-items: flex-end;
-  gap: 0.15rem;
-  padding: 0.15rem;
+  gap: var(--s-0h);
+  padding: var(--s-0h);
   border: 2px solid var(--line);
-  border-radius: calc(var(--tap) / 2 + 0.3rem);
+  /* Concentric with the round buttons inside: their radius, plus this padding and the 2px border. */
+  border-radius: calc(var(--tap) / 2 + var(--s-1));
   background: var(--sheet);
 }
 
@@ -3926,7 +3897,7 @@ h1[tabindex="-1"]:focus {
   min-width: 0;
   min-height: var(--tap);
   max-height: 10.5rem;
-  padding: 0.62rem 0.2rem;
+  padding: var(--s-2h) var(--s-1);
   border: 0;
   background: none;
   color: inherit;
@@ -3946,7 +3917,7 @@ h1[tabindex="-1"]:focus {
   height: var(--tap);
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   cursor: pointer;
 }
 
@@ -4016,7 +3987,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .turnphotos {
-  margin-top: 0.4rem;
+  margin-top: var(--s-1h);
 }
 
 .turnphoto {
@@ -4060,7 +4031,7 @@ h1[tabindex="-1"]:focus {
   height: 100%;
   padding: var(--s-1);
   border: 0;
-  font-size: 0.7rem;
+  font-size: var(--t-tiny);
 }
 
 .composethumb .filename {
@@ -4108,19 +4079,9 @@ h1[tabindex="-1"]:focus {
   color: inherit;
 }
 
-/* --- the app design pass, 2026-09-10 -------------------------------------- */
-/* The owner: "the app needs some sprucing up, we can take advantage of quite a bit
-   with our new structure." What follows is what the new structure earned: a
-   provenance line on the todo view, the price above the fold, the Inbox, and
-   the filter row the list grew. Everything above has been brought onto the type
-   and space scales in the same pass. */
 
-/* WHO SAYS SO, one line under the id (web/src/todo/todoview.ts::provenance). It is
-   deliberately not a warning box: on a confirmed todo — most of them — it is a
-   quiet reassurance, and a page that shouted about provenance every time would
-   teach the reader to skip the line that matters on the ones that are not. The
-   unconfirmed variant gets the rail and the tint the rest of the app uses for
-   provisional content. */
+/* WHO SAYS SO, one quiet line under the id (web/src/todo/todoview.ts::provenance); the
+   unconfirmed variant takes the rail and tint of provisional content. */
 .provline {
   margin: var(--s-2) 0 var(--s-3);
   font-size: var(--t-small);
@@ -4404,7 +4365,7 @@ h1[tabindex="-1"]:focus {
 .phbar {
   display: block;
   height: 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: var(--r-pill);
   background: var(--grid);
 }
 
@@ -4468,8 +4429,8 @@ h1[tabindex="-1"]:focus {
   display: block;
   width: 60%;
   height: 1.5rem;
-  margin: 0.3rem 0;
-  border-radius: 0.75rem;
+  margin: var(--s-1) 0;
+  border-radius: var(--r-pill);
   background: var(--grid);
   animation: placeholder-in 160ms ease-out 300ms both;
 }
@@ -4524,12 +4485,8 @@ h1[tabindex="-1"]:focus {
   }
 }
 
-/* THE SEND BUTTON AND ITS SECOND PRESS. Nothing about the flow changed in the
-   2026-09-10 pass and nothing about it may: CLAUDE.md's rule is that every
-   outbound email shows final recipients, subject and body and gets an explicit
-   confirm of THAT text. What is styled here is only which of the two presses
-   looks like the irreversible one — the first is an offer and the second is the
-   act, so the second is the one that is filled in. */
+/* THE SEND BUTTON AND ITS SECOND PRESS (CLAUDE.md: every outbound email is confirmed
+   as shown). The first press is an offer and the second the act, so the second is filled. */
 .act-send {
   border-color: var(--primary);
   background: var(--primary);
@@ -4561,21 +4518,15 @@ h1[tabindex="-1"]:focus {
   color: var(--primary);
 }
 
-/* --- A BATCH IN THE INBOX ---------------------------------------------------
-   The proposal cards above are the secretary's, drawn by `proposal.ts`; a BATCH
-   is the triage agent's, and it is a different shape — a list of diffs with
-   ticks, over one heading. It keeps its own class names rather than borrowing
-   the proposal card's, for the reason the conversation list already does: what
-   is in each row is not what is in the other, and sharing a class would make a
-   change to one silently move the other. It sits on the same scale as
-   everything above (`--r-card`, `--t-micro`, the accent and the line). */
+/* --- A BATCH IN THE INBOX: the triage agent's list of diffs with ticks, under one
+   heading. Its own class names, so a change to the proposal card never moves it. */
 
 
 .batch {
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
-  padding: 0.6rem 0.75rem 0.7rem;
+  padding: var(--s-2h) var(--s-3) var(--s-3);
 }
 
 /* --- WHAT THE SECRETARY SETTLED TODAY --------------------------------------
@@ -4586,7 +4537,7 @@ h1[tabindex="-1"]:focus {
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
-  padding: 0.5rem 0.75rem;
+  padding: var(--s-2) var(--s-3);
   color: var(--ink-muted);
 }
 
@@ -4596,7 +4547,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .settledbatch {
-  padding: 0.5rem 0 0.15rem;
+  padding: var(--s-2) 0 var(--s-0h);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -4608,7 +4559,7 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.55rem;
+  gap: var(--s-2);
   margin: 0;
   font-size: var(--t-small);
 }
@@ -4621,14 +4572,14 @@ h1[tabindex="-1"]:focus {
 }
 
 .settledwhy {
-  margin: 0.2rem 0 0;
+  margin: var(--s-1) 0 0;
   font-size: var(--t-small);
   line-height: 1.4;
   color: var(--ink);
 }
 
 .proposedobject {
-  padding: 0.55rem 0 0.15rem;
+  padding: var(--s-2) 0 var(--s-0h);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -4639,7 +4590,7 @@ h1[tabindex="-1"]:focus {
 .proposedhead {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s-2);
   min-height: 2rem;
 }
 
@@ -4650,7 +4601,7 @@ h1[tabindex="-1"]:focus {
 .proposedbody,
 .proposednote,
 .proposedpending {
-  margin: 0.2rem 0 0;
+  margin: var(--s-1) 0 0;
   font-size: var(--t-small);
   line-height: 1.4;
 }
@@ -4661,13 +4612,13 @@ h1[tabindex="-1"]:focus {
 
 /* A card that replaces another draws the rows that one did not ask for as new. */
 .proposedfresh {
-  margin-left: 0.4rem;
+  margin-left: var(--s-1h);
   font-size: var(--t-small);
   color: var(--primary);
 }
 
 .proposalrevises {
-  margin: 0.2rem 0 0;
+  margin: var(--s-1) 0 0;
   font-size: var(--t-small);
   color: var(--ink-muted);
 }
@@ -4680,10 +4631,10 @@ h1[tabindex="-1"]:focus {
 }
 
 .proposedchanges {
-  margin: 0.35rem 0 0;
+  margin: var(--s-1h) 0 0;
   display: grid;
   grid-template-columns: minmax(4.5rem, auto) 1fr;
-  gap: 0.15rem 0.6rem;
+  gap: var(--s-0h) var(--s-2h);
   font-size: var(--t-small);
 }
 
@@ -4701,13 +4652,13 @@ h1[tabindex="-1"]:focus {
 }
 
 .proposedchanges .arrow {
-  margin: 0 0.35rem;
+  margin: 0 var(--s-1h);
   color: var(--ink-muted);
 }
 
 .proposedlink {
   display: inline-block;
-  margin-top: 0.25rem;
+  margin-top: var(--s-1);
   font-size: var(--t-small);
 }
 
@@ -4715,8 +4666,8 @@ h1[tabindex="-1"]:focus {
 .diffsummary {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.45rem 0;
+  gap: var(--s-2h);
+  padding: var(--s-2) 0;
 }
 
 .diffoverview {
@@ -4733,7 +4684,7 @@ h1[tabindex="-1"]:focus {
 
 .diffflag,
 .diffoverview .proposalproblem {
-  margin: 0.2rem 0 0;
+  margin: var(--s-1) 0 0;
   font-size: var(--t-small);
   line-height: 1.4;
 }
@@ -4746,7 +4697,7 @@ h1[tabindex="-1"]:focus {
 .diffbtn {
   flex: none;
   min-height: 2.25rem;
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   border-radius: var(--r-pill);
   font-size: var(--t-small);
 }
@@ -4761,8 +4712,8 @@ h1[tabindex="-1"]:focus {
 .cardmeta .cardid { color: var(--ink-muted); }
 
 /* --- about (docs/AUDIT-UX-2026-09-12.md findings 3 and 6) ------------------- */
-.aboutpage h2 { margin: 1.4rem 0 .4rem; font-size: var(--t-body); }
-.aboutprose { font-size: var(--t-body); line-height: 1.55; margin: .4rem 0; }
+.aboutpage h2 { margin: var(--s-6) 0 var(--s-1h); font-size: var(--t-body); }
+.aboutprose { font-size: var(--t-body); line-height: 1.55; margin: var(--s-1h) 0; }
 
 /* --- the Todos list: one tree of terms (docs/REDESIGN-PLAN-2026-09-25.md) --- */
 /* A group is a glass card, a todo one line: pie and number, title, the count below a
@@ -4848,7 +4799,7 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--s-1h);
 }
 
 .groupbylabel {
@@ -4861,7 +4812,7 @@ h1[tabindex="-1"]:focus {
 
 .pill {
   min-height: 2rem;
-  padding: 0 0.65rem;
+  padding: 0 var(--s-2h);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: transparent;
@@ -5003,7 +4954,7 @@ h1[tabindex="-1"]:focus {
   align-items: center;
   min-height: var(--tap);
   padding-left: calc(var(--depth) * var(--indent));
-  border-radius: 6px;
+  border-radius: var(--r-sm);
 }
 
 .row.selected,
@@ -5013,7 +4964,7 @@ h1[tabindex="-1"]:focus {
 }
 
 .row.inplace {
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
 }
 
 .rowfold,
@@ -5037,10 +4988,10 @@ h1[tabindex="-1"]:focus {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--s-2h);
   min-width: 0;
   min-height: var(--tap);
-  padding: 0 8px 0 0;
+  padding: 0 var(--s-2) 0 0;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -5054,7 +5005,7 @@ h1[tabindex="-1"]:focus {
   display: -webkit-box;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 4px 0;
+  padding: var(--s-1) 0;
   overflow: hidden;
   font-size: var(--t-body);
   line-height: 1.3;
@@ -5086,7 +5037,7 @@ h1[tabindex="-1"]:focus {
 
 .rowcount {
   flex: none;
-  padding: 1px 8px;
+  padding: 1px var(--s-2); /* a hairline: the badge stays one line high */
   border-radius: var(--r-pill);
   background: var(--tint);
   color: var(--primary-soft);
@@ -5101,16 +5052,16 @@ h1[tabindex="-1"]:focus {
 /* A node the tab cannot price: a group it cannot compose. A dashed circle the pie's size. */
 .mark.unlinked {
   border: 1.5px dashed var(--fulfillment-from);
-  border-radius: 50%;
+  border-radius: var(--r-pill);
 }
 
 .rowopen {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 2px;
-  padding: 2px 12px 14px calc(var(--depth) * var(--indent) + var(--fold));
-  border-radius: 0 0 6px 6px;
+  gap: var(--s-2h);
+  margin-bottom: var(--s-0h);
+  padding: var(--s-0h) var(--s-3) var(--s-3h) calc(var(--depth) * var(--indent) + var(--fold));
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
 }
 
 .rowopen .waiting {
@@ -5129,9 +5080,9 @@ h1[tabindex="-1"]:focus {
 .rowacts .act {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-1h);
   min-height: 2.25rem;
-  padding: 0 1rem;
+  padding: 0 var(--s-4);
   border: 2px solid var(--line);
   border-radius: var(--r-pill);
   background: transparent;
@@ -5158,7 +5109,7 @@ h1[tabindex="-1"]:focus {
 .subof {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--s-1h);
   margin: 0;
   font-size: var(--t-small);
   color: var(--ink-muted);
@@ -5178,7 +5129,7 @@ h1[tabindex="-1"]:focus {
   border: 0;
   background: none;
   color: var(--primary);
-  font-size: 1.2rem;
+  font-size: var(--t-head);
 }
 
 @media (min-width: 62rem) {
@@ -5192,7 +5143,7 @@ h1[tabindex="-1"]:focus {
   }
 }
 
-/* --- the secretary layer: ONE DOOR ON EACH WIDTH (the 2026-10-13 audit, X3).
+/* --- the secretary layer: ONE DOOR ON EACH WIDTH.
    On a phone the Secretary tab, and a page's own "Ask the secretary" for what
    it shows; where the panel stands (the app puts it in the page at its wide
    width, `chat/aside.ts`), its toggle carries what the page shows, so the
@@ -5236,9 +5187,7 @@ body:has(> .secretarypanel) .askrow {
     border-left: 1px solid var(--rule);
     background: var(--ground);
     padding: var(--s-3);
-    /* The PANEL ITSELF no longer scrolls (2026-09-16 — this is what let the
-       composer land under the fold, off screen, in the first sheet/panel
-       shape): `.panelscroll` is the one box that does. */
+    /* The panel does not scroll, so the composer stays on screen: `.panelscroll` does. */
     overflow: hidden;
   }
 
@@ -5257,9 +5206,9 @@ body:has(> .secretarypanel) .askrow {
      not clipped by the closed panel's zero width. */
   .panelcollapse {
     position: fixed;
-    top: calc(0.9rem + env(safe-area-inset-top));
+    top: calc(var(--s-3h) + env(safe-area-inset-top));
     right: var(--s-3);
-    width: 7rem;
+    width: var(--panel-toggle);
     min-height: var(--tap);
     padding: 0 var(--s-3);
     border: 2px solid var(--line);
@@ -5338,7 +5287,7 @@ body:has(> .secretarypanel) .askrow {
 }
 
 .needsyou {
-  padding: 0.7rem 0.8rem;
+  padding: var(--s-3) var(--s-3);
   border: 1px solid var(--primary);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -5350,7 +5299,7 @@ body:has(> .secretarypanel) .askrow {
 }
 
 .needsyoutext {
-  margin: 0.25rem 0 0.5rem;
+  margin: var(--s-1) 0 var(--s-2);
   overflow-wrap: anywhere;
 }
 
@@ -5364,7 +5313,7 @@ body:has(> .secretarypanel) .askrow {
   min-height: var(--tap);
   display: inline-flex;
   align-items: center;
-  padding: 0 1.1rem;
+  padding: 0 var(--s-4);
   border-radius: var(--r-pill);
   background: var(--primary);
   color: var(--on-primary);
@@ -5377,7 +5326,7 @@ body:has(> .secretarypanel) .askrow {
   border: 0;
   background: none;
   color: inherit;
-  font-size: 1.2rem;
+  font-size: var(--t-head);
   cursor: pointer;
 }
 
@@ -5404,18 +5353,18 @@ body:has(> .secretarypanel) .askrow {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-3);
-  padding: var(--s-3) 0.875rem var(--s-2);
+  padding: var(--s-3) var(--s-3h) var(--s-2);
 }
 
 .recordnote {
   margin: 0;
-  padding: 0 0.875rem var(--s-3);
+  padding: 0 var(--s-3h) var(--s-3);
 }
 
 .memoryfacts {
   list-style: none;
   margin: 0;
-  padding: 0 0.875rem var(--s-1);
+  padding: 0 var(--s-3h) var(--s-1);
 }
 
 .memoryfact {
@@ -5457,7 +5406,7 @@ body:has(> .secretarypanel) .askrow {
 .act.forget,
 .act.retract {
   min-height: 2.25rem;
-  padding: 0 0.9rem;
+  padding: 0 var(--s-3h);
   font-size: var(--t-small);
 }
 
@@ -5527,7 +5476,7 @@ body:has(> .secretarypanel) .askrow {
   flex: 1 1 auto;
   min-width: 0;
   min-height: var(--tap);
-  padding: 0 0.8rem;
+  padding: 0 var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -5562,9 +5511,9 @@ body:has(> .secretarypanel) .askrow {
 .topiclink {
   display: inline-flex;
   align-items: center;
-  gap: 0.35em;
+  gap: 0.35em; /* em: beside a glyph */
   min-height: 2.25rem;
-  padding: 0 0.75rem;
+  padding: 0 var(--s-3);
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   font: 400 var(--t-small) / 1 var(--f-sans);
@@ -5693,7 +5642,7 @@ body:has(> .secretarypanel) .askrow {
 .roundtopic {
   display: inline-flex;
   align-items: center;
-  padding: 0 0 0 0.5rem;
+  padding: 0 0 0 var(--s-2);
   border-radius: var(--r-pill);
   background: var(--tint);
   font: 400 var(--t-tiny) / 1.6 var(--f-sans);
@@ -5701,7 +5650,7 @@ body:has(> .secretarypanel) .askrow {
 }
 
 .roundtopic:not(:has(button)) {
-  padding-right: 0.5rem;
+  padding-right: var(--s-2);
 }
 
 /* The secretary's guess: an outline, not a fill, until the owner keeps it. */
@@ -5716,7 +5665,7 @@ body:has(> .secretarypanel) .askrow {
 .roundtopicadd {
   display: inline-flex;
   align-items: center;
-  gap: 0.2em;
+  gap: 0.2em; /* em: beside a glyph */
   min-width: 2rem;
   min-height: 2rem;
   justify-content: center;
@@ -5734,11 +5683,11 @@ body:has(> .secretarypanel) .askrow {
 .topicsheet {
   position: fixed;
   left: 50%;
-  bottom: calc(4.6rem + env(safe-area-inset-bottom));
+  bottom: var(--foot-room);
   z-index: 40;
   width: min(38rem, calc(100% - 2rem));
   transform: translateX(-50%);
-  padding: 0.9rem 0.95rem 1.1rem;
+  padding: var(--s-3h) var(--s-4) var(--s-4);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet-solid);
@@ -5765,7 +5714,7 @@ body:has(> .secretarypanel) .askrow {
   flex: 1 1 100%;
   min-width: 0;
   min-height: var(--tap);
-  padding: 0 0.8rem;
+  padding: 0 var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
@@ -5812,10 +5761,10 @@ body:has(> .secretarypanel) .askrow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   column-gap: var(--s-2);
-  row-gap: 2px;
+  row-gap: var(--s-0h);
   align-items: baseline;
   min-height: var(--tap);
-  padding: var(--s-3) 0.875rem;
+  padding: var(--s-3) var(--s-3h);
   color: var(--ink);
   text-decoration: none;
 }
@@ -5844,7 +5793,7 @@ body:has(> .secretarypanel) .askrow {
 }
 
 .chatbadge {
-  padding: 1px 8px;
+  padding: 1px var(--s-2); /* a hairline: the badge stays one line high */
   border-radius: var(--r-pill);
   background: var(--tint);
   color: var(--primary);
@@ -5894,7 +5843,7 @@ body:has(> .secretarypanel) .askrow {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin: 1.1rem 0 0.35rem;
+  margin: var(--s-4) 0 var(--s-1h);
 }
 
 .convhead .pagetitle,
@@ -6066,7 +6015,7 @@ body:has(> .secretarypanel) .askrow {
   white-space: normal;
 }
 
-/* A price's controls sit in the form's own column, as they did before one control drew them. */
+/* A price's controls sit in the form's own column. */
 .pricefields {
   display: contents;
 }
@@ -6161,7 +6110,7 @@ body:has(> .secretarypanel) .askrow {
   display: grid;
   grid-template-columns: 2.25rem minmax(0, 1fr);
   column-gap: var(--s-2);
-  row-gap: 2px;
+  row-gap: var(--s-0h);
   align-items: start;
   flex: 1 1 0;
   min-width: 0;
@@ -6179,8 +6128,8 @@ body:has(> .secretarypanel) .askrow {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding-top: 2px;
+  gap: var(--s-1);
+  padding-top: var(--s-0h);
 }
 
 /* The pie stands as a box, so no line box under it grows the row. */
@@ -6214,7 +6163,7 @@ body:has(> .secretarypanel) .askrow {
 .tchip {
   grid-column: 2;
   justify-self: start;
-  padding: 1px 8px;
+  padding: 1px var(--s-2); /* a hairline: the badge stays one line high */
   border-radius: var(--r-pill);
   background: var(--tint);
   color: var(--primary-soft);
@@ -6309,7 +6258,7 @@ body:has(> .secretarypanel) .askrow {
   margin: 0;
   width: 100%;
   min-height: var(--tap);
-  padding: 0.55rem 0.7rem;
+  padding: var(--s-2) var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   box-sizing: border-box;
@@ -6411,7 +6360,7 @@ body:has(> .secretarypanel) .askrow {
 
 .typedproblems {
   margin: 0;
-  padding-left: 1.2rem;
+  padding-left: var(--s-4);
   color: var(--fulfillment-from);
   font-size: var(--t-small);
 }
@@ -6441,7 +6390,7 @@ body:has(> .secretarypanel) .askrow {
   border: 2px solid var(--line);
   border-radius: var(--r-card);
   background: var(--sheet);
-  padding: 0 0.75rem;
+  padding: 0 var(--s-3);
 }
 
 .setuplabel {
@@ -6500,7 +6449,7 @@ body:has(> .secretarypanel) .askrow {
   background: var(--tint);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
-  padding: 0.45rem 0.75rem;
+  padding: var(--s-2) var(--s-3);
   font-size: var(--t-small);
 }
 

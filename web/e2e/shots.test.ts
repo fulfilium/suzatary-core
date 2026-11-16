@@ -258,6 +258,7 @@ const SHOTS: readonly Shot[] = [
   // endpoint — the ceiling is simply absent here, which is a state the page
   // has to draw honestly anyway.
   { name: "about", hash: "#/about", ready: `document.querySelector(".aboutversion") !== null` },
+  { name: "briefings", hash: "#/briefings", ready: `document.querySelector("#view .pagetitle")?.textContent === "Briefings"` },
   // What is connected, by group, as a writer sees it: Ask, the lines, a card on the line it is about, Change folded.
   {
     name: "settings",

@@ -85,6 +85,34 @@ fi
 
 echo "==> cast ceiling: $as_count <= $as_ceiling"
 
+# A ceiling on the lengths in web/static/style.css that are no step of its scales (`--s-*`,
+# `--t-*`, `--r-*`), that only moves down: each is marked where it stands. Counts every non-zero
+# number with a unit, outside var(), in padding, margin, gap, font, font-size and border radii.
+scale_ceiling=39
+scale_count=$(awk '
+  { css = css $0 "\n" }
+  END {
+    gsub(/\/\*([^*]|\*+[^*\/])*\*+\//, "", css)
+    n = split(css, decl, /[;{}]/)
+    for (i = 1; i <= n; i++) {
+      if (!match(decl[i], /^[[:space:]]*((padding|margin)(-[a-z-]+)?|(row-|column-)?gap|font(-size)?|border(-[a-z]+)*-radius)[[:space:]]*:/)) continue
+      v = substr(decl[i], RLENGTH + 1)
+      gsub(/var\(--[a-z0-9-]+\)/, "", v)
+      while (match(v, /(^|[^a-z0-9.])-?[0-9]*\.?[0-9]+(px|r?em|%|v[hw]|vmin|vmax|ch|ex|r?lh|pt)/)) {
+        if (substr(v, RSTART, RLENGTH) ~ /[1-9]/) count++
+        v = substr(v, RSTART + RLENGTH)
+      }
+    }
+    print count + 0
+  }' web/static/style.css)
+if [[ "$scale_count" -gt "$scale_ceiling" ]]; then
+  echo "web-static.sh: web/static/style.css holds $scale_count lengths off its scales, over the ceiling of $scale_ceiling" >&2
+  echo "  use a step (--s-*, --t-*, --r-*); lower the ceiling when you remove one" >&2
+  exit 1
+fi
+
+echo "==> scale ceiling: $scale_count <= $scale_ceiling"
+
 # An instant is UTC, so cutting its first ten characters names UTC's day, not the owner's;
 # `dayOf` reads it in the owner's zone. `day` and `writtenDay` are for a written day.
 utc_days=$(grep -rnE --binary-files=text --include='*.ts' '\b(day|writtenDay)\([^()]*([.]at|At)\)|([.]at|At|At\([^()]*\))[.]slice\(0, 10\)' web/src | grep -v '/generated/' || true)

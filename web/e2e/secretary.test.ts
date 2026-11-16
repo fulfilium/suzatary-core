@@ -411,8 +411,8 @@ app.scene("the brand, a history's hash links and an answer's Copy, Reply and its
   // The brand reaches its height in padding the header gives back, so the phone's header is no taller for it.
   assert.equal(
     await app.page.evaluate<number>(`Math.round(document.querySelector("header").getBoundingClientRect().height)`),
-    32,
-    "the phone header keeps its own 32 px",
+    31,
+    "the phone header keeps its own 31 px",
   );
 });
 /**
