@@ -69,7 +69,7 @@ impl Phase {
             Phase::Lines => "lines",
             Phase::Opened => "opened",
             Phase::History => "history",
-            Phase::Fold => "fold",
+            Phase::Fold => "digest",
             Phase::Facts => "facts",
             Phase::Remembered => "remembered",
             Phase::Context => "context",
@@ -90,19 +90,22 @@ impl Phase {
     }
 }
 
-/// `run`'s answer, its time logged as `phase`'s when a subscriber listens.
+/// `run`'s answer, its time logged as `phase`'s when a subscriber listens, and summed as a part of
+/// that name into the scopes open on this thread ([`crate::parts`]).
 pub fn timed<T>(phase: Phase, run: impl FnOnce() -> T) -> T {
-    if !tracing::enabled!(target: "suzatary::timings", tracing::Level::INFO) {
-        return run();
-    }
-    let started = Instant::now();
-    let answer = run();
-    tracing::info!(
-        target: "suzatary::timings",
-        phase = phase.name(),
-        ms = started.elapsed().as_secs_f64() * 1000.0,
-    );
-    answer
+    crate::parts::part(phase.name(), || {
+        if !tracing::enabled!(target: "suzatary::timings", tracing::Level::INFO) {
+            return run();
+        }
+        let started = Instant::now();
+        let answer = run();
+        tracing::info!(
+            target: "suzatary::timings",
+            phase = phase.name(),
+            ms = started.elapsed().as_secs_f64() * 1000.0,
+        );
+        answer
+    })
 }
 
 /// `count` of something `phase` did, such as the views it built, logged when a subscriber

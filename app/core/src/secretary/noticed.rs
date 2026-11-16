@@ -157,7 +157,7 @@ impl Owed {
         let conversation = &*suzatary_base::conversation_id::SETUP;
         let mut done = Filed::default();
         // Read once: this filing adds only other proposals, so it changes no answer here.
-        let before = inbox::fold(inbox)?;
+        let before = crate::parts::part("refold", || inbox::fold(inbox))?;
         for noticed in &self.owed {
             let held = before
                 .held(&noticed.proposal, noticed.since)
@@ -167,38 +167,46 @@ impl Owed {
                 continue;
             }
             // Opened by the first card, so a box that owes nothing has no conversation.
-            filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)?;
+            crate::parts::part("file.open", || {
+                filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)
+            })?;
             let card = Reference::Proposal(ProposalRef {
                 conversation: conversation.clone(),
-                index: conversations::read(conversations, conversation)?
-                    .proposals
-                    .len(),
+                index: crate::parts::part("file.read", || {
+                    conversations::read(conversations, conversation)
+                })?
+                .proposals
+                .len(),
             });
             let why = suzatary_base::spelling::said(&noticed.why);
-            conversations::append(
-                conversations,
-                conversation,
-                &Entry::noted(at, why.clone(), vec![card.clone()]),
-            )?;
+            crate::parts::part("file.note", || {
+                conversations::append(
+                    conversations,
+                    conversation,
+                    &Entry::noted(at, why.clone(), vec![card.clone()]),
+                )
+            })?;
             let reasons = Reasons::new(
                 why,
                 [card].into_iter().chain(noticed.about.clone()).collect(),
             )
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-            let (_, object) = filed::file(
-                conversations,
-                inbox,
-                &[],
-                at,
-                Filing {
-                    conversation,
-                    proposer: Proposer::Box,
-                    proposal: noticed.proposal.clone(),
-                    reasons,
-                    serves: None,
-                    revises: None,
-                },
-            )?;
+            let (_, object) = crate::parts::part("file.card", || {
+                filed::file(
+                    conversations,
+                    inbox,
+                    &[],
+                    at,
+                    Filing {
+                        conversation,
+                        proposer: Proposer::Box,
+                        proposal: noticed.proposal.clone(),
+                        reasons,
+                        serves: None,
+                        revises: None,
+                    },
+                )
+            })?;
             done.owed.push(object);
         }
         let stale: Vec<ProposalId> = before
@@ -213,15 +221,17 @@ impl Owed {
             .map(|object| object.id.clone())
             .collect();
         for id in stale {
-            inbox::withdraw(
-                inbox,
-                &id,
-                &transcript::writer(),
-                at,
-                Withdrawal::NoLongerNeeded {
-                    why: WITHDRAWN.to_owned(),
-                },
-            )?;
+            crate::parts::part("withdraw", || {
+                inbox::withdraw(
+                    inbox,
+                    &id,
+                    &transcript::writer(),
+                    at,
+                    Withdrawal::NoLongerNeeded {
+                        why: WITHDRAWN.to_owned(),
+                    },
+                )
+            })?;
             done.withdrawn.push(id);
         }
         Ok(done)
@@ -300,7 +310,9 @@ pub struct Seen<'a> {
 #[must_use]
 pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
     use crate::secrets::Answer;
-    let snapshot = crate::secrets::Snapshot::read(seen.secrets, seen.settables.iter());
+    let snapshot = crate::parts::part("secrets", || {
+        crate::secrets::Snapshot::read(seen.secrets, seen.settables.iter())
+    });
     let Ok(answers) = snapshot.answers() else {
         return super::fixes::unlock(inbox).holding();
     };
@@ -319,35 +331,41 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         .join(seen.declared.map_or_else(
             || Owed::default().holding(),
             |declared| {
-                super::connections::owed(
-                    declared,
-                    seen.secrets,
-                    super::connections::Google {
-                        client: crate::secrets::SecretState::all(
-                            [crate::google::CLIENT_ID, crate::google::CLIENT_SECRET].map(|name| {
-                                crate::settings::Settable::mint(seen.settables, name)
-                                    .ok()
-                                    .and_then(|name| answers.get(&name).copied())
-                                    .map_or(
-                                        crate::secrets::SecretState::Missing,
-                                        crate::secrets::SecretState::from,
-                                    )
-                            }),
-                        ),
-                        redirect: seen.redirect,
-                    },
-                    inbox,
-                )
+                crate::parts::part("connections", || {
+                    super::connections::owed(
+                        declared,
+                        seen.secrets,
+                        super::connections::Google {
+                            client: crate::secrets::SecretState::all(
+                                [crate::google::CLIENT_ID, crate::google::CLIENT_SECRET].map(
+                                    |name| {
+                                        crate::settings::Settable::mint(seen.settables, name)
+                                            .ok()
+                                            .and_then(|name| answers.get(&name).copied())
+                                            .map_or(
+                                                crate::secrets::SecretState::Missing,
+                                                crate::secrets::SecretState::from,
+                                            )
+                                    },
+                                ),
+                            ),
+                            redirect: seen.redirect,
+                        },
+                        inbox,
+                    )
+                })
             },
         ));
     // Joined after, so a secret or sign-in already asked for keeps its card.
     let failing = match (seen.declared, seen.health) {
-        (Some(declared), Some(health)) => super::failing::owed(&super::failing::Observed {
-            declared,
-            answering: &answering,
-            health,
-            heard: seen.heard,
-            now: seen.now,
+        (Some(declared), Some(health)) => crate::parts::part("failing", || {
+            super::failing::owed(&super::failing::Observed {
+                declared,
+                answering: &answering,
+                health,
+                heard: seen.heard,
+                now: seen.now,
+            })
         }),
         (None, _) | (_, None) => Owed::default().holding(),
     };
@@ -369,7 +387,8 @@ pub fn notice(
     inbox_store: &dyn Prodrome<InboxEvent>,
     at: Datetime,
 ) -> Result<Filed, Refusal> {
-    due(seen, &inbox::fold(inbox_store)?).file(conversations, inbox_store, at)
+    let inbox = crate::parts::part("inbox", || inbox::fold(inbox_store))?;
+    crate::parts::part("due", || due(seen, &inbox)).file(conversations, inbox_store, at)
 }
 
 impl FromIterator<Noticed> for Owed {

@@ -59,8 +59,8 @@ impl<E: Husking<Vocabulary: Clone>> Looked<E> {
             writes
         } else {
             let dag = Arc::clone(&self.dag);
-            let nodes = suzatary_core::first_read::part("history", || dag.nodes())?;
-            let folded = suzatary_core::first_read::part("registers", || {
+            let nodes = suzatary_core::parts::part("history", || dag.nodes())?;
+            let folded = suzatary_core::parts::part("registers", || {
                 Arc::new(prodrome_core::registers::fold(&nodes))
             });
             let held = Held {
@@ -116,7 +116,7 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
     /// The files, each read again where its inode moved, and their reading.
     fn memory(&self) -> Result<MutexGuard<'_, Memory<E>>, ProdromeError> {
         let mut memory = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
-        let objects = suzatary_core::first_read::mine().then(std::time::Instant::now);
+        let objects = suzatary_core::parts::open().then(std::time::Instant::now);
         let listed = self.listing()?.0;
         let before = memory.files.len();
         memory.files.retain(|name, _| listed.contains_key(name));
@@ -137,7 +137,7 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
         });
         if let Some(started) = objects {
             // The listing and every file read, hashed and parsed, as a wall time: they run spread.
-            suzatary_core::first_read::add_part("objects", started.elapsed());
+            suzatary_core::parts::add_part("objects", started.elapsed());
         }
         let moved = read.iter().any(|(name, (_, kept))| {
             !matches!(kept, Kept::Unread(_))
@@ -146,10 +146,10 @@ impl<E: Husking<Vocabulary: Clone>> Husked<E> {
         if memory.files.len() != before || moved {
             memory.looked = None;
         }
-        suzatary_core::first_read::part("files", || memory.files.extend(read));
+        suzatary_core::parts::part("files", || memory.files.extend(read));
         if memory.looked.is_none() {
             let dag =
-                suzatary_core::first_read::part("dag", || Arc::new(Self::history(&memory.files).0));
+                suzatary_core::parts::part("dag", || Arc::new(Self::history(&memory.files).0));
             memory.looked = Some(Looked { dag, writes: None });
         }
         Ok(memory)

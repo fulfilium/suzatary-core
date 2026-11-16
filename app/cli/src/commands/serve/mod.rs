@@ -54,6 +54,7 @@ use suzatary_api::server::Server;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::google::Endpoints;
+use suzatary_core::parts::Parts;
 use suzatary_core::secretary::compacting::Compacting;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
@@ -647,14 +648,15 @@ impl State {
 
     /// File owed cards, withdraw the rest; failures are logged.
     pub fn notice(&self) {
-        let heard = locks::held(&self.noticing);
+        use suzatary_core::parts::part;
+        let heard = part("lock", || locks::held(&self.noticing));
         let live::Live {
             settables,
             channels: _,
             accounts: _,
             plugins: _,
         } = self.live();
-        let answered = match self.answered.healths() {
+        let answered = match part("models", || self.answered.healths()) {
             Ok(answered) => answered,
             Err(failed) => {
                 tracing::warn!(
@@ -664,21 +666,16 @@ impl State {
                 return;
             }
         };
-        let open = self.signing.open();
+        let open = part("sign_ins", || self.signing.open());
         let caps = self.first.caps;
-        let declared = self
-            .edits
-            .declared()
+        let declared = part("declared", || self.edits.declared())
             .inspect_err(|failed| tracing::warn!("noticed: the instance file: {failed}"))
             .ok();
-        let health = caps
-            .secretary
-            .health
-            .healths()
+        let health = part("sources", || caps.secretary.health.healths())
             .inspect_err(|failed| tracing::warn!("noticed: the sources' health: {failed}"))
             .ok();
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
-        let model = self.models.recorded();
+        let model = part("model", || self.models.recorded());
         locks::held(&self.secrets_answered).forget();
         let secrets = self.secrets(caps);
         let seen = suzatary_core::secretary::noticed::Seen {
@@ -690,7 +687,7 @@ impl State {
             declared: declared.as_ref(),
             health: health.as_ref(),
             heard: heard.as_ref(),
-            pushed: &settings::pushed(self),
+            pushed: &part("pushed", || settings::pushed(self)),
             now,
             redirect: suzatary_core::secretary::google_sign_in::Consents::redirect(
                 self.consenting.as_ref(),
@@ -712,12 +709,14 @@ impl State {
         }
         // A key trusted while no server ran leaves its card.
         if let Some(keys) = &self.keys {
-            match suzatary_api::secretary::routes::withdraw_trusted(
-                caps.secretary.inbox,
-                caps.secretary.chain,
-                &keys.root().public(),
-                caps.secretary.clock.now(),
-            ) {
+            match part("trusted", || {
+                suzatary_api::secretary::routes::withdraw_trusted(
+                    caps.secretary.inbox,
+                    caps.secretary.chain,
+                    &keys.root().public(),
+                    caps.secretary.clock.now(),
+                )
+            }) {
                 Ok(withdrawn) if !withdrawn.is_empty() => {
                     tracing::info!(
                         withdrawn = withdrawn.len(),
@@ -1018,57 +1017,66 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
 
 /// Everything serve does before it listens, each step timed, and the steps logged as one line
 /// ([`Started`]): the markup warmed, orphaned acts reconciled, the startup's erasures, the default
-/// conversation opened, and the conversations left waiting resumed.
+/// conversation opened, the box's own cards filed, and the conversations left waiting resumed.
 async fn started_up(
     first: &Chained,
     rest: &[Chained],
     state: &State,
     moved: Arc<tokio::sync::Notify>,
 ) {
-    let starting = std::time::Instant::now();
+    let starting = Instant::now();
     let mut started = Started::default();
     started.step("warm", || {
         for chain in std::iter::once(first).chain(rest) {
             watch::warm_now(chain.caps, &chain.policy);
         }
     });
-    let at = std::time::Instant::now();
+    let at = Instant::now();
     reconcile_orphaned_acts(first).await;
-    started.0.push(("reconcile", at.elapsed()));
+    started.took("reconcile", at.elapsed(), Parts::default());
     erase_at_startup(first, &mut started).await;
-    let at = std::time::Instant::now();
+    let at = Instant::now();
     open_default(first).await;
-    started.0.push(("default", at.elapsed()));
-    let at = std::time::Instant::now();
-    notice_from_now_on(state.clone(), moved).await;
-    started.0.push(("notice", at.elapsed()));
-    let at = std::time::Instant::now();
+    started.took("default", at.elapsed(), Parts::default());
+    let at = Instant::now();
+    let parts = notice_from_now_on(state.clone(), moved).await;
+    started.took("notice", at.elapsed(), parts);
+    let at = Instant::now();
     resume_waiting(state).await;
-    started.0.push(("waiting", at.elapsed()));
+    started.took("waiting", at.elapsed(), Parts::default());
     started.log(starting.elapsed());
 }
 
-/// How long each step of serve's start took, in the order they ran: logged once, as one line at
-/// `suzatary::start`, before the server listens. It names steps and milliseconds, nothing a store
-/// holds.
+/// Each step of serve's start and its parts, logged once at `suzatary::start` before the server
+/// listens: `<step>.<part> <ms>` each, then the step's time no part took, so the line sums to the
+/// start. It names no store's content.
 #[derive(Default)]
-struct Started(Vec<(&'static str, std::time::Duration)>);
+struct Started(Vec<(&'static str, Parts, Duration)>);
 
 impl Started {
-    /// `run`'s answer, its time kept as `step`'s.
     fn step<T>(&mut self, step: &'static str, run: impl FnOnce() -> T) -> T {
-        let at = std::time::Instant::now();
-        let answer = run();
-        self.0.push((step, at.elapsed()));
+        let at = Instant::now();
+        let (answer, parts) = suzatary_core::parts::scoped(run);
+        self.took(step, at.elapsed(), parts);
         answer
     }
 
-    /// The steps, `<step> <ms>` each, beside the whole start, `whole` long, as one line.
-    fn log(&self, whole: std::time::Duration) {
+    fn took(&mut self, step: &'static str, spent: Duration, parts: Parts) {
+        let own = spent.saturating_sub(parts.sum());
+        self.0.push((step, parts, own));
+    }
+
+    fn log(&self, whole: Duration) {
         let steps = self
             .0
             .iter()
-            .map(|(step, spent)| format!("{step} {}", spent.as_millis()))
+            .flat_map(|(step, parts, own)| {
+                [
+                    parts.line(&format!("{step}.")),
+                    format!("{step} {}", own.as_millis()),
+                ]
+            })
+            .filter(|said| !said.is_empty())
             .collect::<Vec<_>>()
             .join(", ");
         tracing::info!(
@@ -1532,12 +1540,16 @@ fn heard(
         })
 }
 
-/// File owed cards now, hourly and on `moved`.
-async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
+/// File owed cards now, hourly and on `moved`: the parts of the filing now.
+async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) -> Parts {
     let first = state.clone();
-    if let Err(join_error) = tokio::task::spawn_blocking(move || first.notice()).await {
-        tracing::warn!("noticed: the first filing did not finish: {join_error}");
-    }
+    let parts =
+        tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(|| first.notice()).1)
+            .await
+            .unwrap_or_else(|join_error| {
+                tracing::warn!("noticed: the first filing did not finish: {join_error}");
+                Parts::default()
+            });
     let ringing = state.clone();
     tokio::spawn(async move {
         loop {
@@ -1566,6 +1578,7 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
             }
         }
     });
+    parts
 }
 
 const INSTANCE_POLL: Duration = Duration::from_secs(1);

@@ -105,7 +105,7 @@ impl ReadDigests<'_> {
     /// # Errors
     /// As [`ReadDigests::read`].
     pub(crate) fn read_under(&self, gathered: &Gathered) -> Result<Digest, Refusal> {
-        let shape = gathered.shape().map_err(|cycle| {
+        let shape = crate::parts::part("shape", || gathered.shape()).map_err(|cycle| {
             Refusal::internal(format!(
                 "the conversations' lines rest on {} in a cycle",
                 cycle.0.as_str()
@@ -167,7 +167,8 @@ impl ReadDigests<'_> {
     /// # Errors
     /// As [`ReadDigests::read`].
     pub fn naming(&self) -> Result<Naming<Line>, Refusal> {
-        Ok(self.read()?.naming())
+        let read = self.read()?;
+        Ok(crate::parts::part("naming", || read.naming()))
     }
 
     /// Refuse unless the history and the lines both read whole.

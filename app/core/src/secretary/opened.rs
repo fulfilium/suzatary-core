@@ -104,7 +104,7 @@ impl Fold {
         graph: &Graph<LineEvent>,
         keys: &dyn Gets<KeyName, TextKey>,
     ) -> Result<Vec<KeyName>, StoreError> {
-        let fresh: Vec<_> = crate::first_read::part("fresh", || {
+        let fresh: Vec<_> = crate::parts::part("fresh", || {
             graph
                 .objects()
                 .filter(|(name, _)| !self.lines.holds(name))
@@ -119,23 +119,23 @@ impl Fold {
         for name in named {
             if !self.lines.key_ring().holds(name)
                 && !given.contains_key(name)
-                && let Some(key) = crate::first_read::part("keys", || keys.get(name))?
+                && let Some(key) = crate::parts::part("keys", || keys.get(name))?
             {
                 given.insert(name.clone(), spelled(&key));
             }
         }
-        let gone: Vec<Hash> = crate::first_read::part("gone", || {
+        let gone: Vec<Hash> = crate::parts::part("gone", || {
             self.lines
                 .names()
                 .filter(|name| graph.dag().get(name).is_none())
                 .cloned()
                 .collect()
         });
-        crate::first_read::part("ring", || self.lines.keys(&given, &[]));
-        crate::first_read::part("hold", || self.lines.hold_objects(fresh, &gone));
+        crate::parts::part("ring", || self.lines.keys(&given, &[]));
+        crate::parts::part("hold", || self.lines.hold_objects(fresh, &gone));
         let ring = self.lines.key_ring();
         let dead: Vec<KeyName> =
-            crate::first_read::part("dead", || self.lines.dead(&|name| ring.holds(name)))
+            crate::parts::part("dead", || self.lines.dead(&|name| ring.holds(name)))
                 .into_iter()
                 .collect();
         self.lines.keys(&BTreeMap::new(), &dead);

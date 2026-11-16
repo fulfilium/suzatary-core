@@ -183,7 +183,7 @@ impl<'a> Memories<'a> {
     /// # Errors
     /// As [`Held::sweep`].
     pub fn sweep(&self) -> Result<usize, Refusal> {
-        self.hold()?.sweep()
+        crate::parts::part("lock", || self.hold())?.sweep()
     }
 }
 
@@ -404,21 +404,28 @@ impl Held<'_> {
     /// # Errors
     /// [`Refusal::conflict`] naming a store whose read left anything out; the stores' own.
     pub fn sweep(&self) -> Result<usize, Refusal> {
+        use crate::parts::part;
         let memories = &self.memories;
-        whole(memories.history, "memory")?;
-        whole(memories.cards, "inbox")?;
-        whole(memories.digests.history, "digests")?;
-        whole(memories.digests.lines.lines, "conversations")?;
+        part("whole.memory", || whole(memories.history, "memory"))?;
+        part("whole.inbox", || whole(memories.cards, "inbox"))?;
+        part("whole.digests", || {
+            whole(memories.digests.history, "digests")
+        })?;
+        part("whole.lines", || {
+            whole(memories.digests.lines.lines, "conversations")
+        })?;
         let facts = crate::secretary::texts::dead([
-            memories.reads().history()?.naming(),
-            crate::secretary::inbox::fold(memories.cards)?.naming(),
+            part("facts", || memories.reads().history())?.naming(),
+            part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
         ]);
-        let summaries = crate::secretary::texts::dead([memories.digests.reads().naming()?]);
+        let summaries = crate::secretary::texts::dead([part("summaries", || {
+            memories.digests.reads().naming()
+        })?]);
         for name in &facts {
-            memories.texts.remove(name)?;
+            part("delete", || memories.texts.remove(name))?;
         }
         for name in &summaries {
-            memories.digests.texts.remove(name)?;
+            part("delete", || memories.digests.texts.remove(name))?;
         }
         Ok(facts.len() + summaries.len())
     }

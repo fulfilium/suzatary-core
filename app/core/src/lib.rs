@@ -25,6 +25,7 @@ pub mod model_name;
 pub mod nonempty;
 pub mod notify;
 pub mod outcome;
+pub mod parts;
 pub mod plugin;
 pub mod priced;
 pub mod release;

@@ -262,8 +262,7 @@ impl<S: Slots> Slots for Once<S> {
         if let Some(words) = self.read.borrow().get(name) {
             return words.clone();
         }
-        let words =
-            crate::first_read::part("words", || self.slots.words(name, binding, sealed, open));
+        let words = crate::parts::part("words", || self.slots.words(name, binding, sealed, open));
         self.read.borrow_mut().insert(name.clone(), words.clone());
         words
     }
@@ -514,7 +513,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
             Node::Round { .. } => Read::join(children),
             Node::Store { .. } => {
                 let mut read = Read::join(children);
-                read.gathered = crate::first_read::part("gather", || F::gather(&read.closed));
+                read.gathered = crate::parts::part("gather", || F::gather(&read.closed));
                 read
             }
             Node::Conversation { id, .. } => {
@@ -522,7 +521,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
                 let lines = std::mem::take(&mut read.open);
                 read.closed.insert(
                     id.clone(),
-                    crate::first_read::part("close", || F::close(id, lines)),
+                    crate::parts::part("close", || F::close(id, lines)),
                 );
                 read
             }
@@ -573,7 +572,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
                         object: leaf.object.clone(),
                         line: Arc::clone(&leaf.line),
                         parents: leaf.parents.clone(),
-                        entry: crate::first_read::around("open", || leaf.line.entry(&read)),
+                        entry: crate::parts::part("open", || leaf.line.entry(&read)),
                     })],
                     closed: BTreeMap::new(),
                     gathered: F::Gathered::default(),
@@ -957,7 +956,7 @@ impl<F: Folds> HeldLines<F> {
             name: name.clone(),
             conversations,
         };
-        let folded = crate::first_read::around("fold", || {
+        let folded = crate::parts::part("fold", || {
             memo::fold(
                 &Reading {
                     reader: &self.algebra,
@@ -1260,7 +1259,7 @@ impl<F: Folds> HeldLines<F> {
             Built::Stale { cached } => Some(cached.clone()),
             Built::Unbuilt => None,
         };
-        let (node, leaves) = crate::first_read::part("nodes", || {
+        let (node, leaves) = crate::parts::part("nodes", || {
             build(&self.prints, &self.keys, id, conversation)
         });
         let gone: Vec<Hash> = conversation

@@ -39,7 +39,7 @@ rendering = [
 ]
 
 [layers.modules]
-memory = ["cast", "coding_report", "first_read", "priced", "secretary/carried",
+memory = ["cast", "coding_report", "first_read", "parts", "priced", "secretary/carried",
   "secretary/erasure", "secretary/fact_life", "secretary/key_ring", "secretary/line_words",
   "secretary/locked_text", "secretary/memory", "secretary/memory_event", "secretary/opened",
   "secretary/provenance", "secretary/salted_text", "secretary/scrubbed_under", "secretary/slots",
