@@ -111,6 +111,16 @@ pub fn dead<T>(histories: impl IntoIterator<Item = Naming<T>>) -> BTreeSet<TextN
         .dead()
 }
 
+/// The texts the join of `histories` leaves dead that `held` holds: what a sweep removes, so a
+/// second sweep over what the first left finds none.
+#[must_use]
+pub fn gone<T>(
+    histories: impl IntoIterator<Item = Naming<T>>,
+    held: &BTreeSet<TextName>,
+) -> BTreeSet<TextName> {
+    dead(histories).intersection(held).cloned().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
@@ -159,6 +169,21 @@ mod tests {
             }
             let each: BTreeSet<TextName> = histories.iter().flat_map(Naming::dead).collect();
             prop_assert!(dead.is_subset(&each));
+        }
+
+        /// A sweep removes exactly the held texts that are dead: after it no held text is dead
+        /// and every text it kept is held still, and the same sweep again removes nothing.
+        #[test]
+        fn a_sweep_removes_the_held_dead_and_again_nothing(
+            histories in proptest::collection::vec(naming(), 0..4),
+            held in proptest::collection::btree_set((0u8..10).prop_map(text), 0..10),
+        ) {
+            let removed = gone(histories.clone(), &held);
+            let left: BTreeSet<TextName> = held.difference(&removed).cloned().collect();
+            prop_assert!(removed.is_subset(&held));
+            prop_assert!(left.is_disjoint(&dead(histories.clone())));
+            prop_assert_eq!(&removed | &left, held);
+            prop_assert!(gone(histories, &left).is_empty());
         }
     }
 }

@@ -22,7 +22,7 @@ use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::devices::Device;
-use suzatary_store::store::{Doc, Gets, Log, Prodrome};
+use suzatary_store::store::{Doc, Gets, Lists, Log, Prodrome};
 use suzatary_todo::decisions::DecisionEvent;
 
 /// The whole store, as one value: every chain, and the box's own stores.
@@ -39,11 +39,11 @@ pub struct Database<'a> {
     /// The secretary's memory: which facts were remembered and forgotten, by id.
     pub memory: &'a dyn Prodrome<MemoryEvent>,
     /// Each standing fact's words, by the name its remembering gives them; forgetting deletes.
-    pub memory_texts: &'a dyn Doc<TextName, Text<Fact>>,
+    pub memory_texts: &'a dyn Lists<TextName, Text<Fact>>,
     /// The digest: what was said of each node of the conversations' summary tree, by node.
     pub digests: &'a dyn Prodrome<DigestEvent>,
     /// Each summary's words, by the name its event gives them; the sweep deletes the dead.
-    pub digest_texts: &'a dyn Doc<TextName, Text<Line>>,
+    pub digest_texts: &'a dyn Lists<TextName, Text<Line>>,
     /// The recorded decisions: designs and plans as items, keyed by decision.
     pub decisions: &'a dyn Prodrome<DecisionEvent>,
     /// The topics on the secretary's rounds and notes.

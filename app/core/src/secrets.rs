@@ -115,6 +115,21 @@ pub enum Answer {
     Set,
 }
 
+impl Answer {
+    /// A name's answer, or [`Locked`], which answers for the store and not for the name.
+    ///
+    /// # Errors
+    /// [`Locked`] for [`SecretState::Locked`].
+    pub fn of(state: SecretState) -> Result<Self, Locked> {
+        match state {
+            SecretState::Locked => Err(Locked),
+            SecretState::Missing => Ok(Answer::Missing),
+            SecretState::Failed => Ok(Answer::Failed),
+            SecretState::Set => Ok(Answer::Set),
+        }
+    }
+}
+
 impl From<Answer> for SecretState {
     fn from(answer: Answer) -> Self {
         match answer {
@@ -132,22 +147,34 @@ impl From<Answer> for SecretState {
 pub struct Snapshot(Result<std::collections::BTreeMap<Settable, Answer>, Locked>);
 
 impl Snapshot {
+    /// `secrets`' reading of `names`, in as few questions as it can ask ([`Secrets::snapshot`]).
+    #[must_use]
+    pub fn read(secrets: &dyn Secrets, names: impl IntoIterator<Item = Settable>) -> Self {
+        secrets.snapshot(&names.into_iter().collect::<Vec<_>>())
+    }
+
     /// Ask `secrets` for each of `names` once, stopping at the first answer that the store is
     /// locked: asking the rest would only wait out the same timeout again for each. Any other
     /// answer is the name's own, so one value that cannot be read leaves the others standing.
     #[must_use]
-    pub fn read(secrets: &dyn Secrets, names: impl IntoIterator<Item = Settable>) -> Self {
-        let mut answers = std::collections::BTreeMap::new();
-        for name in names {
-            let answer = match secrets.secret_state(&name) {
-                SecretState::Locked => return Self(Err(Locked)),
-                SecretState::Missing => Answer::Missing,
-                SecretState::Failed => Answer::Failed,
-                SecretState::Set => Answer::Set,
-            };
-            answers.insert(name, answer);
-        }
-        Self(Ok(answers))
+    pub fn each(secrets: &(impl Secrets + ?Sized), names: &[Settable]) -> Self {
+        Self::stood(names, |name| secrets.secret_state(name))
+    }
+
+    /// Where `stood` says each of `names` stands, asked in order until one is locked.
+    fn stood(names: &[Settable], stood: impl Fn(&Settable) -> SecretState) -> Self {
+        Self(
+            names
+                .iter()
+                .map(|name| Ok((name.clone(), Answer::of(stood(name))?)))
+                .collect(),
+        )
+    }
+
+    /// Each name's answer, or [`Locked`], as a store answered them all at once.
+    #[must_use]
+    pub fn of(answers: Result<std::collections::BTreeMap<Settable, Answer>, Locked>) -> Self {
+        Self(answers)
     }
 
     /// Each name's answer, or [`Locked`].
@@ -174,6 +201,13 @@ impl Snapshot {
 pub trait Secrets: std::marker::Sync {
     /// Where this declared name stands now.
     fn secret_state(&self, settable: &Settable) -> SecretState;
+
+    /// Where each of `names` stands at one reading. Asked of each name in turn
+    /// ([`Snapshot::each`]) unless the store can answer them all in fewer questions; either way
+    /// the reading is the same.
+    fn snapshot(&self, names: &[Settable]) -> Snapshot {
+        Snapshot::each(self, names)
+    }
 
     /// This box's own Microsoft OAuth slots for this account, read only through
     /// [`MailCredential::of`].
@@ -238,6 +272,35 @@ impl Secrets for Remembering<'_> {
             &settable.name().to_owned(),
             || self.store.secret_state(settable),
         )
+    }
+
+    /// The names not answered yet, asked of the store in one reading and kept; a locked store
+    /// is kept as locked for each name it was asked.
+    fn snapshot(&self, names: &[Settable]) -> Snapshot {
+        let held = || {
+            self.answers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        let before = held().states.clone();
+        let asking: Vec<Settable> = names
+            .iter()
+            .filter(|name| !before.contains_key(name.name()))
+            .cloned()
+            .collect();
+        let read = self.store.snapshot(&asking);
+        let mut answers = held();
+        for name in &asking {
+            answers
+                .states
+                .insert(name.name().to_owned(), read.state(name));
+        }
+        Snapshot::stood(names, |name| {
+            before
+                .get(name.name())
+                .copied()
+                .unwrap_or_else(|| read.state(name))
+        })
     }
 
     fn mail_grants(&self, account: &MailAccount) -> MailGrants {

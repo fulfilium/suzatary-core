@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-use super::{Doc, Gets, StoreError};
+use super::{Doc, Gets, Lists, StoreError};
 
 /// Documents held in memory, for tests.
 #[derive(Debug)]
@@ -64,5 +64,21 @@ where
             .unwrap_or_else(PoisonError::into_inner)
             .remove(key);
         Ok(())
+    }
+}
+
+impl<K, T> Lists<K, T> for InMemoryDoc<K, T>
+where
+    K: Ord + Clone + Send,
+    T: Clone + Send,
+{
+    fn held(&self) -> Result<std::collections::BTreeSet<K>, StoreError> {
+        Ok(self
+            .docs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .keys()
+            .cloned()
+            .collect())
     }
 }

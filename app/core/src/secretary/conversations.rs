@@ -106,14 +106,35 @@ pub fn start(
     kind: store::Kind,
     at: Datetime,
 ) -> Result<Stored, Refusal> {
-    let opened = Entry::Opened {
+    transcript::start(conversations, id, &opening(model, title, kind, at))?;
+    read(conversations, id)
+}
+
+fn opening(model: &dyn Model, title: &str, kind: store::Kind, at: Datetime) -> Entry {
+    Entry::Opened {
         at,
-        title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
+        title: Words::kept(title.to_owned()),
         model: model.name(),
         kind,
-    };
-    transcript::start(conversations, id, &opened)?;
-    read(conversations, id)
+    }
+}
+
+/// Open [`DEFAULT`](suzatary_base::conversation_id::DEFAULT) unless a line already names it. It
+/// reads the lines' names and no conversation, so it folds nothing.
+///
+/// # Errors
+/// The store's.
+pub fn open_default(
+    conversations: Conversations<'_>,
+    model: &dyn Model,
+    at: Datetime,
+) -> Result<(), Refusal> {
+    let default = &suzatary_base::conversation_id::DEFAULT;
+    let opened = opening(model, "Secretary", store::Kind::Default, at);
+    match transcript::start(conversations, default, &opened) {
+        Err(StoreError::Taken { .. }) => Ok(()),
+        started => started.map_err(Refusal::from),
+    }
 }
 
 /// One conversation, folded.

@@ -116,6 +116,13 @@ impl suzatary_core::secrets::Secrets for Declared {
         suzatary_io::secrets::state(&self.secrets.get(settable.name(), self.asking))
     }
 
+    fn snapshot(
+        &self,
+        names: &[suzatary_core::settings::Settable],
+    ) -> suzatary_core::secrets::Snapshot {
+        self.secrets.snapshot(names, self.asking)
+    }
+
     fn mail_grants(
         &self,
         account: &suzatary_core::mail::account::MailAccount,

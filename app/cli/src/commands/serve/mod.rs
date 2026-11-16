@@ -1030,13 +1030,43 @@ async fn started_up(first: &Chained, rest: &[Chained]) {
             watch::warm_now(chain.caps, &chain.policy);
         }
     });
-    let at = Instant::now();
-    reconcile_orphaned_acts(first).await;
-    started.took("reconcile", at.elapsed(), Parts::default());
-    erase_at_startup(first, &mut started).await;
-    let at = Instant::now();
-    open_default(first).await;
-    started.took("default", at.elapsed(), Parts::default());
+    let caps = first.caps;
+    started
+        .blocking("reconcile", move || reconcile_orphaned_acts(caps))
+        .await;
+    // In order, so a key the sweep kept keeps no summary that read its words. Each step reads
+    // only stored state, so a restart resumes it.
+    started
+        .blocking("erase.forgotten", move || {
+            erased_at_startup(
+                "erased by forgetting",
+                caps.secretary
+                    .memories
+                    .hold()
+                    .and_then(|held| held.erase_forgotten()),
+            );
+        })
+        .await;
+    started
+        .blocking("erase.lines", move || {
+            erased_at_startup(
+                "keys destroyed",
+                suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
+                    .map_err(Refusal::from),
+            );
+        })
+        .await;
+    started
+        .blocking("erase.texts", move || {
+            erased_at_startup(
+                "texts deleted",
+                caps.secretary.memories.sweep_only(Texts::Facts),
+            );
+        })
+        .await;
+    started
+        .blocking("default", move || open_default(caps))
+        .await;
     started.log("serve start", starting.elapsed());
 }
 
@@ -1051,6 +1081,16 @@ impl Started {
         let (answer, parts) = suzatary_core::parts::scoped(run);
         self.took(step, at.elapsed(), parts);
         answer
+    }
+
+    /// [`Started::step`] on a blocking thread, so the runtime's threads stay free; a step that
+    /// did not finish is logged and adds nothing.
+    async fn blocking(&mut self, step: &'static str, run: impl FnOnce() + Send + 'static) {
+        let at = Instant::now();
+        match tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(run).1).await {
+            Ok(parts) => self.took(step, at.elapsed(), parts),
+            Err(join_error) => tracing::warn!("{step} did not finish: {join_error}"),
+        }
     }
 
     fn took(&mut self, step: &'static str, spent: Duration, parts: Parts) {
@@ -1455,28 +1495,13 @@ fn recording_acting(
 }
 
 /// Open the default conversation; no read writes it.
-async fn open_default(chain: &Chained) {
-    let caps = chain.caps;
-    let now = caps.secretary.clock.now();
-    match tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::conversations::read_or_open_default(
-            caps.secretary.conversations,
-            caps.secretary.model,
-            &suzatary_base::conversation_id::DEFAULT,
-            now,
-        )
-    })
-    .await
-    {
-        Ok(Ok(_)) => {}
-        Ok(Err(failed)) => {
-            tracing::warn!("secretary: the default conversation: {}", failed.message());
-        }
-        Err(join_error) => {
-            tracing::warn!(
-                "secretary: opening the default conversation did not finish: {join_error}"
-            );
-        }
+fn open_default(caps: &suzatary_api::server::Server<'_>) {
+    if let Err(failed) = suzatary_core::secretary::conversations::open_default(
+        caps.secretary.conversations,
+        caps.secretary.model,
+        caps.secretary.clock.now(),
+    ) {
+        tracing::warn!("secretary: the default conversation: {}", failed.message());
     }
 }
 
@@ -1580,14 +1605,9 @@ fn notice_from_now_on(state: &State, moved: Arc<tokio::sync::Notify>) {
 /// `work` once the server listens, logged as `step` on an `after start` line.
 async fn after_start(step: &'static str, work: impl FnOnce() + Send + 'static) {
     let at = Instant::now();
-    match tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(work).1).await {
-        Ok(parts) => {
-            let mut after = Started::default();
-            after.took(step, at.elapsed(), parts);
-            after.log("after start", at.elapsed());
-        }
-        Err(join_error) => tracing::warn!("{step} after the start did not finish: {join_error}"),
-    }
+    let mut after = Started::default();
+    after.blocking(step, work).await;
+    after.log("after start", at.elapsed());
 }
 
 const INSTANCE_POLL: Duration = Duration::from_secs(1);
@@ -1651,28 +1671,17 @@ fn resume_waiting(state: &State) {
     }
 }
 
-async fn reconcile_orphaned_acts(chain: &Chained) {
-    let caps = chain.caps;
-    let now = caps.secretary.clock.now();
-    match tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::act_lines::reconcile(
-            caps.secretary.conversations,
-            caps.secretary.inbox,
-            now,
-        )
-    })
-    .await
-    {
-        Ok(Ok(reconciled)) if reconciled > 0 => {
+fn reconcile_orphaned_acts(caps: &suzatary_api::server::Server<'_>) {
+    match suzatary_core::secretary::act_lines::reconcile(
+        caps.secretary.conversations,
+        caps.secretary.inbox,
+        caps.secretary.clock.now(),
+    ) {
+        Ok(0) => {}
+        Ok(reconciled) => {
             tracing::info!("secretary: reconciled {reconciled} orphaned act(s) at startup");
         }
-        Ok(Ok(_)) => {}
-        Ok(Err(failed)) => {
-            tracing::warn!("secretary: reconcile at startup: {}", failed.message());
-        }
-        Err(join_error) => {
-            tracing::warn!("secretary: reconcile at startup did not finish: {join_error}");
-        }
+        Err(failed) => tracing::warn!("secretary: reconcile at startup: {}", failed.message()),
     }
 }
 
@@ -1692,49 +1701,7 @@ fn tls_config(cert: &Path, key: &Path) -> anyhow::Result<rustls::ServerConfig> {
     Ok(config)
 }
 
-/// Each step reads only stored state, so a restart resumes it.
-async fn erase_at_startup(chain: &Chained, timed: &mut Started) {
-    let caps = chain.caps;
-    let done = tokio::task::spawn_blocking(move || {
-        let mut spent = Started::default();
-        // In order, so a key the sweep kept keeps no summary that read its words.
-        let erased = spent.step("erase.forgotten", || {
-            caps.secretary
-                .memories
-                .hold()
-                .and_then(|held| held.erase_forgotten())
-        });
-        let lines = spent.step("erase.lines", || {
-            suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
-                .map_err(Refusal::from)
-        });
-        let texts = spent.step("erase.texts", || {
-            caps.secretary.memories.sweep_only(Texts::Facts)
-        });
-        (
-            [
-                ("erased by forgetting", erased),
-                ("keys destroyed", lines),
-                ("texts deleted", texts),
-            ],
-            spent,
-        )
-    })
-    .await;
-    match done {
-        Ok((steps, spent)) => {
-            timed.0.extend(spent.0);
-            for (what, step) in steps {
-                erased_at_startup(what, step);
-            }
-        }
-        Err(join_error) => {
-            tracing::warn!("secretary: erasing at startup did not finish: {join_error}");
-        }
-    }
-}
-
-/// The erasures that fold the conversations, in order after [`erase_at_startup`]. No read serves
+/// The erasures that fold the conversations, in order after the start's. No read serves
 /// what they remove meanwhile: a dead summary ([`Texts`]), an erased upload (search walks live
 /// conversations).
 fn erase_after_start(chain: &Chained) {

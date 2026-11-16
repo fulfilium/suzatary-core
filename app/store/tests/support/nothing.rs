@@ -4,7 +4,7 @@ use prodrome_core::event::{Envelope, Hash, mk_sealed, seal_hash};
 use prodrome_core::schema::Schema;
 use suzatary_base::capability::Nothing;
 
-use crate::store::{Doc, Gets, Prodrome, Reads, StoreError, WriteLock};
+use crate::store::{Doc, Gets, Lists, Prodrome, Reads, StoreError, WriteLock};
 
 /// A hold that holds nothing.
 struct NoLock;
@@ -51,5 +51,11 @@ impl<K, T> Doc<K, T> for Nothing {
     }
     fn remove(&self, _key: &K) -> Result<(), StoreError> {
         Ok(())
+    }
+}
+
+impl<K, T> Lists<K, T> for Nothing {
+    fn held(&self) -> Result<BTreeSet<K>, StoreError> {
+        Ok(BTreeSet::new())
     }
 }

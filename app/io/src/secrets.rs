@@ -10,10 +10,10 @@ use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
 use suzatary_base::capability::Secret;
-use suzatary_core::secrets::SecretState;
-use suzatary_core::settings::Settables;
+use suzatary_core::secrets::{Answer, SecretState, Snapshot};
+use suzatary_core::settings::{Settable, Settables};
 
-use crate::run::{Cmd, RunError, succeed};
+use crate::run::{Cmd, RunError, run, succeed, zero};
 
 /// What the secret store's providers read of the environment beyond [`crate::run::BASE`]. Any
 /// child that reaches the store (mbsync's `PassCmd`) passes these too.
@@ -75,8 +75,7 @@ impl Secretspec {
     }
 
     /// `timeout` per `secretspec` call.
-    #[must_use]
-    pub fn with_timeout(spec: impl Into<PathBuf>, timeout: Duration) -> Self {
+    fn with_timeout(spec: impl Into<PathBuf>, timeout: Duration) -> Self {
         Self {
             program: PathBuf::from("secretspec"),
             spec: Spec::File(spec.into()),
@@ -95,10 +94,70 @@ impl Secretspec {
         env_value: Option<&str>,
         subprocess: impl FnOnce() -> Result<Option<Secret>, SecretError>,
     ) -> Result<Option<Secret>, SecretError> {
-        if let Some(trimmed) = env_value.map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(trimmed) = given(env_value) {
             return Ok(Some(Secret::new(trimmed)));
         }
         subprocess()
+    }
+
+    /// `names` as [`Secretspec::get`] reads each, in one `secretspec check`.
+    #[must_use]
+    pub fn snapshot(&self, names: &[Settable], reason: &str) -> Snapshot {
+        use suzatary_core::parts::part;
+        let (from_env, asking): (Vec<&Settable>, Vec<&Settable>) = names.iter().partition(|name| {
+            part("environment", || {
+                given(env::var(name.name()).ok().as_deref()).is_some()
+            })
+        });
+        let mut answers: std::collections::BTreeMap<Settable, Answer> = from_env
+            .into_iter()
+            .map(|name| (name.clone(), Answer::Set))
+            .collect();
+        if asking.is_empty() {
+            return Snapshot::of(Ok(answers));
+        }
+        let asked = match part("store", || self.checked(reason, asking.len())) {
+            Ok(report) => Ok(asking
+                .into_iter()
+                .map(|name| (name.clone(), report.answer(name.name())))
+                .collect::<Vec<_>>()),
+            Err(failed) => Answer::of(failed.state()).map(|answer| {
+                asking
+                    .into_iter()
+                    .map(|name| (name.clone(), answer))
+                    .collect()
+            }),
+        };
+        Snapshot::of(asked.map(|asked| {
+            answers.extend(asked);
+            answers
+        }))
+    }
+
+    /// `secretspec check --json`'s report. It exits non-zero when a required name is missing and
+    /// still reports, so a report that parses is read whatever the exit; with none, the exit
+    /// says why, as `get`'s does. It may take as long as `get` was given for each of the `names`
+    /// it answers, since it decrypts each: a slow store must not read as locked.
+    fn checked(&self, reason: &str, names: usize) -> Result<Report, SecretError> {
+        const EVERY: &str = "every declared name";
+        let spec = self.configured(EVERY)?;
+        let cmd = Cmd::new(&self.program)
+            .args(["check", "--json", "--file"])
+            .arg(&spec)
+            .args(["--reason", reason])
+            .pass(STORE)
+            .timeout(
+                self.timeout
+                    .saturating_mul(u32::try_from(names).unwrap_or(u32::MAX)),
+            );
+        let ran = run(&cmd).map_err(|failed| SecretError::of(EVERY, &failed))?;
+        if let Some(report) = Report::in_(&ran.stdout) {
+            return Ok(report);
+        }
+        zero(&cmd, ran).map_err(|failed| SecretError::of(EVERY, &failed))?;
+        Err(SecretError::Unread {
+            name: EVERY.to_owned(),
+        })
     }
 
     /// The spec file to ask by, declared now if it was not yet. A missing one is a store to
@@ -169,7 +228,7 @@ impl Secretspec {
             }
             Err(failed) => return Err(SecretError::of(name, &failed)),
         };
-        let stdout = String::from_utf8(ran.stdout).map_err(|_| SecretError::NotText {
+        let stdout = String::from_utf8(ran.stdout).map_err(|_| SecretError::Unread {
             name: name.to_owned(),
         })?;
         Ok(stdout
@@ -179,6 +238,59 @@ impl Secretspec {
             .map(str::trim)
             .filter(|last| !last.is_empty())
             .map(Secret::new))
+    }
+}
+
+/// A non-empty value, trimmed.
+fn given(env_value: Option<&str>) -> Option<&str> {
+    env_value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// `secretspec check --json`'s report: each declared name's status, never a value.
+#[derive(Debug, serde::Deserialize)]
+struct Report {
+    secrets: Vec<Reported>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Reported {
+    name: String,
+    status: Status,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Status {
+    Resolved,
+    MissingOptional,
+    MissingRequired,
+    /// Neither set nor missing.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Report {
+    /// The report from the first line that opens it: some providers print a banner first, as
+    /// `get`'s last-line reading allows for.
+    fn in_(stdout: &[u8]) -> Option<Self> {
+        let at = stdout
+            .iter()
+            .enumerate()
+            .find(|&(at, byte)| *byte == b'{' && (at == 0 || stdout[at - 1] == b'\n'))?
+            .0;
+        serde_json::from_slice(&stdout[at..]).ok()
+    }
+
+    /// As `get` answers `name`: a name the report does not hold is one the store does not find.
+    fn answer(&self, name: &str) -> Answer {
+        self.secrets
+            .iter()
+            .find(|reported| reported.name == name)
+            .map_or(Answer::Missing, |reported| match reported.status {
+                Status::Resolved => Answer::Set,
+                Status::MissingOptional | Status::MissingRequired => Answer::Missing,
+                Status::Unknown => Answer::Failed,
+            })
     }
 }
 
@@ -204,8 +316,8 @@ pub enum SecretError {
         exit: Exit,
         refusal: Refusal,
     },
-    #[error("the secret store answered for {name} with bytes that are not text")]
-    NotText { name: String },
+    #[error("the secret store's answer for {name} did not read")]
+    Unread { name: String },
     #[error("the secret store was started for {name} and could not be waited on")]
     Lost { name: String },
     #[error("the secret store was stopped before it answered for {name}")]
@@ -310,7 +422,7 @@ impl SecretError {
             | Self::Spawn { .. }
             | Self::NoSpec { .. }
             | Self::Undeclared { .. }
-            | Self::NotText { .. }
+            | Self::Unread { .. }
             | Self::Lost { .. } => SecretState::Failed,
         }
     }
@@ -338,7 +450,7 @@ impl SecretError {
             Self::Undeclared { .. } => {
                 "repair the state directory (can this user write its secretspec files?)"
             }
-            Self::NotText { .. } | Self::Lost { .. } => {
+            Self::Unread { .. } | Self::Lost { .. } => {
                 "repair the secret store (does secretspec answer at a terminal?)"
             }
         }
@@ -770,6 +882,86 @@ mod tests {
         assert_eq!(state(&found), SecretState::Failed);
     }
 
+    /// The store asked name by name, as every reading was before [`Secretspec::snapshot`].
+    struct EachName<'a>(&'a Secretspec);
+
+    impl suzatary_core::secrets::Secrets for EachName<'_> {
+        fn secret_state(&self, settable: &Settable) -> SecretState {
+            state(&self.0.get(settable.name(), "test"))
+        }
+        fn mail_grants(
+            &self,
+            _: &suzatary_core::mail::account::MailAccount,
+        ) -> suzatary_core::secrets::MailGrants {
+            suzatary_core::secrets::MailGrants::default()
+        }
+        fn google_grant(
+            &self,
+            _: &suzatary_core::mail::address::EmailAddress,
+        ) -> suzatary_core::google::Held {
+            suzatary_core::google::Held::NotSignedIn
+        }
+    }
+
+    /// Law (which cards are filed rests on it): one `check --json` reads every name as `get`
+    /// reads each, on every kind of answer, a whole store failing included, and runs the store
+    /// once where `get` runs it once per name. Its status words are secretspec 0.21.1's, as a
+    /// `pass` store printed them: `resolved`, `missing_optional`, and `missing_required`, which
+    /// exits 1 and still reports.
+    #[test]
+    fn one_check_reads_what_each_get_reads_in_one_run() {
+        const SET: &str = "PLUGIN_ICS_TEST_SET";
+        const UNSET: &str = "PLUGIN_ICS_TEST_UNSET";
+        const REQUIRED: &str = "PLUGIN_ICS_TEST_REQUIRED";
+        let declared = derived(&[SET, UNSET, REQUIRED]);
+        let names: Vec<Settable> = [SET, UNSET, REQUIRED]
+            .map(|name| Settable::mint(&declared, name).expect("declared"))
+            .to_vec();
+        let answering = format!(
+            "case \"$1\" in\n\
+             get) case \"$2\" in {SET}) echo hunter2;; *) echo \"Error: Secret '$2' not found\" >&2; exit 1;; esac;;\n\
+             check) printf '{{\"secrets\": [\
+               {{\"name\": \"{SET}\", \"status\": \"resolved\"}},\
+               {{\"name\": \"{UNSET}\", \"status\": \"missing_optional\"}},\
+               {{\"name\": \"{REQUIRED}\", \"status\": \"missing_required\"}}]}}'; exit 1;;\n\
+             esac"
+        );
+        let bannered = format!("echo 'Using the pass provider'\n{answering}");
+        for (store, script, timeout) in [
+            ("answering", answering.as_str(), Duration::from_secs(5)),
+            (
+                "locked",
+                "echo 'gpg: decryption failed: No secret key' >&2; exit 2",
+                Duration::from_secs(5),
+            ),
+            (
+                "unparsed",
+                "echo 'Error: failed to parse .env at line 3' >&2; exit 1",
+                Duration::from_secs(5),
+            ),
+            ("silent", "sleep 5", Duration::from_millis(200)),
+            ("bannered", &bannered, Duration::from_secs(5)),
+        ] {
+            let (dir, spec) = fake(
+                &format!("echo run >> \"$(dirname \"$0\")/runs\"\n{script}"),
+                timeout,
+            );
+            let runs = || {
+                std::fs::read_to_string(dir.path().join("runs"))
+                    .map_or(0, |runs| runs.lines().count())
+            };
+            let each = suzatary_core::secrets::Snapshot::each(&EachName(&spec), &names);
+            let before = runs();
+            assert_eq!(spec.snapshot(&names, "test"), each, "{store}");
+            assert_eq!(runs() - before, 1, "{store}: one run of the store");
+            assert_eq!(
+                spec.snapshot(&[], "test"),
+                suzatary_core::secrets::Snapshot::of(Ok(std::collections::BTreeMap::new()))
+            );
+            assert_eq!(runs() - before, 1, "{store}: no run for no name");
+        }
+    }
+
     #[test]
     fn a_secret_never_prints_its_value() {
         let secret = Secret::new("hunter2-do-not-print-me");
@@ -867,7 +1059,7 @@ mod tests {
                 exit: Exit::Code(1),
                 refusal: Refusal::Unparsed,
             },
-            SecretError::NotText { name: name() },
+            SecretError::Unread { name: name() },
             SecretError::Lost { name: name() },
             SecretError::Stopped { name: name() },
         ] {

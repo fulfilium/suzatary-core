@@ -22,7 +22,7 @@ use crate::timings::{Phase, timed};
 use suzatary_base::refusal::Refusal;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_memory::secretary::texts::Naming;
-use suzatary_store::store::{Doc, Gets, Prodrome, Reads};
+use suzatary_store::store::{Gets, Lists, Prodrome, Reads};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
 pub(crate) const COMPACTOR: &str = "compactor";
@@ -42,7 +42,7 @@ pub struct Digests<'a> {
     /// What was said of each node, by the node's name; never a summary's words.
     pub history: &'a dyn Prodrome<DigestEvent>,
     /// Each summary's words, by the name its event gives them.
-    pub texts: &'a dyn Doc<TextName, Text<Line>>,
+    pub texts: &'a dyn Lists<TextName, Text<Line>>,
     /// The conversations, every line a leaf.
     pub lines: Conversations<'a>,
     /// Whose retraction or erasure is believed: the deployment's writers

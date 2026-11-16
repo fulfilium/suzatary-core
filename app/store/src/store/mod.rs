@@ -24,7 +24,7 @@ mod recording;
 mod reentrant;
 mod signing;
 
-pub use doc::{Doc, Gets};
+pub use doc::{Doc, Gets, Lists};
 pub use error::{Rule, Shut, StoreError};
 pub use graph::Graph;
 pub use hold::{Hold, InMemoryHold, Once};

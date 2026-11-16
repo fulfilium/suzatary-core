@@ -22,7 +22,7 @@ use suzatary_memory::secretary::memory_event::{self, MemoryEvent};
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_memory::secretary::texts;
 use suzatary_memory::secretary::two_phase::TwoPhase;
-use suzatary_store::store::{Doc, Gets, Prodrome, Reads, WriteLock};
+use suzatary_store::store::{Gets, Lists, Prodrome, Reads, WriteLock};
 
 /// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
 #[derive(Clone, Copy)]
@@ -30,7 +30,7 @@ pub struct Memories<'a> {
     /// What was remembered and forgotten, by id; never a fact's words.
     pub history: &'a dyn Prodrome<MemoryEvent>,
     /// The words of each standing fact and remember card, by the name that gives them.
-    pub texts: &'a dyn Doc<TextName, Text<Fact>>,
+    pub texts: &'a dyn Lists<TextName, Text<Fact>>,
     /// The inbox, whose remember cards name their words in [`Memories::texts`].
     pub cards: &'a dyn Prodrome<InboxEvent>,
     pub entropy: &'a dyn Entropy,
@@ -412,8 +412,8 @@ impl Held<'_> {
         })
     }
 
-    /// Delete every text that something names and nothing live names, reading every naming first;
-    /// deleting one already gone succeeds. Answers how many it deleted or found gone.
+    /// Delete every held text that something names and nothing live names, reading every naming
+    /// first. Answers how many it deleted, so a second sweep over the same stores answers 0.
     ///
     /// Asked under the hold, so nothing can come to name a text between the reading and the
     /// deletion; it reads every store whole or deletes nothing, since an object left out may be
@@ -439,26 +439,31 @@ impl Held<'_> {
         })
     }
 
-    /// Delete the dead texts of `which`, every naming of them read first.
+    /// Delete the dead texts of `which` its store holds, every naming of them read first, and
+    /// answer how many.
     fn dead(&self, which: Texts) -> Result<usize, Refusal> {
         use crate::parts::part;
         let memories = &self.memories;
-        let dead = match which {
-            Texts::Facts => texts::dead([
-                part("facts", || memories.reads().history())?.naming(),
-                part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
-            ]),
-            Texts::Summaries => {
-                texts::dead([part("summaries", || memories.digests.reads().naming())?])
-            }
+        let gone = match which {
+            Texts::Facts => held_dead(
+                [
+                    part("facts", || memories.reads().history())?.naming(),
+                    part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
+                ],
+                part("held", || memories.texts.held()),
+            ),
+            Texts::Summaries => held_dead(
+                [part("summaries", || memories.digests.reads().naming())?],
+                part("held", || memories.digests.texts.held()),
+            ),
         };
-        for name in &dead {
+        for name in &gone {
             part("delete", || match which {
                 Texts::Facts => memories.texts.remove(name),
                 Texts::Summaries => memories.digests.texts.remove(name),
             })?;
         }
-        Ok(dead.len())
+        Ok(gone.len())
     }
 
     /// Erase from its conversation what every forgotten fact's writing provably copied, and offer
@@ -557,6 +562,24 @@ impl Held<'_> {
 }
 
 /// A sweep after a write that could not run: said, and left to the next sweep.
+/// The dead texts of `namings` among those `held`. A store that cannot say what it holds is asked
+/// to remove every dead name, as before it could list: removing a name that is not there
+/// succeeds, so the listing can make a sweep cheaper and never make it delete less.
+fn held_dead<T>(
+    namings: impl IntoIterator<Item = texts::Naming<T>>,
+    held: Result<std::collections::BTreeSet<TextName>, suzatary_store::store::StoreError>,
+) -> std::collections::BTreeSet<TextName> {
+    match held {
+        Ok(held) => texts::gone(namings, &held),
+        Err(unlisted) => {
+            tracing::warn!(
+                "the sweep removes every dead name: its store did not list ({unlisted})"
+            );
+            texts::dead(namings)
+        }
+    }
+}
+
 fn refused_sweep(refused: &Refusal) {
     tracing::warn!(
         refused = refused.message(),
@@ -674,7 +697,7 @@ mod tests {
     use crate::secretary::inbox_event::InboxEvent;
     use crate::stores::InMemory;
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_store::store::{InMemoryDoc, Reads};
+    use suzatary_store::store::{Doc as _, InMemoryDoc, Reads};
 
     /// Each salt one more than the last.
     #[derive(Default)]
@@ -959,5 +982,13 @@ mod tests {
         }
         assert_eq!(memories.sweep().expect("sweeps"), 1);
         assert!(texts.keys().is_empty(), "read again, the dead text goes");
+        assert_eq!(
+            memories.sweep().expect("sweeps"),
+            0,
+            "and the same sweep again says 0"
+        );
+        for half in [Texts::Facts, Texts::Summaries] {
+            assert_eq!(memories.sweep_only(half).expect("sweeps"), 0);
+        }
     }
 }

@@ -3,25 +3,35 @@
 //!
 //! [`Doc`]: suzatary_store::store::Doc
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use suzatary_base::capability::Entropy;
 use suzatary_memory::secretary::salted_text::{Text, TextName, Words};
+use suzatary_store::store::{Doc, Gets, Lists, StoreError};
 
 use crate::docs::{DocCodec, Docs};
+use crate::present::Present as _;
 
-/// Salted words of one kind, by name.
-pub type Texts<T> = Docs<TextName, Text<T>>;
+#[derive(Debug, Clone)]
+pub struct Texts<T: 'static> {
+    dir: PathBuf,
+    docs: Docs<TextName, Text<T>>,
+}
 
 impl<T: Words + 'static> Texts<T> {
     /// The texts under `dir`, made on the first write.
     #[must_use]
     pub fn open(dir: PathBuf) -> Self {
-        Docs::new(
-            "texts",
-            move |name: &TextName| dir.join(name.as_str()),
-            Self::CODEC,
-        )
+        let under = dir.clone();
+        Self {
+            docs: Docs::new(
+                "texts",
+                move |name: &TextName| under.join(name.as_str()),
+                Self::CODEC,
+            ),
+            dir,
+        }
     }
 
     /// The name is the bytes' digest, and the bytes' words go through [`Words::read`].
@@ -35,6 +45,49 @@ impl<T: Words + 'static> Texts<T> {
         },
         parse: |name, bytes| Ok(Text::parse(name, &bytes)),
     };
+}
+
+impl<T: Sync + 'static> Gets<TextName, Text<T>> for Texts<T> {
+    fn get(&self, name: &TextName) -> Result<Option<Text<T>>, StoreError> {
+        self.docs.get(name)
+    }
+}
+
+impl<T: Sync + 'static> Doc<TextName, Text<T>> for Texts<T> {
+    fn set(&self, name: &TextName, text: &Text<T>) -> Result<(), StoreError> {
+        self.docs.set(name, text)
+    }
+
+    fn remove(&self, name: &TextName) -> Result<(), StoreError> {
+        self.docs.remove(name)
+    }
+}
+
+/// A write's temporary is not named as a text is, so it is not listed.
+impl<T: Sync + 'static> Lists<TextName, Text<T>> for Texts<T> {
+    fn held(&self) -> Result<BTreeSet<TextName>, StoreError> {
+        let unreadable = |failed: &std::io::Error| {
+            StoreError::unreadable("texts", format!("{}: {failed}", self.dir.display()))
+        };
+        let Some(entries) = std::fs::read_dir(&self.dir)
+            .present()
+            .map_err(|failed| unreadable(&failed))?
+        else {
+            return Ok(BTreeSet::new());
+        };
+        let mut held = BTreeSet::new();
+        for entry in entries {
+            let entry = entry.map_err(|failed| unreadable(&failed))?;
+            if let Some(name) = entry
+                .file_name()
+                .to_str()
+                .and_then(|name| TextName::new(name).ok())
+            {
+                held.insert(name);
+            }
+        }
+        Ok(held)
+    }
 }
 
 /// Bytes from the system's generator.
@@ -52,7 +105,6 @@ impl Entropy for SystemEntropy {
 mod tests {
     use suzatary_base::capability::SALT_BYTES;
     use suzatary_memory::secretary::memory::Fact;
-    use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;
 
@@ -71,9 +123,19 @@ mod tests {
             .expect("the store exists")
             .collect();
         assert_eq!(files.len(), 1, "one file, no temporaries left behind");
+        std::fs::write(dir.path().join("texts").join(".tmp-a-write"), b"").expect("a temporary");
+        assert_eq!(store.held().expect("lists"), BTreeSet::from([name.clone()]));
+        std::fs::remove_file(dir.path().join("texts").join(".tmp-a-write")).expect("gone");
         store.remove(&name).expect("removed");
         store.remove(&name).expect("removing nothing succeeds");
         assert_eq!(store.get(&name).expect("reads"), None);
+        assert!(store.held().expect("lists").is_empty());
+        assert!(
+            Texts::<Fact>::open(dir.path().join("never-written"))
+                .held()
+                .expect("a store never written holds nothing")
+                .is_empty()
+        );
         assert_eq!(
             std::fs::read_dir(dir.path().join("texts"))
                 .expect("the store exists")
