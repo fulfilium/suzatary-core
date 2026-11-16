@@ -54,6 +54,7 @@ fn deployment() -> Deployment {
             .collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
+        upkeep: None,
         zone: suzatary_base::zone::Zone::UTC,
     }
 }

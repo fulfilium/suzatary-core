@@ -23,7 +23,7 @@ export namespace aside {
   export type Presses = { readonly [key: string]: Press }
 
   export const placement = (a: app.App): Placement => {
-    const at = nav.activeFor(app.route(a), a.chain)
+    const at = nav.activeFor(app.route(a))
     if (!a.wide || at === "secretary") return { type: "Absent" }
     const r = referenceInView(app.screen(a), a.chain)
     return { type: "Beside", page: r.type === "one" ? { type: "One", key: print(r.reference), reference: r.reference } : { type: "Many", key: at } }

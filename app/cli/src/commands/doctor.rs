@@ -107,6 +107,14 @@ fn print_persona(persona: &suzatary_base::persona::Persona) {
     );
 }
 
+/// `[upkeep]`, as the line doctor and the server's startup print.
+pub(crate) fn upkeep_line(upkeep: Option<&suzatary_base::chains::ChainName>) -> String {
+    upkeep.map_or_else(
+        || "none: no [upkeep] chain, so the box files no todo about itself".to_owned(),
+        |chain| format!("{chain}: the box files its own todos there"),
+    )
+}
+
 fn notmuch_config_line(config: Option<&Path>) -> String {
     config.map_or_else(
         || "none — mail search refuses (no ambient fallback)".to_owned(),
@@ -151,6 +159,10 @@ fn deployment(path: &Path) {
                 );
             }
             println!("  (* is the first chain: the bare /api paths and an unflagged verb)");
+            println!(
+                "  upkeep    {}",
+                upkeep_line(read.deployment.upkeep.as_ref())
+            );
             println!("  dist      {}", read.serving.dist.display());
             println!("  briefings {}", read.serving.briefings.display());
             println!("  tls       {}", read.serving.tls_dir.display());

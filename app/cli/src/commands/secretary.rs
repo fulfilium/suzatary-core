@@ -2023,19 +2023,9 @@ fn unasked(
     chains: &[suzatary_core::secretary::Bound<'_>],
     id: &ConversationId,
 ) {
-    let categories: Vec<&str> = instance
-        .deployment
-        .categories
-        .keys()
-        .map(String::as_str)
-        .collect();
-    if let Err(refusal) = suzatary_core::secretary::mail_health::propose_persistent(
-        chains,
-        instance.deployment.project().name.as_str(),
-        &categories,
-        instance.deployment.zone,
-        id,
-    ) {
+    if let Err(refusal) =
+        suzatary_core::secretary::mail_health::propose_persistent(chains, &instance.deployment, id)
+    {
         eprintln!(
             "secretary: the mail health proposal was refused: {}",
             refusal.message()

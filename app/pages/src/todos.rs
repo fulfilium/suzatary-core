@@ -36,15 +36,14 @@ use crate::todoparts::{
 };
 use crate::zone::{day_ms, ms as ms_of};
 
-/// The chain the project's own work is on: its list is titled Project.
-const PROJECT: &str = "suzatary";
-
 /// Which chain's list, and when it was opened.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "TodosFlags")]
 pub struct Flags {
     pub context: Context,
     pub chain: String,
+    /// The list's title, the tab's word for the chain: "Todos" on the first chain.
+    pub title: String,
     /// When it was opened, in epoch milliseconds.
     #[ts(type = "number")]
     pub now: i64,
@@ -619,6 +618,7 @@ enum Pane {
 pub struct Model {
     context: Context,
     chain: String,
+    title: String,
     now: i64,
     fold: Option<Folded>,
     unsent: Unsents,
@@ -743,6 +743,7 @@ impl Model {
         let m = Model {
             context: f.context,
             chain: f.chain,
+            title: f.title,
             now: f.now,
             fold: None,
             unsent: Unsents::default(),
@@ -1440,11 +1441,7 @@ impl Model {
             self.sheet.open_on(r.shared.clone());
             out.extend(self.raise());
             out.push(Effect::Replace {
-                href: if self.chain == PROJECT {
-                    "#/project".to_owned()
-                } else {
-                    To::Todos.href()
-                },
+                href: To::Todos.href(),
             });
         }
         self.route = r;
@@ -2134,11 +2131,6 @@ impl Model {
 
     fn head(&self) -> Vec<Node<Msg>> {
         let said = self.filter.narrowing().join(" · ");
-        let title = if self.chain == PROJECT {
-            "Project"
-        } else {
-            "Todos"
-        };
         let attention = match &self.grown {
             Drawn::Tree(t, ..) => Some(
                 t.nodes()
@@ -2164,7 +2156,7 @@ impl Model {
         });
         vec![
             view! { Div "titlerow" [
-                view! { H1 {Class => if self.chain == PROJECT { "pagetitle" } else { "pagetitle destination" }} [title] },
+                view! { H1 "pagetitle destination" [self.title.clone()] },
                 view! { Button "findbtn" {Type => "button", AriaControls => "finder", AriaExpanded => if self.find == Find::Open { "true" } else { "false" }, AriaLabel => if said.is_empty() { "search, filter and group".to_owned() } else { format!("search, filter and group: {said}") }} @click(Msg::Find) [
                     mark(crate::part::Mark::Search),
                     view! { Span "findsaid" [said.clone()] },
@@ -2401,6 +2393,7 @@ mod tests {
                 categories: Vec::new(),
             },
             chain: "life".to_owned(),
+            title: "Todos".to_owned(),
             now: 0,
         })
         .0

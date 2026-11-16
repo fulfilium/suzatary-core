@@ -2535,6 +2535,56 @@ fn train_publish_never_skips_on_a_check_that_could_not_run() {
     }
 }
 
+/// The release fixture's instance file: `{data}` and `{key}` are filled in. Its upkeep chain is a
+/// third chain, `ops`, so a filer that spelled the project chain's name would miss it.
+const RELEASE_INSTANCE: &str = r#"repo = "{data}"
+[signatures]
+root = "{key}"
+[[chains]]
+name = "life"
+events = "events"
+untrusted = ["triage"]
+actors = ["assistant", "ada", "triage"]
+owner = "ada"
+[[chains]]
+name = "suzatary"
+events = "events-suzatary"
+untrusted = ["triage"]
+actors = ["assistant", "ada", "triage"]
+owner = "ada"
+[[chains]]
+name = "ops"
+events = "events-ops"
+untrusted = ["triage"]
+actors = ["assistant", "ada", "triage"]
+owner = "ada"
+[upkeep]
+chain = "ops"
+[web]
+viewers = ["someone@example.com"]
+app_url = "https://example.invalid"
+[web.act_as]
+"someone@example.com" = "ada"
+[web.serving]
+host = "127.0.0.1"
+port = 8790
+tls_dir = "tls"
+dist = "dist"
+briefings = "briefings"
+[categories]
+project = 0
+[mail]
+root = "mail"
+state = "state.json"
+notmuch = "notmuch"
+mbsyncrc = "mbsyncrc"
+heartbeat = "triage-heartbeat"
+[[mail.accounts]]
+email = "someone@example.com"
+subdir = "someone"
+sync = "gmail"
+"#;
+
 /// The project chain a release reads, under `data`: `suzatarytwo` composing three items, one
 /// done; and the instance naming it, as `SUZATARY_INSTANCE` names the box's.
 fn a_release_deployment(data: &Path) -> PathBuf {
@@ -2586,53 +2636,10 @@ fn a_release_deployment(data: &Path) -> PathBuf {
         suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
     }
     let path = data.join("instance.toml");
-    std::fs::write(
-        &path,
-        format!(
-            r#"repo = "{data}"
-[signatures]
-root = "{key}"
-[[chains]]
-name = "life"
-events = "events"
-untrusted = ["triage"]
-actors = ["assistant", "ada", "triage"]
-owner = "ada"
-[[chains]]
-name = "suzatary"
-events = "events-suzatary"
-untrusted = ["triage"]
-actors = ["assistant", "ada", "triage"]
-owner = "ada"
-[web]
-viewers = ["someone@example.com"]
-app_url = "https://example.invalid"
-[web.act_as]
-"someone@example.com" = "ada"
-[web.serving]
-host = "127.0.0.1"
-port = 8790
-tls_dir = "tls"
-dist = "dist"
-briefings = "briefings"
-[categories]
-project = 0
-[mail]
-root = "mail"
-state = "state.json"
-notmuch = "notmuch"
-mbsyncrc = "mbsyncrc"
-heartbeat = "triage-heartbeat"
-[[mail.accounts]]
-email = "someone@example.com"
-subdir = "someone"
-sync = "gmail"
-"#,
-            data = data.display(),
-            key = suzatary_core::cast::keys::root().as_str(),
-        ),
-    )
-    .expect("an instance file");
+    let file = RELEASE_INSTANCE
+        .replace("{data}", &data.display().to_string())
+        .replace("{key}", suzatary_core::cast::keys::root().as_str());
+    std::fs::write(&path, file).expect("an instance file");
     path
 }
 
@@ -3364,10 +3371,10 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
 }
 
 impl Train {
-    /// The todos the nightly gate filed on the fixture's project chain, by id.
-    fn nightly_todos(data: &Path) -> BTreeSet<String> {
+    /// The todos the nightly gate filed on the fixture's chain stored at `events`, by id.
+    fn nightly_todos_in(data: &Path, events: &str) -> BTreeSet<String> {
         suzatary_record::record::EventStore::new(
-            data.join("events-suzatary"),
+            data.join(events),
             prodrome_core::policy::Untrusted::none(),
         )
         .events()
@@ -3383,6 +3390,11 @@ impl Train {
             _ => None,
         })
         .collect()
+    }
+
+    /// The todos the nightly gate filed on the fixture's upkeep chain, `ops`, by id.
+    fn nightly_todos(data: &Path) -> BTreeSet<String> {
+        Self::nightly_todos_in(data, "events-ops")
     }
 }
 
@@ -3411,8 +3423,9 @@ fn train_nightly_gates_master_whole_and_files_nothing_when_green() {
     assert!(Train::nightly_todos(&data).is_empty());
 }
 
-/// A red night runs both halves whatever the first says, files one todo for the tree on the
-/// project chain naming the failing steps, and files it once however many nights find it red.
+/// A red night runs both halves whatever the first says, files one todo for the tree naming the
+/// failing steps on the upkeep chain and on no other (THE ROUTING BOUNDARY), and files it once
+/// however many nights find it red.
 #[test]
 fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
     let t = Train::new("nightly-red");
@@ -3434,13 +3447,49 @@ fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
         BTreeSet::from([format!("nightly{tree}")])
     );
     assert!(
-        text(&out.stderr).contains(&format!("filed todo:suzatary/nightly{tree} for stub")),
+        text(&out.stderr).contains(&format!("filed todo:ops/nightly{tree} for stub")),
         "{}",
         text(&out.stderr)
     );
+    for other in ["events", "events-suzatary"] {
+        assert!(
+            Train::nightly_todos_in(&data, other).is_empty(),
+            "nothing on {other}"
+        );
+    }
     let again = t.train_with(&["nightly"], &env);
     assert!(!again.status.success());
     assert_eq!(Train::nightly_todos(&data).len(), 1, "filed once");
+}
+
+/// With no `[upkeep]`, a red night files nothing anywhere, says so, and still fails.
+#[test]
+fn train_nightly_files_nothing_without_an_upkeep_chain() {
+    let t = Train::new("nightly-upkeep");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let file = std::fs::read_to_string(&instance).expect("the instance");
+    std::fs::write(&instance, file.replace("[upkeep]\nchain = \"ops\"\n", "")).expect("rewritten");
+    t.master_moves(&[("broken", "x\n")]);
+    let unfiled = t.train_with(&["nightly"], &env);
+    assert!(
+        !unfiled.status.success(),
+        "a red night fails with nowhere to file"
+    );
+    assert!(
+        text(&unfiled.stderr).contains("names no [upkeep] chain, so no todo is filed"),
+        "{}",
+        text(&unfiled.stderr)
+    );
+    for chain in ["events", "events-suzatary", "events-ops"] {
+        assert!(
+            Train::nightly_todos_in(&data, chain).is_empty(),
+            "nothing on {chain}"
+        );
+    }
 }
 
 /// The nightly gate waits for a running train and runs once its lock is free, where a train

@@ -94,12 +94,10 @@ export namespace app {
   // How a new place was reached; a step that wrote no place leaves it.
   const via = (a: App, b: App, again: boolean): App => (b.log === a.log || b.again === again ? b : { ...b, again })
 
-  // A new place closes the sheet; a list pins the chain its destination names.
+  // A new place closes the sheet.
   const placed = (a: App, log: routelog.Log, wide: boolean): App => {
     const moved = !routelog.same(routelog.route(log), route(a))
-    const next = log === a.log && wide === a.wide ? a : { ...a, log, wide, more: a.more && !moved }
-    const s = screenFor(routelog.route(log), wide)
-    return s.type === "todos" && s.chain !== "" ? pin(next, s.chain) : next
+    return log === a.log && wide === a.wide ? a : { ...a, log, wide, more: a.more && !moved }
   }
 
   // The writer named again keeps what its key was read to be; anyone else is who the box says.

@@ -13,7 +13,7 @@ mod roots;
 pub use chain_dir::{ChainDir, ChainDirs};
 pub use edits::{InstanceEdits, editing};
 pub(crate) use file::Signatures;
-pub(crate) use file::{Chain, File, Web};
+pub(crate) use file::{Chain, File, Upkeep, Web};
 pub use file::{Mail, Secretary, Serving, Triage};
 pub use local::Local;
 pub use plugins::Plugins;
@@ -464,6 +464,17 @@ impl Instance {
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())
             .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
         let coding = file.coding;
+        let upkeep = file.upkeep.map(|Upkeep { chain }| chain);
+        if let Some(chain) = &upkeep
+            && policies.get(chain.as_str()).is_none()
+        {
+            bail!(
+                "{}: [upkeep] chain {:?} is not a chain this instance serves — it serves {}",
+                path.display(),
+                chain.as_str(),
+                policies.names().join(", ")
+            );
+        }
         let (notify, sender) = file.notify.map_or((None, None), |section| {
             (NonEmpty::of(section.channels), section.fcm_sender)
         });
@@ -498,6 +509,7 @@ impl Instance {
             categories: file.categories,
             app_url: file.web.app_url.trim_end_matches('/').to_owned(),
             coding,
+            upkeep,
             zone: file.persona.zone,
         };
         writers_checked(path, &deployment)?;
@@ -706,6 +718,10 @@ sent_folder = "Sent Items"
             Some("ada")
         );
         assert_eq!(instance.mail.accounts.accounts().len(), 1);
+        assert_eq!(
+            instance.deployment.upkeep, None,
+            "no [upkeep], no chain to file on"
+        );
         assert_eq!(instance.notify, None);
         let _ = std::fs::remove_file(&path);
     }
@@ -715,6 +731,15 @@ sent_folder = "Sent Items"
         let sample = repo_root().join("instance.sample.toml");
         let instance = Instance::read(&sample, &env()).expect("the committed sample parses");
         assert_eq!(instance.notify, None);
+        assert_eq!(
+            instance
+                .deployment
+                .upkeep
+                .as_ref()
+                .map(suzatary_base::chains::ChainName::as_str),
+            Some("suzatary"),
+            "a new deployment files its own repairs on its second chain"
+        );
     }
 
     /// The home is a file, so even root cannot write under it.
@@ -848,6 +873,11 @@ sent_folder = "Sent Items"
                 "bad-reserve",
                 format!("{GOOD}\n[secretary]\nreserve = 1.5\n"),
                 &["reserve"],
+            ),
+            (
+                "unserved-upkeep",
+                format!("{GOOD}\n[upkeep]\nchain = \"ops\"\n"),
+                &["[upkeep] chain \"ops\"", "it serves life, suzatary"],
             ),
         ] {
             let path = write(&text, tag);

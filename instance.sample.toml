@@ -9,8 +9,8 @@
 #
 # `[[chains]]` IS AN ARRAY WHOSE ORDER IS MEANING: the first is what every
 # verb with no `--chain` and the bare `/api/...` paths mean, so your life
-# stays first. Anything about the system itself (a failing sync, a verb to
-# fix) goes to `suzatary`.
+# stays first. `[upkeep]` names the chain the box files its own repairs on
+# (a failing sync, an expiring token).
 repo = "."
 data = "."
 
@@ -95,6 +95,9 @@ aliases = "secretary-topic-aliases"
 name = "Ada"
 city = "London"
 zone = "Europe/London"
+
+[upkeep]
+chain = "suzatary"
 
 [signatures]
 root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"

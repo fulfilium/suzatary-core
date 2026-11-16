@@ -11,7 +11,7 @@ use prodrome_core::event::Actor;
 
 use crate::connect::{Coding, RoutineId};
 use suzatary_base::capability::Login;
-use suzatary_base::chains::{ChainPolicy, Chains};
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::refusal::Refusal;
 
 /// This deployment, as the application reads it.
@@ -35,6 +35,9 @@ pub struct Deployment {
     pub app_url: String,
     /// `[coding]`, when this deployment starts coding sessions; `None` refuses a tap on one.
     pub coding: Option<Coding>,
+    /// `[upkeep] chain`: the one chain the box files todos about itself on, served by this
+    /// deployment; `None` files none.
+    pub upkeep: Option<ChainName>,
     /// The owner's zone, `[persona]`'s: where every day the deployment reads is read.
     pub zone: suzatary_base::zone::Zone,
 }
@@ -128,13 +131,6 @@ impl Deployment {
             )))
         }
     }
-
-    /// This project's own chain: second in the instance file's order of meaning, or the only
-    /// one a deployment of one chain has.
-    #[must_use]
-    pub fn project(&self) -> &ChainPolicy {
-        self.chains.iter().nth(1).unwrap_or(self.chains.first())
-    }
 }
 
 #[cfg(test)]
@@ -166,6 +162,7 @@ mod tests {
             categories: [("home".to_owned(), 3)].into_iter().collect(),
             app_url: "https://example.test".to_owned(),
             coding: None,
+            upkeep: None,
             zone: suzatary_base::zone::Zone::UTC,
         }
     }

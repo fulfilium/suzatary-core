@@ -51,7 +51,7 @@ be right rather than to be visited. RETIRE means its reason has gone.
 | **Todo** (detail) | DAILY | One todo: what it says, what to do, why that number, what it rests on, what happened to it. Every act the chain allows. | A page about the evaluator. The arithmetic is below the fold, under a disclosure, in prose first. |
 | **Inbox** | DAILY | Everything waiting on his tap and nothing else: held batches, proposed emails, proposed changesets. Badge = count. Empty most days now that the secretary reviews. | A feed. If it is not waiting on HIM it does not belong here. |
 | **Secretary** | DAILY | Conversations, the morning brief at the top of them, and Ask one tap away from anywhere. Proposals are made here and answered here or in the Inbox — same tap. | A chat that replaces todos. Every conversation should be trying to end in a proposal or a todo. |
-| **Project** | WEEKLY (his) / DAILY (the agents') | The second chain, same shape as Todos: the roadmap and the issues the system files about itself. | A different UI. It is Todos pointed at another store, and `#/project` calls `setChain`. |
+| **Which list** | WEEKLY | The chain picker in More: every chain the box serves, each the same Todos list over its own store, the upkeep chain among them. | A destination per chain. A chain is a setting of the list, not a page. |
 | **Mail** | REFERENCE | The corpus the agent read, reachable FROM a todo's source and a secretary's reference. Read-only by design. | A mail client. Search and threads stay; composing never arrives, because sending is a tap on a proposal. |
 | **Briefings** | RETIRED (2026-09-13) | Saved daily files from the era when the assistant session wrote them. The mechanism retired 2026-09-11; the entry left the sheet on the 13th. | A destination. The files and `#/briefings` stay served, linked from About and from Secretary as the archive. |
 | **About** | RARE | What the app claims about itself — one evaluator, on two machines — verbatim from the footer that stood under every page; the theme control; the archive link. | A settings page. Theme is its only control and the rest is prose that had to live somewhere. |
@@ -319,10 +319,8 @@ Written down so the rejection is a fact and not a memory.
 - **A settings page.** Theme goes to About (audit finding 6). Nothing else here
   is a preference: the deployment is `instance.toml`, and the phone has no
   configuration of its own beyond the replica it holds.
-- **A second chain switcher.** `Project` is a destination and the segmented
-  control in the sheet is for a third chain. What is still to decide is what
-  the control reads while Project is active (audit finding 5) — not whether
-  there should be two.
+- **A second chain switcher.** The picker in the sheet reaches every list; no
+  chain has a destination of its own.
 - **A service worker for data.** Rejected on 2026-09-04 and still: a cached
   shell serving an old fold silently would put a number on screen with no
   provenance, and naming the staleness is the design. Since 2026-09-27 a worker

@@ -36,6 +36,7 @@ fn deployment() -> Deployment {
         categories: [("home".to_owned(), 1)].into_iter().collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
+        upkeep: None,
         zone: suzatary_base::zone::Zone::UTC,
     }
 }

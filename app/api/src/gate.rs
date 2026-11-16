@@ -230,6 +230,7 @@ mod tests {
             categories: BTreeMap::from([("home".to_owned(), 3)]),
             app_url: "https://example.test".to_owned(),
             coding: None,
+            upkeep: None,
             zone: suzatary_base::zone::Zone::UTC,
         }
     }

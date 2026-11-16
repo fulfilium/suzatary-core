@@ -16,7 +16,7 @@ import d from "./wire/decoder";
 import stream from "./algebra/stream";
 import bfcache from "./app/bfcache";
 import payload from "./wire/generated/payload";
-import { remember } from "./app/chain";
+import { listTitle, remember } from "./app/chain";
 import type stores from "./prodrome/stores";
 import once from "./algebra/once";
 import program from "./pages/program";
@@ -261,6 +261,8 @@ function draw(a: app.App): void {
     idle(() => void time.date(a.zone, time.now()));
   } else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)) || was.wide !== a.wide)
     go(a, moved, true, !moved && a.again && hrefOf(app.route(was)) !== hrefOf(app.route(a)));
+  // The served chains land after the first paint, and the list's title is drawn from them.
+  else if (app.screen(a).type === "todos" && listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) go(a, true, false, true);
 }
 
 // Before the rest of startup, so a failure in any of it reaches the box.

@@ -19,10 +19,10 @@ use prodrome_core::fpl::Outcome;
 pub use block::Shown;
 pub use verified::render_verified;
 
-/// The four constructors a block may call. `decision` (something the owner is
-/// asked to settle) is a kind like the others, under the same law, rather than a
-/// second vocabulary beside this one.
-pub const KINDS: &[&str] = &["todo", "ekaTodo", "suzateryTodo", "decision"];
+/// The constructors a new block may call; a stored block of another name still reads and
+/// draws. `decision` (something the owner is asked to settle) is a kind like the others, under
+/// the same law, rather than a second vocabulary beside this one.
+pub const KINDS: &[&str] = &["todo", "ekaTodo", "decision"];
 
 /// The kinds that file under the category their name begins with (`<category>Todo`), so a
 /// record of one never carries a category of its own. A stored constructor names its

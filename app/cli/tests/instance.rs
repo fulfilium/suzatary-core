@@ -115,6 +115,9 @@ fcm_sender = "100000000000"
 [coding]
 routine = "trig_01fake"
 repo = "bmabsout/Suzatary"
+
+[upkeep]
+chain = "suzatary"
 "#;
 
 /// Each fact the binary read, one `name = value` line each.
@@ -184,6 +187,7 @@ fn printed(instance: &Instance) -> String {
         format!("{:?}", instance.settables.names()),
     );
     line("deployment.coding", format!("{:?}", deployment.coding));
+    line("deployment.upkeep", format!("{:?}", deployment.upkeep));
     let serving = &instance.serving;
     line("serving.host", serving.host.clone());
     line("serving.port", serving.port.to_string());
@@ -474,6 +478,11 @@ const REFUSALS: &[(&str, &str, &str)] = &[
         "a coding repo of another account",
         "trig_01fake\"\nrepo = \"bmabsout/Suzatary\"",
         "trig_01fake\"\nrepo = \"someorg/Suzatary\"",
+    ),
+    (
+        "an upkeep chain the instance does not serve",
+        "[upkeep]\nchain = \"suzatary\"",
+        "[upkeep]\nchain = \"ops\"",
     ),
     (
         "a secretary repo of another account",

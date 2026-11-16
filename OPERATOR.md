@@ -33,14 +33,15 @@ with nothing in it that sends, so a send verb would not compile. Same for
 ## Which list a todo goes in (`chain`)
 
 **There are two, and choosing between them is the first thing you decide about
-a todo.** `instance.toml` names them and `suzatary doctor` prints them:
+a todo.** `instance.toml` names them, and `context` names the second as
+`authoring.upkeep_chain`:
 
 - **`life`** — {{persona.name}}'s own todos. THE DEFAULT: every verb with no `chain`
   argument writes here, and every read with none reads here.
-- **`suzatary`** — this system's own work: the roadmap, the audit's findings,
-  and the issues you notice about the system while you run.
+- **the upkeep chain** — this system's own work: the issues you notice about the
+  system while you run (none when `upkeep_chain` is null).
 
-**THE RULE, in as many words. Anything about the SYSTEM goes to `suzatary`: a
+**THE RULE, in as many words. Anything about the SYSTEM goes to the upkeep chain: a
 gate that failed, a test that is flaky, a sync that broke, a verb that needs
 fixing, a site that stopped building. Anything about {{persona.name}}'s LIFE
 goes to `life`: mail, deadlines, people, money, travel, the things a secretary
@@ -55,10 +56,8 @@ where you learned it, not what it is about.
 
 Every writing verb (`todo_add`, `todo_update`, `record`) and every read that
 takes a todo (`todo_show`, `list_open_todos`, `evaluate`) takes an optional
-`chain`. Leave it out and you are writing to `life`; pass `chain="suzatary"`
-and you are writing to the project's own store. **A todo lives in ONE of them**
-— there is no moving one afterwards, because the Prodrome does not rewrite, so
-decide before you author.
+`chain`. **A todo lives in ONE of them** — there is no moving one afterwards,
+because the Prodrome does not rewrite, so decide before you author.
 
 Everything else is shared. A card you file is against one chain, never both.
 
@@ -123,10 +122,10 @@ no file to open, create or look for.
       todo_id="<short-unique-id>",   # you choose; pass it to `mark --todo-id`
       body="The action, written plainly.",
       rationale="why this priority",
-      kind="suzateryTodo",           # one of the kinds `context` lists
+      kind="todo",                   # one of the kinds `context` lists
       category="home",               # one of instance.toml's [categories]
       priority="35%",
-      chain="life",                  # life (default) | suzatary — see above
+      chain="life",                  # life (default) | the upkeep chain — see above
       why="A message asks for it.",  # REQUIRED: what the card is for
       sources="mail:<hash>",         # REQUIRED: what it rests on
       detail="", waiting_on=None,
@@ -134,10 +133,10 @@ no file to open, create or look for.
     )
 
 `chain` and `kind` are DIFFERENT QUESTIONS and it is easy to conflate them.
-`kind` is how a todo RENDERS (`suzateryTodo` sets its own category); `chain` is
-WHICH STORE it lives in. A `suzateryTodo` about a bill {{persona.name}} owes this project
-is still his and goes to `life`; a plain `todo` about a broken test is the
-system's and goes to `suzatary`.
+`kind` is how a todo RENDERS (`ekaTodo` sets its own category); `chain` is
+WHICH STORE it lives in. A `todo` about a bill {{persona.name}} owes this project
+is still his and goes to `life`; a `todo` about a broken test is the system's
+and goes to the upkeep chain.
 
 **YOUR WRITES ARE CARDS, ONE CARD PER TODO.**
 Nothing you write goes on a chain. `todo_add`, `todo_update` and `record` each
@@ -189,9 +188,9 @@ refused with its line and column if it fails, so backslash a literal `\$ \@ \#
 - `rationale` — REQUIRED, and the one thing no mechanism can recover: why this
   fulfillment and not another. It is recorded as data on the priority, not as a
   floating comment, so a later run can read it back.
-- `kind` — one of the kinds `context` lists: `todo` (full control),
-  `suzateryTodo` (exec suzatery), and a kind named `<category>Todo`, which
-  files under that category and takes none of its own.
+- `kind` — one of the kinds `context` lists: `todo` (full control), and a kind
+  named `<category>Todo`, which files under that category and takes none of its
+  own.
 - `category` — drives which section it lands in; pick the right context.
 - `priority` — a FULFILLMENT, 0–100%: LOW = unfulfilled = urgent (red, top);
   HIGH = satisfied = someday (blue). See the deadline rule below.

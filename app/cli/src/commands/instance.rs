@@ -25,6 +25,10 @@ enum Action {
         /// The key, dotted as TOML spells one: `web.app_url`, `chains.0.name`,
         /// `web.act_as."her@example.test"`.
         key: Key,
+        /// A key the file does not hold prints nothing and succeeds, so a script tells an absent
+        /// key from a file it cannot read by the exit status alone.
+        #[arg(long)]
+        or_empty: bool,
     },
     /// Write one value, keeping every other byte of the file, and only when the box would read
     /// the result: a key holding a number or a boolean takes one, anything else a string.
@@ -72,27 +76,33 @@ impl std::fmt::Display for Key {
 /// A key the file does not hold, a file the box would not read, or a write refused.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.action {
-        Action::Get { key } => {
-            println!("{}", get(path, key)?);
+        Action::Get { key, or_empty } => {
+            match (get(path, key)?, *or_empty) {
+                (Some(value), _) => println!("{value}"),
+                (None, true) => {}
+                (None, false) => bail!("{} holds no {key}", path.display()),
+            }
             Ok(())
         }
         Action::Set { key, value } => set(path, key, value, &Env::read()?),
     }
 }
 
-/// The value at `key` in the file at `path`, as `get` prints it.
+/// The value at `key` in the file at `path`, as `get` prints it; `None` where the file holds no
+/// such key.
 ///
 /// # Errors
-/// The file not TOML, or `key` naming no value in it.
-pub fn get(path: &Path, key: &Key) -> anyhow::Result<String> {
+/// The file unreadable or not TOML, or `key` naming a table.
+pub fn get(path: &Path, key: &Key) -> anyhow::Result<Option<String>> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading the instance file {}", path.display()))?;
     let root = toml::Value::Table(
         toml::from_str(&text)
             .with_context(|| format!("parsing the instance file {}", path.display()))?,
     );
-    let value = at(&root, key).with_context(|| format!("{} holds no {key}", path.display()))?;
-    shown(value).with_context(|| format!("{key} in {}", path.display()))
+    at(&root, key)
+        .map(|value| shown(value).with_context(|| format!("{key} in {}", path.display())))
+        .transpose()
 }
 
 /// The value at `key` beneath `root`.
@@ -235,7 +245,7 @@ mod tests {
             let parsed = at(&read, &key).unwrap_or_else(|| panic!("the reader dropped {key}"));
             assert_eq!(parsed, &written, "{key}");
             assert_eq!(
-                get(&path, &key).expect("get answers"),
+                get(&path, &key).expect("get answers").expect("held"),
                 shown(parsed).expect("a value"),
                 "{key}"
             );
@@ -256,7 +266,12 @@ mod tests {
 
         set(&path, &key("web.serving.port"), "8788", &env).expect("a number");
         let after = std::fs::read_to_string(&path).expect("reads");
-        assert_eq!(get(&path, &key("web.serving.port")).expect("reads"), "8788");
+        assert_eq!(
+            get(&path, &key("web.serving.port"))
+                .expect("reads")
+                .as_deref(),
+            Some("8788")
+        );
         let changed: Vec<_> = before
             .lines()
             .zip(after.lines())
@@ -272,7 +287,12 @@ mod tests {
         set(&path, &key("coding.repo"), "bmabsout/Suzatary", &env)
             .expect_err("a [coding] with no routine");
         set(&path, &key("persona.city"), "Paris", &env).expect("a string");
-        assert_eq!(get(&path, &key("persona.city")).expect("reads"), "Paris");
+        assert_eq!(
+            get(&path, &key("persona.city"))
+                .expect("reads")
+                .expect("held"),
+            "Paris"
+        );
     }
 
     #[test]
@@ -316,9 +336,16 @@ mod tests {
         tapping.join().expect("the tap ends");
         assert_eq!(finished.iter().take(2).count(), 2);
         let key = |text: &str| text.parse::<Key>().expect("a key");
-        assert_eq!(get(&path, &key("persona.city")).expect("reads"), "Paris");
         assert_eq!(
-            get(&path, &key("secretary.web_allow.0")).expect("reads"),
+            get(&path, &key("persona.city"))
+                .expect("reads")
+                .expect("held"),
+            "Paris"
+        );
+        assert_eq!(
+            get(&path, &key("secretary.web_allow.0"))
+                .expect("reads")
+                .expect("held"),
             "*.gov.uk"
         );
     }

@@ -1497,6 +1497,12 @@ fn watch_from_now_on(
     rest: Vec<Chained>,
 ) {
     crate::commands::coding::spawn_polling(instance, stores.conversations, &state.workers);
+    let upkeep = crate::commands::doctor::upkeep_line(instance.deployment.upkeep.as_ref());
+    if instance.deployment.upkeep.is_some() {
+        tracing::info!("serve: upkeep {upkeep}");
+    } else {
+        tracing::warn!("serve: upkeep {upkeep}");
+    }
     tokio::spawn(patches::sweeping(
         state.clone(),
         interpreters::mirrors(instance),

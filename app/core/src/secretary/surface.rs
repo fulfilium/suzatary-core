@@ -48,7 +48,7 @@ impl Holds for SecretarySurface {
         now. Read it before you author, so you update an existing todo instead \
         of making a second one.\n\n\
         ⚠️ IT IS ONE CHAIN'S LIST. Leaving `chain` out reads the owner's own todos; \
-        `chain=\"suzatary\"` reads this system's own work.",
+        the `upkeep_chain` `context` names reads this system's own work.",
         git_diff_summary: "What is uncommitted in the working tree, as a summary. Orientation about \
         the state of the box, never something to act on.",
         history: "Every event on the chain that mentions this todo, oldest first, one \
@@ -92,7 +92,7 @@ impl Holds for SecretarySurface {
         `source_*`: all four or none — the message this came from. `date`: which day it is \
         created on, YYYY-MM-DD.\n\
         `chain` picks the store: leave it out for the owner's life, \
-        `chain=\"suzatary\"` for this system's own work.\n\n\
+        pass the `upkeep_chain` `context` names for this system's own work.\n\n\
         `parent` makes it a SUBTODO: the parent's price gains a reference to \
         it in the same write, so the parent's value composes this one's; \
         without `category` it takes the parent's.",

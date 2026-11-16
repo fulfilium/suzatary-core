@@ -152,7 +152,8 @@ export function route(r: Rng): Route {
     case 0:
       return { type: "todos" };
     case 1:
-      return { type: "project" };
+      // A link saved before the project page went: no route parses it.
+      return { type: "unknown", hash: "#/project" };
     case 2:
       return { type: "add", text: r.string(`${SLUG} `, r.int(20)), title: r.string(SLUG, r.int(10)) };
     case 3:

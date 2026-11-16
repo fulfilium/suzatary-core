@@ -1,5 +1,6 @@
-//! A token that expires is a todo on the system's chain, due on its expiry day. Its id names the
-//! token and the day, so rereading an expiry adds nothing; a later expiry completes the earlier todo.
+//! A token that expires is a todo on the upkeep chain (`[upkeep]`), due on its expiry day. Its id
+//! names the token and the day, so rereading an expiry adds nothing; a later expiry completes the
+//! earlier todo.
 
 use prodrome_core::event::Hash;
 
@@ -7,7 +8,6 @@ use crate::deployment::Deployment;
 use crate::secretary::changes::{self, Act, Changeset, Provenance};
 use crate::settings::{Help, Settable};
 use suzatary_base::capability::Datetime;
-use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::Refusal;
 use suzatary_record::todo::{Deadline, Price, TodoFields};
 
@@ -79,16 +79,20 @@ pub fn acts(
     Ok(acts)
 }
 
-/// Write [`acts`] to the chain as the secretary.
+/// Write [`acts`] to the upkeep chain as the secretary; a deployment with no `[upkeep]` writes
+/// nothing.
 ///
 /// # Errors
-/// As [`acts`], and `gate::apply`'s refusals.
+/// As [`acts`], [`crate::secretary::upkeep`]'s, and `gate::apply`'s refusals.
 pub fn write(
-    caps: &crate::secretary::Secretary<'_>,
-    policy: &ChainPolicy,
+    chains: &[crate::secretary::Bound<'_>],
     deployment: &Deployment,
     expiring: &[(Settable, crate::health::Instant)],
 ) -> Result<Vec<Hash>, Refusal> {
+    let Some(bound) = crate::secretary::upkeep(chains, deployment)? else {
+        return Ok(Vec::new());
+    };
+    let (caps, policy) = (&bound.caps, bound.policy);
     let at = caps.clock.now();
     let nodes = caps.chain.nodes()?;
     let settings = format!("{}/#/settings", deployment.app_url.trim_end_matches('/'));

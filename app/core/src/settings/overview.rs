@@ -1067,6 +1067,7 @@ pub(crate) mod tests {
                 categories: BTreeMap::new(),
                 app_url: "https://example.test".to_owned(),
                 coding: self.coding(),
+                upkeep: None,
                 zone: suzatary_base::zone::Zone::UTC,
             }
         }

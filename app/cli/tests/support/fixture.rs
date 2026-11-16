@@ -1145,6 +1145,9 @@ fn instance_file(
             routine: "trig01fixture".parse().expect("a routine id"),
             repo: "bmabsout/fixture".parse().expect("a repository"),
         }),
+        upkeep: Some(crate::instance::Upkeep {
+            chain: ChainName::new("suzatary").expect("a slug"),
+        }),
         cache: None,
         plugins: Vec::new(),
         signatures: crate::instance::Signatures {

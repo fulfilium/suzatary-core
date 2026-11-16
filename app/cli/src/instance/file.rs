@@ -46,6 +46,9 @@ pub(crate) struct File {
     /// Absent, a tap on a coding session is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) coding: Option<Coding>,
+    /// Absent, the box files no todo about itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) upkeep: Option<Upkeep>,
     /// The cache tier's root under the data root (`cache` when absent): box-local, never pushed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cache: Option<PathBuf>,
@@ -55,6 +58,14 @@ pub(crate) struct File {
     pub(crate) plugins: Vec<Manifest>,
     /// The deployment's root (SPEC law 42), required; `suzatary init` writes it.
     pub(crate) signatures: Signatures,
+}
+
+/// `[upkeep]`: the chain the box files its own repairs on (a failing mail sync, an expiring
+/// token, a red nightly gate). It must be one of `[[chains]]`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Upkeep {
+    pub(crate) chain: ChainName,
 }
 
 /// `[signatures]`: the public root key. Its seed, `SUZATARY_BOX_KEY` in secretspec, is never

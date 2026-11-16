@@ -140,10 +140,11 @@ takes a todo (`todo_show`, `list_open_todos`, `evaluate`) takes an optional
 
 - `life` — the owner's own todos. THE DEFAULT: leave `chain` out and you write
   here. Mail, deadlines, people, money, travel — the things a secretary is for.
-- `suzatary` — this system's own work: the roadmap, and the issues you notice
-  about the system while you run. Pass `chain="suzatary"`.
+- the upkeep chain — this system's own work: the issues you notice about the
+  system while you run. `context` names it as `authoring.upkeep_chain`; pass
+  that name as `chain`. When it is null, this deployment keeps no such list.
 
-THE RULE, in as many words. Anything about the SYSTEM goes to `suzatary`: a
+THE RULE, in as many words. Anything about the SYSTEM goes to the upkeep chain: a
 gate that failed, a test that is flaky, a sync that broke, a verb that needs
 fixing, a site that stopped building. Anything about THE OWNER'S LIFE goes to
 `life`. The test is who the todo is FOR. "Restart Proton Bridge —

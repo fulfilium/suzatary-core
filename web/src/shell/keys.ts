@@ -40,7 +40,6 @@ export interface KeyContext {
 const DESTINATIONS: Record<string, Route> = {
   t: { type: "todos" },
   i: { type: "inbox" },
-  p: { type: "project" },
   m: { type: "mail", query: "", account: "" },
   s: { type: "secretary", refs: [], topics: [] },
   b: { type: "briefings" },
@@ -107,7 +106,7 @@ export const SHORTCUTS: readonly { readonly keys: string; readonly what: string 
   { keys: "n", what: "add a todo" },
   { keys: "⌘K / Ctrl-K", what: "the command palette" },
   { keys: "g t / g i / g s / g b", what: "todos / inbox / secretary / briefings — the bar" },
-  { keys: "g p / g m", what: "project / mail" },
+  { keys: "g m", what: "mail" },
   { keys: "Escape", what: "close a sheet, or clear the cursor" },
   { keys: "?", what: "this list" },
 ];

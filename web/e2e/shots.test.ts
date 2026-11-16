@@ -27,7 +27,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, SIGNED_POST, suite, topicRounds, WIDE, WRITE_BASE } from "./harness";
+import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, SIGNED_POST, suite, switchChain, topicRounds, WIDE, WRITE_BASE } from "./harness";
 import type { Page } from "./cdp";
 import cast from "../test/cast";
 
@@ -66,12 +66,9 @@ interface Shot {
 }
 
 /**
- * ⚠️ THE ORDER MATTERS, and only for one reason: `#/project` PINS the second
- * chain and every page after it is then about that chain. The fixture's second
- * chain holds one resolved todo and no open work, so a list shot taken after
- * it would be a photograph of an empty list — a true picture of the wrong
- * question. So the chain-pinning destination goes last, and `more` (which
- * opens on `#/`) pins the first chain back on its way past.
+ * ⚠️ THE ORDER MATTERS, and only for one reason: `otherchain` picks the second chain,
+ * and every page after it would then be about that chain, whose fixture holds no open work.
+ * So it goes last, and its `undo` picks the first chain back.
  */
 const SHOTS: readonly Shot[] = [
   { name: "list", hash: "#/", ready: `document.querySelectorAll(".tree .row").length > 0` },
@@ -489,34 +486,6 @@ const SHOTS: readonly Shot[] = [
     },
   },
   {
-    name: "project",
-    hash: "#/project",
-    ready: `document.querySelector("#view .pagetitle")?.textContent === "Project"`,
-  },
-  /**
-   * THE SHEET'S OTHER STATE (chain item `chainswitcherlies`,
-   * `docs/AUDIT-UX-2026-09-12.md` finding 5): the switcher is missing here,
-   * not merely disabled, because Project already answers "which chain" for
-   * itself. Stays right after `project` — still that chain, and `more` below
-   * pins the first one back on its way past, same as it always did.
-   */
-  {
-    name: "moreproject",
-    hash: "#/project",
-    ready: `document.querySelector("#view .pagetitle")?.textContent === "Project"`,
-    phoneOnly: true,
-    act: async (page: Page): Promise<void> => {
-      await page.evaluate(
-        `[...document.querySelectorAll(".tabbar .tab")].find((tab) => tab.textContent?.includes("More"))?.click()`,
-      );
-      await page.waitFor(`document.querySelector(".moresheet")?.hidden === false`);
-    },
-    undo: async (page: Page): Promise<void> => {
-      await page.evaluate(`document.body.click()`);
-      await page.waitFor(`document.querySelector(".moresheet")?.hidden === true`);
-    },
-  },
-  {
     name: "more",
     hash: "#/",
     ready: `document.querySelectorAll(".tree .row").length > 0`,
@@ -529,6 +498,20 @@ const SHOTS: readonly Shot[] = [
     undo: async (page: Page): Promise<void> => {
       await page.evaluate(`document.body.click()`);
       await page.waitFor(`document.querySelector(".moresheet")?.hidden === true`);
+    },
+  },
+  /** The second chain's list, reached by the chain picker in More. */
+  {
+    name: "otherchain",
+    hash: "#/",
+    ready: `document.querySelectorAll(".tree .row").length > 0`,
+    act: async (page: Page): Promise<void> => {
+      await switchChain(page, "suzatary");
+      await page.waitFor(`document.querySelector(".todospane .empty:not([hidden])") !== null`);
+    },
+    undo: async (page: Page): Promise<void> => {
+      await switchChain(page, "life");
+      await page.waitFor(`document.querySelectorAll(".tree .row").length > 0`);
     },
   },
 ];

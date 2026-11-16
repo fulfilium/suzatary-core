@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 
-import { BASE, DESKTOP, PHONE, shownTodos, suite } from "./harness";
+import { BASE, DESKTOP, PHONE, shownTodos, suite, switchChain } from "./harness";
 
 const app = await suite("destinations");
 
@@ -32,13 +32,13 @@ app.scene("every slot in the bar opens a page the router knows", async () => {
   }
 });
 
-app.scene("Project is the OTHER chain, not the same list under a new name", async () => {
+app.scene("the chain picker opens the OTHER chain's list, not the same list under a new name", async () => {
   await app.open(BASE);
   const life = await shownTodos(app.page);
   assert.ok(life.length > 0, "the first chain has todos");
 
-  await app.page.navigate(`${BASE}/#/project`);
-  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
+  await switchChain(app.page, "suzatary");
+  assert.equal(await app.page.evaluate<string>(`window.location.hash`), "#/", "a pick moves the chain, not the page");
   // The note, not a count of zero cards: a list that has not drawn yet also has none.
   await app.page.waitFor(`document.querySelector(".todospane .empty:not([hidden])") !== null`);
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".tree .row").length`), 0);
@@ -47,6 +47,14 @@ app.scene("Project is the OTHER chain, not the same list under a new name", asyn
   const said = await app.page.evaluate<string>(`document.querySelector(".todospane .empty:not([hidden])").textContent`);
   assert.match(said, /Nothing is open/, `the empty note should name the reason this list is empty: ${said}`);
   assert.equal(said.includes("filter"), false, "nobody narrowed a filter; do not tell them to widen one");
+
+  // The title names the chain the reader is on, and the pick outlives a reload.
+  const title = `document.querySelector("#view .pagetitle")?.textContent`;
+  await app.page.waitFor(`${title} === "suzatary"`);
+  await app.page.reload();
+  await app.page.waitFor(`${title} === "suzatary"`);
+  await switchChain(app.page, "life");
+  await app.page.waitFor(`${title} === "Todos"`);
 });
 
 app.scene("a page whose code arrives after the next tap is never drawn over it", async () => {
@@ -55,7 +63,7 @@ app.scene("a page whose code arrives after the next tap is never drawn over it",
   const fresh = `${BASE}/?fresh=${Date.now()}`;
   await app.page.navigate(`${fresh}#/briefings`);
   await app.page.untilHeld();
-  await app.page.navigate(`${fresh}#/project`);
+  await app.page.navigate(`${fresh}#/`);
   // The list is a Rust page too, so both wait on the module: every title drawn from the tap on is recorded.
   await app.page.evaluate(`(() => {
     const titles = (window.__titles = []);
@@ -69,10 +77,10 @@ app.scene("a page whose code arrives after the next tap is never drawn over it",
   })()`);
   await release();
   await app.page.waitFor(`performance.getEntriesByName("views:load").length > 0`);
-  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Todos"`);
   // The page waiting on the module draws, or is dropped, in the microtasks after it loads: a task later, either is done.
   await app.page.evaluate(`new Promise((done) => setTimeout(done, 0))`);
-  assert.equal(await app.page.evaluate<string>(`document.querySelector("#view .pagetitle")?.textContent ?? ""`), "Project");
+  assert.equal(await app.page.evaluate<string>(`document.querySelector("#view .pagetitle")?.textContent ?? ""`), "Todos");
   const drawn = await app.page.evaluate<string[]>(`window.__titles`);
   assert.ok(!drawn.includes("Briefings"), `the page tapped away from was never drawn: ${JSON.stringify(drawn)}`);
 });
@@ -98,7 +106,7 @@ app.scene("at 62rem the same words sit across the top, and More holds the rest",
   const rest = await app.page.evaluate<string[]>(
     `[...document.querySelectorAll(".moresheet .morelink .tablabel")].map((n) => n.textContent)`,
   );
-  assert.deepEqual(rest, ["Project", "Mail", "Calendar", "Settings", "About"]);
+  assert.deepEqual(rest, ["Mail", "Calendar", "Settings", "About"]);
   await app.page.evaluate(`document.body.click()`);
   await app.page.waitFor(`document.querySelector(".moresheet")?.hidden === true`);
   await app.resize(PHONE);

@@ -341,11 +341,11 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   frontend, `android/` the portal, `scripts/` the operator's shell, `nix/` the
   deployment, `memory/` the project's memory. New application behaviour goes
   into `app/` (→ `nopython`).
-- **THERE ARE TWO CHAINS**: `life` (the owner's todos) is FIRST, and `suzatary`
-  is the system's own work. **The routing rule**: anything about the SYSTEM (a
-  failing gate, a flaky test, a broken sync) goes to `suzatary`; anything about
-  THE OWNER'S LIFE goes to `life`. Routes take the chain as a path segment (→
-  `twochains`).
+- **THERE ARE TWO CHAINS**: `life` (the owner's todos) is FIRST, and `[upkeep]
+  chain` names the system's own work. **The routing rule**: anything about the
+  SYSTEM (a failing gate, a flaky test, a broken sync) goes to upkeep; anything
+  about THE OWNER'S LIFE goes to `life`. Routes take the chain as a path segment
+  (→ `twochains`).
 - **The Prodrome is a dependency, not a directory**, taken BY REVISION, the same
   sha in `app/Cargo.toml` and `flake.nix`. Its `SPEC.md` is the database's
   contract and its `conformance/` is FROZEN. The tab's wasm module is this

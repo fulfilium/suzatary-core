@@ -999,9 +999,10 @@ nightly_remote() {
   trap finish EXIT
 }
 
-# The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree.
+# The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree on
+# the instance's [upkeep] chain, or on none when it names none.
 report_nightly() {
-  local commit="$1" h steps=() logs=() id
+  local commit="$1" h steps=() logs=() id upkeep
   shift
   for h in "${halves[@]}"; do say "$h half: $(verdict "$h" "$commit" full)"; done
   (($#)) || { say "the nightly gate passed origin/master ${commit:0:12}"; return 0; }
@@ -1012,15 +1013,19 @@ report_nightly() {
   ((${#steps[@]})) || steps=("$@")
   id="nightly$(git rev-parse --short=8 "$commit^{tree}")"
   resolve_app origin/master
-  if "$app_bin" todo show --chain suzatary "$id" >/dev/null 2>&1; then
-    say "red: $id already names this tree's failing steps on the project chain"
+  upkeep="$("$app_bin" instance get --or-empty upkeep.chain)" \
+    || die "the nightly gate is red (${steps[*]}), and its [upkeep] chain could not be read (above)."
+  if [[ -z "$upkeep" ]]; then
+    say "red: ${steps[*]}; the instance names no [upkeep] chain, so no todo is filed"
+  elif "$app_bin" todo show --chain "$upkeep" "$id" >/dev/null 2>&1; then
+    say "red: $id already names this tree's failing steps on $upkeep"
   else
-    "$app_bin" todo add --chain suzatary --actor assistant --kind suzateryTodo --priority 55 "$id" \
+    "$app_bin" todo add --chain "$upkeep" --actor assistant --priority 55 "$id" \
       --body "The nightly gate is red on master ${commit:0:12}: ${steps[*]}." \
       --detail "The gate's logs are in ${logs[*]}." \
       --rationale "A step red on master either let a broken change land or no longer reads the data, and every later train inherits it." >&2 \
       || die "the nightly gate is red (${steps[*]}), and the todo naming it could not be filed (above). The logs are in $state/logs/."
-    say "red: filed todo:suzatary/$id for ${steps[*]}"
+    say "red: filed todo:$upkeep/$id for ${steps[*]}"
   fi
   return 1
 }

@@ -17,6 +17,7 @@ deployment.categories = {"home": 0, "work": 1}
 deployment.app_url = https://box.example.test
 instance.settables = ["CLAUDE_CODE_OAUTH_TOKEN", "FCM_SERVICE_ACCOUNT_B64", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_GRANT_HER_AT_EXAMPLE_TEST", "GOOGLE_GRANT_PRIVATE_AT_EXAMPLE_TEST", "GOOGLE_GRANT_WORK_AT_EXAMPLE_TEST", "NTFY_TOPIC", "SUZATARY_DATA_PUSH_TOKEN", "SUZATARY_REPOS_TOKEN", "SUZATARY_ROUTINE_TOKEN"]
 deployment.coding = Some(Coding { routine: RoutineId("trig_01fake"), repo: RepoName { owner: "bmabsout", name: "Suzatary" } })
+deployment.upkeep = Some(ChainName("suzatary"))
 serving.host = 100.64.0.1
 serving.port = 443
 serving.tls_dir = /var/lib/suzatary/tls
@@ -87,7 +88,7 @@ parsing the instance file <file>: TOML parse error at line 8, column 3
   |
 8 | [[nothing]]
   |   ^^^^^^^
-unknown field `nothing`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
+unknown field `nothing`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a chain name that is not a slug
@@ -330,7 +331,7 @@ parsing the instance file <file>: TOML parse error at line 104, column 3
     |
 104 | [[providers]]
     |   ^^^^^^^^^
-unknown field `providers`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
+unknown field `providers`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a model order, a table the binary does not read
@@ -338,7 +339,7 @@ parsing the instance file <file>: TOML parse error at line 104, column 2
     |
 104 | [models]
     |  ^^^^^^
-unknown field `models`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
+unknown field `models`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a reserve over one
@@ -375,6 +376,9 @@ a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 
 ## a coding repo of another account
 <file>: [coding] repo: every declared repository is in the owner's own account, but these name bmabsout, someorg
+
+## an upkeep chain the instance does not serve
+<file>: [upkeep] chain "ops" is not a chain this instance serves — it serves life, suzatary
 
 ## a secretary repo of another account
 parsing the instance file <file>: TOML parse error at line 87, column 1

@@ -545,6 +545,27 @@ pub struct Bound<'a> {
     pub policy: &'a ChainPolicy,
 }
 
+/// The chain among `chains` that the box files its own todos on: `[upkeep]`'s, or `None` when
+/// the deployment names none. Every automated filer takes its chain from here.
+///
+/// # Errors
+/// [`Refusal::internal`] when `chains` does not bind the chain `[upkeep]` names.
+pub fn upkeep<'c, 'a>(
+    chains: &'c [Bound<'a>],
+    deployment: &Deployment,
+) -> Result<Option<&'c Bound<'a>>, Refusal> {
+    deployment
+        .upkeep
+        .as_ref()
+        .map(|named| {
+            chains
+                .iter()
+                .find(|bound| bound.name == named.as_str())
+                .ok_or_else(|| Refusal::internal(format!("[upkeep] chain {named} is not bound")))
+        })
+        .transpose()
+}
+
 /// The chains a call may read, each read once ([`suzatary_signatures::chain_set::Read`]).
 #[must_use]
 pub(crate) fn chains_read(chains: &[Bound<'_>]) -> suzatary_signatures::chain_set::Read {

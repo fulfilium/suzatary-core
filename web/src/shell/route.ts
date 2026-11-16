@@ -2,7 +2,6 @@
 
 export type Route =
   | { readonly type: "todos" }
-  | { readonly type: "project" }
   // What a share target opens: the list with the add sheet up. In the fragment, so the box never sees the text.
   | { readonly type: "add"; readonly text: string; readonly title: string }
   | { readonly type: "todo"; readonly id: string }
@@ -79,8 +78,6 @@ export function parseRoute(hash: string): Route {
     case "":
     case "todos":
       return HOME;
-    case "project":
-      return { type: "project" };
     case "add":
       // A bare `#/add` is the list: what opens the sheet is having something to put in it.
       return { type: "add", text: query["text"] ?? "", title: query["title"] ?? "" };
@@ -139,8 +136,6 @@ export function hrefOf(route: Route): string {
   switch (route.type) {
     case "todos":
       return "#/";
-    case "project":
-      return "#/project";
     case "add":
       return `#/add${search({ text: route.text, title: route.title })}`;
     case "inbox":

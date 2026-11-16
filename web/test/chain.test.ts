@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_CHAIN, PROJECT_CHAIN, isChainName, remembered } from "../src/app/chain";
+import { DEFAULT_CHAIN, isChainName, remembered } from "../src/app/chain";
 import app from "../src/app/app";
 
 test("the guard admits a slug of up to 32 and refuses traversal, separators, case, length and non-strings", () => {
@@ -70,9 +70,9 @@ test("a pin moves the chain only to another slug, and a refusal leaves it where 
   const at = app.initial({ type: "inbox" }, false, DEFAULT_CHAIN);
   assert.equal(app.step(at, { type: "Pinned", chain: DEFAULT_CHAIN }), at, "the chain it is already on has not moved");
   assert.equal(app.step(at, { type: "Pinned", chain: ".." }), at, "a traversal is ignored");
-  const project = app.step(at, { type: "Pinned", chain: PROJECT_CHAIN });
-  assert.equal(project.chain, PROJECT_CHAIN);
-  assert.equal(app.apiBase(project), `/api/${PROJECT_CHAIN}`);
+  const other = app.step(at, { type: "Pinned", chain: "ops" });
+  assert.equal(other.chain, "ops");
+  assert.equal(app.apiBase(other), "/api/ops");
   // And a refusal from the second chain does not knock it back to the first.
-  assert.equal(app.step(project, { type: "Pinned", chain: "../life" }), project);
+  assert.equal(app.step(other, { type: "Pinned", chain: "../life" }), other);
 });

@@ -110,6 +110,7 @@ pub fn deployment(
         app_url: "https://example.test".to_owned(),
         // A scene needing a settable builds its own, so no other test gets one free.
         coding: None,
+        upkeep: None,
         zone: suzatary_base::zone::Zone::UTC,
     }
 }

@@ -248,6 +248,7 @@ pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
         categories: std::collections::BTreeMap::new(),
         app_url: "https://example.invalid".to_owned(),
         coding: None,
+        upkeep: None,
         zone: suzatary_base::zone::Zone::UTC,
     };
     crate::agent::context(

@@ -3,13 +3,12 @@
 // `paint` puts it in the bar.
 
 import app from "../app/app";
-import { DEFAULT_CHAIN, PROJECT_CHAIN, said } from "../app/chain";
+import { said } from "../app/chain";
 import { el } from "../view/dom";
 import { focusables } from "../view/focus";
 import marks from "../view/marks";
 import type { Route } from "./route";
 import { hrefOf } from "./route";
-import address from "./address";
 import { THEMES, type Theme, labelFor, setTheme } from "../app/theme";
 
 export namespace nav {
@@ -20,8 +19,6 @@ export namespace nav {
     readonly route: Route;
     readonly label: string;
     readonly part: Part;
-    /** The chain this destination needs served; absent means always. */
-    readonly needsChain?: string;
   }
 
   /** Every destination: the bar's four, then the sheet's. */
@@ -30,7 +27,6 @@ export namespace nav {
     { route: { type: "inbox" }, label: "Inbox", part: "Bar" },
     { route: { type: "secretary", refs: [], topics: [] }, label: "Secretary", part: "Bar" },
     { route: { type: "briefings" }, label: "Briefing", part: "Bar" },
-    { route: { type: "project" }, label: "Project", part: "Places", needsChain: PROJECT_CHAIN },
     { route: { type: "mail", query: "", account: "" }, label: "Mail", part: "Places" },
     { route: { type: "calendar", date: "" }, label: "Calendar", part: "Places" },
     { route: { type: "settings" }, label: "Settings", part: "App" },
@@ -44,19 +40,18 @@ export namespace nav {
   export const OVERFLOW: readonly Tab[] = [...PLACES, ...APP];
 
   export type Link = { label: string; href: string; active: boolean; count: number };
-  // `name` is the chain, `label` the owner's word for it; `to` is the list a pick lands on when the reader is on a
-  // list, whose destination IS its chain.
-  export type Pick = { name: string; label: string; here: boolean; to: Route | null };
+  // `name` is the chain, `label` the owner's word for it.
+  export type Pick = { name: string; label: string; here: boolean };
   export type More = { on: boolean; open: boolean; picks: Pick[]; places: Link[]; app: Link[]; theme: Theme };
   export type View = { tabs: Link[]; more: More };
 
   /** The word the bar lights: where the reader is in the app, not the exact hash. */
-  export function activeFor(route: Route, onChain = ""): string {
+  export function activeFor(route: Route): string {
     switch (route.type) {
-      // A todo and a share light the list they came from, and the two lists are two chains.
+      // A todo and a share light the list they came from.
       case "todo":
       case "add":
-        return onChain === PROJECT_CHAIN ? "project" : "todos";
+        return "todos";
       case "message":
       case "thread":
         return "mail";
@@ -71,40 +66,27 @@ export namespace nav {
     }
   }
 
-  export function inOverflow(route: Route, onChain = ""): boolean {
-    return OVERFLOW.some((tab) => tab.route.type === activeFor(route, onChain));
+  export function inOverflow(route: Route): boolean {
+    return OVERFLOW.some((tab) => tab.route.type === activeFor(route));
   }
 
-  const listRouteFor = (name: string): Route | null =>
-    name === DEFAULT_CHAIN ? { type: "todos" } : name === PROJECT_CHAIN ? { type: "project" } : null;
-
   export const of = (a: app.App, theme: Theme): View => {
-    const here = activeFor(app.route(a), a.chain);
+    const here = activeFor(app.route(a));
     const link = (tab: Tab): Link => ({
       label: tab.label,
       href: hrefOf(tab.route),
       active: tab.route.type === here,
       count: tab.route.type === "inbox" ? (a.waiting?.count ?? 0) : 0,
     });
-    const offered = (tabs: readonly Tab[]) => tabs.filter((t) => t.needsChain === undefined || a.served.includes(t.needsChain));
-    // A destination that is about one chain hides the switcher: it would only disagree with the page.
-    const chainSpecific = DESTINATIONS.some((t) => t.route.type === here && t.needsChain !== undefined);
-    const onAList = here === "todos";
-    const picks =
-      a.served.length < 2 || chainSpecific
-        ? []
-        : a.served.map((name) => {
-            const to = onAList ? listRouteFor(name) : null;
-            return { name, label: said(name), here: name === a.chain, to };
-          });
+    const picks = a.served.length < 2 ? [] : a.served.map((name) => ({ name, label: said(name), here: name === a.chain }));
     return {
-      tabs: offered(TABS).map(link),
+      tabs: TABS.map(link),
       more: {
-        on: inOverflow(app.route(a), a.chain),
+        on: inOverflow(app.route(a)),
         open: a.more,
         picks,
-        places: offered(PLACES).map(link),
-        app: offered(APP).map(link),
+        places: PLACES.map(link),
+        app: APP.map(link),
         theme,
       },
     };
@@ -164,9 +146,7 @@ export namespace nav {
                 "aria-pressed": p.here ? "true" : "false",
                 onclick: (event: Event) => {
                   event.stopPropagation();
-                  // On a list the pick is a route, and landing there pins the chain.
-                  if (p.to !== null) address.go(p.to);
-                  else dispatch({ type: "Pinned", chain: p.name });
+                  dispatch({ type: "Pinned", chain: p.name });
                 },
               },
               p.label,

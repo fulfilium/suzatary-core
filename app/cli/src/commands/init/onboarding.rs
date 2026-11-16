@@ -17,7 +17,7 @@ use suzatary_core::health::Refused;
 use suzatary_core::mail::account::{Authority, MailAccount, Roster};
 use suzatary_core::mail::address::EmailAddress;
 
-use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
+use crate::instance::{Chain, File, Mail, Secretary, Serving, Upkeep, Web};
 
 /// Everything `init` asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,13 +150,16 @@ pub(crate) const HEADER: &str = "\
 #
 # `[[chains]]` IS AN ARRAY WHOSE ORDER IS MEANING: the first is what every
 # verb with no `--chain` and the bare `/api/...` paths mean, so your life
-# stays first. Anything about the system itself (a failing sync, a verb to
-# fix) goes to `suzatary`.
+# stays first. `[upkeep]` names the chain the box files its own repairs on
+# (a failing sync, an expiring token).
 ";
 
 /// The two chains every deployment begins with: the person's life first, since the first is
-/// what every unscoped verb means, then the system's own work.
-pub const CHAINS: [(&str, &str); 2] = [("life", "events"), ("suzatary", "events-suzatary")];
+/// what every unscoped verb means, then the system's own work, which `[upkeep]` names.
+pub const CHAINS: [(&str, &str); 2] = [("life", "events"), (UPKEEP, "events-suzatary")];
+
+/// The chain `[upkeep]` names in a new deployment.
+const UPKEEP: &str = "suzatary";
 
 /// The categories a deployment starts with when none are named.
 pub const CATEGORIES: [&str; 5] = ["work", "study", "project", "home", "other"];
@@ -284,6 +287,9 @@ impl Onboarding {
             },
             notify: None,
             coding: None,
+            upkeep: Some(Upkeep {
+                chain: ChainName::new(UPKEEP)?,
+            }),
             cache: None,
             plugins: Vec::new(),
             signatures: crate::instance::Signatures { root: root.clone() },

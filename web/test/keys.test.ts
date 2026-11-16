@@ -58,7 +58,6 @@ test("each key means its one action in the context it lands in, and an unbound k
     ["g", IDLE, { type: "arm" }],
     ["t", armed, { type: "go", route: { type: "todos" } }],
     ["i", armed, { type: "go", route: { type: "inbox" } }],
-    ["p", armed, { type: "go", route: { type: "project" } }],
     ["m", armed, { type: "go", route: { type: "mail", query: "", account: "" } }],
     ["s", armed, { type: "go", route: { type: "secretary", refs: [], topics: [] } }],
     ["b", armed, { type: "go", route: { type: "briefings" } }],

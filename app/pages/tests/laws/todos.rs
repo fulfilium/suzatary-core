@@ -176,6 +176,7 @@ proptest! {
         page_laws::<todos::Todos>(|| todos::Flags {
             context: Context { wide, ..context(writes) },
             chain: "life".to_owned(),
+            title: "Todos".to_owned(),
             now: 1_788_000_000_000,
         }, &msgs);
     }
@@ -191,7 +192,7 @@ proptest! {
             behind: None,
         }));
         let unsent = |todos: Value| held(todos::Hold::Unsent, json!({"todos": todos, "refused": [], "blocked": 0, "stranded": 0, "losses": [], "waiting": 0}));
-        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags { context: context(true), chain: "life".to_owned(), now: 1_788_000_000_000 });
+        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags { context: context(true), chain: "life".to_owned(), title: "Todos".to_owned(), now: 1_788_000_000_000 });
         page.send(held(todos::Hold::Fold, json!({"entries": [done], "at": "2026-09-04T12:00:00"})));
         page.send(unsent(json!({"a": "Sending"})));
         let taken = format!("{:?}", page.send(unsent(json!({}))).effects);
@@ -208,6 +209,7 @@ proptest! {
         let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
             context: Context { wide: true, ..context(true) },
             chain: "life".to_owned(),
+            title: "Todos".to_owned(),
             now: 1_788_000_000_000,
         });
         page.send(route("shownnow"));
@@ -236,6 +238,7 @@ proptest! {
         let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
             context: context(true),
             chain: "life".to_owned(),
+            title: "Todos".to_owned(),
             now: 1_788_000_000_000,
         });
         let (_, asked) = page.step(held(todos::Hold::Fold, json!({"entries": [entry], "at": "2026-08-29T10:00:00"})));

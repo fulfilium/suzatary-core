@@ -9,6 +9,7 @@ import reading from "../algebra/reading"
 import program from "./program"
 import time from "../app/time"
 import app from "../app/app"
+import { listTitle } from "../app/chain"
 
 export namespace pages {
   type Screens = { readonly [K in Screen["type"]]: Extract<Screen, { readonly type: K }> }
@@ -23,10 +24,11 @@ export namespace pages {
   })
 
   export const table: Table = {
-    // The list stays mounted for every list screen of its chain: a todo selected in its pane, a share into its sheet.
-    todos: s => {
-      const chain = s.chain === "" ? app.now().chain : s.chain
-      return program.mount("TodosPage", { chain }, { absorbs: next => next.type === "todos" && (next.chain === "" || next.chain === chain) })
+    // The list stays mounted for every list screen: a todo selected in its pane, a share into its sheet. A switch of
+    // chain mounts it again (`main.ts`).
+    todos: () => {
+      const a = app.now()
+      return program.mount("TodosPage", { chain: a.chain, title: listTitle(a.chain, a.served) }, { absorbs: next => next.type === "todos" })
     },
     inbox: s => program.mount("InboxPage", { open: s.open ?? "" }),
     todo: s => program.mount("TodoPage", { chain: app.now().chain, id: s.id, pushed: true }),

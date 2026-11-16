@@ -216,6 +216,7 @@ mod tests {
             categories: std::collections::BTreeMap::new(),
             app_url: "https://example.test".to_owned(),
             coding: None,
+            upkeep: None,
             zone: suzatary_base::zone::Zone::UTC,
         };
         let caps = Secretary {

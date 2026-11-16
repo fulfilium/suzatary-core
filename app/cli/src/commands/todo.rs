@@ -76,7 +76,7 @@ pub enum Act {
         /// Why this priority, in one sentence.
         #[arg(long)]
         rationale: String,
-        /// `todo` (needs a category), `ekaTodo` or `suzateryTodo`.
+        /// `todo`, which takes a category, or `ekaTodo`, which sets its own.
         #[arg(long, default_value = "todo")]
         kind: String,
         /// One of this deployment's categories.

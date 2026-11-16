@@ -519,35 +519,19 @@ export async function untilReplica(page: Page, chain = "life", timeout = 20000):
  * replica, the stream and `me` — and setting the value behind the app's back
  * would skip exactly the code under test.
  *
- * ⚠️ THE SWITCHER IS NOT ALWAYS THERE (chain item `chainswitcherlies`,
- * `docs/AUDIT-UX-2026-09-12.md` finding 5): `nav.ts` drops the row while a
- * chain-specific destination — Project, today — is active, because a control
- * that disagrees with the page it sits on is worse than no control. Both
- * chains this deployment serves have a destination of their own (`life` is
- * Todos, `suzatary` is Project), so the tap lands on the bar's own tab when
- * the sheet has no row for it, and either way the PAGE TITLE — not the
- * switcher's own `active` class, which the tap into Project just erased —
- * is what says the switch landed.
+ * The picker names a chain as `said` in `web/src/app/chain.ts` does, and the pick it lights is
+ * what says the switch landed.
  */
 export async function switchChain(page: Page, name: string): Promise<void> {
-  const label = name === "suzatary" ? "Project" : "Todos";
-  const said = name === "suzatary" ? "This app's work" : "My todos";
-  const hasSwitcher = await page.evaluate<boolean>(`document.querySelector(".tabbar .chainpick") !== null`);
-  if (hasSwitcher) {
-    await page.evaluate(
-      `[...document.querySelectorAll(".tabbar .tab")].find((tab) => tab.textContent?.includes("More"))?.click()`,
-    );
-    await page.evaluate(
-      `[...document.querySelectorAll(".chainpick")].find((pick) => pick.textContent === ${JSON.stringify(said)})?.click()`,
-    );
-  } else {
-    await page.evaluate(
-      `[...document.querySelectorAll(".tabbar .tab")].find((tab) => tab.textContent?.includes(${JSON.stringify(
-        label,
-      )}))?.click()`,
-    );
-  }
-  await page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === ${JSON.stringify(label)}`);
+  const said = name === "life" ? "My todos" : name;
+  await page.evaluate(
+    `[...document.querySelectorAll(".tabbar .tab")].find((tab) => tab.textContent?.includes("More"))?.click()`,
+  );
+  await page.waitFor(`document.querySelector(".moresheet")?.hidden === false`);
+  await page.clickText(".moresheet .chainpick", said);
+  await page.waitFor(`document.querySelector(".chainpick.active")?.textContent === ${JSON.stringify(said)}`);
+  await page.evaluate(`document.body.click()`);
+  await page.waitFor(`document.querySelector(".moresheet")?.hidden === true`);
 }
 
 /**

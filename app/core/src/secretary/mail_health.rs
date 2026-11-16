@@ -1,10 +1,11 @@
 //! The rule over the mail health register: an account failing for more than a day proposes a
-//! todo on the project's chain, through the path every proposed changeset takes, and a tap
-//! performs it.
+//! todo on the upkeep chain (`[upkeep]`), through the path every proposed changeset takes, and a
+//! tap performs it.
 //!
 //! The act is a function of the account and the instant it last synced, so asking again asks for
 //! the same object; a new failure after a success is a new act.
 
+use crate::deployment::Deployment;
 use crate::health::SourceKey;
 use crate::health::{Instant, Reading};
 use crate::secretary::changes::{self, Act, Changeset};
@@ -51,7 +52,7 @@ pub fn act_of(zone: suzatary_base::zone::Zone, account: &str, since: Instant) ->
             rationale: "An account that does not sync hides its mail from triage until it is \
                         fixed, a real consequence within weeks."
                 .to_owned(),
-            kind: "suzateryTodo".to_owned(),
+            kind: "todo".to_owned(),
             category: String::new(),
             price: Price::Flat { percent: PERCENT },
             detail: escape_markup(&format!(
@@ -69,25 +70,22 @@ pub fn act_of(zone: suzatary_base::zone::Zone, account: &str, since: Instant) ->
 /// How long an account may fail, in days, before the box proposes a todo about it.
 const PERSISTENT: i64 = 1;
 
-/// Propose the todo for every account failing longer than a day at `now`, on
-/// the project's chain (second in the instance file's order of meaning, or the only one), in
-/// `conversation`; answers each proposal's index. An account whose todo the chain already
-/// holds proposes nothing.
+/// Propose the todo for every account failing longer than a day at `now`, on the upkeep chain,
+/// in `conversation`; answers each proposal's index. A deployment with no `[upkeep]` proposes
+/// nothing, and neither does an account whose todo the chain already holds.
 ///
 /// # Errors
 /// The register's, a chain's or the inbox's failure, and an act the chain would refuse.
 pub fn propose_persistent(
     chains: &[Bound<'_>],
-    project: &str,
-    categories: &[&str],
-    zone: suzatary_base::zone::Zone,
+    deployment: &Deployment,
     conversation: &ConversationId,
 ) -> Result<Vec<usize>, Refusal> {
-    let Some(bound) = chains.iter().find(|bound| bound.name == project) else {
-        return Err(Refusal::internal(format!(
-            "no chain named {project} is bound"
-        )));
+    let Some(bound) = super::upkeep(chains, deployment)? else {
+        return Ok(Vec::new());
     };
+    let zone = deployment.zone;
+    let categories: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
     let caps = &bound.caps;
     let now = prodrome_core::fpl::instant_of(caps.clock.now());
     let healths = caps
@@ -110,7 +108,7 @@ pub fn propose_persistent(
         if held.iter().any(|event| event.todo().as_str() == todo) {
             continue;
         }
-        let changeset = Changeset::new(project, vec![act_of(zone, account, *since)])
+        let changeset = Changeset::new(bound.name, vec![act_of(zone, account, *since)])
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
         let preview = suzatary_signatures::believed::Preview::of(caps.chain.objects()?)
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
@@ -123,7 +121,7 @@ pub fn propose_persistent(
                     zone,
                 },
                 by: WRITES_AS,
-                categories,
+                categories: &categories,
                 untrusted: &bound.policy.untrusted,
                 typeset: caps.render,
             },
@@ -184,12 +182,30 @@ mod tests {
         }
     }
 
-    fn proposed(health: &FailingFor, stores: &Stores) -> Vec<usize> {
-        let policy = suzatary_base::chains::ChainPolicy {
-            name: suzatary_base::chains::ChainName::new("suzatary").expect("a slug"),
+    /// What the rule proposes over two bound chains, `life` and `ops`, when `[upkeep]` names
+    /// `upkeep`, and the chain each card in the inbox then writes to.
+    fn proposed(
+        health: &FailingFor,
+        stores: &Stores,
+        upkeep: Option<&str>,
+    ) -> (Vec<usize>, Vec<String>) {
+        use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+        let policy = |name: &str| ChainPolicy {
+            name: ChainName::new(name).expect("a slug"),
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: std::collections::BTreeSet::new(),
             root: crate::cast::keys::root(),
+        };
+        let (life, ops) = (policy("life"), policy("ops"));
+        let deployment = Deployment {
+            viewers: std::collections::BTreeSet::new(),
+            actors: std::collections::BTreeMap::new(),
+            chains: Chains::of(vec![life.clone(), ops.clone()]).expect("two chains"),
+            categories: std::collections::BTreeMap::new(),
+            app_url: "https://example.test".to_owned(),
+            coding: None,
+            upkeep: upkeep.map(|name| ChainName::new(name).expect("a slug")),
+            zone: suzatary_base::zone::Zone::UTC,
         };
         let caps = crate::secretary::Secretary {
             health,
@@ -197,18 +213,18 @@ mod tests {
             inbox: &stores.inbox,
             ..crate::secretary::Secretary::nothing()
         };
-        propose_persistent(
-            &[Bound {
-                name: "suzatary",
-                caps,
-                policy: &policy,
-            }],
-            "suzatary",
-            &[],
-            suzatary_base::zone::Zone::UTC,
-            &stores.id,
-        )
-        .expect("an answer")
+        let chains = [&life, &ops].map(|policy| Bound {
+            name: policy.name.as_str(),
+            caps,
+            policy,
+        });
+        let indices = propose_persistent(&chains, &deployment, &stores.id).expect("an answer");
+        let inbox = crate::secretary::inbox::fold(&stores.inbox).expect("reads");
+        let written = inbox.objects().map(|object| match &object.asked.proposal {
+            Proposal::Changes(changeset) => changeset.chain().to_owned(),
+            other => panic!("the rule proposes chain acts, not {other:?}"),
+        });
+        (indices, written.collect())
     }
 
     struct Stores {
@@ -238,16 +254,22 @@ mod tests {
         stores
     }
 
-    /// A day's failure proposes one todo, asking again asks for the same one, and a failure
-    /// younger than a day proposes nothing.
+    /// A day's failure proposes one todo on the upkeep chain alone, whatever it is called (the
+    /// routing boundary), and asking again asks for the same one; a younger failure, or no
+    /// `[upkeep]`, proposes nothing.
     #[test]
-    fn a_failure_past_a_day_is_proposed_once_and_a_younger_one_not_at_all() {
-        let held = stores();
-        assert_eq!(proposed(&FailingFor(30), &held), vec![0]);
-        assert_eq!(proposed(&FailingFor(30), &held), vec![0], "the same object");
-        let inbox = crate::secretary::inbox::fold(&held.inbox).expect("reads");
-        assert_eq!(inbox.objects().count(), 1);
-
-        assert!(proposed(&FailingFor(20), &stores()).is_empty());
+    fn a_failure_past_a_day_is_proposed_once_on_the_upkeep_chain() {
+        for upkeep in ["ops", "life"] {
+            let (held, once) = (stores(), (vec![0], vec![upkeep.to_owned()]));
+            assert_eq!(proposed(&FailingFor(30), &held, Some(upkeep)), once);
+            assert_eq!(
+                proposed(&FailingFor(30), &held, Some(upkeep)),
+                once,
+                "the same object"
+            );
+        }
+        let nothing = (Vec::new(), Vec::new());
+        assert_eq!(proposed(&FailingFor(20), &stores(), Some("ops")), nothing);
+        assert_eq!(proposed(&FailingFor(30), &stores(), None), nothing);
     }
 }

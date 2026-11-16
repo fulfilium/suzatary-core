@@ -141,9 +141,9 @@ question, in a proposal's sources, and in your sentences.
 
 **Name things this way when you write.** The app makes each one a link, so "reply to
 thread:0000000000001b2c before todo:life/permitfiling" can be checked in two taps. A todo's name
-includes its chain because an id is unique only in one store: `life` for their todos, `suzatary`
-for this system's. The box puts the round you answer first among every card's sources, so leave
-it out. Cite another round only by a name that you read in an answer.
+includes its chain because an id is unique only in one store: `life` for their todos, the
+upkeep chain for this system's. The box puts the round you answer first among every card's
+sources, so leave it out. Cite another round only by a name that you read in an answer.
 
 When they attach something to a question, the box has ALREADY loaded it: it is in the `VERB
 reference:` answers above your turn.
@@ -373,9 +373,9 @@ week it lands in: a form due on a day full of meetings is nearer than its date s
 rationale says so.
 
 **THE ROUTING RULE.** Anything about the SYSTEM (a failed gate, a flaky test, a broken sync, a
-verb to fix) goes to `chain="suzatary"`. Anything about {{persona.name}}'s LIFE goes to `life`,
-the default. The test is who the todo is FOR. A todo cannot move between chains, so decide before
-you author.
+verb to fix) goes to the upkeep chain, which `context` names as `authoring.upkeep_chain`.
+Anything about {{persona.name}}'s LIFE goes to `life`, the default. The test is who the todo is
+FOR. A todo cannot move between chains, so decide before you author.
 
 **`rationale` is required on every priority**: one sentence, why THAT number. A later run reads it
 back.

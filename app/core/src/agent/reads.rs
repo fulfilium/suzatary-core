@@ -154,10 +154,10 @@ fn manual_within(manuals: &dyn Manuals, deployment: &Deployment, cap: usize) -> 
             ),
         );
     }
-    kinds.insert(
-        "suzateryTodo".into(),
-        json!("this system's own upkeep; sets its own category"),
-    );
+    let upkeep = deployment
+        .upkeep
+        .as_ref()
+        .map_or(Value::Null, |chain| json!(chain.as_str()));
     let shape = |operator: String| {
         json!({
             "constitution": "Not carried here: CLAUDE.md is already your project memory.",
@@ -165,6 +165,7 @@ fn manual_within(manuals: &dyn Manuals, deployment: &Deployment, cap: usize) -> 
             "authoring": {
                 "kinds": kinds,
                 "categories": categories,
+                "upkeep_chain": upkeep,
                 "priority": "a whole percentage like '65%'. It is a FULFILLMENT: LOW \
                              is urgent, HIGH is satisfied or someday. Sort ascending.",
                 "rationale": "required on every priority; it becomes the comment \
@@ -367,6 +368,7 @@ mod tests {
                 .collect(),
             app_url: "https://example.invalid/".to_owned(),
             coding: None,
+            upkeep: None,
             zone: suzatary_base::zone::Zone::UTC,
         }
     }

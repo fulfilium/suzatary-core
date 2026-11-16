@@ -81,12 +81,11 @@ test("law: said twice is said once — every arm is idempotent, and a repeat ret
 
 const PLACES = ["Went", "Replaced", "Moved", "Kept", "Resized"] as const
 
-test("law: a list pins its chain, a new place closes the sheet, and only the route register's arms move the log", () => {
+test("law: a place never moves the chain, a new place closes the sheet, and only the route register's arms move the log", () => {
   forAll(300, r => {
     const a = walk(r)
     const b = app.step(a, arms[r.pick(PLACES)](r))
-    const s = app.screen(b)
-    if (s.type === "todos" && s.chain !== "") assert.equal(b.chain, s.chain)
+    assert.equal(b.chain, a.chain, "only a pick moves the chain")
     if (hrefOf(app.route(b)) !== hrefOf(app.route(a))) assert.equal(b.more, false)
     for (const tag of TAGS.filter(t => !(PLACES as readonly string[]).includes(t))) assert.equal(app.step(a, arms[tag](r)).log, a.log, tag)
   })

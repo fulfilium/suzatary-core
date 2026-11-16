@@ -1,6 +1,5 @@
 // Where a hash lands, given the width: a todo is a pane beside the list at 62rem and up, a page below it.
 
-import { DEFAULT_CHAIN, PROJECT_CHAIN } from "../app/chain"
 import share from "../todo/share"
 import type { Route } from "./route"
 
@@ -10,21 +9,20 @@ export const WIDE_MIN_PX = 992
 export const isWide = (width: number): boolean => width >= WIDE_MIN_PX
 
 /**
- * What is mounted: the route itself, except the list. `#/`, `#/project`, `#/add` and a todo on a
- * wide screen are all the list, carrying the todo in the pane, the chain the destination pins ("" pins
- * none, so a todo opened from either list stays there) and the body the add sheet opens with.
+ * What is mounted: the route itself, except the list. `#/`, `#/add` and a todo on a wide screen are
+ * all the list of the reader's chain, carrying the todo in the pane and the body the add sheet opens
+ * with.
  */
 export type Screen =
-  | { readonly type: "todos"; readonly selected: string; readonly chain: string; readonly prefill: string }
-  | Exclude<Route, { readonly type: "todos" | "project" | "add" }>
+  | { readonly type: "todos"; readonly selected: string; readonly prefill: string }
+  | Exclude<Route, { readonly type: "todos" | "add" }>
 
-const list = (chain: string, selected = "", prefill = ""): Screen => ({ type: "todos", selected, chain, prefill })
+const list = (selected = "", prefill = ""): Screen => ({ type: "todos", selected, prefill })
 
 export const screenFor = (route: Route, wide: boolean): Screen =>
-  route.type === "todos" ? list(DEFAULT_CHAIN)
-  : route.type === "project" ? list(PROJECT_CHAIN)
-  : route.type === "add" ? list("", "", share.body(route.text, route.title))
-  : route.type === "todo" && wide ? list("", route.id)
+  route.type === "todos" ? list()
+  : route.type === "add" ? list("", share.body(route.text, route.title))
+  : route.type === "todo" && wide ? list(route.id)
   : route
 
 // "Ask the secretary" with something to ask is the default conversation, so the place written is that one and the

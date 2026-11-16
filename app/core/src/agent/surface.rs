@@ -44,8 +44,8 @@ impl Holds for TriageSurface {
         and the priority is evaluated as of right now rather than whenever a \
         document was last compiled.\n\n\
         ⚠️ IT IS ONE CHAIN'S LIST. Dedup against the chain you are about to \
-        write to: leaving `chain` out reads the owner's own todos, and \
-        `chain=\"suzatary\"` reads this system's own work. Checking one and \
+        write to: leaving `chain` out reads the owner's own todos, and the \
+        `upkeep_chain` `context` names reads this system's own work. Checking one and \
         writing to the other is how a duplicate gets made.",
         git_diff_summary: "A short --stat summary of uncommitted changes, for a final sanity check \
         before ending your session. You do not commit or push yourself — that \
@@ -76,8 +76,8 @@ impl Holds for TriageSurface {
         it happened. `todo` must be an id the chain already knows, or one an open card \
         of yours adds; an unknown id is rejected as a likely typo.\n\n\
         `chain` is WHICH STORE the todo lives in and must match the one it was \
-        authored in — leave it out for the owner's own list, pass \
-        `chain=\"suzatary\"` for this system's work.",
+        authored in — leave it out for the owner's own list, pass the \
+        `upkeep_chain` `context` names for this system's work.",
         todo_add: "Propose a new todo. Nothing is written to the chain: this files a CARD in the owner's \
         Inbox, which he taps to make the todo or answers no. A later `todo_update` or `record` \
         on the same todo joins the same card, so the Inbox holds one card for it.\n\n\
@@ -95,8 +95,8 @@ impl Holds for TriageSurface {
         `rationale`: REQUIRED — WHY this priority, in one sentence. It is \
         recorded as the comment above the number and is the only place the \
         reasoning exists.\n\
-        `kind`: 'todo' (needs `category`), 'ekaTodo' or 'suzateryTodo' (which set \
-        their own category — do not pass one).\n\
+        `kind`: 'todo' (needs `category`) or 'ekaTodo' (which sets its own \
+        category — do not pass one).\n\
         `priority`: a whole percentage like '65%'. It is a FULFILLMENT: LOW means \
         urgent, HIGH means satisfied or someday. Give exactly one of `priority`, \
         `deadline_end_date`, `recur_every_days` or `periodic_every_days`.\n\
@@ -120,9 +120,9 @@ impl Holds for TriageSurface {
         this one's; without `category` this takes the parent's.\n\
         `chain`: WHICH LIST it goes in, and this is a decision, not a detail. \
         Leave it out for the owner's own todos — mail, deadlines, people, money, \
-        travel. Pass `chain=\"suzatary\"` for this system's own work: a gate \
-        that failed, a test that is flaky, a sync that broke, a verb that needs \
-        fixing. The test is who the todo is FOR. A todo lives in ONE chain and \
+        travel. Pass the `upkeep_chain` `context` names for this system's own \
+        work: a gate that failed, a test that is flaky, a sync that broke, a verb \
+        that needs fixing; when it names none, there is no such list. The test is who the todo is FOR. A todo lives in ONE chain and \
         cannot be moved afterwards, because the Prodrome does not rewrite.",
         todo_update: "Propose changed fields on a todo that already exists. Nothing is written to the \
         chain: this files a card in the owner's Inbox, joining any open card about the same \
