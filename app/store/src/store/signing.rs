@@ -29,6 +29,9 @@ pub enum Signer {
     Refusing(String),
     /// Every append signed by this key.
     Key(Arc<Secret>),
+    /// Every append unsigned, for a store that holds no signature: a public one, which never
+    /// holds a deployment's keys.
+    Unsigned,
 }
 
 impl std::fmt::Debug for Signer {
@@ -36,6 +39,7 @@ impl std::fmt::Debug for Signer {
         match self {
             Signer::Refusing(why) => f.debug_tuple("Refusing").field(why).finish(),
             Signer::Key(key) => f.debug_tuple("Key").field(&key.public()).finish(),
+            Signer::Unsigned => f.write_str("Unsigned"),
         }
     }
 }
@@ -120,6 +124,7 @@ impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
                 sign(&self.store, key, &name)?;
                 Ok(name)
             }
+            Signer::Unsigned => self.store.append(event),
         }
     }
 

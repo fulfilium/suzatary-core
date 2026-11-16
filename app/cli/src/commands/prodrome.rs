@@ -1,12 +1,11 @@
 //! `suzatary prodrome init`: a todo store begun at a path, such as a project's roadmap.
 
-mod charter;
-
 use std::path::Path;
 
 use anyhow::{Context as _, bail};
-use charter::Charter;
 use suzatary_store::store::Reads as _;
+
+use crate::instance::charter::{self, Charter};
 
 #[derive(Debug, clap::Args)]
 pub struct Args {

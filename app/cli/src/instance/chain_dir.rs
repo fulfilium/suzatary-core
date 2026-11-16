@@ -9,8 +9,10 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::sign::PublicKey;
 use suzatary_base::chains::ChainPolicy;
 
+use super::charter::Charter;
 use super::file::Chain;
 use super::{DataRoot, RESERVED};
+use crate::commands::door::Lists;
 
 /// One chain this deployment serves: its policy and its stores, together so a
 /// chain can never be folded under another chain's trust policy.
@@ -21,12 +23,27 @@ pub struct ChainDir {
     pub events: PathBuf,
     /// Whom a command with no `--actor` acts as: on the roster and trusted.
     pub owner: Actor,
+    /// What its store's `charter.toml` says, read once with the instance.
+    pub charter: Charted,
+}
+
+/// A chain's charter, with what door 1 reads where it is public.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Charted {
+    Private,
+    Public(Lists),
 }
 
 impl ChainDir {
     /// One `[[chains]]` entry, its untrusted actors checked against its roster: an unknown name
     /// would read as configured and behave as absent.
-    fn of(path: &Path, data: &DataRoot, chain: Chain, root: &PublicKey) -> anyhow::Result<Self> {
+    fn of(
+        path: &Path,
+        data: &DataRoot,
+        chain: Chain,
+        root: &PublicKey,
+        lists: &Lists,
+    ) -> anyhow::Result<Self> {
         let roster: BTreeSet<_> = chain.actors.into_iter().collect();
         if let Some(stranger) = chain.untrusted.iter().find(|actor| !roster.contains(actor)) {
             bail!(
@@ -53,6 +70,7 @@ impl ChainDir {
                 RESERVED.join(", ")
             );
         }
+        let events = data.under(&chain.events);
         Ok(Self {
             policy: ChainPolicy {
                 name: chain.name,
@@ -60,7 +78,11 @@ impl ChainDir {
                 roster,
                 root: root.clone(),
             },
-            events: data.under(&chain.events),
+            charter: match Charter::read(&events)? {
+                Charter::Private => Charted::Private,
+                Charter::Public => Charted::Public(lists.clone()),
+            },
+            events,
             owner: chain.owner,
         })
     }
@@ -98,10 +120,11 @@ impl ChainDirs {
         data: &DataRoot,
         chains: Vec<Chain>,
         root: &PublicKey,
+        lists: &Lists,
     ) -> anyhow::Result<Self> {
         let built = chains
             .into_iter()
-            .map(|chain| ChainDir::of(path, data, chain, root))
+            .map(|chain| ChainDir::of(path, data, chain, root, lists))
             .collect::<anyhow::Result<Vec<_>>>()?;
         let mut seen: BTreeMap<&Path, String> = BTreeMap::new();
         for chain in &built {

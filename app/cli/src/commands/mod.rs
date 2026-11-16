@@ -7,6 +7,7 @@ pub mod context;
 pub mod decision;
 pub mod device;
 pub mod doctor;
+pub mod door;
 // The browser suite's fixtures: test support, compiled only under the `fixture` feature.
 #[cfg(feature = "fixture")]
 #[path = "../../tests/support/fixture.rs"]
@@ -47,9 +48,24 @@ use suzatary_record::record::EventStore;
 
 use crate::instance::{ChainDir, Instance};
 
-/// The store one chain writes to, with that same chain's trust policy.
+/// The store of one chain opened by the box, with that same chain's trust policy.
 pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_record::record::TodoEvent> {
-    chain_at(chain.events.clone(), chain.policy.untrusted.clone())
+    opened(chain, door::Opened::ByTheBox)
+}
+
+/// The store of one chain opened from `opened`, with that same chain's trust policy and, where
+/// its charter is public, door 1.
+pub(crate) fn opened(
+    chain: &ChainDir,
+    opened: door::Opened,
+) -> Objects<suzatary_record::record::TodoEvent> {
+    let store = chain_at(chain.events.clone(), chain.policy.untrusted.clone());
+    match &chain.charter {
+        crate::instance::Charted::Private => store,
+        crate::instance::Charted::Public(lists) => {
+            store.public(door::rule(lists.clone(), &chain.policy, opened))
+        }
+    }
 }
 
 /// The todo store at `events`, not believing `untrusted`.

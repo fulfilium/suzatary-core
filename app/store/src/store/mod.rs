@@ -25,7 +25,7 @@ mod reentrant;
 mod signing;
 
 pub use doc::{Doc, Gets};
-pub use error::StoreError;
+pub use error::{Rule, Shut, StoreError};
 pub use graph::Graph;
 pub use hold::{Hold, InMemoryHold, Once};
 pub use husk::{Hashed, Husk, HuskObject, Husking, NotAHusk, Other};

@@ -2,6 +2,7 @@
 //! `suzatary-core` and `suzatary-io` never see a path. It holds nothing secret.
 
 mod chain_dir;
+pub(crate) mod charter;
 mod connections;
 mod edits;
 mod file;
@@ -10,7 +11,7 @@ mod plugins;
 mod reserve;
 mod roots;
 
-pub use chain_dir::{ChainDir, ChainDirs};
+pub use chain_dir::{ChainDir, ChainDirs, Charted};
 pub use edits::{InstanceEdits, editing};
 pub(crate) use file::Signatures;
 pub(crate) use file::{Chain, File, Upkeep, Web};
@@ -393,19 +394,24 @@ impl Instance {
         )
     }
 
-    /// The store one chain is written through as `actor`: every append signed by `actor`'s key,
-    /// or refused when the key is not at hand.
+    /// The store one chain is written through as `actor`, opened from `opened`: every append
+    /// signed by `actor`'s key, or refused when the key is not at hand. A public chain's appends
+    /// are unsigned, since its store holds no signature.
     #[must_use]
     pub fn writer_of(
         chain: &ChainDir,
         signers: &suzatary_signatures::signatures::Signers,
         actor: &prodrome_core::event::Actor,
+        opened: crate::commands::door::Opened,
     ) -> suzatary_store::store::Signing<
         suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     > {
         suzatary_store::store::Signing::new(
-            crate::commands::store_of(chain),
-            signers.for_actor(actor, &chain.policy.untrusted),
+            crate::commands::opened(chain, opened),
+            match chain.charter {
+                Charted::Private => signers.for_actor(actor, &chain.policy.untrusted),
+                Charted::Public(_) => suzatary_store::store::Signer::Unsigned,
+            },
         )
     }
 
@@ -459,7 +465,9 @@ impl Instance {
             env.code(),
         ));
         let data = DataRoot(Self::data_beside(path, &file.data));
-        let chains = ChainDirs::of(path, &data, file.chains, &file.signatures.root)?;
+        let local = Local(data.under(Path::new(Local::DIR)));
+        let lists = crate::commands::door::Lists::of(&local, code.as_path());
+        let chains = ChainDirs::of(path, &data, file.chains, &file.signatures.root, &lists)?;
         // Derived from `chains`, so the policies and the stores cannot name different chains.
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())
             .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
@@ -489,7 +497,6 @@ impl Instance {
                 .map_err(|e| anyhow::anyhow!("{}: [coding] repo: {e}", path.display()))?,
             None => secretary.repos.clone(),
         };
-        let local = Local(data.under(Path::new(Local::DIR)));
         let persona = suzatary_base::persona::Persona {
             prose: local.prose()?,
             ..file.persona

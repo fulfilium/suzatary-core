@@ -15,7 +15,7 @@ use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::stores::{Kind, Store};
 use suzatary_record::record::Record;
-use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock};
+use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreError, WriteLock};
 
 use crate::durable;
 use crate::husked::Husked;
@@ -27,12 +27,21 @@ pub struct Objects<E: Schema, F = EventStore<E, Untrusted>> {
     remembered: Mutex<Option<Remembered<E>>>,
     reentrant: Reentrant,
     /// What the store refuses to take, whoever offers it: an appended event, or a received
-    /// object's. A store with none takes every event its schema parses.
-    door: Option<Door<E>>,
+    /// object.
+    door: Door<E>,
 }
 
-/// A store's admission rule: `Err` names why an event may not be stored.
-type Door<E> = Box<dyn Fn(&E) -> Result<(), String> + Send + Sync>;
+/// What a store takes.
+enum Door<E> {
+    /// Every object its schema parses.
+    Open,
+    /// Every object whose event, where it carries one, the rule takes.
+    Events(Rule<E>),
+    /// A public store's (`charter.toml` says `public = true`): its genesis and its changes
+    /// alone, each change's event taken by the rule. A signature, a key or an epoch speaks for
+    /// one deployment's keys, which a published history never holds.
+    Public(Rule<E>),
+}
 
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
@@ -81,10 +90,10 @@ impl Objects<DigestEvent> {
         owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     ) -> Self {
         let mut store = Self::new(EventStore::new(root, Untrusted::none()));
-        store.door = Some(Box::new(move |event| {
+        store.door = Door::Events(Box::new(move |event| {
             suzatary_core::secretary::digest_policy::Owners(&owners)
                 .admits(event)
-                .map_err(|refused| refused.to_string())
+                .map_err(|refused| Shut::Refused(refused.to_string()))
         }));
         store
     }
@@ -105,8 +114,15 @@ impl<E: Schema, F> Objects<E, F> {
             events,
             remembered: Mutex::new(None),
             reentrant: Reentrant::default(),
-            door: None,
+            door: Door::Open,
         }
+    }
+
+    /// Under a public charter: its genesis, and the changes whose events `rule` takes.
+    #[must_use]
+    pub fn public(mut self, rule: Rule<E>) -> Self {
+        self.door = Door::Public(rule);
+        self
     }
 
     #[must_use]
@@ -169,6 +185,39 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
 
     fn not_appended(why: impl std::fmt::Display) -> StoreError {
         StoreError::not_appended(E::KIND.name(), why)
+    }
+
+    fn shut(shut: Shut) -> StoreError {
+        shut.error(E::KIND.name())
+    }
+
+    /// Whether the door takes `event`, offered to be appended as a change.
+    fn takes(&self, event: &E) -> Result<(), Shut> {
+        match &self.door {
+            Door::Open => Ok(()),
+            Door::Events(rule) | Door::Public(rule) => rule(event),
+        }
+    }
+
+    /// Whether the door takes `object`, offered to be received.
+    fn receives(&self, object: &Envelope<E>) -> Result<(), Shut> {
+        match (&self.door, object) {
+            (Door::Open, _) | (Door::Public(_), Envelope::Genesis(_)) => Ok(()),
+            (Door::Events(rule), object) => object.event().map_or(Ok(()), rule),
+            (Door::Public(rule), Envelope::Change(change)) => rule(&change.event),
+            (
+                Door::Public(_),
+                other @ (Envelope::Sealed { .. }
+                | Envelope::Woven { .. }
+                | Envelope::Snapshot(_)
+                | Envelope::Signed(_)
+                | Envelope::KeyAdded(_)
+                | Envelope::KeyRevoked(_)),
+            ) => Err(Shut::Refused(format!(
+                "a public store holds no {}",
+                other.name()
+            ))),
+        }
     }
 
     /// `look` at what this head set reads: what the same heads already produced, or the store
@@ -317,9 +366,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
 
 impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
     fn append(&self, event: E) -> Result<Hash, StoreError> {
-        if let Some(door) = &self.door {
-            door(&event).map_err(|refused| Self::not_appended(refused))?;
-        }
+        self.takes(&event).map_err(Self::shut)?;
         let mut once = Some(event);
         let names = self.append_each(&mut || Ok(once.take()))?;
         names
@@ -343,8 +390,12 @@ impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
                     refused = Some(e);
                     shown
                 })?;
-                if let (Some(door), Some(event)) = (&self.door, &event) {
-                    door(event)?;
+                if let Some(event) = &event
+                    && let Err(shut) = self.takes(event)
+                {
+                    let shown = format!("{shut:?}");
+                    refused = Some(Self::shut(shut));
+                    return Err(shown);
                 }
                 Ok(event)
             },
@@ -358,19 +409,16 @@ impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
         }
     }
 
-    /// Where the store has a door, every object's event goes through it first, so a refusal
-    /// takes nothing.
+    /// Where the store has a door, every object goes through it first, so a refusal takes
+    /// nothing.
     fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
-        if let Some(door) = &self.door {
+        if !matches!(self.door, Door::Open) {
             for (name, print) in objects {
                 let object =
                     prodrome_core::event::parse_envelope::<E>(Replica::schema(&self.events), print)
                         .map_err(|e| Self::not_appended(format!("{}: {e}", name.as_str())))?;
-                if let Some(event) = object.event() {
-                    door(event).map_err(|refused| {
-                        Self::not_appended(format!("{}: {refused}", name.as_str()))
-                    })?;
-                }
+                self.receives(&object)
+                    .map_err(|shut| Self::shut(shut.of(name.as_str())))?;
             }
         }
         let by_name: BTreeMap<&Hash, &String> =

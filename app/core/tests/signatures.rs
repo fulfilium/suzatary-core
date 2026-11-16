@@ -471,7 +471,9 @@ fn a_writer_signs_as_each_actor_with_the_key_adoption_registered() {
     let signers = Signers::Held(keys.clone());
     let key = |who: &str| match signers.for_actor(&actor(who), &Untrusted::none()) {
         suzatary_store::store::Signer::Key(key) => key.public(),
-        suzatary_store::store::Signer::Refusing(_) => panic!("no key for {who}"),
+        suzatary_store::store::Signer::Refusing(_) | suzatary_store::store::Signer::Unsigned => {
+            panic!("no key for {who}")
+        }
     };
     assert_eq!(key("triage"), keys.agent().public());
     assert_eq!(key("ada"), keys.root().public());

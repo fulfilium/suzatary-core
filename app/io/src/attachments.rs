@@ -191,6 +191,7 @@ impl AttachmentStore {
             Err(StoreError::Absent { .. }) => Ok(None),
             Err(
                 failed @ (StoreError::Taken { .. }
+                | StoreError::Refused { .. }
                 | StoreError::Unreadable { .. }
                 | StoreError::NotAppended { .. }
                 | StoreError::Unwritable { .. }),

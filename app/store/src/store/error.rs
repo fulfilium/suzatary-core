@@ -35,6 +35,15 @@ pub enum StoreError {
         /// What went wrong.
         why: String,
     },
+    /// The store's door refuses the object itself, so offered again it is refused again; the
+    /// store is as it was.
+    #[error("the {store} refuses it: {why}")]
+    Refused {
+        /// Which store.
+        store: &'static str,
+        /// Why, in the door's words.
+        why: String,
+    },
     /// The store could not be written; it is as it was.
     #[error("the {store} could not be written: {why}")]
     Unwritable {
@@ -43,6 +52,38 @@ pub enum StoreError {
         /// What went wrong.
         why: String,
     },
+}
+
+/// Why a store's door does not take an object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Shut {
+    /// The object itself: offered again, it is refused again.
+    Refused(String),
+    /// The door could not judge it, so it holds nothing it has not judged.
+    Unjudged(String),
+}
+
+/// A store's rule for one event, run before the store holds it.
+pub type Rule<E> = Box<dyn Fn(&E) -> Result<(), Shut> + Send + Sync>;
+
+impl Shut {
+    /// The same refusal, said of the object `name`.
+    #[must_use]
+    pub fn of(self, name: &str) -> Shut {
+        match self {
+            Shut::Refused(why) => Shut::Refused(format!("{name}: {why}")),
+            Shut::Unjudged(why) => Shut::Unjudged(format!("{name}: {why}")),
+        }
+    }
+
+    /// The refusal as `store`'s error: [`StoreError::Refused`], or a store that took nothing.
+    #[must_use]
+    pub fn error(self, store: &'static str) -> StoreError {
+        match self {
+            Shut::Refused(why) => StoreError::Refused { store, why },
+            Shut::Unjudged(why) => StoreError::not_appended(store, why),
+        }
+    }
 }
 
 impl StoreError {
@@ -96,6 +137,7 @@ impl From<StoreError> for Refusal {
         match failed {
             StoreError::Absent { .. } => Refusal::not_found(failed.to_string()),
             StoreError::Taken { .. } => Refusal::conflict(failed.to_string()),
+            StoreError::Refused { .. } => Refusal::forbidden(failed.to_string()),
             StoreError::Unreadable { .. }
             | StoreError::NotAppended { .. }
             | StoreError::Unwritable { .. } => Refusal::internal(failed.to_string()),

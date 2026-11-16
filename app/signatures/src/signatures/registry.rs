@@ -324,7 +324,7 @@ fn signed_as_owned<E: Schema>(
         .into_iter()
         .filter_map(|(name, actor)| match signers.for_actor(&actor, untrusted) {
             Signer::Key(key) => Some(sign(store, &key, &name)),
-            Signer::Refusing(_) => None,
+            Signer::Refusing(_) | Signer::Unsigned => None,
         })
         .collect()
 }

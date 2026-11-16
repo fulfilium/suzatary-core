@@ -464,7 +464,12 @@ impl Stores {
     pub fn of(chain: &ChainDir, signers: &Signers) -> Self {
         Self {
             policy: chain.policy.clone(),
-            chain: Instance::writer_of(chain, signers, &chain.owner),
+            chain: Instance::writer_of(
+                chain,
+                signers,
+                &chain.owner,
+                crate::commands::door::Opened::ByTheBox,
+            ),
         }
     }
 }

@@ -288,6 +288,7 @@ fn items(
         chain.dir,
         &instance.signers(),
         &prodrome_core::event::Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?,
+        crate::commands::door::Opened::AtTerminal,
     );
     let _held = writer.locked().context("taking the chain's write lock")?;
     let nodes = writer.nodes().context("reading the project chain")?;
@@ -353,6 +354,7 @@ fn record(
         chain.dir,
         &instance.signers(),
         &prodrome_core::event::Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?,
+        crate::commands::door::Opened::AtTerminal,
     );
     let _held = writer.locked().context("taking the chain's write lock")?;
     let objects = writer.nodes().context("reading the project chain")?;

@@ -23,7 +23,8 @@ allowance = 2000
 # The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
 # downward.
 # 2026-11-12: raised by hand by 15,065 for the lines' husked store (linesprune); husked.rs and object_files.rs leave with huskstoreup, when it comes down by their tokens.
-reading = 2945795
+# 2026-11-16: raised by hand to the merged tree's figure for door 1, a public store's write guard (+5,451, a new security boundary).
+reading = 2949899
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

@@ -415,7 +415,12 @@ fn writer(
 ) -> anyhow::Result<Signing<suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>>> {
     on_the_roster(chain, actor)?;
     let actor = Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?;
-    Ok(Instance::writer_of(chain, signers, &actor))
+    Ok(Instance::writer_of(
+        chain,
+        signers,
+        &actor,
+        crate::commands::door::Opened::AtTerminal,
+    ))
 }
 
 /// Refuses an actor this chain does not know: a typo, not a new identity.

@@ -187,10 +187,11 @@ impl Words {
         words
     }
 
-    /// The lines on which `term`, already read as words, starts as a whole word (no letter, digit
-    /// or `_` of any script on either side).
+    /// The lines on which `term`, already read as words, starts as a whole word: no letter or
+    /// digit of any script on either side. An underscore is a boundary, as a calendar export
+    /// writes an address (`ADA_AT_EXAMPLE_COM`).
     fn find<'a>(&'a self, term: &'a str) -> impl Iterator<Item = usize> + 'a {
-        let wordy = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        let wordy = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
         self.text
             .match_indices(term)
             .filter(move |(at, _)| {
@@ -915,6 +916,23 @@ mod tests {
             ["zzpers&#", "111;n"].concat(),
         ] {
             assert!(!leaks(&all, &encoded), "{encoded}");
+        }
+    }
+
+    /// A term is matched wherever the characters beside it are no letter or digit, an
+    /// underscore included; glued to letters (`JonasADA`) it is not a whole word, and is no hit.
+    #[test]
+    fn a_term_between_underscores_is_a_hit() {
+        let terms = Matcher::new(&["zzcorp".to_owned()], &[], &[], Scope::Lists);
+        for (line, hit) in [
+            ("plain zzcorp here", true),
+            ("the ZzCorp team", true),
+            ("ada@zzcorp.test wrote", true),
+            ("ADA_AT_ZZCORP_COM_2718523C 16:00", true),
+            ("Nightly - JonasADA_AT_ZZCORP_TEST_2EA67D", true),
+            ("Nightly - JonasZZCORP", false),
+        ] {
+            assert_eq!(leaks(&terms, line), hit, "{line}");
         }
     }
 
