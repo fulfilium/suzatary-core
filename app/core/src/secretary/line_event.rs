@@ -83,12 +83,13 @@ impl SealedSlot {
     /// what the current rules catch; withheld when they no longer pass the door at all. `None`
     /// for a key that does not open them. A reader that keeps what it opens
     /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once, and no reader opens
-    /// a seal a reseal supersedes ([`crate::secretary::transcript::Through`]).
-    fn open(&self, binding: &LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
+    /// a seal a reseal supersedes ([`crate::secretary::transcript::Through`]). `binding` is
+    /// printed only for a seal that has bytes.
+    fn open(&self, binding: impl FnOnce() -> LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
         let Seal::Locked(locked) = &self.seal else {
             return None;
         };
-        let words = locked.open(binding, key)?;
+        let words = locked.open(&binding(), key)?;
         Some(if self.under.is_current(()) {
             Words::kept(words)
         } else {
@@ -319,12 +320,13 @@ impl LineEvent {
     #[must_use]
     pub fn read(&self, slot: usize, key: &TextKey) -> Option<Words<LineWords>> {
         let sealed = self.words.get(slot)?;
-        sealed.open(&self.slot(slot, &sealed.under), key)
+        sealed.open(|| self.slot(slot, &sealed.under), key)
     }
 
     /// Slot `slot`'s words as they were locked, under whatever rules: for sealing them again
-    /// through the door ([`LineEvent::reseal`]) and for naming the blocks they were rendered to
-    /// ([`crate::secretary::transcript::fed`]), never for a reader.
+    /// through the door ([`LineEvent::reseal`]), for naming the blocks they were rendered to
+    /// ([`crate::secretary::transcript::fed`]) and for whether a key opens them, never for a
+    /// reader.
     pub(crate) fn unscrubbed(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
         let sealed = self.words.get(slot)?;
         let Seal::Locked(locked) = &sealed.seal else {
@@ -334,20 +336,13 @@ impl LineEvent {
     }
 
     /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's
-    /// binding for that slot; missing for a slot the line does not hold.
+    /// binding for that slot ([`LineEvent::read`]); missing for a slot the line does not hold.
     #[must_use]
     pub(crate) fn slot_words(&self, slot: usize, slots: &impl Slots) -> Words<LineWords> {
         let Some(sealed) = self.words.get(slot) else {
             return Gone::Missing.into();
         };
-        let binding = self.slot(slot, &sealed.under);
-        let bytes = match &sealed.seal {
-            Seal::Locked(locked) => locked.sealed(),
-            Seal::Dropped(_) => &[],
-        };
-        slots.words(sealed.seal.key(), &binding.0, bytes, &|key| {
-            sealed.open(&binding, key)
-        })
+        slots.words(sealed.seal.key(), &|key| self.read(slot, key))
     }
 
     /// Whether slot `slot` opens as `slots` reads it by its key's name ([`Slots::opens`]): its
@@ -357,15 +352,10 @@ impl LineEvent {
         let Some(sealed) = self.words.get(slot) else {
             return false;
         };
-        let binding = self.slot(slot, &sealed.under);
-        let unlocks = |key: &TextKey| match &sealed.seal {
-            Seal::Locked(locked) => locked.open(&binding, key).is_some(),
-            Seal::Dropped(_) => false,
-        };
         slots.opens(
             sealed.seal.key(),
             &|| self.slot_words(slot, slots),
-            &unlocks,
+            &|key| self.unscrubbed(slot, key).is_some(),
         )
     }
 

@@ -6,16 +6,15 @@ use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::words::{Gone, Words};
 
-/// The words of a slot, locked under the key `name` names as `sealed` and bound to `binding`
-/// (what the slot's associated data is), `open` opening them with a key: `None` for a key that
-/// does not open them, and words gone only for words that open and are withheld.
+/// The words of a slot locked under the key `name` names, `open` opening them with a key: `None`
+/// for a key that does not open them or a seal with no bytes, and words gone only for words that
+/// open and are withheld. The slot's binding (its associated data) is made inside `open`, so a
+/// reader that holds no key makes none.
 pub trait Slots {
     /// The slot's words, or why they are not here.
     fn words(
         &self,
         name: &KeyName,
-        binding: &[u8],
-        sealed: &[u8],
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords>;
 
@@ -44,8 +43,6 @@ impl<F: Fn(&KeyName) -> Words<TextKey>> Slots for F {
     fn words(
         &self,
         name: &KeyName,
-        _: &[u8],
-        _: &[u8],
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
         match self(name) {

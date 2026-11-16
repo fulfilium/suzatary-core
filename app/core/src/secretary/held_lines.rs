@@ -255,14 +255,12 @@ impl<S: Slots> Slots for Once<S> {
     fn words(
         &self,
         name: &KeyName,
-        binding: &[u8],
-        sealed: &[u8],
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
         if let Some(words) = self.read.borrow().get(name) {
             return words.clone();
         }
-        let words = crate::parts::part("words", || self.slots.words(name, binding, sealed, open));
+        let words = crate::parts::part("words", || self.slots.words(name, open));
         self.read.borrow_mut().insert(name.clone(), words.clone());
         words
     }

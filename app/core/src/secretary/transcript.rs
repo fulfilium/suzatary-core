@@ -581,8 +581,6 @@ impl<S: Slots> Slots for Through<'_, S> {
     fn words(
         &self,
         name: &KeyName,
-        binding: &[u8],
-        sealed: &[u8],
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
         if let Some(erasure) = self.erased.get(name) {
@@ -603,7 +601,7 @@ impl<S: Slots> Slots for Through<'_, S> {
         if self.superseded.contains(name) {
             return resealed();
         }
-        match self.slots.words(name, binding, sealed, open) {
+        match self.slots.words(name, open) {
             Words::Gone {
                 gone: Gone::Missing,
             } => resealed(),
