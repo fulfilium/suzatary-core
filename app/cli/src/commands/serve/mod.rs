@@ -1007,10 +1007,14 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     started_up(&first, &rest).await;
     // Its first round folds the conversations, which a start step would wait for.
     let state = compaction::started(state, instance, serving.compacting);
-    erase_after_start(&first);
-    let waiting = state.clone();
-    tokio::spawn(after_start("waiting", move || resume_waiting(&waiting)));
-    notice_from_now_on(&state, serving.moved);
+    let (after, caps) = (state.clone(), first.caps);
+    // The first fold alone on the box's cores; what else folds or files starts once it holds.
+    tokio::spawn(async move {
+        let waiting = after.clone();
+        after_start("waiting", move || resume_waiting(&waiting)).await;
+        erase_after_start(caps);
+        notice_from_now_on(&after, serving.moved);
+    });
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
     watch_from_now_on(instance, stores, &state, &first, rest);
 
@@ -1704,8 +1708,7 @@ fn tls_config(cert: &Path, key: &Path) -> anyhow::Result<rustls::ServerConfig> {
 /// The erasures that fold the conversations, in order after the start's. No read serves
 /// what they remove meanwhile: a dead summary ([`Texts`]), an erased upload (search walks live
 /// conversations).
-fn erase_after_start(chain: &Chained) {
-    let caps = chain.caps;
+fn erase_after_start(caps: &'static Server<'static>) {
     tokio::spawn(async move {
         after_start("erase.summaries", move || {
             erased_at_startup(

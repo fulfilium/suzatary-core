@@ -4,6 +4,7 @@
 
 pub mod commands;
 pub mod instance;
+mod journal;
 pub mod paths;
 pub mod stamp;
 pub mod verb;

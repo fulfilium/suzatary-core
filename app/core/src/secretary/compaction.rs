@@ -72,15 +72,17 @@ impl Reading {
     /// # Errors
     /// [`ReadDigests::whole`]'s, and the stores' own.
     pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
-        digests.whole()?;
-        let graph = digests.line_graph()?;
-        let gathered = digests
-            .lines
-            .fold(crate::secretary::held_lines::HeldLines::gathered)?;
-        Ok(Self {
-            digest: digests.read_under(&gathered)?,
-            lines: graph,
-            gathered,
+        crate::first_read::first("digest", || {
+            digests.whole()?;
+            let graph = digests.line_graph()?;
+            let gathered = digests
+                .lines
+                .fold(crate::secretary::held_lines::HeldLines::gathered)?;
+            Ok(Self {
+                digest: digests.read_under(&gathered)?,
+                lines: graph,
+                gathered,
+            })
         })
     }
 

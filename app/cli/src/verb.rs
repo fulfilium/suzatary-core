@@ -160,6 +160,37 @@ pub fn logs_when_asked() {
     }
 }
 
+/// Under a unit (`JOURNAL_STREAM` set), this process's first read is one journal entry: the verb,
+/// what was read and its milliseconds. Natively, since a pass captures a verb's stderr. A process
+/// a person runs says nothing: the journal records its command line, which can hold words.
+pub fn tell_the_journal(matches: &clap::ArgMatches) {
+    if std::env::var_os("JOURNAL_STREAM").is_none() {
+        return;
+    }
+    let verb = verb_of(matches);
+    suzatary_core::first_read::tell(move |what, spent| {
+        let ms = spent.as_millis().to_string();
+        let message = format!("{verb}: first read of the {what}, {ms} ms");
+        let _ = crate::journal::say(&[
+            ("MESSAGE", &message),
+            ("SYSLOG_IDENTIFIER", "suzatary"),
+            ("PRIORITY", "6"),
+            ("SUZATARY_VERB", &verb),
+            ("SUZATARY_READ", what),
+            ("SUZATARY_MS", &ms),
+        ]);
+    });
+}
+
+/// The subcommands `matches` names, outermost first: names of the command tree, never an
+/// argument's value (the tree takes no external subcommand).
+fn verb_of(matches: &clap::ArgMatches) -> String {
+    std::iter::successors(matches.subcommand(), |(_, inner)| inner.subcommand())
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Print a failure and its causes under the program's name, and exit 1.
 pub fn exit_on(program: &str, result: anyhow::Result<()>) {
     if let Err(failed) = result {
@@ -184,6 +215,35 @@ mod tests {
     struct Tree {
         #[command(subcommand)]
         verb: Verb,
+    }
+
+    /// An external subcommand's name would be the person's text.
+    #[test]
+    fn the_journal_names_the_verb_and_no_argument() {
+        use clap::CommandFactory;
+        fn each(command: &clap::Command) -> Vec<&clap::Command> {
+            std::iter::once(command)
+                .chain(command.get_subcommands().flat_map(each))
+                .collect()
+        }
+        let tree = Tree::command();
+        for command in each(&tree) {
+            assert!(
+                !command.is_allow_external_subcommands_set(),
+                "{} takes an external subcommand",
+                command.get_name()
+            );
+        }
+        let matches = Tree::command().get_matches_from([
+            "suzatary",
+            "secretary",
+            "dismiss",
+            "2026-10-09-1",
+            "3",
+            "--reason",
+            "Ada asked twice",
+        ]);
+        assert_eq!(super::verb_of(&matches), "secretary dismiss");
     }
 
     #[test]

@@ -1,30 +1,48 @@
-//! A process's first read of the conversations, logged once, part by part ([`crate::parts`]): the
-//! one line that says where a cold read spends its time on a box.
+//! A process's first whole read of a store, timed once, and split into its parts ([`crate::parts`])
+//! when asked.
 
-/// The target a process's first read of the conversations is logged at, once: one line with the
-/// time of each of its parts, so a cold read on a box can be split without a debugger. It names no
-/// store's content: no word, no name, only parts and milliseconds.
+/// The target a process's first read is logged at, once, part by part, so a cold read on a box
+/// can be split without a debugger. It names no store's content: no word, no name, only parts and
+/// milliseconds.
 pub const FIRST_READ: &str = "suzatary::first_read";
 
-/// `run`'s answer, its parts logged at [`FIRST_READ`] where it is this process's first read.
+/// Told what a process's first read was and how long it took; unset, nobody is.
+#[cfg(not(target_arch = "wasm32"))]
+static TOLD: std::sync::OnceLock<Box<dyn Fn(&'static str, std::time::Duration) + Send + Sync>> =
+    std::sync::OnceLock::new();
+
+/// Tell `teller` of this process's first read when it ends. The first teller set is the one told.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn tell(teller: impl Fn(&'static str, std::time::Duration) + Send + Sync + 'static) {
+    let _ = TOLD.set(Box::new(teller));
+}
+
+/// `run`'s answer; where it is this process's first read, told ([`tell`]) and logged at
+/// [`FIRST_READ`].
 #[cfg(not(target_arch = "wasm32"))]
 pub fn first<T>(what: &'static str, run: impl FnOnce() -> T) -> T {
-    static TOLD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if !tracing::enabled!(target: "suzatary::first_read", tracing::Level::INFO)
-        || TOLD.swap(true, std::sync::atomic::Ordering::Relaxed)
-    {
+    static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if FIRST.swap(true, std::sync::atomic::Ordering::Relaxed) {
         return run();
     }
     let started = std::time::Instant::now();
-    let (answer, parts) = crate::parts::scoped(run);
-    tracing::info!(
-        target: "suzatary::first_read",
-        what,
-        ms = parts.sum().as_millis(),
-        whole = started.elapsed().as_millis(),
-        "first read: {}",
-        parts.line("")
-    );
+    let answer = if tracing::enabled!(target: "suzatary::first_read", tracing::Level::INFO) {
+        let (answer, parts) = crate::parts::scoped(run);
+        tracing::info!(
+            target: "suzatary::first_read",
+            what,
+            ms = parts.sum().as_millis(),
+            whole = started.elapsed().as_millis(),
+            "first read: {}",
+            parts.line("")
+        );
+        answer
+    } else {
+        run()
+    };
+    if let Some(teller) = TOLD.get() {
+        teller(what, started.elapsed());
+    }
     answer
 }
 
