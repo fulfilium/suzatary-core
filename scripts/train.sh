@@ -38,6 +38,16 @@ usage() {
 }
 
 gh="${SUZATARY_TRAIN_GH:-gh}"
+# Before the lock: a missing flock or git would read as another train or no checkout.
+needs() {
+  local tool
+  for tool; do
+    command -v "$tool" >/dev/null \
+      || die "$tool is not on PATH; the .#triage shell (flake.nix) carries every tool this script calls. Nothing ran."
+  done
+}
+needs git flock
+case "${1:-}" in build | land | check | nightly) needs "$gh" ;; esac
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --show-toplevel)" || die "not inside a git checkout."
 cd "$root"
@@ -216,7 +226,6 @@ build() {
   (($#)) || usage
   local n
   for n in "$@"; do [[ "$n" =~ ^[1-9][0-9]*$ ]] || die "\"$n\" is not a pull request number."; done
-  command -v "$gh" >/dev/null || die "build reads each PR's title through gh, which is not on PATH."
   clean
   fetch_origin
   git checkout --quiet -B train origin/master
@@ -413,6 +422,8 @@ record() {
 }
 
 log_of() { mkdir -p "$state/logs" && echo "$state/logs/$1-$(git rev-parse "$2^{tree}").log"; }
+# A red step's screenshots and server output, `<step>-<commit12>`, beside the logs (merge-gate.sh).
+evidence_dir="$state/logs/evidence"
 
 worktree="$state/worktree"
 target="$state/target"
@@ -451,7 +462,7 @@ run_here() {
   gate="${SUZATARY_TRAIN_GATE:-$worktree/scripts/merge-gate.sh}"
   for name in "${train_reads[@]}"; do unset+=(-u "$name"); done
   # shellcheck disable=SC2046
-  (cd "$worktree" && env "${unset[@]}" "$gate" $(gate_flags "$half") "${@:3}") 2>&1 \
+  (cd "$worktree" && env "${unset[@]}" SUZATARY_GATE_EVIDENCE="$evidence_dir" "$gate" $(gate_flags "$half") "${@:3}") 2>&1 \
     | tee "$(log_of "$half" "$commit")" >&2 || code=$?
   worktree_close
   return "$code"
@@ -486,7 +497,7 @@ gate_environment() {
 remote_opt() {
   case "$#/${1:-}/${2:-}" in
     0//) ;;
-    2/--remote/github) cloud=github ;;
+    2/--remote/github) cloud=github && needs "$gh" ;;
     *) usage ;;
   esac
 }
@@ -1002,15 +1013,24 @@ nightly_remote() {
 # The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree on
 # the instance's [upkeep] chain, or on none when it names none.
 report_nightly() {
-  local commit="$1" h steps=() logs=() id upkeep
+  local commit="$1" h steps=() logs=() scenes=() step detail id upkeep
   shift
   for h in "${halves[@]}"; do say "$h half: $(verdict "$h" "$commit" full)"; done
   (($#)) || { say "the nightly gate passed origin/master ${commit:0:12}"; return 0; }
   for h; do
     logs+=(".git/train/logs/${h}-$(git rev-parse "$commit^{tree}").log")
     mapfile -t -O "${#steps[@]}" steps < <(sed -n 's/^\([a-z][a-z0-9-]*\) \{1,\}FAILED.*/\1/p' "$(log_of "$h" "$commit")" | awk '!seen[$0]++')
+    # Each red scene's name (`<file>: <scene>`), never its assertion, which can quote the page.
+    mapfile -t -O "${#scenes[@]}" scenes < <(sed -E 's/\x1b\[[0-9;]*m//g' "$(log_of "$h" "$commit")" |
+      sed -nE 's/^[[:space:]]*✖ ([a-z]+: .+) \([0-9.]+ms\)$/\1/p' | tr -d '`' | awk '!seen[$0]++')
   done
   ((${#steps[@]})) || steps=("$@")
+  detail="The gate's logs are in ${logs[*]}."
+  ((${#scenes[@]} == 0)) || detail+=" The red scenes: $(printf '`%s`, ' "${scenes[@]}" | sed 's/, $//')."
+  for step in "${steps[@]}"; do
+    [[ ! -d "$evidence_dir/$step-${commit:0:12}" ]] \
+      || detail+=" The $step step's screenshots and servers' output are on the box in \`${evidence_dir#"$root/"}/$step-${commit:0:12}\`."
+  done
   id="nightly$(git rev-parse --short=8 "$commit^{tree}")"
   resolve_app origin/master
   upkeep="$("$app_bin" instance get --or-empty upkeep.chain)" \
@@ -1022,7 +1042,7 @@ report_nightly() {
   else
     "$app_bin" todo add --chain "$upkeep" --actor assistant --priority 55 "$id" \
       --body "The nightly gate is red on master ${commit:0:12}: ${steps[*]}." \
-      --detail "The gate's logs are in ${logs[*]}." \
+      --detail "$detail" \
       --rationale "A step red on master either let a broken change land or no longer reads the data, and every later train inherits it." >&2 \
       || die "the nightly gate is red (${steps[*]}), and the todo naming it could not be filed (above). The logs are in $state/logs/."
     say "red: filed todo:$upkeep/$id for ${steps[*]}"

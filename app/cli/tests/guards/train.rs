@@ -14,35 +14,11 @@ struct Train {
     scratch: Scratch,
 }
 
-/// The stub `gh`. `pr view <n> --json title,url,headRefOid --jq …` answers the title, URL and
-/// head commit in `prs/<n>`, tab-separated, and `pr view <n> --json body …` the description in
-/// `prs/<n>.body`, empty when there is none.
-///
-/// It also plays GitHub's API over the gate branches pushed to `core.git`, logging each call to
-/// `github.log`: `api …/actions/runs?head_sha=<sha>…` answers nothing until core holds `<sha>`,
-/// then runs the stub gate's tree half once in `runner-<sha>`, a checkout of that commit alone, as
-/// gate.yml's jobs do, and answers the run's id (the sha); `api …/actions/runs/<id>` answers
-/// `completed <conclusion>`, success where the gate passed and failure where it failed;
-/// `…/runs/<id>/jobs…` answers `7 gate (tests)` for a failed gate, whose `red` step failed; and
-/// `…/jobs/7/logs` the gate's output, each line stamped with a time as GitHub's are. With
-/// `GH_RUN=cancelled` the run is cancelled, and with `GH_RUN=lost` it fails with no red step, as
-/// a lost runner's does, and with `GH_RUN=running` it never ends; none of them runs the gate. With
-/// `GH_RUN=checks-red` the run never ends either, and its jobs already hold `8 gate (checks)`,
-/// whose `red` step failed and whose log (`…/jobs/8/logs`) is a real one's shape: clippy's error,
-/// the gate's failing steps' last lines, the gate's size and free-disk lines, GitHub's next steps. With
-/// `GH_RUN=e2e-red` its jobs hold `9 gate (e2e-1)` instead, whose log is an e2e job's stopped before
-/// its gate's summary: a coloured failed scene, its `Error:` and `last:` lines, and no block.
-///
-/// `workflow run publication.yml --repo <repo> --ref master -f commit=<sha>`, the train's dispatch
-/// of master's publication workflow, appends `dispatch <master> <sha>` to `<TRAIN_PROBES>.args`
-/// and marks the run of `<sha>` dispatched; with `GH_CACHE=down` it fails. `run list --repo <repo>
-/// --workflow publication.yml --event workflow_dispatch … --jq <filter naming "Publication cache
-/// <sha>">` appends `publication <sha>` and answers nothing until that run is dispatched, then
-/// `completed success`; with `GH_CACHE=failure` `completed failure`, with `GH_CACHE=running`
-/// `in_progress `, and with `GH_CACHE=down` it fails as an unreachable GitHub. `api
-/// …/actions/runs?per_page=…`, the listing a gate's end cancels from, answers `<sha>` for each gate
-/// run still in progress and `pub-<sha>` for each publication run still running, and `api
-/// …/runs/<id>/cancel` is logged.
+/// The stub `gh`: `pr view` answers from `prs/<n>` and `prs/<n>.body`. `api`, `workflow run` and
+/// `run list` play GitHub's Actions over the gate branches pushed to `core.git`, logging each call
+/// to `github.log`. A gate run runs the stub gate's tree half once in `runner-<sha>`, a checkout of
+/// that commit alone, as gate.yml's jobs do. `GH_RUN` and `GH_CACHE` choose how the gate run and the
+/// publication run end; each case below is one way a real run has ended.
 const GH: &str = r#"#!/bin/sh
 exec 9>&-
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -130,18 +106,10 @@ case "$1 $2" in
 esac
 "#;
 
-/// The stub merge gate, `[--full | --nightly] --no-live` or `[--full | --nightly] --only-live`, a
-/// full run noted in `<TRAIN_PROBES>.full` with its flag last. A red run names its one step,
-/// `stub`, in a summary row. With `GATE_HOLD` set, the tree half says so on the `<GATE_HOLD>.up`
-/// fifo and waits on `<GATE_HOLD>` to go on, and with `GATE_HOLD_LIVE` the live half does the
-/// same, its pid written to `<GATE_HOLD_LIVE>.pid` first, on the live half's run beside the runners
-/// (its early run, `--steps live,…`, is red on a tree holding `broken-live-early` and never held). A full run of a tree holding `missed` fails, as a selection that missed a step would.
-/// With `GATE_RED_TEXT` set, the tree half is red on a tree whose CHANGELOG.md holds that text.
-/// Each run writes the environment it was handed to `<TRAIN_PROBES>.env`, and its arguments, a
-/// line, to `<TRAIN_PROBES>.args`. Run with `--steps` naming `changelog`, the box's part of a
-/// tree half on GitHub's runners before the push, it is red on a tree holding `broken-box` and on
-/// no other; run with `--steps` naming `public-tree`, the box's part after the push, on a tree
-/// holding `broken-build`.
+/// The stub merge gate. A half is red where the tree holds the file its case below names, and a
+/// red run names its one step, `stub`, as the real gate's summary does. Each run records its
+/// environment, arguments and directory beside `<TRAIN_PROBES>`. `GATE_HOLD` and `GATE_HOLD_LIVE`
+/// hold a half on a fifo until the test lets it go on.
 const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
@@ -165,6 +133,10 @@ esac
 [ -z "$GATE_HOLD_LIVE" ] || [ "$bad" != broken-live ] || { echo $$ >"$GATE_HOLD_LIVE.pid"; echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
 [ -z "$GATE_RED_TEXT" ] || [ "$1" != --no-live ] || ! grep -qs "$GATE_RED_TEXT" CHANGELOG.md || bad=CHANGELOG.md
 test -e "$bad" || exit 0
+[ "$bad" != broken-live ] || {
+  mkdir -p "$SUZATARY_GATE_EVIDENCE/stub-$(git rev-parse HEAD | cut -c1-12)"
+  printf '\033[31m✖ pages: a *starred* #scene (12ms)\033[39m\n  Error: the page said something\n' >&2
+}
 printf 'stub             FAILED (1)\n==> the failing steps'"'"' last lines\n--- stub\n%s is in the tree\n' "$bad" >&2
 exit 1
 "#;
@@ -3371,8 +3343,9 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
 }
 
 impl Train {
-    /// The todos the nightly gate filed on the fixture's chain stored at `events`, by id.
-    fn nightly_todos_in(data: &Path, events: &str) -> BTreeSet<String> {
+    /// The todos the nightly gate filed on the fixture's chain stored at `events`, by id, with
+    /// their details.
+    fn nightly_todos_in(data: &Path, events: &str) -> std::collections::BTreeMap<String, String> {
         suzatary_record::record::EventStore::new(
             data.join(events),
             prodrome_core::policy::Untrusted::none(),
@@ -3385,7 +3358,10 @@ impl Train {
                 if made.todo.as_str().starts_with("nightly")
                     && made.actor.as_str() == "assistant" =>
             {
-                Some(made.todo.as_str().to_owned())
+                Some((
+                    made.todo.as_str().to_owned(),
+                    made.payload.detail.as_str().to_owned(),
+                ))
             }
             _ => None,
         })
@@ -3393,7 +3369,7 @@ impl Train {
     }
 
     /// The todos the nightly gate filed on the fixture's upkeep chain, `ops`, by id.
-    fn nightly_todos(data: &Path) -> BTreeSet<String> {
+    fn nightly_todos(data: &Path) -> std::collections::BTreeMap<String, String> {
         Self::nightly_todos_in(data, "events-ops")
     }
 }
@@ -3433,7 +3409,7 @@ fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
     std::fs::create_dir_all(&data).expect("a data root");
     let env = release_env(&a_release_deployment(&data));
     let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    t.master_moves(&[("broken", "x\n")]);
+    t.master_moves(&[("broken", "x\n"), ("broken-live", "x\n")]);
     let out = t.train_with(&["nightly"], &env);
     assert!(!out.status.success(), "a red night fails");
     assert_eq!(
@@ -3442,14 +3418,26 @@ fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
         "the live half ran beside a red tree half"
     );
     let tree = t.git(&["rev-parse", "--short=8", "origin/master^{tree}"]);
+    let filed = Train::nightly_todos(&data);
     assert_eq!(
-        Train::nightly_todos(&data),
+        filed.keys().cloned().collect::<BTreeSet<_>>(),
         BTreeSet::from([format!("nightly{tree}")])
     );
     assert!(
         text(&out.stderr).contains(&format!("filed todo:ops/nightly{tree} for stub")),
         "{}",
         text(&out.stderr)
+    );
+    let master = t.origin_master();
+    let evidence = format!(".git/train/logs/evidence/stub-{}", &master[..12]);
+    let detail = filed.values().cloned().collect::<String>();
+    assert!(
+        detail.contains("`pages: a *starred* #scene`") && detail.contains(&format!("`{evidence}`")),
+        "the todo names the red scene and the evidence's path, and files as markup: {detail}"
+    );
+    assert!(
+        !detail.contains("the page said"),
+        "and never the assertion: {detail}"
     );
     for other in ["events", "events-suzatary"] {
         assert!(

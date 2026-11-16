@@ -740,34 +740,19 @@
           "${pkgs.lato}/share/fonts"
         ];
 
-        # THE RUST TOOLCHAIN app/ BUILDS WITH, SHARED. Defined once so `.#rust`
-        # and `.#triage` cannot drift by a hand-edit to just one of them — see
-        # devShells.triage below for why `.#triage` needs this now. `.#rust`
-        # adds rust-analyzer, the editor's, and takes nothing else; `.#triage`
-        # takes just this subset.
+        # The Rust toolchain app/ builds with, defined once so `.#rust` and `.#triage` cannot drift.
         rustToolchain = {
-          # `lld` is what the wasm32 target links with: nixpkgs' rustc carries
-          # the wasm32-unknown-unknown std (checked with `rustc --print
-          # target-list` and `ls $(rustc --print sysroot)/lib/rustlib/`, 2026-09-06),
-          # so no rust-overlay and no fenix — but it expects the linker on PATH
-          # rather than bundling rust-lld, and without it the build stops at
-          # "linker `lld` not found".
+          # nixpkgs' rustc carries the wasm32 std but not its linker, so `lld` is on PATH.
           packages = with pkgs; [ cargo rustc rustfmt clippy lld mold ];
           RUST_BACKTRACE = "1";
-          # THE SHELLS' BUILDS LINK WITH MOLD. A test build links a dozen executables
-          # of the whole application each, and GNU ld spent 322 of the 907 seconds
-          # of rustc in a warm gate's test build linking them (one of 73 s); the
-          # code linked is the same. Target-specific rustflags, so a `--target
-          # wasm32` build is untouched; the Nix derivations never read a shell.
+          # The shells link with mold, which links the dozen test executables far faster than GNU
+          # ld; per target, so a wasm32 build and the Nix derivations are untouched.
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         };
 
-        # WHAT THE WORKSPACE'S TESTS RUN BESIDE THE TOOLCHAIN, in every shell
-        # that runs them: typst renders the site's pages and the answer blocks,
-        # and poppler reads a PDF's text layer. Without them in `.#rust`, CI's
-        # test job fell back to `nix develop` from a scratch directory and
-        # failed where the box's gate, in `.#triage`, passed.
+        # What the workspace's tests run beside the toolchain, in every shell that runs them: typst
+        # renders pages and answer blocks, and poppler reads a PDF's text layer.
         testTools = {
           packages = with pkgs; [ typst poppler-utils ];
           TYPST_FONT_PATHS = pkgs.lib.concatStringsSep ":" fontPaths;
@@ -776,76 +761,33 @@
       in
       {
         packages = {
-          # `nix run .#roots` — build the app `$SUZATARY_USER_REPO/flake.lock`
-          # names and link it, which every other service runs from.
           roots = services.roots;
-          # `nix run .#web` — the read-only chain browser on the tailnet.
           web = services.web;
-          # `nix build .#apk-unsigned` — the generic portal, which asks for its
-          # box at first launch, with no network and no Gradle. Unsigned because a key in the store is a key
-          # published; `nix run .#apk-sign -- <in> <out>` is the impure half.
+          # Unsigned: a key in the store is a key published; `nix run .#apk-sign` is the impure half.
           apk-unsigned = apk.unsigned (apkProfile ./android/profile/generic.toml);
-          # `SUZATARY_APK_PROFILE=<file> nix build --impure
-          # .#apk-profiled-unsigned` — the portal one profile names.
           apk-profiled-unsigned = apkNamed apk.unsigned;
-          # `SUZATARY_APK_PROFILE=<file> nix build --impure
-          # .#apk-tsnet-unsigned` — a SPIKE: the same portal joining
-          # the tailnet itself through an embedded tsnet node, installed beside
-          # the portal as com.bmabsout.suzatary.tsnet
-          # (the `tsnetportal-android-spike-x2b41w` report).
+          # A spike: the portal joining the tailnet itself through an embedded tsnet node.
           apk-tsnet-unsigned = apkNamed apk.tsnet;
           apk-sign = apk.sign;
-          # `nix build .#suzatary` — the application (docs/ARCHITECTURE.md).
           suzatary = suzatary-app;
-          # `nix build .#suzatary-bin` — its binary alone, which no release moves.
           inherit suzatary-bin;
-          # `nix build -o <root> .#suzatary-deps` — the dependency build every derivation above
-          # starts from, exposed so it can be rooted: no output keeps a build-time input alive.
+          # The dependency builds, exposed so a gate can root them: no output keeps them alive.
           suzatary-deps = cargoArtifacts;
-          # The other two dependency builds, the browser module's and the core's
-          # alone (the wire's and the vectors'), exposed to be rooted the same way.
           inherit suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps;
           inherit suzatary-wasm-dev-deps suzatary-views-wasm-dev-deps;
-          # `nix build .#suzatary-wire-ts` — the frontend's wire declarations,
-          # generated from suzatary-core rather than mirrored by hand.
           inherit suzatary-wire-ts;
-          # `nix build .#suzatary-web-ts` — the wire's TypeScript and the pages', in one directory.
           inherit suzatary-pages-ts suzatary-web-ts;
-          # `nix build .#suzatary-web` — the frontend bundle itself, the same
-          # `scripts/build-web.sh` run produces, as a derivation. Resolved and
-          # rooted by `scripts/web-dist.sh`, the way `.#suzatary` is by
-          # `scripts/app-bin.sh`.
           inherit suzatary-web;
-          # `nix build .#suzatary-vector-json` — the fpl/series conformance
-          # vectors `web/test/wasm.test.ts` reads, regenerated from prodrome's
-          # own literal grammar (see the derivation's own comment).
           inherit suzatary-vector-json;
-          # `nix build .#suzatary-wasm` — the browser's module, exposed so
-          # scripts/build-web.sh and scripts/web-test.sh can resolve it by name.
           inherit suzatary-wasm;
-          # `nix build .#suzatary-views-wasm` — the pages' module, resolved the same way.
           inherit suzatary-views-wasm;
           inherit suzatary-wasm-dev suzatary-views-wasm-dev;
-          # `nix build .#suzatary-plugin-fence` — the components the plugin
-          # host's fence tests load; resolved by scripts/merge-gate.sh.
           inherit suzatary-plugin-fence;
-          # `nix build .#suzatary-plugins` — the app's reference plugins
-          # (`ics.wasm`), rooted and loaded by scripts/plugin-sync.sh.
           inherit suzatary-plugins;
-          # `nix build .#suzatary-typst-wasm` — Typst for the tab, resolved by
-          # scripts/build-web.sh the same way.
           inherit suzatary-typst-wasm;
-          # `nix build .#suzatary-fixture` — `suzatary-dev`, the binary with
-          # the end-to-end fixture. NEVER DEPLOYED; the
-          # comment on the derivation says why it is a second one.
           inherit suzatary-fixture;
-          # `nix build .#suzatary-junk-seed` — the monthly Junk sweep's churn
-          # seed, normalised from two maintained public lists. See the
-          # derivation's own comment.
           inherit suzatary-junk-seed;
-          # `nix build .#docs` — the guide (docs/guide): its HTML compiled in the
-          # app's closed world and its PDF by typst with the e2e suite's pictures,
-          # around the cast's deployment as `init` writes it. Reads no network.
+          # The guide, its HTML compiled in the app's closed world and its PDF by typst; no network.
           docs = pkgs.runCommand "suzatary-docs" {
             nativeBuildInputs = [ pkgs.typst ];
             TYPST_FONT_PATHS = lib.concatStringsSep ":" fontPaths;
@@ -870,12 +812,8 @@
             inherit nixpkgs system;
             module = self.nixosModules.default;
           };
-          # `cargo test` over the workspace: the
-          # escape's laws, the capability bundles' shapes, the wire's
-          # declarations — and clippy at `-D warnings` over `--all-targets`.
-          # Both start from `cargoArtifacts` (crane, 2026-09-13): the tests
-          # compile the four workspace crates in the test profile, clippy
-          # lints them, and neither builds a dependency.
+          # `cargo test` and clippy over the workspace, both from `cargoArtifacts`, so neither
+          # builds a dependency.
           suzatary-core = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
             pname = "suzatary-core";
@@ -988,12 +926,8 @@
             # typst and poppler-utils come with testTools, below.
             notmuch lieer isync openssl curl
             protonmail-bridge pass gnupg  # Proton: Bridge serves localhost IMAP; pass/gnupg back its keyring on this headless box
-            # Resolves the static secrets declared in secretspec.toml out of the
-            # `pass` store, so no password sits in plaintext in a config file.
-            # NOT the `keyring` provider: it needs a DBus secret-service and
-            # dies headless with "Unable to autolaunch a dbus-daemon without a
-            # $DISPLAY". `pass` works here because Proton Bridge already
-            # required a passphraseless GPG key to back its own keyring.
+            # Resolves secretspec.toml's secrets from `pass`; the `keyring` provider needs a DBus
+            # secret service, which this headless box does not run.
             secretspec
             # Plugins are WebAssembly components (docs/PLUGINS-PLAN-2026-10-02.md):
             # `wasm-tools component new` wraps a guest, `component wit` reads
@@ -1009,6 +943,9 @@
             # actionlint: the guards lint .github/workflows/gate.yml, the workflow core runs a
             # train's tree half with (app/cli/tests/guards/gate_yml.rs).
             actionlint
+            # The nightly unit has no login profile, so every tool train.sh and the gate call is
+            # here, and both scripts check theirs at their start.
+            gh git openssh systemdMinimal
           ] ++ rustToolchain.packages ++ testTools.packages;
         });
       }

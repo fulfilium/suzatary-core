@@ -546,10 +546,12 @@ fn merge_gate_no_rust_source_names_a_path_its_cargo_steps_skip() {
 /// The stub run in every step's place: it logs the step's name and fails a step named in
 /// `red`. Run where a scene would, it records that each scene it runs fetched what the ignored
 /// file `fetches-<scene>` names, as web/e2e/harness.ts records what a scene's tabs fetched, and
-/// nothing for a scene the ignored file `unrecorded-<scene>` names.
+/// nothing for a scene the ignored file `unrecorded-<scene>` names. Handed a screenshot
+/// directory, it leaves a screenshot there, as a scene does.
 const STUB: &str = r#"#!/bin/sh
 echo "$1" >>"$GATE_PROBES"
 echo "$1 ${SUZATARY_GATE_UNITS:-*}" >>"$GATE_PROBES.units"
+[ -z "$SUZATARY_E2E_SHOTS" ] || { mkdir -p "$SUZATARY_E2E_SHOTS" && echo page >"$SUZATARY_E2E_SHOTS/$1.png"; }
 if [ -n "$SUZATARY_E2E_READS" ]; then
   mkdir -p "$SUZATARY_E2E_READS"
   for unit in ${SUZATARY_GATE_UNITS:-web/e2e/*.test.ts}; do
@@ -958,6 +960,92 @@ fn merge_gate_keeps_nothing_for_a_dirty_checkout() {
 
     gate.write("docs/new.md", "an untracked file\n");
     assert_eq!(gate.run(&[]).1, every, "an untracked file is a difference");
+}
+
+/// A red step's screenshots and server output hold a deployment's page text. Under a train they
+/// outlive the gate in `$SUZATARY_GATE_EVIDENCE/<step>-<commit>`, which only this user can read,
+/// and the summary names the path. A green step's are removed, the newest ten stay (pruned by
+/// whole paths, whatever spaces they hold), and the directory is in no pass's key.
+#[test]
+fn merge_gate_keeps_a_red_steps_evidence_for_this_user_alone() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mode = |path: &Path| {
+        std::fs::metadata(path)
+            .expect("exists")
+            .permissions()
+            .mode()
+            & 0o777
+    };
+    let gate = Gate::new();
+    let scratch = Scratch::new("merge-gate-evidence");
+    // A path with a space, beside the directory a split at the space would name.
+    let evidence = scratch.join("with space").join("evidence");
+    let sentinel = scratch.join("with");
+    std::fs::create_dir_all(&evidence).expect("dirs");
+    std::fs::create_dir_all(&sentinel).expect("dirs");
+    for n in 0..10 {
+        let old = evidence.join(format!("old-{n}"));
+        std::fs::create_dir(&old).expect("dir");
+        std::fs::File::open(&old)
+            .and_then(|dir| {
+                dir.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(n))
+            })
+            .expect("dated");
+    }
+    let head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&*gate.scratch)
+        .output()
+        .expect("git runs");
+    let red = evidence.join(format!(
+        "e2e-{}",
+        &String::from_utf8_lossy(&head.stdout)[..12]
+    ));
+    let run = |env: &[(&str, &Path)]| {
+        Command::new(gate.scratch.join("scripts/merge-gate.sh"))
+            .arg("--no-live")
+            .current_dir(&*gate.scratch)
+            .env("SUZATARY_GATE_RUN", gate.scratch.join("stub"))
+            .env("GATE_PROBES", gate.scratch.join("probes"))
+            .envs(env.iter().copied())
+            .output()
+            .expect("the gate runs")
+    };
+
+    gate.write("red", "e2e\n");
+    let out = run(&[("SUZATARY_GATE_EVIDENCE", &evidence)]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let left: BTreeSet<PathBuf> = std::fs::read_dir(&evidence)
+        .expect("reads")
+        .map(|entry| entry.expect("an entry").path())
+        .collect();
+    let mut expected: BTreeSet<PathBuf> =
+        (1..10).map(|n| evidence.join(format!("old-{n}"))).collect();
+    expected.insert(red.clone());
+    assert_eq!(
+        left, expected,
+        "the red step's is added, and the oldest goes"
+    );
+    assert!(sentinel.exists(), "the prune removes whole paths alone");
+    assert_eq!(mode(&evidence), 0o700);
+    assert_eq!(mode(&red), 0o700);
+    assert_eq!(mode(&red.join("e2e.png")), 0o600);
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains(&format!("on this box alone: {}", red.display())),
+        "the summary names the kept path: {out:?}"
+    );
+
+    std::fs::remove_file(gate.scratch.join("red")).expect("removes");
+    assert_eq!(
+        run(&[("SUZATARY_GATE_EVIDENCE", &evidence)]).status.code(),
+        Some(0)
+    );
+    assert!(!red.exists(), "a green rerun removes the step's evidence");
+    assert!(
+        !gate.run(&[]).1.contains("e2e"),
+        "a run with no evidence directory reads the passes one with it kept"
+    );
 }
 
 /// The public-tree step leaves out of its key the private history it never reads, read off

@@ -34,7 +34,7 @@
 # SUZATARY_GATE_RUN names a stub run in each step's place; its passes are keyed by its bytes.
 #
 # Exit 0 green, 1 red, 64 usage, 75 when the gate did not start (too little disk, a key it could
-# not name, another gate in this checkout).
+# not name, another gate in this checkout, a tool not on PATH).
 set -uo pipefail
 
 usage() {
@@ -71,8 +71,17 @@ esac
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 
-# One gate per checkout: two would race on the target, web/dist, the generated wire, the roots.
+# Every tool the steps call is the .#triage shell's: a missing one stops the gate here, not at
+# its step an hour in. A stub run calls only what it names.
 if ((!list)); then
+  tools=(git flock)
+  [[ -n "${SUZATARY_GATE_RUN:-}" ]] || tools+=(nix nix-store setsid setpriv script curl cargo rustfmt
+    cargo-clippy mold node esbuild tsc chromium brotli typst pdftotext gitleaks actionlint notmuch gpg journalctl)
+  for tool in "${tools[@]}"; do
+    command -v "$tool" >/dev/null \
+      || { echo "merge-gate.sh: $tool is not on PATH; the .#triage shell (flake.nix) carries every tool the steps call. Not starting." >&2; exit 75; }
+  done
+  # One gate per checkout: two would race on the target, web/dist, the generated wire, the roots.
   lock="$(git rev-parse --absolute-git-dir)/merge-gate.lock"
   exec 8>>"$lock"
   flock -n 8 || { echo "merge-gate.sh: another gate runs in this checkout: $(cat "$lock")" >&2; exit 75; }
@@ -91,6 +100,28 @@ chosen() { selected "${s_half[$1]}" && { [[ -z "$only" ]] || [[ ",$only," == *",
 kept_dir="$(git rev-parse --path-format=absolute --git-common-dir)/gate"
 [[ -z "${SUZATARY_GATE_RUN:-}" ]] || kept_dir+="/other-$(git hash-object "$SUZATARY_GATE_RUN")"
 
+# $SUZATARY_GATE_EVIDENCE/<step>-<commit>: what a red step left in $SUZATARY_E2E_SHOTS
+# (screenshots, the fixture servers' output). It holds a deployment's page text, so only this user
+# reads it, a green step's is removed, and the newest `evidence_kept` stay.
+evidence_kept=10
+if [[ -n "${SUZATARY_GATE_EVIDENCE:-}" ]] && ((!list)); then
+  mkdir -p "$SUZATARY_GATE_EVIDENCE" && chmod 700 "$SUZATARY_GATE_EVIDENCE" || exit 75
+  evidence_head="$(git rev-parse HEAD)" && evidence_head="${evidence_head:0:12}" || exit 75
+fi
+# evidence <step> <code>, in run_step's scope: a red step's $SUZATARY_E2E_SHOTS locked down and the
+# oldest pruned, a green or empty one removed.
+evidence() {
+  local dir="$SUZATARY_E2E_SHOTS"
+  if (($2 == 0)); then rm -rf "$dir"; return; fi
+  rmdir --ignore-fail-on-non-empty "$dir" 2>/dev/null
+  [[ -d "$dir" ]] || return 0
+  chmod -R go= "$dir"
+  # NUL-separated whole paths: a checkout's path may hold a space.
+  find "$SUZATARY_GATE_EVIDENCE" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' | sort -zrn |
+    tail -zn +$((evidence_kept + 1)) | while IFS= read -r -d '' old; do rm -rf -- "${old#* }"; done
+  echo "$dir" >"$logs/$1.evidence"
+}
+
 # Needs a Nix shell, whose PATH names the tools the keys cover.
 keeping() {
   [[ -n "${IN_NIX_SHELL:-}${SUZATARY_GATE_RUN:-}" ]] || { echo "outside a nix shell"; return 1; }
@@ -100,7 +131,7 @@ keeping() {
 
 environment() {
   env | grep -E '^(PATH|SUZATARY_|CARGO|RUST|NODE|NIX_(CFLAGS|LDFLAGS)|CC|CXX|LD_|LIBRARY_PATH|PKG_CONFIG|FONTCONFIG|TYPST|TZ|LANG|LC_)[A-Z_]*=' \
-    | grep -vE '^SUZATARY_(INSTANCE|GATE_UNITS|GUARD_FULL|GUARD_PASSES)=' | LC_ALL=C sort
+    | grep -vE '^SUZATARY_(INSTANCE|GATE_UNITS|GUARD_FULL|GUARD_PASSES|GATE_EVIDENCE)=' | LC_ALL=C sort
 }
 
 # Proptest's saved counterexamples change the cases `test` runs.
@@ -234,6 +265,10 @@ run_step() {
   echo "==> $name (${s_lane[i]} lane)" >&2
   if [[ "${s_half[i]}" == tree ]]; then local -x SUZATARY_INSTANCE="$logs/no-data-tree/instance.toml"; fi
   if [[ "${s_reads[i]}" == "$observed" ]]; then local -x SUZATARY_E2E_READS="$logs/reads-$name"; fi
+  if [[ -n "${SUZATARY_GATE_EVIDENCE:-}" ]]; then
+    local -x SUZATARY_E2E_SHOTS="$SUZATARY_GATE_EVIDENCE/$name-$evidence_head"
+    rm -rf "$SUZATARY_E2E_SHOTS"
+  fi
   if [[ -n "${todo_units[i]:-}" ]]; then
     local -x SUZATARY_GATE_UNITS="${todo_units[i]}"
     of+=" ($(wc -w <<<"${todo_units[i]}") of $(wc -w <<<"${units[i]}") units)"
@@ -242,6 +277,7 @@ run_step() {
   if [[ -n "${SUZATARY_GATE_RUN:-}" ]]; then "$SUZATARY_GATE_RUN" "$name"; else eval "${s_cmd[i]}"; fi >"$logs/$name" 2>&1 8>&- 7>&-
   code=$? took=$((SECONDS - start))
   [[ -z "${s_heavy[i]:-}" ]] || exec 7>&-
+  [[ -z "${SUZATARY_GATE_EVIDENCE:-}" ]] || evidence "$name" "$code"
   printf '%-16s %s  %4ds%s\n' "$name" "$([ "$code" -eq 0 ] && echo ok || echo "FAILED ($code)")" "$took" "$of" >"$logs/$name.row"
   if [ "$code" -eq 0 ]; then
     [[ -z "${todo_kept[i]:-}" ]] || passes "$i" >"$logs/$name.pass"
@@ -763,6 +799,7 @@ if ((${#failures[@]})); then
   echo "==> the failing steps' last lines" >&2
   for name in "${failures[@]}"; do
     echo "--- $name" >&2
+    [[ ! -e "$logs/$name.evidence" ]] || echo "its screenshots and servers' output, on this box alone: $(cat "$logs/$name.evidence")" >&2
     grep -E 'FAILED|panicked|^error|not ok|✖' "$logs/$name" | tail -n 20 >&2 \
       || tail -n 20 "$logs/$name" >&2
   done

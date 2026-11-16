@@ -15,7 +15,8 @@
 #   SUZATARY_E2E_LIVE=<instance> scripts/web-e2e.sh pages
 #                                 web/e2e/pages.test.ts against a copy of that deployment's data tree
 #
-# $SUZATARY_E2E_SHOTS: failure screenshots (a temp dir by default). $SUZATARY_SHOTS: the gallery
+# $SUZATARY_E2E_SHOTS: failure screenshots and server logs (by default a private directory of this
+# run's, kept when it fails and removed when it passes). $SUZATARY_SHOTS: the gallery
 # `web/e2e/shots.test.ts` files.
 # $SUZATARY_E2E_WAIT_MS (default 15000, raised by load average when unset): scales every
 # timeout the scenes name (`web/e2e/cdp.ts`); a budget, not a delay.
@@ -170,8 +171,15 @@ work="$(mktemp -d)"
 # A runtime directory, which every box path needs and a shell outside a login session lacks.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$work/run}"
 mkdir -p "$XDG_RUNTIME_DIR"
-shots="${SUZATARY_E2E_SHOTS:-$work/shots}"
-mkdir -p "$shots"
+# A failure's screenshots can hold a deployment's page text: the default is this user's alone.
+made_shots=""
+if [[ -n "${SUZATARY_E2E_SHOTS:-}" ]]; then
+  shots="$SUZATARY_E2E_SHOTS"
+  mkdir -p "$shots"
+else
+  shots="$(mktemp -d "${TMPDIR:-/tmp}/suzatary-e2e-shots.XXXXXX")"
+  made_shots="$shots"
+fi
 servers=()
 
 # Each server runs under `setsid`, so its PID is its process group, and cleanup kills the whole
@@ -208,6 +216,7 @@ cleanup() {
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   done
   if [ -n "${SUZATARY_E2E_KEEP:-}" ]; then echo "==> kept $work (SUZATARY_E2E_KEEP)"; else rm -rf "$work"; fi
+  (( status != 0 )) || [[ -z "$made_shots" ]] || rm -rf "$made_shots"
 }
 trap cleanup EXIT INT TERM
 
