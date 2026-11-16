@@ -1,7 +1,8 @@
 //! The carried list: the public name of each actor whose words are carried, and for each open
 //! todo of the source, by its id, whether `prodrome carry` takes it to the public store and in
-//! what words, or leaves it on the source, with a one-line reason. The main session writes it
-//! and the owner reads it, so it is a box-local file, never a tracked one. It is TOML:
+//! what words, or leaves it on the source, with a one-line reason; and, for a closed todo the
+//! carry takes because a carried price names it, the words it is carried in. The main session
+//! writes it and the owner reads it, so it is a box-local file, never a tracked one. It is TOML:
 //!
 //! ```toml
 //! [actors]                            # a source actor = the name it is published under

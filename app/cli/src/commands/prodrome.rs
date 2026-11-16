@@ -1,8 +1,9 @@
-//! `suzatary prodrome init|carry`: a todo store begun at a path, such as a project's roadmap,
-//! and the upkeep chain's project todos carried to it.
+//! `suzatary prodrome init|carry|draw`: a todo store begun at a path, such as a project's
+//! roadmap, the upkeep chain's project todos carried to it, and its open list drawn.
 
 mod carry;
 mod list;
+mod picture;
 
 use std::path::Path;
 
@@ -31,6 +32,10 @@ pub enum Action {
     /// Carry the upkeep chain's open todos that the carried list carries, and its releases, to a
     /// public store. Without `--apply` it prints what it would write, to stdout alone.
     Carry(Carrying),
+    /// Draw a public store's open list as `roadmap.svg` and `roadmap-dark.svg`, and write the
+    /// `README.md` that shows them, beside the store; or print, for door 2, what they are as
+    /// drawn now.
+    Draw(picture::Drawing),
 }
 
 /// What `prodrome carry` takes.
@@ -65,6 +70,7 @@ pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
             },
         ),
         Action::Carry(carrying) => carry::run(path, carrying),
+        Action::Draw(drawing) => picture::run(drawing),
     }
 }
 
@@ -84,6 +90,7 @@ fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir)?;
     charter.write(dir)?;
     unless_there(&dir.join(".gitignore"), "/.heads\n/.lock\n")?;
+    unless_there(&dir.join(".gitattributes"), ATTRIBUTES)?;
     super::init::begin_chain(dir)?;
     unless_there(
         &dir.join("flake.nix"),
@@ -92,6 +99,12 @@ fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     println!("began {} as {charter:?}", dir.display());
     Ok(())
 }
+
+/// How git keeps a store's files: an object is named by the SHA-256 of its bytes, so git never
+/// rewrites one; the pictures `draw` writes are drawn again at each push, so a merge keeps either
+/// side as bytes and the next draw replaces it.
+const ATTRIBUTES: &str = "objects/** -text -diff\n/roadmap.svg -text -diff -merge\n\
+                          /roadmap-dark.svg -text -diff -merge\n";
 
 fn unless_there(path: &Path, text: &str) -> anyhow::Result<()> {
     if path.exists() {

@@ -616,7 +616,8 @@ fn stored_markup_is_minted_only_where_it_is_read() {
 /// The closed world is the Prodrome's restricted project, and this application builds no typst
 /// world or library of its own: a second world would be a second containment to keep in step
 /// with the tab's. The Prodrome's unrestricted project is built in the same one file, for a
-/// template whose library is `Library::Open`, and only the templates name that library.
+/// template whose library is `Library::Open`, and only the templates name that library: the
+/// pages', and the picture of a public store, which compiles in `tokens.typ` with the binary.
 #[test]
 fn the_closed_world_is_the_one_world_and_library_built_here() {
     for needle in [
@@ -643,7 +644,10 @@ fn the_closed_world_is_the_one_world_and_library_built_here() {
     }
     assert_eq!(
         production_callers(&["Library::", "Open,"].concat()),
-        vec!["todo/src/rendering.rs"]
+        vec![
+            "cli/src/commands/prodrome/picture.rs",
+            "todo/src/rendering.rs"
+        ]
     );
 }
 

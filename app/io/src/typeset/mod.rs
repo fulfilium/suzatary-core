@@ -3,12 +3,13 @@
 //!
 //! The closed library has `html` and `plugin` removed from its global scope and from `std`, so
 //! no spelling, field access or `eval` reaches either. Either world holds only the files a job
-//! sets: no package is fetched, and there is no font and no clock. The compile has no time
-//! bound, so the box runs it in a child it can kill ([`closed`]).
+//! sets: no package, no clock, no font but [`bundled_fonts`]. The compile has no time bound, so
+//! the box runs it in a child it can kill ([`closed`]).
 
 pub mod closed;
 
 pub use closed::Closed;
+
 use prodrome_typst_wasm::Project;
 use serde::Deserialize;
 use suzatary_base::capability::{Diagnostic, Rejected, Typeset};
@@ -54,6 +55,16 @@ pub fn compile(job: &Job) -> Result<String, Rejected> {
         }
     }
     read(job, &project.compile(&job.main, &job.state))
+}
+
+/// Adds typst's faces, once.
+pub fn bundled_fonts() {
+    static ADDED: std::sync::Once = std::sync::Once::new();
+    ADDED.call_once(|| {
+        for face in typst_assets::fonts() {
+            prodrome_typst_wasm::add_font(face.to_vec());
+        }
+    });
 }
 
 #[derive(Deserialize)]

@@ -58,6 +58,8 @@ lettre.workspace = true
 rustix = { version = "1", features = ["process", "pty", "termios"] }
 # Authored markup compiled in the closed world (`typeset`): the Prodrome's restricted project.
 prodrome-typst-wasm.workspace = true
+# The faces a drawing is set in (`typeset::bundled_fonts`).
+typst-assets.workspace = true
 # `durable`'s temporaries and `scratch`'s directories: unpredictable names,
 # created exclusively, private.
 tempfile = "3"

@@ -62,6 +62,8 @@ toml_edit.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
+# A drawing's value is read in Typst through its generated schema (`prodrome draw`).
+schemars.workspace = true
 chrono.workspace = true
 # An API answer's validator is a digest of its bytes (`commands/serve/validated.rs`).
 sha2.workspace = true

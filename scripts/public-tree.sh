@@ -169,7 +169,7 @@ skipped() {
 
 # check <whole|lists|terms> <dir> <manifest or empty for dir's own>
 check() {
-  local rules="$1" dir="$2" manifest="$3" instance data hits repo
+  local rules="$1" dir="$2" manifest="$3" instance data hits
   instance="${SUZATARY_INSTANCE-$REPO/instance.toml}"
   terms="" words="" links="" found="" leaked="" failed=""
   # Any failure but a hit is a check that did not run: 2, never a hit's 1.
@@ -195,18 +195,12 @@ check() {
     else
       skipped "context-terms.txt: the box-local tier has none yet"
     fi
-    # Every instance names `repo`, so a file that does not read stops the check.
-    repo="$("$bin" --instance "$instance" instance get repo)" || {
-      echo "public-tree: the binary ($bin) read no repo from $instance, so the check did not run whole" >&2
+    # The words door 1 reads too (`suzatary instance words`); a file that does not read stops the
+    # check.
+    "$bin" --instance "$instance" instance words >"$words" || {
+      echo "public-tree: the binary ($bin) read no words from $instance, so the check did not run whole" >&2
       exit 2
     }
-    {
-      [ -f "$data/FETCHER" ] && tr -d '[:space:]' <"$data/FETCHER" && echo
-      { "$bin" --instance "$instance" instance get web.app_url 2>/dev/null || true; } |
-        sed -n 's#^[a-z]*://\([^/:]*\).*#\1#p' | tr '.' '\n' | grep -vxE 'ts|net|com|org|www|localhost|[0-9]+' || true
-      { realpath "$instance"; echo "$repo"; "$bin" --instance "$instance" instance get data 2>/dev/null || true; } |
-        sed -n 's#^/\(home\|Users\)/\([^/]*\).*#\2#p'
-    } | tr '[:upper:]' '[:lower:]' | grep -E '^[a-z0-9_-]+$' | sort -u >"$words" || true
   else
     skipped "the data repository's lists and this deployment's names: no instance file"
   fi

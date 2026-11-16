@@ -111,75 +111,64 @@ fn public_tree_is_a_fixpoint_of_itself() {
     );
 }
 
-/// The deployment's own words are one function (`suzatary instance words`, which door 1 reads),
-/// and it gives the words `public-tree.sh`'s own pipeline gives, read live from the script, over
-/// instance files that vary each input of that pipeline.
+/// The deployment's own words, the one function `public-tree.sh` and door 1 read (`suzatary
+/// instance words`), over instance files that vary each of its inputs, are the words stated here:
+/// the box's name in `FETCHER` with its spaces dropped, the labels of `web.app_url`'s host but
+/// the generic ones and those of a scheme not in lower case, and the user of each home path, all
+/// lowercased, and nothing outside `[a-z0-9_-]`. The scratch directory's own home user, where the
+/// temporary directory lies under a home, is a word of every case.
 #[test]
-fn the_deployments_words_are_the_words_the_script_derived() {
-    let script = std::fs::read_to_string(public_tree_script()).expect("the script");
-    let lines: Vec<&str> = script.lines().collect();
-    let fetcher = lines
-        .iter()
-        .position(|line| line.contains(r#"[ -f "$data/FETCHER" ]"#))
-        .expect("the script's words pipeline");
-    let last = (fetcher..lines.len())
-        .find(|&at| lines[at].contains(r#">"$words""#))
-        .expect("the pipeline's end");
-    let pipeline = lines[fetcher - 1..=last]
-        .join("\n")
-        .replace(r#" >"$words""#, "");
+fn the_deployments_words_are_the_words_stated() {
     let (home, users, tailnet) = (
         concat!("/ho", "me"),
         concat!("/Use", "rs"),
         concat!(".ts", ".net"),
     );
-    let cases: [(&str, Option<&str>); 5] = [
+    let cases: [(&str, Option<&str>, &[&str]); 5] = [
         (
             &format!(
                 "repo = \"{home}/zzuser/code\"\ndata = \"{users}/ZzMac/data\"\n[web]\n\
                  app_url = \"https://zzbox.ZzNet{tailnet}:8443/app\"\n"
             ),
             Some(" zz fetch\n"),
+            &["zzbox", "zzfetch", "zzmac", "zznet", "zzuser"],
         ),
         (
             "repo = \"relative/code\"\n[web]\napp_url = \"http://www.10.localhost\"\n",
             None,
+            &[],
         ),
         (
             "repo = \"/srv/code\"\n[web]\napp_url = \"HTTPS://zzupper.example.org\"\n",
             Some("zzhost"),
+            &["zzhost"],
         ),
         (
             &format!("repo = \"{home}//x\"\n[web]\napp_url = \"://zz..odd_label\"\n"),
             Some(""),
+            &["odd_label", "zz"],
         ),
-        ("repo = \"/srv/code\"\n", Some("zz.box-1\n")),
+        ("repo = \"/srv/code\"\n", Some("zz.box-1\n"), &[]),
     ];
-    for (i, (text, fetcher)) in cases.iter().enumerate() {
+    for (i, (text, fetcher, stated)) in cases.iter().enumerate() {
         let scratch = Scratch::new(&format!("words-{i}"));
         let instance = scratch.join("instance.toml");
         std::fs::write(&instance, text).expect("the instance");
         if let Some(fetcher) = fetcher {
             std::fs::write(scratch.join("FETCHER"), fetcher).expect("FETCHER");
         }
-        let repo = binary::run(Path::new(binary::path()))
-            .args([
-                "--instance",
-                &instance.to_string_lossy(),
-                "instance",
-                "get",
-                "repo",
-            ])
-            .output()
-            .expect("the binary runs");
-        let scripted = Command::new("bash")
-            .args(["-c", &pipeline])
-            .env("bin", binary::path())
-            .env("instance", &instance)
-            .env("data", &*scratch)
-            .env("repo", String::from_utf8_lossy(&repo.stdout).trim_end())
-            .output()
-            .expect("bash runs");
+        let mut expected: std::collections::BTreeSet<String> =
+            stated.iter().map(|word| (*word).to_owned()).collect();
+        let real = std::fs::canonicalize(&instance).expect("the instance's real path");
+        let mut parts = real
+            .components()
+            .skip(1)
+            .map(std::path::Component::as_os_str);
+        if let (Some(root), Some(user)) = (parts.next(), parts.next())
+            && (root == "home" || root == "Users")
+        {
+            expected.insert(user.to_string_lossy().to_lowercase());
+        }
         let function = binary::run(Path::new(binary::path()))
             .args([
                 "--instance",
@@ -190,11 +179,11 @@ fn the_deployments_words_are_the_words_the_script_derived() {
             .output()
             .expect("the binary runs");
         assert!(function.status.success(), "{}", stderr(&function));
-        assert_eq!(
-            String::from_utf8_lossy(&function.stdout),
-            String::from_utf8_lossy(&scripted.stdout),
-            "case {i}"
-        );
+        let words: std::collections::BTreeSet<String> = String::from_utf8_lossy(&function.stdout)
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(words, expected, "case {i}");
     }
 }
 
@@ -1485,4 +1474,238 @@ fn public_tree_guard_incremental_and_full_checks_agree() {
         "{}",
         moved.2
     );
+}
+
+/// Door 2 over a public store's repository: `prodrome draw`'s pictures pass the scan of a commit
+/// exactly when drawing the store at that commit gives their bytes, wherever and however often the
+/// store is drawn. One byte changed in a picture is refused, and so is a picture drawn before an
+/// object its commit adds; each refusal names the file and no word. A commit with an object door 1
+/// would refuse is refused as before. The redraw reads the commit alone: a link is a hit by its
+/// path, and the commit's own `.gitattributes` change nothing it reads. A body the closed world
+/// refuses or stops is drawn as text.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn door_2_admits_a_picture_by_drawing_the_store_again() {
+    use prodrome_core::literal::Datetime;
+    use suzatary_record::record::{MarkupSource, mk_authored};
+    let scratch = Scratch::new("door-2");
+    let instance = throwaway_deployment(&scratch);
+    let roadmap = scratch.join("roadmap");
+    let packages =
+        std::env::var_os("TYPST_PACKAGE_PATH").expect("TYPST_PACKAGE_PATH: run in .#triage");
+    let suzatary = |args: &[&std::ffi::OsStr]| {
+        let out = binary::run(Path::new(binary::path()))
+            .args(args)
+            .env("TYPST_PACKAGE_PATH", &packages)
+            .output()
+            .expect("the binary runs");
+        assert!(out.status.success(), "{args:?}: {}", stderr(&out));
+        out
+    };
+    let os = |text: &str| std::ffi::OsString::from(text);
+    suzatary(&[
+        &os("prodrome"),
+        &os("init"),
+        &os("--public"),
+        &os("--store"),
+        roadmap.as_os_str(),
+    ]);
+    let add = |id: &str, body: &str, day: u32| {
+        let at = Datetime::new(2026, 11, day, 9, 0, 0, 0).expect("an instant");
+        let record = mk_authored(
+            id,
+            at,
+            "assistant",
+            "todo",
+            at,
+            MarkupSource::from_chain(body),
+            prodrome_core::fpl::mk_flat(0.4).expect("a price"),
+            Vec::new(),
+            "",
+            "",
+            MarkupSource::escaped(""),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "",
+        )
+        .expect("a record");
+        suzatary_store::store::append_to(
+            &prodrome_core::store::EventStore::new(
+                &roadmap,
+                prodrome_core::policy::Untrusted::none(),
+            ),
+            suzatary_record::record::GENESIS,
+            record,
+        )
+        .expect("appends");
+    };
+    let draw = || {
+        suzatary(&[
+            &os("prodrome"),
+            &os("draw"),
+            &os("--store"),
+            roadmap.as_os_str(),
+            &os("--link"),
+            &os("https://example.org/roadmap/"),
+        ]);
+    };
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&roadmap)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+            .args(args)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {}", stderr(&out));
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    };
+    let scan = |range: &str| {
+        Command::new(repo().join("scripts/public-scan.sh"))
+            .arg(&roadmap)
+            .arg(range)
+            .env(suzatary_cli::instance::ENV, &instance)
+            .env("SUZATARY_BIN", binary::path())
+            .env("TYPST_PACKAGE_PATH", &packages)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("public-scan.sh runs")
+    };
+    git(&["init", "-q", "-b", "main"]);
+    add("coldstart", "A cold start reads every object again", 1);
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "the first task"]);
+    let first = (
+        std::fs::read(roadmap.join("roadmap.svg")).expect("the picture"),
+        std::fs::read(roadmap.join("roadmap-dark.svg")).expect("the dark picture"),
+    );
+    assert_ne!(first.0, first.1, "the two themes drew one picture");
+    assert!(
+        std::fs::read_to_string(roadmap.join("README.md"))
+            .expect("the README")
+            .contains("<a href=\"https://example.org/roadmap/\"><picture>"),
+    );
+    add("foldrun", "Keep the fold's reading across restarts", 2);
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "a second task"]);
+    git(&["tag", "fresh"]);
+
+    // The same store drawn again elsewhere, in another zone and language, gives the same bytes.
+    let copy = scratch.join("copy");
+    std::fs::create_dir_all(&copy).expect("a copy");
+    let archive = Command::new("sh")
+        .arg("-c")
+        .arg("git -C \"$1\" archive HEAD | tar -x -C \"$2\"")
+        .args(["sh", &roadmap.to_string_lossy(), &copy.to_string_lossy()])
+        .output()
+        .expect("archive runs");
+    assert!(archive.status.success(), "{}", stderr(&archive));
+    let again = binary::run(Path::new(binary::path()))
+        .args(["prodrome", "draw", "--admissions", "--store"])
+        .arg(&copy)
+        .env("TYPST_PACKAGE_PATH", &packages)
+        .env("TZ", "Pacific/Chatham")
+        .env("LANG", "fr_FR.UTF-8")
+        .output()
+        .expect("the binary runs");
+    assert!(again.status.success(), "{}", stderr(&again));
+    let digests = Command::new("sha256sum")
+        .args(["roadmap.svg", "roadmap-dark.svg"])
+        .current_dir(&roadmap)
+        .output()
+        .expect("sha256sum runs");
+    assert_eq!(
+        String::from_utf8_lossy(&again.stdout),
+        String::from_utf8_lossy(&digests.stdout)
+    );
+
+    let out = scan("main");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+
+    // One byte changed in a picture.
+    let mut changed = std::fs::read(roadmap.join("roadmap.svg")).expect("the picture");
+    let at = changed.len() / 2;
+    changed[at] = if changed[at] == b'1' { b'2' } else { b'1' };
+    std::fs::write(roadmap.join("roadmap.svg"), &changed).expect("a changed picture");
+    git(&["commit", "-q", "-am", "a changed picture"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("roadmap.svg:0"), "{}", stderr(&out));
+    assert!(
+        !stderr(&out).contains("roadmap-dark.svg:0"),
+        "{}",
+        stderr(&out)
+    );
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // A picture drawn before the object its commit adds.
+    add("staleone", "A task the picture does not show", 3);
+    git(&["add", "-A"]);
+    git(&[
+        "commit",
+        "-q",
+        "-m",
+        "an object, and the pictures as they were",
+    ]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    for picture in ["roadmap.svg:0", "roadmap-dark.svg:0"] {
+        assert!(stderr(&out).contains(picture), "{}", stderr(&out));
+    }
+    assert!(
+        !stderr(&out).contains("picture does not show"),
+        "{}",
+        stderr(&out)
+    );
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // An object door 1 would refuse, with its pictures drawn: refused by the object's words.
+    add("zzperson", "Ask zzperson about the notes", 3);
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "a task with a term"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("objects/"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("roadmap.svg:0"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("zzperson"), "{}", stderr(&out));
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // The redraw reads the commit alone: a link anywhere in a chartered tree is a hit by its path.
+    std::os::unix::fs::symlink("/etc/hostname", roadmap.join("elsewhere")).expect("a link");
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "a link"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("elsewhere:0 is not a file"),
+        "{}",
+        stderr(&out)
+    );
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // The commit's own attributes change nothing the redraw reads: with its objects export-ignored,
+    // its pictures are still the store's.
+    let attributes = roadmap.join(".gitattributes");
+    let mut text = std::fs::read_to_string(&attributes).expect("init's attributes");
+    text.push_str("objects/** export-ignore\n");
+    std::fs::write(&attributes, text).expect("an export-ignore");
+    git(&["commit", "-q", "-am", "objects export-ignored"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // A body the closed world refuses (it reaches for `plugin`), one it stops (a loop past its
+    // child's CPU cap) and one that breaks a page are each drawn as text, and the store still draws.
+    add("aplugin", "Load #plugin(bytes(()))", 4);
+    add("aloop", "Count #for i in range(1000000000) {}", 4);
+    add("apage", "Before #pagebreak() after", 4);
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "bodies the closed world refuses"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
 }

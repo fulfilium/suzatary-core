@@ -246,6 +246,10 @@ pub enum Opaque {
     /// ASCII (`%XX`, `&#…;`, `\uXXXX`, `\xXX`); one of a letter or digit inside a word, those or
     /// quoted-printable's `=XX`; or two quoted-printable escapes in a row, or an escaped `=`.
     Escaped,
+    /// An SVG image: text whose first element, past a byte-order mark, an XML declaration,
+    /// comments and a doctype, is `svg`, whatever its prefix. An image's words can be shapes
+    /// (typst draws every glyph as an outline), which no reading of its text finds.
+    Drawn,
 }
 
 impl std::fmt::Display for Opaque {
@@ -254,6 +258,7 @@ impl std::fmt::Display for Opaque {
             Opaque::Binary => "not text",
             Opaque::Encoded => "base64 or hex",
             Opaque::Escaped => "text spelled with escapes",
+            Opaque::Drawn => "an SVG drawing",
         })
     }
 }
@@ -488,6 +493,9 @@ impl Opaque {
         if text.contains('\0') {
             return Some(Opaque::Binary);
         }
+        if drawn(text) {
+            return Some(Opaque::Drawn);
+        }
         let boxes: Vec<_> = slots(text).into_iter().map(|slot| slot.sealed).collect();
         let encoded: usize = ALPHABET
             .find_iter(text)
@@ -524,6 +532,51 @@ impl Opaque {
         }
         (spelled >= ESCAPES || QUOTED.is_match(text)).then_some(Opaque::Escaped)
     }
+}
+
+/// Is `text`'s first element, past a byte-order mark, an XML declaration, comments and a doctype
+/// (its internal subset included), an `svg` element, whatever its namespace prefix?
+fn drawn(text: &str) -> bool {
+    let mut rest = text.trim_start_matches('\u{feff}').trim_start();
+    while let Some(after) = rest
+        .strip_prefix("<?")
+        .and_then(|inside| inside.split_once("?>").map(|(_, after)| after))
+        .or_else(|| {
+            rest.strip_prefix("<!--")
+                .and_then(|inside| inside.split_once("-->").map(|(_, after)| after))
+        })
+        .or_else(|| rest.strip_prefix("<!").and_then(past_doctype))
+    {
+        rest = after.trim_start();
+    }
+    let Some(tag) = rest.strip_prefix('<') else {
+        return false;
+    };
+    let name = tag
+        .split(|c: char| c.is_whitespace() || c == '>' || c == '/')
+        .next()
+        .unwrap_or_default();
+    name.rsplit(':')
+        .next()
+        .is_some_and(|local| local.eq_ignore_ascii_case("svg"))
+}
+
+/// What follows a doctype whose `<!` is already read: its `>`, past an internal subset in `[…]`
+/// whose quoted values may hold `]` and `>`.
+fn past_doctype(inside: &str) -> Option<&str> {
+    let mut quote = None;
+    let mut subset = false;
+    for (at, c) in inside.char_indices() {
+        match (quote, c) {
+            (Some(open), c) if c == open => quote = None,
+            (None, '"' | '\'') if subset => quote = Some(c),
+            (None, '[') => subset = true,
+            (None, ']') => subset = false,
+            (None, '>') if !subset => return Some(&inside[at + 1..]),
+            (Some(_) | None, _) => {}
+        }
+    }
+    None
 }
 
 /// The files a person admitted, each by its path and the SHA-256 of its bytes: the manifest,
@@ -1197,6 +1250,34 @@ mod tests {
             escapes(&["%", "20"].concat()),
         ] {
             assert_eq!(Opaque::of(text.as_bytes()), None, "{text}");
+        }
+    }
+
+    /// A file whose first element is `svg` (any prefix), past a byte-order mark, a declaration,
+    /// comments and a doctype with an internal subset, is a drawing; text that only names one (a
+    /// test's literal, a page that builds one) is read.
+    #[test]
+    fn an_svg_is_a_drawing_and_naming_one_is_not() {
+        for drawing in [
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M0 0\"/></svg>\n",
+            "\n <?xml version=\"1.0\"?>\n<!-- a comment -->\n<!DOCTYPE svg>\n<SVG>\n</SVG>",
+            "<svg/>",
+            "\u{feff}<svg viewBox=\"0 0 1 1\"></svg>",
+            "<x:svg xmlns:x=\"http://www.w3.org/2000/svg\"></x:svg>",
+            "<!DOCTYPE svg [<!ENTITY a \"b>c]d\">]>\n<svg></svg>",
+        ] {
+            assert_eq!(
+                Opaque::of(drawing.as_bytes()),
+                Some(Opaque::Drawn),
+                "{drawing}"
+            );
+        }
+        for named in [
+            "let probe = \"<svg><a xlink:href=\\\"x\\\"></a></svg>\";\n",
+            "<p>an icon: <svg viewBox=\"0 0 1 1\"></svg></p>\n",
+            "<svgish>\n",
+        ] {
+            assert_eq!(Opaque::of(named.as_bytes()), None, "{named}");
         }
     }
 

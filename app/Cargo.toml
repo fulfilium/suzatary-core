@@ -120,6 +120,9 @@ typst-syntax = "=0.15.1"
 # THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm without `html` and
 # `plugin`, the crate the tab fetches, at `prodrome_core`'s revision.
 prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "16f1ba25352becaffcd40fde0e028f469d667837", default-features = false }
+# THE FACES A DRAWING IS SET IN (`prodrome draw`): typst's own, at the typst this lock links, in
+# the binary, so no font the machine holds reaches a picture.
+typst-assets = { version = "=0.15.1", features = ["fonts"] }
 
 # CLIPPY PEDANTIC IS ON, AND EACH ALLOW SAYS WHY.
 [workspace.lints.clippy]

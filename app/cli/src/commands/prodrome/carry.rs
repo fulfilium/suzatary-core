@@ -8,7 +8,11 @@
 //! of the source event it restates, so the event the dry run judges is the event `--apply`
 //! writes. The destination is written first and the source second: a run after a crash finds
 //! the carried todos held and writes the cancellations, and a run after a success finds every
-//! carried todo cancelled naming its successor and writes nothing.
+//! carried todo cancelled naming its successor and writes nothing. "Held" is equality of events,
+//! so a row whose todo the destination holds in other words than the row's (a list edited after a
+//! crash) is refused rather than written beside them. A closed todo that a carried price names
+//! (an open release's shipped or dropped item) is carried as it closed, so the release prices and
+//! reads its items the same on the destination.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -27,7 +31,7 @@ use suzatary_record::record::{Authored, Node, Record, TodoEvent};
 use suzatary_signatures::believed::Believed;
 use suzatary_store::store::{Prodrome as _, Reads as _, Shut};
 
-use super::list::{CarriedList, Decision, Restated};
+use super::list::{CarriedList, Decision, Field, Restated};
 use crate::commands::door::{Door, Lists, Opened, published};
 use crate::instance::charter::Charter;
 use crate::instance::{ChainDir, Instance};
@@ -68,9 +72,23 @@ enum Fate<V> {
 enum Why {
     /// The list says so, with its reason and what it restates.
     Listed(Restated),
-    /// A completed release, carried so the version reads the same on the destination, with what
-    /// the list restates of it.
-    Shipped(Restated),
+    /// A closed todo carried as its history, with what the list restates of it.
+    Closed(Closed, Restated),
+}
+
+/// Which closed todo is carried as its history: its record and its first trusted closing, so that
+/// what reads its lot or its price reads the same on the destination.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Closed {
+    /// A completed release no carried price names, with no price and so no rationale: its price
+    /// names items that stay behind, and the version reads only that it completed.
+    Shipped,
+    /// A completed or cancelled todo that a carried todo's price names, a completed release
+    /// among them: an open release's shipped or dropped item, with its own price renamed. A reference to it prices 1 from its
+    /// closing on, as on the source, and the release's items read its lot. The core gives a todo
+    /// whose first record has no price no function at all, so a reference to one carried with
+    /// none would drop out of the release's price.
+    Named,
 }
 
 struct Carried<V> {
@@ -80,12 +98,17 @@ struct Carried<V> {
     leaving: Leaving,
 }
 
-/// What the destination gains.
+/// What the destination gains, by what it holds of the successor: "held" is equality of events.
 enum Landing<V> {
-    /// These events, in order: those of the todo's that the destination does not hold yet.
+    /// These events, in order: it holds none of the row's events, or a prefix of them and nothing
+    /// else of the todo.
     New(Vec<(TodoEvent, V)>),
-    /// Nothing: it holds every event of the todo already.
+    /// Nothing: it holds every event of the row already, and nothing else of the todo.
     Held,
+    /// Refused: it holds an event of the todo the row would not write, as after a run stopped
+    /// between the two stores and a list edited before the next. A store never takes an event
+    /// back, so a second record would stand beside the first.
+    Differs,
 }
 
 /// What becomes of the source.
@@ -215,6 +238,7 @@ impl Row<()> {
                             .collect(),
                     ),
                     Landing::Held => Landing::Held,
+                    Landing::Differs => Landing::Differs,
                 },
                 to: carried.to,
                 why: carried.why,
@@ -230,6 +254,7 @@ impl Carried<Verdict> {
         match &self.landing {
             Landing::New(events) => events.iter().any(|(_, verdict)| verdict.is_err()),
             Landing::Held => false,
+            Landing::Differs => true,
         }
     }
 }
@@ -263,6 +288,10 @@ impl std::fmt::Display for Carry {
                     )?;
                     match &carried.landing {
                         Landing::Held => writeln!(f, "  the destination holds it already")?,
+                        Landing::Differs => writeln!(
+                            f,
+                            "  refused: the destination holds a different record of it"
+                        )?,
                         Landing::New(events) => {
                             for (event, verdict) in events {
                                 write!(
@@ -295,7 +324,13 @@ impl std::fmt::Display for Why {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Why::Listed(restated) => write!(f, "carry: {}", restated.reason),
-            Why::Shipped(_) => write!(f, "completed: carried as completed; its items stay behind"),
+            Why::Closed(Closed::Shipped, _) => {
+                write!(f, "completed: carried as completed; its items stay behind")
+            }
+            Why::Closed(Closed::Named, _) => write!(
+                f,
+                "closed: a carried price names it, so it is carried as it closed"
+            ),
         }
     }
 }
@@ -318,23 +353,13 @@ fn planned(reading: &Reading<'_>, list: &CarriedList) -> anyhow::Result<Vec<Row<
         })
         .map(|(todo, _)| todo)
         .collect();
-    let shipped: Vec<&TodoId> = releases
-        .iter()
-        .copied()
-        .filter(|todo| believed.content.contains_key(*todo))
-        .filter(|todo| {
-            believed
-                .outcome(todo)
-                .iter()
-                .all(|outcome| matches!(outcome, Some(Outcome::Completed(_))))
-        })
-        .collect();
-    let (to, done) = successors(reading, list, &open, &releases, &shipped)?;
+    let closed = closed(reading, &believed, list, &open, &releases);
+    let (to, done) = successors(reading, list, &open, &releases, &closed)?;
     let mut rows = Vec::new();
     for (todo, decision) in list
         .todos
         .iter()
-        .filter(|(todo, _)| !shipped.contains(todo))
+        .filter(|(todo, _)| !closed.contains_key(todo))
     {
         let fate = match (decision, done.get(todo)) {
             (Decision::Stay { reason }, _) => Fate::Stays {
@@ -352,22 +377,111 @@ fn planned(reading: &Reading<'_>, list: &CarriedList) -> anyhow::Result<Vec<Row<
             fate,
         });
     }
-    for todo in shipped {
+    for (todo, how) in closed {
+        let restated = match list.todos.get(todo) {
+            Some(Decision::Carry(restated)) => restated.clone(),
+            Some(Decision::Stay { .. }) | None => Restated::kept(),
+        };
         rows.push(Row {
             id: todo.clone(),
-            fate: carried(
-                reading,
-                &believed,
-                &to,
-                todo,
-                Why::Shipped(match list.todos.get(todo) {
-                    Some(Decision::Carry(restated)) => restated.clone(),
-                    Some(Decision::Stay { .. }) | None => Restated::kept(),
-                }),
-            ),
+            fate: carried(reading, &believed, &to, todo, Why::Closed(how, restated)),
         });
     }
     Ok(rows)
+}
+
+/// The closed todos carried as their history: each completed release, and each completed or
+/// cancelled todo that a carried price names, whether the list carries that price's todo now or
+/// an earlier run did, closed over the prices of the closed todos it adds.
+fn closed<'a>(
+    reading: &Reading<'_>,
+    believed: &'a Believed,
+    list: &CarriedList,
+    open: &BTreeSet<&TodoId>,
+    releases: &[&'a TodoId],
+) -> BTreeMap<&'a TodoId, Closed> {
+    let completed = |todo: &TodoId| {
+        believed
+            .outcome(todo)
+            .iter()
+            .all(|outcome| matches!(outcome, Some(Outcome::Completed(_))))
+    };
+    let mut closed: BTreeMap<&TodoId, Closed> = releases
+        .iter()
+        .copied()
+        .filter(|todo| believed.content.contains_key(*todo) && completed(todo))
+        .map(|todo| (todo, Closed::Shipped))
+        .collect();
+    let earlier = |todo: &TodoId| match list.todos.get(todo) {
+        Some(Decision::Carry(restated)) => {
+            cancelled_to(reading, todo, restated.to.as_ref().unwrap_or(todo))
+        }
+        Some(Decision::Stay { .. }) | None => false,
+    };
+    let by_name: BTreeMap<&str, &TodoId> = believed
+        .content
+        .keys()
+        .map(|todo| (todo.as_str(), todo))
+        .collect();
+    let mut priced: Vec<&TodoId> = list
+        .todos
+        .iter()
+        .filter(|(todo, decision)| {
+            matches!(decision, Decision::Carry(_)) && (open.contains(todo) || earlier(todo))
+        })
+        .filter_map(|(todo, _)| by_name.get(todo.as_str()).copied())
+        .collect();
+    let mut seen = BTreeSet::new();
+    while let Some(todo) = priced.pop() {
+        for name in names(believed, todo) {
+            let Some(&item) = by_name.get(name.as_str()) else {
+                continue;
+            };
+            if seen.insert(item)
+                && !believed.is_open(item)
+                && !earlier(item)
+                && closed.get(item) != Some(&Closed::Named)
+                && believed
+                    .content
+                    .get(item)
+                    .into_iter()
+                    .flatten()
+                    .all(|record| !record.payload.is_decision())
+            {
+                closed.insert(item, Closed::Named);
+                priced.push(item);
+            }
+        }
+    }
+    closed
+}
+
+/// The todos of this store that `todo`'s price names: the price [`built`] carries, its specs'
+/// candidates, else its record's.
+fn names(believed: &Believed, todo: &TodoId) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    let specs: Vec<&Term> = match believed.specs.get(todo).map(Vec::as_slice) {
+        Some(specs @ [_, ..]) => specs.iter().collect(),
+        Some([]) | None => believed
+            .content
+            .get(todo)
+            .into_iter()
+            .flatten()
+            .map(|record| &record.payload.spec)
+            .collect(),
+    };
+    for spec in specs {
+        spec.cata(|layer: TermF<()>| {
+            if let TermF::Ref {
+                store: None,
+                entity,
+            } = layer
+            {
+                names.insert(entity);
+            }
+        });
+    }
+    names
 }
 
 /// Each carried todo's successor by its id, an earlier run's beside the others, and the todos an
@@ -377,7 +491,7 @@ fn successors(
     list: &CarriedList,
     open: &BTreeSet<&TodoId>,
     releases: &[&TodoId],
-    shipped: &[&TodoId],
+    closed: &BTreeMap<&TodoId, Closed>,
 ) -> anyhow::Result<(BTreeMap<String, TodoId>, BTreeMap<TodoId, TodoId>)> {
     let mut wrong = Vec::new();
     for todo in open {
@@ -401,26 +515,39 @@ fn successors(
                 "gives the release {} a new id; releases.toml names it by its own",
                 todo.as_str()
             )),
+            Decision::Carry(Restated {
+                rationale: Field::Restated(_),
+                ..
+            }) if closed.get(todo) == Some(&Closed::Shipped) => wrong.push(format!(
+                "restates the rationale of the completed release {}, which is carried with no \
+                 price for one to explain",
+                todo.as_str()
+            )),
+            Decision::Stay { .. } if closed.contains_key(todo) => wrong.push(format!(
+                "lets {} stay, which a carried price names; it is carried as it closed",
+                todo.as_str()
+            )),
             Decision::Stay { .. } | Decision::Carry(_) => {}
-        }
-        if let (Decision::Carry(_), true) = (decision, shipped.contains(&todo)) {
-            continue;
         }
         if let Decision::Carry(restated) = decision {
             let successor = restated.to.clone().unwrap_or_else(|| todo.clone());
-            if open.contains(todo) {
+            if open.contains(todo) || closed.contains_key(todo) {
                 to.insert(todo.as_str().to_owned(), successor);
             } else if cancelled_to(reading, todo, &successor) {
                 done.insert(todo.clone(), successor);
             } else {
-                wrong.push(format!("carries {}, which is not open", todo.as_str()));
+                wrong.push(format!(
+                    "carries {}, which is not open and no carried price names",
+                    todo.as_str()
+                ));
             }
-        } else if !open.contains(todo) {
+        } else if !open.contains(todo) && !closed.contains_key(todo) {
             wrong.push(format!("lets {} stay, which is not open", todo.as_str()));
         }
     }
-    for todo in shipped {
-        to.insert(todo.as_str().to_owned(), (*todo).clone());
+    for todo in closed.keys() {
+        to.entry(todo.as_str().to_owned())
+            .or_insert_with(|| (*todo).clone());
     }
     for (from, successor) in &done {
         to.insert(from.as_str().to_owned(), successor.clone());
@@ -460,8 +587,8 @@ fn successor_note(named: &ChainName, successor: &TodoId) -> String {
     format!("carried to {reference}")
 }
 
-/// The fate of one todo the carry takes: an open one with what the list restates, or a
-/// completed release as completed, with no items.
+/// The fate of one todo the carry takes: an open one with what the list restates, or a closed
+/// one as it closed.
 fn carried(
     reading: &Reading<'_>,
     believed: &Believed,
@@ -470,8 +597,11 @@ fn carried(
     why: Why,
 ) -> Fate<()> {
     let successor = match &why {
-        Why::Listed(Restated { to: Some(to), .. }) => to.clone(),
-        Why::Listed(Restated { to: None, .. }) | Why::Shipped(_) => todo.clone(),
+        Why::Listed(Restated { to: Some(to), .. })
+        | Why::Closed(Closed::Named, Restated { to: Some(to), .. }) => to.clone(),
+        Why::Listed(Restated { to: None, .. })
+        | Why::Closed(Closed::Named, Restated { to: None, .. })
+        | Why::Closed(Closed::Shipped, _) => todo.clone(),
     };
     match built(reading, believed, to, todo, &successor, &why) {
         Ok((landing, leaving)) => Fate::Carried(Carried {
@@ -527,8 +657,20 @@ fn built(
         ));
     }
     let (spec, restated) = match why {
-        Why::Listed(restated) => (renamed(&spec, to)?, restated.clone()),
-        Why::Shipped(restated) => (prodrome_core::fpl::mk_absent(), restated.clone()),
+        Why::Listed(restated) | Why::Closed(Closed::Named, restated) => {
+            (renamed(&spec, to)?, restated.clone())
+        }
+        Why::Closed(Closed::Shipped, restated) => {
+            (prodrome_core::fpl::mk_absent(), restated.clone())
+        }
+    };
+    // A record with no price holds no rationale: there is nothing for one to explain.
+    let rationale = match why {
+        Why::Closed(Closed::Shipped, _) => Vec::new(),
+        Why::Listed(_) | Why::Closed(Closed::Named, _) => restated
+            .rationale
+            .clone()
+            .or(source.payload.rationale.clone()),
     };
     // Restated words are the carrier's own, so the carrier authors them; words carried as they
     // stand keep their author. Either is published under the name the list gives it.
@@ -544,7 +686,7 @@ fn built(
     let payload = Record {
         body: restated.body.or(kept.body),
         detail: restated.detail.or(kept.detail),
-        rationale: restated.rationale.or(kept.rationale),
+        rationale,
         waiting_on: restated.waiting_on.or(kept.waiting_on),
         category: restated.category.or(kept.category),
         subtodos: restated.subtodos.or(kept.subtodos),
@@ -567,55 +709,72 @@ fn built(
             actor: reading.carrier.clone(),
             note: successor_note(reading.named, successor),
         })),
-        Why::Shipped(_) => {
-            events.push(completed(reading, todo, successor)?);
+        Why::Closed(..) => {
+            events.push(closing(reading, todo, successor)?);
             Leaving::AsItWas
         }
     };
     let held = reading.held.get(successor).map_or(&[][..], Vec::as_slice);
-    let new: Vec<(TodoEvent, ())> = events
-        .into_iter()
-        .filter(|event| !held.contains(event))
-        .map(|event| (event, ()))
-        .collect();
-    let landing = if new.is_empty() {
-        Landing::Held
-    } else {
-        Landing::New(new)
-    };
-    Ok((landing, leaving))
+    Ok((landing(events, held), leaving))
 }
 
-/// A completed release's first trusted completion, as its successor's, under its public actor.
-/// The completion's note is the train's private record of the land, so none is published.
-fn completed(
-    reading: &Reading<'_>,
-    todo: &TodoId,
-    successor: &TodoId,
-) -> Result<TodoEvent, String> {
-    let completed = reading
+/// What the destination gains of `events`, given the events of the todo it `held`.
+fn landing(mut events: Vec<TodoEvent>, held: &[TodoEvent]) -> Landing<()> {
+    let prefix = events
+        .iter()
+        .take_while(|event| held.contains(event))
+        .count();
+    if held.iter().any(|event| !events[..prefix].contains(event)) {
+        return Landing::Differs;
+    }
+    match events.split_off(prefix) {
+        new if new.is_empty() => Landing::Held,
+        new => Landing::New(new.into_iter().map(|event| (event, ())).collect()),
+    }
+}
+
+/// A closed todo's first trusted closing, as its successor's, under its public actor: its first
+/// completion where it has one, else its first cancellation, as a release reads an item's lot
+/// (`suzatary_core::release::Lot`). The note is the source's own record of why (a release's is
+/// the train's record of its land), so none is published.
+fn closing(reading: &Reading<'_>, todo: &TodoId, successor: &TodoId) -> Result<TodoEvent, String> {
+    let trusted: Vec<&TodoEvent> = reading
         .nodes
         .iter()
         .filter(|node| node.event().is_some_and(|e| e.todo() == todo))
-        .filter_map(|node| match node.event() {
-            Some(TodoEvent::Completed(done))
-                if reading
-                    .untrusted
-                    .standing(node.name(), node.event()?)
-                    .binds() =>
-            {
-                Some(done)
-            }
-            _ => None,
+        .filter(|node| {
+            node.event()
+                .is_some_and(|event| reading.untrusted.standing(node.name(), event).binds())
         })
-        .min_by_key(|done| done.at)
-        .ok_or_else(|| "its completion is not a trusted event".to_owned())?;
-    Ok(TodoEvent::Completed(Lifecycle {
-        todo: successor.clone(),
-        at: completed.at,
-        actor: public(reading, &completed.actor)?,
-        note: String::new(),
-    }))
+        .filter_map(Node::event)
+        .collect();
+    let first = |of: fn(&TodoEvent) -> Option<&Lifecycle>| {
+        trusted
+            .iter()
+            .filter_map(|event| of(event))
+            .min_by_key(|closed| closed.at)
+    };
+    let published = |closed: &Lifecycle| -> Result<Lifecycle, String> {
+        Ok(Lifecycle {
+            todo: successor.clone(),
+            at: closed.at,
+            actor: public(reading, &closed.actor)?,
+            note: String::new(),
+        })
+    };
+    let completion = first(|event| match event {
+        TodoEvent::Completed(closed) => Some(closed),
+        _ => None,
+    });
+    let cancellation = first(|event| match event {
+        TodoEvent::Cancelled(closed) => Some(closed),
+        _ => None,
+    });
+    match (completion, cancellation) {
+        (Some(closed), _) => published(closed).map(TodoEvent::Completed),
+        (None, Some(closed)) => published(closed).map(TodoEvent::Cancelled),
+        (None, None) => Err("its closing is not a trusted event".to_owned()),
+    }
 }
 
 /// The name the list publishes `actor` under; an actor it does not name refuses the row.

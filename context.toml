@@ -28,7 +28,8 @@ allowance = 2000
 # 2026-11-16: raised by hand to the figure of the tree merged with #520 for the start that folds no conversations (#521, +614 on top of #520's figure, about 5 s off every start).
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.149 for a page's reading as its JSON's bytes, parsed once (#522, +7,899: the collections bench, `Text`, `Hosted::reply` and the worker's dressing); accepted at the review of #522.
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.151 for the secrets in one call, the sweeps of what is held and the start's `default` named (#527, +3,569: 9.4 s of secrets per filing and 6,590 removals per start); accepted at the review of #527.
-reading = 2984103
+# 2026-11-16: raised by hand to the figure of the tree merged with 2.1.152 for the roadmap's picture and door 2's redraw (#525, +12,309 over #527's figure: `prodrome draw` and its template, the carry's closed items, which stage 4 deletes, and their tests); accepted at the review of #525.
+reading = 2996412
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

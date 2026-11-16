@@ -167,6 +167,8 @@
             # THE SAMPLE, NOT THE DEPLOYMENT: `tests/init.rs` pins it as `suzatary init`'s output;
             # the tests that read this box's deployment skip when it is absent, as it is here.
             ./instance.sample.toml
+            # The colour roles a picture of a public store is drawn in (`prodrome draw`).
+            ./tokens.typ
           ];
         };
 
@@ -292,7 +294,8 @@
         # `app/release.toml` beside it at `share/suzatary/release.toml`, read at run time. A
         # release commit rebuilds this copy alone, and `--version` runs before it ships. Door 1
         # runs `libexec/suzatary/gitleaks` over `share/suzatary/secret-rules.toml`
-        # (`suzatary_cli::stamp`), so no unit's PATH needs gitleaks.
+        # (`suzatary_cli::stamp`), so no unit's PATH needs gitleaks. `prodrome draw` imports the
+        # design system from `share/suzatary/typst-packages`.
         suzatary-app = pkgs.runCommand "suzatary-${appVersion}" {
           release = ./app/release.toml;
           rules = ./scripts/secret-rules.toml;
@@ -307,6 +310,7 @@
           cp $release $out/share/suzatary/release.toml
           cp $rules $out/share/suzatary/secret-rules.toml
           ln -s ${pkgs.gitleaks}/bin/gitleaks $out/libexec/suzatary/gitleaks
+          ln -s ${typstPackages} $out/share/suzatary/typst-packages
           [ "$($out/bin/suzatary --version)" = "suzatary ${appVersion}" ] \
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';

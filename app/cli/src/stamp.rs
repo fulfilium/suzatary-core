@@ -16,6 +16,11 @@ pub const GITLEAKS: &str = "libexec/suzatary/gitleaks";
 /// Where the package installs gitleaks's rules, relative to its `<out>`.
 pub const SECRET_RULES: &str = "share/suzatary/secret-rules.toml";
 
+/// Where the package links the Typst package path a drawing imports the design system from,
+/// relative to its `<out>`; a cargo build reads `TYPST_PACKAGE_PATH`, which the flake's shells
+/// set to the same path.
+pub const TYPST_PACKAGES: &str = "share/suzatary/typst-packages";
+
 /// The package an executable was installed from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Package {
@@ -33,6 +38,24 @@ impl Package {
             .and_then(Path::parent)
             .filter(|out| out.join("share/suzatary").is_dir())
             .map_or(Package::Dev, |out| Package::Installed(out.to_owned()))
+    }
+
+    /// The Typst package path a drawing reads: the package's own, else `TYPST_PACKAGE_PATH`.
+    ///
+    /// # Errors
+    /// A cargo build run where `TYPST_PACKAGE_PATH` is unset.
+    pub fn typst_packages(&self) -> anyhow::Result<PathBuf> {
+        match self {
+            Package::Installed(out) => Ok(out.join(TYPST_PACKAGES)),
+            Package::Dev => std::env::var_os("TYPST_PACKAGE_PATH")
+                .map(PathBuf::from)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "a cargo build reads the design system from TYPST_PACKAGE_PATH, which is \
+                         unset: enter nix develop .#triage"
+                    )
+                }),
+        }
     }
 
     /// The running executable's package, looked up once.

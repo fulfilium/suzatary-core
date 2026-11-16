@@ -2,10 +2,12 @@
 //!
 //! An unconfirmed triage-authored todo is marked where it stands, never moved or sunk.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Context;
 use clap::Subcommand;
+use prodrome_core::event::Hash;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::{markup_text, string_text};
 use suzatary_io::clock::SystemClock;
@@ -53,21 +55,7 @@ fn open_todos((read, name): (Read, ChainName), json: bool) -> anyhow::Result<()>
     let nodes = set.held(&name).context("reading the chain")?.nodes;
     let entries = set.entries(&name).context("folding the chain")?;
     let records = suzatary_record::decoration::records_of(nodes);
-
-    // The Inbox's held-batch decisions fold like todos and are dropped, as the web app does.
-    let mut open: Vec<&Entry> = entries
-        .iter()
-        .filter(|entry| one_outcome(entry.outcome()).is_none() && !entry.content().is_empty())
-        .filter(|entry| {
-            entry
-                .content()
-                .first()
-                .and_then(|name| records.get(name))
-                .is_none_or(|record| !record.payload.is_decision())
-        })
-        .collect();
-    // Ascending, ties by id, then every row with no number by id.
-    open.sort_by(|left, right| prodrome_core::view::list_order(left, right));
+    let open = open(&entries, &records);
 
     if json {
         let rows: Vec<serde_json::Value> = open
@@ -119,4 +107,26 @@ fn open_todos((read, name): (Read, ChainName), json: bool) -> anyhow::Result<()>
         println!("{price}  {:<24}{mark} {body}", entry.key.as_str());
     }
     Ok(())
+}
+
+/// The open list of `entries`, whose records are `records`: every open todo with a record but the
+/// Inbox's held-batch decisions, which fold like todos and are dropped as the web app drops them;
+/// ascending, ties by id, then every row with no number by id. `prodrome draw` draws this list.
+pub(crate) fn open<'a>(
+    entries: &'a [Entry],
+    records: &BTreeMap<Hash, &suzatary_record::record::Authored>,
+) -> Vec<&'a Entry> {
+    let mut open: Vec<&Entry> = entries
+        .iter()
+        .filter(|entry| one_outcome(entry.outcome()).is_none() && !entry.content().is_empty())
+        .filter(|entry| {
+            entry
+                .content()
+                .first()
+                .and_then(|name| records.get(name))
+                .is_none_or(|record| !record.payload.is_decision())
+        })
+        .collect();
+    open.sort_by(|left, right| prodrome_core::view::list_order(left, right));
+    open
 }

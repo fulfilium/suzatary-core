@@ -1,9 +1,11 @@
 //! `suzatary prodrome carry`, a migration (AGENTS.md §8): over a fixture upkeep chain with open
-//! todos, completed releases and the open release, and a scratch carried list, the dry run's
-//! verdicts are what `--apply` does; the destination verifies, holds no signature or key object
-//! and reads the same version; every carried source is cancelled naming its successor; a refused
-//! carry, or one whose list a completion has made stale, leaves both stores as they were; and a
-//! second `--apply` writes nothing.
+//! todos, completed releases and the open release (with a completed and a cancelled item), and a
+//! scratch carried list, the dry run's verdicts are what `--apply` does; the destination verifies,
+//! holds no signature or key object, shows every carried todo, reads the same version and prices
+//! the open release the same; every carried source is cancelled naming its successor; a refused
+//! carry, one whose list a completion has made stale, or one whose edited list would write a
+//! record the destination holds differently, leaves both stores as they were; and a second
+//! `--apply` writes nothing.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -58,11 +60,46 @@ fn refs(ids: &[&str]) -> prodrome_core::term::Term {
     fpl::mk_conj(members, -4.0).expect("a conjunction")
 }
 
-/// A box whose upkeep chain holds two completed releases (the first naming a completed item),
-/// the open release naming two open todos, and four more open todos; the destination begun
-/// public beside it, empty.
+/// A box whose upkeep chain is [`an_upkeep_chain`], and the destination begun public beside it,
+/// empty.
 fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let root = scratch(name);
+    an_upkeep_chain(&root);
+    std::fs::create_dir_all(root.join("events")).expect("the life chain");
+    crate::todos::a_chain(&root);
+    std::fs::create_dir_all(root.join("local")).expect("the box-local tier");
+    std::fs::write(root.join("local/personal-terms.txt"), "zzperson\n").expect("terms");
+    std::fs::write(root.join("local/context-terms.txt"), "zzcontext\n").expect("context");
+    std::fs::create_dir_all(root.join("scripts")).expect("scripts");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/secret-rules.toml"),
+        root.join("scripts/secret-rules.toml"),
+    )
+    .expect("the secret rules");
+    let instance = an_instance(&root);
+    let destination = root.join("roadmap");
+    let begun = run(
+        &instance,
+        &[
+            "prodrome",
+            "init",
+            "--public",
+            "--store",
+            &destination.to_string_lossy(),
+        ],
+    );
+    assert!(
+        begun.status.success(),
+        "{}",
+        String::from_utf8_lossy(&begun.stderr)
+    );
+    (root, instance, destination)
+}
+
+/// Two completed releases (the first naming a completed item), the open release naming two open
+/// todos, a completed item, a cancelled one and the second completed release, and four more open
+/// todos.
+fn an_upkeep_chain(root: &Path) {
     let flat = |value: f64| fpl::mk_flat(value).expect("a term");
     let store = EventStore::new(
         root.join("events-suzatary"),
@@ -110,11 +147,32 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
         "",
     ));
     append(record("zzperson", 6, "Ask about the notes", flat(0.7), ""));
+    append(record("itemdone", 6, "Ship the second item", flat(0.6), ""));
+    append(
+        prodrome_core::event::mk_completed("itemdone", at(7), "assistant", "landed").expect("done"),
+    );
+    append(record(
+        "itemdropped",
+        6,
+        "Drop the third item",
+        flat(0.6),
+        "",
+    ));
+    append(
+        prodrome_core::event::mk_cancelled("itemdropped", at(7), "assistant", "moved out")
+            .expect("dropped"),
+    );
     append(record(
         "suzatarytwotwo",
         7,
         "Release two point two",
-        refs(&["coldstart", "zzperson"]),
+        refs(&[
+            "coldstart",
+            "zzperson",
+            "itemdone",
+            "itemdropped",
+            "suzatarytwoone",
+        ]),
         "",
     ));
     append(record("boxdisk", 8, "Watch the disk", flat(0.5), ""));
@@ -126,35 +184,6 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
         "Measured at commit 9c1e4f0b7a2d6e8f13579bdf2468ace013579bdf.",
     ));
     append(record("restated", 9, "Old words", flat(0.65), "Old detail"));
-    std::fs::create_dir_all(root.join("events")).expect("the life chain");
-    crate::todos::a_chain(&root);
-    std::fs::create_dir_all(root.join("local")).expect("the box-local tier");
-    std::fs::write(root.join("local/personal-terms.txt"), "zzperson\n").expect("terms");
-    std::fs::write(root.join("local/context-terms.txt"), "zzcontext\n").expect("context");
-    std::fs::create_dir_all(root.join("scripts")).expect("scripts");
-    std::fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/secret-rules.toml"),
-        root.join("scripts/secret-rules.toml"),
-    )
-    .expect("the secret rules");
-    let instance = an_instance(&root);
-    let destination = root.join("roadmap");
-    let begun = run(
-        &instance,
-        &[
-            "prodrome",
-            "init",
-            "--public",
-            "--store",
-            &destination.to_string_lossy(),
-        ],
-    );
-    assert!(
-        begun.status.success(),
-        "{}",
-        String::from_utf8_lossy(&begun.stderr)
-    );
-    (root, instance, destination)
 }
 
 /// The box's instance file: `life`, and the upkeep chain `suzatary` the release plan names.
@@ -205,6 +234,11 @@ carry = "Said again for the public."
 body = "New words"
 detail = "New detail"
 waiting_on = "the upstream fix"
+
+[todos.itemdropped]
+carry = "A dropped item of the open release."
+as = "itemgone"
+body = "Drop the third item, said again"
 
 [todos.boxdisk]
 {boxdisk}
@@ -283,6 +317,49 @@ fn events(store: &Path) -> Vec<TodoEvent<suzatary_record::record::Record>> {
         .collect()
 }
 
+/// The open release's price as `todos open --json` prints it, reading the chain or store `at`.
+fn price(instance: &Path, at: &[&str]) -> String {
+    let mut args = vec!["todos"];
+    args.extend_from_slice(at);
+    args.extend(["open", "--json"]);
+    let out = run(instance, &args);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rows: serde_json::Value = serde_json::from_slice(&out.stdout).expect("json");
+    rows["open"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .find(|row| row["id"] == "suzatarytwotwo")
+        .map(|row| row["priority"].to_string())
+        .expect("the open release is open")
+}
+
+/// The lots of the open release's items, by the release reading over `events`.
+fn lots(events: &[TodoEvent<suzatary_record::record::Record>]) -> Vec<suzatary_core::release::Lot> {
+    let plan = suzatary_core::release::Plan::declared().expect("the plan");
+    let reading = suzatary_core::release::Reading::of(
+        &plan,
+        events,
+        at(28),
+        &std::collections::BTreeMap::new(),
+    );
+    let mut lots: Vec<_> = reading
+        .releases
+        .into_iter()
+        .find(|release| release.todo.as_str() == "suzatarytwotwo")
+        .expect("the open release")
+        .items
+        .into_iter()
+        .map(|item| item.lot)
+        .collect();
+    lots.sort_unstable();
+    lots
+}
+
 fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -318,7 +395,7 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
     );
     assert_eq!(
         printed.lines().last(),
-        Some("carried 7, staying 0, refused 1"),
+        Some("carried 9, staying 0, refused 1"),
         "{printed}"
     );
     let applied = carry(&instance, &destination, &refusing, true);
@@ -338,7 +415,7 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
     let printed = stdout(&carry(&instance, &destination, &unnamed, false));
     assert_eq!(
         printed.lines().last(),
-        Some("carried 5, staying 1, refused 2"),
+        Some("carried 6, staying 1, refused 3"),
         "{printed}"
     );
     assert!(
@@ -362,7 +439,7 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
     );
     assert_eq!(
         printed.lines().last(),
-        Some("carried 7, staying 1, refused 0"),
+        Some("carried 9, staying 1, refused 0"),
         "{printed}"
     );
     assert!(printed.contains("zzperson → notesask"), "{printed}");
@@ -379,6 +456,16 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
         verdicts.iter().all(|line| line.ends_with(": taken")),
         "{printed}"
     );
+    assert!(
+        printed.contains(
+            "itemdropped → itemgone  closed: a carried price names it, so it is carried as it \
+             closed\n"
+        ),
+        "{printed}"
+    );
+    assert!(printed.contains("  Cancelled at "), "{printed}");
+    let open_release = price(&instance, &["--chain", "suzatary"]);
+    let source_before = events(&source);
 
     // The apply writes exactly the events the dry run judged.
     let applied = carry(&instance, &destination, &list, true);
@@ -423,6 +510,8 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
         "restated",
         "suzatarytwo",
         "suzatarytwoone",
+        "itemdone",
+        "itemgone",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -443,6 +532,23 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
         "{}",
         String::from_utf8_lossy(&verified.stderr)
     );
+    for todo in &expected {
+        let shown = run(
+            &instance,
+            &[
+                "todo",
+                "show",
+                "--store",
+                &destination.to_string_lossy(),
+                todo,
+            ],
+        );
+        assert!(
+            shown.status.success(),
+            "{todo}: {}",
+            String::from_utf8_lossy(&shown.stderr)
+        );
+    }
 
     // The open release names its items by their new ids, and the version reads the same.
     let renamed = events(&destination)
@@ -471,6 +577,13 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
         .counted
     };
     assert_eq!(version(&destination), version(&source));
+    // The open release prices the same, and its items read the same lots: a closed item is carried
+    // as it closed.
+    assert_eq!(
+        price(&instance, &["--store", &destination.to_string_lossy()]),
+        open_release
+    );
+    assert_eq!(lots(&events(&destination)), lots(&source_before));
 
     // A stop between a shipped release's two events: the next run writes the one it lacks.
     let completion = named_objects(&destination)
@@ -505,7 +618,7 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
     let notes: BTreeSet<(String, String)> = events(&source)
         .into_iter()
         .filter_map(|event| match event {
-            TodoEvent::Cancelled(cancelled) => {
+            TodoEvent::Cancelled(cancelled) if cancelled.note.starts_with("carried to ") => {
                 Some((cancelled.todo.as_str().to_owned(), cancelled.note))
             }
             _ => None,
@@ -538,8 +651,9 @@ fn the_carry_does_what_its_dry_run_says_and_once() {
     );
 }
 
-/// A todo completed between the dry run and the apply makes the list name a todo that is not
-/// open: the apply refuses it whole and writes nothing to either store.
+/// A todo completed between the dry run and the apply, which no carried price names, makes the
+/// list name a todo that is not open: the apply refuses it whole and writes nothing to either
+/// store.
 #[test]
 fn a_list_a_completion_made_stale_is_refused_whole() {
     let (root, instance, destination) = a_box("carry-stale");
@@ -551,7 +665,7 @@ fn a_list_a_completion_made_stale_is_refused_whole() {
     );
     let done = run(
         &instance,
-        &["todo", "--chain", "suzatary", "done", "coldstart"],
+        &["todo", "--chain", "suzatary", "done", "foldrun"],
     );
     assert!(
         done.status.success(),
@@ -563,8 +677,142 @@ fn a_list_a_completion_made_stale_is_refused_whole() {
     let applied = carry(&instance, &destination, &list, true);
     let said = String::from_utf8_lossy(&applied.stderr);
     assert!(
-        !applied.status.success() && said.contains("carries coldstart, which is not open"),
+        !applied.status.success()
+            && said.contains("carries foldrun, which is not open and no carried price names"),
         "{said}"
     );
     assert_eq!((held(&source), held(&destination)), before);
+}
+
+/// A run stopped after the destination's write and before the source's cancellations, then a list
+/// edited before the next run: the edited row's record differs from the one the destination
+/// holds, so the row is refused, counted as a refusal, and neither store moves. With the list as
+/// it was, the next run writes the cancellation the stop left out.
+#[test]
+fn a_record_the_destination_holds_differently_is_refused() {
+    let (root, instance, destination) = a_box("carry-differs");
+    let list = a_list(&root, ACTORS, "stay = \"The box's own disk.\"");
+    let applied = carry(&instance, &destination, &list, true);
+    assert!(
+        applied.status.success(),
+        "{}",
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let source = root.join("events-suzatary");
+    let cancellation = named_objects(&source)
+        .into_iter()
+        .find_map(|(name, envelope)| match envelope.event() {
+            Some(TodoEvent::Cancelled(cancelled)) if cancelled.todo.as_str() == "restated" => {
+                Some(name)
+            }
+            _ => None,
+        })
+        .expect("the carry's cancellation of restated");
+    std::fs::remove_file(source.join("objects").join(format!("{cancellation}.py")))
+        .expect("the cancellation removed");
+    let heads = source.join(".heads");
+    if heads.is_dir() {
+        std::fs::remove_dir_all(&heads).expect("the heads' record removed");
+    } else if heads.exists() {
+        std::fs::remove_file(&heads).expect("the heads' record removed");
+    }
+
+    let text = std::fs::read_to_string(&list).expect("the list");
+    let edited = root.join("edited-list.toml");
+    std::fs::write(
+        &edited,
+        text.replace("body = \"New words\"", "body = \"Newer words\""),
+    )
+    .expect("the edited list");
+    let before = (held(&source), held(&destination));
+    let dry = carry(&instance, &destination, &edited, false);
+    let printed = stdout(&dry);
+    assert!(
+        !dry.status.success(),
+        "{printed}{}",
+        String::from_utf8_lossy(&dry.stderr)
+    );
+    assert!(
+        printed.contains(
+            "restated → restated  carry: Said again for the public.\n  refused: the \
+             destination holds a different record of it\n"
+        ),
+        "{printed}"
+    );
+    assert_eq!(
+        printed.lines().last(),
+        Some("carried 8, staying 1, refused 1"),
+        "{printed}"
+    );
+    assert!(
+        !carry(&instance, &destination, &edited, true)
+            .status
+            .success()
+    );
+    assert_eq!((held(&source), held(&destination)), before);
+
+    let resumed = carry(&instance, &destination, &list, true);
+    assert!(
+        resumed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&resumed.stderr)
+    );
+    let carried = events(&source)
+        .into_iter()
+        .filter(|event| {
+            matches!(event, TodoEvent::Cancelled(cancelled)
+                if cancelled.todo.as_str() == "restated"
+                    && cancelled.note == "carried to todo:roadmap/restated")
+        })
+        .count();
+    assert_eq!(
+        carried, 1,
+        "the resumed run wrote the cancellation the stop left out"
+    );
+    assert_eq!(held(&destination), before.1);
+}
+
+/// A closed todo that only an earlier price of a carried todo named stays behind: the carry reads
+/// the price it carries. Here the open release's revised price drops its cancelled item, which the
+/// list then need not name.
+#[test]
+fn a_closed_item_no_carried_price_names_stays_behind() {
+    let (root, instance, destination) = a_box("carry-revised");
+    let store = EventStore::new(
+        root.join("events-suzatary"),
+        prodrome_core::policy::Untrusted::none(),
+    );
+    suzatary_store::store::append_to(
+        &store,
+        suzatary_record::record::GENESIS,
+        prodrome_core::event::mk_spec_revised::<suzatary_record::record::Record>(
+            "suzatarytwotwo",
+            at(10),
+            "assistant",
+            refs(&["coldstart", "zzperson", "itemdone", "suzatarytwoone"]),
+            "",
+        )
+        .expect("a revision"),
+    )
+    .expect("appends");
+    let list = a_list(&root, ACTORS, "stay = \"The box's own disk.\"");
+    let text = std::fs::read_to_string(&list).expect("the list");
+    let (before, after) = text
+        .split_once("[todos.itemdropped]")
+        .expect("the item's table");
+    let (_, rest) = after.split_once("\n\n").expect("the next table");
+    std::fs::write(&list, format!("{before}{rest}")).expect("the list without the item");
+    let dry = carry(&instance, &destination, &list, false);
+    let printed = stdout(&dry);
+    assert!(
+        dry.status.success(),
+        "{printed}{}",
+        String::from_utf8_lossy(&dry.stderr)
+    );
+    assert!(!printed.contains("itemdropped"), "{printed}");
+    assert_eq!(
+        printed.lines().last(),
+        Some("carried 8, staying 1, refused 0"),
+        "{printed}"
+    );
 }

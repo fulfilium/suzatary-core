@@ -6,7 +6,9 @@
 #   scripts/public-scan.sh [--admit <path>]... <repo> <range> [<pr>]
 #
 # An opaque file, or one with a finding `.gitleaksignore` admits, is a hit until `--admit
-# <path>`, taken only at a terminal, admits every version of it the range holds by digest.
+# <path>`, taken only at a terminal, admits every version of it the range holds by digest. A
+# store's pictures (`suzatary prodrome draw`) are admitted where drawing the store at their
+# commit again gives their bytes, and are a hit, by name, where it does not.
 set -Eeuo pipefail
 # 2 when the scan could not run, 1 only for a hit.
 trap 'exit 2' ERR
@@ -36,6 +38,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   echo "public-scan: no instance file, so no lists to scan with" >&2
   exit 2
 }
+bin="${SUZATARY_BIN:-}"
+[ -n "$bin" ] || bin="$("$root/scripts/app-bin.sh")/bin/suzatary"
 scan="$(mktemp -d)"
 trap 'rm -rf "$scan"' EXIT
 mkdir -p "$scan/tree"
@@ -58,6 +62,55 @@ while IFS= read -r commit; do
   }
   if git -C "$repo" cat-file -e "$commit:.gitleaksignore" 2>/dev/null; then
     printf '.gitleaksignore\0' >>"$scan/paths"
+  fi
+  # Door 2's redraw: the binary draws the store at this commit again and prints each picture's
+  # digest, which admits that picture at that path with exactly those bytes; it prints nothing
+  # for a tree whose charter is not public. Each picture is read at every commit, changed or
+  # not, so one drawn before the commit's objects is refused.
+  mkdir -p "$scan/drawn" "$scan/linked"
+  : >"$scan/drawn/$n-${commit:0:12}"
+  : >"$scan/linked/$n-${commit:0:12}"
+  if git -C "$repo" cat-file -e "$commit:charter.toml" 2>/dev/null; then
+    store="$scan/store/$n"
+    mkdir -p "$store"
+    # Blob by blob from the commit's tree, so its own `.gitattributes` (`export-ignore`,
+    # `export-subst`) changes nothing the redraw reads, and nothing outside the commit is read: an
+    # entry that is not a file (a link, a submodule) is a hit by its path.
+    git -C "$repo" ls-tree -r -z --full-tree "$commit" >"$scan/entries" || {
+      echo "public-scan: could not list the tree of ${commit:0:12}" >&2
+      exit 2
+    }
+    while IFS= read -r -d '' entry; do
+      path="${entry#*$'\t'}"
+      read -r mode _ oid <<<"${entry%%$'\t'*}"
+      case "$mode" in
+        100644 | 100755) ;;
+        *)
+          printf '%s:0\n' "$path" >>"$scan/linked/$n-${commit:0:12}"
+          continue
+          ;;
+      esac
+      case "$path" in
+        charter.toml | objects/*)
+          mkdir -p "$store/$(dirname "$path")"
+          git -C "$repo" cat-file blob "$oid" >"$store/$path" || {
+            echo "public-scan: could not write $(printf '%q' "$path") at ${commit:0:12} out" >&2
+            exit 2
+          }
+          ;;
+      esac
+    done <"$scan/entries"
+    "$bin" prodrome draw --store "$store" --admissions >"$scan/drawn/$n-${commit:0:12}" || {
+      echo "public-scan: the store at ${commit:0:12} did not draw again, so its pictures are unread" >&2
+      exit 2
+    }
+    rm -rf "$store"
+    while IFS= read -r line; do
+      path="${line#*  }"
+      if git -C "$repo" cat-file -e "$commit:$path" 2>/dev/null; then
+        printf '%s\0' "$path" >>"$scan/paths"
+      fi
+    done <"$scan/drawn/$n-${commit:0:12}"
   fi
   while IFS= read -r -d '' path; do
     mkdir -p "$tree/$(dirname "$path")"
@@ -95,6 +148,11 @@ for path in "${admits[@]}"; do
 done
 
 leaked=""
+for linked in "$scan"/linked/*; do
+  [ -s "$linked" ] || continue
+  sed "s/^/public-scan: $(basename "$linked"): /; s/\$/ is not a file, and a chartered tree holds files alone/" "$linked" >&2
+  leaked=yes
+done
 for tree in "$scan"/files/* "$scan"/text/*; do
   : >"$scan/admitted"
   for path in "${admits[@]}"; do
@@ -104,7 +162,10 @@ for tree in "$scan"/files/* "$scan"/text/*; do
   status=0
   case "$tree" in
     "$scan"/text/*) words=(--text) ;;
-    *) words=(--admitted "$scan/admitted") ;;
+    *)
+      cat "$scan/drawn/$(basename "$tree")" >>"$scan/admitted"
+      words=(--admitted "$scan/admitted")
+      ;;
   esac
   hits="$("$root/scripts/public-tree.sh" --check --lists "${words[@]}" "$tree")" || status=$?
   if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
