@@ -3,7 +3,6 @@
 
 use serde_json::{Map, Value};
 
-use crate::secretary::memory::FactId;
 use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
@@ -12,6 +11,7 @@ use suzatary_held::attachment::AttachmentId;
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::file_read::FileRead;
 use suzatary_held::held_value::HeldFile;
+use suzatary_memory::secretary::memory::FactId;
 
 /// The field of a file reading that names the file's source.
 pub const SOURCE: &str = "source";

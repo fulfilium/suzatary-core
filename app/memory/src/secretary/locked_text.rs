@@ -95,8 +95,8 @@ prodrome_core::text_literal!(
 /// Locking spends it and answers the key that opens:
 ///
 /// ```
-/// # use suzatary_core::secretary::locked_text::{FreshKey, Locked, Shape};
-/// # use suzatary_core::secretary::salted_text::Words;
+/// # use suzatary_memory::secretary::locked_text::{FreshKey, Locked, Shape};
+/// # use suzatary_memory::secretary::salted_text::Words;
 /// # #[derive(Clone, Debug, PartialEq, Eq)] struct W(String);
 /// # impl Words for W { fn print(&self) -> std::borrow::Cow<'_, str> { self.0.as_str().into() } fn read(p: &str) -> Option<Self> { Some(W(p.into())) } }
 /// # struct S;
@@ -111,8 +111,8 @@ prodrome_core::text_literal!(
 /// so it locks once:
 ///
 /// ```compile_fail,E0382
-/// # use suzatary_core::secretary::locked_text::{FreshKey, Locked, Shape};
-/// # use suzatary_core::secretary::salted_text::Words;
+/// # use suzatary_memory::secretary::locked_text::{FreshKey, Locked, Shape};
+/// # use suzatary_memory::secretary::salted_text::Words;
 /// # #[derive(Clone, PartialEq, Eq)] struct W(String);
 /// # impl Words for W { fn print(&self) -> std::borrow::Cow<'_, str> { self.0.as_str().into() } fn read(p: &str) -> Option<Self> { Some(W(p.into())) } }
 /// # struct S;
@@ -127,7 +127,7 @@ prodrome_core::text_literal!(
 /// and nothing copies it:
 ///
 /// ```compile_fail,E0599
-/// # use suzatary_core::secretary::locked_text::FreshKey;
+/// # use suzatary_memory::secretary::locked_text::FreshKey;
 /// fn copies(key: FreshKey) -> (FreshKey, FreshKey) { (key.clone(), key) }
 /// ```
 pub struct FreshKey([u8; KEY_BYTES]);
@@ -159,8 +159,8 @@ impl std::fmt::Debug for FreshKey {
 /// The key of one locked text, as the key store keeps it: it opens that text and locks nothing.
 ///
 /// ```compile_fail,E0308
-/// # use suzatary_core::secretary::locked_text::{Locked, Shape, TextKey};
-/// # use suzatary_core::secretary::salted_text::Words;
+/// # use suzatary_memory::secretary::locked_text::{Locked, Shape, TextKey};
+/// # use suzatary_memory::secretary::salted_text::Words;
 /// # #[derive(Clone, PartialEq, Eq)] struct W(String);
 /// # impl Words for W { fn print(&self) -> std::borrow::Cow<'_, str> { self.0.as_str().into() } fn read(p: &str) -> Option<Self> { Some(W(p.into())) } }
 /// # struct S;

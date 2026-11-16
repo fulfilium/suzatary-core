@@ -185,7 +185,7 @@ mod tests {
         let mut entries = vec![Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
                 .expect("an instant"),
-            title: crate::secretary::words::Words::kept(format!("About {slug}")),
+            title: suzatary_memory::secretary::words::Words::kept(format!("About {slug}")),
             model: "m".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }];

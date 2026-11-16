@@ -339,7 +339,7 @@ pub fn opened(
 ) -> Result<(), Refusal> {
     let opened = Entry::Opened {
         at,
-        title: crate::secretary::words::Words::kept(title.to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
         model: proposer.named(),
         kind: Kind::Review,
     };

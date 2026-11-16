@@ -2,24 +2,21 @@
 # The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
 # modules, never a higher one's. A file is in the cut of the longest module path below that
 # holds it. A cut that is its own crate (`app/base`, `app/record`, `app/store`, `app/signatures`,
-# `app/todo`, `app/held`, `app/api`) is held by the compiler. The guard layers.rs beside this file
-# reads it; the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is
-# where it is.
-order = ["memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
+# `app/todo`, `app/held`, `app/memory`, `app/api`) is held by the compiler. The guard layers.rs
+# beside this file reads it; the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why
+# each module is where it is.
+order = ["mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
 allowed = [
   { from = "secretary/build", to = "secretary" },
-  { from = "secretary/erasure", to = "secretary/holder" },
   { from = "secretary/filed", to = "secretary" },
   { from = "secretary/held_lines", to = "secretary/digest" },
   { from = "secretary/mail_health", to = "secretary" },
   { from = "secretary/mail_health", to = "secretary/verbs" },
   { from = "secretary/memories", to = "secretary/filed" },
   { from = "secretary/opened", to = "secretary/digest" },
-  { from = "secretary/opened", to = "secretary/held_lines" },
-  { from = "secretary/opened", to = "secretary/line_event" },
   { from = "secretary/undo", to = "secretary" },
 ]
 
@@ -39,11 +36,6 @@ rendering = [
 ]
 
 [layers.modules]
-memory = ["cast", "coding_report", "first_read", "parts", "priced", "secretary/carried",
-  "secretary/erasure", "secretary/fact_life", "secretary/key_ring", "secretary/line_words",
-  "secretary/locked_text", "secretary/memory", "secretary/memory_event", "secretary/opened",
-  "secretary/provenance", "secretary/salted_text", "secretary/scrubbed_under", "secretary/slots",
-  "secretary/texts", "secretary/two_phase", "secretary/words", "verb"]
 mail = ["mail", "outcome"]
 health = ["health"]
 triage = ["mail/corpus", "mail/gone", "mail/heartbeat", "mail/junk", "mail/junk_folder",
@@ -51,22 +43,22 @@ triage = ["mail/corpus", "mail/gone", "mail/heartbeat", "mail/junk", "mail/junk_
   "mail/verbs", "mail/watch", "rule", "wire/triage"]
 services = ["drive", "plugin", "repos", "repositories", "repository", "usage", "weather", "web"]
 google = ["calendar", "google", "url"]
-connect = ["conformance", "connect", "deployment", "release", "secrets", "settings"]
-inbox = ["coding", "content_id", "secretary/act_vocabulary", "secretary/acts", "secretary/card",
-  "secretary/changes", "secretary/decide", "secretary/diff", "secretary/fix", "secretary/inbox",
-  "secretary/inbox_event", "secretary/inbox_json", "secretary/inbox_reading",
+connect = ["cast", "conformance", "connect", "deployment", "release", "secrets", "settings"]
+inbox = ["coding", "content_id", "priced", "secretary/act_vocabulary", "secretary/acts",
+  "secretary/card", "secretary/changes", "secretary/decide", "secretary/diff", "secretary/fix",
+  "secretary/inbox", "secretary/inbox_event", "secretary/inbox_json", "secretary/inbox_reading",
   "secretary/inbox_registers", "secretary/own_round", "secretary/phase", "secretary/proposal",
   "secretary/proposer", "secretary/responded", "secretary/sending", "secretary/sign_in",
-  "secretary/stamp", "secretary/tapped", "wire/inbox"]
+  "secretary/stamp", "secretary/tapped", "verb", "wire/inbox"]
 conversations = ["nonempty", "secretary/about", "secretary/found", "secretary/model",
   "secretary/model_sessions", "secretary/outcome", "secretary/queue", "secretary/search",
   "secretary/store", "secretary/taint", "secretary/tool_name", "secretary/turn_shape",
   "secretary/verb_name"]
-lines = ["timings", "secretary/act_lines", "secretary/conversation_json", "secretary/conversations",
-  "secretary/held_lines", "secretary/held_replica", "secretary/holder", "secretary/husks",
+lines = ["first_read", "parts", "timings", "secretary/act_lines", "secretary/conversation_json",
+  "secretary/conversations", "secretary/held_lines", "secretary/held_replica", "secretary/husks",
   "secretary/line_event", "secretary/line_form", "secretary/line_shape", "secretary/object_stores",
-  "secretary/outline", "secretary/outlines", "secretary/prune", "secretary/rescrub",
-  "secretary/step", "secretary/targets", "secretary/transcript", "wire/lines"]
+  "secretary/opened", "secretary/outline", "secretary/outlines", "secretary/prune",
+  "secretary/rescrub", "secretary/step", "secretary/targets", "secretary/transcript", "wire/lines"]
 topics = ["secretary/answers", "secretary/readings", "secretary/rules", "secretary/stream",
   "secretary/title", "secretary/topics", "wire/topics"]
 digest = ["model_name", "secretary/caused", "secretary/compact", "secretary/compact_ask",

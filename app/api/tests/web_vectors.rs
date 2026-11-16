@@ -35,17 +35,17 @@ use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::conversations;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::memories::Memories;
-use suzatary_core::secretary::memory::{Fact, Kind};
 use suzatary_core::secretary::model::{Model, ModelError, Turn};
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::stamp::stamp;
 use suzatary_core::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::transcript;
 use suzatary_core::stores::InMemory;
 use suzatary_core::wire::topics as wire;
+use suzatary_memory::secretary::memory::{Fact, Kind};
+use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_record::record::TodoEvent;
 use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_signatures::chain_set::Read;
@@ -302,7 +302,7 @@ struct Bundle {
     events: EventStore,
     conversations: conversations::InMemory,
     inbox: InMemory<suzatary_core::secretary::inbox_event::InboxEvent>,
-    memory: InMemory<suzatary_core::secretary::memory_event::MemoryEvent>,
+    memory: InMemory<suzatary_memory::secretary::memory_event::MemoryEvent>,
     texts: InMemoryDoc<TextName, Text<Fact>>,
     digests: InMemory<suzatary_core::secretary::digest_event::DigestEvent>,
     digest_texts: InMemoryDoc<TextName, Text<suzatary_core::secretary::digest_line::Line>>,
@@ -374,7 +374,7 @@ impl Bundle {
             Proposal::Remember {
                 text: kept.name().clone(),
                 kind: Kind::Person,
-                replaces: suzatary_core::secretary::memory::Replaces::Nothing,
+                replaces: suzatary_memory::secretary::memory::Replaces::Nothing,
             },
             Reasons::new(
                 "her signature says so",
@@ -548,7 +548,7 @@ impl Answers for Bundle {
 /// and, once `resealed` runs, a turn sealed under older rules and sealed again.
 fn every_line() -> Vec<ConversationEntry> {
     use suzatary_core::secretary::store::{Namer, Title};
-    use suzatary_core::secretary::words::Words;
+    use suzatary_memory::secretary::words::Words;
     let opened = later(now(), 200);
     let owner = CAST.owner.actor.to_owned();
     let person = |at: u32, text: &str| ConversationEntry::Said {
@@ -604,7 +604,7 @@ fn every_line() -> Vec<ConversationEntry> {
 /// every such slot sealed again as `migrate-scrub` does.
 fn resealed(bundle: &Bundle, id: &ConversationId) {
     use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_store::store::Doc as _;
     let held = transcript::read(bundle.conversations.conversations(), id)
         .expect("reads")
@@ -666,7 +666,7 @@ fn scripted_conversation(bundle: &Bundle, id: &ConversationId) -> Vec<Conversati
     vec![
         ConversationEntry::Opened {
             at: opened,
-            title: suzatary_core::secretary::words::Words::kept("About the deed".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("About the deed".to_owned()),
             model: "vectors-fixture".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },
@@ -1038,7 +1038,7 @@ fn every_stage(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     };
     let mut entries = vec![ConversationEntry::Opened {
         at: opened,
-        title: suzatary_core::secretary::words::Words::kept("Every stage".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("Every stage".to_owned()),
         model: "vectors-fixture".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     }];
@@ -1113,7 +1113,7 @@ fn with_an_unreadable_proposal(bundle: &Bundle, id: &ConversationId) -> (Proposa
         &[
             ConversationEntry::Opened {
                 at: opened,
-                title: suzatary_core::secretary::words::Words::kept("Two proposals".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Two proposals".to_owned()),
                 model: "vectors-fixture".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },
@@ -1225,7 +1225,7 @@ fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
         &[
             ConversationEntry::Opened {
                 at,
-                title: suzatary_core::secretary::words::Words::kept("Three proposals".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Three proposals".to_owned()),
                 model: "vectors-fixture".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },
@@ -1480,7 +1480,7 @@ fn keys_of(conversations: &conversations::InMemory) -> BTreeMap<String, String> 
             let key = conversations.keys.get(&name).expect("reads").expect("held");
             (
                 name.as_str().to_owned(),
-                suzatary_core::secretary::key_ring::spelled(&key),
+                suzatary_memory::secretary::key_ring::spelled(&key),
             )
         })
         .collect()
@@ -1495,7 +1495,7 @@ fn erase_the_first_answer(bundle: &Bundle, id: &ConversationId) {
         bundle.conversations.conversations(),
         id,
         read.lines()[line].line.keys().cloned().collect(),
-        suzatary_core::secretary::erasure::Erasure::Asked {
+        suzatary_memory::secretary::erasure::Erasure::Asked {
             by: actor(CAST.owner.actor),
         },
         later(now(), 300),
@@ -1509,8 +1509,8 @@ fn forgotten(
     conversations: &conversations::InMemory,
     keys: &BTreeMap<String, String>,
 ) -> BTreeMap<String, Vec<String>> {
-    use suzatary_core::secretary::locked_text::KeyName;
-    let ring = suzatary_core::secretary::key_ring::KeyRing::of(
+    use suzatary_memory::secretary::locked_text::KeyName;
+    let ring = suzatary_memory::secretary::key_ring::KeyRing::of(
         &keys
             .iter()
             .map(|(name, hex)| (KeyName::new(name.clone()).expect("a key name"), hex.clone()))
@@ -1622,7 +1622,7 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     vec![
         ConversationEntry::Opened {
             at: opened,
-            title: suzatary_core::secretary::words::Words::kept("Trains".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Trains".to_owned()),
             model: "vectors-fixture".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },
@@ -1641,7 +1641,7 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
                 verb: "remember".into(),
                 answer: r#"{"remembered": 1, "kind": "owner"}"#.to_owned(),
                 outcome: suzatary_core::secretary::outcome::Outcome::Remembered {
-                    fact: suzatary_core::secretary::memory::FactId(1),
+                    fact: suzatary_memory::secretary::memory::FactId(1),
                 },
                 files: Vec::new(),
             },
@@ -1899,10 +1899,10 @@ fn skeleton_of(bundle: &Bundle) -> suzatary_core::wire::lines::SkeletonPayload {
 fn memory_of(bundle: &Bundle, trains: &ConversationId) -> wire::MemoryPayload {
     wire::MemoryPayload {
         facts: vec![wire::FactRow {
-            id: suzatary_core::secretary::memory::FactId(1),
+            id: suzatary_memory::secretary::memory::FactId(1),
             at: stamp(later(now(), 202)),
             fact: "Takes the early train".to_owned(),
-            kind: suzatary_core::secretary::memory::Kind::Owner,
+            kind: suzatary_memory::secretary::memory::Kind::Owner,
             said: wire::FactSaid::Said {
                 on: wire::SaidOn::Turn {
                     conversation: trains.to_string(),
@@ -2110,7 +2110,7 @@ fn the_answers_vector_holds_every_answer() {
         &ConversationId::new("pulled").expect("a slug"),
         &ConversationEntry::Opened {
             at,
-            title: suzatary_core::secretary::words::Words::kept("Pulled".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Pulled".to_owned()),
             model: "vectors-fixture".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },
@@ -2427,7 +2427,7 @@ fn the_answers_vector_holds_every_answer() {
         .expect("the lines read");
     let opened = suzatary_core::secretary::transcript::opened(
         &objects,
-        &|name: &suzatary_core::secretary::locked_text::KeyName| {
+        &|name: &suzatary_memory::secretary::locked_text::KeyName| {
             bundle.conversations.conversations().reads().key(name)
         },
     );
@@ -2531,10 +2531,10 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([wire::MemoryPayload {
         facts: vec![
             wire::FactRow {
-                id: suzatary_core::secretary::memory::FactId(1),
+                id: suzatary_memory::secretary::memory::FactId(1),
                 at: stamp(at),
                 fact: "Takes the early train".to_owned(),
-                kind: suzatary_core::secretary::memory::Kind::Person,
+                kind: suzatary_memory::secretary::memory::Kind::Person,
                 said: wire::FactSaid::Said {
                     on: wire::SaidOn::Turn {
                         conversation: deed.to_string(),
@@ -2543,10 +2543,10 @@ fn the_answers_vector_holds_every_answer() {
                 },
             },
             wire::FactRow {
-                id: suzatary_core::secretary::memory::FactId(2),
+                id: suzatary_memory::secretary::memory::FactId(2),
                 at: stamp(at),
                 fact: format!("{} keeps the books", CAST.counsel.name),
-                kind: suzatary_core::secretary::memory::Kind::Person,
+                kind: suzatary_memory::secretary::memory::Kind::Person,
                 said: wire::FactSaid::Said {
                     on: wire::SaidOn::Tapped {
                         conversation: deed.to_string(),
@@ -2555,14 +2555,14 @@ fn the_answers_vector_holds_every_answer() {
                 },
             },
             wire::FactRow {
-                id: suzatary_core::secretary::memory::FactId(6),
+                id: suzatary_memory::secretary::memory::FactId(6),
                 at: stamp(at),
                 fact: "Takes the early train on weekdays".to_owned(),
-                kind: suzatary_core::secretary::memory::Kind::Owner,
+                kind: suzatary_memory::secretary::memory::Kind::Owner,
                 said: wire::FactSaid::Merged {
                     from: vec![
-                        suzatary_core::secretary::memory::FactId(4),
-                        suzatary_core::secretary::memory::FactId(5),
+                        suzatary_memory::secretary::memory::FactId(4),
+                        suzatary_memory::secretary::memory::FactId(5),
                     ],
                     origins: vec![
                         wire::SaidOn::Turn {
@@ -2582,15 +2582,15 @@ fn the_answers_vector_holds_every_answer() {
             },
         ],
         cap: 200,
-        forgotten: vec![suzatary_core::secretary::memory::FactId(3)],
+        forgotten: vec![suzatary_memory::secretary::memory::FactId(3)],
         merged: vec![
             wire::MergedFact {
-                fact: suzatary_core::secretary::memory::FactId(4),
-                into: suzatary_core::secretary::memory::FactId(6),
+                fact: suzatary_memory::secretary::memory::FactId(4),
+                into: suzatary_memory::secretary::memory::FactId(6),
             },
             wire::MergedFact {
-                fact: suzatary_core::secretary::memory::FactId(5),
-                into: suzatary_core::secretary::memory::FactId(6),
+                fact: suzatary_memory::secretary::memory::FactId(5),
+                into: suzatary_memory::secretary::memory::FactId(6),
             },
         ],
         cards: vec![wire::CardWords {
@@ -2983,8 +2983,8 @@ fn failed_chain() -> suzatary_signatures::wire::signatures::FailedChain {
 #[test]
 fn a_stored_slot_is_under_the_rules_this_build_names() {
     use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_held::redact::Rules;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 
     let text = std::fs::read_to_string(vector("replicas.json")).expect("the replicas vector");
     let vectors: serde_json::Value = serde_json::from_str(&text).expect("json");
@@ -3049,14 +3049,14 @@ fn keys_conversation() -> ConversationId {
 
 /// The conversation opened and three turns, each sealed under `under`.
 fn three_turns(
-    under: &suzatary_core::secretary::scrubbed_under::ScrubbedUnder,
+    under: &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder,
 ) -> conversations::InMemory {
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_store::store::Doc as _;
     let lines = conversations::InMemory::default();
     let opened = ConversationEntry::Opened {
         at: now(),
-        title: suzatary_core::secretary::words::Words::kept("Keys".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("Keys".to_owned()),
         model: "a-cli/small".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     };
@@ -3101,7 +3101,7 @@ fn erase_line(lines: &conversations::InMemory, at: usize) {
         lines.conversations(),
         &keys_conversation(),
         keys,
-        suzatary_core::secretary::erasure::Erasure::Asked {
+        suzatary_memory::secretary::erasure::Erasure::Asked {
             by: actor(CAST.owner.actor),
         },
         later(now(), 60),
@@ -3127,8 +3127,8 @@ fn migrate_again(lines: &conversations::InMemory) {
 fn reseal_again(lines: &conversations::InMemory) {
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_core::secretary::line_shape::LineShape;
-    use suzatary_core::secretary::line_words::LineWords;
-    use suzatary_core::secretary::locked_text::KeyName;
+    use suzatary_memory::secretary::line_words::LineWords;
+    use suzatary_memory::secretary::locked_text::KeyName;
     use suzatary_store::store::Doc as _;
     let read = transcript::read(lines.conversations(), &keys_conversation()).expect("reads");
     // Each slot's words as a reader reads them, by the key of the slot as first written.
@@ -3194,8 +3194,8 @@ fn fresh() -> Device {
 fn restore_keys_from_before(
     lines: &conversations::InMemory,
     before: &[(
-        suzatary_core::secretary::locked_text::KeyName,
-        suzatary_core::secretary::locked_text::TextKey,
+        suzatary_memory::secretary::locked_text::KeyName,
+        suzatary_memory::secretary::locked_text::TextKey,
     )],
 ) {
     use suzatary_store::store::Doc as _;
@@ -3211,8 +3211,8 @@ fn restore_keys_from_before(
 fn held_keys(
     lines: &conversations::InMemory,
 ) -> Vec<(
-    suzatary_core::secretary::locked_text::KeyName,
-    suzatary_core::secretary::locked_text::TextKey,
+    suzatary_memory::secretary::locked_text::KeyName,
+    suzatary_memory::secretary::locked_text::TextKey,
 )> {
     use suzatary_store::store::Gets as _;
     lines
@@ -3241,7 +3241,7 @@ fn erase_a_reseal_s_key(lines: &conversations::InMemory) {
         lines.conversations(),
         &keys_conversation(),
         [own].into(),
-        suzatary_core::secretary::erasure::Erasure::Asked {
+        suzatary_memory::secretary::erasure::Erasure::Asked {
             by: actor(CAST.owner.actor),
         },
         later(now(), 60),
@@ -3257,8 +3257,8 @@ fn erase_a_reseal_s_key(lines: &conversations::InMemory) {
 /// the box's own rule over the objects (`transcript::dead`), and by the core's rule over the
 /// skeleton it took (`Outlines::retired`, what a tab's core reads), given the keys it holds.
 fn converged(name: &str, lines: &conversations::InMemory, steps: &[Step<'_>]) {
-    use suzatary_core::secretary::locked_text::KeyName;
     use suzatary_core::secretary::outlines::{self, Parsed};
+    use suzatary_memory::secretary::locked_text::KeyName;
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
@@ -3287,7 +3287,7 @@ fn converged(name: &str, lines: &conversations::InMemory, steps: &[Step<'_>]) {
         .iter()
         .map(|name| name.as_str().to_owned())
         .collect();
-    let ring = suzatary_core::secretary::key_ring::KeyRing::of(
+    let ring = suzatary_memory::secretary::key_ring::KeyRing::of(
         &device
             .keys
             .iter()
@@ -3344,7 +3344,7 @@ fn converged(name: &str, lines: &conversations::InMemory, steps: &[Step<'_>]) {
 /// live again, and an erasure of a reseal's own key, which the box refuses.
 #[test]
 fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     let (current, unversioned) = (ScrubbedUnder::current(()), ScrubbedUnder::Unversioned);
     let migrate_twice = |lines: &conversations::InMemory| {
         migrate(lines);
@@ -3397,7 +3397,7 @@ fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
 #[test]
 fn a_slot_resealed_twice_reads_its_newest_reseal() {
     use suzatary_core::secretary::line_shape::LineShape;
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_store::store::Gets as _;
     let lines = three_turns(&ScrubbedUnder::Unversioned);
     migrate(&lines);
@@ -3463,7 +3463,7 @@ proptest::proptest! {
             1..6,
         )
     ) {
-        use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+        use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
         // A migration reseals the stale slots once; a second finds none. Sealing again reads every
         // slot's words, so it comes after a migration and before any erasure. A line is erased once.
         let mut migrated = false;

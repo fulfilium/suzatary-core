@@ -14,7 +14,6 @@ pub mod briefs;
 pub mod build;
 mod call;
 pub mod card;
-pub mod carried;
 pub mod caused;
 pub mod changes;
 pub mod coding;
@@ -41,8 +40,6 @@ pub mod digest_spent;
 pub mod digest_view;
 pub mod digests;
 pub mod done_elsewhere;
-pub mod erasure;
-pub mod fact_life;
 pub mod failing;
 pub(crate) mod file_query;
 pub mod file_search;
@@ -54,7 +51,6 @@ pub mod gate;
 pub mod google_sign_in;
 pub mod held_lines;
 pub mod held_replica;
-pub mod holder;
 pub mod husks;
 pub mod inbox;
 pub mod inbox_event;
@@ -63,19 +59,14 @@ mod inbox_json;
 pub mod inbox_reading;
 pub mod inbox_registers;
 pub mod indexed_tree;
-pub mod key_ring;
 pub mod lapsed;
 pub mod line_event;
 pub mod line_form;
 pub mod line_shape;
-pub mod line_words;
 #[cfg(any(test, feature = "nothing"))]
 pub mod live_shape;
-pub mod locked_text;
 pub mod mail_health;
 pub mod memories;
-pub mod memory;
-pub mod memory_event;
 pub mod merged_patches;
 pub mod model;
 pub mod model_sessions;
@@ -90,7 +81,6 @@ pub mod own_round;
 pub mod phase;
 pub mod proposal;
 pub mod proposer;
-pub mod provenance;
 pub mod prune;
 pub mod queue;
 pub mod read_holders;
@@ -102,13 +92,10 @@ pub mod rescrub;
 pub mod responded;
 pub mod review;
 pub mod rules;
-pub mod salted_text;
-pub mod scrubbed_under;
 pub mod search;
 pub mod sending;
 pub mod shown_record;
 pub mod sign_in;
-pub mod slots;
 pub mod stamp;
 pub mod step;
 pub mod store;
@@ -118,7 +105,6 @@ pub mod sweep;
 pub mod taint;
 pub mod tapped;
 pub mod targets;
-pub mod texts;
 pub mod title;
 pub mod token_expiry;
 pub mod told;
@@ -126,12 +112,10 @@ pub mod tool_name;
 pub mod topics;
 pub mod transcript;
 pub mod turn_shape;
-pub mod two_phase;
 pub mod undo;
 pub mod verb_answer;
 pub mod verb_name;
 pub mod verbs;
-pub mod words;
 
 use serde_json::{Map, Value};
 
@@ -496,7 +480,7 @@ fn load(
                             "kind": kind.as_str(),
                         }),
                     };
-                    if let memory::Replaces::Facts(from) = replaces {
+                    if let suzatary_memory::secretary::memory::Replaces::Facts(from) = replaces {
                         card["act"] = "consolidate".into();
                         card["replaces"] = from.ids().iter().map(|id| id.0).collect();
                     }

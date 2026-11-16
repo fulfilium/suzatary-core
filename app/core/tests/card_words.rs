@@ -15,13 +15,13 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::inbox::{self, Fold, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Kept, Memories};
-use suzatary_core::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sources};
-use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::proposal::{Proposal, Reasons};
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
-use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::texts;
 use suzatary_core::stores::InMemory;
+use suzatary_memory::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sources};
+use suzatary_memory::secretary::memory_event::MemoryEvent;
+use suzatary_memory::secretary::salted_text::{Text, TextName};
+use suzatary_memory::secretary::texts;
 use suzatary_store::store::{InMemoryDoc, Prodrome};
 
 /// Each salt the next number.

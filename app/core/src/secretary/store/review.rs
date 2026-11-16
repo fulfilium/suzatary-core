@@ -1,7 +1,7 @@
 //! One review answer about a triage card, or a batch before cards, as a reader gets it.
 
 use super::Decision;
-use crate::secretary::words::Words;
+use suzatary_memory::secretary::words::Words;
 
 /// One review answer, as a reader gets it: the fold of one [`Entry::Reviewed`](super::Entry::Reviewed). A review is a
 /// fact about a moment, so re-reviewing a head later is another line.

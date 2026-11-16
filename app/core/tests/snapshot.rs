@@ -8,12 +8,12 @@ use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 
 use prodrome_core::event::Hash;
-use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::line_form::{LinePulling, LineReplica};
-use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::wire::lines::{NodeHeader, SkeletonNode};
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::held::Said;
 use suzatary_store::snapshot::{NotASnapshot, from_snapshot, snapshot};
 use suzatary_store::wire::store::SinceRead;

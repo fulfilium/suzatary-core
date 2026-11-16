@@ -681,7 +681,7 @@ mod tests {
             &id,
             &Entry::Opened {
                 at: at(0),
-                title: suzatary_core::secretary::words::Words::kept("Morning".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },
@@ -742,7 +742,7 @@ mod tests {
     fn words_that_cannot_be_read_fail_the_reading() {
         use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
-        use suzatary_core::secretary::memory::{Fact, Kind, Origin};
+        use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let history = Objects::open(dir.path().join("memory"));
@@ -844,7 +844,7 @@ mod tests {
     fn the_memory_keeps_its_words_apart_and_forgetting_deletes_them() {
         use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
-        use suzatary_core::secretary::memory::{Fact, Kind, Origin};
+        use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let history = Objects::open(dir.path().join("memory"));
@@ -964,7 +964,7 @@ mod tests {
         let minute = |m: u32| Datetime::new(2026, 10, 6, 9, m, 0, 0).expect("an instant");
         let opened = Entry::Opened {
             at: minute(0),
-            title: suzatary_core::secretary::words::Words::kept("Morning".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
             model: "a fake model".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         };
@@ -1001,8 +1001,8 @@ mod tests {
     #[test]
     fn nothing_is_deleted_or_summarised_over_a_damaged_line() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::memory::{Fact, Kind, Origin};
         use suzatary_core::secretary::{digest_line::Line, digests::Digests, memories::Memories};
+        use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let lines = spoken(dir.path());

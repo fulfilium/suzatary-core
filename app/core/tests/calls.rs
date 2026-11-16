@@ -139,7 +139,7 @@ impl Prodrome<TodoEvent> for Fixed {
 }
 
 /// Where a line pushed to [`Fixed`]'s conversation keeps its keys.
-static KEYS: std::sync::LazyLock<suzatary_core::secretary::locked_text::InMemoryKeys> =
+static KEYS: std::sync::LazyLock<suzatary_memory::secretary::locked_text::InMemoryKeys> =
     std::sync::LazyLock::new(Default::default);
 static ENTROPY: std::sync::LazyLock<suzatary_core::secretary::conversations::Counting> =
     std::sync::LazyLock::new(Default::default);
@@ -167,7 +167,7 @@ impl Reads<LineEvent> for Fixed {
             &Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 7, 0, 0, 0, 0)
                     .expect("an instant"),
-                title: suzatary_core::secretary::words::Words::kept(String::new()),
+                title: suzatary_memory::secretary::words::Words::kept(String::new()),
                 model: "nothing".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },

@@ -579,9 +579,11 @@ mod tests {
         let erase = boxs(
             "default",
             Proposal::Act(crate::secretary::acts::Act::Erase {
-                fact: crate::secretary::memory::FactId(2),
-                keys: [crate::secretary::locked_text::KeyName::new("a".repeat(64))
-                    .expect("a key name")]
+                fact: suzatary_memory::secretary::memory::FactId(2),
+                keys: [
+                    suzatary_memory::secretary::locked_text::KeyName::new("a".repeat(64))
+                        .expect("a key name"),
+                ]
                 .into(),
             }),
         );

@@ -12,8 +12,8 @@ use super::{Digest, Kept, Placed, Shape, under_kept};
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::digest_line::Line;
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::salted_text::TextName;
 use crate::secretary::store::Entry;
+use suzatary_memory::secretary::salted_text::TextName;
 
 /// The digest of `lines` (every conversation's objects, in the store's order, each read as
 /// `opened` reads it) under `history`: [`under`] of their [`Shape`].

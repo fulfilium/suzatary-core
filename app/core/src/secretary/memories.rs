@@ -12,15 +12,16 @@ use prodrome_core::literal::Datetime;
 
 use crate::secretary::digests::{Digests, ReadDigests};
 use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::memory::{
-    Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered, Replaces, Sources,
-};
-use crate::secretary::memory_event::{self, MemoryEvent};
 use crate::secretary::proposal::Proposal;
-use crate::secretary::salted_text::{Text, TextName};
-use crate::secretary::two_phase::TwoPhase;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
+use suzatary_memory::secretary::memory::{
+    Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered, Replaces, Sources,
+};
+use suzatary_memory::secretary::memory_event::{self, MemoryEvent};
+use suzatary_memory::secretary::salted_text::{Text, TextName};
+use suzatary_memory::secretary::texts;
+use suzatary_memory::secretary::two_phase::TwoPhase;
 use suzatary_store::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 
 /// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
@@ -414,13 +415,11 @@ impl Held<'_> {
         part("whole.lines", || {
             whole(memories.digests.lines.lines, "conversations")
         })?;
-        let facts = crate::secretary::texts::dead([
+        let facts = texts::dead([
             part("facts", || memories.reads().history())?.naming(),
             part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
         ]);
-        let summaries = crate::secretary::texts::dead([part("summaries", || {
-            memories.digests.reads().naming()
-        })?]);
+        let summaries = texts::dead([part("summaries", || memories.digests.reads().naming())?]);
         for name in &facts {
             part("delete", || memories.texts.remove(name))?;
         }
@@ -454,7 +453,7 @@ impl Held<'_> {
                         lines,
                         conversation,
                         caused.erased,
-                        crate::secretary::erasure::Erasure::Forgot { fact: *fact },
+                        suzatary_memory::secretary::erasure::Erasure::Forgot { fact: *fact },
                         gone.at,
                     )?;
                 }
@@ -471,7 +470,7 @@ impl Held<'_> {
         &self,
         conversation: &suzatary_base::conversation_id::ConversationId,
         fact: FactId,
-        keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
+        keys: std::collections::BTreeSet<suzatary_memory::secretary::locked_text::KeyName>,
         at: Datetime,
     ) -> Result<(), Refusal> {
         let lines = self.memories.digests.lines;
@@ -889,7 +888,7 @@ mod tests {
                 texts: &digest_texts,
                 lines: crate::secretary::conversations::Conversations {
                     lines: &lines,
-                    keys: &crate::secretary::locked_text::InMemoryKeys::default(),
+                    keys: &suzatary_memory::secretary::locked_text::InMemoryKeys::default(),
                     entropy: &entropy,
                     renders: &suzatary_base::capability::Nothing,
                     sessions: &suzatary_base::capability::Nothing,

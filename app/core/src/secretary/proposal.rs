@@ -9,8 +9,10 @@ pub use forward::{EML, Forward, Forwarded, Style};
 pub(crate) use forward::{FORWARD, FORWARDED};
 pub use reasons::{NoReasons, Reasons};
 
-use crate::secretary::memory::Replaces;
 use serde::{Deserialize, Serialize};
+use suzatary_memory::secretary::memory;
+use suzatary_memory::secretary::memory::Replaces;
+use suzatary_memory::secretary::salted_text;
 
 /// One act the secretary wants performed and will not perform itself, whole.
 ///
@@ -41,11 +43,11 @@ pub enum Proposal {
     /// deletes them while this record stays.
     Remember {
         /// The words, by the name the memory's text store keeps them under.
-        text: crate::secretary::salted_text::TextName,
+        text: salted_text::TextName,
         /// What it is about.
-        kind: crate::secretary::memory::Kind,
+        kind: memory::Kind,
         /// The standing facts it replaces.
-        replaces: crate::secretary::memory::Replaces,
+        replaces: memory::Replaces,
     },
     /// A decision to record, whole, as the owner's own once he taps it.
     Decide(suzatary_todo::decisions::Draft),
@@ -122,9 +124,7 @@ impl Proposal {
     #[must_use]
     pub fn headline(
         &self,
-        words: impl Fn(
-            &crate::secretary::salted_text::TextName,
-        ) -> crate::secretary::inbox_reading::Words,
+        words: impl Fn(&salted_text::TextName) -> crate::secretary::inbox_reading::Words,
     ) -> String {
         use crate::secretary::inbox_reading::Words;
         match self {

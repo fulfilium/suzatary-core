@@ -456,7 +456,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
 /// A fresh session is headed with all memory, a resume with what moved, a quiet memory nothing.
 #[test]
 fn the_memory_heads_a_batch_once() {
-    use suzatary_core::secretary::memory::{Fact, Kind, Origin};
+    use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
     let at =
         || suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant");
     let caps = Fakes::new("session-memory").model(FakeModel::saying([

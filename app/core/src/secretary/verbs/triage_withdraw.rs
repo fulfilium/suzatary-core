@@ -95,7 +95,7 @@ impl Verb for TriageWithdraw {
                     objects: crate::nonempty::NonEmpty::of(vec![reviewed.clone()])
                         .ok_or_else(|| Refusal::internal("one card"))?,
                 },
-                why: crate::secretary::words::Words::kept(why.clone()),
+                why: suzatary_memory::secretary::words::Words::kept(why.clone()),
             },
         )?;
         Ok(json!({

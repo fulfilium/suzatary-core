@@ -534,8 +534,10 @@ impl Fold {
 
     /// The texts the remember cards name, live while a card is open.
     #[must_use]
-    pub fn naming(&self) -> crate::secretary::texts::Naming<crate::secretary::memory::Fact> {
-        use crate::secretary::texts::Liveness;
+    pub fn naming(
+        &self,
+    ) -> suzatary_memory::secretary::texts::Naming<suzatary_memory::secretary::memory::Fact> {
+        use suzatary_memory::secretary::texts::Liveness;
         self.objects()
             .filter_map(|object| match &object.asked.proposal {
                 Proposal::Remember { text, .. } => {

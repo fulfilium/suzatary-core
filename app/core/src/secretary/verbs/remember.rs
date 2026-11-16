@@ -4,13 +4,13 @@ use serde_json::json;
 
 use crate::secretary;
 use crate::secretary::gate::Gate;
-use crate::secretary::memory::{self, Fact, Replaces};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verb_name::Binding;
 use crate::secretary::verbs::{IfCarded, memory_card};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_memory::secretary::memory::{self, Fact, Replaces};
 
 /// Remember a fact for every later conversation.
 pub struct Remember;

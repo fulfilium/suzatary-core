@@ -35,8 +35,8 @@ struct Disk {
     lines: ConversationStores,
     digests: Objects<suzatary_core::secretary::digest_event::DigestEvent>,
     summaries: Texts<suzatary_core::secretary::digest_line::Line>,
-    facts: Objects<suzatary_core::secretary::memory_event::MemoryEvent>,
-    words: Texts<suzatary_core::secretary::memory::Fact>,
+    facts: Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
+    words: Texts<suzatary_memory::secretary::memory::Fact>,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
 }
 

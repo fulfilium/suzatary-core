@@ -8,12 +8,12 @@ use std::collections::BTreeMap;
 use prodrome_core::event::Hash;
 use serde::{Deserialize, Serialize};
 
-use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::locked_text::{KEY_BYTES, KeyName};
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::wire::lines::{NodeHeader, SkeletonNode};
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::locked_text::{KEY_BYTES, KeyName};
 use suzatary_store::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
 use suzatary_store::replica::pulling::{Delta, Pulling};
 use suzatary_store::replica::row::Row;

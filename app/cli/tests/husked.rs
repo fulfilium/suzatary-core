@@ -7,13 +7,13 @@ use std::path::Path;
 use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::Conversations;
-use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::transcript;
 use suzatary_io::husked::Husked;
 use suzatary_io::objects::Objects;
 use suzatary_io::text_keys::TextKeys;
+use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_store::store::{Prodrome as _, Reads as _};
 
 type Lines = Objects<
@@ -85,7 +85,7 @@ fn written(root: &Path) -> BTreeSet<Hash> {
     for n in 0..3 {
         let opened = Entry::Opened {
             at: at(0),
-            title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
             model: "scripted".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         };

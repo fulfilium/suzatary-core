@@ -18,6 +18,7 @@ use crate::secretary::model::Turn;
 use crate::secretary::transcript;
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_memory::secretary::words::Words;
 
 /// What one review did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,7 +171,7 @@ pub fn review(
                 &id,
                 &Entry::ReviewFailed {
                     at: caps.clock.now(),
-                    reason: crate::secretary::words::Words::kept(refusal.message().to_owned()),
+                    reason: Words::kept(refusal.message().to_owned()),
                     standing: standing(caps.inbox).map_or(0, |open| open.len()),
                 },
             );
@@ -267,7 +268,7 @@ fn hold_the_rest(
                 batch: card,
                 // A hold names no object.
                 decision: Decision::Held,
-                why: crate::secretary::words::Words::kept(why.clone()),
+                why: Words::kept(why.clone()),
             },
         )?;
     }
@@ -433,7 +434,7 @@ mod tests {
                 id,
                 &Entry::Opened {
                     at,
-                    title: crate::secretary::words::Words::kept("Review".to_owned()),
+                    title: suzatary_memory::secretary::words::Words::kept("Review".to_owned()),
                     model: "m".to_owned(),
                     kind: Kind::Review,
                 },
@@ -450,7 +451,9 @@ mod tests {
                 chain: "life".to_owned(),
                 batch: "a".repeat(64),
                 decision: Decision::Held,
-                why: crate::secretary::words::Words::kept("it changes a commitment".to_owned()),
+                why: suzatary_memory::secretary::words::Words::kept(
+                    "it changes a commitment".to_owned(),
+                ),
             },
         )
         .expect("written");

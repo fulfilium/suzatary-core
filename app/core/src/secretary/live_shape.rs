@@ -17,16 +17,16 @@ use crate::secretary::digest_line::Line;
 use crate::secretary::digests::{Digests, compactor};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::ReadMemories;
-use crate::secretary::memory::Fact;
-use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::model::Turn;
 use crate::secretary::recollection::Recollection;
-use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::{Entry, Kind};
-use crate::secretary::words::Words;
 use crate::stores::InMemory;
 use suzatary_base::capability::Entropy as _;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::memory::Fact;
+use suzatary_memory::secretary::memory_event::MemoryEvent;
+use suzatary_memory::secretary::salted_text::{Text, TextName};
+use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 
 /// How large a memory to build.

@@ -32,11 +32,11 @@ use prodrome_core::literal::Datetime;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
-use crate::secretary::line_words::LineWords;
-use crate::secretary::locked_text::KeyName;
 use crate::secretary::transcript;
-use crate::secretary::words::Words;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::line_words::LineWords;
+use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::StoreError;
 
 /// How the lines' slots stand against the current rules.

@@ -12,6 +12,7 @@ use crate::verb::{Caught, Verb};
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::topic_target::Target;
+use suzatary_memory::secretary::memory;
 
 /// Propose an act the box performs on a tap.
 pub struct ProposeAct;
@@ -267,15 +268,13 @@ fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
         )));
     }
     match crate::secretary::taint::opener(&stored) {
-        Some(crate::secretary::memory::Origin::Turn { conversation, turn }) => {
+        Some(memory::Origin::Turn { conversation, turn }) => {
             Ok(Reference::Target(Target::Round { conversation, turn }))
         }
-        Some(crate::secretary::memory::Origin::Tapped { .. }) | None => {
-            Err(Refusal::forbidden(format!(
-                "this round was not opened by the owner's own words, and {why}: the owner asks \
+        Some(memory::Origin::Tapped { .. }) | None => Err(Refusal::forbidden(format!(
+            "this round was not opened by the owner's own words, and {why}: the owner asks \
                  in a round of their own"
-            )))
-        }
+        ))),
     }
 }
 

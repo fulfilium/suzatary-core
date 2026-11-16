@@ -8,10 +8,10 @@ use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
 
 use crate::secretary::inbox::{Check, Unchecked};
-use crate::secretary::memory::Fact;
 use crate::secretary::phase::Phase;
 use crate::secretary::responded::Responded;
 use crate::secretary::stamp::stamp;
+use suzatary_memory::secretary::memory::Fact;
 
 /// One proposal's state register, read.
 #[derive(Debug, Clone, PartialEq, Eq)]

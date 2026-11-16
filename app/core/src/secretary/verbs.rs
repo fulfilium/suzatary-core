@@ -14,6 +14,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_held::mail_error::MailError;
+use suzatary_memory::secretary::memory;
 
 mod add_topics;
 mod attachments;
@@ -260,11 +261,7 @@ fn memory_card(
     caps: &crate::secretary::Secretary<'_>,
     id: &ConversationId,
     carded: &IfCarded,
-    (fact, kind, replaces): (
-        &super::memory::Fact,
-        super::memory::Kind,
-        super::memory::Replaces,
-    ),
+    (fact, kind, replaces): (&memory::Fact, memory::Kind, memory::Replaces),
 ) -> Result<usize, Refusal> {
     let reasons = carded.reasons("the fact")?;
     // Under the memory's hold, so no sweep decides about these words between keeping them and
@@ -288,7 +285,7 @@ fn memory_card(
 /// # Errors
 /// [`Refusal::forbidden`] for a round the box opened, or one that has read something not the
 /// owner's own words, saying `instead`, what the owner can do.
-fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<super::memory::Origin, Refusal> {
+fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<memory::Origin, Refusal> {
     match Gate::of(
         Binding::Remembers,
         &conversations::read(call.caps.conversations, call.conversation)?,

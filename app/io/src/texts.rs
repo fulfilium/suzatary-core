@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use suzatary_base::capability::Entropy;
-use suzatary_core::secretary::salted_text::{Text, TextName, Words};
+use suzatary_memory::secretary::salted_text::{Text, TextName, Words};
 
 use crate::docs::{DocCodec, Docs};
 
@@ -51,7 +51,7 @@ impl Entropy for SystemEntropy {
 #[cfg(test)]
 mod tests {
     use suzatary_base::capability::SALT_BYTES;
-    use suzatary_core::secretary::memory::Fact;
+    use suzatary_memory::secretary::memory::Fact;
     use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;

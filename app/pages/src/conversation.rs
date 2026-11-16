@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::Frame;
 use suzatary_base::reference::Reference;
-use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::wire::topics::{
     ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Speaker, TurnGone, TurnRow,
     VerbOutcome,
 };
+use suzatary_memory::secretary::erasure::Erasure;
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
 use viewtree::kit::{Reading, para};
@@ -524,7 +524,7 @@ impl Program for Conversation {
             Msg::Forget(fact) => vec![Effect::Act {
                 ask: Ask::Forget(fact),
                 act: Act::Forget {
-                    fact: suzatary_core::secretary::memory::FactId(fact),
+                    fact: suzatary_memory::secretary::memory::FactId(fact),
                 },
                 secret: Secret::None,
                 told: runtime::Told::Held,

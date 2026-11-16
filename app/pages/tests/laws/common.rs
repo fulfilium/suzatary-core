@@ -6,9 +6,9 @@ pub(crate) use suzatary_api::wire::{
 };
 pub(crate) use suzatary_base::answer::Kind as BlockKind;
 pub(crate) use suzatary_core::release::{Lot, Named, Place};
-pub(crate) use suzatary_core::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_core::wire::cards::{AboutPayload, HeldTodo};
 pub(crate) use suzatary_core::wire::topics::{BlockRow, FactRow, FactSaid, MemoryPayload, SaidOn};
+pub(crate) use suzatary_memory::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_pages::reading::{Nothing, One, Opened};
 pub(crate) use suzatary_pages::runtime::{
     Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Untrusted,

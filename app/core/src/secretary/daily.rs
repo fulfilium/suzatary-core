@@ -4,11 +4,11 @@
 use crate::secretary::Secretary;
 use crate::secretary::conversations;
 use crate::secretary::store::{Kind, Stored};
-use crate::secretary::words::Words;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::conversation_id::Daily;
 use suzatary_base::refusal::{Refusal, Status};
 use suzatary_base::zone::Zone;
+use suzatary_memory::secretary::words::Words;
 
 /// Today's round of one kind: its conversation, and that conversation as it stands when it was
 /// opened.

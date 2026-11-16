@@ -1,12 +1,12 @@
 # THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the repository's only one; the Prodrome
 # is a dependency by REVISION (→ `prodromedependency`). Arrows point down only: cli → plugin →
-# io → core → {todo → signatures, held} → store, record → base → prodrome-core. `wasm` is the
-# browser's module; `plugin` the plugin host, alone because wasmtime is the largest tree here;
-# `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` the programs `io`'s and
-# `cli`'s tests run.
+# io → core → {todo → signatures, memory → held} → store, record → base → prodrome-core.
+# `wasm` is the browser's module; `plugin` the plugin host, alone because wasmtime is the largest
+# tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` the programs
+# `io`'s and `cli`'s tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "store", "signatures", "todo", "held", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "signatures", "todo", "held", "memory", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -31,6 +31,7 @@ suzatary-store = { path = "store" }
 suzatary-signatures = { path = "signatures" }
 suzatary-todo = { path = "todo" }
 suzatary-held = { path = "held" }
+suzatary-memory = { path = "memory" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }
@@ -130,14 +131,14 @@ missing_panics_doc = "allow"
 [workspace.lints.rust]
 missing_docs = "allow"
 
-# THE TEST BUILD IS NOT A DEBUGGER SESSION: full debuginfo made a test tree of 9–16 GB (→
-# `checkdisk`). Line tables keep a panic's file and line.
+# THE TEST BUILD IS NOT A DEBUGGER SESSION: full debuginfo fills the disk (→ `checkdisk`). Line
+# tables keep a panic's file and line.
 [profile.dev]
 debug = "line-tables-only"
 incremental = false
 
 # Dependencies optimised, the workspace's own crates not: the tests spend their time in the
-# dependencies (on the 4-core gate machine, 2026-10-11, 112 s against 173).
+# dependencies.
 [profile.dev.package."*"]
 opt-level = 1
 
@@ -149,9 +150,9 @@ opt-level = 3
 [profile.dev.package.sha2]
 opt-level = 3
 
-# THE DEPLOYED BINARY (`.#suzatary`, measured in #72): small; sixteen units (252 s against 340
-# with one); no LTO (thin grew it, fat cost six times the rebuild); a handler's panic unwinds,
-# ending its task and not the server.
+# THE DEPLOYED BINARY (`.#suzatary`): small; sixteen units, faster to build than one; no LTO,
+# which grew it or slowed the rebuild; a handler's panic unwinds, ending its task and not the
+# server.
 [profile.release]
 opt-level = "s"
 codegen-units = 16
@@ -166,7 +167,7 @@ codegen-units = 1
 lto = true
 panic = "abort"
 
-# The gate's tests' and scenes' build of it (`-dev`): no LTO, half the compile (75 s against 166).
+# The gate's tests' and scenes' build of it (`-dev`): no LTO, half the compile.
 [profile.wasm-dev]
 inherits = "wasm-release"
 codegen-units = 16

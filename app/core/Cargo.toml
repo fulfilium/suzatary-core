@@ -19,6 +19,7 @@ suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
 suzatary-held.workspace = true
+suzatary-memory.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -44,9 +45,6 @@ typst-syntax.workspace = true
 sha2.workspace = true
 hmac.workspace = true
 hex.workspace = true
-# Words locked under a key of their own (`secretary::locked_text`), erased by destroying it.
-chacha20poly1305.workspace = true
-zeroize.workspace = true
 postcard.workspace = true
 # The outgoing message is built here, pure (`mail::send::build_mime`), so it is tested offline.
 mail-builder.workspace = true
@@ -57,7 +55,7 @@ prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
 fixture = []
 # The browser module's view of this crate's schemas; `app/wasm` alone enables it.

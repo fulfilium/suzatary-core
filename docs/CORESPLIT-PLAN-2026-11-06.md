@@ -331,6 +331,24 @@ their test support and `husk`; USE 19.8k. The crate depends on base and the Prod
   `attachment`'s two transcript tests (`secretary::model::Turn`) and `vault`'s (`drive::allowed`).
 - **The inert upload index and PDF reader** for base's `Nothing` move with their traits.
 
+**PR 18 (memory).** `coding_report` and `secretary/{carried, erasure, fact_life, key_ring,
+line_words, locked_text, memory, memory_event, provenance, salted_text, scrubbed_under, slots,
+texts, two_phase, words}` move to `app/memory`, the secretary's under
+`suzatary_memory::secretary`.
+- **`holder` moves down with them.** `erasure` names `Holder` and `Fate`, and `words` names
+  `erasure`, so the edge `erasure -> holder` was a cycle once the cut is a crate. `holder` names
+  nothing of core's, so it moves to the lowest crate that names it, as C8 moved the ids.
+- **`opened` stays in core** and takes the lines cut, the cut of its lowest user
+  (`conversations`): nothing in the crate names it, and it names `digest`, `held_lines` and
+  `line_event`. Two allowed edges go (`opened -> held_lines`, `opened -> line_event`), with
+  `erasure -> holder`; `opened -> digest` stays.
+- **The four that joined the cut stay in core**, each in its lowest user's cut, since nothing in
+  the crate names them: `first_read` in lines (`conversations`, `held_lines`, `opened`), `cast` in
+  connect (`deployment`), and `priced` and `verb` in inbox (`changes`).
+- **Nothing widens.** Two test modules move to core's integration tests because they read higher
+  cuts: `holder`'s two sweep laws (`transcript`, `rescrub`) and `line_words`' bounded tool answer
+  (`turn_shape`). `InMemoryKeys` moves with `locked_text`.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

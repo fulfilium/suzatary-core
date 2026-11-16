@@ -23,7 +23,6 @@ use suzatary_core::secretary::digests::Digests;
 use suzatary_core::secretary::inbox;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::Memories;
-use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::store::Entry;
@@ -33,6 +32,7 @@ use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
 use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 use suzatary_record::record::{EventStore, TodoEvent, mk_authored};
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
@@ -354,7 +354,7 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
     };
     let opened = |title: &str| Entry::Opened {
         at: at(12, 0),
-        title: suzatary_core::secretary::words::Words::kept(title.to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
         model: "scripted/golden".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     };
@@ -1012,7 +1012,7 @@ pub(crate) fn conversations_at_scale(
         .collect();
     let opening = Entry::Opened {
         at: at(9, 0),
-        title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
         model: "claude-cli/haiku".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     };
@@ -1153,7 +1153,7 @@ fn lines_for_a_tab() {
             id,
             &Entry::Opened {
                 at: at(9, 0),
-                title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
                 model: "claude-cli/haiku".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },
@@ -1171,7 +1171,7 @@ fn lines_for_a_tab() {
         stores,
         &ids[0],
         read.lines()[line].line.keys().cloned().collect(),
-        suzatary_core::secretary::erasure::Erasure::Asked { by: owner() },
+        suzatary_memory::secretary::erasure::Erasure::Asked { by: owner() },
         second(2_000),
     )
     .expect("erased");
@@ -1253,8 +1253,8 @@ fn digest_nodes_at_scale() {
     use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
     use suzatary_core::secretary::digest_line::Line;
     use suzatary_core::secretary::opened::Opened;
-    use suzatary_core::secretary::salted_text::Text;
     use suzatary_core::secretary::shown_record::OwnersRecord;
+    use suzatary_memory::secretary::salted_text::Text;
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
     let owners = std::collections::BTreeSet::new();
@@ -1404,8 +1404,8 @@ fn a_rules_change_over_a_stored_digest() {
     use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
     use suzatary_core::secretary::digest_line::Line;
     use suzatary_core::secretary::opened::Opened;
-    use suzatary_core::secretary::salted_text::Text;
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_memory::secretary::salted_text::Text;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     let root = PathBuf::from(std::env::var("SUZATARY_RULES_STORE").expect("a directory"));
     let phase = std::env::var("SUZATARY_RULES_PHASE").expect("write or read");
     let (lines, keys) = lines_at(&root);
@@ -1439,7 +1439,7 @@ fn a_rules_change_over_a_stored_digest() {
         let opened: &'static Opened = Box::leak(Box::default());
         let opening = Entry::Opened {
             at: at(9, 59),
-            title: suzatary_core::secretary::words::Words::kept("Codes".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Codes".to_owned()),
             model: "claude-cli/haiku".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         };
@@ -1581,7 +1581,7 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
         &id,
         &Entry::Opened {
             at: at(10, 0),
-            title: suzatary_core::secretary::words::Words::kept("Heads".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Heads".to_owned()),
             model: "claude-cli/haiku".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },

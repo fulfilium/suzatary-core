@@ -212,7 +212,7 @@ mod tests {
             &Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 0, 0, 0)
                     .expect("an instant"),
-                title: crate::secretary::words::Words::kept("A grant".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("A grant".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,
             },
@@ -379,7 +379,7 @@ mod tests {
             &Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 15, 8, 0, 0, 0)
                     .expect("an instant"),
-                title: crate::secretary::words::Words::kept("A chain act".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("A chain act".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,
             },

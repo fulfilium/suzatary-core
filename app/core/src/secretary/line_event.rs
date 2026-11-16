@@ -22,20 +22,20 @@ use prodrome_core::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::secretary::carried::Carried;
-use crate::secretary::erasure::Erasure;
 use crate::secretary::line_shape::{self, LineShape};
-use crate::secretary::line_words::LineWords;
-use crate::secretary::locked_text::{FreshKey, KeyName, Locked, Shape, TextKey};
-use crate::secretary::scrubbed_under::ScrubbedUnder;
-use crate::secretary::slots::Slots;
 use crate::secretary::store::Entry;
-use crate::secretary::words::{Gone, Words};
 use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_held::redact::Rules;
+use suzatary_memory::secretary::carried::Carried;
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_memory::secretary::line_words::LineWords;
+use suzatary_memory::secretary::locked_text::{FreshKey, KeyName, Locked, Shape, TextKey};
+use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
+use suzatary_memory::secretary::slots::Slots;
+use suzatary_memory::secretary::words::{Gone, Words};
 
 /// One line: which conversation, when, who wrote it, how many lines its writer held, where it
 /// came from, its shape, and its words locked.
@@ -1057,8 +1057,8 @@ mod tests {
 
     use super::*;
     use crate::secretary::model::{ToolCall, Turn};
-    use crate::secretary::salted_text::Words as _;
-    use crate::secretary::words::{Gone, Words};
+    use suzatary_memory::secretary::salted_text::Words as _;
+    use suzatary_memory::secretary::words::{Gone, Words};
 
     /// Each key one more than the last.
     #[derive(Default)]
@@ -1292,7 +1292,7 @@ mod tests {
             5,
             [KeyName::new("a".repeat(64)).expect("a name")].into(),
             Erasure::Forgot {
-                fact: crate::secretary::memory::FactId(2),
+                fact: suzatary_memory::secretary::memory::FactId(2),
             },
         );
         let read: LineEvent = parse_event(&LineVocabulary, &canonical(&line)).expect("parses");

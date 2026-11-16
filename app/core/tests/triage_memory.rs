@@ -35,16 +35,16 @@ use suzatary_core::secretary::filed::{TriageCards, triage_conversation};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::{Memories, ReadMemories};
-use suzatary_core::secretary::memory::{Fact, Kind, Origin};
-use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
-use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::surface::SecretaryVerb;
 use suzatary_core::secretary::verb_name::{Binding, Effect};
 use suzatary_core::stores::InMemory;
+use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
+use suzatary_memory::secretary::memory_event::MemoryEvent;
+use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_store::store::{Doc as _, InMemoryDoc, Only, Prodrome, Reads as _};
 
 /// Each salt the next number.
@@ -80,7 +80,7 @@ struct Reader<'a> {
     digests: Only<&'a InMemory<DigestEvent>>,
     summaries: Only<&'a InMemoryDoc<TextName, Text<Line>>>,
     lines: Only<&'a InMemory<LineEvent>>,
-    keys: Only<&'a suzatary_core::secretary::locked_text::InMemoryKeys>,
+    keys: Only<&'a suzatary_memory::secretary::locked_text::InMemoryKeys>,
 }
 
 impl Reader<'_> {
@@ -124,7 +124,7 @@ struct Held {
 struct Filed {
     lines: BTreeSet<(Hash, String)>,
     cards: BTreeSet<(Hash, String)>,
-    keys: BTreeSet<suzatary_core::secretary::locked_text::KeyName>,
+    keys: BTreeSet<suzatary_memory::secretary::locked_text::KeyName>,
 }
 
 fn prints<E: suzatary_core::stores::Store>(store: &InMemory<E>) -> Vec<(Hash, String)> {
@@ -273,7 +273,7 @@ fn remembered() -> Stores {
     let mut lines = vec![
         Entry::Opened {
             at: at(0),
-            title: suzatary_core::secretary::words::Words::kept("The lease".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("The lease".to_owned()),
             model: "m".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },

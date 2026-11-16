@@ -245,7 +245,7 @@ mod tests {
             &crate::secretary::store::Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 10, 1, 8, 0, 0, 0)
                     .expect("an instant"),
-                title: crate::secretary::words::Words::kept("Default".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Default".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,
             },

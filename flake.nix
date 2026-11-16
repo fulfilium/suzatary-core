@@ -12,11 +12,8 @@
     # spec. Moving the pin is three places in one commit: this url (with `flake.lock`), the
     # `rev`s in `app/Cargo.toml`, and `app/Cargo.lock`.
     prodrome.url = "github:fulfilium/prodrome/16f1ba25352becaffcd40fde0e028f469d667837";
-    # One nixpkgs in the closure. The Prodrome's own
-    # flake pins its own — that is what its CI builds against — but the two
-    # packages that matter here (`cargo`/`rustc` and `wasm-bindgen-cli_0_2_127`,
-    # which must stay in lockstep with the `=0.2.127` crate) are present in this
-    # repository's pin, which already builds the same derivation.
+    # One nixpkgs in the closure: this pin carries what the Prodrome's build needs, `cargo`/`rustc`
+    # and `wasm-bindgen-cli_0_2_127` (in lockstep with the `=0.2.127` crate).
     prodrome.inputs.nixpkgs.follows = "nixpkgs";
     prodrome.inputs.flake-utils.follows = "flake-utils";
     prodrome.inputs.crane.follows = "crane";
@@ -28,17 +25,15 @@
     # it compiles the workspace crates and nothing else.
     crane.url = "github:ipetkov/crane";
 
-    # THE LOOK, AS AN INPUT: the owner's design system, the one source of
-    # every colour, mark and template Suzatary sets in Typst. It is a Typst
-    # package, `@local/typst-design:<version>`, found on `TYPST_PACKAGE_PATH`
-    # wherever typst runs here, and bundled beside the tab's kit
-    # (`typstPackages` below), so the box and the tab compile against one
-    # package. Pinned by commit like the Prodrome.
+    # THE LOOK, AS AN INPUT: the owner's design system, the one source of every colour, mark and
+    # template Suzatary sets in Typst, as `@local/typst-design:<version>` on `TYPST_PACKAGE_PATH`
+    # and beside the tab's kit (`typstPackages` below), so the box and the tab compile against one
+    # package. Pinned by commit.
     typst-design.url = "github:bmabsout/typst-design/79d9dbafcd6457f269c3cd8b6f88c0ac27e35851";
     typst-design.inputs.nixpkgs.follows = "nixpkgs";
 
     # THE JUNK CHURN SEED'S TWO SOURCES: public spam-domain lists. `flake = false`: each is a
-    # plain tree, locked by hash in `flake.lock` like any input. `suzatary-junk-seed` reads both.
+    # plain tree, locked by hash in `flake.lock`.
     disposable-email-domains = {
       url = "github:disposable-email-domains/disposable-email-domains";
       flake = false;
@@ -51,7 +46,7 @@
     # THE PLUGINS' STANDARD LIBRARY. A plugin is built for wasm32-wasip2, whose std
     # nixpkgs' rustc does not carry (it carries wasm32-unknown-unknown alone), so the
     # plugin derivation alone takes a rustup toolchain from this overlay with that target
-    # added. Nothing else the flake builds uses it.
+    # added.
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -104,15 +99,12 @@
             builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
         };
 
-        # What the background jobs need in order to run, expressed without
-        # reference to systemd — so `nix run .#web` on any Linux with nix and
-        # the NixOS unit invoke the same store path. See nix/services.nix.
+        # What the background jobs run, without systemd, so `nix run .#web` and the NixOS unit
+        # invoke one store path.
         services = import ./nix/services.nix { inherit pkgs; };
 
-        # The Android portal. It takes `nixpkgs` and not `pkgs` on purpose: the
-        # SDK is unfree and licence-gated, and nix/apk.nix imports its own pkgs
-        # so that permission stays inside the one file that needs it instead of
-        # widening the posture the comment above just narrowed.
+        # The Android portal. It takes `nixpkgs`, not `pkgs`: the SDK is unfree, and nix/apk.nix
+        # imports its own pkgs so that permission stays in the one file that needs it.
         apk = import ./nix/apk.nix {
           inherit nixpkgs system;
           src = ./android;
@@ -121,10 +113,8 @@
           versionCode = appVersionCode;
           versionName = appVersionName;
         };
-        # An APK is a function of its PROFILE (nix/apk-profile.nix). The
-        # generic one is empty and names no deployment; a person's names their
-        # box, and an impure build reads its path from `SUZATARY_APK_PROFILE`.
-        # Unset, the build fails saying so, at build time rather than
+        # An APK is a function of its PROFILE: the generic one names no deployment; an impure build
+        # reads a person's from `SUZATARY_APK_PROFILE`, and fails without it at build time, not
         # evaluation, so `nix flake check` still evaluates every package.
         apkProfile = import ./nix/apk-profile.nix { inherit (nixpkgs) lib; };
         apkNamed =
@@ -159,6 +149,7 @@
             ./app/signatures
             ./app/todo
             ./app/held
+            ./app/memory
             ./app/api
             ./app/io
             ./app/plugin
@@ -239,6 +230,7 @@
           ./app/signatures/Cargo.toml
           ./app/todo/Cargo.toml
           ./app/held/Cargo.toml
+          ./app/memory/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
@@ -247,6 +239,7 @@
           ./app/signatures/src
           ./app/todo/src
           ./app/held/src
+          ./app/memory/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
@@ -256,6 +249,7 @@
           ./app/signatures/tests/support
           ./app/todo/tests/support
           ./app/held/tests/support
+          ./app/memory/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -362,6 +356,7 @@
                 ./app/signatures/Cargo.toml
                 ./app/todo/Cargo.toml
                 ./app/held/Cargo.toml
+                ./app/memory/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
@@ -370,6 +365,7 @@
                 ./app/signatures/src
                 ./app/todo/src
                 ./app/held/src
+                ./app/memory/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -398,10 +394,8 @@
             cargoArtifacts = deps;
             nativeBuildInputs = [ pkgs.lld pkgs.wasm-bindgen-cli_0_2_127 pkgs.binaryen ];
             doInstallCargoArtifacts = false;
-            # `wasm-opt -Os` over what bindgen emits, with the proposals rustc's wasm32
-            # baseline already uses named, since wasm-opt's older default refuses them
-            # rather than dropping them. `SIZES` is the module before and after it, which
-            # is what a first visit pays.
+            # `wasm-opt -Os` over what bindgen emits, naming the proposals rustc's wasm32 baseline
+            # uses, which wasm-opt's default refuses. `SIZES` is the module before and after it.
             installPhaseCommand = ''
               wasm=target/wasm32-unknown-unknown/${profile}/${builtins.replaceStrings ["-"] ["_"] package}.wasm
               features="--enable-bulk-memory --enable-bulk-memory-opt --enable-sign-ext"
@@ -468,6 +462,7 @@
               ./app/signatures/Cargo.toml
               ./app/todo/Cargo.toml
               ./app/held/Cargo.toml
+              ./app/memory/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -518,6 +513,7 @@
               ./app/signatures/Cargo.toml
               ./app/todo/Cargo.toml
               ./app/held/Cargo.toml
+              ./app/memory/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
@@ -545,10 +541,8 @@
           '';
           meta.description = "Suzatary's reference plugin as a component: ics.wasm, the calendar, beside ics.schema";
         });
-        # TYPST FOR THE TAB: the Prodrome's `typst-wasm` (`compile_html`,
-        # `add_font`), the build its flake makes at the revision `inputs.prodrome`
-        # pins. The web build copies it beside `prodrome_bg.wasm`; the tab loads it
-        # only when a Typst view is first drawn. `SIZES` prints raw and brotli bytes.
+        # TYPST FOR THE TAB: the Prodrome's `typst-wasm` at `inputs.prodrome`'s revision, copied
+        # beside `prodrome_bg.wasm` and loaded when a Typst view is first drawn.
         suzatary-typst-wasm = prodrome.packages.${system}.prodrome-typst-wasm;
 
         # THE FRONTEND'S WIRE TYPES, GENERATED: `cargo test -p suzatary-api` writes `wire.ts` and
@@ -615,9 +609,7 @@
         suzatary-web = pkgs.stdenv.mkDerivation {
           pname = "suzatary-web";
           version = "0";
-          # web/ plus the one script that builds it — not `./.`, so an edit to
-          # a todo or a briefing does not move this derivation's hash any more
-          # than it moves `suzatary-app`'s.
+          # web/ and the one script that builds it, so a todo or a briefing moves no hash.
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
@@ -654,8 +646,7 @@
         # THE WEB TEST'S FPL/SERIES VECTORS, read from the Prodrome's `conformance/*.py` with the
         # crate's own parser (`app/core/examples/vector_json.rs`), so `web/test/wasm.test.ts` needs
         # no second reader of that grammar; `env`/`json` come from `prodrome-wasm`'s frozen
-        # `term-json.json` as they are. scripts/web-test.sh without this output runs the same two
-        # `cargo run`s in the working tree.
+        # `term-json.json` as they are.
         suzatary-vector-json = coreCrate {
           pname = "suzatary-vector-json";
           doCheck = false;
@@ -724,8 +715,7 @@
         # files for the tab.
         typstPackages = typst-design.lib.packagePath pkgs;
 
-        # A CHECK IS A VERDICT, NOT AN ARTEFACT — `touch $out`, exactly as the
-        # Prodrome's two above.
+        # A CHECK IS A VERDICT, NOT AN ARTEFACT: `touch $out`.
         fontPaths = [
           "${pkgs.libertinus}/share/fonts/opentype"
           # the working document's body face (typst-design): the CV's and the site's.
@@ -867,9 +857,7 @@
         # `.#rust` is the EDITOR's shell for `app/`: the same toolchain the checks above build
         # with, plus a language server.
         devShells.rust = pkgs.mkShell {
-          # `rust-analyzer` is the editor's. Nothing else — no pkg-config, no
-          # OpenSSL, no interpreter: rustls, never OpenSSL (CLAUDE.md),
-          # and there is no build script here that asks a Python about itself.
+          # `rust-analyzer` is the editor's. No pkg-config, no OpenSSL, no interpreter.
           packages = rustToolchain.packages ++ testTools.packages ++ [ pkgs.rust-analyzer ];
           inherit (rustToolchain) RUST_BACKTRACE CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
             CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS;
@@ -919,9 +907,8 @@
             # brotli: scripts/build-web.sh precompresses the frontend at
             # quality 11, so the server never compresses a file per request.
             brotli
-            # THE BROWSER IS PART OF THE TOOLCHAIN: `scripts/web-e2e.sh` drives it headless
-            # over CDP — node 24's global WebSocket is the whole client, so the
-            # browser is a pinned package and not an npm dependency tree.
+            # THE BROWSER IS PART OF THE TOOLCHAIN: `scripts/web-e2e.sh` drives it headless over
+            # CDP, with node 24's global WebSocket as the client.
             chromium
             # typst and poppler-utils come with testTools, below.
             notmuch lieer isync openssl curl

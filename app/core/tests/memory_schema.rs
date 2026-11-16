@@ -20,13 +20,13 @@ use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::fact_life::Life;
-use suzatary_core::secretary::memory::{FactId, Kind, Origin};
-use suzatary_core::secretary::memory_event::Said;
-use suzatary_core::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
-use suzatary_core::secretary::provenance::Wrote;
-use suzatary_core::secretary::salted_text::TextName;
-use suzatary_core::secretary::two_phase::TwoPhase;
+use suzatary_memory::secretary::fact_life::Life;
+use suzatary_memory::secretary::memory::{FactId, Kind, Origin};
+use suzatary_memory::secretary::memory_event::Said;
+use suzatary_memory::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
+use suzatary_memory::secretary::provenance::Wrote;
+use suzatary_memory::secretary::salted_text::TextName;
+use suzatary_memory::secretary::two_phase::TwoPhase;
 use suzatary_store::store::linearised;
 
 type Disk = EventStore<MemoryEvent, Everything>;
@@ -228,11 +228,11 @@ fn lives(events: &[MemoryEvent]) -> Vec<Life<'_>> {
     events
         .iter()
         .map(|event| match event.body() {
-            suzatary_core::secretary::memory_event::Said::Remembered { .. }
-            | suzatary_core::secretary::memory_event::Said::Consolidated { .. } => {
+            suzatary_memory::secretary::memory_event::Said::Remembered { .. }
+            | suzatary_memory::secretary::memory_event::Said::Consolidated { .. } => {
                 Life::Remembered(Discrete(event))
             }
-            suzatary_core::secretary::memory_event::Said::Forgotten { .. } => Life::Forgotten,
+            suzatary_memory::secretary::memory_event::Said::Forgotten { .. } => Life::Forgotten,
         })
         .collect()
 }

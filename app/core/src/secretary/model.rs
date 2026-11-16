@@ -64,7 +64,11 @@ pub enum Turn {
         /// Who said it and what it named.
         shape: crate::secretary::turn_shape::TurnShape,
         /// Each slot, kept or gone.
-        words: Vec<crate::secretary::words::Words<crate::secretary::line_words::LineWords>>,
+        words: Vec<
+            suzatary_memory::secretary::words::Words<
+                suzatary_memory::secretary::line_words::LineWords,
+            >,
+        >,
     },
 }
 

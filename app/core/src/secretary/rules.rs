@@ -66,7 +66,7 @@ mod tests {
             &Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 10, 5, 9, 0, 0, 0)
                     .expect("an instant"),
-                title: crate::secretary::words::Words::kept(String::new()),
+                title: suzatary_memory::secretary::words::Words::kept(String::new()),
                 model: "m".to_owned(),
                 kind: Kind::Topic,
             },
@@ -137,7 +137,7 @@ mod tests {
             &Entry::Titled {
                 at: suzatary_base::capability::Datetime::new(2026, 10, 5, 9, 2, 0, 0)
                     .expect("an instant"),
-                title: crate::secretary::words::Words::kept(
+                title: suzatary_memory::secretary::words::Words::kept(
                     Title::new("The permit").expect("a title"),
                 ),
                 by: Namer::Job {

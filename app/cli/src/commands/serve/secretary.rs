@@ -22,7 +22,7 @@ use super::guard::{Reader, Writer};
 use super::params::{Asked, Params};
 use super::reply::Accepted;
 use super::{Chained, State};
-use suzatary_core::secretary::memory::FactId;
+use suzatary_memory::secretary::memory::FactId;
 
 pub struct Block {
     id: ConversationId,

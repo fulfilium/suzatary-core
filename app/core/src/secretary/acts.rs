@@ -11,6 +11,8 @@ use crate::mail::address::EmailAddress;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
+use suzatary_memory::secretary::locked_text;
+use suzatary_memory::secretary::memory;
 
 /// One act, from a closed set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,8 +132,8 @@ pub enum Act {
     /// Erase these words, which may restate a forgotten fact its erasure left in other words.
     Erase {
         /// The fact whose forgetting offers it.
-        fact: crate::secretary::memory::FactId,
-        keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
+        fact: memory::FactId,
+        keys: std::collections::BTreeSet<locked_text::KeyName>,
     },
     /// Retract the summary `node` shows, as the memory page's Wrong does.
     Retract {
@@ -518,12 +520,12 @@ impl Literal for Act {
             "Erase" => {
                 let fields = Fields::of(value, ERASE)?;
                 Act::Erase {
-                    fact: crate::secretary::memory::FactId(fields.get("fact")?),
+                    fact: memory::FactId(fields.get("fact")?),
                     keys: fields
                         .get::<Vec<String>>("keys")?
                         .into_iter()
                         .map(|key| {
-                            crate::secretary::locked_text::KeyName::new(key)
+                            locked_text::KeyName::new(key)
                                 .map_err(|failed| ProdromeError::invalid(failed.to_string()))
                         })
                         .collect::<Result<_, _>>()?,

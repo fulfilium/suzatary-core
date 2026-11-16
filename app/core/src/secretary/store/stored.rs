@@ -9,8 +9,8 @@ use suzatary_base::conversation_id::ConversationId;
 
 use crate::secretary::model::Turn;
 use crate::secretary::turn_shape::TurnShape;
-use crate::secretary::words::Words;
 use suzatary_base::capability::Datetime;
+use suzatary_memory::secretary::words::Words;
 
 /// A whole conversation as a reader gets one: the fold of its lines.
 #[derive(Debug, Clone, PartialEq, Eq)]

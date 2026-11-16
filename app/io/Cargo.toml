@@ -18,12 +18,12 @@ suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
 suzatary-held.workspace = true
+suzatary-memory.workspace = true
 suzatary-core.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-# The whois answer, the FCM message and the notmuch output are all JSON this
-# crate parses; serde derives the records it parses them into.
+# The JSON this crate parses: the whois answer, the FCM message and notmuch's output.
 serde.workspace = true
 serde_json.workspace = true
 # FCM and ntfy, blocking, over rustls (§2: never OpenSSL).
@@ -45,9 +45,8 @@ regex.workspace = true
 # IMAP, with no TLS feature of its own: the stream is built here, from the workspace's rustls.
 imap.workspace = true
 # The TLS both mail transports run over, and the roots they trust.
-# `webpki-roots` rather than the platform store, for the reason the push clients
-# already give: a systemd unit's view of /etc/ssl is one more thing to be wrong
-# about. The Proton Bridge path trusts no store: its verifier accepts ONE pinned
+# `webpki-roots`, not the platform store: a systemd unit's view of /etc/ssl is one more thing
+# to be wrong about. The Proton Bridge path trusts no store: its verifier accepts ONE pinned
 # self-signed certificate and nothing else (`smtp::submission`).
 rustls.workspace = true
 rustls-pki-types = "1"

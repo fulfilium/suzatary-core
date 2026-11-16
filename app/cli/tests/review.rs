@@ -393,7 +393,7 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
         &bad,
         &Entry::Opened {
             at,
-            title: suzatary_core::secretary::words::Words::kept("Topic".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Topic".to_owned()),
             model: "m".to_owned(),
             kind: Kind::Topic,
         },

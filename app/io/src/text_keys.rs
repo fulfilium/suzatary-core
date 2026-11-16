@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::secretary::locked_text::{KeyName, TextKey};
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 
 use crate::docs::{DocCodec, Docs};
 
@@ -40,8 +40,8 @@ const CODEC: DocCodec<KeyName, TextKey> = DocCodec {
 mod tests {
     use std::os::unix::fs::PermissionsExt as _;
 
-    use suzatary_core::secretary::locked_text::{FreshKey, Locked, Shape};
-    use suzatary_core::secretary::memory::Fact;
+    use suzatary_memory::secretary::locked_text::{FreshKey, Locked, Shape};
+    use suzatary_memory::secretary::memory::Fact;
     use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;

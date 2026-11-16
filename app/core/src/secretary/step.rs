@@ -7,9 +7,9 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
-use crate::secretary::locked_text::KeyName;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::turn_shape::TurnShape;
+use suzatary_memory::secretary::locked_text::KeyName;
 
 /// What a line does to its conversation's reading.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

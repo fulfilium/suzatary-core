@@ -13,7 +13,7 @@
 //! and every summary of a renamed node stops being named by the tree. Those words are then dead
 //! ([`Digest::naming`]), and the one sweep deletes them: an erasure needs no case of its own.
 //!
-//! A leaf is the line a line carries ([`Carried::From`](crate::secretary::carried::Carried::From)), or the line itself, so a store carried
+//! A leaf is the line a line carries ([`Carried::From`](suzatary_memory::secretary::carried::Carried::From)), or the line itself, so a store carried
 //! forward reads as the same tree and every summary stands. A line whose words are erased stays in
 //! the order, its leaf renamed over the keys that went
 //! and its label marked erased, so the nodes above it rename, and with them, where a renamed node
@@ -42,12 +42,12 @@ use crate::secretary::digest_policy::Owners;
 use crate::secretary::digest_spent::Spent;
 use crate::secretary::indexed_tree::IndexedTree;
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::salted_text::TextName;
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
-use crate::secretary::texts::{Liveness, Naming};
 use crate::secretary::transcript;
 use suzatary_base::rule_version::Under;
+use suzatary_memory::secretary::salted_text::TextName;
+use suzatary_memory::secretary::texts::{Liveness, Naming};
 
 thread_local! {
     static VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

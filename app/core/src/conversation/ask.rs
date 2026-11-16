@@ -8,11 +8,12 @@ use crate::secretary::digest_view::VIEW_BYTES;
 use crate::secretary::model::{
     Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
 };
+use crate::secretary::queue;
 use crate::secretary::store::{Kept, Scope, Stored};
 use crate::secretary::told::{Asking, context_of};
 use crate::secretary::topics::stores::TopicStores;
-use crate::secretary::{memory, queue};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::memory;
 
 /// How a round asks its model: the one difference between a model that remembers and one that
 /// does not.

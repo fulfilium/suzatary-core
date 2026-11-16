@@ -17,27 +17,27 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
-use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
 use suzatary_core::secretary::inbox::ProposalId;
-use suzatary_core::secretary::key_ring::{KeyRing, spelled};
 use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_core::secretary::line_form::{Husked, LineReplica};
 use suzatary_core::secretary::line_shape::LineShape;
-use suzatary_core::secretary::locked_text::KeyName;
-use suzatary_core::secretary::locked_text::opens;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::outlines::{Outlines, Parsed};
 use suzatary_core::secretary::readings::Dress;
 use suzatary_core::secretary::rescrub;
-use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_core::secretary::store::{Entry, Kind, Namer, NotAConversation, Stored, Title};
 use suzatary_core::secretary::stream;
 use suzatary_core::secretary::targets::rounds;
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::transcript::{self, Transcript};
-use suzatary_core::secretary::words::Words;
 use suzatary_core::wire::topics as wire;
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_memory::secretary::key_ring::{KeyRing, spelled};
+use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_memory::secretary::locked_text::opens;
+use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
+use suzatary_memory::secretary::words::Words;
 use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
@@ -759,7 +759,7 @@ proptest! {
 
         let skeleton = skeleton(&held);
         let objects = held.lines.objects().expect("objects");
-        let opened = transcript::opened(&objects, &|name: &suzatary_core::secretary::locked_text::KeyName| held.conversations().reads().key(name));
+        let opened = transcript::opened(&objects, &|name: &suzatary_memory::secretary::locked_text::KeyName| held.conversations().reads().key(name));
         let eager = stream::stream(skeleton.outlines(), stream::every(&opened), &topics, &chosen, pages, &Dress::BARE)
             .expect("reads");
         prop_assert_eq!(&eager, &read_whole);
@@ -1054,7 +1054,7 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
     let objects = held.lines.objects().expect("objects");
     let opened = transcript::opened(
         &objects,
-        &|name: &suzatary_core::secretary::locked_text::KeyName| store.reads().key(name),
+        &|name: &suzatary_memory::secretary::locked_text::KeyName| store.reads().key(name),
     );
     let drawn = stream::stream(
         skeleton(&held).outlines(),

@@ -61,7 +61,7 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
             id,
             &Entry::Opened {
                 at: at(0),
-                title: suzatary_core::secretary::words::Words::kept("Secretary".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("Secretary".to_owned()),
                 model: "scripted".to_owned(),
                 kind: if id == &*DEFAULT {
                     suzatary_core::secretary::store::Kind::Default

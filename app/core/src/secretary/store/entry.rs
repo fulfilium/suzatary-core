@@ -4,10 +4,11 @@ use super::{Decision, Kind, Namer, Scope, Title};
 use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::stamp::Stamp;
-use crate::secretary::words::Words;
 use serde::Serialize;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::Reference;
+use suzatary_memory::secretary::locked_text;
+use suzatary_memory::secretary::words::Words;
 
 /// One line of a conversation as the box reads it from its store. It prints as JSON tagged on
 /// `line`, each instant as its stamp, for a test's record of a scene; nothing reads that print.
@@ -209,9 +210,9 @@ pub enum Entry {
         #[serde(serialize_with = "stamped")]
         at: Datetime,
         /// The keys whose words went.
-        keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
+        keys: std::collections::BTreeSet<locked_text::KeyName>,
         /// Why.
-        erasure: crate::secretary::erasure::Erasure,
+        erasure: suzatary_memory::secretary::erasure::Erasure,
     },
     /// One slot's words sealed again, scrubbed under the current redaction rules, under a key of
     /// its own: every reader reads the slot `of` names from it once the key it was sealed from is
@@ -221,9 +222,9 @@ pub enum Entry {
         #[serde(serialize_with = "stamped")]
         at: Datetime,
         /// The key of the slot as first written, which names the slot.
-        of: crate::secretary::locked_text::KeyName,
+        of: locked_text::KeyName,
         /// The key of the seal it was sealed again from, which it supersedes.
-        from: crate::secretary::locked_text::KeyName,
+        from: locked_text::KeyName,
     },
 }
 

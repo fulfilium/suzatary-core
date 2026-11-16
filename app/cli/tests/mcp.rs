@@ -513,10 +513,10 @@ fn the_agents_reads_of_the_memory_write_no_file() {
     suzatary_cli::wiring::Remembering::reader(&read)
         .memories()
         .remember(
-            &suzatary_core::secretary::memory::Fact::new("The permit office is on Rue Neuve")
+            &suzatary_memory::secretary::memory::Fact::new("The permit office is on Rue Neuve")
                 .expect("a fact"),
-            suzatary_core::secretary::memory::Kind::Owner,
-            &suzatary_core::secretary::memory::Origin::Turn {
+            suzatary_memory::secretary::memory::Kind::Owner,
+            &suzatary_memory::secretary::memory::Origin::Turn {
                 conversation: suzatary_base::conversation_id::ConversationId::new("a")
                     .expect("a slug"),
                 turn: 0,
@@ -531,7 +531,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
     for (held, entry) in [
         suzatary_core::secretary::store::Entry::Opened {
             at,
-            title: suzatary_core::secretary::words::Words::kept("Permits".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Permits".to_owned()),
             model: "m".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },

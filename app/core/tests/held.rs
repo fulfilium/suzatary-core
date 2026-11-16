@@ -117,7 +117,7 @@ impl Conversation {
         Self {
             lines: vec![Entry::Opened {
                 at: at(),
-                title: suzatary_core::secretary::words::Words::kept("t".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
                 model: "m".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             }],

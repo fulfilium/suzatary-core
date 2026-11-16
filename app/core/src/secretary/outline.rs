@@ -9,12 +9,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
 
-use crate::secretary::locked_text::KeyName;
 use crate::secretary::step::Step;
 use crate::secretary::store::{NotAConversation, Stored};
 use crate::secretary::targets::rounds;
 use crate::secretary::transcript;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::locked_text::KeyName;
 
 /// Each live round, oldest first, or why the lines are no conversation.
 pub type Outline = Result<Rounds, NotAConversation>;

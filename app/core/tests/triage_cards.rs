@@ -194,7 +194,7 @@ fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMem
         &DEFAULT,
         &Entry::Opened {
             at,
-            title: suzatary_core::secretary::words::Words::kept(String::new()),
+            title: suzatary_memory::secretary::words::Words::kept(String::new()),
             model: "m".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },

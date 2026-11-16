@@ -2149,7 +2149,7 @@ fn a_search_answer_is_stored_within_the_cap_and_keeps_its_files() {
         .expect("the search's answer")
         .to_owned();
     assert!(
-        stored.len() <= suzatary_core::secretary::line_words::STORED_ANSWER_BYTES,
+        stored.len() <= suzatary_memory::secretary::line_words::STORED_ANSWER_BYTES,
         "{} bytes stored",
         stored.len()
     );

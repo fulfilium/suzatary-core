@@ -20,12 +20,12 @@ use suzatary_core::secretary::digest_line::Line;
 use suzatary_core::secretary::digests::Digests;
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
-use suzatary_core::secretary::memory::Fact;
-use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::stores::InMemory;
+use suzatary_memory::secretary::memory::Fact;
+use suzatary_memory::secretary::memory_event::MemoryEvent;
+use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc, Gets as _, InMemoryDoc, Prodrome};
 
@@ -238,7 +238,7 @@ impl Box {
                 let erasure = Entry::Erased {
                     at: at(59),
                     keys,
-                    erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+                    erasure: suzatary_memory::secretary::erasure::Erasure::Asked { by: ada() },
                 };
                 let held = u32::try_from(lines.len()).expect("few lines");
                 write_line(&self.lines, id, held, &erasure);
@@ -264,7 +264,7 @@ impl Box {
         let reads = self.lines.conversations().reads();
         let opened = suzatary_core::secretary::transcript::opened(
             &objects,
-            &|name: &suzatary_core::secretary::locked_text::KeyName| reads.key(name),
+            &|name: &suzatary_memory::secretary::locked_text::KeyName| reads.key(name),
         );
         let history = self.history.nodes().expect("the history");
         suzatary_core::secretary::digest::digest(
@@ -352,7 +352,7 @@ proptest! {
         let reads = the.lines.conversations().reads();
         let opened = suzatary_core::secretary::transcript::opened(
             &objects,
-            &|name: &suzatary_core::secretary::locked_text::KeyName| reads.key(name),
+            &|name: &suzatary_memory::secretary::locked_text::KeyName| reads.key(name),
         );
         let parents: Vec<Vec<Hash>> = objects
             .iter()
@@ -613,7 +613,7 @@ fn a_line_whose_words_are_erased_stays_and_renames_what_read_it() {
             &Entry::Erased {
                 at: at(500),
                 keys,
-                erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+                erasure: suzatary_memory::secretary::erasure::Erasure::Asked { by: ada() },
             },
         );
         suzatary_core::secretary::transcript::sweep(the.lines.conversations()).expect("destroyed");
@@ -1810,7 +1810,7 @@ proptest! {
         compact in any::<bool>(),
         budget in budgets(),
     ) {
-        use suzatary_core::secretary::memory::{Kind, Origin};
+        use suzatary_memory::secretary::memory::{Kind, Origin};
         let the = Box::default();
         the.write("a", turns(&kinds));
         the.write("b", turns(&kinds.iter().rev().copied().collect::<Vec<_>>()));
@@ -1837,7 +1837,7 @@ proptest! {
 /// as said, a summary fenced as derived, a tainted part by its handle and kinds alone.
 #[test]
 fn a_session_is_told_the_facts_then_the_record() {
-    use suzatary_core::secretary::memory::{Kind, Origin};
+    use suzatary_memory::secretary::memory::{Kind, Origin};
     let the = Box::default();
     // Turns of a length the owner writes, so a summary costs less than the lines it stands for.
     // The tree's cuts follow the lines' names, so how many come before the tool answer is chosen
@@ -1938,7 +1938,7 @@ fn zoomed_round(answer: &str) -> suzatary_core::secretary::store::Stored {
         &[
             Entry::Opened {
                 at: at(0),
-                title: suzatary_core::secretary::words::Words::kept("z".to_owned()),
+                title: suzatary_memory::secretary::words::Words::kept("z".to_owned()),
                 model: "m".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },
@@ -2150,7 +2150,7 @@ fn an_acts_note_keeps_a_todo_id_out_of_the_record() {
         &id,
         &Entry::Opened {
             at: at(0),
-            title: suzatary_core::secretary::words::Words::kept("a".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("a".to_owned()),
             model: "m".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },
@@ -2235,8 +2235,8 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
 /// rules moves no fixture line's name, and with it no tree, no question and no pin of the asking.
 /// Such a line reads stale and its words are scrubbed again as they open; the fixtures hold
 /// nothing the scrub takes.
-fn fixture_rules() -> suzatary_core::secretary::scrubbed_under::ScrubbedUnder {
-    suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Version(
+fn fixture_rules() -> suzatary_memory::secretary::scrubbed_under::ScrubbedUnder {
+    suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Version(
         suzatary_held::redact::Rules::new(
             "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a",
         )
@@ -2799,7 +2799,7 @@ fn kept_words_leave_with_their_node() {
     let erasure = Entry::Erased {
         at: at(59),
         keys: first.keys().cloned().collect(),
-        erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+        erasure: suzatary_memory::secretary::erasure::Erasure::Asked { by: ada() },
     };
     write_line(&the.lines, id, 40, &erasure);
     let after = read(&mut kept);

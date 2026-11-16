@@ -187,24 +187,31 @@ depends = ["base", "prodrome-core", "store"]
 scripts = []
 
 [[unit]]
+name = "memory"
+path = "app/memory"
+shape = "crate"
+depends = ["base", "held", "prodrome-core", "store"]
+scripts = []
+
+[[unit]]
 name = "core"
 path = "app/core"
 shape = "crate"
-depends = ["base", "held", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
+depends = ["base", "held", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
 scripts = []
 
 [[unit]]
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "core", "held", "prodrome-core", "record", "signatures", "store", "todo"]
+depends = ["base", "core", "held", "memory", "prodrome-core", "record", "signatures", "store", "todo"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["base", "core", "held", "prodrome-core", "prodrome-typst-wasm", "record", "signatures", "store", "todo"]
+depends = ["base", "core", "held", "memory", "prodrome-core", "prodrome-typst-wasm", "record", "signatures", "store", "todo"]
 scripts = []
 
 [[unit]]
@@ -218,14 +225,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "core", "held", "io", "plugin", "prodrome-core", "record", "signatures", "store", "todo"]
+depends = ["api", "base", "core", "held", "io", "memory", "plugin", "prodrome-core", "record", "signatures", "store", "todo"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["api", "base", "core", "held", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
+depends = ["api", "base", "core", "held", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "todo"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]
@@ -239,7 +246,7 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["api", "base", "core", "prodrome-core", "record", "todo", "viewtree"]
+depends = ["api", "base", "core", "memory", "prodrome-core", "record", "todo", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]

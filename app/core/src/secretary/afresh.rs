@@ -118,7 +118,7 @@ mod tests {
     fn stored(lines: Vec<Entry>) -> Stored {
         let mut entries = vec![Entry::Opened {
             at: at(),
-            title: crate::secretary::words::Words::kept("t".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }];

@@ -3,7 +3,6 @@
 //! Deny by default: a verb is [`Taint::Clean`] only where `VerbName` says so, and a turn is
 //! clean only when it is the model's own, a clean verb's answer, or stamped as the owner's.
 
-use crate::secretary::memory::Origin;
 use crate::secretary::model::Turn;
 use crate::secretary::queue;
 use crate::secretary::stamp::Stamp;
@@ -11,6 +10,7 @@ use crate::secretary::store::{Entry, Said, Stored};
 use crate::secretary::turn_shape::{TurnShape, shape};
 use crate::secretary::verb_name::VerbName;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::memory::Origin;
 
 /// Whether an answer can carry somebody else's words. Ordered `Clean < Tainted`, a
 /// join-semilattice with `Clean` its unit: what a span of lines carries is the join of its lines'.
@@ -246,7 +246,7 @@ mod tests {
         let mut entries = vec![Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 8, 0, 0, 0)
                 .expect("an instant"),
-            title: crate::secretary::words::Words::kept("t".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }];
@@ -294,7 +294,7 @@ mod tests {
         let failed = Entry::ReviewFailed {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
                 .expect("an instant"),
-            reason: crate::secretary::words::Words::kept("the batch said so".to_owned()),
+            reason: suzatary_memory::secretary::words::Words::kept("the batch said so".to_owned()),
             standing: 1,
         };
         assert_eq!(line(&failed), Taint::Tainted);

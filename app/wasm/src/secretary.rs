@@ -15,13 +15,13 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::held_lines::Admitted;
 use suzatary_core::secretary::held_replica::HeldReplica;
 use suzatary_core::secretary::inbox::Fold;
-use suzatary_core::secretary::key_ring::KeyRing;
-use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Scope;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::Stored;
 use suzatary_core::secretary::stream;
 use suzatary_core::wire::topics::MemoryPayload;
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::locked_text::KeyName;
 use wasm_bindgen::prelude::*;
 
 use crate::{Chains, Proposals, json, refused};
@@ -413,7 +413,7 @@ fn unread(name: &Hash, why: &Unread) -> String {
 #[wasm_bindgen]
 #[must_use]
 pub fn erase_warning() -> String {
-    suzatary_core::secretary::erasure::Erasure::for_good()
+    suzatary_memory::secretary::erasure::Erasure::for_good()
 }
 
 /// The keys a pull gave, parsed once.

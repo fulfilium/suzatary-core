@@ -1,6 +1,6 @@
 //! The box's lines read through the fold a tab reads through ([`HeldLines`]), fed the store's
 //! graph as its heads move and each new line's keys. It is the holder an erasure empties
-//! ([`crate::secretary::holder::Holder::Opened`]): [`Opened::forget`] drops a key and what it
+//! ([`suzatary_memory::secretary::holder::Holder::Opened`]): [`Opened::forget`] drops a key and what it
 //! opened at once, and a line that kills a key drops it at the next feed, in any process. Beside
 //! the lines it keeps the digest's history read per node ([`Kept`]), which holds summaries'
 //! words, so a forgetting drops it too.
@@ -12,9 +12,9 @@ use prodrome_core::event::Hash;
 
 use crate::secretary::digest::Kept;
 use crate::secretary::held_lines::{HeldLines, TheBox};
-use crate::secretary::key_ring::spelled;
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::locked_text::{KeyName, TextKey};
+use suzatary_memory::secretary::key_ring::spelled;
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 use suzatary_store::store::{Gets, Graph, StoreError};
 
 #[derive(Default)]
@@ -148,13 +148,13 @@ impl Fold {
 mod tests {
     use super::{HeldLines, Opened};
     use crate::secretary::conversations::{Conversations, InMemory};
-    use crate::secretary::erasure::Erasure;
     use crate::secretary::model::Turn;
     use crate::secretary::store::{Entry, Kind};
     use crate::secretary::transcript;
-    use crate::secretary::words::Words;
     use prodrome_core::literal::Datetime;
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_memory::secretary::erasure::Erasure;
+    use suzatary_memory::secretary::words::Words;
 
     const SAID: &str = "a word only the owner says";
 

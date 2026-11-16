@@ -3,6 +3,8 @@ use ts_rs::TS;
 
 use super::inbox::{Asker, Card, CodingSession, ProposedAct};
 use suzatary_base::reference::Reference;
+use suzatary_memory::secretary::memory;
+use suzatary_memory::secretary::words;
 use suzatary_signatures::wire::signatures::FailedChain;
 use suzatary_todo::wire::todo::Fulfillment;
 
@@ -76,7 +78,7 @@ pub enum TurnGone {
         by: String,
     },
     Forgot {
-        fact: crate::secretary::memory::FactId,
+        fact: memory::FactId,
     },
     /// Their key is not here: lost in a restore, or never given to this replica.
     Missing,
@@ -118,21 +120,21 @@ pub enum VerbOutcome {
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum Receipt {
     Standing {
-        fact: crate::secretary::memory::FactId,
+        fact: memory::FactId,
         /// Model text, drawn as text.
         text: String,
     },
     Forgotten {
-        fact: crate::secretary::memory::FactId,
+        fact: memory::FactId,
     },
     /// By a consolidation: its words are gone, and `into` says what they said.
     Merged {
-        fact: crate::secretary::memory::FactId,
-        into: crate::secretary::memory::FactId,
+        fact: memory::FactId,
+        into: memory::FactId,
     },
     /// The memory would not read, or holds no words for it that are not forgotten.
     Unread {
-        fact: crate::secretary::memory::FactId,
+        fact: memory::FactId,
     },
 }
 
@@ -143,7 +145,7 @@ pub struct MemoryPayload {
     pub facts: Vec<FactRow>,
     pub cap: u32,
     /// Oldest first: a receipt naming one says so.
-    pub forgotten: Vec<crate::secretary::memory::FactId>,
+    pub forgotten: Vec<memory::FactId>,
     /// By the consolidation: a receipt naming one says so.
     pub merged: Vec<MergedFact>,
     /// By the name a card gives them: a card whose name is not here has had its words deleted.
@@ -160,17 +162,17 @@ pub struct CardWords {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MergedFact {
-    pub fact: crate::secretary::memory::FactId,
-    pub into: crate::secretary::memory::FactId,
+    pub fact: memory::FactId,
+    pub into: memory::FactId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct FactRow {
-    pub id: crate::secretary::memory::FactId,
+    pub id: memory::FactId,
     pub at: String,
     /// Model text, drawn as text.
     pub fact: String,
-    pub kind: crate::secretary::memory::Kind,
+    pub kind: memory::Kind,
     pub said: FactSaid,
 }
 
@@ -182,7 +184,7 @@ pub enum FactSaid {
     },
     Merged {
         /// By number.
-        from: Vec<crate::secretary::memory::FactId>,
+        from: Vec<memory::FactId>,
         /// At least one.
         origins: Vec<SaidOn>,
         round: SaidOn,
@@ -423,10 +425,10 @@ impl From<&suzatary_held::attachment::Attachment> for AttachmentRow {
     }
 }
 
-impl From<&crate::secretary::words::Gone> for TurnGone {
-    fn from(gone: &crate::secretary::words::Gone) -> Self {
-        use crate::secretary::erasure::Erasure;
-        use crate::secretary::words::Gone;
+impl From<&words::Gone> for TurnGone {
+    fn from(gone: &words::Gone) -> Self {
+        use suzatary_memory::secretary::erasure::Erasure;
+        use suzatary_memory::secretary::words::Gone;
         match gone {
             Gone::Erased {
                 erasure: Erasure::Asked { by },

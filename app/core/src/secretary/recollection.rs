@@ -5,9 +5,9 @@
 
 use crate::secretary::compaction::Reading;
 use crate::secretary::memories::ReadMemories;
-use crate::secretary::memory::Memory;
 use crate::secretary::shown_record::OwnersRecord;
 use suzatary_base::refusal::Refusal;
+use suzatary_memory::secretary::memory::Memory;
 
 /// The memory, read-only, and how many bytes it may spend in an answer that carries it.
 #[derive(Clone, Copy)]

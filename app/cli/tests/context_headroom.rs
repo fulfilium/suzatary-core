@@ -25,13 +25,13 @@ use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_view::LINE_BYTES;
 use suzatary_core::secretary::digests::ReadDigests;
 use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::memory::{
-    Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
-};
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::shown_record::OwnersRecord;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::stores::InMemory;
+use suzatary_memory::secretary::memory::{
+    Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
+};
 use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 
 fn repo_root() -> PathBuf {
@@ -100,7 +100,7 @@ fn full_memory() -> Memory {
                 at: at(0),
                 fact: Fact::new(words.clone()).expect("a fact"),
                 kind: Kind::Standing,
-                said: suzatary_core::secretary::provenance::Provenance::said(Origin::Turn {
+                said: suzatary_memory::secretary::provenance::Provenance::said(Origin::Turn {
                     conversation: ConversationId::new("a").expect("a slug"),
                     turn: 0,
                 }),

@@ -18,10 +18,10 @@ use crate::secretary::digest_line::Line;
 use crate::secretary::held_lines::{Gathered, HeldLines};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
-use crate::secretary::salted_text::{Text, TextName};
-use crate::secretary::texts::Naming;
 use crate::timings::{Phase, timed};
 use suzatary_base::refusal::Refusal;
+use suzatary_memory::secretary::salted_text::{Text, TextName};
+use suzatary_memory::secretary::texts::Naming;
 use suzatary_store::store::{Doc, Gets, Prodrome, Reads};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.

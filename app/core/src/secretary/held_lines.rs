@@ -24,18 +24,18 @@ use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
 use crate::secretary::digest::{Placed, Shape};
-use crate::secretary::erasure::Erasure;
-use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
-use crate::secretary::line_words::LineWords;
-use crate::secretary::locked_text::{KeyName, TextKey};
-use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Stored};
 use crate::secretary::transcript::{self, Transcript, Write};
-use crate::secretary::words::{Gone, Words};
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::line_words::LineWords;
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
+use suzatary_memory::secretary::slots::Slots;
+use suzatary_memory::secretary::words::{Gone, Words};
 use suzatary_store::store::Husk;
 
 thread_local! {
@@ -1505,7 +1505,7 @@ mod tests {
             .into_iter()
             .map(|name| {
                 let key = held.keys.get(&name).expect("reads").expect("held");
-                (name, crate::secretary::key_ring::spelled(&key))
+                (name, suzatary_memory::secretary::key_ring::spelled(&key))
             })
             .collect()
     }
@@ -1563,7 +1563,7 @@ mod tests {
     #[test]
     fn a_resealed_conversation_reads_as_the_box_reads_it() {
         use crate::secretary::line_event::LineEvent;
-        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
         let held = InMemory::default();
         let id = ConversationId::new("2026-10-25-1").expect("a slug");
         let at = |second: u32| Datetime::new(2026, 10, 25, 9, 0, second, 0).expect("an instant");
@@ -1616,7 +1616,7 @@ mod tests {
     #[test]
     fn a_replica_holding_the_replaced_keys_reads_the_reseals_and_scrubs_nothing() {
         use crate::secretary::line_event::LineEvent;
-        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
         let held = InMemory::default();
         let at = |second: u32| Datetime::new(2026, 10, 25, 9, 0, second, 0).expect("an instant");
         for id in ["2026-10-25-1", "2026-10-25-2"] {
@@ -1744,7 +1744,7 @@ mod tests {
     #[ignore = "a measurement, run by hand"]
     fn bench_reading_1200_rounds() {
         use crate::secretary::line_event::LineEvent;
-        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
         let words = "Your order #48213 shipped on 2026-10-25 and arrives by 10/28/2026. Call us at \
                      617-555-1234 between 9:00 and 17:30. Total due: $1,532.40 (tax 212.18). \
                      Le rendez-vous est confirmé pour le 12/11 à 14h30. Savings      2024      1500.\n"

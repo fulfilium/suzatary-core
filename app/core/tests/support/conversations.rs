@@ -25,7 +25,7 @@ pub struct InMemory {
     /// The lines.
     pub lines: crate::stores::InMemory<LineEvent>,
     /// The keys.
-    pub keys: crate::secretary::locked_text::InMemoryKeys,
+    pub keys: suzatary_memory::secretary::locked_text::InMemoryKeys,
     /// Where keys come from.
     pub entropy: Counting,
     /// The blocks and sessions a sweep forgot.

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use suzatary_memory::secretary::memory;
 use ts_rs::TS;
 
 /// A field's change in prose, for somebody deciding.
@@ -339,14 +340,14 @@ pub enum ProposedAct {
     /// A fact to remember from a round that read something not the owner's own.
     Remember {
         words: RememberWords,
-        about: crate::secretary::memory::Kind,
+        about: memory::Kind,
         /// The imperative, or what became of the words.
         sentence: String,
     },
     /// A fact to write in place of the standing facts it `replaces`.
     Consolidate {
         words: RememberWords,
-        about: crate::secretary::memory::Kind,
+        about: memory::Kind,
         /// At least one.
         replaces: Vec<ReplacedFact>,
         sentence: String,
@@ -379,7 +380,7 @@ pub enum RememberWords {
 /// A fact a consolidation card replaces, with its words while it stands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReplacedFact {
-    pub id: crate::secretary::memory::FactId,
+    pub id: memory::FactId,
     /// `Gone` once the fact no longer stands.
     pub words: RememberWords,
 }

@@ -555,7 +555,7 @@ pub(crate) enum Act {
         title: String,
     },
     Forget {
-        fact: suzatary_core::secretary::memory::FactId,
+        fact: suzatary_memory::secretary::memory::FactId,
     },
     Erase {
         conversation: String,

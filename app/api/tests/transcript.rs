@@ -22,7 +22,6 @@ use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
 use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_core::secretary::line_shape;
-use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::queue;
@@ -32,8 +31,9 @@ use suzatary_core::secretary::store::{
     Decision, Entry, Line, Namer, Rewind, Stored, Title, Unheld,
 };
 use suzatary_core::secretary::transcript::{self, Transcript};
-use suzatary_core::secretary::words::Words;
 use suzatary_core::stores::InMemory;
+use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Prodrome, linearised};
 
@@ -41,15 +41,15 @@ type Memory = suzatary_core::secretary::conversations::InMemory;
 type Disk = EventStore<LineEvent, Everything>;
 
 /// Every key the lines written straight to a store were locked under, and where they came from.
-static KEYS: std::sync::LazyLock<suzatary_core::secretary::locked_text::InMemoryKeys> =
+static KEYS: std::sync::LazyLock<suzatary_memory::secretary::locked_text::InMemoryKeys> =
     std::sync::LazyLock::new(Default::default);
 static ENTROPY: std::sync::LazyLock<Counting> = std::sync::LazyLock::new(Default::default);
 
 /// A key `KEYS` holds, or missing.
-fn key(name: &KeyName) -> Words<suzatary_core::secretary::locked_text::TextKey> {
+fn key(name: &KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey> {
     use suzatary_store::store::Gets as _;
     KEYS.get(name).ok().flatten().map_or_else(
-        || suzatary_core::secretary::words::Gone::Missing.into(),
+        || suzatary_memory::secretary::words::Gone::Missing.into(),
         Words::kept,
     )
 }
@@ -105,14 +105,14 @@ fn weight(entry: &Entry) -> usize {
         .1
         .expect("a line with its words")
         .iter()
-        .map(|words| suzatary_core::secretary::salted_text::Words::print(words).len())
+        .map(|words| suzatary_memory::secretary::salted_text::Words::print(words).len())
         .sum()
 }
 
 fn opened() -> Entry {
     Entry::Opened {
         at: at(0),
-        title: suzatary_core::secretary::words::Words::kept("Morning".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
         model: "a-cli/small".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     }
@@ -390,7 +390,7 @@ fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
         },
         Step::Title => Entry::Titled {
             at,
-            title: suzatary_core::secretary::words::Words::kept(
+            title: suzatary_memory::secretary::words::Words::kept(
                 Title::new(format!("Topic {second}")).expect("a title"),
             ),
             by: Namer::Person {
@@ -402,11 +402,11 @@ fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
             chain: "life".to_owned(),
             batch: format!("{second:064x}"),
             decision: Decision::Held,
-            why: suzatary_core::secretary::words::Words::kept("about money".to_owned()),
+            why: suzatary_memory::secretary::words::Words::kept("about money".to_owned()),
         },
         Step::ReviewFailed => Entry::ReviewFailed {
             at,
-            reason: suzatary_core::secretary::words::Words::kept(
+            reason: suzatary_memory::secretary::words::Words::kept(
                 "the model was unreachable".to_owned(),
             ),
             standing: 1,
@@ -551,7 +551,7 @@ proptest! {
     #[test]
     fn split_and_join_are_a_lawful_pair(script in steps(), gone in any::<prop::sample::Index>()) {
         use suzatary_core::secretary::line_shape::{join, split};
-        use suzatary_core::secretary::words::{Gone, Words};
+        use suzatary_memory::secretary::words::{Gone, Words};
         for entry in through_the_door(&conversation(&script)) {
             let (shape, words) = split(&entry);
             let words = words.expect("a line the box writes holds its words");
@@ -602,7 +602,7 @@ proptest! {
         if stale {
             let read = transcript::read(memory.conversations(), &id()).expect("read");
             let (line, keys) = LineEvent::written_under(
-                &suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
+                &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
                 id(),
                 by(),
                 u32::try_from(read.lines().len()).expect("a count"),
@@ -628,7 +628,7 @@ proptest! {
                 .collect();
             let keys: std::collections::BTreeSet<KeyName> = slots[which.index(slots.len())].keys().cloned().collect();
             if !keys.is_empty() {
-                let by = suzatary_core::secretary::erasure::Erasure::Asked { by: Actor::new("ada").expect("a name") };
+                let by = suzatary_memory::secretary::erasure::Erasure::Asked { by: Actor::new("ada").expect("a name") };
                 transcript::erase(memory.conversations(), &id(), keys, by, at(3598)).expect("erased");
             }
         }
@@ -784,8 +784,8 @@ proptest! {
         let (memory, read) = written(&lines);
         let whole = read.stored();
         let inbox = inbox_of(whole.proposals.len(), &answers, &dropped);
-        let missing = |_: &KeyName| -> Words<suzatary_core::secretary::locked_text::TextKey> {
-            suzatary_core::secretary::words::Gone::Missing.into()
+        let missing = |_: &KeyName| -> Words<suzatary_memory::secretary::locked_text::TextKey> {
+            suzatary_memory::secretary::words::Gone::Missing.into()
         };
         let shaped = transcript::transcripts(&memory.lines.nodes().expect("nodes"), &missing)
             .expect("reads by shape");
@@ -809,7 +809,7 @@ proptest! {
             state ^= state << 17;
             objects.swap(at, usize::try_from(state % (at as u64 + 1)).expect("an index"));
         }
-        let all = transcript::of_objects(objects, &|name: &suzatary_core::secretary::locked_text::KeyName| memory.conversations().reads().key(name)).expect("reads");
+        let all = transcript::of_objects(objects, &|name: &suzatary_memory::secretary::locked_text::KeyName| memory.conversations().reads().key(name)).expect("reads");
         prop_assert_eq!(all.get(&id()), Some(&*read));
     }
 

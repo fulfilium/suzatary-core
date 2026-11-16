@@ -32,6 +32,8 @@ mod fragment;
 mod held;
 #[path = "held_values.rs"]
 mod held_values;
+#[path = "holder.rs"]
+mod holder;
 #[path = "inbox.rs"]
 mod inbox;
 #[path = "inbox_prices.rs"]
@@ -44,6 +46,8 @@ mod lapsed;
 mod laws;
 #[path = "line_replica.rs"]
 mod line_replica;
+#[path = "line_words.rs"]
+mod line_words;
 #[path = "memory.rs"]
 mod memory;
 #[path = "memory_schema.rs"]

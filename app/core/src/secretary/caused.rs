@@ -12,14 +12,14 @@
 use std::collections::BTreeSet;
 
 use crate::secretary::line_shape::LineShape;
-use crate::secretary::locked_text::KeyName;
-use crate::secretary::memory::{FactId, Origin};
 use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::store::Entry;
 use crate::secretary::transcript::Transcript;
 use crate::secretary::turn_shape::TurnShape;
 use crate::secretary::verb_name::VerbName;
+use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_memory::secretary::memory::{FactId, Origin};
 
 /// The keys a forgetting erases, and those it offers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

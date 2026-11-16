@@ -4,6 +4,7 @@ use crate::secretary::proposal::{Draft, Proposal, Reasons};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::words;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-09-1").expect("a slug")
@@ -86,7 +87,7 @@ fn changeset() -> crate::secretary::changes::Changeset {
 fn opened() -> Entry {
     Entry::Opened {
         at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 0, 0, 0).expect("an instant"),
-        title: crate::secretary::words::Words::kept("Morning".to_owned()),
+        title: words::Words::kept("Morning".to_owned()),
         model: "a-cli".to_owned(),
         kind: crate::secretary::store::Kind::Topic,
     }
@@ -681,13 +682,13 @@ proptest::proptest! {
 fn the_last_title_wins() {
     let untitled = Entry::Opened {
         at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
-        title: crate::secretary::words::Words::kept(String::new()),
+        title: words::Words::kept(String::new()),
         model: "m".to_owned(),
         kind: Kind::Topic,
     };
     let titled = |title: &str, by: Namer| Entry::Titled {
         at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 5, 0, 0).expect("an instant"),
-        title: crate::secretary::words::Words::kept(Title::new(title).expect("a title")),
+        title: words::Words::kept(Title::new(title).expect("a title")),
         by,
     };
     let bare = Stored::of(&id(), std::slice::from_ref(&untitled)).expect("a conversation");

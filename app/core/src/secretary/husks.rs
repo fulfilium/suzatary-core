@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use suzatary_base::refusal::Answered;
+use suzatary_memory::secretary::locked_text;
 
 /// What the lines of `graph` retire of their keys, kept in the graph.
 pub fn retired(
@@ -23,7 +24,7 @@ pub fn keys_of(
     sent: &[prodrome_core::event::Hash],
 ) -> Answered<BTreeMap<String, String>> {
     let reads = conversations.reads();
-    let slots = |name: &crate::secretary::locked_text::KeyName| reads.key(name);
+    let slots = |name: &locked_text::KeyName| reads.key(name);
     let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
     let mut keys = BTreeMap::new();
     for name in sent
@@ -36,7 +37,7 @@ pub fn keys_of(
         if let Some(key) = conversations.keys.get(name)? {
             keys.insert(
                 name.as_str().to_owned(),
-                crate::secretary::key_ring::spelled(&key),
+                suzatary_memory::secretary::key_ring::spelled(&key),
             );
         }
     }
@@ -82,7 +83,7 @@ pub fn dead(
 ) -> Answered<BTreeSet<prodrome_core::event::Hash>> {
     let retired = retired(graph);
     let reads = conversations.reads();
-    let slots = |name: &crate::secretary::locked_text::KeyName| reads.key(name);
+    let slots = |name: &locked_text::KeyName| reads.key(name);
     let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
     let mut dead = BTreeSet::new();
     'lines: for name in names {

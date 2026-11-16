@@ -155,7 +155,7 @@ fn titled(
         id,
         &Entry::Titled {
             at: clock.now(),
-            title: crate::secretary::words::Words::kept(title),
+            title: suzatary_memory::secretary::words::Words::kept(title),
             by,
         },
     )?;
@@ -194,7 +194,7 @@ mod tests {
         let mut entries = vec![Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
                 .expect("an instant"),
-            title: crate::secretary::words::Words::kept(title.to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
             model: "m".to_owned(),
             kind,
         }];

@@ -232,7 +232,7 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
         read.iter().any(|entry| matches!(
             entry,
             suzatary_core::secretary::store::Entry::Erased {
-                erasure: suzatary_core::secretary::erasure::Erasure::Forgot { .. },
+                erasure: suzatary_memory::secretary::erasure::Erasure::Forgot { .. },
                 ..
             }
         )),

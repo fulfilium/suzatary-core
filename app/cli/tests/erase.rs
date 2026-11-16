@@ -150,7 +150,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
     let root = digest.tree().expect("lines").root();
     // Written as the compactor writes it, over the root, whichever node is pending: which is,
     // is a function of the lines' names, and every key is fresh.
-    let text = suzatary_core::secretary::salted_text::Text::new(
+    let text = suzatary_memory::secretary::salted_text::Text::new(
         suzatary_core::secretary::digest_line::Line::new(&summary).expect("a line"),
         [7; suzatary_base::capability::SALT_BYTES],
     );

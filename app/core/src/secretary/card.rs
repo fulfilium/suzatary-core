@@ -11,6 +11,7 @@ use crate::wire::inbox::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
     RememberWords, ReplacedFact,
 };
+use suzatary_memory::secretary::memory;
 
 /// The Memory page.
 pub(crate) const MEMORY_PAGE: &str = "#/secretary/memory";
@@ -540,7 +541,7 @@ fn decision(
 }
 
 /// Without its words the card has no answer.
-fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, sentence: &str) -> Card {
+fn remember(words: &RememberWords, about: memory::Kind, sentence: &str) -> Card {
     let base = card(
         "Remember this?",
         sentence,
@@ -571,7 +572,7 @@ fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, senten
 /// Each fact it replaces beside the one it writes, so the owner reads both before he taps.
 fn consolidate(
     words: &RememberWords,
-    about: crate::secretary::memory::Kind,
+    about: memory::Kind,
     replaces: &[ReplacedFact],
     sentence: &str,
 ) -> Card {
@@ -972,7 +973,7 @@ fn erase(sentence: &str) -> Card {
                 question: format!(
                     "{} {}",
                     question(sentence),
-                    crate::secretary::erasure::Erasure::for_good()
+                    suzatary_memory::secretary::erasure::Erasure::for_good()
                 ),
                 yes: "Yes, erase them".to_owned(),
             },

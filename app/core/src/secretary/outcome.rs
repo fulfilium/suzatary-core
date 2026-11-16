@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::secretary::memory::FactId;
+use suzatary_memory::secretary::memory::FactId;
 
 /// How one call ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

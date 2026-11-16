@@ -427,7 +427,7 @@ impl Instance {
     #[must_use]
     pub fn memory_store(
         &self,
-    ) -> suzatary_io::objects::Objects<suzatary_core::secretary::memory_event::MemoryEvent> {
+    ) -> suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent> {
         suzatary_io::objects::Objects::open(self.secretary.memory.clone())
     }
 

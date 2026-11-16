@@ -11,15 +11,15 @@ use sha2::{Digest, Sha256};
 
 use prodrome_core::event::Hash;
 use suzatary_core::secretary::held_replica::{HeldReplica, Moved};
-use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::line_form::{
     LineDelta, LineFrame, LinePulling, LineReplica, frame, unframe,
 };
-use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::wire::lines as wire;
 use suzatary_core::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::{Held, Node, Said};
 use suzatary_store::replica::pulling::Delta;

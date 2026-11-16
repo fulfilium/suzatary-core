@@ -33,6 +33,10 @@ use suzatary_core::wire::topics as wire;
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_memory::secretary::erasure;
+use suzatary_memory::secretary::locked_text;
+use suzatary_memory::secretary::memory;
+use suzatary_memory::secretary::salted_text;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Tap;
 
@@ -431,7 +435,7 @@ pub fn erase(
             caps.secretary.conversations,
             id,
             keys,
-            suzatary_core::secretary::erasure::Erasure::Asked {
+            erasure::Erasure::Asked {
                 by: tap.who().clone(),
             },
             caps.secretary.clock.now(),
@@ -765,7 +769,7 @@ enum Prepared<'p, 'c> {
         origin: &'p Origin,
     },
     UnlockStore,
-    Erase(&'p std::collections::BTreeSet<suzatary_core::secretary::locked_text::KeyName>),
+    Erase(&'p std::collections::BTreeSet<locked_text::KeyName>),
     Afresh {
         conversation: &'p ConversationId,
         turn: usize,
@@ -782,9 +786,9 @@ enum Prepared<'p, 'c> {
     /// Remember a card's words under the memory's hold, taken before the inbox's.
     Remember {
         held: suzatary_core::secretary::memories::Held<'c>,
-        text: &'p suzatary_core::secretary::salted_text::TextName,
-        kind: suzatary_core::secretary::memory::Kind,
-        replaces: &'p suzatary_core::secretary::memory::Replaces,
+        text: &'p salted_text::TextName,
+        kind: memory::Kind,
+        replaces: &'p memory::Replaces,
     },
     /// Retract a summary under the memory's hold, whose sweep deletes its words.
     Retract {
@@ -2144,14 +2148,14 @@ fn google_client(
 fn erased(
     caps: &Server<'_>,
     id: &ConversationId,
-    keys: &std::collections::BTreeSet<suzatary_core::secretary::locked_text::KeyName>,
+    keys: &std::collections::BTreeSet<locked_text::KeyName>,
     tap: &Tap,
 ) -> Result<Performed, Refusal> {
     suzatary_core::secretary::transcript::erase(
         caps.secretary.conversations,
         id,
         keys.clone(),
-        suzatary_core::secretary::erasure::Erasure::Asked {
+        erasure::Erasure::Asked {
             by: tap.who().clone(),
         },
         caps.secretary.clock.now(),
@@ -2305,23 +2309,19 @@ fn remembered(
     clock: &dyn Clock,
     id: &ConversationId,
     index: usize,
-    (text, kind, replaces): (
-        &suzatary_core::secretary::salted_text::TextName,
-        suzatary_core::secretary::memory::Kind,
-        &suzatary_core::secretary::memory::Replaces,
-    ),
+    (text, kind, replaces): (&salted_text::TextName, memory::Kind, &memory::Replaces),
 ) -> Performed {
-    let origin = suzatary_core::secretary::memory::Origin::Tapped {
+    let origin = memory::Origin::Tapped {
         conversation: id.clone(),
         proposal: index,
     };
     match held.write_kept(text, kind, replaces, &origin, clock.now()) {
         Ok(remembered) => Performed::Done(Done::Acted {
             what: match replaces {
-                suzatary_core::secretary::memory::Replaces::Nothing => {
+                memory::Replaces::Nothing => {
                     format!("remembered as fact {}", remembered.id)
                 }
-                suzatary_core::secretary::memory::Replaces::Facts(sources) => {
+                memory::Replaces::Facts(sources) => {
                     format!("merged {sources} into fact {}", remembered.id)
                 }
             },
@@ -2564,7 +2564,7 @@ pub fn forget(
     memories: suzatary_core::secretary::memories::Memories<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
-    id: suzatary_core::secretary::memory::FactId,
+    id: memory::FactId,
 ) -> Answered<wire::MemoryPayload> {
     memories.forget(id, clock.now(), by)?;
     memory(memories)
@@ -2608,8 +2608,8 @@ pub fn retract(
     record(&memories.digests)
 }
 
-fn memory_payload(memory: &suzatary_core::secretary::memory::Memory) -> wire::MemoryPayload {
-    use suzatary_core::secretary::provenance::Wrote;
+fn memory_payload(memory: &memory::Memory) -> wire::MemoryPayload {
+    use suzatary_memory::secretary::provenance::Wrote;
     let number = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     wire::MemoryPayload {
         facts: memory
@@ -2632,7 +2632,7 @@ fn memory_payload(memory: &suzatary_core::secretary::memory::Memory) -> wire::Me
                 },
             })
             .collect(),
-        cap: number(suzatary_core::secretary::memory::MAX_LIVE),
+        cap: number(memory::MAX_LIVE),
         forgotten: memory.forgotten.iter().map(|gone| gone.id).collect(),
         merged: memory
             .merged
@@ -2646,16 +2646,14 @@ fn memory_payload(memory: &suzatary_core::secretary::memory::Memory) -> wire::Me
     }
 }
 
-fn said_on(origin: &suzatary_core::secretary::memory::Origin) -> wire::SaidOn {
+fn said_on(origin: &memory::Origin) -> wire::SaidOn {
     let number = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     match origin {
-        suzatary_core::secretary::memory::Origin::Turn { conversation, turn } => {
-            wire::SaidOn::Turn {
-                conversation: conversation.as_str().to_owned(),
-                turn: number(*turn),
-            }
-        }
-        suzatary_core::secretary::memory::Origin::Tapped {
+        memory::Origin::Turn { conversation, turn } => wire::SaidOn::Turn {
+            conversation: conversation.as_str().to_owned(),
+            turn: number(*turn),
+        },
+        memory::Origin::Tapped {
             conversation,
             proposal,
         } => wire::SaidOn::Tapped {
@@ -2854,8 +2852,8 @@ mod tests {
     }
 
     /// A memory of one standing fact, one forgotten and one replaced by the standing one.
-    fn receipts_memory() -> suzatary_core::secretary::memory::Memory {
-        use suzatary_core::secretary::memory::{
+    fn receipts_memory() -> suzatary_memory::secretary::memory::Memory {
+        use suzatary_memory::secretary::memory::{
             Fact, FactId, Forgotten, Kind, Memory, Merge, Origin, Remembered,
         };
         Memory {
@@ -2865,7 +2863,7 @@ mod tests {
                     .expect("an instant"),
                 fact: Fact::new("He takes the 7:40 train").expect("a fact"),
                 kind: Kind::Owner,
-                said: suzatary_core::secretary::provenance::Provenance::said(Origin::Turn {
+                said: suzatary_memory::secretary::provenance::Provenance::said(Origin::Turn {
                     conversation: ConversationId::new("default").expect("a slug"),
                     turn: 0,
                 }),
@@ -2889,8 +2887,8 @@ mod tests {
     /// verb stopped echoing its fact still names it, and a forgotten fact still draws none.
     #[test]
     fn a_receipt_is_the_shapes_fact_and_its_words_the_memorys() {
-        use suzatary_core::secretary::memory::{FactId, Memory};
         use suzatary_core::secretary::outcome::Outcome;
+        use suzatary_memory::secretary::memory::{FactId, Memory};
         let memory = receipts_memory();
         let row =
             |turn_said: suzatary_core::secretary::model::Turn, memory: Option<&Memory>| match turn(
@@ -2964,8 +2962,8 @@ mod tests {
                 files: Vec::new(),
             },
             vec![
-                suzatary_core::secretary::words::Gone::Erased {
-                    erasure: suzatary_core::secretary::erasure::Erasure::Asked {
+                suzatary_memory::secretary::words::Gone::Erased {
+                    erasure: suzatary_memory::secretary::erasure::Erasure::Asked {
                         by: prodrome_core::event::Actor::new("ada").expect("an actor"),
                     },
                 }

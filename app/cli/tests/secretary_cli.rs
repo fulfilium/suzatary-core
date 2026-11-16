@@ -347,7 +347,7 @@ fn conversation(
     };
     let opened = Entry::Opened {
         at: at(0),
-        title: suzatary_core::secretary::words::Words::kept(title.to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
         model: "scripted".to_owned(),
         kind,
     };
@@ -934,10 +934,10 @@ fn migrated(
 /// under the current rules.
 fn written_before_the_rules(instance: &Instance) -> ConversationId {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::erasure::Erasure;
     use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_core::secretary::store::Entry;
+    use suzatary_memory::secretary::erasure::Erasure;
+    use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_store::store::{Doc as _, Prodrome as _};
 
     let stores = instance.conversation_stores();
@@ -949,7 +949,7 @@ fn written_before_the_rules(instance: &Instance) -> ConversationId {
     let entries = [
         Entry::Opened {
             at: at(0),
-            title: suzatary_core::secretary::words::Words::kept("Café notes".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Café notes".to_owned()),
             model: "scripted".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
         },

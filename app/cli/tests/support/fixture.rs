@@ -354,7 +354,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
         &id,
         &Entry::Opened {
             at,
-            title: suzatary_core::secretary::words::Words::kept(Daily::Sweep.title().to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept(Daily::Sweep.title().to_owned()),
             model: "scripted/fixture".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Review,
         },
@@ -488,7 +488,7 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
         &id,
         &Entry::Opened {
             at: now,
-            title: suzatary_core::secretary::words::Words::kept("Calendars".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Calendars".to_owned()),
             model: "scripted".to_owned(),
             kind: Kind::Topic,
         },
@@ -703,7 +703,7 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
 /// `url`, and it is not merged.
 fn the_branch_back(url: &str) -> anyhow::Result<suzatary_core::coding::Seen> {
     use suzatary_core::coding::{ReportFile, Seen};
-    use suzatary_core::coding_report::{FileStat, Lines};
+    use suzatary_memory::coding_report::{FileStat, Lines};
     let path = |text: &str| suzatary_base::repo_ids::RepoPath::try_from(text.to_owned());
     Ok(Seen {
         branch: "claude/retitle".parse()?,
@@ -1359,7 +1359,7 @@ fn bulk_lines(
     use prodrome_core::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::line_words::LineWords;
+    use suzatary_memory::secretary::line_words::LineWords;
 
     let count: usize = sizes.iter().map(|(_, size)| size).sum();
     if count == 0 {
@@ -1383,7 +1383,7 @@ fn bulk_lines(
         let id = ConversationId::new(id.clone())?;
         // Each conversation's share of what is left, as `reseals` shares them.
         let mut share = reseals.share(sizes, n, resealing);
-        let mut slots: Vec<(suzatary_core::secretary::locked_text::TextKey, LineWords)> =
+        let mut slots: Vec<(suzatary_memory::secretary::locked_text::TextKey, LineWords)> =
             Vec::new();
         // The first conversation's opening line is the store's own, above.
         for line in usize::from(n == 0)..*size {
@@ -1448,7 +1448,7 @@ fn bulk_entry(
 ) -> suzatary_core::secretary::store::Entry {
     use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::store::{Entry, Kind};
-    use suzatary_core::secretary::words::Words;
+    use suzatary_memory::secretary::words::Words;
     if line == 0 {
         Entry::Opened {
             at,
@@ -1613,7 +1613,7 @@ fn bulk_proposals(
         &id,
         &Entry::Opened {
             at: now,
-            title: suzatary_core::secretary::words::Words::kept("Letters".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Letters".to_owned()),
             model: "scripted/fixture".to_owned(),
             kind: Kind::Topic,
         },
@@ -1725,7 +1725,7 @@ impl Sealed {
     ) -> Result<
         (
             suzatary_core::secretary::line_event::LineEvent,
-            Vec<suzatary_core::secretary::locked_text::TextKey>,
+            Vec<suzatary_memory::secretary::locked_text::TextKey>,
         ),
         suzatary_core::secretary::line_event::NotALine,
     > {
@@ -1733,7 +1733,7 @@ impl Sealed {
         match self {
             Sealed::Current => LineEvent::write(id, writer, held, entry, entropy),
             Sealed::Unversioned => LineEvent::written_under(
-                &suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
+                &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
                 id,
                 writer,
                 held,

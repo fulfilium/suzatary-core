@@ -11,7 +11,7 @@ default-run = "suzatary"
 
 # A LIBRARY BESIDE THE BINARY, so the binary's own wiring can be tested: cargo
 # links `tests/*.rs` against a package's library, and a package with only a
-# `[[bin]]` exposes nothing to them. See `src/lib.rs` for why that mattered.
+# `[[bin]]` exposes nothing to them.
 [lib]
 name = "suzatary_cli"
 path = "src/lib.rs"
@@ -36,6 +36,7 @@ suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
 suzatary-held.workspace = true
+suzatary-memory.workspace = true
 suzatary-core.workspace = true
 suzatary-api.workspace = true
 suzatary-io.workspace = true
@@ -56,8 +57,7 @@ tracing-subscriber.workspace = true
 # The instance file, and the wire this serialises.
 toml.workspace = true
 # THE ONE EDIT PATH: `instance::InstanceEdits` parses the file as a
-# `DocumentMut` and edits one table, never rewriting the rest of it — see
-# `toml_edit`'s own comment in the workspace manifest.
+# `DocumentMut` and edits one table, never rewriting the rest of it.
 toml_edit.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -114,9 +114,8 @@ suzatary-core = { workspace = true, features = ["nothing"] }
 # address is a second tailnet peer (tests/google.rs).
 tokio = { workspace = true, features = ["net", "io-util"] }
 ureq.workspace = true
-# The benchmark harness (tests/perf_fold_chain.rs) hashes bodies (with the
-# library's sha2) and gzips them at each level itself, to break a route's time
-# into its parts.
+# The benchmark harness (tests/perf_fold_chain.rs) gzips bodies at each level itself, to break a
+# route's time into its parts.
 flate2 = "1"
 # A PDF upload is base64 in its JSON body (tests/secretary.rs).
 base64.workspace = true

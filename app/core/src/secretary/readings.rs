@@ -8,11 +8,9 @@ use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::changes::Changeset;
 use crate::secretary::inbox;
 use crate::secretary::inbox_reading::{Reading, Words};
-use crate::secretary::memory::Fact;
 use crate::secretary::model::Turn;
 use crate::secretary::proposal::{Forward, Proposal, Style};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
-use crate::secretary::salted_text::TextName;
 use crate::secretary::stamp::stamp;
 use crate::secretary::store::{Said, Standing, Stored};
 use crate::secretary::turn_shape::TurnShape;
@@ -27,6 +25,10 @@ use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::{Answered, Refusal};
 use suzatary_held::secretary::attached;
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_memory::secretary::memory;
+use suzatary_memory::secretary::memory::Fact;
+use suzatary_memory::secretary::salted_text::TextName;
+use suzatary_memory::secretary::words;
 use suzatary_todo::render::Html;
 use suzatary_todo::wire::todo::Fulfillment;
 
@@ -164,8 +166,8 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
         let text = match &said.turn {
             Turn::Model { text, .. } => text,
             Turn::Erased { words, .. } => match words.first() {
-                Some(crate::secretary::words::Words::Kept {
-                    kept: crate::secretary::line_words::LineWords::Model { text },
+                Some(words::Words::Kept {
+                    kept: suzatary_memory::secretary::line_words::LineWords::Model { text },
                 }) => text,
                 _ => return None,
             },
@@ -566,7 +568,7 @@ pub fn turn<A: Answers + ?Sized>(
             text: crate::secretary::turn_shape::prose(words),
             gone: words
                 .first()
-                .and_then(crate::secretary::words::Words::gone)
+                .and_then(words::Words::gone)
                 .map(wire::TurnGone::from),
             ..row("", erased(shape, said.by.as_ref(), memory))
         },
@@ -638,10 +640,7 @@ pub fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::Bloc
 }
 
 /// A forgotten fact's receipt says it was forgotten, never what it said.
-fn receipt(
-    fact: crate::secretary::memory::FactId,
-    memory: Option<&wire::MemoryPayload>,
-) -> wire::Receipt {
+fn receipt(fact: memory::FactId, memory: Option<&wire::MemoryPayload>) -> wire::Receipt {
     let Some(memory) = memory else {
         return wire::Receipt::Unread { fact };
     };
@@ -720,11 +719,11 @@ fn disconnect_on_wire(connection: &crate::connect::Connection, sentence: String)
 /// A remember card on the wire, with each fact a consolidation replaces.
 fn remember_on_wire(
     words: &Words,
-    about: crate::secretary::memory::Kind,
-    replaces: &crate::secretary::memory::Replaces,
+    about: memory::Kind,
+    replaces: &memory::Replaces,
     memory: Option<&wire::MemoryPayload>,
 ) -> ProposedAct {
-    use crate::secretary::memory::Replaces;
+    use suzatary_memory::secretary::memory::Replaces;
     let into = match replaces {
         Replaces::Nothing => String::new(),
         Replaces::Facts(sources) => format!(" in place of {sources}"),
@@ -1118,7 +1117,7 @@ pub fn proposal(
 
 fn session_on_wire(session: &crate::coding::Session) -> CodingSession {
     use crate::coding::Session;
-    use crate::coding_report::Lines;
+    use suzatary_memory::coding_report::Lines;
     match session {
         Session::Fired { id, url, at } => CodingSession::Fired {
             id: id.to_string(),

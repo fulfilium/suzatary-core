@@ -11,13 +11,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::event::Hash;
 
 use crate::secretary::held_lines::HeldLines;
-use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
-use crate::secretary::locked_text::KeyName;
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::key_ring::KeyRing;
+use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::held::Said;
 
 /// The lines held: the rows, and the readings of the landed one.

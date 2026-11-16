@@ -4,7 +4,6 @@ use prodrome_core::event::Hash;
 
 use crate::secretary::Secretary;
 use crate::secretary::changes::{Building, Changeset, Unapplied, events_of};
-use crate::secretary::memory::Origin;
 use crate::secretary::store::Stored;
 use crate::secretary::taint;
 use crate::secretary::verb_name::Binding;
@@ -12,6 +11,7 @@ use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::{Moment, Zone};
+use suzatary_memory::secretary::memory::Origin;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::believed::Preview;
 
@@ -185,7 +185,7 @@ mod tests {
         let mut entries = vec![Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 8, 0, 0, 0)
                 .expect("an instant"),
-            title: crate::secretary::words::Words::kept("t".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }];

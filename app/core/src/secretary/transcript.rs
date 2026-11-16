@@ -17,18 +17,18 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
 use crate::secretary::conversations::Conversations;
-use crate::secretary::erasure::Erasure;
 use crate::secretary::held_lines::HeldLines;
-use crate::secretary::holder::Holder;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
-use crate::secretary::line_words::LineWords;
-use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::model::{SessionId, Turn};
-use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Said, Stored};
-use crate::secretary::words::{Gone, Words};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_memory::secretary::holder::Holder;
+use suzatary_memory::secretary::line_words::LineWords;
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
+use suzatary_memory::secretary::slots::Slots;
+use suzatary_memory::secretary::words::{Gone, Words};
 use suzatary_store::store::{Prodrome, StoreError};
 
 /// One conversation's lines in causal order, and their fold.
@@ -1168,7 +1168,7 @@ mod tests {
     fn opened() -> Entry {
         Entry::Opened {
             at: at(0),
-            title: crate::secretary::words::Words::kept("Morning".to_owned()),
+            title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
             model: "a-cli/small".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }

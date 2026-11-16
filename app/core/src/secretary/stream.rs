@@ -20,10 +20,10 @@ use crate::secretary::store::{Entry, NotAConversation, Said, heading};
 use crate::secretary::targets::{self, MAX_TOPICS};
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
-use crate::secretary::words::Words;
 use crate::wire::topics as wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
+use suzatary_memory::secretary::words::Words;
 
 /// How many rounds one page of the stream holds.
 pub const PAGE: usize = 30;

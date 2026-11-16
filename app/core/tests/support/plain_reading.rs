@@ -10,9 +10,9 @@ use super::{
     transcripts,
 };
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_memory::secretary::slots::Slots;
 
 /// Every line the objects hold, by name, read: each slot opened by the key `key` answers, or
 /// erased where an erasure line of its own conversation names its key.

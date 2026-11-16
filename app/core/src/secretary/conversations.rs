@@ -1,6 +1,6 @@
 //! The conversations' stores as one value: the lines, a prodrome at the [`LineEvent`] schema whose
 //! words are locked, the keys that open them, box-local and never pushed, where a new key comes
-//! from, and every other holder of the words an erasure empties ([`crate::secretary::holder`]).
+//! from, and every other holder of the words an erasure empties ([`suzatary_memory::secretary::holder`]).
 //!
 //! Reading goes through the lines' one fold ([`Opened`]) and takes no store lock. A line is
 //! written through [`crate::secretary::transcript::push`] alone, which keeps each key before the
@@ -8,17 +8,17 @@
 
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
-use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::model::Model;
 use crate::secretary::model_sessions::ModelSessions;
 use crate::secretary::opened::Opened;
 use crate::secretary::store::{self, Entry, Stored};
 use crate::secretary::transcript;
-use crate::secretary::words::{Gone, Words};
 use crate::timings::{Phase, timed};
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, Status};
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
+use suzatary_memory::secretary::words::{Gone, Words};
 use suzatary_store::store::{Doc, Gets, Prodrome, Reads, StoreError};
 use suzatary_todo::render_cache::RenderCache;
 
@@ -108,7 +108,7 @@ pub fn start(
 ) -> Result<Stored, Refusal> {
     let opened = Entry::Opened {
         at,
-        title: crate::secretary::words::Words::kept(title.to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
         model: model.name(),
         kind,
     };

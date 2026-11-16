@@ -2203,11 +2203,12 @@ pub struct Fakes {
     /// Every answer block an erasure emptied from the render cache, by source.
     pub forgot: Arc<suzatary_core::secretary::conversations::Forgot>,
     /// The secretary's memory, its history beside the conversations.
-    pub memory: suzatary_io::objects::Objects<suzatary_core::secretary::memory_event::MemoryEvent>,
+    pub memory:
+        suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
     /// The recorded decisions, beside the memory.
     pub decisions: suzatary_io::objects::Objects<suzatary_todo::decisions::DecisionEvent>,
     /// The memory's texts, beside its history.
-    pub memory_texts: suzatary_io::texts::Texts<suzatary_core::secretary::memory::Fact>,
+    pub memory_texts: suzatary_io::texts::Texts<suzatary_memory::secretary::memory::Fact>,
     /// The digest's history, beside the memory.
     pub digests: suzatary_io::objects::Objects<suzatary_core::secretary::digest_event::DigestEvent>,
     /// The digest's summaries' words, beside its history.
@@ -3947,12 +3948,12 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
     store: &str,
 ) -> (
     Vec<prodrome_core::registers::Node<E>>,
-    suzatary_core::secretary::key_ring::KeyRing,
+    suzatary_memory::secretary::key_ring::KeyRing,
 ) {
     let mut answer = get(&format!("{base}/api/stores/{store}/objects"));
     assert_eq!(status(&answer), 200, "the {store} store answers");
     let payload = body_json(&mut answer);
-    let keys = suzatary_core::secretary::key_ring::KeyRing::of(
+    let keys = suzatary_memory::secretary::key_ring::KeyRing::of(
         &serde_json::from_value(payload["keys"].clone()).unwrap_or_default(),
     );
     let prints = payload["objects"]
@@ -4286,7 +4287,7 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
     let id = ConversationId::new(conversation).expect("a slug");
     let opened = Entry::Opened {
         at: suzatary_base::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
-        title: suzatary_core::secretary::words::Words::kept("Connect".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("Connect".to_owned()),
         model: "a fake".to_owned(),
         kind: Kind::Topic,
     };

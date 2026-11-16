@@ -1,6 +1,6 @@
 //! The words of one slot of a conversation line: what is locked under one key.
 //!
-//! A line holds at most a few slots ([`crate::secretary::line_shape::LineShape::slots`]): a
+//! A line holds at most a few slots (`suzatary_core::secretary::line_shape::LineShape::slots`): a
 //! turn's words, or a model turn's text and then each call's arguments, each under a key of its
 //! own, so a forgetting can erase the one call that wrote a fact and leave the prose beside it.
 //! Every slot's words go through the redaction door ([`Scrubbed`]) before they are locked
@@ -214,58 +214,6 @@ pub(crate) mod tests {
         #[test]
         fn words_read_back_as_their_print(words in line_words()) {
             prop_assert_eq!(LineWords::read(&words.print()), Some(words));
-        }
-    }
-
-    /// An answer of `len` bytes or a little more, of one-, two-, three- and four-byte characters,
-    /// so a cut can land inside a character.
-    fn answer_of(len: usize) -> String {
-        "aé€😀"
-            .chars()
-            .cycle()
-            .scan(0, |bytes, c| {
-                (*bytes < len).then(|| {
-                    *bytes += c.len_utf8();
-                    c
-                })
-            })
-            .collect()
-    }
-
-    proptest! {
-        /// No stored tool turn exceeds the cap, whatever the verb answered; an answer within it
-        /// is stored whole, and a longer one keeps its head and says how much it left out.
-        #[test]
-        fn a_stored_tool_answer_is_bounded(len in prop_oneof![
-            0..STORED_ANSWER_BYTES + 1,
-            STORED_ANSWER_BYTES - 8..STORED_ANSWER_BYTES + 8,
-            STORED_ANSWER_BYTES..4 * STORED_ANSWER_BYTES,
-        ]) {
-            let answer = answer_of(len);
-            let turn = crate::secretary::model::Turn::Tool {
-                verb: crate::secretary::tool_name::ToolName::from("junk_digest"),
-                answer: answer.clone(),
-                outcome: crate::secretary::outcome::Outcome::Answered,
-                files: Vec::new(),
-            };
-            let (_, words) = crate::secretary::turn_shape::split(&turn);
-            let words = words.expect("a whole turn has words");
-            let [LineWords::Tool { answer: stored, .. }] = words.as_slice() else {
-                panic!("a tool turn is one tool slot: {words:?}");
-            };
-            prop_assert!(stored.as_str().len() <= STORED_ANSWER_BYTES);
-            if answer.len() <= STORED_ANSWER_BYTES {
-                prop_assert_eq!(stored.as_str(), answer.as_str());
-            } else {
-                let (head, note) = stored.as_str().rsplit_once('\n').expect("a note");
-                prop_assert!(answer.starts_with(head));
-                prop_assert_eq!(
-                    note,
-                    format!("[{} more bytes of this answer were not stored]", answer.len() - head.len())
-                );
-            }
-            let opened = LineWords::read(&words[0].print()).expect("reads back");
-            prop_assert_eq!(&opened, &words[0]);
         }
     }
 

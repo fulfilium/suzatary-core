@@ -16,13 +16,13 @@ use prodrome_core::store::frontier::{Frontiers, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::InMemory;
-use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::{Entry, Kind};
 use suzatary_core::secretary::transcript;
-use suzatary_core::secretary::words::Words;
 use suzatary_core::wire::lines::Content;
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc as _, Prodrome as _};
 
@@ -416,7 +416,7 @@ fn landed_by_pieces(
             .iter()
             .map(|(name, key)| {
                 (
-                    suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                    suzatary_memory::secretary::locked_text::KeyName::new(name.clone())
                         .expect("a key name"),
                     key.clone(),
                 )
@@ -426,7 +426,7 @@ fn landed_by_pieces(
         replica
             .piece(
                 piece,
-                suzatary_core::secretary::key_ring::KeyRing::of(&given),
+                suzatary_memory::secretary::key_ring::KeyRing::of(&given),
                 1,
             )
             .expect("a piece");
@@ -909,7 +909,7 @@ fn replica_of(
         .iter()
         .map(|(name, key)| {
             (
-                suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                suzatary_memory::secretary::locked_text::KeyName::new(name.clone())
                     .expect("a key name"),
                 key.clone(),
             )
@@ -919,7 +919,7 @@ fn replica_of(
     replica
         .piece(
             skeleton,
-            suzatary_core::secretary::key_ring::KeyRing::of(&given),
+            suzatary_memory::secretary::key_ring::KeyRing::of(&given),
             1,
         )
         .expect("a piece");
@@ -1084,7 +1084,7 @@ fn pulled_again(
             .iter()
             .map(|(name, key)| {
                 (
-                    suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                    suzatary_memory::secretary::locked_text::KeyName::new(name.clone())
                         .expect("a key name"),
                     key.clone(),
                 )
@@ -1094,7 +1094,7 @@ fn pulled_again(
         replica
             .piece(
                 piece,
-                suzatary_core::secretary::key_ring::KeyRing::of(&given),
+                suzatary_memory::secretary::key_ring::KeyRing::of(&given),
                 1,
             )
             .expect("a piece");

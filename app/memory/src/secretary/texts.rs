@@ -12,7 +12,7 @@
 //! same, so a sweep can delete a text only from the store whose histories named it.
 //!
 //! Whether a text is dead is not monotone (a forgetting makes one), so the sweep asks it under
-//! ONE hold, the memory's ([`crate::secretary::memories::Held`]), and every writer that files a
+//! ONE hold, the memory's (`suzatary_core::secretary::memories::Held`), and every writer that files a
 //! naming of a text into that store takes the same hold first: a fact remembered, a remember card
 //! filed or tapped. A writer that names texts without it could name one the sweep has just found
 //! dead. A sweep that cannot read every naming deletes nothing, since the words are box-local and

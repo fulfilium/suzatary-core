@@ -130,7 +130,7 @@ fn probe() -> Vec<(Label, Body)> {
     });
     let opened = Entry::Opened {
         at: at(),
-        title: crate::secretary::words::Words::kept("a title".to_owned()),
+        title: suzatary_memory::secretary::words::Words::kept("a title".to_owned()),
         model: "m".to_owned(),
         kind: crate::secretary::store::Kind::Topic,
     };

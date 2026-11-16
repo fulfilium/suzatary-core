@@ -10,7 +10,6 @@ pub mod asks;
 pub mod calendar;
 pub mod cast;
 pub mod coding;
-pub mod coding_report;
 pub mod conformance;
 pub mod connect;
 pub mod content_id;

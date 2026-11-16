@@ -17,6 +17,7 @@ use suzatary_held::held_value::Filled;
 use suzatary_held::secretary::attached::Checked;
 
 use crate::instance::Instance;
+use suzatary_memory::secretary::salted_text;
 
 /// `SECRETARY.md`; without it the model is told to propose nothing.
 #[must_use]
@@ -1869,11 +1870,9 @@ pub fn dismiss(
 
 fn words_of(
     instance: &Instance,
-) -> impl Fn(
-    &suzatary_core::secretary::salted_text::TextName,
-) -> suzatary_core::secretary::inbox_reading::Words {
+) -> impl Fn(&salted_text::TextName) -> suzatary_core::secretary::inbox_reading::Words {
     use suzatary_store::store::Gets as _;
-    let texts = suzatary_io::texts::Texts::<suzatary_core::secretary::memory::Fact>::open(
+    let texts = suzatary_io::texts::Texts::<suzatary_memory::secretary::memory::Fact>::open(
         instance.secretary.memory_texts(),
     );
     // A failed read is unread, never gone.
@@ -2572,9 +2571,7 @@ fn lines_of(
 fn transcript(
     stored: &suzatary_core::secretary::store::Stored,
     lines: &suzatary_core::secretary::store::Lines,
-    words: &impl Fn(
-        &suzatary_core::secretary::salted_text::TextName,
-    ) -> suzatary_core::secretary::inbox_reading::Words,
+    words: &impl Fn(&salted_text::TextName) -> suzatary_core::secretary::inbox_reading::Words,
 ) {
     for said in &stored.turns {
         match &said.turn {
@@ -2680,7 +2677,7 @@ mod sign_in_completion {
             &DEFAULT,
             &Entry::Opened {
                 at,
-                title: suzatary_core::secretary::words::Words::kept(String::new()),
+                title: suzatary_memory::secretary::words::Words::kept(String::new()),
                 model: "m".to_owned(),
                 kind: suzatary_core::secretary::store::Kind::Topic,
             },

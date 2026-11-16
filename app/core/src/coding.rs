@@ -9,9 +9,10 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::coding_report::{FileStat, Report};
 use crate::connect::parsed;
 use suzatary_base::repo_ids::{CommitId, RepoPath};
+use suzatary_memory::coding_report::{FileStat, Report};
+use suzatary_memory::secretary::words;
 
 /// The most a task may be, in bytes.
 pub(crate) const MAX_TASK_BYTES: usize = 4096;
@@ -268,7 +269,7 @@ pub enum Session {
         /// The branch it pushed.
         branch: Branch,
         /// What it wrote there, while its words are kept.
-        report: crate::secretary::words::Words<Report>,
+        report: words::Words<Report>,
     },
     /// The branch is on the default branch.
     Merged {
@@ -282,7 +283,7 @@ pub enum Session {
         /// The session.
         id: SessionId,
         /// His words, while they are kept.
-        reason: crate::secretary::words::Words<String>,
+        reason: words::Words<String>,
     },
 }
 
@@ -351,13 +352,13 @@ impl Session {
             (Self::Fired { id, .. }, Step::Report { branch, report }) => Ok(Self::Reported {
                 id,
                 branch,
-                report: crate::secretary::words::Words::kept(report),
+                report: words::Words::kept(report),
             }),
             (Self::Reported { id, .. }, Step::Merge { sha }) => Ok(Self::Merged { id, sha }),
             (Self::Fired { id, .. } | Self::Reported { id, .. }, Step::Drop { reason }) => {
                 Ok(Self::Dropped {
                     id,
-                    reason: crate::secretary::words::Words::kept(reason),
+                    reason: words::Words::kept(reason),
                 })
             }
             (session, step) => Err(NotAStep {
@@ -557,7 +558,7 @@ mod tests {
             "Session: https://claude.ai/code/session_01abc\nGates: green",
             vec![FileStat {
                 path: RepoPath::try_from("README.md".to_owned()).expect("a path"),
-                lines: crate::coding_report::Lines::Text {
+                lines: suzatary_memory::coding_report::Lines::Text {
                     added: 3,
                     removed: 1,
                 },

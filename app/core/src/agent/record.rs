@@ -57,12 +57,12 @@ use suzatary_todo::render::Render;
 ///
 /// ```compile_fail,E0599
 /// use suzatary_core::secretary::memories::ReadMemories;
-/// use suzatary_core::secretary::memory_event::MemoryEvent;
+/// use suzatary_memory::secretary::memory_event::MemoryEvent;
 /// fn remember(memory: ReadMemories<'_>, event: MemoryEvent) { let _ = memory.history.append(event); }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::secretary::memories::ReadMemories;
-/// use suzatary_core::secretary::salted_text::TextName;
+/// use suzatary_memory::secretary::salted_text::TextName;
 /// fn forget(memory: ReadMemories<'_>, name: &TextName) { let _ = memory.texts.remove(name); }
 /// ```
 /// ```compile_fail,E0599

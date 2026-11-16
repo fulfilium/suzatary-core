@@ -4142,6 +4142,7 @@ dependencies = [
  "suzatary-core",
  "suzatary-held",
  "suzatary-io",
+ "suzatary-memory",
  "suzatary-plugin",
  "suzatary-record",
  "suzatary-signatures",
@@ -4173,6 +4174,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-core",
  "suzatary-held",
+ "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4208,7 +4210,6 @@ name = "suzatary-core"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
- "chacha20poly1305",
  "chrono",
  "chrono-tz",
  "hex",
@@ -4226,6 +4227,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-core",
  "suzatary-held",
+ "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4236,7 +4238,6 @@ dependencies = [
  "ts-rs",
  "typst-syntax",
  "unicode-normalization",
- "zeroize",
 ]
 
 [[package]]
@@ -4287,6 +4288,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-core",
  "suzatary-held",
+ "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
@@ -4297,6 +4299,26 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "ureq",
  "webpki-roots",
+]
+
+[[package]]
+name = "suzatary-memory"
+version = "0.0.0"
+dependencies = [
+ "chacha20poly1305",
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-held",
+ "suzatary-memory",
+ "suzatary-store",
+ "thiserror",
+ "ts-rs",
+ "zeroize",
 ]
 
 [[package]]
@@ -4311,6 +4333,7 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-memory",
  "suzatary-record",
  "suzatary-todo",
  "ts-rs",
@@ -4449,6 +4472,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-core",
  "suzatary-held",
+ "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
