@@ -120,14 +120,15 @@ pub static TODOS: Template<crate::pages::TodosPage> = Template::new(
     &[],
 );
 
-/// One todo of a store as a static page, in the closed world, since a body is a writer's markup.
+/// One todo of a store as a static page. It evaluates no writer's markup, so it reads the whole
+/// library: a field's drawing is set into it after its compile (`pages::Field`).
 pub static TODO: Template<crate::pages::TodoPage> = Template::new(
     "/todo.typ",
     &[
         ("/todo.typ", include_str!("rendering/todo.typ")),
         ("/priority.typ", include_str!("rendering/priority.typ")),
     ],
-    Library::Closed,
+    Library::Open,
     Output::Body,
     Kept::Nowhere,
     &[],

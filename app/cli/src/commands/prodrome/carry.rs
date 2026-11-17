@@ -16,6 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{Context as _, bail};
 use prodrome_core::event::{Actor, Lifecycle, TodoId};
@@ -23,13 +24,14 @@ use prodrome_core::fpl::Outcome;
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::{Policy as _, Untrusted};
 use prodrome_core::term::{Term, TermF};
-use suzatary_base::capability::Clock as _;
+use suzatary_base::capability::{Clock as _, Typeset};
 use suzatary_base::chains::ChainName;
 use suzatary_base::reference::TodoRef;
 use suzatary_core::release::{Counted, Plan};
 use suzatary_record::record::{Authored, Node, Record, TodoEvent};
 use suzatary_signatures::believed::Believed;
 use suzatary_store::store::{Prodrome as _, Reads as _, Shut};
+use suzatary_todo::render::Remembered;
 
 use super::list::{CarriedList, Decision, Field, Restated};
 use crate::commands::door::{Door, Lists, Opened, published};
@@ -818,6 +820,10 @@ fn renamed(spec: &Term, to: &BTreeMap<String, TodoId>) -> Result<Term, String> {
     })
 }
 
+/// The texts one carry keeps the closed world's answer to: more than a carried list's bodies and
+/// markup fields.
+const TEXTS_KEPT: usize = 4096;
+
 /// `suzatary prodrome carry`.
 pub(crate) fn run(path: &Path, args: &super::Carrying) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
@@ -833,10 +839,15 @@ pub(crate) fn run(path: &Path, args: &super::Carrying) -> anyhow::Result<()> {
         .list
         .clone()
         .unwrap_or_else(|| instance.local.carried_list());
+    // The list's bodies, the dry run's door and the destination's are one reading of each text.
+    let typeset = Arc::new(Remembered::new(
+        suzatary_io::typeset::Closed::this_binary(),
+        TEXTS_KEPT,
+    ));
     let list = CarriedList::parse(
         &std::fs::read_to_string(&list_path)
             .with_context(|| format!("reading the carried list {}", list_path.display()))?,
-        &suzatary_io::typeset::Closed::this_binary(),
+        &*typeset,
     )?;
     let actor = Actor::new(
         args.actor
@@ -845,7 +856,14 @@ pub(crate) fn run(path: &Path, args: &super::Carrying) -> anyhow::Result<()> {
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     let lists = Lists::of(&instance.local, instance.code(), &instance.path);
-    let door = || Door::named(lists.clone(), list.public_actors(), Opened::AtTerminal);
+    let door = || {
+        Door::named(
+            lists.clone(),
+            list.public_actors(),
+            Opened::AtTerminal,
+            Arc::clone(&typeset) as Arc<dyn Typeset + Send>,
+        )
+    };
     let destination =
         crate::commands::chain_at(args.to.clone(), Untrusted::none()).public(door().rule());
     let writer = Instance::writer_of(source, &instance.signers(), &actor, Opened::AtTerminal);

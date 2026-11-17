@@ -62,6 +62,8 @@ toml_edit.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
+# A page's references and its links to todos, read off a field's drawing (`prodrome pages`).
+regex.workspace = true
 # A drawing's value is read in Typst through its generated schema (`prodrome draw`).
 schemars.workspace = true
 chrono.workspace = true
@@ -107,8 +109,6 @@ test = false
 [dev-dependencies]
 # The workflow `prodrome init --public` writes, read as GitHub reads it.
 serde_yaml = "0.9"
-# Reading a written page back.
-regex.workspace = true
 # A scratch cache tier for `tests/plugin.rs`.
 tempfile = "3"
 # Programs a test makes and runs, never executing a file its process wrote.

@@ -140,9 +140,11 @@ It prints only `file:line` (`scripts/public-tree.sh:1-35`). It runs at three doo
    `public = true`. This covers the CLI, `POST /api/objects`, `POST /api/author` and a tapped
    card. A refused object from the phone stays local and named (`phonereplica`). The check
    must come before the store because a `Change` rests on its todo's heads (`changeheads`), so
-   a stored object is an ancestor of every later write to its todo.
+   a stored object is an ancestor of every later write to its todo. It reads every string the
+   event holds and, for each markup field (`Record::markup`), what that field draws in the
+   closed world: the HTML body and its text. A field that does not draw is refused.
 2. **At the push**: `public-scan.sh` over every commit the push adds, with their messages and
-   identities. It refuses to run without the lists (`scripts/public-scan.sh:34-38`), so only
+   identities, and door 1's reading of each object a commit changes (`prodrome texts`). It refuses to run without the lists (`scripts/public-scan.sh:34-38`), so only
    the box can push.
 3. **In the carry**, over every restated object.
 

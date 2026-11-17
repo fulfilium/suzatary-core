@@ -2,9 +2,11 @@
 
 use prodrome_core::memo::Finding;
 
-use crate::template::Called;
-use suzatary_base::capability::{RenderError, Typeset};
+use crate::rendering::CLOSED;
+use crate::template::{Called, named};
+use suzatary_base::capability::{Rejected, RenderError, Typeset};
 use suzatary_base::escape::Escaped;
+use suzatary_base::table::Table;
 
 /// Typst's own HTML for a fragment of markup; only a [`Render`] can make one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,5 +50,52 @@ pub trait Render: Typeset {
     /// nothing.
     fn findings(&self) -> Vec<Finding> {
         Vec::new()
+    }
+}
+
+/// A typesetter that compiles each text once while it keeps the answer: the closed world is a
+/// function of the text alone ([`crate::rendering::CLOSED`]), so its answer is tabulated by the text.
+#[derive(Debug)]
+pub struct Remembered<T> {
+    typeset: T,
+    answers: Table<Result<String, Rejected>>,
+}
+
+impl<T: Typeset> Remembered<T> {
+    /// `typeset`, keeping at most `capacity` answers.
+    #[must_use]
+    pub fn new(typeset: T, capacity: usize) -> Self {
+        Self {
+            typeset,
+            answers: Table::new(capacity),
+        }
+    }
+
+    /// Every text whose tabulation holds two answers.
+    #[must_use]
+    pub fn findings(&self) -> Vec<Finding> {
+        self.answers.findings()
+    }
+}
+
+impl<T: Typeset> Typeset for Remembered<T> {
+    fn closed(&self, source: &str) -> Result<String, Rejected> {
+        let key = prodrome_core::memo::Key {
+            function: CLOSED.clone(),
+            argument: named(source),
+        };
+        if let Some(known) = self.answers.kept(&key) {
+            return known;
+        }
+        let answer = self.typeset.closed(source);
+        // A refusal typst located is a fact about the text; one about nothing (a timeout, a
+        // child that would not start) may be about the box, so it is asked again next time.
+        if answer
+            .as_ref()
+            .map_or_else(|r| r.diagnostics.iter().any(|d| d.span.is_some()), |_| true)
+        {
+            let _ = self.answers.keep(key, answer.clone());
+        }
+        answer
     }
 }

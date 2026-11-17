@@ -8,10 +8,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, bail};
 use prodrome_core::event::TodoId;
 use prodrome_core::literal::Datetime;
+use suzatary_base::capability::Typeset;
 use suzatary_base::chains::ChainName;
 use suzatary_io::typeset::Compiler;
 use suzatary_signatures::chain_set::Read;
-use suzatary_todo::pages::{Linked, Listed, TodoPage, TodosPage};
+use suzatary_todo::pages::{Drawn, Field, Linked, Listed, TodoPage, TodosPage};
 use suzatary_todo::rendering::{TODO, TODOS};
 use suzatary_todo::shown::{Shown, open_rows, shown};
 use suzatary_todo::template::Called;
@@ -58,12 +59,8 @@ pub(super) fn run(paging: &Paging) -> anyhow::Result<()> {
     }
     empty(&paging.into)?;
     let read = crate::commands::store_at::by_path(&paging.store)?;
-    let site = site(
-        read,
-        paging.at,
-        &paging.named,
-        &suzatary_io::typeset::Closed::this_binary(),
-    )?;
+    let closed = suzatary_io::typeset::Closed::this_binary();
+    let site = site(read, paging.at, &paging.named, &closed, &closed)?;
     write(&paging.into, &site)?;
     println!("wrote {} files into {}", site.len(), paging.into.display());
     Ok(())
@@ -76,6 +73,7 @@ fn site(
     at: Datetime,
     named: &ChainName,
     compiler: &dyn Compiler,
+    typeset: &dyn Typeset,
 ) -> anyhow::Result<BTreeMap<String, String>> {
     let set = read.set(at);
     let held = set.held(&name).context("reading the store")?;
@@ -122,17 +120,106 @@ fn site(
         LIST.to_owned(),
         page(&Page::List, &drawn(compiler, &TODOS.call(&list)?)?),
     );
+    let pages: BTreeMap<&str, &str> = links
+        .iter()
+        .map(|link| (link.reference.as_str(), link.page.as_str()))
+        .collect();
     for (id, shown) in todos {
+        let mut placed: Vec<(String, String)> = Vec::new();
+        let drawn_fields = shown
+            .candidates
+            .iter()
+            .enumerate()
+            .map(|(i, candidate)| {
+                let mut refers: Vec<Linked> = Vec::new();
+                let mut field = |name: &str, source: &str| {
+                    if source.is_empty() {
+                        return Field::Empty;
+                    }
+                    match crate::commands::door::drawing(typeset, source) {
+                        Ok(drawing) => {
+                            for reference in references(&drawing.text, &pages) {
+                                if !refers.contains(&reference) {
+                                    refers.push(reference);
+                                }
+                            }
+                            let marker = format!("{i}-{name}");
+                            placed.push((marker.clone(), followed(&drawing.html, &pages)));
+                            Field::Drawn { marker }
+                        }
+                        Err(_) => Field::Source,
+                    }
+                };
+                let body = field("body", &candidate.body);
+                let detail = field("detail", &candidate.detail);
+                Drawn {
+                    body,
+                    detail,
+                    refers,
+                }
+            })
+            .collect();
         let todo = TodoPage {
             at: at.clone(),
             list: format!("../{LIST}"),
             links: links.clone(),
             shown,
+            drawn: drawn_fields,
         };
         let body = drawn(compiler, &TODO.call(&todo)?).with_context(|| format!("drawing {id}"))?;
+        let body = placed_into(body, &placed).with_context(|| format!("drawing {id}"))?;
         files.insert(todo_path(id.as_str()), page(&Page::Todo(id), &body));
     }
     Ok(files)
+}
+
+/// `page` with each field's drawing in place of the one element that holds its marker: the bytes
+/// door 1 read, so the page publishes of a field exactly what the door matched.
+fn placed_into(mut page: String, placed: &[(String, String)]) -> anyhow::Result<String> {
+    for (marker, html) in placed {
+        let element = format!("<div data-drawn=\"{marker}\"></div>");
+        if page.matches(&element).count() != 1 {
+            bail!("the page does not hold the place of field {marker} exactly once");
+        }
+        page = page.replacen(&element, &format!("<div class=\"drawn\">{html}</div>"), 1);
+    }
+    Ok(page)
+}
+
+/// A reference spelled whole: `todo:`, a chain and an id, as the page's own show rule reads one.
+static REFERENCE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"\btodo:([A-Za-z0-9_-]+/[A-Za-z0-9_\-–—]+)").expect("a fixed pattern")
+});
+
+/// Each todo of this store `text` names, in order, with its page.
+fn references(text: &str, pages: &BTreeMap<&str, &str>) -> Vec<Linked> {
+    REFERENCE
+        .captures_iter(text)
+        .filter_map(|found| {
+            let reference = found.get(1)?.as_str();
+            pages.get(reference).map(|page| Linked {
+                reference: reference.to_owned(),
+                page: (*page).to_owned(),
+            })
+        })
+        .collect()
+}
+
+/// A drawing's links to todos (typst writes each as `<a href="todo:<chain>/<id>">`) leading to
+/// their pages: a todo of this store to its page, any other to nowhere, its words kept as text.
+/// Typst escapes `<` in text and `"` in a value, so only typst's own anchors match.
+fn followed(html: &str, pages: &BTreeMap<&str, &str>) -> String {
+    static ANCHOR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"<a href="todo:([^"]*)""#).expect("a fixed pattern")
+    });
+    ANCHOR
+        .replace_all(html, |found: &regex::Captures<'_>| {
+            match pages.get(&found[1]) {
+                Some(page) => format!("<a href=\"{page}\""),
+                None => "<a".to_owned(),
+            }
+        })
+        .into_owned()
 }
 
 fn todo_path(id: &str) -> String {

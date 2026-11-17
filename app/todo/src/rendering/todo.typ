@@ -1,11 +1,14 @@
 // One todo of a store as a static page: its state and price, every content candidate whole, and
-// every object of its history. A body and a detail are markup the door admitted, evaluated in the
-// closed world; every other datum is drawn as text. A reference to a todo of this store
-// (`todo:<chain>/<id>`, spelled or linked) leads to that todo's page; any other stays text.
+// every object of its history. Every datum is drawn as text. A body and a detail are never
+// evaluated here, where markup could ask about the page: each is an empty element that the verb
+// replaces with the field's drawing, compiled alone, the bytes door 1 read. A reference to a todo
+// of this store spelled in the page's text, or named by a field's drawn text, leads to its page.
 #import "/schema/TodoPage.typ" as page
 #import "/schema/Linked.typ" as linked
 #import "/schema/Shown.typ" as shown
 #import "/schema/Candidate.typ" as candidate
+#import "/schema/Drawn.typ" as drawn
+#import "/schema/Field.typ" as field
 #import "/schema/Event.typ" as event
 #import "/schema/FieldChange.typ" as change
 #import "/priority.typ": price
@@ -43,12 +46,22 @@
 
 #if shown.candidates(s).len() > 1 [*In conflict:* #shown.candidates(s).len() records stand, each shown whole below; the next write settles it.]
 
-#for c in shown.candidates(s) [
+#let shown-field(f, source) = if field.is-Empty(f) {
+  none
+} else if field.is-Drawn(f) {
+  html.elem("div", attrs: ("data-drawn": field.marker(f)))
+} else if field.is-Source(f) {
+  raw(source)
+}
+
+#for (c, f) in shown.candidates(s).zip(page.drawn(d)) [
   == #candidate.kind(c) by #candidate.authored_by(c)
 
-  #eval(candidate.body(c), mode: "markup")
+  #shown-field(drawn.body(f), candidate.body(c))
 
-  #eval(candidate.detail(c), mode: "markup")
+  #shown-field(drawn.detail(f), candidate.detail(c))
+
+  #if drawn.refers(f).len() > 0 [Refers to #drawn.refers(f).map(l => link(linked.page(l), "todo:" + linked.reference(l))).join(", ").]
 
   Object #raw(candidate.object(c)), as stored:
 

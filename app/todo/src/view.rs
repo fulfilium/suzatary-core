@@ -151,34 +151,26 @@ pub fn renders(record: &Authored, untrusted: &Untrusted) -> bool {
     !untrusted.actors().contains(&record.actor)
 }
 
-/// One field's text as the typst markup it renders, `None` when it is empty: the body and the
-/// detail as stored, the waiting-on and the rationale escaped as data.
-#[must_use]
-pub(crate) fn rich_source(field: &str, text: &str) -> Option<Escaped> {
-    if text.is_empty() {
-        return None;
-    }
-    match field {
-        "body" | "detail" => Some(Escaped::from_chain(text.to_owned())),
-        "waiting_on" => Some(escape_markup(&string_text(text))),
-        "rationale" => Some(escape_markup(text)),
-        _ => None,
-    }
-}
-
-/// Each present field as the typst markup it stands for (`rich_source`).
+/// Each present field as the typst markup it renders: the record's markup fields as stored
+/// (`Record::markup`), the waiting-on and the rationale escaped as data.
 #[must_use]
 pub fn rich_sources(record: &Authored) -> Vec<(&'static str, Escaped)> {
-    let rationale = record.payload.rationale.join(" ");
-    [
-        ("body", record.payload.body.as_str()),
-        ("detail", record.payload.detail.as_str()),
-        ("waiting_on", record.payload.waiting_on.as_str()),
-        ("rationale", rationale.as_str()),
-    ]
-    .into_iter()
-    .filter_map(|(field, text)| rich_source(field, text).map(|source| (field, source)))
-    .collect()
+    let payload = &record.payload;
+    let markup = payload
+        .markup()
+        .map(|(field, source)| (field, Escaped::from_chain(source.as_str().to_owned())));
+    let data = [
+        (
+            "waiting_on",
+            escape_markup(&string_text(payload.waiting_on.as_str())),
+        ),
+        ("rationale", escape_markup(&payload.rationale.join(" "))),
+    ];
+    markup
+        .into_iter()
+        .chain(data)
+        .filter(|(_, source)| !source.as_str().is_empty())
+        .collect()
 }
 
 /// Typst string source as the prose it stands for, undoing only `\\` and `\"`.
@@ -771,18 +763,6 @@ pub fn quoted(source: &str) -> Quoted {
 mod tests {
     use suzatary_record::record::{MarkupSource, mk_authored, mk_source};
 
-    #[test]
-    fn a_data_field_renders_as_escaped_markup_and_a_markup_field_as_written() {
-        use super::{escape_markup, rich_source};
-        let text = "the *notary* #2";
-        let source = |field| rich_source(field, text).map(|s| s.as_str().to_owned());
-        let escaped = Some(escape_markup(text).as_str().to_owned());
-        assert_eq!(source("waiting_on"), escaped);
-        assert_eq!(source("rationale"), escaped);
-        assert_ne!(source("waiting_on"), Some(text.to_owned()));
-        assert_eq!(source("body"), Some(text.to_owned()));
-        assert!(rich_source("body", "").is_none());
-    }
     use prodrome_core::event::{Actor, mk_completed, mk_reopened, mk_sealed};
     use prodrome_core::literal::Datetime as Stamp;
 
@@ -985,10 +965,17 @@ mod tests {
         );
     }
 
+    /// The markup fields render as stored and an empty one not at all; the data fields escaped.
     #[test]
     fn waiting_on_and_rationale_are_converted_on_the_way_to_typst() {
         let mine = record("file-permit", "ada");
         let sources = rich_sources(&mine);
+        let named = |field| sources.iter().find(|(name, _)| *name == field);
+        assert_eq!(
+            named("body").map(|(_, s)| s.as_str()),
+            Some(mine.payload.body.as_str())
+        );
+        assert!(named("detail").is_none());
         let waiting = sources
             .iter()
             .find(|(name, _)| *name == "waiting_on")

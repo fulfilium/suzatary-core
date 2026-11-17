@@ -288,10 +288,8 @@ fn listed(store: &Path, typeset: &dyn Typeset) -> anyhow::Result<Listed> {
 /// caps its time and memory, or its source as it stands where the closed world refuses it. A
 /// writer's markup is never evaluated in the picture's own compile.
 fn title(body: &str, typeset: &dyn Typeset) -> String {
-    let text = typeset.closed(body).map_or_else(
-        |_| body.to_owned(),
-        |html| suzatary_io::mailbox::text::html_to_text(&html),
-    );
+    let text = crate::commands::door::drawing(typeset, body)
+        .map_or_else(|_| body.to_owned(), |drawn| drawn.text);
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 

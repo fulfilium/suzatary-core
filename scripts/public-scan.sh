@@ -8,7 +8,10 @@
 # An opaque file, or one with a finding `.gitleaksignore` admits, is a hit until `--admit
 # <path>`, taken only at a terminal, admits every version of it the range holds by digest. A
 # store's pictures (`suzatary prodrome draw`) are admitted where drawing the store at their
-# commit again gives their bytes, and are a hit, by name, where it does not.
+# commit again gives their bytes, and are a hit, by name, where it does not. Each object a
+# chartered commit changes is also read as door 1 reads it (`suzatary prodrome texts`): its
+# strings and what its markup draws, beside it as `<object>.texts`; an object whose markup does
+# not draw is a hit by its path.
 set -Eeuo pipefail
 # 2 when the scan could not run, 1 only for a hit.
 trap 'exit 2' ERR
@@ -67,10 +70,13 @@ while IFS= read -r commit; do
   # digest, which admits that picture at that path with exactly those bytes; it prints nothing
   # for a tree whose charter is not public. Each picture is read at every commit, changed or
   # not, so one drawn before the commit's objects is refused.
-  mkdir -p "$scan/drawn" "$scan/linked"
+  mkdir -p "$scan/drawn" "$scan/linked" "$scan/undrawn"
   : >"$scan/drawn/$n-${commit:0:12}"
   : >"$scan/linked/$n-${commit:0:12}"
+  : >"$scan/undrawn/$n-${commit:0:12}"
+  chartered=""
   if git -C "$repo" cat-file -e "$commit:charter.toml" 2>/dev/null; then
+    chartered=yes
     store="$scan/store/$n"
     mkdir -p "$store"
     # Blob by blob from the commit's tree, so its own `.gitattributes` (`export-ignore`,
@@ -112,13 +118,27 @@ while IFS= read -r commit; do
       fi
     done <"$scan/drawn/$n-${commit:0:12}"
   fi
+  objects=()
   while IFS= read -r -d '' path; do
     mkdir -p "$tree/$(dirname "$path")"
     git -C "$repo" show "$commit:$path" >"$tree/$path" || {
       echo "public-scan: could not read $(printf '%q' "$path") at ${commit:0:12}, so the scan did not run whole" >&2
       exit 2
     }
+    case "$path" in
+      objects/*/*) ;;
+      objects/*.py) [ -z "$chartered" ] || objects+=("$tree/$path") ;;
+    esac
   done <"$scan/paths"
+  # Door 1's reading of each object, the same function over the same bytes: an object another
+  # clone wrote, or one copied in by hand, never passed door 1, and the Pages workflow draws it.
+  if ((${#objects[@]})); then
+    "$bin" prodrome texts "${objects[@]}" >"$scan/undrawn/$n-${commit:0:12}" || {
+      echo "public-scan: the objects of ${commit:0:12} could not be read as door 1 reads them" >&2
+      exit 2
+    }
+    sed -i "s#^$tree/##" "$scan/undrawn/$n-${commit:0:12}"
+  fi
   git -C "$repo" log -1 --format=%B "$commit" >"$said/message"
   git -C "$repo" log -1 --format='%an <%ae>%n%cn <%ce>' "$commit" >"$said/identity"
 done <"$scan/commits"
@@ -151,6 +171,11 @@ leaked=""
 for linked in "$scan"/linked/*; do
   [ -s "$linked" ] || continue
   sed "s/^/public-scan: $(basename "$linked"): /; s/\$/ is not a file, and a chartered tree holds files alone/" "$linked" >&2
+  leaked=yes
+done
+for undrawn in "$scan"/undrawn/*; do
+  [ -s "$undrawn" ] || continue
+  sed "s/^/public-scan: $(basename "$undrawn"): /; s/\$/:0 holds markup that does not draw in the closed world/" "$undrawn" >&2
   leaked=yes
 done
 for tree in "$scan"/files/* "$scan"/text/*; do

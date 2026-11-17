@@ -63,9 +63,15 @@ pub(crate) fn opened(
     let store = chain_at(chain.events.clone(), chain.policy.untrusted.clone());
     match &chain.charter {
         crate::instance::Charted::Private => store,
-        crate::instance::Charted::Public(lists) => {
-            store.public(door::Door::of(lists.clone(), &chain.policy, opened).rule())
-        }
+        crate::instance::Charted::Public(lists) => store.public(
+            door::Door::of(
+                lists.clone(),
+                &chain.policy,
+                opened,
+                std::sync::Arc::new(suzatary_io::typeset::Closed::this_binary()),
+            )
+            .rule(),
+        ),
     }
 }
 

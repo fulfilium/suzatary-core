@@ -15,12 +15,11 @@ use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Rejected, Typeset};
 use suzatary_base::escape::Escaped;
 use suzatary_base::narrowing::narrowed;
-use suzatary_base::table::Table;
 use suzatary_base::tripwire::suspicious;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
-use suzatary_todo::render::{Html, Render};
-use suzatary_todo::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
-use suzatary_todo::template::{Called, Job, Kept, Output, Unprintable, named};
+use suzatary_todo::render::{Html, Remembered, Render};
+use suzatary_todo::rendering::{self, ANSWER, MARKUP, Markup};
+use suzatary_todo::template::{Called, Job, Kept, Output, Unprintable};
 
 use crate::rendered::Rendered;
 use crate::typeset::Compiler;
@@ -35,7 +34,16 @@ pub struct Typst {
     pages: Rendered,
     compiler: Arc<dyn Compiler>,
     /// The closed world's answers: one compile per text, not one per poll.
-    answers: Table<Result<String, Rejected>>,
+    closed: Remembered<Texts>,
+}
+
+/// The compiler, asked for lone texts.
+struct Texts(Arc<dyn Compiler>);
+
+impl Typeset for Texts {
+    fn closed(&self, source: &str) -> Result<String, Rejected> {
+        self.0.compile(&Job::text(source))
+    }
 }
 
 impl std::fmt::Debug for Typst {
@@ -50,11 +58,12 @@ impl Typst {
     /// `cache` is where bodies and answers are stored by key; `compiler` compiles every call.
     #[must_use]
     pub fn new(cache: impl Into<PathBuf>, compiler: impl Compiler + 'static) -> Self {
+        let compiler: Arc<dyn Compiler> = Arc::new(compiler);
         Self {
             fragments: Rendered::on_disk(cache, FRAGMENTS_KEPT, &rendering::kept()),
             pages: Rendered::in_memory(PAGES_KEPT),
-            compiler: Arc::new(compiler),
-            answers: Table::new(PAGES_KEPT),
+            closed: Remembered::new(Texts(Arc::clone(&compiler)), PAGES_KEPT),
+            compiler,
         }
     }
 
@@ -94,7 +103,7 @@ impl Typst {
         [
             self.fragments.findings(),
             self.pages.findings(),
-            self.answers.findings(),
+            self.closed.findings(),
         ]
         .concat()
     }
@@ -127,23 +136,7 @@ fn markup(markup: &Escaped) -> Result<Called, RenderError> {
 
 impl Typeset for Typst {
     fn closed(&self, source: &str) -> Result<String, Rejected> {
-        let key = prodrome_core::memo::Key {
-            function: CLOSED.clone(),
-            argument: named(source),
-        };
-        if let Some(known) = self.answers.kept(&key) {
-            return known;
-        }
-        let answer = self.compiler.compile(&Job::text(source));
-        // A refusal typst located is a fact about the text; one about nothing (a timeout, a
-        // child that would not start) may be about the box, so it is asked again next time.
-        if answer
-            .as_ref()
-            .map_or_else(|r| r.diagnostics.iter().any(|d| d.span.is_some()), |_| true)
-        {
-            let _ = self.answers.keep(key, answer.clone());
-        }
-        answer
+        self.closed.closed(source)
     }
 }
 

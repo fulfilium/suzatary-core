@@ -1,6 +1,6 @@
-//! `suzatary prodrome init|carry|draw|pages`: a todo store begun at a path, such as a project's
-//! roadmap, the upkeep chain's project todos carried to it, its open list drawn, and the store
-//! written as static pages.
+//! `suzatary prodrome init|carry|draw|pages|texts`: a todo store begun at a path, such as a
+//! project's roadmap, the upkeep chain's project todos carried to it, its open list drawn, the
+//! store written as static pages, and what door 1 reads of its objects written out for door 2.
 
 mod carry;
 mod list;
@@ -40,6 +40,13 @@ pub enum Action {
     Draw(picture::Drawing),
     /// Write a store as static pages: the open list and each todo's page, at one instant.
     Pages(pages::Paging),
+    /// For door 2: write what door 1 reads of each object file (`door::Reading`) beside it as
+    /// `<object>.texts`, and print each object one of whose markup fields does not draw.
+    Texts {
+        /// Object files of a store, each one printed object.
+        #[arg(required = true, value_name = "OBJECT")]
+        objects: Vec<std::path::PathBuf>,
+    },
 }
 
 /// What `prodrome carry` takes.
@@ -76,7 +83,42 @@ pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
         Action::Carry(carrying) => carry::run(path, carrying),
         Action::Draw(drawing) => picture::run(drawing),
         Action::Pages(paging) => pages::run(paging),
+        Action::Texts { objects } => texts(objects),
     }
+}
+
+fn texts(objects: &[std::path::PathBuf]) -> anyhow::Result<()> {
+    let typeset = suzatary_io::typeset::Closed::this_binary();
+    for path in objects {
+        let literal =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let envelope = prodrome_core::event::parse_envelope(
+            &suzatary_record::record::TodoVocabulary::default(),
+            &literal,
+        )
+        .map_err(|e| anyhow::anyhow!("{} is no object of a todo store: {e}", path.display()))?;
+        let Some(event) = envelope.event() else {
+            continue;
+        };
+        let reading = super::door::Reading::of(event, &typeset);
+        let mut texts = String::new();
+        for (_, text) in &reading.texts {
+            texts.push_str(text);
+            texts.push('\n');
+        }
+        let mut beside = path.clone().into_os_string();
+        beside.push(".texts");
+        suzatary_io::durable::replace(
+            Path::new(&beside),
+            texts.as_bytes(),
+            suzatary_io::durable::Mode::Readable,
+        )
+        .with_context(|| format!("writing {}", Path::new(&beside).display()))?;
+        if reading.undrawn.is_some() {
+            println!("{}", path.display());
+        }
+    }
+    Ok(())
 }
 
 /// Refuses a store begun under another charter, or none, so no object reaches a public store

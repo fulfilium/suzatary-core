@@ -1480,9 +1480,10 @@ fn public_tree_guard_incremental_and_full_checks_agree() {
 /// exactly when drawing the store at that commit gives their bytes, wherever and however often the
 /// store is drawn. One byte changed in a picture is refused, and so is a picture drawn before an
 /// object its commit adds; each refusal names the file and no word. A commit with an object door 1
-/// would refuse is refused as before. The redraw reads the commit alone: a link is a hit by its
-/// path, and the commit's own `.gitattributes` change nothing it reads. A body the closed world
-/// refuses or stops is drawn as text.
+/// would refuse is refused as before, and so is one whose body draws a listed word. The redraw
+/// reads the commit alone: a link is a hit by its path, and the commit's own `.gitattributes`
+/// change nothing it reads. A body the closed world refuses or stops is drawn as text, and its
+/// object is a hit by its path.
 #[test]
 #[allow(clippy::too_many_lines)]
 fn door_2_admits_a_picture_by_drawing_the_store_again() {
@@ -1698,8 +1699,51 @@ fn door_2_admits_a_picture_by_drawing_the_store_again() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     git(&["reset", "-q", "--hard", "fresh"]);
 
-    // A body the closed world refuses (it reaches for `plugin`), one it stops (a loop past its
-    // child's CPU cap) and one that breaks a page are each drawn as text, and the store still draws.
+    // An object written past door 1 whose body builds a listed word from parts: door 2 reads what
+    // it draws, and names the reading's file, never the word.
+    add("zzbuilt", r#"Ask #("zz" + "person") about the notes"#, 3);
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "a task that draws a term"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains(".py.texts:"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("zzperson"), "{}", stderr(&out));
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // A body that builds a listed word only where it sees its page's headings: door 2 reads it
+    // alone, as door 1 does, and passes it, and the pages of the commit never draw the word.
+    add(
+        "zzshed",
+        r#"Sort the shed #context if query(heading).len() > 0 [#("zz" + "person")]"#,
+        3,
+    );
+    draw();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "a task that sees its page"]);
+    let out = scan("fresh..main");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let site = scratch.join("site");
+    suzatary(&[
+        &os("prodrome"),
+        &os("pages"),
+        &os("--store"),
+        roadmap.as_os_str(),
+        &os("--at"),
+        &os("2030-01-01"),
+        &os("--into"),
+        site.as_os_str(),
+    ]);
+    let page = std::fs::read_to_string(site.join("todo/zzshed.html")).expect("the page");
+    assert!(
+        page.contains("Sort the shed") && !page.contains("zzperson"),
+        "{page}"
+    );
+    git(&["reset", "-q", "--hard", "fresh"]);
+
+    // A body the closed world refuses (it reaches for `plugin`) and one it stops (a loop past its
+    // child's CPU cap) are each drawn as text, and the store still draws; door 2 refuses both
+    // objects by their paths, as door 1 would. One that breaks a page draws, and is taken.
     add("aplugin", "Load #plugin(bytes(()))", 4);
     add("aloop", "Count #for i in range(1000000000) {}", 4);
     add("apage", "Before #pagebreak() after", 4);
@@ -1707,5 +1751,14 @@ fn door_2_admits_a_picture_by_drawing_the_store_again() {
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", "bodies the closed world refuses"]);
     let out = scan("fresh..main");
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out)
+            .matches(".py:0 holds markup that does not draw in the closed world")
+            .count(),
+        2,
+        "{}",
+        stderr(&out)
+    );
+    assert!(!stderr(&out).contains("roadmap.svg:0"), "{}", stderr(&out));
 }

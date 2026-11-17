@@ -525,6 +525,27 @@ impl Record {
     pub fn is_decision(&self) -> bool {
         self.kind.as_str() == "decision"
     }
+
+    /// Every field held as markup, by its stored name: what a renderer evaluates in the closed
+    /// world. A field added to [`Record`] fails to compile here until it is placed.
+    #[must_use]
+    pub fn markup(&self) -> [(&'static str, &MarkupSource); 2] {
+        let Record {
+            kind: _,
+            created: _,
+            body,
+            spec: _,
+            rationale: _,
+            category: _,
+            waiting_on: _,
+            detail,
+            source: _,
+            subtodos: _,
+            notes: _,
+            note: _,
+        } = self;
+        [("body", body), ("detail", detail)]
+    }
 }
 
 impl Payload for Record {

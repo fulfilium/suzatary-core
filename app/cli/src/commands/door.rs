@@ -1,5 +1,6 @@
 //! Door 1 of a public store: an event reaches a store whose charter says `public = true` only
-//! from a writer that store takes, and only after the leak guard has read every string it holds.
+//! from a writer that store takes, and only after the leak guard has read its `Reading`: every
+//! string it holds and what each of its markup fields draws.
 //! A `Change` rests on its todo's heads, so a stored object is an ancestor of every later write
 //! to that todo, and a published history never takes a word back: the check runs before the
 //! store holds the object, or not at all.
@@ -8,9 +9,11 @@ use std::collections::BTreeSet;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Value;
+use suzatary_base::capability::{RenderError, Typeset};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_held::leak::{Matcher, Opaque, Scope};
 use suzatary_record::record::TodoEvent;
@@ -19,10 +22,12 @@ use suzatary_store::store::{Rule, Shut};
 use crate::instance::Local;
 use crate::stamp::{self, Package};
 
-/// Door 1 of one public store opened from one place: whom it takes writes from, and what it reads.
+/// Door 1 of one public store opened from one place: whom it takes writes from, what it reads,
+/// and the typesetter that draws a markup field as every renderer draws it.
 pub struct Door {
     lists: Lists,
     writers: BTreeSet<Actor>,
+    typeset: Arc<dyn Typeset + Send>,
 }
 
 /// Where a chain's store is opened: how the box tells apart two writers that author as `assistant`.
@@ -51,27 +56,106 @@ struct Scanner {
     rules: PathBuf,
 }
 
-/// One event's strings, each beside its field's path.
-type Fields<'a> = Vec<(String, &'a str)>;
+/// Where a text of an event's [`Reading`] stands, which a refusal names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Site {
+    /// A string the event holds, at its field's path.
+    Held(String),
+    /// What a markup field draws: its HTML body or that body's text.
+    Drawn(&'static str),
+    /// Typst's message about a markup field that does not draw.
+    Said(&'static str),
+}
+
+impl std::fmt::Display for Site {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Site::Held(path) => write!(f, "field {path}"),
+            Site::Drawn(field) => write!(f, "field {field}, as drawn,"),
+            Site::Said(field) => write!(
+                f,
+                "field {field} does not draw, and typst's message about it"
+            ),
+        }
+    }
+}
+
+/// What door 1 matches of one event: every string it holds, then, for each field the record holds
+/// as markup ([`suzatary_record::record::Record::markup`]), what it draws in the closed world, or
+/// typst's message where it does not draw.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Reading {
+    /// Each text, beside its site, in the order a refusal is chosen: held, drawn, said.
+    pub(crate) texts: Vec<(Site, String)>,
+    /// The first markup field that does not draw, and why: a public store refuses the event.
+    pub(crate) undrawn: Option<(&'static str, String)>,
+}
+
+impl Reading {
+    /// `event` read: its strings decoded, and each nonempty markup field drawn once by `typeset`,
+    /// which the box runs as the child that caps a compile's CPU time and memory
+    /// (`suzatary_io::typeset::Closed`).
+    #[must_use]
+    pub(crate) fn of(event: &TodoEvent, typeset: &dyn Typeset) -> Self {
+        let mut texts: Vec<(Site, String)> = published(event)
+            .into_iter()
+            .map(|(path, text)| (Site::Held(path), text))
+            .collect();
+        let mut said = Vec::new();
+        let mut undrawn = None;
+        if let TodoEvent::Authored(record) = event {
+            for (field, source) in record.payload.markup() {
+                if source.as_str().is_empty() {
+                    continue;
+                }
+                match drawing(typeset, source.as_str()) {
+                    Ok(drawn) => {
+                        texts.push((Site::Drawn(field), drawn.html));
+                        texts.push((Site::Drawn(field), drawn.text));
+                    }
+                    Err(RenderError::Refused(message)) => {
+                        said.push((Site::Said(field), message.clone()));
+                        undrawn.get_or_insert((field, message));
+                    }
+                    Err(RenderError::Suspicious(reason)) => {
+                        undrawn.get_or_insert((field, format!("its render carries {reason}")));
+                    }
+                }
+            }
+        }
+        texts.extend(said);
+        Reading { texts, undrawn }
+    }
+}
 
 impl Door {
     /// The door of a public chain's store opened from `opened`: the roster's trusted actors, never
     /// the triage agent, and from the box never the secretary.
     #[must_use]
-    pub fn of(lists: Lists, policy: &ChainPolicy, opened: Opened) -> Door {
+    pub fn of(
+        lists: Lists,
+        policy: &ChainPolicy,
+        opened: Opened,
+        typeset: Arc<dyn Typeset + Send>,
+    ) -> Door {
         let trusted = policy
             .roster
             .iter()
             .filter(|actor| !policy.untrusted.actors().contains(*actor))
             .cloned()
             .collect();
-        Door::named(lists, trusted, opened)
+        Door::named(lists, trusted, opened, typeset)
     }
 
     /// The door of a public store whose writers are `writers`, never the triage agent, and from
     /// the box never the secretary.
     #[must_use]
-    pub fn named(lists: Lists, writers: BTreeSet<Actor>, opened: Opened) -> Door {
+    pub fn named(
+        lists: Lists,
+        writers: BTreeSet<Actor>,
+        opened: Opened,
+        typeset: Arc<dyn Typeset + Send>,
+    ) -> Door {
         let barred: &[suzatary_base::writer::Writer] = match opened {
             Opened::AtTerminal => &[suzatary_core::agent::WRITES_AS],
             Opened::ByTheBox => &[
@@ -83,7 +167,11 @@ impl Door {
             .into_iter()
             .filter(|actor| !barred.iter().any(|writer| writer.actor() == actor.as_str()))
             .collect();
-        Door { lists, writers }
+        Door {
+            lists,
+            writers,
+            typeset,
+        }
     }
 
     /// Each event's verdict, written into the same place of `verdicts`, which holds one place for
@@ -100,7 +188,7 @@ impl Door {
         if open.is_empty() {
             return;
         }
-        let read: Vec<&TodoEvent> = open.iter().map(|&i| events[i]).collect();
+        let read = self.read(events, &open);
         match self.lists.judge(&read) {
             Ok(judged) => {
                 for (i, verdict) in open.into_iter().zip(judged) {
@@ -113,6 +201,29 @@ impl Door {
                 }
             }
         }
+    }
+
+    /// The readings of `events` at `open`, in that order, each field's compile in a child of
+    /// its own, at most one per core at a time.
+    fn read(&self, events: &[&TodoEvent], open: &[usize]) -> Vec<Reading> {
+        let width = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let typeset = &*self.typeset;
+        std::thread::scope(|scope| {
+            let parts: Vec<_> = open
+                .chunks(open.len().div_ceil(width))
+                .map(|part| {
+                    scope.spawn(move || {
+                        part.iter()
+                            .map(|&i| Reading::of(events[i], typeset))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            parts
+                .into_iter()
+                .flat_map(|part| part.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                .collect()
+        })
     }
 
     /// The store's rule: [`Door::judge`] over a batch of one.
@@ -154,8 +265,8 @@ impl Scanner {
     }
 
     /// For each event, its secret at the least line gitleaks reports (the least rule there),
-    /// as a refusal naming its field. `Err` says why gitleaks did not run.
-    fn secrets(&self, events: &[Fields<'_>]) -> Result<Vec<Option<Shut>>, String> {
+    /// as a refusal naming its site. `Err` says why gitleaks did not run.
+    fn secrets(&self, events: &[&Reading]) -> Result<Vec<Option<Shut>>, String> {
         let failed = |why: &dyn std::fmt::Display| format!("gitleaks did not run ({why})");
         let scratch = suzatary_io::scratch::Scratch::temporary("door").map_err(|e| failed(&e))?;
         let template = scratch.path().join("template");
@@ -166,9 +277,9 @@ impl Scanner {
         .map_err(|e| failed(&e))?;
         let mut text = String::new();
         let mut starts = Vec::new();
-        for (event, fields) in events.iter().enumerate() {
-            for (field, value) in fields {
-                starts.push((text.matches('\n').count() + 1, event, field.as_str()));
+        for (event, reading) in events.iter().enumerate() {
+            for (site, value) in &reading.texts {
+                starts.push((text.matches('\n').count() + 1, event, site));
                 text.push_str(value);
                 text.push('\n');
             }
@@ -203,7 +314,7 @@ impl Scanner {
             .write_all(text.as_bytes())
             .map_err(|e| failed(&e))?;
         let ran = scanner.wait_with_output().map_err(|e| failed(&e))?;
-        let mut found: Vec<Option<(usize, String, &str)>> = vec![None; events.len()];
+        let mut found: Vec<Option<(usize, String, &Site)>> = vec![None; events.len()];
         match ran.status.code() {
             Some(0) => {}
             Some(3) => {
@@ -217,7 +328,7 @@ impl Scanner {
                     return Err(failed(&"its report names no line"));
                 }
                 for (line, rule) in findings {
-                    let Some(&(_, event, field)) = starts
+                    let Some(&(_, event, site)) = starts
                         .partition_point(|(start, _, _)| *start <= line)
                         .checked_sub(1)
                         .and_then(|at| starts.get(at))
@@ -229,7 +340,7 @@ impl Scanner {
                         .as_ref()
                         .is_none_or(|(held, kept, _)| (line, rule) < (*held, kept.as_str()))
                     {
-                        *least = Some((line, rule.to_owned(), field));
+                        *least = Some((line, rule.to_owned(), site));
                     }
                 }
             }
@@ -238,8 +349,8 @@ impl Scanner {
         Ok(found
             .into_iter()
             .map(|found| {
-                found.map(|(_, rule, field)| {
-                    refused(field, format!("holds a secret (gitleaks rule {rule})"))
+                found.map(|(_, rule, site)| {
+                    refused(site, format!("holds a secret (gitleaks rule {rule})"))
                 })
             })
             .collect())
@@ -255,34 +366,34 @@ impl Lists {
         }
     }
 
-    /// Each event's verdict, refused with the field and the rule's kind, never the words; `Err`
-    /// says why the lists could not be read.
-    fn judge(&self, events: &[&TodoEvent]) -> Result<Vec<Result<(), Shut>>, String> {
+    /// Each event's verdict, refused with the site and the rule's kind, never the words; then,
+    /// where nothing matched, refused for its first markup field that does not draw. `Err` says
+    /// why the lists could not be read.
+    fn judge(&self, events: &[Reading]) -> Result<Vec<Result<(), Shut>>, String> {
         let words: Vec<String> = super::instance::words(&self.instance)
             .map_err(|e| format!("the deployment's own words cannot be read ({e})"))?
             .into_iter()
             .collect();
         let matcher = Matcher::new(&self.terms()?, &words, &[], Scope::Whole);
-        let values: Vec<Value> = events.iter().map(|event| event.to_value()).collect();
-        let fields: Vec<Fields<'_>> = values
+        let mut verdicts: Vec<Result<(), Shut>> = events
             .iter()
-            .map(|value| {
-                let mut fields = Vec::new();
-                strings(String::new(), value, &mut fields);
-                fields
-            })
-            .collect();
-        let mut verdicts: Vec<Result<(), Shut>> = fields
-            .iter()
-            .map(|fields| matched(&matcher, fields))
+            .map(|reading| matched(&matcher, reading))
             .collect();
         let scanned: Vec<usize> = (0..verdicts.len())
             .filter(|&i| verdicts[i].is_ok())
             .collect();
-        let read: Vec<Fields<'_>> = scanned.iter().map(|&i| fields[i].clone()).collect();
+        let read: Vec<&Reading> = scanned.iter().map(|&i| &events[i]).collect();
         for (i, secret) in scanned.into_iter().zip(self.scanner.secrets(&read)?) {
             if let Some(shut) = secret {
                 verdicts[i] = Err(shut);
+            }
+        }
+        for (verdict, reading) in verdicts.iter_mut().zip(events) {
+            if let (Ok(()), Some((field, why))) = (&verdict, &reading.undrawn) {
+                *verdict = Err(Shut::Refused(format!(
+                    "a public store holds no event whose field {field} does not draw in the \
+                     closed world, which every renderer of the store compiles in: {why}"
+                )));
             }
         }
         Ok(verdicts)
@@ -310,7 +421,31 @@ impl Lists {
     }
 }
 
-/// Every string `event` publishes, beside its field's path: exactly what door 1 reads of it.
+/// What a writer's markup draws, in the two forms a renderer publishes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Drawing {
+    /// Typst's HTML body, past the tripwire: what the app and `prodrome pages` serve, its
+    /// attributes included.
+    pub(crate) html: String,
+    /// That body's text, inline elements joined: what `prodrome draw` sets as glyphs.
+    pub(crate) text: String,
+}
+
+/// `source` compiled in the closed world, narrowed to its body and past the tripwire.
+///
+/// # Errors
+/// Typst's refusal, read against `source`, or the tripwire's.
+pub(crate) fn drawing(typeset: &dyn Typeset, source: &str) -> Result<Drawing, RenderError> {
+    let document = typeset
+        .closed(source)
+        .map_err(|rejected| RenderError::Refused(rejected.said(source)))?;
+    let html = suzatary_base::narrowing::narrowed(&document)?;
+    let text = suzatary_io::mailbox::text::html_to_text(&html);
+    Ok(Drawing { html, text })
+}
+
+/// Every string `event` holds, beside its field's path: what door 1 reads of it before it draws
+/// the markup fields (`Reading`).
 #[must_use]
 pub fn published(event: &TodoEvent) -> Vec<(String, String)> {
     let value = event.to_value();
@@ -322,14 +457,15 @@ pub fn published(event: &TodoEvent) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The first field, in order, that names a term, a name or an address, or that is opaque.
-fn matched(matcher: &Matcher, fields: &Fields<'_>) -> Result<(), Shut> {
-    for (field, text) in fields {
+/// The first text, in the reading's order, that names a term, a name or an address, or that is
+/// opaque.
+fn matched(matcher: &Matcher, reading: &Reading) -> Result<(), Shut> {
+    for (site, text) in &reading.texts {
         if let Some(layer) = matcher.hits(text).into_values().min() {
-            return Err(refused(field, layer));
+            return Err(refused(site, layer));
         }
         if let Some(opaque) = Opaque::of(text.as_bytes()) {
-            return Err(refused(field, opaque));
+            return Err(refused(site, opaque));
         }
     }
     Ok(())
@@ -337,7 +473,7 @@ fn matched(matcher: &Matcher, fields: &Fields<'_>) -> Result<(), Shut> {
 
 /// Every string `value` holds, decoded, beside its field's path: a printed object escapes a line
 /// break, and a term just after `\n` is no whole word there.
-fn strings<'a>(at: String, value: &'a Value, out: &mut Fields<'a>) {
+fn strings<'a>(at: String, value: &'a Value, out: &mut Vec<(String, &'a str)>) {
     match value {
         Value::Str(text) => out.push((at, text)),
         Value::Tuple(items) => {
@@ -364,10 +500,8 @@ fn strings<'a>(at: String, value: &'a Value, out: &mut Fields<'a>) {
     }
 }
 
-fn refused(field: &str, kind: impl std::fmt::Display) -> Shut {
-    Shut::Refused(format!(
-        "a public store holds no event whose field {field} {kind}"
-    ))
+fn refused(site: &Site, kind: impl std::fmt::Display) -> Shut {
+    Shut::Refused(format!("a public store holds no event whose {site} {kind}"))
 }
 
 fn unjudged(why: &str) -> Shut {
