@@ -1,13 +1,5 @@
 use crate::agent::Agent;
 use crate::drive::Drive;
-use crate::mail::corpus::{Corpus, CorpusError};
-use crate::mail::junk_folder::{Junk, JunkFailure};
-use crate::mail::mail_sync::{MailSync, SyncFailure, Synced};
-use crate::mail::mailbox::{Mailbox, Query};
-use crate::mail::state::Decision;
-use crate::mail::sync_report::SyncReport;
-use crate::mail::verbs::{Marked, Show, Summary};
-use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::notify::{Delivered, Notify, NotifyError, Push};
 use crate::repos::{Patch, RepoRow, Visibility};
 use crate::repositories::{RepoFailure, Repositories};
@@ -19,12 +11,9 @@ use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use crate::secrets::{MailGrants, Secrets};
 use crate::weather::{Weather, WeatherError};
 use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
-use suzatary_base::capability::{Datetime, Nothing};
+use suzatary_base::capability::Nothing;
 use suzatary_base::drive_path::DriveFailure;
-use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
-use suzatary_held::mail_error::MailError;
-use suzatary_store::store::StoreError;
 use suzatary_todo::render::Html;
 
 impl Agent<'static> {
@@ -125,95 +114,9 @@ impl Secretary<'static> {
     }
 }
 
-fn absent(kind: &'static str, name: &str) -> MailError {
-    MailError::Absent {
-        kind,
-        name: name.to_owned(),
-    }
-}
-
 impl crate::settings::Configuration for Nothing {
     fn declared(&self) -> Result<crate::connect::Declared, crate::settings::EditError> {
         Ok(crate::connect::Declared::default())
-    }
-}
-
-impl Corpus for Nothing {
-    fn sync(&self) -> Result<SyncReport, CorpusError> {
-        Ok(SyncReport {
-            synced: Vec::new(),
-            notmuch: String::new(),
-            unheld: None,
-        })
-    }
-    fn queue(&self, _limit: Option<usize>) -> Result<Vec<Summary>, CorpusError> {
-        Ok(Vec::new())
-    }
-    fn search(&self, _query: &Query, _limit: Option<usize>) -> Result<Vec<Summary>, CorpusError> {
-        Ok(Vec::new())
-    }
-    fn show(&self, id: &str) -> Result<Show, CorpusError> {
-        Ok(Show::NotFound { id: id.to_owned() })
-    }
-    fn mark(
-        &self,
-        _hash: &str,
-        _decision: Decision,
-        _note: Option<&str>,
-        _native: Option<&str>,
-    ) -> Result<Marked, CorpusError> {
-        Err(CorpusError::Refused("nothing is marked".into()))
-    }
-    fn last_sync(&self) -> Option<SyncReport> {
-        None
-    }
-    fn last_triage_pass(&self) -> Option<String> {
-        None
-    }
-}
-
-impl Mailbox for Nothing {
-    fn accounts(&self) -> Vec<String> {
-        Vec::new()
-    }
-    fn inbox(
-        &self,
-        _account: Option<&str>,
-        _limit: usize,
-        _before: Option<Datetime>,
-    ) -> Result<Vec<MailRow>, MailError> {
-        Ok(Vec::new())
-    }
-    fn search(
-        &self,
-        _query: &Query,
-        _account: Option<&str>,
-        _limit: usize,
-        _before: Option<Datetime>,
-    ) -> Result<Vec<MailRow>, MailError> {
-        Ok(Vec::new())
-    }
-    fn message(&self, id: &str) -> Result<MailMessage, MailError> {
-        Err(absent("message", id))
-    }
-    fn thread(&self, thread: &str, _limit: usize) -> Result<Vec<MailMessage>, MailError> {
-        Err(absent("conversation", thread))
-    }
-    fn attachments(&self, _id: &str) -> Result<Vec<AttachmentMeta>, MailError> {
-        Ok(Vec::new())
-    }
-    fn stored(&self, id: &str, _cap: u64) -> Result<crate::mail::Stored, MailError> {
-        Err(absent("message", id))
-    }
-    fn attachment(&self, _id: &str, name: &str) -> Result<crate::mail::AttachmentFile, MailError> {
-        Err(absent("attachment", name))
-    }
-    fn read_attachment(
-        &self,
-        _id: &str,
-        name: &str,
-    ) -> Result<suzatary_held::file_read::FileRead, MailError> {
-        Err(absent("attachment", name))
     }
 }
 
@@ -290,11 +193,11 @@ impl Secrets for Nothing {
     fn secret_state(&self, _settable: &crate::settings::Settable) -> crate::secrets::SecretState {
         crate::secrets::SecretState::Missing
     }
-    fn mail_grants(&self, _account: &crate::mail::account::MailAccount) -> MailGrants {
+    fn mail_grants(&self, _account: &suzatary_mail::mail::account::MailAccount) -> MailGrants {
         MailGrants::default()
     }
 
-    fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {
+    fn google_grant(&self, _: &suzatary_mail::mail::address::EmailAddress) -> crate::google::Held {
         crate::google::Held::NotSignedIn
     }
 }
@@ -390,68 +293,6 @@ impl crate::drive::Port for Nothing {
     }
 }
 
-impl Junk for Nothing {
-    fn junk_accounts(&self) -> Vec<String> {
-        Vec::new()
-    }
-    fn churn(&self) -> crate::mail::junk::ChurnList {
-        crate::mail::junk::ChurnList::default()
-    }
-    fn junk_headers(
-        &self,
-        account: &str,
-        _since: chrono::NaiveDate,
-    ) -> Result<Vec<crate::mail::junk::JunkHeader>, JunkFailure> {
-        Err(JunkFailure::Unknown(account.to_owned()))
-    }
-    fn junk_message(
-        &self,
-        account: &str,
-        _uid: crate::mail::junk::Uid,
-    ) -> Result<crate::mail::junk::JunkMessage, JunkFailure> {
-        Err(JunkFailure::Unknown(account.to_owned()))
-    }
-}
-
-impl crate::mail::older_mail::OlderMail for Nothing {
-    fn search_older(
-        &self,
-        accounts: &[String],
-        _query: &crate::mail::older::OlderQuery,
-        _range: crate::mail::older::Range,
-    ) -> Vec<crate::mail::older::AccountOlder> {
-        accounts
-            .iter()
-            .map(|account| crate::mail::older::AccountOlder {
-                account: account.clone(),
-                outcome: crate::mail::older::Outcome::NotSearched(
-                    crate::mail::older::Unsearched::Failed(
-                        "this box searches no mail server".to_owned(),
-                    ),
-                ),
-            })
-            .collect()
-    }
-}
-
-impl crate::health::Register<crate::health::SourceKey> for Nothing {
-    fn healths(
-        &self,
-    ) -> Result<crate::health::Healths<crate::health::SourceKey>, suzatary_store::store::StoreError>
-    {
-        Ok(crate::health::Healths::default())
-    }
-}
-
-impl MailSync for Nothing {
-    fn last(&self) -> Result<Option<Synced>, SyncFailure> {
-        Ok(None)
-    }
-    fn start(&self, _since: Datetime) -> Result<Option<Synced>, SyncFailure> {
-        Err(SyncFailure("this box runs no mail sync".to_owned()))
-    }
-}
-
 impl Notify for Nothing {
     fn push(&self, _message: &Push) -> Result<Delivered, NotifyError> {
         Err(NotifyError::Unreachable("nothing is pushed".into()))
@@ -461,40 +302,6 @@ impl Notify for Nothing {
 impl Answers for Nothing {
     fn block(&self, block: &suzatary_base::answer::Renderable) -> Result<Html, AnswerError> {
         Err(AnswerError(format!("nothing renders {block:?}")))
-    }
-}
-
-/// No watch is set, and setting one is refused.
-impl suzatary_store::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> for Nothing {
-    fn keys(&self) -> Result<Vec<crate::mail::watch::WatchId>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn lines(
-        &self,
-        _watch: &crate::mail::watch::WatchId,
-    ) -> Result<Vec<crate::mail::watch::Line>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn start(
-        &self,
-        _watch: &crate::mail::watch::WatchId,
-        _first: &crate::mail::watch::Line,
-    ) -> Result<(), StoreError> {
-        Err(StoreError::unwritable("watch store", "nothing is watched"))
-    }
-    fn push(
-        &self,
-        _watch: &crate::mail::watch::WatchId,
-        _line: &crate::mail::watch::Line,
-    ) -> Result<(), StoreError> {
-        Err(StoreError::unwritable("watch store", "nothing is watched"))
-    }
-    fn edit(
-        &self,
-        _watch: &crate::mail::watch::WatchId,
-        _decide: &mut suzatary_store::store::Decide<'_, crate::mail::watch::Line>,
-    ) -> Result<suzatary_store::store::Edit<crate::mail::watch::Line>, Refusal> {
-        Err(StoreError::unwritable("watch store", "nothing is watched").into())
     }
 }
 
@@ -510,7 +317,7 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
     fn begin(
         &self,
         _: &crate::secretary::inbox::ProposalId,
-        _: &crate::mail::address::EmailAddress,
+        _: &suzatary_mail::mail::address::EmailAddress,
         _: &crate::google::Scopes,
         _: &prodrome_core::event::Actor,
         _: suzatary_base::capability::Datetime,

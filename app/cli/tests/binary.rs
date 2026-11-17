@@ -53,7 +53,7 @@ pub(crate) fn keyed() -> Command {
             suzatary_core::cast::keys::AGENT,
         )
         .env(
-            suzatary_core::mail::dedup_key::DEDUP_KEY,
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
             suzatary_core::cast::keys::DEDUP,
         );
     command

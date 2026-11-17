@@ -4,7 +4,7 @@
 use suzatary_base::capability::Secret;
 
 use super::{Manifest, PluginUrl};
-use crate::health::plugin::{CredentialName, Refusal, Said};
+use suzatary_health::health::plugin::{CredentialName, Refusal, Said};
 
 /// The most bytes of an answer's body the host reads.
 pub const MAX_RESPONSE: u64 = 8 * 1024 * 1024;
@@ -102,7 +102,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::health::plugin::Origin;
+    use suzatary_health::health::plugin::Origin;
 
     fn manifest() -> Manifest {
         toml::from_str(

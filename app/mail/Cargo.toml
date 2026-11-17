@@ -1,0 +1,39 @@
+[package]
+name = "suzatary-mail"
+description = "Suzatary's mail: one account's mail as the protocols carry it"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_mail"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-held.workspace = true
+suzatary-signatures.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+# A maildir file's name is a content digest (`mail::imap::maildir_name`), so a refetch rewrites
+# one file.
+sha2.workspace = true
+hmac.workspace = true
+hex.workspace = true
+# The outgoing message is built here, pure (`mail::send::build_mime`), so it is tested offline.
+mail-builder.workspace = true
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-held/nothing", "suzatary-signatures/nothing"]
+
+[dev-dependencies]
+suzatary-mail = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -4143,8 +4143,10 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-held",
  "suzatary-io",
+ "suzatary-mail",
  "suzatary-memory",
  "suzatary-plugin",
  "suzatary-record",
@@ -4152,6 +4154,7 @@ dependencies = [
  "suzatary-store",
  "suzatary-testkit",
  "suzatary-todo",
+ "suzatary-triage",
  "tempfile",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
@@ -4176,12 +4179,15 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-held",
+ "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-todo",
+ "suzatary-triage",
  "thiserror",
  "tracing",
  "ts-rs",
@@ -4216,8 +4222,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "hex",
- "hmac",
- "mail-builder",
  "postcard",
  "prodrome-core",
  "prodrome-wasm-exports",
@@ -4229,18 +4233,38 @@ dependencies = [
  "sha2",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-held",
+ "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-todo",
+ "suzatary-triage",
  "thiserror",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
  "ts-rs",
  "typst-syntax",
  "unicode-normalization",
+]
+
+[[package]]
+name = "suzatary-health"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-health",
+ "suzatary-mail",
+ "suzatary-store",
+ "thiserror",
+ "ts-rs",
 ]
 
 [[package]]
@@ -4290,19 +4314,43 @@ dependencies = [
  "sha2",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-held",
+ "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-testkit",
  "suzatary-todo",
+ "suzatary-triage",
  "tempfile",
  "thiserror",
  "toml 0.9.12+spec-1.1.0",
  "typst-assets",
  "ureq",
  "webpki-roots",
+]
+
+[[package]]
+name = "suzatary-mail"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "hmac",
+ "mail-builder",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-held",
+ "suzatary-mail",
+ "suzatary-signatures",
+ "thiserror",
+ "ts-rs",
 ]
 
 [[package]]
@@ -4337,9 +4385,12 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
+ "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
  "suzatary-todo",
+ "suzatary-triage",
  "ts-rs",
  "viewtree",
  "wasm-bindgen",
@@ -4352,6 +4403,7 @@ dependencies = [
  "prodrome-core",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-io",
  "thiserror",
  "tokio",
@@ -4381,6 +4433,7 @@ dependencies = [
  "serde",
  "serde_json",
  "suzatary-core",
+ "suzatary-health",
  "suzatary-store",
  "wit-bindgen 0.62.0",
 ]
@@ -4460,6 +4513,26 @@ dependencies = [
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-todo",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
+name = "suzatary-triage"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-held",
+ "suzatary-mail",
+ "suzatary-store",
+ "suzatary-triage",
  "thiserror",
  "ts-rs",
 ]

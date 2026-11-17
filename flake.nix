@@ -150,6 +150,9 @@
             ./app/todo
             ./app/held
             ./app/memory
+            ./app/mail
+            ./app/health
+            ./app/triage
             ./app/api
             ./app/io
             ./app/plugin
@@ -236,6 +239,9 @@
           ./app/todo/Cargo.toml
           ./app/held/Cargo.toml
           ./app/memory/Cargo.toml
+          ./app/mail/Cargo.toml
+          ./app/health/Cargo.toml
+          ./app/triage/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
@@ -245,6 +251,9 @@
           ./app/todo/src
           ./app/held/src
           ./app/memory/src
+          ./app/mail/src
+          ./app/health/src
+          ./app/triage/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
@@ -255,6 +264,9 @@
           ./app/todo/tests/support
           ./app/held/tests/support
           ./app/memory/tests/support
+          ./app/mail/tests/support
+          ./app/health/tests/support
+          ./app/triage/tests/support
           ./app/api/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
@@ -369,6 +381,9 @@
                 ./app/todo/Cargo.toml
                 ./app/held/Cargo.toml
                 ./app/memory/Cargo.toml
+                ./app/mail/Cargo.toml
+                ./app/health/Cargo.toml
+                ./app/triage/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
@@ -378,6 +393,9 @@
                 ./app/todo/src
                 ./app/held/src
                 ./app/memory/src
+                ./app/mail/src
+                ./app/health/src
+                ./app/triage/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -475,6 +493,9 @@
               ./app/todo/Cargo.toml
               ./app/held/Cargo.toml
               ./app/memory/Cargo.toml
+              ./app/mail/Cargo.toml
+              ./app/health/Cargo.toml
+              ./app/triage/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -526,6 +547,9 @@
               ./app/todo/Cargo.toml
               ./app/held/Cargo.toml
               ./app/memory/Cargo.toml
+              ./app/mail/Cargo.toml
+              ./app/health/Cargo.toml
+              ./app/triage/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
@@ -689,7 +713,7 @@
         # `nix build .#suzatary-junk-seed`: THE MONTHLY JUNK SWEEP'S CHURN SEED, the two public
         # lists above as one sorted `domains.txt` and a `sources.txt` of revs and counts, read at
         # each digest through `SUZATARY_JUNK_SEED`. Both lists are flake inputs, locked by hash;
-        # `suzatary_core::mail::junk::normalize_seed_file` is the one normaliser.
+        # `suzatary_triage::mail::junk::normalize_seed_file` is the one normaliser.
         suzatary-junk-seed = appCrate {
           pname = "suzatary-junk-seed";
           doCheck = false;
@@ -697,7 +721,7 @@
           buildPhase = ''
             runHook preBuild
             mkdir -p $out
-            cargo run --offline -p suzatary-core --example junk_seed -- $out \
+            cargo run --offline -p suzatary-triage --example junk_seed -- $out \
               disposable-email-domains ${disposable-email-domains.rev} \
                 ${disposable-email-domains}/disposable_email_blocklist.conf \
               blocklistproject-phishing ${blocklist-project.rev} \

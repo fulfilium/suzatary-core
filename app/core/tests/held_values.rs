@@ -9,14 +9,14 @@ use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::mail::corpus::{Corpus, CorpusError};
-use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
-use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
-use suzatary_core::mail::mailbox::Query;
-use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::sync_report::SyncReport;
-use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::secretary::{Bound, Secretary};
+use suzatary_mail::mail::mailbox::Query;
+use suzatary_mail::mail::sync_report::SyncReport;
+use suzatary_triage::mail::corpus::{Corpus, CorpusError};
+use suzatary_triage::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
+use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
+use suzatary_triage::mail::state::Decision;
+use suzatary_triage::mail::verbs::{Marked, Message, Show, Summary};
 
 /// Synthetic numbers no person holds: SSN area 000, ITIN area 912.
 const SSN: &str = "000-12-3456";

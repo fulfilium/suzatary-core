@@ -6,9 +6,9 @@ use std::collections::BTreeSet;
 use base64::Engine as _;
 
 use super::{Challenge, Client, ClientId, RedirectUri, Scope, Scopes, State, Verifier};
-use crate::mail::address::EmailAddress;
-use crate::mail::oauth::{Answered, FormPost, NeedsLogin, OauthError, Silent};
 use suzatary_base::capability::Secret;
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::oauth::{Answered, FormPost, NeedsLogin, OauthError, Silent};
 
 /// Where the box asks Google: its consent page, its token endpoint and its Calendar API.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -417,7 +417,7 @@ pub enum Held {
 pub fn grant_name(account: &EmailAddress) -> String {
     format!(
         "GOOGLE_GRANT_{}",
-        crate::mail::account::slug_of(account.as_str())
+        suzatary_mail::mail::account::slug_of(account.as_str())
             .to_ascii_uppercase()
             .replace(|c: char| !c.is_ascii_alphanumeric(), "_")
     )

@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::Stored;
 use crate::secretary::proposal::{Forward, Forwarded, Proposal, Style};
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::propose_email::{address, addresses};
@@ -12,6 +11,7 @@ use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_held::held_value::Written;
 use suzatary_held::secretary::attached::MAX_TOTAL;
+use suzatary_mail::mail::Stored;
 
 /// Propose forwarding a stored message, which only a tap sends.
 pub struct ProposeForward;

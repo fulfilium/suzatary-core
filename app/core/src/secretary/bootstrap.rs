@@ -8,12 +8,12 @@
 //! later stops (an expired token) files the same card again, and the owner's no stands within
 //! one episode.
 
-use crate::health::{Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::sign_in::SignInUrl;
 use crate::settings::{Settable, Settables};
+use suzatary_health::health::{Healths, Instant, Reading};
 
 /// What the box knows of its model.
 #[derive(Clone, Copy)]

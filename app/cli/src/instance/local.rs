@@ -48,13 +48,13 @@ impl Local {
     }
 
     /// What the box keeps of its mail beside the pushed decisions
-    /// ([`suzatary_core::mail::local_state`]).
+    /// ([`suzatary_triage::mail::local_state`]).
     #[must_use]
     pub fn mail(&self) -> PathBuf {
         self.0.join(Self::FILES[3])
     }
 
-    /// The watches on mail the owner expects ([`suzatary_core::mail::watch`]), a directory.
+    /// The watches on mail the owner expects ([`suzatary_triage::mail::watch`]), a directory.
     #[must_use]
     pub fn watches(&self) -> PathBuf {
         self.0.join(Self::FILES[5])

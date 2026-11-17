@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use suzatary_base::capability::Clock;
-use suzatary_core::mail::account::Sync;
 use suzatary_io::clock::SystemClock;
+use suzatary_mail::mail::account::Sync;
 
 use crate::instance;
 

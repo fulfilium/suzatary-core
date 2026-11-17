@@ -30,7 +30,6 @@ use prodrome_core::literal::Datetime;
 
 use crate::model_name::ModelName;
 use crate::nonempty::NonEmpty;
-use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::compact_budget::{Budget, Hold};
@@ -47,6 +46,7 @@ use crate::secretary::store::Entry;
 use suzatary_base::capability::Clock;
 use suzatary_base::refusal::Refusal;
 use suzatary_store::store::Prodrome;
+use suzatary_triage::rule::{Named, ReadingName, Rule};
 
 /// The one digest the box keeps, as a rule's key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

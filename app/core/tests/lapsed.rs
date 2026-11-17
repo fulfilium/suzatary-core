@@ -28,7 +28,7 @@ fn card(inbox: &InMemory<InboxEvent>, index: usize, when: When) -> inbox::Propos
         Asked {
             proposer: Proposer::Secretary,
             proposal: Proposal::Act(Act::CalendarEvent {
-                account: suzatary_core::mail::address::EmailAddress::new("ada@example.test")
+                account: suzatary_mail::mail::address::EmailAddress::new("ada@example.test")
                     .expect("an address"),
                 event,
             }),

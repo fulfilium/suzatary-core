@@ -946,8 +946,8 @@ impl Box {
         &self,
         compactor: &dyn suzatary_core::secretary::compact::Compact,
     ) -> Vec<suzatary_core::secretary::compaction::Compacted> {
-        use suzatary_core::rule::Engine;
         use suzatary_core::secretary::compaction::{Reading, TheDigest, perform};
+        use suzatary_triage::rule::Engine;
         let rule = ladder(&[compactor]);
         let mut engine = Engine::new(vec![rule.clone()]);
         let mut done = Vec::new();
@@ -1360,8 +1360,8 @@ impl Box {
         workers: usize,
         round: usize,
     ) {
-        use suzatary_core::rule::Rule as _;
         use suzatary_core::secretary::compaction::{Reading, Round};
+        use suzatary_triage::rule::Rule as _;
         let owes = ladder(&[compactor]);
         std::thread::scope(|scope| {
             for _ in 0..workers {

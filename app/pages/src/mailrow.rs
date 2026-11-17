@@ -1,7 +1,7 @@
 //! What every mail page says of a message. Every string here came out of mail and is set as text;
 //! a body is the host's part (`mailbody`), which draws a held value's chip in it.
 
-use suzatary_core::mail::{Disposed, MailRow};
+use suzatary_mail::mail::{Disposed, MailRow};
 use viewtree::Attr::{Class, Href};
 use viewtree::{Node, view};
 

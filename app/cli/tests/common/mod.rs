@@ -21,14 +21,6 @@ use suzatary_base::escape::Escaped;
 use suzatary_cli::serve::{self, Chained, State};
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::mail::corpus::{Corpus, CorpusError};
-use suzatary_core::mail::junk;
-use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
-use suzatary_core::mail::mailbox::{Mailbox, Query};
-use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::sync_report::SyncReport;
-use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
-use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
 use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -41,8 +33,16 @@ use suzatary_held::mail_error::MailError;
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
+use suzatary_mail::mail::mailbox::{Mailbox, Query};
+use suzatary_mail::mail::sync_report::SyncReport;
+use suzatary_mail::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_todo::render::{Html, Render};
+use suzatary_triage::mail::corpus::{Corpus, CorpusError};
+use suzatary_triage::mail::junk;
+use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
+use suzatary_triage::mail::state::Decision;
+use suzatary_triage::mail::verbs::{Marked, Message, Show, Summary};
 
 /// The one IPv4 identity every real connection from this process presents as.
 #[must_use]
@@ -677,7 +677,7 @@ pub struct FakeMailbox {
     /// Attachment reads by message id and attachment name.
     pub attachment_reads: HashMap<(String, String), FileRead>,
     /// Attachment bytes by message id and attachment name.
-    pub attachment_files: Mutex<HashMap<(String, String), suzatary_core::mail::AttachmentFile>>,
+    pub attachment_files: Mutex<HashMap<(String, String), suzatary_mail::mail::AttachmentFile>>,
     /// Each message's file, by notmuch id.
     pub message_files: HashMap<String, Vec<u8>>,
     asked_messages: Mutex<Vec<String>>,
@@ -736,7 +736,7 @@ impl FakeMailbox {
     pub fn with_attachment_file(
         self,
         id: impl Into<String>,
-        file: suzatary_core::mail::AttachmentFile,
+        file: suzatary_mail::mail::AttachmentFile,
     ) -> Self {
         self.replace_attachment_file(id, file);
         self
@@ -746,7 +746,7 @@ impl FakeMailbox {
     pub fn replace_attachment_file(
         &self,
         id: impl Into<String>,
-        file: suzatary_core::mail::AttachmentFile,
+        file: suzatary_mail::mail::AttachmentFile,
     ) {
         self.attachment_files
             .lock()
@@ -835,7 +835,7 @@ impl Mailbox for FakeMailbox {
             })
     }
 
-    fn stored(&self, id: &str, cap: u64) -> Result<suzatary_core::mail::Stored, MailError> {
+    fn stored(&self, id: &str, cap: u64) -> Result<suzatary_mail::mail::Stored, MailError> {
         let raw = self
             .message_files
             .get(id)
@@ -844,11 +844,11 @@ impl Mailbox for FakeMailbox {
                 name: id.to_owned(),
             })?;
         Ok(if raw.len() as u64 > cap {
-            suzatary_core::mail::Stored::TooLarge {
+            suzatary_mail::mail::Stored::TooLarge {
                 size: raw.len() as u64,
             }
         } else {
-            suzatary_core::mail::Stored::Recorded(suzatary_io::mailbox::forwarded::stored(id, raw))
+            suzatary_mail::mail::Stored::Recorded(suzatary_io::mailbox::forwarded::stored(id, raw))
         })
     }
 
@@ -856,7 +856,7 @@ impl Mailbox for FakeMailbox {
         &self,
         id: &str,
         name: &str,
-    ) -> Result<suzatary_core::mail::AttachmentFile, MailError> {
+    ) -> Result<suzatary_mail::mail::AttachmentFile, MailError> {
         self.attachment_files
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -984,7 +984,7 @@ pub struct FakeModel {
     /// The verb names each ask was shown, in order.
     shown: Mutex<Vec<Vec<String>>>,
     /// The limit its account is under, as a door reads it.
-    limited: Option<suzatary_core::health::Limited>,
+    limited: Option<suzatary_health::health::Limited>,
 }
 
 impl FakeModel {
@@ -1134,7 +1134,7 @@ impl FakeModel {
 
     /// The same model, its account under `limited`.
     #[must_use]
-    pub fn limited(self, limited: suzatary_core::health::Limited) -> Self {
+    pub fn limited(self, limited: suzatary_health::health::Limited) -> Self {
         Self {
             limited: Some(limited),
             ..self
@@ -1175,7 +1175,7 @@ impl Model for FakeModel {
         }
     }
 
-    fn limited(&self) -> Option<suzatary_core::health::Limited> {
+    fn limited(&self) -> Option<suzatary_health::health::Limited> {
         self.limited
     }
 }
@@ -1487,7 +1487,7 @@ impl suzatary_api::secretary::routes::Perform for ActRecorder {
         _object: &suzatary_core::secretary::inbox::ProposalId,
         _proposer: &suzatary_core::secretary::proposer::Proposer,
         act: &suzatary_core::secretary::acts::Act,
-        _consent: suzatary_core::mail::oauth::Consent,
+        _consent: suzatary_mail::mail::oauth::Consent,
     ) -> suzatary_core::secretary::responded::Performed {
         self.begun
             .lock()
@@ -1516,7 +1516,7 @@ impl suzatary_api::secretary::routes::Perform for SignsIn {
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
         act: &suzatary_core::secretary::acts::Act,
-        consent: suzatary_core::mail::oauth::Consent,
+        consent: suzatary_mail::mail::oauth::Consent,
     ) -> suzatary_core::secretary::responded::Performed {
         match act {
             suzatary_core::secretary::acts::Act::SignIn { .. } => self.signing.begin(object, now()),
@@ -1540,13 +1540,13 @@ impl CheckRecorder {
 }
 
 impl suzatary_core::settings::Checks for CheckRecorder {
-    fn check(&self, source: &suzatary_core::health::SourceKey) {
+    fn check(&self, source: &suzatary_health::health::SourceKey) {
         self.0.lock().expect("not poisoned").push(match source {
-            suzatary_core::health::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
-            suzatary_core::health::SourceKey::Mail(_)
-            | suzatary_core::health::SourceKey::Link { .. }
-            | suzatary_core::health::SourceKey::GoogleCalendar(_)
-            | suzatary_core::health::SourceKey::Drive => source.to_string(),
+            suzatary_health::health::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
+            suzatary_health::health::SourceKey::Mail(_)
+            | suzatary_health::health::SourceKey::Link { .. }
+            | suzatary_health::health::SourceKey::GoogleCalendar(_)
+            | suzatary_health::health::SourceKey::Drive => source.to_string(),
         });
     }
 }
@@ -1613,11 +1613,11 @@ impl suzatary_core::secrets::Secrets for SecretRecorder {
 
     fn mail_grants(
         &self,
-        account: &suzatary_core::mail::account::MailAccount,
+        account: &suzatary_mail::mail::account::MailAccount,
     ) -> suzatary_core::secrets::MailGrants {
-        let held = suzatary_core::mail::address::EmailAddress::new(account.email.as_str())
+        let held = suzatary_mail::mail::address::EmailAddress::new(account.email.as_str())
             .ok()
-            .filter(|_| matches!(account.sync, suzatary_core::mail::account::Sync::Google))
+            .filter(|_| matches!(account.sync, suzatary_mail::mail::account::Sync::Google))
             .is_some_and(|email| {
                 matches!(
                     self.google_grant(&email),
@@ -1632,7 +1632,7 @@ impl suzatary_core::secrets::Secrets for SecretRecorder {
 
     fn google_grant(
         &self,
-        account: &suzatary_core::mail::address::EmailAddress,
+        account: &suzatary_mail::mail::address::EmailAddress,
     ) -> suzatary_core::google::Held {
         use suzatary_io::secrets::Resolves as _;
         match self.get(&suzatary_core::google::grant_name(account), "a scene") {
@@ -1858,8 +1858,8 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn add_origin(
         &self,
-        plugin: &suzatary_core::health::plugin::PluginName,
-        origin: &suzatary_core::health::plugin::Origin,
+        plugin: &suzatary_health::health::plugin::PluginName,
+        origin: &suzatary_health::health::plugin::Origin,
     ) -> Result<(), suzatary_core::settings::EditError> {
         let mut declared = self.declared.lock().expect("not poisoned");
         *declared = declared.with_origin(plugin, origin)?;
@@ -1916,7 +1916,7 @@ impl SettingsFixture {
                     &[],
                 ),
                 channels: None,
-                accounts: suzatary_core::mail::account::Roster::new(Vec::new())
+                accounts: suzatary_mail::mail::account::Roster::new(Vec::new())
                     .expect("an empty roster"),
                 plugins: Vec::new(),
             },
@@ -2009,7 +2009,7 @@ impl ScriptedOauth {
     #[must_use]
     pub fn new(
         answers: Vec<
-            Result<suzatary_core::mail::oauth::Answered, suzatary_core::mail::oauth::OauthError>,
+            Result<suzatary_mail::mail::oauth::Answered, suzatary_mail::mail::oauth::OauthError>,
         >,
     ) -> Self {
         use suzatary_io::http::{HttpError, Resp, Scripted};
@@ -2145,8 +2145,8 @@ pub fn exchange(base: &str, title: &str, text: &str) -> (String, serde_json::Val
 
 /// A 200 answer over JSON, for a `ScriptedOauth` script.
 #[must_use]
-pub fn answered(body: serde_json::Value) -> suzatary_core::mail::oauth::Answered {
-    suzatary_core::mail::oauth::Answered { status: 200, body }
+pub fn answered(body: serde_json::Value) -> suzatary_mail::mail::oauth::Answered {
+    suzatary_mail::mail::oauth::Answered { status: 200, body }
 }
 
 /// The whole capability set: real stores over temp directories, and fakes for every daemon.
@@ -2753,7 +2753,7 @@ pub struct Reaching {
     /// The program a tapped Connect card runs.
     pub claude: String,
     /// The register's first reading; `None` for the server's own default.
-    pub answered: Option<suzatary_core::health::Healths<String>>,
+    pub answered: Option<suzatary_health::health::Healths<String>>,
     /// What a credential's test call answers.
     pub verify: Arc<VerifyRecorder>,
 }
@@ -3342,17 +3342,17 @@ fn performer(
             conversations,
             oauth,
         } => {
-            use suzatary_core::mail::account::{Authority, MailAccount, MsImap, Sync as MailSync};
+            use suzatary_mail::mail::account::{Authority, MailAccount, MsImap, Sync as MailSync};
             let roster: Arc<dyn suzatary_core::settings::Edits + Send + Sync> = match account {
                 Some(account) => {
                     Arc::new(EditsRecorder::declaring(suzatary_core::connect::Declared {
                         accounts: vec![MailAccount {
-                            email: suzatary_core::mail::account_email::AccountEmail::new(&account)
+                            email: suzatary_mail::mail::account_email::AccountEmail::new(&account)
                                 .expect("a lower-case address"),
                             subdir: "study".to_owned(),
                             sync: MailSync::MsImap(MsImap {
                                 authority: Authority::Organizations,
-                                inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                                inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                                 sent_folder: "Sent Items".to_owned(),
                             }),
                         }],
@@ -3396,7 +3396,7 @@ fn test_ledger(root: &Path) -> suzatary_io::state::Ledger {
         root.join("state.json"),
         root.join("local/mail.json"),
         || {
-            suzatary_core::mail::dedup_key::DedupKey::of(&suzatary_base::capability::Secret::new(
+            suzatary_mail::mail::dedup_key::DedupKey::of(&suzatary_base::capability::Secret::new(
                 "12".repeat(32),
             ))
             .map_err(|failed| failed.to_string())
@@ -3658,7 +3658,7 @@ impl FakeJunk {
         match self.folders.iter().find(|(name, _)| name == account) {
             Some((_, JunkFolder::Holds(held))) => Ok(held),
             Some((_, JunkFolder::NeedsLogin)) => Err(JunkFailure::NeedsLogin(
-                suzatary_core::mail::oauth::NeedsLogin::Lapsed {
+                suzatary_mail::mail::oauth::NeedsLogin::Lapsed {
                     email: account.to_owned(),
                     slot: "imap",
                     code: "invalid_grant".to_owned(),

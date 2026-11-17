@@ -61,7 +61,7 @@ pub const SIGNATURES: &[Constructor] = &[
     attachment_source::FROM_UPLOAD,
     attachment_source::FROM_KEPT,
     attachment_source::FROM_REPO,
-    crate::mail::STORED_MESSAGE,
-    crate::mail::STORED_PART,
+    suzatary_mail::mail::STORED_MESSAGE,
+    suzatary_mail::mail::STORED_PART,
     suzatary_held::held_value::HELD,
 ];

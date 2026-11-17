@@ -8,9 +8,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::mail::{AttachmentFile, MailMessage, MailRow};
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_mail::mail::{AttachmentFile, MailMessage, MailRow};
 
 const NOTICE: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
@@ -32,7 +32,7 @@ fn message(id: &str) -> MailMessage {
             date: None,
             container: "inbox".to_owned(),
             account: "ada@example.com".to_owned(),
-            disposition: suzatary_core::mail::Disposed::Undecided,
+            disposition: suzatary_mail::mail::Disposed::Undecided,
             held: suzatary_held::held_value::Kinds::empty(),
         },
         thread: "000000000000c3fb".to_owned(),

@@ -4,8 +4,8 @@ use super::{
     AccountKind, Channel, Check, Fragment, Group, Run, SecretName, StepShape, Table, Template,
     TemplateId,
 };
-use crate::health::plugin::PluginName;
 use crate::settings::{Page, Words};
+use suzatary_health::health::plugin::PluginName;
 
 /// The data repository, pushed to a remote.
 const GIT_REMOTE: Template = Template {

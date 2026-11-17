@@ -7,7 +7,6 @@
 
 use prodrome_core::literal::Datetime;
 
-use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::inbox::{self, Object, ProposalId, Response};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
@@ -15,6 +14,7 @@ use crate::secretary::responded::{Performed, Responded};
 use suzatary_base::refusal::Refusal;
 use suzatary_signatures::signatures::Tap;
 use suzatary_store::store::Prodrome;
+use suzatary_triage::rule::{Named, ReadingName, Rule};
 
 /// The tap's rule at the instant of the tap.
 #[derive(Debug, Clone, Copy)]

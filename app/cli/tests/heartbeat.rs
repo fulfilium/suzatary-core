@@ -3,8 +3,8 @@
 //! and nowhere the wrapper spells.
 
 use suzatary_cli::instance::Instance;
-use suzatary_core::mail::corpus::Corpus as _;
-use suzatary_core::mail::heartbeat::{PassOutcome, Recorded, Stage};
+use suzatary_triage::mail::corpus::Corpus as _;
+use suzatary_triage::mail::heartbeat::{PassOutcome, Recorded, Stage};
 
 use super::todos::{an_instance, scratch};
 

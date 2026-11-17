@@ -19,20 +19,20 @@ use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
-use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
-use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
-use suzatary_core::mail::mailbox::{Mailbox, Query};
-use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
-use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::repos::{Patch, RepoRow, Visibility};
 use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
 use suzatary_held::mail_error::MailError;
+use suzatary_mail::mail::mail_sync::{MailSync, SyncFailure, Synced};
+use suzatary_mail::mail::mailbox::{Mailbox, Query};
+use suzatary_mail::mail::sync_report::{AccountSync, SyncReport};
+use suzatary_mail::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{Envelope, EventStore, TodoEvent};
 use suzatary_store::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
+use suzatary_triage::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
+use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
 
 fn chain() -> ChainPolicy {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -146,8 +146,8 @@ static ENTROPY: std::sync::LazyLock<suzatary_core::secretary::conversations::Cou
 /// The watches `watch_mail` sets.
 static WATCHES: std::sync::LazyLock<
     suzatary_store::store::InMemoryLog<
-        suzatary_core::mail::watch::WatchId,
-        suzatary_core::mail::watch::Line,
+        suzatary_triage::mail::watch::WatchId,
+        suzatary_triage::mail::watch::Line,
     >,
 > = std::sync::LazyLock::new(|| suzatary_store::store::InMemoryLog::new("watch"));
 /// The words opened, kept for the calls' conversation.
@@ -261,7 +261,7 @@ impl Mailbox for Fixed {
     fn attachments(&self, id: &str) -> Result<Vec<AttachmentMeta>, MailError> {
         Nothing.attachments(id)
     }
-    fn stored(&self, id: &str, cap: u64) -> Result<suzatary_core::mail::Stored, MailError> {
+    fn stored(&self, id: &str, cap: u64) -> Result<suzatary_mail::mail::Stored, MailError> {
         Nothing.stored(id, cap)
     }
     fn attachment(&self, id: &str, name: &str) -> Result<AttachmentFile, MailError> {
@@ -343,9 +343,9 @@ impl MailSync for Fixed {
             report: SyncReport {
                 unheld: None,
                 synced: vec![AccountSync {
-                    account: suzatary_core::mail::account_email::AccountEmail::new(ACCOUNT)
+                    account: suzatary_mail::mail::account_email::AccountEmail::new(ACCOUNT)
                         .expect("an address"),
-                    outcome: suzatary_core::outcome::Outcome::Succeeded,
+                    outcome: suzatary_mail::outcome::Outcome::Succeeded,
                     tail: "Sent: 1 new".to_owned(),
                 }],
                 notmuch: "Added 1 new message.".to_owned(),

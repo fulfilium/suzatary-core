@@ -17,9 +17,9 @@ use suzatary_base::capability::Secret;
 use suzatary_cli::commands::plugin;
 use suzatary_cli::instance::Plugins;
 use suzatary_core::calendar::{Calendar, Status};
-use suzatary_core::health::Reading;
-use suzatary_core::health::Register as _;
 use suzatary_core::plugin::Manifest;
+use suzatary_health::health::Reading;
+use suzatary_health::health::Register as _;
 use suzatary_io::http::Ureq;
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_io::secrets::Resolves;
@@ -131,18 +131,18 @@ fn files(dir: &Path) -> Vec<String> {
 
 /// When `plugin`'s `link` last synced, as the sources' health holds it.
 fn synced(
-    healths: &suzatary_core::health::Healths<suzatary_core::health::SourceKey>,
-    plugin: &suzatary_core::health::plugin::PluginName,
+    healths: &suzatary_health::health::Healths<suzatary_health::health::SourceKey>,
+    plugin: &suzatary_health::health::plugin::PluginName,
     link: &str,
-) -> Option<suzatary_core::health::Instant> {
+) -> Option<suzatary_health::health::Instant> {
     let credential =
-        suzatary_core::health::plugin::CredentialName::parse(plugin, link).expect("a credential");
+        suzatary_health::health::plugin::CredentialName::parse(plugin, link).expect("a credential");
     healths
-        .health(&suzatary_core::health::SourceKey::Link {
+        .health(&suzatary_health::health::SourceKey::Link {
             plugin: plugin.clone(),
             credential,
         })
-        .and_then(suzatary_core::health::Health::succeeded)
+        .and_then(suzatary_health::health::Health::succeeded)
 }
 
 #[test]
@@ -248,7 +248,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         unread.line
     );
     let ran = health.healths().expect("the health reads");
-    let plugin = suzatary_core::health::SourceKey::Plugin(manifest.name().clone());
+    let plugin = suzatary_health::health::SourceKey::Plugin(manifest.name().clone());
     assert!(
         matches!(ran.reading(&plugin), Some(Reading::Failing { words, .. })
             if words.contains("its cursor could not be read")),

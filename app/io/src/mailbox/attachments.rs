@@ -2,7 +2,7 @@
 //! notmuch's JSON never carries a binary part's content.
 
 use mail_parser::{MessageParser, MimeHeaders as _};
-use suzatary_core::mail::AttachmentMeta;
+use suzatary_mail::mail::AttachmentMeta;
 
 /// Every attachment one raw RFC 5322 message carries, in the order it lists them; `[]` for a
 /// message that does not parse.

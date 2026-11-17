@@ -33,20 +33,20 @@ pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
 use self::message::NotmuchMessage;
 use suzatary_base::capability::Datetime;
 use suzatary_base::spelling::clip;
-use suzatary_core::mail::account::{MailAccount, Roster};
-use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
-use suzatary_core::mail::known::Known;
-use suzatary_core::mail::mailbox::{Mailbox, Query};
-use suzatary_core::mail::verbs;
-use suzatary_core::mail::{
-    AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,
-    headers_of, web_links,
-};
 use suzatary_held::enclosed::Enclosure;
 use suzatary_held::file_read::FileRead;
 use suzatary_held::held_value::HeldFile;
 use suzatary_held::held_value::{self, Reopened, Reveal};
 use suzatary_held::mail_error::MailError;
+use suzatary_mail::mail::account::{MailAccount, Roster};
+use suzatary_mail::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
+use suzatary_mail::mail::mailbox::{Mailbox, Query};
+use suzatary_mail::mail::{
+    AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,
+    headers_of, web_links,
+};
+use suzatary_triage::mail::known::Known;
+use suzatary_triage::mail::verbs;
 
 /// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].
 pub struct Notmuch {
@@ -559,8 +559,11 @@ fn epoch_of(message: &CanonicalMessage) -> i64 {
 }
 
 fn row_of(message: &CanonicalMessage, state: Option<&Known>) -> MailRow {
-    let disposition = state.map_or(suzatary_core::mail::Disposed::Unkeyed, |state| {
-        suzatary_core::mail::Disposed::from(state.decided(&message.hash))
+    let disposition = state.map_or(suzatary_mail::mail::Disposed::Unkeyed, |state| {
+        state.decided(&message.hash).map_or(
+            suzatary_mail::mail::Disposed::Undecided,
+            suzatary_mail::mail::Disposed::from,
+        )
     });
     let primary = &message.primary;
     MailRow {
@@ -930,17 +933,17 @@ pub(crate) mod fixture {
         )
         .expect("indexed");
         let roster = Roster::new(vec![MailAccount {
-            email: suzatary_core::mail::account_email::AccountEmail::new("ada@example.test")
+            email: suzatary_mail::mail::account_email::AccountEmail::new("ada@example.test")
                 .expect("a lower-case address"),
             subdir: "ada".to_owned(),
-            sync: suzatary_core::mail::account::Sync::Gmail,
+            sync: suzatary_mail::mail::account::Sync::Gmail,
         }])
         .expect("a roster");
         let keyed = crate::state::Ledger::new(
             root.join("state.json"),
             root.join("local/mail.json"),
             || {
-                Ok(suzatary_core::mail::dedup_key::DedupKey::of(
+                Ok(suzatary_mail::mail::dedup_key::DedupKey::of(
                     &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))

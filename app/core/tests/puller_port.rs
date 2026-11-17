@@ -2,8 +2,8 @@
 
 use proptest::prelude::*;
 use suzatary_core::conformance::puller::{Rig, check};
-use suzatary_core::mail::fault::Fault;
-use suzatary_core::mail::mailroom::{Mailroom, Server};
+use suzatary_mail::mail::fault::Fault;
+use suzatary_mail::mail::mailroom::{Mailroom, Server};
 
 struct Memory(Mailroom);
 

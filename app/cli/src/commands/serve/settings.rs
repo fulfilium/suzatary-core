@@ -10,13 +10,13 @@ use prodrome_core::store::Replica as _;
 use suzatary_api::routes;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::calendar::Occurrence;
-use suzatary_core::health::plugin::PluginName;
 use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
 };
 use suzatary_core::settings::remote::{self, Pushed, Tip};
 use suzatary_core::timings::{Part, Phase, timed};
 use suzatary_core::wire::cards as wire;
+use suzatary_health::health::plugin::PluginName;
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_store::store::StoreError;
 
@@ -169,7 +169,7 @@ fn git_config(root: &std::path::Path) -> std::io::Result<String> {
 }
 
 /// `None` on no branch, or never pushed.
-fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
+fn pushes(root: &std::path::Path) -> Option<suzatary_health::health::Health> {
     let (dir, common) = git_dirs(root).ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
     let branch = head.trim().strip_prefix("ref: refs/heads/")?;
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn the_pushes_are_read_from_the_reflogs() {
-        use suzatary_core::health::Reading;
+        use suzatary_health::health::Reading;
         let root = tempfile::tempdir().expect("a scratch directory");
         let git = root.path().join(".git");
         std::fs::create_dir_all(git.join("logs/refs/remotes/origin")).expect("the logs");

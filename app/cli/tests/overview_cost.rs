@@ -100,7 +100,7 @@ impl suzatary_core::secrets::Secrets for Decrypting {
 
     fn mail_grants(
         &self,
-        _: &suzatary_core::mail::account::MailAccount,
+        _: &suzatary_mail::mail::account::MailAccount,
     ) -> suzatary_core::secrets::MailGrants {
         suzatary_core::secrets::MailGrants {
             imap: self.decrypt(),
@@ -110,7 +110,7 @@ impl suzatary_core::secrets::Secrets for Decrypting {
 
     fn google_grant(
         &self,
-        _: &suzatary_core::mail::address::EmailAddress,
+        _: &suzatary_mail::mail::address::EmailAddress,
     ) -> suzatary_core::google::Held {
         self.decrypt();
         suzatary_core::google::Held::NotSignedIn
@@ -264,7 +264,7 @@ impl suzatary_core::secrets::Secrets for Counting {
 
     fn mail_grants(
         &self,
-        _: &suzatary_core::mail::account::MailAccount,
+        _: &suzatary_mail::mail::account::MailAccount,
     ) -> suzatary_core::secrets::MailGrants {
         self.0.fetch_add(1, Ordering::SeqCst);
         suzatary_core::secrets::MailGrants::default()
@@ -272,7 +272,7 @@ impl suzatary_core::secrets::Secrets for Counting {
 
     fn google_grant(
         &self,
-        _: &suzatary_core::mail::address::EmailAddress,
+        _: &suzatary_mail::mail::address::EmailAddress,
     ) -> suzatary_core::google::Held {
         self.0.fetch_add(1, Ordering::SeqCst);
         suzatary_core::google::Held::NotSignedIn

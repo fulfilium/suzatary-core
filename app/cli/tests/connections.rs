@@ -165,14 +165,14 @@ impl suzatary_core::secrets::Secrets for GitHubHeld {
 
     fn mail_grants(
         &self,
-        _: &suzatary_core::mail::account::MailAccount,
+        _: &suzatary_mail::mail::account::MailAccount,
     ) -> suzatary_core::secrets::MailGrants {
         suzatary_core::secrets::MailGrants::default()
     }
 
     fn google_grant(
         &self,
-        _: &suzatary_core::mail::address::EmailAddress,
+        _: &suzatary_mail::mail::address::EmailAddress,
     ) -> suzatary_core::google::Held {
         suzatary_core::google::Held::NotSignedIn
     }

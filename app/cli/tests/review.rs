@@ -442,8 +442,8 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
     let _ = three_cards(&caps);
     let policy = common::chain();
     let deployment = deployment();
-    let limited = suzatary_core::health::Limited {
-        limit: suzatary_core::health::Limit::Usage,
+    let limited = suzatary_health::health::Limited {
+        limit: suzatary_health::health::Limit::Usage,
         until: prodrome_core::fpl::instant_of(caps.clock.now()) + chrono::Duration::hours(3),
     };
     let caps = caps.model(FakeModel::saying([]).limited(limited));

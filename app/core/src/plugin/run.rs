@@ -4,10 +4,10 @@
 use prodrome_core::fpl::Instant;
 
 use super::Manifest;
-use crate::health::Failure;
-use crate::health::SourceKey;
-use crate::health::plugin::{CredentialName, Refusal};
-use crate::health::{Healths, Outcome};
+use suzatary_health::health::Failure;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::plugin::{CredentialName, Refusal};
+use suzatary_health::health::{Healths, Outcome};
 
 /// One run, summarised.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +108,7 @@ impl LastRun {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::health::Reading;
+    use suzatary_health::health::Reading;
 
     fn at(minute: u32) -> Instant {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 5)

@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::health::plugin::Origin;
+use suzatary_health::health::plugin::Origin;
 
 /// The longest URL accepted.
 pub(crate) const MAX_URL: usize = 8192;

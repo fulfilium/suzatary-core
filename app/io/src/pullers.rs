@@ -4,12 +4,12 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use suzatary_core::mail::account::{MailAccount, MsImap};
-use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::declared::{Declared, Landed, declared, line};
-use suzatary_core::mail::fault::Fault;
-use suzatary_core::mail::imap::{INBOX, ImapError, Pull, Pulled, Session, pull};
-use suzatary_core::mail::puller::{Puller, Unpulled};
+use suzatary_mail::mail::account::{MailAccount, MsImap};
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::declared::{Declared, Landed, declared, line};
+use suzatary_mail::mail::fault::Fault;
+use suzatary_mail::mail::imap::{INBOX, ImapError, Pull, Pulled, Session, pull};
+use suzatary_mail::mail::puller::{Puller, Unpulled};
 
 use crate::google::{Grants, NotReady};
 use crate::imap::{Folder, Outlook};
@@ -94,7 +94,7 @@ impl Open for Granted {
     fn open(&self, account: &MailAccount) -> Result<Outlook, ImapError> {
         let token = self
             .tokens
-            .access::<suzatary_core::mail::oauth::Imap>(account)
+            .access::<suzatary_mail::mail::oauth::Imap>(account)
             .map_err(|failed| ImapError::Unauthorised(failed.to_string()))?
             .required()
             .map_err(ImapError::NeedsLogin)?;

@@ -1,7 +1,7 @@
 //! Which instance table declares a secret.
 
-use crate::health::plugin::PluginName;
 use crate::settings::remote::Pushed;
+use suzatary_health::health::plugin::PluginName;
 
 /// One table naming a secret; a name two tables declare is declared by both.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::junk::{DEFAULT_DAYS, Window, digest};
-use crate::mail::junk_folder::JunkFailure;
 use crate::secretary::verbs::not_a_junk_account;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_triage::mail::junk::{DEFAULT_DAYS, Window, digest};
+use suzatary_triage::mail::junk_folder::JunkFailure;
 
 /// The Junk folders, swept.
 pub struct JunkDigest;

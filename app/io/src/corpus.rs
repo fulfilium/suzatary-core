@@ -6,13 +6,13 @@
 use std::path::PathBuf;
 
 use suzatary_base::capability::Clock;
-use suzatary_core::mail::corpus::{Corpus, CorpusError};
-use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
-use suzatary_core::mail::known::Known;
-use suzatary_core::mail::local_state::Kept;
-use suzatary_core::mail::mailbox::Query;
-use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::verbs;
+use suzatary_mail::mail::hash_prefix::{HashPrefix, Resolved};
+use suzatary_mail::mail::mailbox::Query;
+use suzatary_triage::mail::corpus::{Corpus, CorpusError};
+use suzatary_triage::mail::known::Known;
+use suzatary_triage::mail::local_state::Kept;
+use suzatary_triage::mail::state::Decision;
+use suzatary_triage::mail::verbs;
 
 use crate::mailbox::Notmuch;
 use crate::sync::Syncer;
@@ -116,7 +116,7 @@ impl Operator {
             .map(|account| account.email.as_str())
             .collect();
         let now = prodrome_core::fpl::instant_of(self.clock.now());
-        match suzatary_core::mail::watch::ring(&self.watches, self, &own, now) {
+        match suzatary_triage::mail::watch::ring(&self.watches, self, &own, now) {
             Ok(failed) => {
                 for refused in failed {
                     eprintln!("sync: a watch did not ring: {}", refused.message());
@@ -135,12 +135,12 @@ impl Operator {
 impl Corpus for Operator {
     /// Every sync records each account's health and fails when it cannot; its report is kept
     /// private for the gate, the briefing and `last_sync`.
-    fn sync(&self) -> Result<suzatary_core::mail::sync_report::SyncReport, CorpusError> {
+    fn sync(&self) -> Result<suzatary_mail::mail::sync_report::SyncReport, CorpusError> {
         let report = self.syncer.sync(self.today());
         self.ring();
         let at = prodrome_core::fpl::instant_of(self.clock.now());
         self.health
-            .join(&suzatary_core::health::Healths::of_sync(&report, at))
+            .join(&suzatary_health::health::Healths::of_sync(&report, at))
             .map_err(|failed| {
                 CorpusError::Refused(format!(
                     "the sync ran, and its accounts' health was not recorded: {failed}"
@@ -234,7 +234,7 @@ impl Corpus for Operator {
         })
     }
 
-    fn last_sync(&self) -> Option<suzatary_core::mail::sync_report::SyncReport> {
+    fn last_sync(&self) -> Option<suzatary_mail::mail::sync_report::SyncReport> {
         crate::mail_sync::read_report(&self.sync_status)
             .ok()
             .flatten()
@@ -245,7 +245,7 @@ impl Corpus for Operator {
         self.pulse.last_pass()
     }
 
-    fn last_triage_outcome(&self) -> suzatary_core::mail::heartbeat::PassOutcome {
+    fn last_triage_outcome(&self) -> suzatary_triage::mail::heartbeat::PassOutcome {
         self.pulse.last_outcome()
     }
 }
@@ -254,7 +254,7 @@ impl Corpus for Operator {
 mod tests {
     use super::*;
     use std::path::Path;
-    use suzatary_core::mail::account::{MailAccount, Roster, Sync};
+    use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
 
     fn operator(root: &Path) -> Operator {
         let mail = Notmuch::new(
@@ -269,7 +269,7 @@ mod tests {
 
     fn roster() -> Roster {
         Roster::new(vec![MailAccount {
-            email: suzatary_core::mail::account_email::AccountEmail::new("her@example.test")
+            email: suzatary_mail::mail::account_email::AccountEmail::new("her@example.test")
                 .expect("a lower-case address"),
             subdir: "her".to_owned(),
             sync: Sync::Gmail,
@@ -310,7 +310,7 @@ mod tests {
             root.join("state.json"),
             root.join("local/mail.json"),
             || {
-                Ok(suzatary_core::mail::dedup_key::DedupKey::of(
+                Ok(suzatary_mail::mail::dedup_key::DedupKey::of(
                     &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))
@@ -422,7 +422,7 @@ mod tests {
             answer,
             verbs::Marked {
                 marked: "abc123".to_owned(),
-                disposition: suzatary_core::mail::state::Disposition::Todo,
+                disposition: suzatary_triage::mail::state::Disposition::Todo,
             }
         );
 

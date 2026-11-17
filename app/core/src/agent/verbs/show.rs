@@ -6,10 +6,10 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::agent::{Holds, answered, refused};
-use crate::mail::corpus::Corpus;
-use crate::mail::verbs;
 use crate::verb::{Own, Verb};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_triage::mail::corpus::Corpus;
+use suzatary_triage::mail::verbs;
 
 /// One message in full, its arguments spelled `A`: paged, or whole.
 pub struct Show<S, A>(PhantomData<(S, A)>);
@@ -93,7 +93,7 @@ fn show(corpus: &dyn Corpus, id: &str, part: Part) -> Result<Value, Refusal> {
         return answered(&verbs::Show::Shown(message));
     }
     let at = part.min(total_parts);
-    let paged = crate::mail::page(body, (at - 1) * SHOW_CAP, SHOW_CAP);
+    let paged = suzatary_mail::mail::page(body, (at - 1) * SHOW_CAP, SHOW_CAP);
     let note = if at < total_parts {
         format!(
             "\n\n(… part {at} of {total_parts} — this body is longer than one answer. \

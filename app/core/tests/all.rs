@@ -54,6 +54,8 @@ mod memory;
 mod memory_schema;
 #[path = "model_port.rs"]
 mod model_port;
+#[path = "oauth_tap.rs"]
+mod oauth_tap;
 #[path = "object_replica.rs"]
 mod object_replica;
 #[path = "operator_tap.rs"]

@@ -879,9 +879,9 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
 #[test]
 fn the_standings_vector_is_every_standing_a_line_can_take() {
     use suzatary_core::connect::{Group, Standing};
-    use suzatary_core::health::Failure;
-    use suzatary_core::health::Outcome;
-    type Healths = suzatary_core::health::Healths<String>;
+    use suzatary_health::health::Failure;
+    use suzatary_health::health::Outcome;
+    type Healths = suzatary_health::health::Healths<String>;
     let at = fpl::instant_of(now());
     let failed = |class: Failure| {
         Standing::of_health(
@@ -1999,8 +1999,8 @@ fn row(n: u8) -> wire::AttachmentRow {
     }
 }
 
-fn mail_row() -> suzatary_core::mail::MailRow {
-    suzatary_core::mail::MailRow {
+fn mail_row() -> suzatary_mail::mail::MailRow {
+    suzatary_mail::mail::MailRow {
         hash: "a".repeat(16),
         id: "m1@example.test".to_owned(),
         sender: CAST.counsel.email.to_owned(),
@@ -2008,7 +2008,7 @@ fn mail_row() -> suzatary_core::mail::MailRow {
         date: Some(now()),
         container: "inbox".to_owned(),
         account: CAST.owner.email.to_owned(),
-        disposition: suzatary_core::mail::Disposed::Todo {
+        disposition: suzatary_mail::mail::Disposed::Todo {
             todo: CAST.todos.agents.id.to_owned(),
         },
         held: [
@@ -2685,13 +2685,13 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([suzatary_api::wire::InboxPayload {
         accounts: vec![CAST.owner.email.to_owned()],
         messages: [
-            suzatary_core::mail::Disposed::Undecided,
-            suzatary_core::mail::Disposed::Noise,
-            suzatary_core::mail::Disposed::Skip,
-            suzatary_core::mail::Disposed::Unkeyed,
+            suzatary_mail::mail::Disposed::Undecided,
+            suzatary_mail::mail::Disposed::Noise,
+            suzatary_mail::mail::Disposed::Skip,
+            suzatary_mail::mail::Disposed::Unkeyed,
         ]
         .into_iter()
-        .map(|disposition| suzatary_core::mail::MailRow {
+        .map(|disposition| suzatary_mail::mail::MailRow {
             disposition,
             ..mail_row()
         })
@@ -2703,13 +2703,13 @@ fn the_answers_vector_holds_every_answer() {
         accounts: Vec::new(),
         messages: vec![mail_row()],
     }]);
-    samples.add([suzatary_core::wire::triage::WatchesPayload {
+    samples.add([suzatary_triage::wire::triage::WatchesPayload {
         watches: [
-            suzatary_core::wire::triage::WatchOn::Sender,
-            suzatary_core::wire::triage::WatchOn::Subject,
+            suzatary_triage::wire::triage::WatchOn::Sender,
+            suzatary_triage::wire::triage::WatchOn::Subject,
         ]
         .into_iter()
-        .map(|on| suzatary_core::wire::triage::MailWatch {
+        .map(|on| suzatary_triage::wire::triage::MailWatch {
             id: "0123456789abcdef".to_owned(),
             on,
             text: "counsel".to_owned(),
@@ -2721,7 +2721,7 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([suzatary_api::wire::ThreadPayload {
         thread: "000000000000c3fb".to_owned(),
         messages: vec![suzatary_api::wire::MailPage {
-            message: suzatary_core::mail::MailMessage {
+            message: suzatary_mail::mail::MailMessage {
                 row: mail_row(),
                 thread: "000000000000c3fb".to_owned(),
                 headers: vec![suzatary_held::message_part::MailHeader {
@@ -2730,7 +2730,7 @@ fn the_answers_vector_holds_every_answer() {
                 }],
                 body: "The signature is due.".to_owned(),
                 truncated: false,
-                links: vec![suzatary_core::mail::MailLink {
+                links: vec![suzatary_mail::mail::MailLink {
                     url: "https://example.com/deed".to_owned(),
                     label: "Upload".to_owned(),
                 }],
@@ -2758,7 +2758,7 @@ fn the_answers_vector_holds_every_answer() {
                 CAST.owner.email,
                 Standing::Failing {
                     since: stamp(at),
-                    class: suzatary_core::health::Failure::NeedsLogin,
+                    class: suzatary_health::health::Failure::NeedsLogin,
                     words: "token expired".to_owned(),
                     at: stamp(at),
                 },

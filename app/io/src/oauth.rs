@@ -1,4 +1,4 @@
-//! The transport and token store for `suzatary_core::mail::oauth`'s sans-I/O state machine.
+//! The transport and token store for `suzatary_mail::mail::oauth`'s sans-I/O state machine.
 //!
 //! Each account's file keeps one slot per protocol keyed only by `Protocol::SLOT`, so a
 //! refresh granted under IMAP consent can never be read back for an SMTP request.
@@ -17,8 +17,8 @@ use crate::present::Present as _;
 use crate::tokens::{Bearer, Fresh, Grant, unix_now};
 use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Secret;
-use suzatary_core::mail::account::{Authority, MailAccount};
-use suzatary_core::mail::oauth::{
+use suzatary_mail::mail::account::{Authority, MailAccount};
+use suzatary_mail::mail::oauth::{
     Answered, Consent, DeviceCode, FormPost, Imap, NeedsLogin, OauthError, Polled, Protocol,
     Silent, Smtp, device_request, poll_request, read_device_code, read_poll, read_silent,
     refresh_request,
@@ -407,7 +407,7 @@ impl<P: Protocol> Pending<P> {
 mod tests {
     use super::*;
     use crate::http::{Resp, Scripted};
-    use suzatary_core::mail::account::{Authority, MsImap, Sync};
+    use suzatary_mail::mail::account::{Authority, MsImap, Sync};
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -421,12 +421,12 @@ mod tests {
 
     fn ms_account(email: &str) -> MailAccount {
         MailAccount {
-            email: suzatary_core::mail::account_email::AccountEmail::new(email)
+            email: suzatary_mail::mail::account_email::AccountEmail::new(email)
                 .expect("a lower-case address"),
             subdir: "study".to_owned(),
             sync: Sync::MsImap(MsImap {
                 authority: Authority::Organizations,
-                inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                 sent_folder: "Sent Items".to_owned(),
             }),
         }
@@ -700,7 +700,7 @@ mod tests {
     fn begin_device_flow_refuses_a_non_microsoft_account_and_asks_the_transport_nothing() {
         let store = TokenStore::with_http(scratch("non-ms"), never_called());
         let account = MailAccount {
-            email: suzatary_core::mail::account_email::AccountEmail::new("her@gmail.test")
+            email: suzatary_mail::mail::account_email::AccountEmail::new("her@gmail.test")
                 .expect("a lower-case address"),
             subdir: "personal".to_owned(),
             sync: Sync::Gmail,

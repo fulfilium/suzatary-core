@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use suzatary_core::health::{Healths, Instant, Outcome, Reading, Register};
+use suzatary_health::health::{Healths, Instant, Outcome, Reading, Register};
 use suzatary_store::store::StoreError;
 
 use crate::docs::{DocCodec, Docs};
@@ -78,7 +78,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
-    use suzatary_core::health::Failure;
+    use suzatary_health::health::Failure;
 
     /// A call that answered and later ones that did not read back as their join, from the file,
     /// and the bell rings only when the reading moves.

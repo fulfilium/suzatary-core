@@ -32,7 +32,7 @@ pub fn open(
                 .map_err(|failed| mail_refusal(&failed))?;
             Ok(Opened {
                 media: if file.mime.is_empty() {
-                    crate::mail::send::guess_mime_type(name)
+                    suzatary_mail::mail::send::guess_mime_type(name)
                 } else {
                     file.mime
                 },
@@ -55,7 +55,7 @@ pub fn open(
             .map_err(|failed| drive_refusal(&failed))?;
             let name = path.name().unwrap_or_default().to_owned();
             Ok(Opened {
-                media: crate::mail::send::guess_mime_type(&name),
+                media: suzatary_mail::mail::send::guess_mime_type(&name),
                 name,
                 bytes,
             })
@@ -138,7 +138,7 @@ fn repository(
         .unwrap_or_default()
         .to_owned();
     Ok(Opened {
-        media: crate::mail::send::guess_mime_type(&name),
+        media: suzatary_mail::mail::send::guess_mime_type(&name),
         name,
         bytes,
     })

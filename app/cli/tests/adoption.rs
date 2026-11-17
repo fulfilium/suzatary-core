@@ -23,7 +23,7 @@ fn seeds() -> [(&'static str, String); 3] {
     [
         (BOX_KEY, OWN.to_owned()),
         (AGENT_KEY, AGENT.to_owned()),
-        (suzatary_core::mail::dedup_key::DEDUP_KEY, "7".repeat(64)),
+        (suzatary_mail::mail::dedup_key::DEDUP_KEY, "7".repeat(64)),
     ]
 }
 

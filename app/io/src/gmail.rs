@@ -10,7 +10,7 @@ use std::time::Duration;
 use base64::Engine as _;
 use serde::Deserialize;
 use suzatary_base::capability::Secret;
-use suzatary_core::mail::older::Matched;
+use suzatary_triage::mail::older::Matched;
 
 use crate::http::{Http, Req};
 use crate::tokens::{Fresh, Grant};

@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::watch::{self, Days, On, Part, Pattern};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_triage::mail::watch::{self, Days, On, Part, Pattern};
 
 /// Watch for a message the owner expects, and push to their phone when it syncs.
 pub struct WatchMail;

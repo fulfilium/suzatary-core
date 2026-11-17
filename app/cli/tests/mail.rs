@@ -6,8 +6,8 @@
 mod common;
 
 use common::Fakes;
-use suzatary_core::mail::{MailLink, MailMessage, MailRow};
 use suzatary_held::message_part::MailHeader;
+use suzatary_mail::mail::{MailLink, MailMessage, MailRow};
 
 fn a_row(hash: &str, account: &str) -> MailRow {
     MailRow {
@@ -18,7 +18,7 @@ fn a_row(hash: &str, account: &str) -> MailRow {
         date: None,
         container: "inbox".to_owned(),
         account: account.to_owned(),
-        disposition: suzatary_core::mail::Disposed::Undecided,
+        disposition: suzatary_mail::mail::Disposed::Undecided,
         held: suzatary_held::held_value::Kinds::empty(),
     }
 }
@@ -113,7 +113,10 @@ fn every_reading_tolerates_a_message_no_longer_stored() {
         .as_str()
         .unwrap_or_default()
         .to_owned();
-    assert!(said.starts_with(suzatary_core::mail::gone::SAID), "{said}");
+    assert!(
+        said.starts_with(suzatary_triage::mail::gone::SAID),
+        "{said}"
+    );
     assert!(
         said.contains("“"),
         "the subject a todo recorded is named: {said}"
@@ -123,7 +126,7 @@ fn every_reading_tolerates_a_message_no_longer_stored() {
     assert!(
         common::body_json(&mut thread)["error"]
             .as_str()
-            .is_some_and(|said| said.starts_with(suzatary_core::mail::gone::SAID))
+            .is_some_and(|said| said.starts_with(suzatary_triage::mail::gone::SAID))
     );
     let todo = common::get(&format!("{base}/api/todo/email-harrow"));
     assert_eq!(common::status(&todo), 200, "the todo citing it still reads");

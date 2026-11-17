@@ -2,12 +2,12 @@ use chrono::NaiveDate;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::mail::imap::window_start;
-use crate::mail::older::{Older, OlderQuery, Range};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_mail::mail::imap::window_start;
+use suzatary_triage::mail::older::{Older, OlderQuery, Range};
 
 /// Search the mail servers for mail older than the routine sync keeps, and pull what matched.
 pub struct SearchOlder;
@@ -46,7 +46,7 @@ impl Verb for SearchOlder {
         let query: OlderQuery =
             args.query
                 .parse()
-                .map_err(|failed: crate::mail::older::QueryError| {
+                .map_err(|failed: suzatary_triage::mail::older::QueryError| {
                     Refusal::bad_request(format!("query: {failed}"))
                 })?;
         let since = NaiveDate::parse_from_str(args.since.trim(), "%Y-%m-%d").map_err(|_| {
@@ -101,13 +101,13 @@ mod tests {
 
     use super::*;
     use crate::deployment::Deployment;
-    use crate::mail::mailbox::{Mailbox, Query};
-    use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
-    use crate::mail::older_mail::OlderMail;
     use crate::secretary::Secretary;
     use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_held::mail_error::MailError;
+    use suzatary_mail::mail::mailbox::{Mailbox, Query};
+    use suzatary_triage::mail::older::{AccountOlder, Found, Matched, Outcome};
+    use suzatary_triage::mail::older_mail::OlderMail;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]
@@ -154,7 +154,7 @@ mod tests {
             _: Option<&str>,
             _: usize,
             _: Option<suzatary_base::capability::Datetime>,
-        ) -> Result<Vec<crate::mail::MailRow>, MailError> {
+        ) -> Result<Vec<suzatary_mail::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
         fn search(
@@ -163,28 +163,39 @@ mod tests {
             _: Option<&str>,
             _: usize,
             _: Option<suzatary_base::capability::Datetime>,
-        ) -> Result<Vec<crate::mail::MailRow>, MailError> {
+        ) -> Result<Vec<suzatary_mail::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
-        fn message(&self, id: &str) -> Result<crate::mail::MailMessage, MailError> {
+        fn message(&self, id: &str) -> Result<suzatary_mail::mail::MailMessage, MailError> {
             Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })
         }
-        fn thread(&self, _: &str, _: usize) -> Result<Vec<crate::mail::MailMessage>, MailError> {
+        fn thread(
+            &self,
+            _: &str,
+            _: usize,
+        ) -> Result<Vec<suzatary_mail::mail::MailMessage>, MailError> {
             Ok(Vec::new())
         }
-        fn attachments(&self, _: &str) -> Result<Vec<crate::mail::AttachmentMeta>, MailError> {
+        fn attachments(
+            &self,
+            _: &str,
+        ) -> Result<Vec<suzatary_mail::mail::AttachmentMeta>, MailError> {
             Ok(Vec::new())
         }
-        fn stored(&self, id: &str, _: u64) -> Result<crate::mail::Stored, MailError> {
+        fn stored(&self, id: &str, _: u64) -> Result<suzatary_mail::mail::Stored, MailError> {
             Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })
         }
-        fn attachment(&self, id: &str, _: &str) -> Result<crate::mail::AttachmentFile, MailError> {
+        fn attachment(
+            &self,
+            id: &str,
+            _: &str,
+        ) -> Result<suzatary_mail::mail::AttachmentFile, MailError> {
             Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),

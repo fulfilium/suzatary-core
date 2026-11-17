@@ -701,11 +701,11 @@ impl Digest {
     /// ([`digest::read`]), every candidate of every node and every call, so any object the
     /// history gains that moves a register, or counts a call, moves the name.
     #[must_use]
-    pub fn name(&self) -> crate::rule::ReadingName {
+    pub fn name(&self) -> suzatary_triage::rule::ReadingName {
         let tree = self
             .tree()
             .map(|tree| digest::read(tree, |node| self.summarized(node)));
-        crate::rule::ReadingName::of(
+        suzatary_triage::rule::ReadingName::of(
             tree.iter()
                 .chain(
                     self.said

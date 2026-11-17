@@ -6,8 +6,6 @@
 //! the same object; a new failure after a success is a new act.
 
 use crate::deployment::Deployment;
-use crate::health::SourceKey;
-use crate::health::{Instant, Reading};
 use crate::secretary::changes::{self, Act, Changeset};
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
@@ -15,6 +13,8 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::escape_markup;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::Refusal;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::{Instant, Reading};
 use suzatary_record::todo::{Price, TodoFields};
 
 /// What the proposed todo is priced: an account that does not sync hides its mail from triage,
@@ -156,27 +156,32 @@ mod tests {
     /// A register holding one account that last synced `hours` before the clock.
     struct FailingFor(i64);
 
-    impl crate::health::Register<SourceKey> for FailingFor {
+    impl suzatary_health::health::Register<SourceKey> for FailingFor {
         fn healths(
             &self,
-        ) -> Result<crate::health::Healths<SourceKey>, suzatary_store::store::StoreError> {
+        ) -> Result<suzatary_health::health::Healths<SourceKey>, suzatary_store::store::StoreError>
+        {
             use suzatary_base::capability::Clock as _;
             let now = prodrome_core::fpl::instant_of(suzatary_base::capability::Nothing.now());
-            let row = |ok| crate::mail::sync_report::SyncReport {
+            let row = |ok| suzatary_mail::mail::sync_report::SyncReport {
                 unheld: None,
-                synced: vec![crate::mail::sync_report::AccountSync {
-                    account: crate::mail::account_email::AccountEmail::new("ada@hotmail.test")
-                        .expect("an address"),
+                synced: vec![suzatary_mail::mail::sync_report::AccountSync {
+                    account: suzatary_mail::mail::account_email::AccountEmail::new(
+                        "ada@hotmail.test",
+                    )
+                    .expect("an address"),
                     outcome: ok,
                     tail: "IMAP: not connected".to_owned(),
                 }],
                 notmuch: String::new(),
             };
             let at = |hours| now - chrono::Duration::hours(hours);
-            let failed = crate::outcome::Outcome::Failed(crate::mail::fault::Fault::Unclassified);
-            let healths = crate::health::Healths::of_sync;
+            let failed = suzatary_mail::outcome::Outcome::Failed(
+                suzatary_mail::mail::fault::Fault::Unclassified,
+            );
+            let healths = suzatary_health::health::Healths::of_sync;
             Ok(
-                healths(&row(crate::outcome::Outcome::Succeeded), at(self.0))
+                healths(&row(suzatary_mail::outcome::Outcome::Succeeded), at(self.0))
                     .join(&healths(&row(failed), at(1))),
             )
         }

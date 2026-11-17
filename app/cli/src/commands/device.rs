@@ -11,7 +11,7 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
-use suzatary_core::mail::dedup_key::DEDUP_KEY;
+use suzatary_mail::mail::dedup_key::DEDUP_KEY;
 use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Trust};
 
 use super::store_of;
@@ -285,7 +285,7 @@ pub(crate) fn kept_or_minted(
     };
     // In this order, so a store that fails on the agent's key has kept or minted the box's.
     let (boxed, agent, dedup) = (seed(BOX_KEY)?, seed(AGENT_KEY)?, seed(DEDUP_KEY)?);
-    suzatary_core::mail::dedup_key::DedupKey::of(&dedup)?;
+    suzatary_mail::mail::dedup_key::DedupKey::of(&dedup)?;
     let root = prodrome_core::sign::Secret::new(boxed.expose())
         .map_err(|_| anyhow::anyhow!("{BOX_KEY} is not a key's seed"))?
         .public();

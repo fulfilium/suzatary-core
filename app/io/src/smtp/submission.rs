@@ -18,7 +18,7 @@ use rustls::crypto::{WebPkiSupportedAlgorithms, verify_tls12_signature, verify_t
 use rustls::{CertificateError, DigitallySignedStruct, OtherError, SignatureScheme};
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
 use suzatary_base::capability::Secret;
-use suzatary_core::mail::send::{SendError, Step};
+use suzatary_mail::mail::send::{SendError, Step};
 
 /// The Bridge's address, its pinned certificate, and the per-read/write timeout.
 pub(super) struct Server {
@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn a_failure_at_each_step_says_whether_the_message_may_have_gone() {
-        use suzatary_core::mail::send::Delivery;
+        use suzatary_mail::mail::send::Delivery;
         let cases = [
             (Stop::Refuse(Step::Connect), Some(Step::Connect)),
             (Stop::Drop(Step::Connect), Some(Step::Connect)),
@@ -685,8 +685,8 @@ mod tests {
     #[test]
     fn the_bridge_keeps_every_transport_law_behind_a_fake_bridge() {
         use suzatary_core::conformance::transport::{Case, check};
-        use suzatary_core::mail::send::{Composed, Outgoing};
-        use suzatary_core::mail::transport::Delivered;
+        use suzatary_mail::mail::send::{Composed, Outgoing};
+        use suzatary_mail::mail::transport::Delivered;
 
         let listener = TcpListener::bind("127.0.0.1:0").expect("a local port");
         let address = listener.local_addr().expect("its address");

@@ -3,10 +3,10 @@
 
 use suzatary_core::calendar::When;
 use suzatary_core::google::{NewEvent, Scope};
-use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::secretary::acts::Act;
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sending::performs;
+use suzatary_mail::mail::address::EmailAddress;
 use suzatary_signatures::signatures::ActHeaders;
 use suzatary_signatures::signatures::Seat;
 use suzatary_signatures::signatures::Tap;

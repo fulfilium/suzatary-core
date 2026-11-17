@@ -20,8 +20,6 @@ use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::mail;
-use suzatary_core::mail::mailbox::{Mailbox, Query};
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
@@ -32,6 +30,8 @@ use suzatary_core::wire::lines::{
     Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
     SkeletonNode, SkeletonPayload, StoredObject,
 };
+use suzatary_mail::mail;
+use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_store::store::Prodrome;
 use suzatary_store::wire::store::SinceRead;
 use suzatary_todo::reading;
@@ -454,7 +454,7 @@ fn gone(chain: &ChainPolicy, set: &ChainSet<'_>, id: &str) -> Result<String, Ref
                 mail::sourced_from(cited, id) || mail::sourced_from(id, cited)
             })
     });
-    Ok(suzatary_core::mail::gone::Gone {
+    Ok(suzatary_triage::mail::gone::Gone {
         subject: source.map(|source| source.subject.as_str()),
         sender: source.map(|source| source.sender.as_str()),
     }
@@ -474,7 +474,7 @@ pub fn thread(
     let found = mail.thread(id, limit).map_err(|e| match e {
         suzatary_held::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
             "{}: conversation {}",
-            suzatary_core::mail::gone::SAID,
+            suzatary_triage::mail::gone::SAID,
             shown(id)
         )),
         other => Refusal::internal(other.to_string()),
@@ -482,7 +482,7 @@ pub fn thread(
     if found.is_empty() {
         return Err(Refusal::not_found(format!(
             "{}: conversation {}",
-            suzatary_core::mail::gone::SAID,
+            suzatary_triage::mail::gone::SAID,
             shown(id)
         )));
     }
@@ -2133,7 +2133,7 @@ mod tests {
 
         fn mail_grants(
             &self,
-            account: &suzatary_core::mail::account::MailAccount,
+            account: &suzatary_mail::mail::account::MailAccount,
         ) -> suzatary_core::secrets::MailGrants {
             self.grants
                 .get(account.email.as_str())
@@ -2143,7 +2143,7 @@ mod tests {
 
         fn google_grant(
             &self,
-            _: &suzatary_core::mail::address::EmailAddress,
+            _: &suzatary_mail::mail::address::EmailAddress,
         ) -> suzatary_core::google::Held {
             suzatary_core::google::Held::NotSignedIn
         }
@@ -2195,14 +2195,14 @@ mod tests {
 
         fn mail_grants(
             &self,
-            account: &suzatary_core::mail::account::MailAccount,
+            account: &suzatary_mail::mail::account::MailAccount,
         ) -> suzatary_core::secrets::MailGrants {
             self.0.mail_grants(account)
         }
 
         fn google_grant(
             &self,
-            account: &suzatary_core::mail::address::EmailAddress,
+            account: &suzatary_mail::mail::address::EmailAddress,
         ) -> suzatary_core::google::Held {
             self.0.google_grant(account)
         }
@@ -2216,7 +2216,7 @@ mod tests {
         deployment: Deployment,
         settables: suzatary_core::settings::Settables,
         channels: Vec<suzatary_core::connect::Channel>,
-        accounts: suzatary_core::mail::account::Roster,
+        accounts: suzatary_mail::mail::account::Roster,
         jobs: Vec<suzatary_core::settings::overview::ModelJob>,
         plugins: Vec<suzatary_core::plugin::Manifest>,
         build: suzatary_core::settings::overview::Build,
@@ -2226,16 +2226,16 @@ mod tests {
         fn new() -> Self {
             let channels = suzatary_core::connect::Channel::ALL.to_vec();
             let plugins = vec![suzatary_core::settings::overview::calendar()];
-            let account = |email: &str, sync| suzatary_core::mail::account::MailAccount {
-                email: suzatary_core::mail::account_email::AccountEmail::new(email)
+            let account = |email: &str, sync| suzatary_mail::mail::account::MailAccount {
+                email: suzatary_mail::mail::account_email::AccountEmail::new(email)
                     .expect("a lower-case address"),
                 subdir: email.replace(['@', '.'], "-"),
                 sync,
             };
             let ms =
-                suzatary_core::mail::account::Sync::MsImap(suzatary_core::mail::account::MsImap {
-                    authority: suzatary_core::mail::account::Authority::Organizations,
-                    inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                suzatary_mail::mail::account::Sync::MsImap(suzatary_mail::mail::account::MsImap {
+                    authority: suzatary_mail::mail::account::Authority::Organizations,
+                    inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                     sent_folder: "Sent Items".to_owned(),
                 });
             let chain = ChainPolicy {
@@ -2266,10 +2266,10 @@ mod tests {
                     None,
                     &plugins,
                 ),
-                accounts: suzatary_core::mail::account::Roster::new(vec![
+                accounts: suzatary_mail::mail::account::Roster::new(vec![
                     account(
                         "ada@example.test",
-                        suzatary_core::mail::account::Sync::Gmail,
+                        suzatary_mail::mail::account::Sync::Gmail,
                     ),
                     account("ada@university.example", ms),
                 ])
@@ -2315,7 +2315,7 @@ mod tests {
                 reach: &suzatary_core::connect::PLAIN,
             };
             let calendar = BTreeMap::from([(
-                suzatary_core::health::plugin::PluginName::parse("ics").expect("a name"),
+                suzatary_health::health::plugin::PluginName::parse("ics").expect("a name"),
                 suzatary_core::settings::overview::Store::Calendar,
             )]);
             overview(
@@ -2326,8 +2326,8 @@ mod tests {
                     self.accounts.accounts(),
                 ),
                 suzatary_core::settings::overview::Registers {
-                    health: &suzatary_core::health::Healths::default(),
-                    answered: &suzatary_core::health::Healths::default(),
+                    health: &suzatary_health::health::Healths::default(),
+                    answered: &suzatary_health::health::Healths::default(),
                     plugins: &calendar,
                     pushes: None,
                 },

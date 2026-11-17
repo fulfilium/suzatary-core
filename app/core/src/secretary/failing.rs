@@ -14,14 +14,14 @@ use chrono::Duration;
 
 use crate::calendar::CalendarName;
 use crate::connect::{Connection, Declared, Key, Step, Table};
-use crate::health::SourceKey;
-use crate::health::{Failure, Remedy};
-use crate::health::{Health, Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::Proposal;
 use crate::settings::{Settable, Settables};
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::{Failure, Remedy};
+use suzatary_health::health::{Health, Healths, Instant, Reading};
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for
 /// removal.
@@ -312,11 +312,11 @@ fn quiet_calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::health::Outcome;
     use crate::secretary::inbox::{self, Fold};
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::proposer::Proposer;
     use crate::stores::InMemory;
+    use suzatary_health::health::Outcome;
 
     fn at(hour: u32) -> Instant {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
@@ -517,8 +517,8 @@ mod tests {
     /// rule already asks for, for one missing part, is that card.
     #[test]
     fn a_google_accounts_two_sources() {
-        let bea =
-            crate::mail::account_email::AccountEmail::new("bea@example.test").expect("an address");
+        let bea = suzatary_mail::mail::account_email::AccountEmail::new("bea@example.test")
+            .expect("an address");
         let (mail, calendars) = (
             SourceKey::Mail(bea.clone()),
             SourceKey::GoogleCalendar(bea.clone()),

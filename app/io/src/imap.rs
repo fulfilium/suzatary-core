@@ -1,5 +1,5 @@
 //! Microsoft's mailbox over IMAP and a maildir to land it in: [`Outlook`] and [`Folder`]
-//! interpret `suzatary_core::mail::imap`'s `Session` and [`Maildir`]. They keep the core's
+//! interpret `suzatary_mail::mail::imap`'s `Session` and [`Maildir`]. They keep the core's
 //! promises: UIDs sorted, reads peeked, folders quoted once.
 //!
 //! The stream is this workspace's own rustls, not the crate's `rustls-tls`, which pins an older
@@ -16,8 +16,8 @@ use std::time::Duration;
 
 use crate::present::Present as _;
 use suzatary_base::capability::ImapToken;
-use suzatary_core::mail::idle::Wake;
-use suzatary_core::mail::imap::{ImapError, Maildir, Selected};
+use suzatary_mail::mail::idle::Wake;
+use suzatary_mail::mail::imap::{ImapError, Maildir, Selected};
 
 /// The SASL `XOAUTH2` initial response, unencoded: `Client::authenticate` base64-encodes it.
 #[must_use]
@@ -78,7 +78,7 @@ impl imap::extensions::idle::SetReadTimeout for TlsStream {
     }
 }
 
-/// [`suzatary_core::mail::imap::Session`] against Microsoft's IMAP server, connected by hand
+/// [`suzatary_mail::mail::imap::Session`] against Microsoft's IMAP server, connected by hand
 /// because `imap::ClientBuilder` builds only TLS stacks this crate does not enable.
 pub struct Outlook<S: Read + Write = TlsStream> {
     session: imap::Session<S>,
@@ -115,7 +115,7 @@ impl Outlook {
 
     /// `IDLE`, blocking until the mailbox changes or `renew_after` elapses; only
     /// `EXISTS`/`RECENT` wake it. The crate's own keepalive is off, so [`Wake::TimedOut`]
-    /// returns and [`suzatary_core::mail::idle::after`] decides whether to re-issue IDLE. On an
+    /// returns and [`suzatary_mail::mail::idle::after`] decides whether to re-issue IDLE. On an
     /// error the caller reconnects.
     pub fn watch(&mut self, renew_after: Duration) -> Result<Wake, ImapError> {
         let outcome = self
@@ -209,7 +209,7 @@ pub(crate) fn authenticated(
     Ok(session)
 }
 
-impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
+impl<S: Read + Write> suzatary_mail::mail::imap::Session for Outlook<S> {
     fn list(&mut self) -> Result<Vec<String>, ImapError> {
         let names = self
             .session
@@ -365,7 +365,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
 
-    use suzatary_core::mail::imap::{INBOX, Pull, Session, SyncState, maildir_name, pull};
+    use suzatary_mail::mail::imap::{INBOX, Pull, Session, SyncState, maildir_name, pull};
 
     use super::*;
 

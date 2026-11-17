@@ -7,10 +7,10 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::mail::{MailMessage, MailRow};
 use suzatary_core::secretary::proposal::Style;
 use suzatary_held::held_value::{Handle, Reopened, Reveal, Shown};
 use suzatary_held::mail_error::MailError;
+use suzatary_mail::mail::{MailMessage, MailRow};
 
 /// A synthetic SSN no person holds, as the form writes it and as its copy does.
 const SSN: &str = "000-12-3456";
@@ -67,7 +67,7 @@ fn masked() -> MailMessage {
             date: None,
             container: "inbox".to_owned(),
             account: "ada@example.com".to_owned(),
-            disposition: suzatary_core::mail::Disposed::Undecided,
+            disposition: suzatary_mail::mail::Disposed::Undecided,
             held: suzatary_held::held_value::Kinds::one(suzatary_held::redact::Kind::Ssn),
         },
         thread: "000000000000c3fc".to_owned(),

@@ -49,7 +49,7 @@ impl Settables {
         coding: Option<&connect::Coding>,
         (plugins, accounts): (
             &[crate::plugin::Manifest],
-            &[crate::mail::account::MailAccount],
+            &[suzatary_mail::mail::account::MailAccount],
         ),
         repos: &crate::repos::Declared,
     ) -> Self {
@@ -93,8 +93,8 @@ impl Settables {
     /// The Google client and each account's grant, each asked for by its own card: any account
     /// may hold a grant for its Google calendar, however its mail is read.
     #[must_use]
-    pub fn google(accounts: &[crate::mail::account::MailAccount]) -> Self {
-        let addresses: Vec<&crate::mail::address::EmailAddress> = accounts
+    pub fn google(accounts: &[suzatary_mail::mail::account::MailAccount]) -> Self {
+        let addresses: Vec<&suzatary_mail::mail::address::EmailAddress> = accounts
             .iter()
             .map(|account| account.email.address())
             .collect();
@@ -256,7 +256,7 @@ pub trait Verify {
 /// Reads a source once, when an act makes it readable; held in no capability record.
 pub trait Checks {
     /// Read `source` once and join the result into its health.
-    fn check(&self, source: &crate::health::SourceKey);
+    fn check(&self, source: &suzatary_health::health::SourceKey);
 }
 
 /// Edits the instance file; held in no capability bundle.
@@ -276,8 +276,8 @@ pub trait Edits: Configuration {
     /// Lets `plugin` reach `origin`; idempotent.
     fn add_origin(
         &self,
-        plugin: &crate::health::plugin::PluginName,
-        origin: &crate::health::plugin::Origin,
+        plugin: &suzatary_health::health::plugin::PluginName,
+        origin: &suzatary_health::health::plugin::Origin,
     ) -> Result<(), EditError>;
 }
 
@@ -298,7 +298,7 @@ pub enum EditError {
     Malformed(String),
     /// The connection algebra refused the edit, which touched nothing.
     #[error(transparent)]
-    Connection(#[from] crate::health::Refused),
+    Connection(#[from] suzatary_health::health::Refused),
 }
 
 #[cfg(test)]

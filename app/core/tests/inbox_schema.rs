@@ -15,13 +15,13 @@ use prodrome_core::policy::Everything;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
-use suzatary_core::health::plugin::PluginName;
 use suzatary_core::secretary::inbox::{self, Asked, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use suzatary_core::secretary::phase::Phase;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_health::health::plugin::PluginName;
 
 type Store = EventStore<InboxEvent, Everything>;
 
@@ -118,7 +118,7 @@ fn a_response() -> impl Strategy<Value = Responded> {
         }),
         (1..4_u32).prop_map(|attempt| Responded::Tried {
             attempt,
-            tried: Tried::Lacks(suzatary_core::mail::lacking::Lacking::GoogleClient),
+            tried: Tried::Lacks(suzatary_mail::mail::lacking::Lacking::GoogleClient),
         }),
         (1..4_u32).prop_map(|attempt| Responded::Tried {
             attempt,

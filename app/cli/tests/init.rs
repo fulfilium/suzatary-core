@@ -313,7 +313,7 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
             suzatary_core::cast::keys::AGENT,
         ),
         (
-            suzatary_core::mail::dedup_key::DEDUP_KEY,
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
             suzatary_core::cast::keys::DEDUP,
         ),
     ]);

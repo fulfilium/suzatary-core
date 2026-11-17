@@ -11,8 +11,8 @@ use suzatary_core::google::{
     AccessToken, Client, ClientId, ClientSecret, Code, Endpoints, Exchanged, KeptGrant, NewEvent,
     RedirectUri, RefreshToken, Verifier,
 };
-use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::oauth::{NeedsLogin, OauthError, Silent};
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::oauth::{NeedsLogin, OauthError, Silent};
 
 use crate::http::{Http, HttpError, Req, Ureq};
 use crate::secrets::{Resolves, SecretError};
@@ -299,11 +299,11 @@ impl NotReady {
     pub fn lacking(
         self,
         account: &EmailAddress,
-        grant: suzatary_core::mail::lacking::Grant,
-    ) -> Result<suzatary_core::mail::lacking::Lacking, String> {
+        grant: suzatary_mail::mail::lacking::Grant,
+    ) -> Result<suzatary_mail::mail::lacking::Lacking, String> {
         match self {
-            NotReady::NoClient => Ok(suzatary_core::mail::lacking::Lacking::GoogleClient),
-            NotReady::NeedsLogin(_) => Ok(suzatary_core::mail::lacking::Lacking::Grant {
+            NotReady::NoClient => Ok(suzatary_mail::mail::lacking::Lacking::GoogleClient),
+            NotReady::NeedsLogin(_) => Ok(suzatary_mail::mail::lacking::Lacking::Grant {
                 account: account.clone(),
                 grant,
             }),
@@ -313,11 +313,11 @@ impl NotReady {
 
     /// Its failure's class, which names its fix card.
     #[must_use]
-    pub fn class(&self) -> suzatary_core::mail::fault::Fault {
+    pub fn class(&self) -> suzatary_mail::mail::fault::Fault {
         match self {
-            NotReady::NoClient => suzatary_core::mail::fault::Fault::Unresolved,
-            NotReady::NeedsLogin(_) => suzatary_core::mail::fault::Fault::NeedsLogin,
-            NotReady::Failed(_) => suzatary_core::mail::fault::Fault::Unclassified,
+            NotReady::NoClient => suzatary_mail::mail::fault::Fault::Unresolved,
+            NotReady::NeedsLogin(_) => suzatary_mail::mail::fault::Fault::NeedsLogin,
+            NotReady::Failed(_) => suzatary_mail::mail::fault::Fault::Unclassified,
         }
     }
 }

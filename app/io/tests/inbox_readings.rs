@@ -13,7 +13,6 @@ use prodrome_core::fpl::mk_flat;
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::chains::ChainName;
-use suzatary_core::rule::Rule as _;
 use suzatary_core::secretary::inbox::{Fold, Object};
 use suzatary_core::secretary::inbox_event::Said;
 use suzatary_core::secretary::stamp::stamp;
@@ -22,6 +21,7 @@ use suzatary_io::objects::Objects;
 use suzatary_signatures::chain_set::ChainSet;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;
+use suzatary_triage::rule::Rule as _;
 
 /// The instant every reading is taken at: after every response in the frozen store, before the
 /// live device code's expiry.

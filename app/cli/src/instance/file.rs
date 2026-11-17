@@ -13,12 +13,12 @@ use suzatary_base::chains::ChainName;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_base::persona::Persona;
 use suzatary_core::connect::Coding;
-use suzatary_core::mail::account::Roster;
-use suzatary_core::mail::junk::ChurnList;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::plugin::Manifest;
 use suzatary_core::repos::Declared;
 use suzatary_core::web::AllowRule;
+use suzatary_mail::mail::account::Roster;
+use suzatary_triage::mail::junk::ChurnList;
 
 use super::{CodeRoot, DataRoot, Reserve};
 
@@ -556,7 +556,7 @@ mod text_map {
 mod junk {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use suzatary_core::mail::junk::{ChurnList, KeepList};
+    use suzatary_triage::mail::junk::{ChurnList, KeepList};
 
     #[derive(Deserialize, Serialize)]
     #[serde(deny_unknown_fields)]

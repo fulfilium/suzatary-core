@@ -9,11 +9,11 @@ use std::sync::LazyLock;
 use prodrome_core::event::TodoId;
 use regex::Regex;
 
-use crate::mail::corpus::{Corpus, CorpusError};
-use crate::mail::mailbox::Query;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::MailHash;
+use suzatary_mail::mail::mailbox::Query;
 use suzatary_record::record::{MarkupSource, Source};
+use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 
 /// A message's canonical hash, the same type a `mail:<hash>` reference validates.
 pub(crate) type MessageHash = MailHash;
@@ -290,9 +290,9 @@ pub fn candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::state::Decision;
-    use crate::mail::sync_report::SyncReport;
-    use crate::mail::verbs::{Marked, Show, Summary};
+    use suzatary_mail::mail::sync_report::SyncReport;
+    use suzatary_triage::mail::state::Decision;
+    use suzatary_triage::mail::verbs::{Marked, Show, Summary};
 
     fn dt(y: i32, m: u32, d: u32) -> Datetime {
         Datetime::new(y, m, d, 0, 0, 0, 0).expect("a real date")

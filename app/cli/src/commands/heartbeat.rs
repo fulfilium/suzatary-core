@@ -5,8 +5,8 @@ use std::path::Path;
 
 use clap::Subcommand;
 use suzatary_base::capability::Clock as _;
-use suzatary_core::mail::heartbeat::{Pass, Stage};
 use suzatary_io::pulse::Pulse;
+use suzatary_triage::mail::heartbeat::{Pass, Stage};
 
 use crate::instance::Instance;
 

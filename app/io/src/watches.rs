@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::mail::watch::{Line, WatchId};
+use suzatary_triage::mail::watch::{Line, WatchId};
 
 use crate::lines::{Codec, Layout, Lines};
 

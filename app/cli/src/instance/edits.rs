@@ -106,8 +106,8 @@ impl suzatary_core::settings::Edits for InstanceEdits {
 
     fn add_origin(
         &self,
-        plugin: &suzatary_core::health::plugin::PluginName,
-        origin: &suzatary_core::health::plugin::Origin,
+        plugin: &suzatary_health::health::plugin::PluginName,
+        origin: &suzatary_health::health::plugin::Origin,
     ) -> Result<(), suzatary_core::settings::EditError> {
         self.edit(|path, text| super::connections::add_origin(path, text, plugin, origin))
     }

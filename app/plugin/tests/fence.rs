@@ -21,8 +21,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use suzatary_base::capability::Secret;
-use suzatary_core::health::plugin::{CredentialName, MAX_FETCHES, MAX_SAID, Origin, Refusal, Said};
 use suzatary_core::plugin::{Manifest, admit};
+use suzatary_health::health::plugin::{
+    CredentialName, MAX_FETCHES, MAX_SAID, Origin, Refusal, Said,
+};
 use suzatary_io::http::Ureq;
 use suzatary_io::secrets::Resolves;
 use suzatary_plugin::{Budget, Effects, Host, LoadError, Run, RunError, Source};

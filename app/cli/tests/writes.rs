@@ -343,8 +343,10 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
                 walk.push(path);
                 continue;
             }
+            // The constructors' own file, and the law that mints a tap over a test chain.
             if path.extension().is_some_and(|e| e == "rs")
-                && !path.ends_with("app/core/src/mail/oauth.rs")
+                && !path.ends_with("app/mail/src/mail/oauth.rs")
+                && !path.ends_with("app/core/tests/oauth_tap.rs")
             {
                 let Ok(text) = std::fs::read_to_string(&path) else {
                     continue;

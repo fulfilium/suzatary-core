@@ -5,7 +5,7 @@
 //! `+inbox`; a folder on one list and not the other is synced but silently invisible to
 //! triage. Properties of the account model itself are `Roster::new`'s, pinned in the core.
 
-use suzatary_core::mail::account::Sync;
+use suzatary_mail::mail::account::Sync;
 
 /// The deployment's own file parses, and its roster passes `Roster::new`'s checks, so it holds
 /// no duplicate address or maildir folder.

@@ -5,9 +5,9 @@
 //! past the one it fired on and discharges the rule there. Order is declaration order, so an
 //! answer comes before the title that names it.
 
-use crate::rule::Rule;
 use crate::secretary::transcript::Transcript;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_triage::rule::Rule;
 
 /// One of the box's own rules over a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,10 +49,10 @@ impl Rule for Conversational {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rule::{Engine, Named};
     use crate::secretary::model::Turn;
     use crate::secretary::store::{Entry, Kind, Namer, Title};
     use crate::secretary::transcript;
+    use suzatary_triage::rule::{Engine, Named};
 
     fn id() -> ConversationId {
         ConversationId::new("2026-10-05-1").expect("a slug")

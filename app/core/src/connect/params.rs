@@ -1,9 +1,9 @@
 //! What a person chooses for one connection.
 
-use crate::health::{Label, Refused};
-use crate::mail::account::Authority;
-use crate::mail::address::EmailAddress;
 use suzatary_base::drive_path::DrivePath;
+use suzatary_health::health::{Label, Refused};
+use suzatary_mail::mail::account::Authority;
+use suzatary_mail::mail::address::EmailAddress;
 
 /// What a template reads, a function of the table it writes, so a template cannot read one
 /// shape and write another.

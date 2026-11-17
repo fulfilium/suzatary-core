@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 
 use super::BundlePath;
-use crate::health::SourceKey;
-use crate::health::plugin::{CredentialName, ManifestError, Origin, PluginName};
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::plugin::{CredentialName, ManifestError, Origin, PluginName};
 
 /// One `[[plugins]]` table, parsed: the origins it may reach and the credentials it may name.
 ///

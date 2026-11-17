@@ -1,9 +1,9 @@
 //! "Sign in with Google": one consent that connects a Google account's mail and calendars,
 //! as a sans-I/O state machine over the authorization-code grant with PKCE (RFC 6749 §4.1,
 //! RFC 7636, the practices of RFC 9700); `suzatary_io::oauth` is the transport, as it is for
-//! Microsoft's device-code flow in [`crate::mail::oauth`], whose request and answer shapes
-//! ([`FormPost`](crate::mail::oauth::FormPost), [`Answered`](crate::mail::oauth::Answered),
-//! [`OauthError`](crate::mail::oauth::OauthError), [`Silent`](crate::mail::oauth::Silent)) this
+//! Microsoft's device-code flow in [`suzatary_mail::mail::oauth`], whose request and answer shapes
+//! ([`FormPost`](suzatary_mail::mail::oauth::FormPost), [`Answered`](suzatary_mail::mail::oauth::Answered),
+//! [`OauthError`](suzatary_mail::mail::oauth::OauthError), [`Silent`](suzatary_mail::mail::oauth::Silent)) this
 //! reuses.
 //!
 //! Google grants Gmail and Calendar scopes through no device-code flow, so the consent page

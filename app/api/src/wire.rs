@@ -15,9 +15,9 @@ use suzatary_core::wire::topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
     MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
 };
-use suzatary_core::wire::triage::WatchesPayload;
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
 use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
+use suzatary_triage::wire::triage::WatchesPayload;
 
 /// `GET /api/chain`: every object in the linearisation's order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -258,7 +258,7 @@ pub enum BriefingDay {
 pub struct MailPage {
     #[serde(flatten)]
     #[ts(flatten)]
-    pub message: suzatary_core::mail::MailMessage,
+    pub message: suzatary_mail::mail::MailMessage,
     pub todos: Vec<Entry>,
 }
 
@@ -266,7 +266,7 @@ pub struct MailPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct InboxPayload {
     pub accounts: Vec<String>,
-    pub messages: Vec<suzatary_core::mail::MailRow>,
+    pub messages: Vec<suzatary_mail::mail::MailRow>,
 }
 
 /// `GET /api/mail/search`: a notmuch query, newest first.
@@ -274,7 +274,7 @@ pub struct InboxPayload {
 pub struct MailSearchPayload {
     pub q: String,
     pub accounts: Vec<String>,
-    pub messages: Vec<suzatary_core::mail::MailRow>,
+    pub messages: Vec<suzatary_mail::mail::MailRow>,
 }
 
 /// `GET /api/mail/thread/{id}`: oldest first.

@@ -6,9 +6,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::mail::AttachmentMeta;
 use suzatary_core::secretary::model::Turn;
 use suzatary_held::enclosed::Enclosure;
+use suzatary_mail::mail::AttachmentMeta;
 
 const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
@@ -16,8 +16,8 @@ const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 fn holding(id: &str) -> FakeMailbox {
     FakeMailbox::new().with_message(
         id,
-        suzatary_core::mail::MailMessage {
-            row: suzatary_core::mail::MailRow {
+        suzatary_mail::mail::MailMessage {
+            row: suzatary_mail::mail::MailRow {
                 hash: "a1b2c3d4e5f6a1b2".to_owned(),
                 id: id.to_owned(),
                 sender: "hr@example.test".to_owned(),
@@ -25,7 +25,7 @@ fn holding(id: &str) -> FakeMailbox {
                 date: None,
                 container: "inbox".to_owned(),
                 account: "ada@example.com".to_owned(),
-                disposition: suzatary_core::mail::Disposed::Undecided,
+                disposition: suzatary_mail::mail::Disposed::Undecided,
                 held: suzatary_held::held_value::Kinds::empty(),
             },
             thread: "000000000000c3fd".to_owned(),

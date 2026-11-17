@@ -8,8 +8,6 @@ use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::mail::corpus::{Corpus, CorpusError};
-use suzatary_core::mail::mailbox::Query;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::filed::TriageCards;
@@ -17,9 +15,11 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::stores::InMemory;
+use suzatary_mail::mail::mailbox::Query;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
+use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 
 fn deployment() -> Deployment {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -335,14 +335,14 @@ struct Forged;
 const FORGED: &str = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
 
 impl Corpus for Forged {
-    fn sync(&self) -> Result<suzatary_core::mail::sync_report::SyncReport, CorpusError> {
+    fn sync(&self) -> Result<suzatary_mail::mail::sync_report::SyncReport, CorpusError> {
         Corpus::sync(&Nothing)
     }
     fn queue(
         &self,
         _limit: Option<usize>,
-    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, CorpusError> {
-        Ok(vec![suzatary_core::mail::verbs::Summary {
+    ) -> Result<Vec<suzatary_triage::mail::verbs::Summary>, CorpusError> {
+        Ok(vec![suzatary_triage::mail::verbs::Summary {
             hash: FORGED.to_owned(),
             id: "forged-1@example.test".to_owned(),
             sender: "alerts@bank.example.test".to_owned(),
@@ -357,22 +357,22 @@ impl Corpus for Forged {
         &self,
         query: &Query,
         limit: Option<usize>,
-    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, CorpusError> {
+    ) -> Result<Vec<suzatary_triage::mail::verbs::Summary>, CorpusError> {
         Corpus::search(&Nothing, query, limit)
     }
-    fn show(&self, id: &str) -> Result<suzatary_core::mail::verbs::Show, CorpusError> {
+    fn show(&self, id: &str) -> Result<suzatary_triage::mail::verbs::Show, CorpusError> {
         Corpus::show(&Nothing, id)
     }
     fn mark(
         &self,
         hash: &str,
-        decision: suzatary_core::mail::state::Decision,
+        decision: suzatary_triage::mail::state::Decision,
         note: Option<&str>,
         native: Option<&str>,
-    ) -> Result<suzatary_core::mail::verbs::Marked, CorpusError> {
+    ) -> Result<suzatary_triage::mail::verbs::Marked, CorpusError> {
         Corpus::mark(&Nothing, hash, decision, note, native)
     }
-    fn last_sync(&self) -> Option<suzatary_core::mail::sync_report::SyncReport> {
+    fn last_sync(&self) -> Option<suzatary_mail::mail::sync_report::SyncReport> {
         None
     }
     fn last_triage_pass(&self) -> Option<String> {

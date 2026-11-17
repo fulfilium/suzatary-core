@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::health::{Instant, Reading};
 use crate::secrets::SecretState;
 use crate::settings::Help;
+use suzatary_health::health::{Instant, Reading};
 
 /// Where a line stands, ordered by how much it asks of the owner (the arms in that order), so
 /// [`Standing::join`] of a line's parts is the one that asks most; of two missing, both, and of
@@ -44,7 +44,7 @@ pub enum Standing {
         /// It has not succeeded since this instant, ISO 8601, UTC.
         since: String,
         /// Its class, which names its one fix.
-        class: crate::health::Failure,
+        class: suzatary_health::health::Failure,
         /// What the failure said, in words.
         words: String,
         /// When it last tried, ISO 8601, UTC.

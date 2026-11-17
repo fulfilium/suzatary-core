@@ -9,8 +9,6 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::health::plugin::{Origin, PluginName};
-use suzatary_core::mail::oauth::Consent;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::act_lines::ActLine;
 use suzatary_core::secretary::acts::Act;
@@ -30,9 +28,11 @@ use suzatary_core::secretary::transcript;
 use suzatary_core::secrets::Secrets;
 use suzatary_core::settings::{Edits, Settable, Settables, Writes};
 use suzatary_core::wire::topics as wire;
+use suzatary_health::health::plugin::{Origin, PluginName};
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_mail::mail::oauth::Consent;
 use suzatary_memory::secretary::erasure;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
@@ -657,7 +657,7 @@ pub struct Effectors<'a> {
     /// Edits the instance file.
     pub edits: &'a dyn Edits,
     /// Deletes what the box kept for a removed account.
-    pub forget: &'a dyn suzatary_core::mail::cache::Forget,
+    pub forget: &'a dyn suzatary_mail::mail::cache::Forget,
     /// Registers a device's key on every chain; `None` without a root.
     pub enrolling: Option<suzatary_signatures::signatures::Enrolling<'a>>,
     /// Opens a sign-in with Google.
@@ -801,12 +801,12 @@ enum Prepared<'p, 'c> {
         file: &'p Secret,
     },
     GoogleSignIn {
-        account: &'p suzatary_core::mail::address::EmailAddress,
+        account: &'p suzatary_mail::mail::address::EmailAddress,
         scopes: &'p suzatary_core::google::Scopes,
     },
     CalendarEvent {
         act: &'p Act,
-        account: &'p suzatary_core::mail::address::EmailAddress,
+        account: &'p suzatary_mail::mail::address::EmailAddress,
     },
 }
 
@@ -1211,7 +1211,7 @@ fn calendar_event(
         &ProposalId,
         &suzatary_core::secretary::proposer::Proposer,
     ),
-    (act, account): (&Act, &suzatary_core::mail::address::EmailAddress),
+    (act, account): (&Act, &suzatary_mail::mail::address::EmailAddress),
     consent: Consent,
 ) -> Performed {
     match google_account(edits, secrets, account) {
@@ -1244,10 +1244,10 @@ pub fn fix(
         .and_then(|answer| answer.response.lacking())
         .ok_or_else(|| Refusal::conflict("this card lacks nothing a tap connects now"))?;
     let held = match lacking {
-        suzatary_core::mail::lacking::Lacking::Grant { account, .. } => {
+        suzatary_mail::mail::lacking::Lacking::Grant { account, .. } => {
             caps.secretary.secrets.google_grant(account)
         }
-        suzatary_core::mail::lacking::Lacking::GoogleClient => {
+        suzatary_mail::mail::lacking::Lacking::GoogleClient => {
             suzatary_core::google::Held::NotSignedIn
         }
     };
@@ -1414,8 +1414,8 @@ enum Then {
     Check(PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold.
     Forget(
-        suzatary_core::mail::account::MailAccount,
-        suzatary_core::mail::removal::Removal,
+        suzatary_mail::mail::account::MailAccount,
+        suzatary_mail::mail::removal::Removal,
     ),
     Opened(ConversationId),
 }
@@ -1453,7 +1453,7 @@ fn afterwards(
         Some(Then::Check(plugin)) => {
             effectors
                 .checks
-                .check(&suzatary_core::health::SourceKey::Plugin(plugin));
+                .check(&suzatary_health::health::SourceKey::Plugin(plugin));
             Ok(())
         }
         Some(Then::Forget(account, removal)) => {
@@ -1728,7 +1728,7 @@ fn disconnected(
     let what = match (account, mail) {
         (Some(account), mail) => {
             let deleted = mail == KeptMail::Deleted;
-            match suzatary_core::mail::removal::Removal::of(account.microsoft().is_some(), deleted)
+            match suzatary_mail::mail::removal::Removal::of(account.microsoft().is_some(), deleted)
             {
                 Some(removal) => {
                     *then = Some(Then::Forget(account, removal));
@@ -2052,7 +2052,7 @@ fn forwarded(
 fn google_account(
     edits: &dyn Edits,
     (secrets, settables): (&dyn Secrets, &Settables),
-    account: &suzatary_core::mail::address::EmailAddress,
+    account: &suzatary_mail::mail::address::EmailAddress,
 ) -> Result<(), Tried> {
     let declared = edits.declared().map_err(|failed| Tried::NotSent {
         reason: format!("nothing was written: the instance file does not read ({failed})"),
@@ -2071,13 +2071,13 @@ fn google_account(
     if suzatary_core::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
         Ok(())
     } else if google_client_kept(secrets, settables).is_set() {
-        Err(Tried::Lacks(suzatary_core::mail::lacking::Lacking::Grant {
+        Err(Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
             account: account.clone(),
-            grant: suzatary_core::mail::lacking::Grant::GoogleCalendar,
+            grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
         }))
     } else {
         Err(Tried::Lacks(
-            suzatary_core::mail::lacking::Lacking::GoogleClient,
+            suzatary_mail::mail::lacking::Lacking::GoogleClient,
         ))
     }
 }

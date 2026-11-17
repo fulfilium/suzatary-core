@@ -168,7 +168,6 @@ pub fn heard_from_objects(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::address::EmailAddress;
     use crate::secretary::acts::Act;
     use crate::secretary::model::Turn;
     use crate::secretary::proposal::{Proposal, Reasons};
@@ -177,6 +176,7 @@ mod tests {
     use suzatary_base::capability::Datetime;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_base::reference::ProposalRef;
+    use suzatary_mail::mail::address::EmailAddress;
 
     use suzatary_store::store::Reads as _;
 

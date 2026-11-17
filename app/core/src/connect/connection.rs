@@ -6,11 +6,11 @@ use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use super::{AccountKind, Group, Params, Seen, Standing, Step, Table, Template, TemplateId};
-use crate::health::Refused;
-use crate::health::SourceKey;
-use crate::health::plugin::CredentialName;
-use crate::mail::account_email::AccountEmail;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use suzatary_health::health::Refused;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::plugin::CredentialName;
+use suzatary_mail::mail::account_email::AccountEmail;
 
 /// The model connection's key name: a deployment has one model.
 const MODEL_KEY: &str = "model";

@@ -34,9 +34,9 @@ pub struct ProposeEmailArgs {
     filing: FilingArgs,
 }
 
-/// One address, shaped by [`crate::mail::address::EmailAddress`], refused with its field name.
+/// One address, shaped by [`suzatary_mail::mail::address::EmailAddress`], refused with its field name.
 pub(super) fn address(text: &str, field: &str) -> Result<String, Refusal> {
-    crate::mail::address::EmailAddress::new(text)
+    suzatary_mail::mail::address::EmailAddress::new(text)
         .map(|address| address.as_str().to_owned())
         .map_err(|_| Refusal::bad_request(format!("{field} must be an email address")))
 }

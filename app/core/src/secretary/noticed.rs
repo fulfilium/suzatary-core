@@ -286,19 +286,19 @@ pub struct Seen<'a> {
     /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
-    pub answered: &'a crate::health::Healths<String>,
+    pub answered: &'a suzatary_health::health::Healths<String>,
     /// The sign-ins the box holds open.
     pub open: &'a [super::sign_in::SignInUrl],
     /// The connection tables now; `None` (unreadable) holds every card.
     pub declared: Option<&'a crate::connect::Declared>,
     /// Every source's results; `None` (unreadable) holds every card.
-    pub health: Option<&'a crate::health::Healths<crate::health::SourceKey>>,
+    pub health: Option<&'a suzatary_health::health::Healths<suzatary_health::health::SourceKey>>,
     /// The calendars with an occurrence within [`super::failing::quiet`] of now.
     pub heard: Option<&'a std::collections::BTreeSet<crate::calendar::CalendarName>>,
     /// Where the data repository pushes: its token is asked for only on GitHub.
     pub pushed: &'a crate::settings::remote::Pushed,
     /// Now, UTC.
-    pub now: crate::health::Instant,
+    pub now: suzatary_health::health::Instant,
     /// The Google sign-in callback, if the app's URL has an origin Google can return to.
     pub redirect: Option<&'a crate::google::RedirectUri>,
 }
@@ -599,7 +599,7 @@ mod tests {
 
     fn signing_in() -> Proposal {
         Proposal::Act(crate::secretary::acts::Act::Auth {
-            account: crate::mail::address::EmailAddress::new("ada@example.com")
+            account: suzatary_mail::mail::address::EmailAddress::new("ada@example.com")
                 .expect("a shaped address"),
         })
     }
@@ -717,12 +717,15 @@ mod tests {
 
         fn mail_grants(
             &self,
-            _account: &crate::mail::account::MailAccount,
+            _account: &suzatary_mail::mail::account::MailAccount,
         ) -> crate::secrets::MailGrants {
             crate::secrets::MailGrants::default()
         }
 
-        fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {
+        fn google_grant(
+            &self,
+            _: &suzatary_mail::mail::address::EmailAddress,
+        ) -> crate::google::Held {
             self.granted.clone().map_or(
                 crate::google::Held::NotSignedIn,
                 crate::google::Held::Signed,
@@ -759,10 +762,10 @@ mod tests {
             settables: &settables,
             secrets: store,
             model: "a-cli/large",
-            answered: &crate::health::Healths::default(),
+            answered: &suzatary_health::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
-            health: Some(&crate::health::Healths::default()),
+            health: Some(&suzatary_health::health::Healths::default()),
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &crate::settings::remote::Pushed::Nowhere,
             now: prodrome_core::fpl::instant_of(at(minute)),
@@ -791,7 +794,7 @@ mod tests {
             settables: &settables,
             secrets: &Store::default(),
             model: "a-cli/large",
-            answered: &crate::health::Healths::default(),
+            answered: &suzatary_health::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
             health: None,
@@ -923,10 +926,12 @@ mod tests {
             &declared.plugins,
         );
         let link = work.secrets().into_iter().next().expect("a link's secret");
-        let health = crate::health::Healths::one(
+        let health = suzatary_health::health::Healths::one(
             work.sources().into_iter().next().expect("a link's source"),
             prodrome_core::fpl::instant_of(at(0)),
-            crate::health::Outcome::Failed(crate::health::Failure::of_status(401)),
+            suzatary_health::health::Outcome::Failed(suzatary_health::health::Failure::of_status(
+                401,
+            )),
             "it answered 401",
         );
         let conversations = crate::secretary::conversations::InMemory::default();
@@ -936,7 +941,7 @@ mod tests {
                 settables: &settables,
                 secrets: store,
                 model: "a-cli/large",
-                answered: &crate::health::Healths::default(),
+                answered: &suzatary_health::health::Healths::default(),
                 open: &[],
                 declared: Some(&declared),
                 health: Some(&health),
@@ -1019,10 +1024,10 @@ mod tests {
                 settables: &settables,
                 secrets: store,
                 model: "a-cli/large",
-                answered: &crate::health::Healths::default(),
+                answered: &suzatary_health::health::Healths::default(),
                 open: &[],
                 declared: Some(&declared),
-                health: Some(&crate::health::Healths::default()),
+                health: Some(&suzatary_health::health::Healths::default()),
                 heard: Some(&std::collections::BTreeSet::new()),
                 pushed: &crate::settings::remote::Pushed::Nowhere,
                 now: prodrome_core::fpl::instant_of(at(minute)),

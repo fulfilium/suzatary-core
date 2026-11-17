@@ -29,7 +29,7 @@ pub fn acts(
     nodes: &[suzatary_record::record::Node],
     at: Datetime,
     untrusted: &prodrome_core::policy::Untrusted,
-    expiring: &[(Settable, crate::health::Instant)],
+    expiring: &[(Settable, suzatary_health::health::Instant)],
     (settings, category): (&str, &str),
 ) -> Result<Vec<Act>, Refusal> {
     let open = suzatary_todo::todos::open_todos(nodes, at, untrusted)?;
@@ -87,7 +87,7 @@ pub fn acts(
 pub fn write(
     chains: &[crate::secretary::Bound<'_>],
     deployment: &Deployment,
-    expiring: &[(Settable, crate::health::Instant)],
+    expiring: &[(Settable, suzatary_health::health::Instant)],
 ) -> Result<Vec<Hash>, Refusal> {
     let Some(bound) = crate::secretary::upkeep(chains, deployment)? else {
         return Ok(Vec::new());

@@ -11,15 +11,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail};
 use clap::Subcommand;
-use suzatary_core::mail::account::{AccountName, MailAccount, Sender};
-use suzatary_core::mail::corpus::Corpus as _;
-use suzatary_core::mail::idle;
-use suzatary_core::mail::imap::Session as _;
-use suzatary_core::mail::mailbox::Query;
-use suzatary_core::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
-use suzatary_core::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
-use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::transport::Transport as _;
 use suzatary_held::excerpt::Excerpt;
 use suzatary_held::message_part::Attachment;
 use suzatary_io::corpus::Operator;
@@ -28,6 +19,15 @@ use suzatary_io::mail_sync::{TRIAGE_UNIT, Timer};
 use suzatary_io::mailbox::Notmuch;
 use suzatary_io::oauth::TokenStore;
 use suzatary_io::sync::Syncer;
+use suzatary_mail::mail::account::{AccountName, MailAccount, Sender};
+use suzatary_mail::mail::idle;
+use suzatary_mail::mail::imap::Session as _;
+use suzatary_mail::mail::mailbox::Query;
+use suzatary_mail::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
+use suzatary_mail::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
+use suzatary_mail::mail::transport::Transport as _;
+use suzatary_triage::mail::corpus::Corpus as _;
+use suzatary_triage::mail::state::Decision;
 
 use crate::instance::Instance;
 
@@ -95,7 +95,7 @@ pub fn sync(path: &Path) -> anyhow::Result<()> {
 /// push failed is pushed again by the next sync.
 fn deliver_rings(instance: &Instance) {
     use suzatary_base::capability::Clock as _;
-    use suzatary_core::mail::watch;
+    use suzatary_triage::mail::watch;
     let watches = suzatary_io::watches::Watches::open(instance.local.watches());
     let now = || prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
     let owed = match watch::owed(&watches, now()) {
@@ -137,7 +137,7 @@ pub fn queue(path: &Path, args: &NewArgs) -> anyhow::Result<()> {
 /// A queue the corpus cannot answer is an error, which fails the pass loudly
 /// rather than reading as an empty inbox.
 pub fn gate(path: &Path) -> anyhow::Result<()> {
-    use suzatary_core::mail::triage::{Mailbox, Queue, Triage};
+    use suzatary_triage::mail::triage::{Mailbox, Queue, Triage};
     let instance = Instance::open(path)?;
     let rows = operator(&instance).queue(None)?;
     let report = suzatary_io::mail_sync::read_report(&instance.paths.last_sync)
@@ -150,7 +150,7 @@ pub fn gate(path: &Path) -> anyhow::Result<()> {
     }
     // Each pass is a fresh process: the memo that lasts is the dedup authority, whose
     // dispositions take what the last pass triaged out of the queue.
-    let Some((_, firing)) = suzatary_core::rule::Engine::new(vec![Triage]).due(&Mailbox, &queue)
+    let Some((_, firing)) = suzatary_triage::rule::Engine::new(vec![Triage]).due(&Mailbox, &queue)
     else {
         println!("{queue}");
         std::process::exit(3);
@@ -253,15 +253,15 @@ pub fn noise(path: &Path, args: &NoiseArgs) -> anyhow::Result<()> {
 pub(crate) fn silence(
     ledger: &suzatary_io::state::Ledger,
     sender: &str,
-) -> anyhow::Result<suzatary_core::mail::verbs::NoiseAdded> {
+) -> anyhow::Result<suzatary_triage::mail::verbs::NoiseAdded> {
     let known = ledger.read().map_err(anyhow::Error::msg)?;
     ledger
-        .write(&suzatary_core::mail::known::Known {
+        .write(&suzatary_triage::mail::known::Known {
             local: known.local.add_noise(sender),
             ..known
         })
         .map_err(anyhow::Error::msg)?;
-    Ok(suzatary_core::mail::verbs::NoiseAdded {
+    Ok(suzatary_triage::mail::verbs::NoiseAdded {
         noise_added: sender.to_lowercase(),
     })
 }
@@ -363,7 +363,7 @@ pub fn grants(
     instance: &Instance,
 ) -> Vec<(
     String,
-    Result<Vec<&'static str>, suzatary_core::mail::oauth::OauthError>,
+    Result<Vec<&'static str>, suzatary_mail::mail::oauth::OauthError>,
 )> {
     let store = tokens(instance);
     instance
@@ -436,7 +436,7 @@ pub fn deliver(
     out: &Outgoing,
     message_id: &str,
     at: i64,
-) -> Result<suzatary_core::mail::send::Sent, SendError> {
+) -> Result<suzatary_mail::mail::send::Sent, SendError> {
     match sender {
         Sender::Microsoft { email, .. } => {
             let account = instance
@@ -456,9 +456,9 @@ pub fn deliver(
                 .map_err(|failed| auth(failed.to_string()))?
                 .required()
                 .map_err(|_| {
-                    SendError::Ungranted(suzatary_core::mail::lacking::Lacking::Grant {
+                    SendError::Ungranted(suzatary_mail::mail::lacking::Lacking::Grant {
                         account: account.email.address().clone(),
-                        grant: suzatary_core::mail::lacking::Grant::MicrosoftSend,
+                        grant: suzatary_mail::mail::lacking::Grant::MicrosoftSend,
                     })
                 })?;
             suzatary_io::smtp::Microsoft {
@@ -483,11 +483,11 @@ pub fn deliver(
                 step: Step::Auth,
                 why,
             };
-            let account = suzatary_core::mail::address::EmailAddress::new(from)
+            let account = suzatary_mail::mail::address::EmailAddress::new(from)
                 .map_err(|refused| auth(refused.message().to_owned()))?;
             let token =
                 google_grants(instance).token(&account).map_err(|refused| {
-                    match refused.lacking(&account, suzatary_core::mail::lacking::Grant::GoogleSend)
+                    match refused.lacking(&account, suzatary_mail::mail::lacking::Grant::GoogleSend)
                     {
                         Ok(lacking) => SendError::Ungranted(lacking),
                         Err(words) => auth(words),

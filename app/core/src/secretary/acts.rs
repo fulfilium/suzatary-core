@@ -7,10 +7,10 @@
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use crate::mail::address::EmailAddress;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
+use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
 
@@ -107,8 +107,8 @@ pub enum Act {
     },
     /// Let a plugin reach one more origin, naming the origin and never the link.
     Grant {
-        plugin: crate::health::plugin::PluginName,
-        origin: crate::health::plugin::Origin,
+        plugin: suzatary_health::health::plugin::PluginName,
+        origin: suzatary_health::health::plugin::Origin,
     },
     /// Keep the box's Google Cloud client: the tap's value is its downloaded file, which travels
     /// only in the tap's body and is kept only when it lists `redirect`.
@@ -615,7 +615,7 @@ fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::address::EmailAddress;
+    use suzatary_mail::mail::address::EmailAddress;
 
     fn auth() -> Act {
         Act::Auth {

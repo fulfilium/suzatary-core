@@ -1,5 +1,5 @@
 //! A Microsoft account's Junk folder, read-only: the interpreter of
-//! `suzatary_core::mail::junk_folder::Junk`.
+//! `suzatary_triage::mail::junk_folder::Junk`.
 //!
 //! The folder is `EXAMINE`d and fetched with `BODY.PEEK`, never selected, and the token is minted
 //! silently or the read is [`JunkFailure::NeedsLogin`].
@@ -10,12 +10,12 @@ use std::path::PathBuf;
 use chrono::NaiveDate;
 use mail_parser::{HeaderName, Message, MessageParser, PartType};
 use suzatary_base::spelling::clip;
-use suzatary_core::mail::MAX_BODY_CHARS;
-use suzatary_core::mail::account::{MailAccount, Roster};
-use suzatary_core::mail::imap::imap_date;
-use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Listed, Uid, junk_folder};
-use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
-use suzatary_core::mail::oauth::{Imap, Silent};
+use suzatary_mail::mail::MAX_BODY_CHARS;
+use suzatary_mail::mail::account::{MailAccount, Roster};
+use suzatary_mail::mail::imap::imap_date;
+use suzatary_mail::mail::oauth::{Imap, Silent};
+use suzatary_triage::mail::junk::{ChurnList, JunkHeader, JunkMessage, Listed, Uid, junk_folder};
+use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
 
 use crate::imap::{IMAP_HOST, IMAP_PORT, TlsStream, authenticated};
 use crate::oauth::TokenStore;
@@ -309,7 +309,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use suzatary_core::cast::CAST;
-    use suzatary_core::mail::account::{Authority, MsImap, Sync};
+    use suzatary_mail::mail::account::{Authority, MsImap, Sync};
 
     use super::*;
 
@@ -476,17 +476,17 @@ mod tests {
     fn roster() -> Roster {
         Roster::new(vec![
             MailAccount {
-                email: suzatary_core::mail::account_email::AccountEmail::new(CAST.owner.email)
+                email: suzatary_mail::mail::account_email::AccountEmail::new(CAST.owner.email)
                     .expect("a lower-case address"),
                 subdir: "owner".to_owned(),
                 sync: Sync::MsImap(MsImap {
                     authority: Authority::Consumers,
-                    inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                    inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                     sent_folder: "Sent".to_owned(),
                 }),
             },
             MailAccount {
-                email: suzatary_core::mail::account_email::AccountEmail::new(CAST.accountant.email)
+                email: suzatary_mail::mail::account_email::AccountEmail::new(CAST.accountant.email)
                     .expect("a lower-case address"),
                 subdir: "gmail".to_owned(),
                 sync: Sync::Gmail,
@@ -528,7 +528,7 @@ mod tests {
         };
         let churn = ChurnList::new(
             ["offers.example.net"],
-            suzatary_core::mail::junk::KeepList::default(),
+            suzatary_triage::mail::junk::KeepList::default(),
         )
         .expect("a list");
         (OutlookJunk::new(&roster(), churn, None, fake), log)

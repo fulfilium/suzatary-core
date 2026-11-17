@@ -1,11 +1,6 @@
 use crate::agent::Agent;
 use crate::calendar::effect::Calendar;
 use crate::drive::Drive;
-use crate::mail::corpus::Corpus;
-use crate::mail::junk_folder::Junk;
-use crate::mail::mail_sync::MailSync;
-use crate::mail::mailbox::Mailbox;
-use crate::mail::older_mail::OlderMail;
 use crate::repositories::Repositories;
 use crate::repository::Repository;
 use crate::secretary::briefings::Briefings;
@@ -14,9 +9,14 @@ use crate::secrets::Secrets;
 use crate::weather::Weather;
 use crate::web::Web;
 use suzatary_base::capability::{Clock, Manuals};
+use suzatary_mail::mail::mail_sync::MailSync;
+use suzatary_mail::mail::mailbox::Mailbox;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Prodrome;
 use suzatary_todo::render::Render;
+use suzatary_triage::mail::corpus::Corpus;
+use suzatary_triage::mail::junk_folder::Junk;
+use suzatary_triage::mail::older_mail::OlderMail;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its
@@ -97,7 +97,7 @@ pub struct Secretary<'a> {
     pub sync: &'a dyn MailSync,
     /// Every source's health: each mail account's syncs, each plugin's runs and links, each
     /// Google account's calendars and the Drive's probes.
-    pub health: &'a dyn crate::health::Register<crate::health::SourceKey>,
+    pub health: &'a dyn suzatary_health::health::Register<suzatary_health::health::SourceKey>,
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
@@ -119,7 +119,7 @@ pub struct Secretary<'a> {
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
     pub configuration: &'a dyn crate::settings::Configuration,
     /// The watches on mail the owner expects; a watch's only act is the sync's push.
-    pub watches: &'a crate::mail::watch::Watches,
+    pub watches: &'a suzatary_triage::mail::watch::Watches,
 }
 
 impl<'a> Secretary<'a> {

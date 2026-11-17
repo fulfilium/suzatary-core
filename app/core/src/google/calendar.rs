@@ -11,7 +11,7 @@ use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime};
 
 use super::Endpoints;
 use crate::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
-use crate::mail::address::EmailAddress;
+use suzatary_mail::mail::address::EmailAddress;
 
 /// The calendar's schema: the text the calendar plugin declares (`app/plugin-ics/ics.schema`,
 /// which a test holds this to), so the calendar reads what this source writes as it reads the
@@ -402,8 +402,8 @@ pub fn insert_body(event: &NewEvent) -> serde_json::Value {
 /// its failures its health; any other account's exactly while its grant holds the calendars,
 /// however its mail is read, since the calendar is a fact about the grant and the mail is not.
 #[must_use]
-pub fn reads_calendars(sync: &crate::mail::account::Sync, held: &super::Held) -> bool {
-    use crate::mail::account::Sync;
+pub fn reads_calendars(sync: &suzatary_mail::mail::account::Sync, held: &super::Held) -> bool {
+    use suzatary_mail::mail::account::Sync;
     let granted =
         matches!(held, super::Held::Signed(parts) if parts.contains(super::Scope::Calendar));
     match sync {

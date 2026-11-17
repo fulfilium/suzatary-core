@@ -8,13 +8,13 @@ use suzatary_api::secretary::routes::Post;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::conversation::round::Ending;
-use suzatary_core::mail::send::{Composed, Outgoing};
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::proposal::Draft;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_held::excerpt::Excerpt;
 use suzatary_held::held_value::Filled;
 use suzatary_held::secretary::attached::Checked;
+use suzatary_mail::mail::send::{Composed, Outgoing};
 
 use crate::instance::Instance;
 use suzatary_memory::secretary::salted_text;
@@ -300,7 +300,7 @@ impl Acting {
 
     fn calendar_event(
         &self,
-        account: &suzatary_core::mail::address::EmailAddress,
+        account: &suzatary_mail::mail::address::EmailAddress,
         event: &suzatary_core::google::NewEvent,
     ) -> Performed {
         use suzatary_io::google::Inserted;
@@ -322,7 +322,7 @@ impl Acting {
             Err(failed) => {
                 return Performed::Tried(
                     match failed
-                        .lacking(account, suzatary_core::mail::lacking::Grant::GoogleCalendar)
+                        .lacking(account, suzatary_mail::mail::lacking::Grant::GoogleCalendar)
                     {
                         Ok(lacking) => Tried::Lacks(lacking),
                         Err(reason) => Tried::NotSent { reason },
@@ -390,7 +390,7 @@ impl suzatary_api::secretary::routes::Perform for Acting {
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
         act: &suzatary_core::secretary::acts::Act,
-        consent: suzatary_core::mail::oauth::Consent,
+        consent: suzatary_mail::mail::oauth::Consent,
     ) -> Performed {
         if let suzatary_core::secretary::acts::Act::SignIn { .. } = act {
             return self.sign_in(object);
@@ -510,10 +510,10 @@ fn begin_real(
     (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     object: &suzatary_core::secretary::inbox::ProposalId,
     act: &suzatary_core::secretary::acts::Act,
-    consent: suzatary_core::mail::oauth::Consent,
+    consent: suzatary_mail::mail::oauth::Consent,
 ) -> Performed {
-    use suzatary_core::mail::oauth::{Imap, Smtp};
     use suzatary_core::secretary::acts::Act;
+    use suzatary_mail::mail::oauth::{Imap, Smtp};
 
     let (account, sending) = match act {
         Act::Auth { account } => (account, false),
@@ -547,7 +547,7 @@ fn begin_real(
         .declared()
         .map_err(|failed| failed.to_string())
         .and_then(|declared| {
-            suzatary_core::mail::account::Roster::new(declared.accounts)
+            suzatary_mail::mail::account::Roster::new(declared.accounts)
                 .map_err(|refused| refused.to_string())
         }) {
         Ok(accounts) => accounts,
@@ -596,13 +596,13 @@ impl Flow<'_> {
     fn begin<P>(
         self,
         tokens: &suzatary_io::oauth::TokenStore,
-        consent: suzatary_core::mail::oauth::Consent,
-        mail_account: &suzatary_core::mail::account::MailAccount,
-        account: &suzatary_core::mail::address::EmailAddress,
+        consent: suzatary_mail::mail::oauth::Consent,
+        mail_account: &suzatary_mail::mail::account::MailAccount,
+        account: &suzatary_mail::mail::address::EmailAddress,
         named: String,
     ) -> Performed
     where
-        P: suzatary_core::mail::oauth::Protocol + Send + 'static,
+        P: suzatary_mail::mail::oauth::Protocol + Send + 'static,
         suzatary_io::oauth::Pending<P>: Send,
     {
         use suzatary_base::capability::Clock as _;
@@ -682,11 +682,11 @@ impl Flow<'_> {
     clippy::too_many_arguments,
     reason = "one value per thing the flow's own end needs, none of them optional"
 )]
-fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
+fn finish_act<P: suzatary_mail::mail::oauth::Protocol + Send + 'static>(
     pending: suzatary_io::oauth::Pending<P>,
     deadline_seconds: u64,
     object: &suzatary_core::secretary::inbox::ProposalId,
-    account: &suzatary_core::mail::address::EmailAddress,
+    account: &suzatary_mail::mail::address::EmailAddress,
     named: &str,
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
@@ -907,14 +907,14 @@ fn append_note(
 
 /// Append the triage heartbeat's alarm, if any; no model is needed.
 fn maybe_append_triage_alarm(
-    corpus: &dyn suzatary_core::mail::corpus::Corpus,
+    corpus: &dyn suzatary_triage::mail::corpus::Corpus,
     clock: &dyn suzatary_base::capability::Clock,
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_base::conversation_id::ConversationId,
 ) {
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
-    if let Some(line) = suzatary_core::mail::heartbeat::alarm(
+    if let Some(line) = suzatary_triage::mail::heartbeat::alarm(
         prodrome_core::fpl::instant_of(now),
         corpus.last_triage_pass().as_deref(),
         STALE_HOURS,
@@ -1132,7 +1132,7 @@ fn record(
     })
     .map_err(|failed| not_sent(&failed))?;
     // Fixed date, for byte-stable records.
-    let mime = suzatary_core::mail::send::build_mime(&out, "recorded@fixture", 1_788_912_000)
+    let mime = suzatary_mail::mail::send::build_mime(&out, "recorded@fixture", 1_788_912_000)
         .map_err(|failed| not_sent(&failed))?;
     let mut recorded = serde_json::to_value(draft).map_err(|failed| not_sent(&failed))?;
     if let Some(fields) = recorded.as_object_mut() {
@@ -2159,7 +2159,7 @@ fn ask_brief(
     wired: &Wired,
     chains: &[suzatary_core::secretary::Bound<'_>],
     id: &ConversationId,
-    limited: Option<suzatary_core::health::Limited>,
+    limited: Option<suzatary_health::health::Limited>,
 ) -> anyhow::Result<Option<suzatary_core::secretary::Answered>> {
     let caps = &wired.secretary();
     let Some(limited) = limited else {
@@ -2324,7 +2324,7 @@ pub const PAUSED: i32 = 3;
 /// Say the round did not start, and exit [`PAUSED`].
 fn paused(
     what: &str,
-    limited: &suzatary_core::health::Limited,
+    limited: &suzatary_health::health::Limited,
     json: bool,
     mut counts: serde_json::Value,
 ) -> ! {

@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use suzatary_base::capability::Datetime;
-use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
-use suzatary_core::mail::sync_report::SyncReport;
+use suzatary_mail::mail::mail_sync::{MailSync, SyncFailure, Synced};
+use suzatary_mail::mail::sync_report::SyncReport;
 
 use crate::present::Present as _;
 use crate::run::{Cmd, Ran, RunError, run};
@@ -115,7 +115,7 @@ fn instant(at: SystemTime) -> Option<Datetime> {
 #[cfg(test)]
 mod tests {
     use suzatary_base::capability::Clock as _;
-    use suzatary_core::mail::sync_report::AccountSync;
+    use suzatary_mail::mail::sync_report::AccountSync;
 
     use super::*;
 
@@ -131,9 +131,9 @@ mod tests {
         serde_json::to_string_pretty(&SyncReport {
             unheld: None,
             synced: vec![AccountSync {
-                account: suzatary_core::mail::account_email::AccountEmail::new("ada@example.test")
+                account: suzatary_mail::mail::account_email::AccountEmail::new("ada@example.test")
                     .expect("an address"),
-                outcome: suzatary_core::outcome::Outcome::Succeeded,
+                outcome: suzatary_mail::outcome::Outcome::Succeeded,
                 tail: tail.to_owned(),
             }],
             notmuch: "No new mail.".to_owned(),

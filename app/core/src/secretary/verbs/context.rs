@@ -107,12 +107,15 @@ mod tests {
         }
         fn mail_grants(
             &self,
-            _account: &crate::mail::account::MailAccount,
+            _account: &suzatary_mail::mail::account::MailAccount,
         ) -> crate::secrets::MailGrants {
             crate::secrets::MailGrants::default()
         }
 
-        fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {
+        fn google_grant(
+            &self,
+            _: &suzatary_mail::mail::address::EmailAddress,
+        ) -> crate::google::Held {
             crate::google::Held::NotSignedIn
         }
     }

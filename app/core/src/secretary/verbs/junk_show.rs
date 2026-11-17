@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::junk::Uid;
-use crate::mail::junk_folder::JunkFailure;
 use crate::secretary::verbs::not_a_junk_account;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_triage::mail::junk::Uid;
+use suzatary_triage::mail::junk_folder::JunkFailure;
 
 /// One Junk message in full.
 pub struct JunkShow;

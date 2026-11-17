@@ -3,9 +3,9 @@
 
 use proptest::prelude::*;
 use suzatary_core::conformance::transport::{Case, Law, check};
-use suzatary_core::mail::outbox::Outbox;
-use suzatary_core::mail::send::{Composed, Outgoing, SendError, Sent};
-use suzatary_core::mail::transport::Transport;
+use suzatary_mail::mail::outbox::Outbox;
+use suzatary_mail::mail::send::{Composed, Outgoing, SendError, Sent};
+use suzatary_mail::mail::transport::Transport;
 
 fn address() -> impl Strategy<Value = String> {
     "[a-z]{1,8}@[a-z]{1,8}\\.test"
@@ -92,7 +92,7 @@ impl Transport for Squeezes {
 }
 
 impl Squeezes {
-    fn delivered(&self) -> Vec<suzatary_core::mail::transport::Delivered> {
+    fn delivered(&self) -> Vec<suzatary_mail::mail::transport::Delivered> {
         self.0
             .delivered()
             .into_iter()

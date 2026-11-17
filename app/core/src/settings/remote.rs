@@ -1,7 +1,7 @@
 //! Where the data repository is pushed, and whether it was.
 
-use crate::health::Failure;
-use crate::health::{Health, Instant, Outcome};
+use suzatary_health::health::Failure;
+use suzatary_health::health::{Health, Instant, Outcome};
 
 /// Where the data repository is pushed; a failed read is `Unread`, never `Nowhere`.
 #[derive(Debug, Clone, PartialEq, Eq)]

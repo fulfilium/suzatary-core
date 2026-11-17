@@ -3,9 +3,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, answered, refused};
-use crate::mail::state::Decision;
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_triage::mail::state::Decision;
 
 /// Record a decision about a message.
 pub struct Mark;

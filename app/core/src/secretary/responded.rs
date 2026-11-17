@@ -11,7 +11,7 @@ pub enum Tried {
     /// Nothing was sent.
     NotSent { reason: String },
     /// The box lacks a grant the act needs.
-    Lacks(crate::mail::lacking::Lacking),
+    Lacks(suzatary_mail::mail::lacking::Lacking),
     /// A tap again would meet the same refusal, so none is offered.
     Refused { reason: String },
     /// Part of the act left the box; a tap again finishes it without repeating that part.
@@ -112,14 +112,14 @@ impl From<Done> for Performed {
 impl Performed {
     /// A failed send, by what its transport knew.
     #[must_use]
-    pub fn of_send(failed: &crate::mail::send::SendError) -> Self {
-        if let crate::mail::send::SendError::Ungranted(lacking) = failed {
+    pub fn of_send(failed: &suzatary_mail::mail::send::SendError) -> Self {
+        if let suzatary_mail::mail::send::SendError::Ungranted(lacking) = failed {
             return Tried::Lacks(lacking.clone()).into();
         }
         let reason = failed.to_string();
         match failed.delivery() {
-            crate::mail::send::Delivery::NotSent => Tried::NotSent { reason }.into(),
-            crate::mail::send::Delivery::Unknown => Done::MayHaveGone { reason }.into(),
+            suzatary_mail::mail::send::Delivery::NotSent => Tried::NotSent { reason }.into(),
+            suzatary_mail::mail::send::Delivery::Unknown => Done::MayHaveGone { reason }.into(),
         }
     }
 }
@@ -210,7 +210,7 @@ impl<C> Responded<C> {
 
     /// The grant a try lacked.
     #[must_use]
-    pub fn lacking(&self) -> Option<&crate::mail::lacking::Lacking> {
+    pub fn lacking(&self) -> Option<&suzatary_mail::mail::lacking::Lacking> {
         match self {
             Responded::Tried {
                 tried: Tried::Lacks(lacking),

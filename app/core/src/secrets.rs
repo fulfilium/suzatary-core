@@ -1,8 +1,8 @@
 //! Where a secret stands, never what it is: the only answer this crate can see is a
 //! [`SecretState`].
 
-use crate::mail::account::{MailAccount, Sync};
 use crate::settings::Settable;
+use suzatary_mail::mail::account::{MailAccount, Sync};
 
 /// One account's OAuth consents held by this box: for Microsoft, IMAP and SMTP are separate grants
 /// in separate slots; for a Google account, its one sign-in with Google is its reading grant.
@@ -215,7 +215,10 @@ pub trait Secrets: std::marker::Sync {
 
     /// Whether `account` is signed in with Google, and the parts its grant holds: read from the
     /// kept grant, of which only the parts cross.
-    fn google_grant(&self, account: &crate::mail::address::EmailAddress) -> crate::google::Held;
+    fn google_grant(
+        &self,
+        account: &suzatary_mail::mail::address::EmailAddress,
+    ) -> crate::google::Held;
 }
 
 /// Each answer a secret store gave, by its question: the store as it stood when last asked.
@@ -311,7 +314,10 @@ impl Secrets for Remembering<'_> {
         )
     }
 
-    fn google_grant(&self, account: &crate::mail::address::EmailAddress) -> crate::google::Held {
+    fn google_grant(
+        &self,
+        account: &suzatary_mail::mail::address::EmailAddress,
+    ) -> crate::google::Held {
         self.answer(
             |answers| &mut answers.google,
             &account.to_string(),

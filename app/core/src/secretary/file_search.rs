@@ -168,9 +168,9 @@ fn cut(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::mailbox::Query;
     use crate::secretary::store::Entry;
     use suzatary_held::attachment::Attachment;
+    use suzatary_mail::mail::mailbox::Query;
 
     const PDF: &[u8] = b"%PDF-1.7\n%%EOF\n";
 

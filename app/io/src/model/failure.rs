@@ -2,9 +2,9 @@
 //! stdout, as a refused `rate_limit_event` and an error `result`, and often nothing on stderr, so
 //! a run is read whole before its exit status is.
 
-use suzatary_core::health::Instant;
-use suzatary_core::health::Limited;
 use suzatary_core::secretary::model::ModelError;
+use suzatary_health::health::Instant;
+use suzatary_health::health::Limited;
 
 use super::stream::{Event, LimitStatus};
 
@@ -148,7 +148,7 @@ const TOO_LONG: [&str; 3] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::health::Limit;
+    use suzatary_health::health::Limit;
 
     fn now() -> Instant {
         unix(1_761_800_000).expect("an instant")

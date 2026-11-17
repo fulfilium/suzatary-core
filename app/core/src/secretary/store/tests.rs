@@ -100,7 +100,7 @@ fn now() -> Datetime {
 
 fn act() -> crate::secretary::acts::Act {
     crate::secretary::acts::Act::Auth {
-        account: crate::mail::address::EmailAddress::new("ada@example.com")
+        account: suzatary_mail::mail::address::EmailAddress::new("ada@example.com")
             .expect("a shaped address"),
     }
 }
@@ -738,7 +738,7 @@ fn every_response() -> Vec<Responded> {
         }),
         Responded::Tried {
             attempt: 1,
-            tried: Tried::Lacks(crate::mail::lacking::Lacking::GoogleClient),
+            tried: Tried::Lacks(suzatary_mail::mail::lacking::Lacking::GoogleClient),
         },
         Responded::Dismissed {
             reason: "wrong person".to_owned(),

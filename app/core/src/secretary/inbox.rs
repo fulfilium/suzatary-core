@@ -14,7 +14,6 @@ use prodrome_core::registers::{Node, Stamp};
 use prodrome_core::term::{Term, TermF};
 
 use crate::content_id::ContentId;
-use crate::health::plugin::PluginName;
 use crate::secretary::inbox_event::{InboxEvent, Said};
 use crate::secretary::inbox_reading::{Answer, Conflict, Reading};
 use crate::secretary::inbox_registers::{ContentRegister, StateRegister};
@@ -25,6 +24,7 @@ use crate::secretary::tapped::Tapped;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 use suzatary_base::reference::{ProposalRef, TodoRef};
 use suzatary_base::refusal::Refusal;
+use suzatary_health::health::plugin::PluginName;
 use suzatary_signatures::chain_set::ChainSet;
 use suzatary_store::store::Prodrome;
 
@@ -717,7 +717,7 @@ pub fn submit<C: Prodrome<InboxEvent> + ?Sized>(
     at: Datetime,
     perform: impl FnOnce(&Asked) -> Result<Performed, Refusal>,
 ) -> Result<Response, Refusal> {
-    use crate::rule::Rule as _;
+    use suzatary_triage::rule::Rule as _;
     transition(caps, id, by, at, |object| {
         Ok(if (Tapped { now: at }).holds(object) {
             Step::Record(Responded::performed(
@@ -914,7 +914,7 @@ mod tests {
         Asked {
             proposer: Proposer::Secretary,
             proposal: Proposal::Act(crate::secretary::acts::Act::Auth {
-                account: crate::mail::address::EmailAddress::new("ada@example.com")
+                account: suzatary_mail::mail::address::EmailAddress::new("ada@example.com")
                     .expect("a shaped address"),
             }),
             reasons: Reasons::new(asking, vec!["mail:abcdef012345".parse().expect("a ref")])

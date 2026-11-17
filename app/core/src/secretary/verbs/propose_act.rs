@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::address::EmailAddress;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
@@ -12,6 +11,7 @@ use crate::verb::{Caught, Verb};
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::topic_target::Target;
+use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::memory;
 
 /// Propose an act the box performs on a tap.

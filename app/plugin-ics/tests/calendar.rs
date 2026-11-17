@@ -20,9 +20,9 @@ const NOTHING: [Item; 0] = [];
 /// occurrence, then learned into a store, read as the calendar reads it.
 fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
     use prodrome_core::declared::{Declaration, Declared};
-    use suzatary_core::health::plugin::PluginName;
     use suzatary_core::plugin::admit;
     use suzatary_core::stores::InMemory;
+    use suzatary_health::health::plugin::PluginName;
     use suzatary_store::store::{Reads, learn};
     let ics = PluginName::parse("ics").map_err(|refused| refused.to_string())?;
     let schema =

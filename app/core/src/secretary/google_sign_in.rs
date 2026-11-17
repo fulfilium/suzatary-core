@@ -8,10 +8,10 @@ use chrono::NaiveDateTime;
 use prodrome_core::event::Actor;
 
 use crate::google::{Client, Exchanged, RedirectUri, Scope, Scopes, State, Verifier};
-use crate::mail::address::EmailAddress;
-use crate::mail::oauth::OauthError;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::responded::{Done, Performed, Tried};
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::oauth::OauthError;
 
 /// How long a consent stays open from the tap that began it. The bound is on a drawn state and its
 /// verifier, held in memory and taken once by the actor who tapped: it closes a consent link left
@@ -53,7 +53,7 @@ pub enum Then {
     /// Perform `card` again under the fix tap's `consent`.
     Retry {
         card: ProposalId,
-        consent: crate::mail::oauth::Consent,
+        consent: suzatary_mail::mail::oauth::Consent,
     },
 }
 

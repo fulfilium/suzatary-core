@@ -5,9 +5,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Holds, answered, refused};
-use crate::mail::mailbox::Query;
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_mail::mail::mailbox::Query;
 
 /// Search the mail: the triage agent's verb, which the secretary's own `search` widens to files.
 pub struct Search<S>(PhantomData<S>);

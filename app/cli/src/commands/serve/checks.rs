@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::health::SourceKey;
-use suzatary_core::health::plugin::PluginName;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::plugin::PluginName;
 
 use crate::instance::Instance;
 

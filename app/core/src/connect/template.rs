@@ -1,12 +1,12 @@
 //! A template: how one kind of connection is made, as data.
 
 use super::{Check, Group, Params, Shape, StepShape};
-use crate::health::Refused;
-use crate::health::plugin::{ManifestError, PluginName};
-use crate::mail::account::{Authority, MailAccount, MsImap, Proton, Sync, slug_of};
-use crate::mail::account_email::AccountEmail;
-use crate::mail::folders::Folders;
 use crate::plugin::Manifest;
+use suzatary_health::health::Refused;
+use suzatary_health::health::plugin::{ManifestError, PluginName};
+use suzatary_mail::mail::account::{Authority, MailAccount, MsImap, Proton, Sync, slug_of};
+use suzatary_mail::mail::account_email::AccountEmail;
+use suzatary_mail::mail::folders::Folders;
 
 /// A template: its group, the table it writes, the steps a person takes and the check that
 /// proves it; every value that grants anything is here or parsed by its constructor.

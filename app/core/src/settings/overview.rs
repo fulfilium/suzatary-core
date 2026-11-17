@@ -7,10 +7,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::connect::{self, Checked, Connection, Group, Key, Standing};
 use crate::deployment::Deployment;
-use crate::health::SourceKey;
-use crate::health::plugin::PluginName;
-use crate::health::{Health, Healths};
-use crate::mail::account::MailAccount;
 use crate::plugin::Manifest;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
@@ -18,6 +14,10 @@ use crate::secrets::{MailCredential, MailGrants, SecretState};
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
 use crate::wire::cards as wire;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::plugin::PluginName;
+use suzatary_health::health::{Health, Healths};
+use suzatary_mail::mail::account::MailAccount;
 
 /// What an open card asks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -331,7 +331,7 @@ pub struct Registers<'a> {
     /// Each plugin's store.
     pub plugins: &'a BTreeMap<PluginName, Store>,
     /// The data repository's pushes, if it has an upstream.
-    pub pushes: Option<&'a crate::health::Health>,
+    pub pushes: Option<&'a suzatary_health::health::Health>,
 }
 
 /// The tables' connections, as observed.
@@ -357,13 +357,13 @@ impl Connected<'_> {
                 .copied()
                 .unwrap_or(SecretState::Missing)
         };
-        let signed_in = |email: &crate::mail::address::EmailAddress| {
+        let signed_in = |email: &suzatary_mail::mail::address::EmailAddress| {
             self.observed
                 .grants
                 .get(email.as_str())
                 .is_some_and(|grants| grants.imap)
         };
-        let may_send = |email: &crate::mail::address::EmailAddress| {
+        let may_send = |email: &suzatary_mail::mail::address::EmailAddress| {
             self.observed
                 .grants
                 .get(email.as_str())
@@ -662,7 +662,7 @@ fn storage(
             observed
                 .registers
                 .pushes
-                .map(crate::health::Health::reading),
+                .map(suzatary_health::health::Health::reading),
         )
     };
     let (pushed, standing) = match &storage.pushed {
@@ -790,10 +790,11 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                         Slot::Credential(name.clone(), credential.label().to_lowercase()),
                         needing(
                             line(
-                                crate::health::Label::of_suffix(credential.label()).map_or_else(
-                                    |_| credential.label().to_owned(),
-                                    |label| label.shown(),
-                                ),
+                                suzatary_health::health::Label::of_suffix(credential.label())
+                                    .map_or_else(
+                                        |_| credential.label().to_owned(),
+                                        |label| label.shown(),
+                                    ),
                                 through.clone(),
                                 standing,
                             ),
@@ -806,7 +807,7 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                                     .then(|| Need::Grant(name.clone())),
                                 )
                                 .chain(
-                                    crate::health::Label::of_suffix(credential.label())
+                                    suzatary_health::health::Label::of_suffix(credential.label())
                                         .map(|label| removal(Group::Calendar, label.as_str())),
                                 ),
                         ),
@@ -840,13 +841,15 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
         .flat_map(Connection::sources)
         .collect();
     let probed = (sources.iter()).find_map(|key| observed.registers.health.health(key));
-    let reading = probed.map(crate::health::Health::reading);
+    let reading = probed.map(suzatary_health::health::Health::reading);
     // A lapsed sign-in is the terminal step again.
     let steps = match &reading {
-        None | Some(crate::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
-        Some(crate::health::Reading::Failing { class, .. }) => match class.remedy() {
-            crate::health::Remedy::Auth => Some(Checked::Never),
-            crate::health::Remedy::Secret | crate::health::Remedy::Retry => None,
+        None | Some(suzatary_health::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
+        Some(suzatary_health::health::Reading::Failing { class, .. }) => match class.remedy() {
+            suzatary_health::health::Remedy::Auth => Some(Checked::Never),
+            suzatary_health::health::Remedy::Secret | suzatary_health::health::Remedy::Retry => {
+                None
+            }
         },
     };
     let as_probed = Standing::of_health(reading);
@@ -883,7 +886,7 @@ fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
             let (standing, needs) = match &job.calls {
                 // Calls outrank the key: the model may hold its own sign-in.
                 Calls::Recorded { key, credential } => (
-                    match crate::health::reading_of(observed.registers.answered, key) {
+                    match suzatary_health::health::reading_of(observed.registers.answered, key) {
                         Some(reading) => Standing::of_calls(Some(reading)),
                         None => observed.secret(credential).join(Standing::Unobserved),
                     },
@@ -995,8 +998,8 @@ pub(crate) mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::mail::account::{MailAccount, MsImap, Proton, Sync};
-    use crate::mail::sync_report::{AccountSync, SyncReport};
+    use suzatary_mail::mail::account::{MailAccount, MsImap, Proton, Sync};
+    use suzatary_mail::mail::sync_report::{AccountSync, SyncReport};
 
     fn manifest(name: &str, links: &[&str]) -> Manifest {
         let credentials = links
@@ -1028,7 +1031,7 @@ pub(crate) mod tests {
         asking: Vec<Asking>,
         pushed: Pushed,
         links: Healths<SourceKey>,
-        pushes: Option<crate::health::Health>,
+        pushes: Option<suzatary_health::health::Health>,
     }
 
     impl World {
@@ -1095,10 +1098,10 @@ pub(crate) mod tests {
                     .failing
                     .iter()
                     .map(|(account, tail)| AccountSync {
-                        account: crate::mail::account_email::AccountEmail::new(account)
+                        account: suzatary_mail::mail::account_email::AccountEmail::new(account)
                             .expect("a generated address"),
-                        outcome: crate::outcome::Outcome::Failed(
-                            crate::mail::fault::Fault::Unclassified,
+                        outcome: suzatary_mail::outcome::Outcome::Failed(
+                            suzatary_mail::mail::fault::Fault::Unclassified,
                         ),
                         tail: tail.clone(),
                     })
@@ -1166,8 +1169,8 @@ pub(crate) mod tests {
         let sync = match kind {
             0 => Sync::Gmail,
             1 => Sync::MsImap(MsImap {
-                authority: crate::mail::account::Authority::Organizations,
-                inbox_folders: crate::mail::folders::Folders::inbox(),
+                authority: suzatary_mail::mail::account::Authority::Organizations,
+                inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                 sent_folder: "Sent Items".to_owned(),
             }),
             3 => Sync::Google,
@@ -1175,12 +1178,12 @@ pub(crate) mod tests {
                 channel: "proton-all".to_owned(),
                 smtp_user: email.to_owned(),
                 send_addresses: vec![email.to_owned()],
-                inbox_folders: crate::mail::folders::Folders::inbox(),
+                inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
             }),
         };
         MailAccount {
             subdir: email.replace(['@', '.', '+'], "-"),
-            email: crate::mail::account_email::AccountEmail::new(email)
+            email: suzatary_mail::mail::account_email::AccountEmail::new(email)
                 .expect("a lower-case address"),
             sync,
         }
@@ -1345,12 +1348,15 @@ pub(crate) mod tests {
                 None => continue,
                 Some(0) => crate::plugin::Answer::Status(200),
                 Some(1) => crate::plugin::Answer::Status(401),
-                Some(2) => {
-                    crate::plugin::Answer::Refused(crate::health::plugin::Refusal::CredentialUnset(
-                        crate::health::plugin::CredentialName::parse(&plugin, &credential)
-                            .expect("a name"),
-                    ))
-                }
+                Some(2) => crate::plugin::Answer::Refused(
+                    suzatary_health::health::plugin::Refusal::CredentialUnset(
+                        suzatary_health::health::plugin::CredentialName::parse(
+                            &plugin,
+                            &credential,
+                        )
+                        .expect("a name"),
+                    ),
+                ),
                 Some(_) => break,
             };
             let tried = chrono::NaiveDate::from_ymd_opt(2026, 10, 5)
@@ -1361,7 +1367,8 @@ pub(crate) mod tests {
                 came: crate::plugin::Came::Learnt,
             };
             let credential =
-                crate::health::plugin::CredentialName::parse(&plugin, &credential).expect("a name");
+                suzatary_health::health::plugin::CredentialName::parse(&plugin, &credential)
+                    .expect("a name");
             fetched = fetched.join(&run.health(&manifest(name, links), &[(credential, answer)]));
         }
         let store = match store {
@@ -1386,7 +1393,7 @@ pub(crate) mod tests {
                 .prop_map(|(step, command, why)| { Standing::ByHand { step, command, why } }),
             (
                 "2026-10-0[1-3]",
-                proptest::sample::select(crate::health::Failure::ALL.to_vec()),
+                proptest::sample::select(suzatary_health::health::Failure::ALL.to_vec()),
                 "[a-c]{1,3}"
             )
                 .prop_map(|(since, class, words)| Standing::Failing {
@@ -1533,7 +1540,7 @@ pub(crate) mod tests {
             let (draft, sign_in) = if draft_first { (0, 1) } else { (1, 0) };
             ask(0, Proposal::Email(Draft { account: email.to_owned(), ..Draft::default() }), draft);
             ask(1, Proposal::Act(Act::Auth {
-                account: crate::mail::address::EmailAddress::new(email).expect("an address"),
+                account: suzatary_mail::mail::address::EmailAddress::new(email).expect("an address"),
             }), sign_in);
             let mut world = World {
                 accounts: vec![account(email, kind)],

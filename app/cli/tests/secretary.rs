@@ -1177,7 +1177,7 @@ fn a_tap_on_an_act_begins_it_once_and_records_what_the_performer_said() {
         .expect("an id")
         .to_owned();
     let account =
-        suzatary_core::mail::address::EmailAddress::new("ada@example.com").expect("an address");
+        suzatary_mail::mail::address::EmailAddress::new("ada@example.com").expect("an address");
     assert!(acting.begun().is_empty(), "proposing performs nothing");
 
     let mut tapped = common::act(

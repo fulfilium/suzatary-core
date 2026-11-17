@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::mail::account::MailAccount;
-use suzatary_core::mail::cache::{Forgot, Forgotten};
-use suzatary_core::mail::removal::Removal;
 use suzatary_io::present::Present as _;
 use suzatary_io::run::{Cmd, succeed};
+use suzatary_mail::mail::account::MailAccount;
+use suzatary_mail::mail::cache::{Forgot, Forgotten};
+use suzatary_mail::mail::removal::Removal;
 
 /// How long telling the index may take before the delete answers that it will at the next sync.
 const REINDEX: std::time::Duration = std::time::Duration::from_secs(120);
@@ -64,7 +64,7 @@ impl MailCache {
 impl MailCache {
     fn mail(&self, account: &MailAccount) -> Forgot {
         // Only a plain folder name is joined, so a delete never reaches outside the mail root.
-        let Some(folder) = suzatary_core::mail::cache::folder(account) else {
+        let Some(folder) = suzatary_mail::mail::cache::folder(account) else {
             return Forgot::Failed {
                 why: format!(
                     "{:?} is not a folder its mail could be kept in",
@@ -92,7 +92,7 @@ impl MailCache {
     }
 }
 
-impl suzatary_core::mail::cache::Forget for MailCache {
+impl suzatary_mail::mail::cache::Forget for MailCache {
     fn forget(&self, account: &MailAccount, removal: Removal) -> Forgotten {
         let _held = match suzatary_io::durable::hold(&self.lock) {
             Ok(held) => held,
@@ -111,8 +111,8 @@ impl suzatary_core::mail::cache::Forget for MailCache {
 fn revoked(
     tokens: &suzatary_io::oauth::TokenStore,
     account: &MailAccount,
-) -> Result<suzatary_core::mail::grants::Revoked, String> {
-    use suzatary_core::mail::grants::Revoked;
+) -> Result<suzatary_mail::mail::grants::Revoked, String> {
+    use suzatary_mail::mail::grants::Revoked;
     tokens
         .revoke(account)
         .map(|held| {
@@ -128,11 +128,11 @@ fn revoked(
 /// A server that keeps no mail, as a test's is, and the sign-ins `tokens` keeps, if any.
 pub struct Unkept(pub Option<suzatary_io::oauth::TokenStore>);
 
-impl suzatary_core::mail::cache::Forget for Unkept {
+impl suzatary_mail::mail::cache::Forget for Unkept {
     fn forget(&self, account: &MailAccount, removal: Removal) -> Forgotten {
         let grants = || match &self.0 {
             Some(tokens) => revoked(tokens, account),
-            None => Ok(suzatary_core::mail::grants::Revoked::NoneKept),
+            None => Ok(suzatary_mail::mail::grants::Revoked::NoneKept),
         };
         let mail = || Forgot::Failed {
             why: "this server keeps no mail".to_owned(),
@@ -147,14 +147,14 @@ impl suzatary_core::mail::cache::Forget for Unkept {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::mail::account::Sync;
-    use suzatary_core::mail::cache::Forget as _;
+    use suzatary_mail::mail::account::Sync;
+    use suzatary_mail::mail::cache::Forget as _;
 
     use super::*;
 
     fn account(subdir: &str) -> MailAccount {
         MailAccount {
-            email: suzatary_core::mail::account_email::AccountEmail::new("ada@example.test")
+            email: suzatary_mail::mail::account_email::AccountEmail::new("ada@example.test")
                 .expect("a lower-case address"),
             subdir: subdir.to_owned(),
             sync: Sync::Gmail,

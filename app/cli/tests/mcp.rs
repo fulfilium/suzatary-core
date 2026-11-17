@@ -439,7 +439,7 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     let seeds = [
         (suzatary_signatures::signatures::BOX_KEY, OWN.to_owned()),
         (suzatary_signatures::signatures::AGENT_KEY, AGENT.to_owned()),
-        (suzatary_core::mail::dedup_key::DEDUP_KEY, "7".repeat(64)),
+        (suzatary_mail::mail::dedup_key::DEDUP_KEY, "7".repeat(64)),
     ];
     let root = scratch("adopted-agent");
     let _chain = a_chain(&root);

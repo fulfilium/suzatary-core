@@ -224,7 +224,7 @@ impl Transcript {
     /// flight (a model's or a verb's turn still owed), or a person's question, which the routes
     /// wake a model for. An act line alone is not: an acknowledgement wakes no model, by design.
     #[must_use]
-    pub fn interrupted(&self, since: crate::health::Instant) -> bool {
+    pub fn interrupted(&self, since: suzatary_health::health::Instant) -> bool {
         self.owed().iter().any(|(_, said)| {
             prodrome_core::fpl::instant_of(said.at) >= since
                 && match said.turn {
@@ -284,12 +284,12 @@ pub(crate) const RESUMED: chrono::Duration = chrono::Duration::hours(1);
 /// The store's.
 pub fn waiting(
     conversations: Conversations<'_>,
-    model: Option<&crate::health::Reading>,
+    model: Option<&suzatary_health::health::Reading>,
     now: Datetime,
 ) -> Result<Vec<ConversationId>, StoreError> {
     match model {
-        Some(crate::health::Reading::Failing { .. }) => return Ok(Vec::new()),
-        Some(crate::health::Reading::Ok { .. }) | None => {}
+        Some(suzatary_health::health::Reading::Failing { .. }) => return Ok(Vec::new()),
+        Some(suzatary_health::health::Reading::Ok { .. }) | None => {}
     }
     let since = prodrome_core::fpl::instant_of(now) - RESUMED;
     let mut waiting: Vec<ConversationId> = each(conversations)?
@@ -303,14 +303,14 @@ pub fn waiting(
 
 /// A conversation's reading is named by its heads, the lines no other line rests on: the down-set
 /// they close is every line, so two replicas holding the same lines name one reading.
-impl crate::rule::Named for Transcript {
-    fn name(&self) -> crate::rule::ReadingName {
+impl suzatary_triage::rule::Named for Transcript {
+    fn name(&self) -> suzatary_triage::rule::ReadingName {
         let rested_on: std::collections::BTreeSet<usize> = self
             .lines
             .iter()
             .flat_map(|written| written.rests_on.iter().copied())
             .collect();
-        crate::rule::ReadingName::of(
+        suzatary_triage::rule::ReadingName::of(
             self.lines
                 .iter()
                 .enumerate()
@@ -1241,10 +1241,12 @@ mod tests {
             waiting(store, None, at(30)).expect("reads"),
             [id("2026-09-30-1"), id("2026-09-30-2")]
         );
-        let failing = crate::health::Healths::<String>::one(
+        let failing = suzatary_health::health::Healths::<String>::one(
             "a-cli/large".to_owned(),
             prodrome_core::fpl::instant_of(at(20)),
-            crate::health::Outcome::Failed(crate::health::Failure::Unclassified),
+            suzatary_health::health::Outcome::Failed(
+                suzatary_health::health::Failure::Unclassified,
+            ),
             "it failed",
         );
         assert!(

@@ -2,7 +2,7 @@
 //! grant reads that account's mail.
 
 use super::Endpoints;
-use crate::mail::address::EmailAddress;
+use suzatary_mail::mail::address::EmailAddress;
 
 /// Why an answer of the profile was not read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

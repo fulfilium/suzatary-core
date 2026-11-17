@@ -14,11 +14,11 @@ use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::conversation::round::Ending;
-use suzatary_core::rule::{Engine, Firing};
 use suzatary_core::secretary::model::{Halt, Sessions, Turn};
 use suzatary_core::secretary::rules::{Conversational, RULES};
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::secretary::{self, transcript};
+use suzatary_triage::rule::{Engine, Firing};
 use tokio::sync::{broadcast, mpsc};
 
 use super::State;

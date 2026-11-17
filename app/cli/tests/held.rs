@@ -309,8 +309,8 @@ fn w2_mailbox() -> common::FakeMailbox {
         mailbox = mailbox
             .with_message(
                 id,
-                suzatary_core::mail::MailMessage {
-                    row: suzatary_core::mail::MailRow {
+                suzatary_mail::mail::MailMessage {
+                    row: suzatary_mail::mail::MailRow {
                         hash: "b2c3d4e5f6a1b2c3".to_owned(),
                         id: id.to_owned(),
                         sender: "payroll@example.test".to_owned(),
@@ -318,7 +318,7 @@ fn w2_mailbox() -> common::FakeMailbox {
                         date: None,
                         container: "inbox".to_owned(),
                         account: "ada@example.com".to_owned(),
-                        disposition: suzatary_core::mail::Disposed::Undecided,
+                        disposition: suzatary_mail::mail::Disposed::Undecided,
                         held: suzatary_held::held_value::Kinds::empty(),
                     },
                     thread: "000000000000c3fc".to_owned(),
@@ -341,7 +341,7 @@ fn w2_mailbox() -> common::FakeMailbox {
             )
             .with_attachment_file(
                 id,
-                suzatary_core::mail::AttachmentFile {
+                suzatary_mail::mail::AttachmentFile {
                     name: "w2.pdf".to_owned(),
                     mime: "application/pdf".to_owned(),
                     content: W2.to_vec(),

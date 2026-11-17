@@ -11,19 +11,19 @@ use std::sync::Arc;
 
 use suzatary_base::capability::Secret;
 use suzatary_core::conformance::puller::{Rig, check};
-use suzatary_core::mail::account::{Authority, MailAccount, MsImap, Sync};
-use suzatary_core::mail::account_email::AccountEmail;
-use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::fault::Fault;
-use suzatary_core::mail::folders::Folders;
-use suzatary_core::mail::imap::ImapError;
-use suzatary_core::mail::mailroom::Server;
-use suzatary_core::mail::puller::Puller as _;
 use suzatary_io::google::{Google as Api, Grants};
 use suzatary_io::http::{HttpError, Resp, Scripted};
 use suzatary_io::imap::Outlook;
 use suzatary_io::pullers::{Google, Lieer, Mbsync, Microsoft, Open};
 use suzatary_io::secrets::{Resolves, SecretError};
+use suzatary_mail::mail::account::{Authority, MailAccount, MsImap, Sync};
+use suzatary_mail::mail::account_email::AccountEmail;
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::fault::Fault;
+use suzatary_mail::mail::folders::Folders;
+use suzatary_mail::mail::imap::ImapError;
+use suzatary_mail::mail::mailroom::Server;
+use suzatary_mail::mail::puller::Puller as _;
 
 const ADA: &str = "ada@example.test";
 

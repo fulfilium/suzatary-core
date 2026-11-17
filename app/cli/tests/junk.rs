@@ -6,7 +6,7 @@ mod common;
 use common::{FakeJunk, Fakes, JunkFolder};
 use serde_json::{Value, json};
 use suzatary_core::cast::CAST;
-use suzatary_core::mail::junk::{ChurnList, JunkHeader, KeepList, Uid};
+use suzatary_triage::mail::junk::{ChurnList, JunkHeader, KeepList, Uid};
 
 const CHURN: &str = "offers.example.net";
 const SMALL: &str = "ada@example.org";

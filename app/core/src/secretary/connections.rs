@@ -3,9 +3,6 @@
 
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
-use crate::health::plugin::{Origin, PluginName};
-use crate::mail::account::Sync;
-use crate::mail::address::EmailAddress;
 use crate::secretary::acts::Act;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::inbox;
@@ -19,6 +16,9 @@ use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_health::health::plugin::{Origin, PluginName};
+use suzatary_mail::mail::account::Sync;
+use suzatary_mail::mail::address::EmailAddress;
 use suzatary_store::store::Prodrome;
 
 /// What the rule reads of a deployment's Google accounts.

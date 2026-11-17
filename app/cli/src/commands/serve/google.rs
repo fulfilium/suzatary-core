@@ -9,14 +9,14 @@ use axum::response::Redirect;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
 use suzatary_core::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
-use suzatary_core::mail::account::Sync as Strategy;
-use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::stamp::stamp;
 use suzatary_io::google::Google;
 use suzatary_io::secrets::Resolves;
+use suzatary_mail::mail::account::Sync as Strategy;
+use suzatary_mail::mail::address::EmailAddress;
 
 use super::call::Call;
 use super::guard::Reader;
@@ -231,8 +231,8 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
         },
     };
     let kept = if let (Taken::Yours(begun), Performed::Done(_)) = (&taken, &performed) {
-        Some(suzatary_core::health::SourceKey::GoogleCalendar(
-            suzatary_core::mail::account_email::AccountEmail::folded(&begun.account),
+        Some(suzatary_health::health::SourceKey::GoogleCalendar(
+            suzatary_mail::mail::account_email::AccountEmail::folded(&begun.account),
         ))
     } else {
         None

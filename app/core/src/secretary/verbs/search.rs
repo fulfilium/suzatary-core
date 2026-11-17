@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent::{answered, refused};
-use crate::mail::mailbox::Query;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::file_search::{self, FileHit, MAX_FILE_HITS};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_mail::mail::mailbox::Query;
 
 /// Search the mail and the files the owner sent in a chat, with one query.
 pub struct Search;
@@ -28,7 +28,7 @@ const FILES_DEFAULT: usize = 10;
 #[derive(Serialize)]
 struct Answer {
     files: Files,
-    mail: Vec<crate::mail::verbs::Summary>,
+    mail: Vec<suzatary_triage::mail::verbs::Summary>,
 }
 
 /// What the file side of a search answers.

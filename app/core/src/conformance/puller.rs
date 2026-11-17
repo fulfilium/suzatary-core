@@ -1,10 +1,10 @@
-//! Mail-in's laws ([`crate::mail::puller::Puller`]), read in the maildir a pull writes.
+//! Mail-in's laws ([`suzatary_mail::mail::puller::Puller`]), read in the maildir a pull writes.
 
 use std::fmt;
 
 use super::{Broken, hold};
-use crate::mail::fault::Fault;
-use crate::mail::puller::{Puller, Unpulled};
+use suzatary_mail::mail::fault::Fault;
+use suzatary_mail::mail::puller::{Puller, Unpulled};
 
 /// A law of a puller, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

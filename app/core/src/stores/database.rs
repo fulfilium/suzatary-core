@@ -4,9 +4,6 @@ use prodrome_core::declared::Declared;
 
 use super::{Kind, Store};
 use crate::asks::AskEvent;
-use crate::health::plugin::PluginName;
-use crate::mail::local_state::LocalState;
-use crate::mail::state::TriageState;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::digest_line::Line;
 use crate::secretary::inbox_event::InboxEvent;
@@ -14,6 +11,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use suzatary_base::chains::ChainName;
+use suzatary_health::health::plugin::PluginName;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::upload::Upload;
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
@@ -24,6 +22,8 @@ use suzatary_record::record::TodoEvent;
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::{Doc, Gets, Lists, Log, Prodrome};
 use suzatary_todo::decisions::DecisionEvent;
+use suzatary_triage::mail::local_state::LocalState;
+use suzatary_triage::mail::state::TriageState;
 
 /// The whole store, as one value: every chain, and the box's own stores.
 #[derive(Clone)]

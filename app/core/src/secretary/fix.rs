@@ -1,10 +1,10 @@
 //! A lack's fix: the box's card that gives what a tapped card lacked, performed by its tap.
 
 use crate::google::{Held, RedirectUri, Scope, Scopes};
-use crate::mail::address::EmailAddress;
-use crate::mail::lacking::{Grant, Lacking};
 use crate::secretary::acts::Act;
 use crate::secretary::inbox::ProposalId;
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::lacking::{Grant, Lacking};
 
 /// Why a lack has no card to fix it now.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

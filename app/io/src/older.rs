@@ -1,5 +1,5 @@
 //! Searching each account's mail server for mail older than the routine sync's window: the
-//! interpreter of `suzatary_core::mail::older_mail::OlderMail`.
+//! interpreter of `suzatary_triage::mail::older_mail::OlderMail`.
 //!
 //! - A Microsoft account is `EXAMINE`d over IMAP and pulled into `<subdir>/older-inbox`, with a
 //!   state file of its own beside the routine pull's.
@@ -16,15 +16,15 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use suzatary_core::mail::account::{MailAccount, Roster, Sync};
-use suzatary_core::mail::imap::{ImapError, Maildir};
-use suzatary_core::mail::junk_folder::JunkFailure;
-use suzatary_core::mail::older::{
+use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
+use suzatary_mail::mail::imap::{ImapError, Maildir};
+use suzatary_triage::mail::junk_folder::JunkFailure;
+use suzatary_triage::mail::older::{
     self, AccountOlder, Found, IMAP_FOLDER, MAX_MATCHES, MAX_MESSAGE_BYTES, Matched, OlderQuery,
     Outcome, Plan, Range, Unsearched,
 };
-use suzatary_core::mail::older_mail::OlderMail;
-use suzatary_core::mail::verbs::Summary;
+use suzatary_triage::mail::older_mail::OlderMail;
+use suzatary_triage::mail::verbs::Summary;
 
 use crate::gmail::{self, Fetched, Lieer, MessageId};
 use crate::http::Http;
@@ -94,14 +94,14 @@ pub trait GoogleTokens {
     /// The grant is missing or refused, or Google did not answer.
     fn token(
         &self,
-        account: &suzatary_core::mail::address::EmailAddress,
+        account: &suzatary_mail::mail::address::EmailAddress,
     ) -> Result<suzatary_base::capability::Secret, Unsearched>;
 }
 
 impl GoogleTokens for crate::google::Grants {
     fn token(
         &self,
-        account: &suzatary_core::mail::address::EmailAddress,
+        account: &suzatary_mail::mail::address::EmailAddress,
     ) -> Result<suzatary_base::capability::Secret, Unsearched> {
         crate::google::Grants::token(self, account)
             .map(|minted| minted.token)
@@ -431,8 +431,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use chrono::NaiveDate;
-    use suzatary_core::mail::account::{Authority, MsImap, Proton};
-    use suzatary_core::mail::imap::SyncState;
+    use suzatary_mail::mail::account::{Authority, MsImap, Proton};
+    use suzatary_mail::mail::imap::SyncState;
 
     use super::*;
     use crate::http::{Resp, Scripted as Answers};
@@ -448,7 +448,7 @@ mod tests {
     impl GoogleTokens for Minted {
         fn token(
             &self,
-            _: &suzatary_core::mail::address::EmailAddress,
+            _: &suzatary_mail::mail::address::EmailAddress,
         ) -> Result<suzatary_base::capability::Secret, Unsearched> {
             Ok(suzatary_base::capability::Secret::new("box-minted"))
         }
@@ -465,8 +465,8 @@ mod tests {
         dir
     }
 
-    use suzatary_core::mail::account_email::AccountEmail;
-    use suzatary_core::mail::folders::Folders;
+    use suzatary_mail::mail::account_email::AccountEmail;
+    use suzatary_mail::mail::folders::Folders;
 
     fn roster() -> Roster {
         Roster::new(vec![
@@ -1097,7 +1097,7 @@ mod tests {
             root.join("state.json"),
             root.join("local/mail.json"),
             || {
-                Ok(suzatary_core::mail::dedup_key::DedupKey::of(
+                Ok(suzatary_mail::mail::dedup_key::DedupKey::of(
                     &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))
@@ -1154,7 +1154,7 @@ mod tests {
         assert_eq!(first.title, "Team invite");
 
         let shown = older.index.mail.full_message(&first.id).expect("a read");
-        let suzatary_core::mail::verbs::Show::Shown(shown) = shown else {
+        let suzatary_triage::mail::verbs::Show::Shown(shown) = shown else {
             panic!("show finds the pulled message, and answered {shown:?}");
         };
         assert!(shown.body.contains("You are invited"), "{}", shown.body);

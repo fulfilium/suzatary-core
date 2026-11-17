@@ -1,11 +1,11 @@
 //! Every source's health on disk, as one [`Register`] keyed by [`SourceKey`]. It lives beside
 //! the triage heartbeat, box-local and never pushed.
 //!
-//! [`Register`]: suzatary_core::health::Register
+//! [`Register`]: suzatary_health::health::Register
 
 use std::path::Path;
 
-use suzatary_core::health::SourceKey;
+use suzatary_health::health::SourceKey;
 
 use crate::docs::{DocCodec, Docs};
 use crate::health_file::HealthFile;
@@ -27,11 +27,11 @@ pub fn beside(heartbeat: &Path) -> Health {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::health::Failure;
-    use suzatary_core::health::{Healths, Outcome, Reading, Register as _};
-    use suzatary_core::mail::account_email::AccountEmail;
-    use suzatary_core::mail::fault::Fault;
-    use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
+    use suzatary_health::health::Failure;
+    use suzatary_health::health::{Healths, Outcome, Reading, Register as _};
+    use suzatary_mail::mail::account_email::AccountEmail;
+    use suzatary_mail::mail::fault::Fault;
+    use suzatary_mail::mail::sync_report::{AccountSync, SyncReport};
 
     use super::*;
 
@@ -51,9 +51,9 @@ mod tests {
             synced: vec![AccountSync {
                 account: email("ada"),
                 outcome: if ok {
-                    suzatary_core::outcome::Outcome::Succeeded
+                    suzatary_mail::outcome::Outcome::Succeeded
                 } else {
-                    suzatary_core::outcome::Outcome::Failed(Fault::NeedsLogin)
+                    suzatary_mail::outcome::Outcome::Failed(Fault::NeedsLogin)
                 },
                 tail: if ok { "done" } else { "IMAP: not connected" }.to_owned(),
             }],

@@ -1,10 +1,10 @@
-//! Mail-out's laws ([`crate::mail::transport::Transport`]), read at the far end of the wire.
+//! Mail-out's laws ([`suzatary_mail::mail::transport::Transport`]), read at the far end of the wire.
 
 use std::fmt;
 
 use super::{Broken, hold};
-use crate::mail::send::{Outgoing, angle, build_mime};
-use crate::mail::transport::{Delivered, Transport};
+use suzatary_mail::mail::send::{Outgoing, angle, build_mime};
+use suzatary_mail::mail::transport::{Delivered, Transport};
 
 /// A law of a transport, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

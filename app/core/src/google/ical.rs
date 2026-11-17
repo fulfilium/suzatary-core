@@ -3,8 +3,8 @@
 //! names its calendar (`/calendar/ical/<id>/private-<key>/basic.ics`), and an account's own
 //! calendar has the account's address for its id.
 
-use crate::mail::address::EmailAddress;
 use crate::plugin::PluginUrl;
+use suzatary_mail::mail::address::EmailAddress;
 
 /// The host that serves Google calendars' iCal links.
 const HOST: &str = "calendar.google.com";

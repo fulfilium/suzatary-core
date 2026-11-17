@@ -132,7 +132,7 @@ pub struct Inner {
     /// Edits the instance file, by a tapped card.
     pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
     /// Deletes a removed account's data.
-    pub forget: Arc<dyn suzatary_core::mail::cache::Forget + Send + Sync>,
+    pub forget: Arc<dyn suzatary_mail::mail::cache::Forget + Send + Sync>,
     /// Reads a held value back for a tap; outside every record, so no agent verb can.
     pub reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
     /// Syncs a plugin after a tap.
@@ -180,7 +180,7 @@ pub struct Inner {
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
-    pub answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
+    pub answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
     /// Reached only with a `Tap`.
     pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
     pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
@@ -332,10 +332,10 @@ impl State {
             data,
         }: Settings,
     ) -> Self {
-        let answered = Mutex::new(suzatary_core::health::Healths::one(
+        let answered = Mutex::new(suzatary_health::health::Healths::one(
             models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
-            suzatary_core::health::Outcome::Succeeded,
+            suzatary_health::health::Outcome::Succeeded,
             "",
         ));
         let consenting = Arc::new(google::Consenting::new(
@@ -433,7 +433,7 @@ impl State {
     #[must_use]
     pub fn with_answered(
         mut self,
-        answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
+        answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
     ) -> Self {
         self.building().answered = answered;
         self
@@ -561,7 +561,7 @@ impl State {
     pub fn reconnected(&self, who: &str) {
         let mut live = locks::write(&self.live);
         let read = self.edits.declared().and_then(|declared| {
-            let accounts = suzatary_core::mail::account::Roster::new(declared.accounts.clone())
+            let accounts = suzatary_mail::mail::account::Roster::new(declared.accounts.clone())
                 .map_err(|refused| {
                     suzatary_core::settings::EditError::Malformed(format!(
                         "[[mail.accounts]]: {refused}"
@@ -1552,7 +1552,7 @@ pub type Heard = std::collections::BTreeSet<suzatary_core::calendar::CalendarNam
 /// `None`, logged, on a failed read.
 fn heard(
     calendar: &dyn suzatary_core::calendar::effect::Calendar,
-    now: suzatary_core::health::Instant,
+    now: suzatary_health::health::Instant,
 ) -> Option<Heard> {
     use suzatary_core::secretary::failing::{QUIET, quiet};
     calendar
@@ -1657,7 +1657,7 @@ fn resume_waiting(state: &State) {
     let model = state.models.recorded();
     match suzatary_core::secretary::transcript::waiting(
         caps.secretary.conversations,
-        suzatary_core::health::reading_of(&answered, model.as_str()).as_ref(),
+        suzatary_health::health::reading_of(&answered, model.as_str()).as_ref(),
         caps.secretary.clock.now(),
     ) {
         Ok(waiting) => {

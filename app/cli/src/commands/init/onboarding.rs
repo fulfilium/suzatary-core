@@ -13,9 +13,9 @@ use suzatary_base::chains::ChainName;
 use suzatary_base::persona::Persona;
 use suzatary_base::writer::Writer;
 use suzatary_core::connect::{AccountKind, Connection, Params, Reach};
-use suzatary_core::health::Refused;
-use suzatary_core::mail::account::{Authority, MailAccount, Roster};
-use suzatary_core::mail::address::EmailAddress;
+use suzatary_health::health::Refused;
+use suzatary_mail::mail::account::{Authority, MailAccount, Roster};
+use suzatary_mail::mail::address::EmailAddress;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Upkeep, Web};
 
@@ -268,7 +268,7 @@ impl Onboarding {
                     .map(FirstAccount::account)
                     .collect::<Result<_, _>>()?,
             )?,
-            junk: suzatary_core::mail::junk::ChurnList::default(),
+            junk: suzatary_triage::mail::junk::ChurnList::default(),
         };
         Ok(File {
             repo: self.repo.clone(),

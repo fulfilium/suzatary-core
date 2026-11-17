@@ -349,6 +349,45 @@ texts, two_phase, words}` move to `app/memory`, the secretary's under
   cuts: `holder`'s two sweep laws (`transcript`, `rescrub`) and `line_words`' bounded tool answer
   (`turn_shape`). `InMemoryKeys` moves with `locked_text`.
 
+**Rows 18 to 20 (mail, health, triage), one pull request.** Each cut is its own crate, and
+each module keeps its path under the crate's name: `suzatary_mail::{mail, outcome}`,
+`suzatary_health::health` and `suzatary_triage::{mail::*, rule, wire::triage}`.
+- **mail** takes `mail.rs` and its 23 protocol modules, with `outcome` (base's table put it under
+  mail). Its USE is 24.8k after the module docs lost the lists that their items' docs repeat.
+  - One edge went first: `mail.rs` read triage's `state::Decision` through a relative path,
+    which the layer guard does not read. The reading is now `From<&Decision> for Disposed` in
+    `state.rs`.
+  - The device flow's tap test reads core's test chain, so it moved to `core/tests/oauth_tap.rs`.
+    The consent guard in `cli/tests/writes.rs` skips that file and the constructors' file.
+- **health** moves whole, with its USE at 8.6k. `UNTOLD` and `RATE_WAIT` stay public, since public
+  docs link them as the documented waits.
+- **triage** takes the thirteen modules of core's `mail` that read triage's decisions, with `rule`
+  and `wire/triage`, so core no longer has a `mail` module. Its USE is 23.8k. The
+  `junk_seed` example moves with `normalize_seed_file`.
+  - `heartbeat::freshness` becomes `pub`, because `secretary::verbs::briefing_delta` reads it.
+  - `junk`'s bounded-sweep law names its account as the module's other sweeps do, so the
+    law no longer reads `cast`.
+- **What narrowed:** `SHOWN_HEADERS`, `LINK_SCHEMES`, `HEADER_CHARS` and `Domain::of_address`
+  became private, because only their own file reads them.
+- **The inert impls** for base's `Nothing` of `Mailbox`, `MailSync`, `Register`, `Corpus`, `Junk`,
+  `OlderMail` and the watch log move with their traits.
+
+Measured with `cargo check --workspace --all-targets` on four cores, one line edited, the
+second run of each:
+
+| one-line edit in | before | after |
+|---|---|---|
+| `mail` (`address.rs`) | 46.0 s | 47.4 s |
+| `secretary` (`review.rs`) | 50.8 s | 44.0 s |
+| `routes.rs` | 32.2 s | 31.4 s |
+
+An edit in `mail` still rechecks core and everything above it. An edit in `secretary` is faster
+because core is smaller: core's USE fell from 308.1k to 250.3k.
+
+The pages' module, `views_bg.wasm` on x86_64-linux by `nix build`, grew by 227 bytes after
+`wasm-opt` (3,602,822 to 3,603,049) and by 815 bytes brotli (644,785 to 645,600). No line of
+`web/wasm-budget` rises.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

@@ -1,9 +1,9 @@
 //! One thing a person does for a connection.
 
 use super::{Checked, Params, Reach, Run, Seen, Standing};
-use crate::health::plugin::{CredentialName, PluginName};
-use crate::mail::address::EmailAddress;
 use crate::settings::{Help, Words};
+use suzatary_health::health::plugin::{CredentialName, PluginName};
+use suzatary_mail::mail::address::EmailAddress;
 
 /// Which secret a step asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,7 +141,9 @@ impl StepShape {
                         text.replace("{email}", &super::reach::word(email.as_str()))
                             .replace(
                                 "{subdir}",
-                                &super::reach::word(&crate::mail::account::slug_of(email.as_str())),
+                                &super::reach::word(&suzatary_mail::mail::account::slug_of(
+                                    email.as_str(),
+                                )),
                             )
                     }),
                     None if names => return None,

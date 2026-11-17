@@ -51,7 +51,7 @@ fn fixture(root: &Path) -> Command {
         .env(suzatary_signatures::signatures::BOX_KEY, BOX_SEED)
         .env(suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED)
         .env(
-            suzatary_core::mail::dedup_key::DEDUP_KEY,
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
             "e2e0000000000000000000000000000000000000000000000000000000000d3d",
         )
         .env("MALLOC_ARENA_MAX", "2");

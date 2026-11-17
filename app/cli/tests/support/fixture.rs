@@ -20,9 +20,9 @@ use suzatary_store::store::{append_to, linearised};
 
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
-use suzatary_core::mail::account::{MailAccount, Roster, Sync};
-use suzatary_core::mail::account_email::AccountEmail;
 use suzatary_core::model_name::ModelName;
+use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
+use suzatary_mail::mail::account_email::AccountEmail;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 
@@ -283,8 +283,8 @@ fn write_seed_message(cur: &Path, mail: &cast::Mail) -> anyhow::Result<()> {
 
 /// The notice: its text and its PDF, built by the same MIME builder a send uses.
 fn write_notice(cur: &Path, notice: &cast::Notice) -> anyhow::Result<()> {
-    use suzatary_core::mail::send::{Composed, Outgoing, build_mime};
     use suzatary_held::message_part::Attachment;
+    use suzatary_mail::mail::send::{Composed, Outgoing, build_mime};
     let cast::Notice { mail, file } = notice;
     let out = Outgoing::new(Composed {
         sender: mail.from.email.to_owned(),
@@ -394,11 +394,11 @@ fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<(
     let at = prodrome_core::fpl::instant_of(SystemClock.now());
     let (outcome, words) = if no_model {
         (
-            suzatary_core::health::Outcome::Failed(suzatary_core::health::Failure::KeyRefused),
+            suzatary_health::health::Outcome::Failed(suzatary_health::health::Failure::KeyRefused),
             "the fixture's model is not connected",
         )
     } else {
-        (suzatary_core::health::Outcome::Succeeded, "")
+        (suzatary_health::health::Outcome::Succeeded, "")
     };
     suzatary_io::model_health::beside(&read.mail.heartbeat)
         .record(
@@ -556,8 +556,8 @@ pub mod fake_google;
 /// begun at the reference plugin's schema, so the calendar reads it, and its last run and its
 /// link's fetch a success, so storing the link again makes its line healthy without a sync.
 fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<()> {
-    use suzatary_core::health::plugin::{CredentialName, PluginName};
     use suzatary_core::plugin::{Answer, Came, LastRun};
+    use suzatary_health::health::plugin::{CredentialName, PluginName};
     let name = PluginName::parse("ics")?;
     let text = std::fs::read_to_string(repo.join("app/plugin-ics/ics.schema"))
         .context("reading the calendar plugin's schema")?;
@@ -594,10 +594,10 @@ fn mail_accounts(lapsed: bool) -> Roster {
             lapsed.then(|| MailAccount {
                 email: AccountEmail::new(LINKS_ACCOUNT)
                     .expect("the links account is a lower-case address"),
-                subdir: suzatary_core::mail::account::slug_of(LINKS_ACCOUNT),
-                sync: Sync::MsImap(suzatary_core::mail::account::MsImap {
-                    authority: suzatary_core::mail::account::Authority::Consumers,
-                    inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+                subdir: suzatary_mail::mail::account::slug_of(LINKS_ACCOUNT),
+                sync: Sync::MsImap(suzatary_mail::mail::account::MsImap {
+                    authority: suzatary_mail::mail::account::Authority::Consumers,
+                    inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
                     sent_folder: "Sent".to_owned(),
                 }),
             }),
@@ -622,7 +622,7 @@ fn reading_not_sending(read: &crate::instance::Instance, root: &Path) -> anyhow:
     std::fs::write(
         dir.join(format!(
             "{}.json",
-            suzatary_core::mail::account::slug_of(LINKS_ACCOUNT)
+            suzatary_mail::mail::account::slug_of(LINKS_ACCOUNT)
         )),
         serde_json::json!({
             "version": 1,
@@ -1107,7 +1107,7 @@ fn instance_file(
         mbsyncrc: root.join("mbsyncrc"),
         heartbeat: root.join("triage-heartbeat"),
         accounts: mail_accounts(lapsed),
-        junk: suzatary_core::mail::junk::ChurnList::default(),
+        junk: suzatary_triage::mail::junk::ChurnList::default(),
     };
     File {
         repo: root.to_path_buf(),
@@ -2058,9 +2058,9 @@ mod tests {
     /// Deleting an account's mail tells the index before the tap answers.
     #[test]
     fn forgotten_mail_reads_as_no_longer_stored_at_once() {
-        use suzatary_core::mail::cache::Forget as _;
-        use suzatary_core::mail::mailbox::Mailbox as _;
         use suzatary_held::mail_error::MailError;
+        use suzatary_mail::mail::cache::Forget as _;
+        use suzatary_mail::mail::mailbox::Mailbox as _;
 
         let root = scratch("forgotten");
         let config = mail_fixture(&root, false)
@@ -2079,7 +2079,7 @@ mod tests {
                 root.join("state.json"),
                 root.join("local.json"),
                 || {
-                    suzatary_core::mail::dedup_key::DedupKey::of(
+                    suzatary_mail::mail::dedup_key::DedupKey::of(
                         &suzatary_base::capability::Secret::new("3c".repeat(32)),
                     )
                     .map_err(|refused| refused.to_string())
@@ -2100,12 +2100,12 @@ mod tests {
             root.join("sync.lock"),
             suzatary_io::oauth::TokenStore::new(root.join("oauth")),
         )
-        .forget(&account, suzatary_core::mail::removal::Removal::Mail);
+        .forget(&account, suzatary_mail::mail::removal::Removal::Mail);
         assert!(
             matches!(
                 forgot,
-                suzatary_core::mail::cache::Forgotten::Mail(
-                    suzatary_core::mail::cache::Forgot::Deleted { .. }
+                suzatary_mail::mail::cache::Forgotten::Mail(
+                    suzatary_mail::mail::cache::Forgot::Deleted { .. }
                 )
             ),
             "{forgot:?}"

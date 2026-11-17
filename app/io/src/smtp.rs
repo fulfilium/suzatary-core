@@ -22,8 +22,8 @@ use lettre::transport::smtp::response::{Category, Code, Detail, Severity};
 use rustls_pki_types::CertificateDer;
 use rustls_pki_types::pem::PemObject as _;
 use suzatary_base::capability::{Secret, SmtpToken};
-use suzatary_core::mail::send::{Outgoing, SendError, Sent, Step, angle, build_mime};
-use suzatary_core::mail::transport::Transport;
+use suzatary_mail::mail::send::{Outgoing, SendError, Sent, Step, angle, build_mime};
+use suzatary_mail::mail::transport::Transport;
 
 use crate::http::{Http, HttpError, Req, Ureq};
 use crate::secrets::Resolves;
@@ -370,7 +370,7 @@ fn gmail_api(
 }
 
 /// The SMTP envelope (`to + cc`, hence no Bcc), refusing an address the RFC 5321 grammar
-/// rejects even when [`suzatary_core::mail::address::EmailAddress`]'s thin check passed it.
+/// rejects even when [`suzatary_mail::mail::address::EmailAddress`]'s thin check passed it.
 fn envelope(out: &Outgoing) -> Result<Envelope, SendError> {
     let parse = |address: &str| -> Result<Address, SendError> {
         address
@@ -390,7 +390,7 @@ fn envelope(out: &Outgoing) -> Result<Envelope, SendError> {
 mod tests {
     use super::*;
     use suzatary_base::capability::Secret;
-    use suzatary_core::mail::send::Composed;
+    use suzatary_mail::mail::send::Composed;
 
     fn composed() -> Composed {
         Composed {
@@ -597,7 +597,7 @@ mod tests {
 
     #[test]
     fn a_failure_at_each_microsoft_step_says_whether_the_message_may_have_gone() {
-        use suzatary_core::mail::send::Delivery;
+        use suzatary_mail::mail::send::Delivery;
         assert_eq!(submitted(Stop::Nowhere), Ok(()));
         for step in [
             Step::Connect,

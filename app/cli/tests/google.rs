@@ -13,8 +13,8 @@ use common::fake_google::{self, FakeGoogle};
 use common::{EditsRecorder, Fakes, SecretRecorder, SettingsFixture};
 use suzatary_base::conversation_id::SETUP;
 use suzatary_core::calendar::effect::Calendar as _;
-use suzatary_core::mail::account::{MailAccount, Sync};
-use suzatary_core::mail::address::EmailAddress;
+use suzatary_mail::mail::account::{MailAccount, Sync};
+use suzatary_mail::mail::address::EmailAddress;
 
 const ADA: &str = "ada@example.test";
 
@@ -34,7 +34,7 @@ fn ada() -> EmailAddress {
 
 fn account(sync: Sync) -> MailAccount {
     MailAccount {
-        email: suzatary_core::mail::account_email::AccountEmail::new(ADA)
+        email: suzatary_mail::mail::account_email::AccountEmail::new(ADA)
             .expect("a lower-case address"),
         subdir: "ada-at-example-test".to_owned(),
         sync,
@@ -134,9 +134,9 @@ const MARKER: &str = "zebra-quartz-marker";
 /// The mail message holding [`MARKER`].
 const MARKED_MAIL: &str = "a1b2c3d4e5f6a1b2";
 
-fn marked_mail() -> suzatary_core::mail::MailMessage {
-    suzatary_core::mail::MailMessage {
-        row: suzatary_core::mail::MailRow {
+fn marked_mail() -> suzatary_mail::mail::MailMessage {
+    suzatary_mail::mail::MailMessage {
+        row: suzatary_mail::mail::MailRow {
             hash: MARKED_MAIL.to_owned(),
             id: "marked@example.test".to_owned(),
             sender: "someone@example.test".to_owned(),
@@ -144,7 +144,7 @@ fn marked_mail() -> suzatary_core::mail::MailMessage {
             date: None,
             container: "inbox".to_owned(),
             account: ADA.to_owned(),
-            disposition: suzatary_core::mail::Disposed::Undecided,
+            disposition: suzatary_mail::mail::Disposed::Undecided,
             held: suzatary_held::held_value::Kinds::empty(),
         },
         thread: "000000000000c3fb".to_owned(),
@@ -675,7 +675,7 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let refused = grants.live(&ada()).expect_err("no client is kept");
     assert_eq!(
         refused.class(),
-        suzatary_core::mail::fault::Fault::Unresolved
+        suzatary_mail::mail::fault::Fault::Unresolved
     );
 
     let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
@@ -696,14 +696,14 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let unsigned = grants.live(&ada()).expect_err("never signed in");
     assert_eq!(
         unsigned.class(),
-        suzatary_core::mail::fault::Fault::NeedsLogin
+        suzatary_mail::mail::fault::Fault::NeedsLogin
     );
 
     write(GRANT, "mail,calendar 1//not-one-google-issued");
     let lapsed = grants.live(&ada()).expect_err("Google refuses it");
     assert_eq!(
         lapsed.class(),
-        suzatary_core::mail::fault::Fault::NeedsLogin
+        suzatary_mail::mail::fault::Fault::NeedsLogin
     );
     assert!(lapsed.to_string().contains("7 days"), "{lapsed}");
 }
@@ -920,9 +920,9 @@ fn a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button() {
 fn a_microsoft_card_that_lacks_a_grant_is_fixed_from_its_button() {
     fixed_from_its_button(
         "google-fix-ms",
-        &Sync::MsImap(suzatary_core::mail::account::MsImap {
-            authority: suzatary_core::mail::account::Authority::Organizations,
-            inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+        &Sync::MsImap(suzatary_mail::mail::account::MsImap {
+            authority: suzatary_mail::mail::account::Authority::Organizations,
+            inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
             sent_folder: "Sent Items".to_owned(),
         }),
     );
@@ -933,11 +933,11 @@ fn a_microsoft_card_that_lacks_a_grant_is_fixed_from_its_button() {
 fn a_proton_card_that_lacks_a_grant_is_fixed_from_its_button() {
     fixed_from_its_button(
         "google-fix-proton",
-        &Sync::Proton(suzatary_core::mail::account::Proton {
+        &Sync::Proton(suzatary_mail::mail::account::Proton {
             channel: "proton-all".to_owned(),
             smtp_user: ADA.to_owned(),
             send_addresses: vec![ADA.to_owned()],
-            inbox_folders: suzatary_core::mail::folders::Folders::inbox(),
+            inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
         }),
     );
 }
@@ -1056,7 +1056,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         Arc::clone(&serving.secrets) as _,
     );
     let unsigned = MailAccount {
-        email: suzatary_core::mail::account_email::AccountEmail::new("bo@example.test")
+        email: suzatary_mail::mail::account_email::AccountEmail::new("bo@example.test")
             .expect("a lower-case address"),
         subdir: "bo-at-example-test".to_owned(),
         sync: Sync::Gmail,
@@ -1084,8 +1084,8 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         "{lines:?}"
     );
     assert!(lines[0].contains("occurrences read"), "{lines:?}");
-    let key = suzatary_core::health::SourceKey::GoogleCalendar(
-        suzatary_core::mail::account_email::AccountEmail::folded(&ada()),
+    let key = suzatary_health::health::SourceKey::GoogleCalendar(
+        suzatary_mail::mail::account_email::AccountEmail::folded(&ada()),
     );
     assert!(healths.health(&key).is_some(), "its calendars' health");
     assert!(

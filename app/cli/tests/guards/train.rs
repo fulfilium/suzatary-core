@@ -2635,7 +2635,7 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
             suzatary_core::cast::keys::AGENT.to_owned(),
         ),
         (
-            suzatary_core::mail::dedup_key::DEDUP_KEY,
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
             suzatary_core::cast::keys::DEDUP.to_owned(),
         ),
     ]

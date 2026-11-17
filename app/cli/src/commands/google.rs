@@ -3,9 +3,9 @@
 //! account's result joins the sources' health under its calendars' key.
 
 use suzatary_base::capability::Clock as _;
-use suzatary_core::health::Failure;
-use suzatary_core::health::SourceKey;
-use suzatary_core::health::{Healths, Outcome};
+use suzatary_health::health::Failure;
+use suzatary_health::health::SourceKey;
+use suzatary_health::health::{Healths, Outcome};
 use suzatary_io::google::ReadError;
 
 use crate::instance::Instance;
@@ -37,9 +37,9 @@ pub fn sync_calendars(
 /// (`google::reads_calendars`): a line and a health each, and whether every one was stored. A
 /// lieer account is read through its calendar grant alone, and its mail stays lieer's.
 pub fn read_calendars(
-    accounts: &[suzatary_core::mail::account::MailAccount],
+    accounts: &[suzatary_mail::mail::account::MailAccount],
     grants: &suzatary_io::google::Grants,
-    store_of: impl Fn(&suzatary_core::mail::account::MailAccount) -> std::path::PathBuf,
+    store_of: impl Fn(&suzatary_mail::mail::account::MailAccount) -> std::path::PathBuf,
     now: suzatary_base::capability::Datetime,
 ) -> (Vec<String>, Healths<SourceKey>, bool) {
     let at = prodrome_core::fpl::instant_of(now);

@@ -27,7 +27,7 @@ pub enum Run<T> {
     /// It ran, to this.
     Done(T),
     /// It did not start.
-    Paused(crate::health::Limited),
+    Paused(suzatary_health::health::Limited),
 }
 
 /// Today's round of `daily`, unless the model is under a limit now: the one check every box

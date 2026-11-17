@@ -5,8 +5,8 @@ use suzatary_api::{query, routes, wire};
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 
-use suzatary_core::mail::watch::{self, WatchId};
 use suzatary_signatures::signatures::Tap;
+use suzatary_triage::mail::watch::{self, WatchId};
 
 use super::Chained;
 use super::call::Call;
@@ -137,7 +137,7 @@ pub fn thread(call: &Call<Reader, Thread, ()>) -> Result<Json<wire::ThreadPayloa
 /// `GET /api/mail/watches`: every watch on expected mail that waits.
 pub fn watches(
     call: &Call<Reader, (), ()>,
-) -> Result<Json<suzatary_core::wire::triage::WatchesPayload>, Refusal> {
+) -> Result<Json<suzatary_triage::wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
     let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
     Ok(Json(watch::listed(caps.secretary.watches, now)?))
@@ -146,7 +146,7 @@ pub fn watches(
 /// `POST /api/mail/watches/<id>/cancel`: the owner's tap closes a watch; answers the rest.
 pub fn cancel_watch(
     call: &Call<Tap, Watched, ()>,
-) -> Result<Json<suzatary_core::wire::triage::WatchesPayload>, Refusal> {
+) -> Result<Json<suzatary_triage::wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
     let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
     watch::cancel(caps.secretary.watches, &call.params.0, now)?;

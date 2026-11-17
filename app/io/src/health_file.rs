@@ -1,7 +1,7 @@
 //! A health register on disk: one document under a lock, so the mail sync, the plugin sync and a
 //! migration joining at once each keep the others' results.
 
-use suzatary_core::health::{Healths, Register};
+use suzatary_health::health::{Healths, Register};
 use suzatary_store::store::StoreError;
 
 use crate::docs::Locked;

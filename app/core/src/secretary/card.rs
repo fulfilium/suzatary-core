@@ -1417,10 +1417,10 @@ mod tests {
             email.clone(),
             &one(Responded::Tried {
                 attempt: 1,
-                tried: Tried::Lacks(crate::mail::lacking::Lacking::Grant {
-                    account: crate::mail::address::EmailAddress::new("me@example.test")
+                tried: Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
+                    account: suzatary_mail::mail::address::EmailAddress::new("me@example.test")
                         .expect("an address"),
-                    grant: crate::mail::lacking::Grant::GoogleCalendar,
+                    grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
                 }),
             }),
             &id(),
