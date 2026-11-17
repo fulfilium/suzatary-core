@@ -177,6 +177,15 @@ there is no login page and no public endpoint, by design.
 [`CONTRIBUTING.md`](CONTRIBUTING.md): the gate a change passes, the rule
 that a change lands as a series of small commits, and the style guides.
 
+## Roadmap
+
+The project's open tasks, most urgent first, drawn from
+[the roadmap's own repository](https://github.com/fulfilium/suzatary-core-roadmap)
+at each of its pushes. The picture links to the list, where each task has a
+page with its history.
+
+<a href="https://fulfilium.github.io/suzatary-core-roadmap/"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/fulfilium/suzatary-core-roadmap/master/roadmap-dark.svg"><img alt="The open tasks, most urgent first" src="https://raw.githubusercontent.com/fulfilium/suzatary-core-roadmap/master/roadmap.svg"></picture></a>
+
 ## License
 
 Either the Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE)) or
