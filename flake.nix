@@ -11,7 +11,7 @@
     # the browser fetches the wasm from this input, and two shas would be two readings of one
     # spec. Moving the pin is three places in one commit: this url (with `flake.lock`), the
     # `rev`s in `app/Cargo.toml`, and `app/Cargo.lock`.
-    prodrome.url = "github:fulfilium/prodrome/16f1ba25352becaffcd40fde0e028f469d667837";
+    prodrome.url = "github:fulfilium/prodrome/799cffb1232f6eb62bb3c669400f002260d018ab";
     # One nixpkgs in the closure: this pin carries what the Prodrome's build needs, `cargo`/`rustc`
     # and `wasm-bindgen-cli_0_2_127` (in lockstep with the `=0.2.127` crate).
     prodrome.inputs.nixpkgs.follows = "nixpkgs";

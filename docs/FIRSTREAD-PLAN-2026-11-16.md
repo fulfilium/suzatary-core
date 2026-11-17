@@ -17,10 +17,9 @@ repeat it, and which of them need not.
   skeleton path is 2.9–3.1 s.
 - **Decided:** no reading of a store is kept on disk. A later design that holds the lines by
   position, with seals opened lazily, would start from #524's branch.
-- **Still open** from the old plan, and not this note's subject: the server's start spends
-  5.8 s in `notice` (every declared secret resolved afresh) and 1.6–5.0 s in `erase.texts`
-  (every text swept). Each is a pull request of its own: name its parts until they sum to the
-  whole, then remove what a start does not need.
+- **Landed** from the old plan: #527 (release 2.1.152) reads every declared secret in one
+  call, which took the server's start 5.8 s in `notice`, and sweeps only the dead texts a
+  store holds, which took it 1.6–5.0 s in `erase.texts`.
 
 ## The measurements
 
@@ -102,7 +101,8 @@ Who must work when the server is down:
 
 On the deployment's figures (each first read about 4.6 s), a day costs:
 
-- one `verify` per commit, at about 13 s on a store of this shape;
+- one `verify` per commit, at about 13 s on a store of this shape (about 3.2 s since the pin
+  799cffb, recommendation 1);
 - two first reads per busy pass (`mcp` and `review`), about 9 s;
 - one per sweep, about 4.6 s;
 - one per server start, 3.7 s;
@@ -186,11 +186,12 @@ The deployment's next start says what the order gives against the store call: `w
 
 ## The recommendation, in order of what it saves a day
 
-1. **The Prodrome: answer `deps_findings` without a closure for a change of one dependency**
-   (or from the ancestry bitsets of `prodrome_core::registers`). It saves about 9 s per commit
-   on a store of this shape, and every commit runs `verify`. It is a change to the Prodrome,
-   so it is a request to its owners, with the figures above. It is the first item, and it is
-   not a change in this repository, so this pull request stops at the note and the line.
+1. **Done at the Prodrome pin 799cffb** (its pull request 69): `deps_findings` costs no walk
+   for a change of one dependency, and one walk down the linear order for more, with the same
+   findings (the Prodrome's law 66). On this scratch store, `verify` went from 9.7–11.4 s to
+   3.16–3.30 s (the line: stores, 9,480–11,162 ms, then 2,933–3,063 ms), three runs each.
+   On a store of one conversation of 30,000 lines, it went from 549.9 s to 1.8 s (stores,
+   549,694 ms, then 1,618 ms). Each `verify` printed the same lines before and after.
 2. **`secretary review` stops reading when no card stands.** It saves one first read (about
    4.6 s) per busy pass with nothing standing; the review's JSON already prints `standing`, so
    the journal says how many such passes there are. Today the CLI runs `note_unreadable`, which
@@ -274,6 +275,6 @@ in the Prodrome changes in this pull request.
 ## Order of the work
 
 1. This note and the line, in this pull request, so the deployment's journal gives the counts.
-2. The Prodrome's `deps_findings`, asked of its owners with the figures above.
+2. The Prodrome's `deps_findings`: done at the pin 799cffb.
 3. After a day of the journal: item 2 if the review passes with no card standing are many,
    then items 3 and 4 in the order the journal's seconds put them.
