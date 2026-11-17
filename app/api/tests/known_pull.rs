@@ -33,7 +33,7 @@ fn at(n: usize) -> Datetime {
     Datetime::new(2026, 9, 30, n / 3600, (n / 60) % 60, n % 60, 0).expect("an instant")
 }
 
-fn id(n: usize) -> ConversationId {
+pub(crate) fn id(n: usize) -> ConversationId {
     ConversationId::new(format!("2026-09-30-{n}")).expect("a slug")
 }
 
@@ -41,7 +41,7 @@ fn id(n: usize) -> ConversationId {
 /// spread over them, and each turn sealed again from its own seal, so about half the store is
 /// reseals. The first line begins the store; the rest are appended through one store in memory
 /// holding it and handed over at once, since an append each reads the store again.
-fn store() -> InMemory {
+pub(crate) fn store() -> InMemory {
     let lines = InMemory::default();
     let writer = Actor::new("assistant").expect("an actor");
     let mut held: BTreeMap<usize, u32> = BTreeMap::new();

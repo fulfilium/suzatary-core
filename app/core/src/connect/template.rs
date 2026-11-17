@@ -360,6 +360,8 @@ impl TemplateId {
     }
 }
 
+prodrome_core::word_literal!(TemplateId: TemplateId::ALL => |id| id.as_str());
+
 /// The secret names `channel` needs: its template's steps.
 #[must_use]
 pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {

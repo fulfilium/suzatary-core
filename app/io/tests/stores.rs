@@ -682,7 +682,10 @@ fn asks(root: &Path) {
         Hash::new("ab".repeat(32)).expect("a name"),
         at(17, 0),
         suzatary_core::asks::keeper(),
-        suzatary_core::stores::Kind::Topics,
+        (
+            suzatary_core::stores::Kind::Topics,
+            suzatary_store::receipt::Grounds::Final,
+        ),
         "rests on cd…, which this box does not hold".to_owned(),
     ))
     .expect("appends");

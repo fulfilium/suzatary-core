@@ -71,13 +71,6 @@ impl Params for ConversationId {
     }
 }
 
-impl Params for suzatary_core::connect::TemplateId {
-    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
-        Self::parse(asked.segment("template")?)
-            .map_err(|refused| Refusal::bad_request(refused.to_string()))
-    }
-}
-
 impl Params for Block {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         Ok(Self {
@@ -115,16 +108,6 @@ impl Params for AttachmentId {
                 Refusal::bad_request(failed.to_string())
             },
         )
-    }
-}
-
-impl Body for suzatary_api::wire::Titling {
-    const CAP: usize = MAX_ACT_BYTES;
-
-    type Wire = Self;
-
-    fn parse(titling: Self, _: &State) -> Result<Self, Refusal> {
-        Ok(titling)
     }
 }
 
@@ -275,24 +258,6 @@ pub fn retract(
     .map(Json)
 }
 
-/// `POST …/conversations`.
-pub fn open(
-    call: &Call<Writer, (), suzatary_api::wire::Titling>,
-) -> Result<Json<wire::ConversationPayload>, Refusal> {
-    call.state
-        .with_cards(|caps, cards| secretary_routes::open(caps, cards, &call.body.title))
-        .map(Json)
-}
-
-/// `POST …/setup/<template>`.
-pub fn setup(
-    call: &Call<Writer, suzatary_core::connect::TemplateId, ()>,
-) -> Result<Json<wire::ConversationPayload>, Refusal> {
-    call.state
-        .with_cards(|caps, cards| secretary_routes::setup(caps, cards, call.params))
-        .map(Json)
-}
-
 /// A stored secret's handle.
 pub struct Handle(String);
 
@@ -308,18 +273,6 @@ pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value
         .with_cards(|caps, cards| secretary_routes::replace(caps, cards, &call.params.0))?;
     call.state.heard(&suzatary_base::conversation_id::SETUP);
     Ok(Json(serde_json::json!({})))
-}
-
-/// `POST …/<id>/title`.
-pub fn rename(
-    call: &Call<Actor, ConversationId, suzatary_api::wire::Titling>,
-) -> Result<Json<wire::ConversationPayload>, Refusal> {
-    call.state
-        .with_cards(|caps, cards| {
-            secretary_routes::rename(caps, cards, &call.guard, &call.params, &call.body.title)
-        })
-        .inspect(|_| call.state.heard(&call.params))
-        .map(Json)
 }
 
 /// `POST …/<id>/erase`, by tap, after any running round stops.

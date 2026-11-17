@@ -12,6 +12,9 @@ use suzatary_triage::rule::Rule;
 /// One of the box's own rules over a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Conversational {
+    /// A conversation set up from a template is owed the box's opening note
+    /// ([`crate::secretary::set_up`]), which is the outcome.
+    Opening,
     /// A line that wakes a model is owed an answer: run a round, whose closing turn (an answer
     /// with no calls, or "did not finish") is the outcome.
     Answer,
@@ -21,7 +24,11 @@ pub enum Conversational {
 }
 
 /// Every conversation rule, in the order a reading is tried against them.
-pub const RULES: [Conversational; 2] = [Conversational::Answer, Conversational::Title];
+pub const RULES: [Conversational; 3] = [
+    Conversational::Opening,
+    Conversational::Answer,
+    Conversational::Title,
+];
 
 impl Rule for Conversational {
     type Key = ConversationId;
@@ -30,6 +37,7 @@ impl Rule for Conversational {
 
     fn name(&self) -> &'static str {
         match self {
+            Conversational::Opening => "opening",
             Conversational::Answer => "answer",
             Conversational::Title => "title",
         }
@@ -37,6 +45,7 @@ impl Rule for Conversational {
 
     fn holds(&self, reading: &Transcript) -> bool {
         match self {
+            Conversational::Opening => crate::secretary::set_up::owed(reading).is_some(),
             Conversational::Answer => reading
                 .owed()
                 .iter()

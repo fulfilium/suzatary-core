@@ -77,7 +77,7 @@ export interface Todos {
 /** What a store this tab writes answers its hand-over (`written`). */
 export interface Written {
   since: () => string;
-  /** `[[{hash, literal}]]`: what the tab wrote and may post, in posts the box takes whole. */
+  /** `[[{hash, literal, keys}]]`: what the tab wrote and may post, in posts the box takes whole; `keys` each slot's. */
   unsent: () => string;
   answered: (receipt: string) => LineStep;
   /** `names` refused for good in the box's words. */
@@ -155,8 +155,21 @@ export interface LineStep {
   free: () => void;
 }
 
-/** The lines a tab holds; a slot without its key reads as missing. */
-export interface Lines {
+/** A line this tab sealed: the move of its own lines (as a `LineStep` reads), its name and its conversation. */
+export interface Sealed extends LineStep {
+  readonly name: string;
+  readonly conversation: string;
+}
+
+/** The lines a tab holds; a slot without its key reads as missing. What this tab wrote is handed over as every
+ * store a tab writes is (`written`), each step of it the device's record of the own lines. */
+export interface Lines extends Written {
+  /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once. */
+  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed;
+  /** The device's record of own lines taken: `{moved, unread}`. */
+  take_own: (records: string) => string;
+  /** The box's answer to an own line: `"Unsent"`, `{"Refused": {kind, reason}}` or `"Taken"`. */
+  answer: (name: string) => string;
   hold: (add: string, drop: string) => void;
   /** `hold` of literals already checked against their names, so none is hashed again. */
   hold_admitted: (add: string, drop: string) => void;

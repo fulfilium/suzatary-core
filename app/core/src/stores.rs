@@ -16,6 +16,7 @@ use crate::asks::AskEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::line_event::LineEvent;
+use crate::secretary::lines_rule::LinesRule;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
@@ -158,7 +159,7 @@ stores! {
     /// The proposals a person taps.
     Inbox = "inbox", Pushed, Objects: InboxEvent, Hold::File("submit.lock");
     /// The secretary's conversations, every word locked.
-    Lines = "lines", Pushed, Objects: LineEvent, Hold::File("lines.lock");
+    Lines = "lines", Pushed, Objects: LineEvent, Hold::File("lines.lock") => LinesRule;
     /// The keys of the lines' words, destroyed by the lines' sweep.
     LineKeys = "line keys", Local, Directory;
     /// Which facts the secretary remembered and forgot, by id.

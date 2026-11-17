@@ -42,7 +42,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     );
     let asked = ask::ask(
         &common::operator(&running.base),
-        &ask::Conversation::New,
+        &common::topic(fakes.conversations.conversations()),
         "what is due this week",
     )
     .expect("the operator asks");
@@ -81,7 +81,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
 /// never asked; the card waits for the owner's tap.
 #[test]
 fn an_operators_tap_on_a_card_that_sends_is_refused() {
-    let (_fakes, running) = running(
+    let (fakes, running) = running(
         "operator-send",
         FakeModel::saying([
             r#"{"say": "Drafted.", "calls": [{"verb": "propose_email", "args": {
@@ -95,7 +95,7 @@ fn an_operators_tap_on_a_card_that_sends_is_refused() {
     let operator = common::operator(&running.base);
     let asked = ask::ask(
         &operator,
-        &ask::Conversation::New,
+        &common::topic(fakes.conversations.conversations()),
         "tell counsel thursday works",
     )
     .expect("the operator asks");

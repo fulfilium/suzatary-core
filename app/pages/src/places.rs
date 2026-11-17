@@ -141,7 +141,6 @@ pub(crate) enum Question<'a> {
     Cancel(&'a str),
     Overview,
     /// A POST beginning a setup conversation on a template, answered by the conversation.
-    Setup(&'a str),
     /// A POST filing the card that asks for a new value of a stored secret, by its handle.
     Replace(&'a str),
     /// A POST filing this device's card for a trusted device to tap.
@@ -196,7 +195,6 @@ impl Question<'_> {
             Question::Watches => "/api/mail/watches".to_owned(),
             Question::Cancel(id) => format!("/api/mail/watches/{}/cancel", component(id)),
             Question::Overview => "/api/overview".to_owned(),
-            Question::Setup(template) => format!("/api/secretary/setup/{}", component(template)),
             Question::Replace(handle) => format!("/api/secretary/replace/{}", component(handle)),
             Question::Key => "/api/act/key".to_owned(),
             Question::Pair => "/api/act/pair".to_owned(),

@@ -17,6 +17,7 @@ mod memo;
 mod object_rows;
 mod prose;
 mod rendering;
+mod seal;
 mod secretary;
 mod signatures;
 mod todos;

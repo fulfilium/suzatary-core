@@ -9,6 +9,22 @@ use std::sync::LazyLock;
 #[serde(try_from = "String", into = "String")]
 pub struct ConversationId(String);
 
+/// Text that names no single held conversation.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Unmatched {
+    /// No held id is or begins with it.
+    #[error("no conversation is or begins with {0}")]
+    None(String),
+    /// Several held ids begin with it.
+    #[error("{count} conversations begin with {text}: type more of the id")]
+    Several {
+        /// The text.
+        text: String,
+        /// How many begin with it.
+        count: usize,
+    },
+}
+
 /// A name that is not a slug.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
@@ -40,17 +56,23 @@ impl ConversationId {
         }
     }
 
-    /// Mint one for today: the day plus the smallest free suffix, so a listing sorts by when.
-    #[must_use]
-    pub fn minted(day: chrono::NaiveDate, taken: &[Self]) -> Self {
-        let stem = day.format("%Y-%m-%d").to_string();
-        let mut n = 1u64;
-        loop {
-            let candidate = Self(format!("{stem}-{n}"));
-            if !taken.contains(&candidate) {
-                return candidate;
-            }
-            n += 1;
+    /// The id among `held` that `text` names: that id itself, or the one held id `text` begins,
+    /// so a person types a few of a conversation's 32 hex digits rather than all of them.
+    ///
+    /// # Errors
+    /// [`Unmatched`]: no held id is or begins with `text`, or several begin with it.
+    pub fn among(text: &str, held: &[Self]) -> Result<Self, Unmatched> {
+        if let Some(id) = held.iter().find(|id| id.0 == text) {
+            return Ok(id.clone());
+        }
+        let begun: Vec<&Self> = held.iter().filter(|id| id.0.starts_with(text)).collect();
+        match begun.as_slice() {
+            [one] => Ok((*one).clone()),
+            [] => Err(Unmatched::None(text.to_owned())),
+            several => Err(Unmatched::Several {
+                text: text.to_owned(),
+                count: several.len(),
+            }),
         }
     }
 
@@ -185,5 +207,27 @@ mod tests {
                 .as_str(),
             "brief-1"
         );
+    }
+
+    /// A held id is named by itself or by a prefix only it begins with; a prefix two begin with,
+    /// or none, names nothing.
+    #[test]
+    fn a_conversation_is_named_by_a_prefix_only_it_begins_with() {
+        let held: Vec<ConversationId> = ["0a1b2c", "0a9f00", "default"]
+            .into_iter()
+            .map(|id| ConversationId::new(id).expect("a slug"))
+            .collect();
+        let named = |text: &str| ConversationId::among(text, &held).map(|id| id.to_string());
+        assert_eq!(named("default"), Ok("default".to_owned()));
+        assert_eq!(named("0a1"), Ok("0a1b2c".to_owned()));
+        assert_eq!(named("0a9f00"), Ok("0a9f00".to_owned()));
+        assert_eq!(
+            named("0a"),
+            Err(Unmatched::Several {
+                text: "0a".to_owned(),
+                count: 2
+            })
+        );
+        assert_eq!(named("ff"), Err(Unmatched::None("ff".to_owned())));
     }
 }

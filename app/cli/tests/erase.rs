@@ -23,15 +23,7 @@ fn one_round(tag: &str, words: &str) -> (Arc<Fakes>, String, String) {
     let base = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
         .start()
         .base;
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Folders"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "Folders");
     common::said(&base, &id, words);
     (fakes, base, id)
 }

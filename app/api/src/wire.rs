@@ -166,6 +166,8 @@ impl StoreName {
 /// holds it to the rows whose writer is `Tab`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
 pub enum WrittenName {
+    #[serde(rename = "lines")]
+    Lines,
     #[serde(rename = "topics")]
     Topics,
     #[serde(rename = "topic-aliases")]
@@ -173,7 +175,11 @@ pub enum WrittenName {
 }
 
 impl WrittenName {
-    pub const ALL: [WrittenName; 2] = [WrittenName::Topics, WrittenName::TopicAliases];
+    pub const ALL: [WrittenName; 3] = [
+        WrittenName::Lines,
+        WrittenName::Topics,
+        WrittenName::TopicAliases,
+    ];
 
     /// The store a path segment names, where a tab writes it.
     #[must_use]
@@ -186,6 +192,7 @@ impl WrittenName {
     #[must_use]
     pub const fn store(self) -> StoreName {
         match self {
+            WrittenName::Lines => StoreName::Lines,
             WrittenName::Topics => StoreName::Topics,
             WrittenName::TopicAliases => StoreName::TopicAliases,
         }
@@ -365,7 +372,8 @@ pub struct ContentPayload {
     pub objects: Vec<Content>,
 }
 
-/// `POST /api/objects`: literals only; a name is what the bytes are.
+/// `POST /api/objects` and `POST /api/stores/<store>/objects`: literals, and what travels beside
+/// them; a name is what the bytes are.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct PostedObjects {
@@ -374,13 +382,11 @@ pub struct PostedObjects {
     /// As a pull names it: absent or empty for none.
     #[serde(default)]
     pub since: String,
-}
-
-/// `POST /api/secretary/conversations` and `…/title`: `""` leaves it to the title job.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(deny_unknown_fields)]
-pub struct Titling {
-    pub title: String,
+    /// By object name, each slot's key in hex, in slot order: the lines' alone, never inside an
+    /// object, and refused by every other store.
+    #[serde(default)]
+    #[ts(type = "Record<string, Array<string>>")]
+    pub keys: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// `POST …/say` and `…/edit`.
@@ -1012,7 +1018,6 @@ fn answers(visit: &mut impl TypeVisitor) {
 fn bodies(visit: &mut impl TypeVisitor) {
     visit.visit::<Authoring>();
     visit.visit::<WrittenName>();
-    visit.visit::<Titling>();
     visit.visit::<crate::secretary::routes::Erasing>();
     visit.visit::<Saying>();
     visit.visit::<Uploading>();
@@ -1169,7 +1174,6 @@ mod tests {
             "body": "b", "category": "home", "rationale": "r",
             "priority": {"how": "flat", "percent": 75},
         }}));
-        reads::<Titling>(&serde_json::json!({"title": "t"}));
         reads::<Saying>(&serde_json::json!({"say": "s", "after": 2}));
         reads::<PickedFile>(&serde_json::json!({"id": hash}));
         reads::<Uploading>(&serde_json::json!({"file": "AAAA", "private": true}));

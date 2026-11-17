@@ -137,6 +137,30 @@ pub fn open_default(
     }
 }
 
+/// Begin a new conversation with its first line, its id that line's
+/// ([`LineEvent::begun_id`](crate::secretary::line_event::LineEvent::begun_id)); an empty `title`
+/// leaves it for [`crate::secretary::title::owed`].
+///
+/// # Errors
+/// The store's, and an id already taken.
+pub fn begin(
+    conversations: Conversations<'_>,
+    model: &dyn Model,
+    title: &str,
+    kind: store::Kind,
+    at: Datetime,
+) -> Result<(ConversationId, Stored), Refusal> {
+    let opened = Entry::Opened {
+        at,
+        title: Words::kept(title.to_owned()),
+        model: model.name(),
+        kind,
+    };
+    let id = transcript::begin(conversations, &opened)?;
+    let stored = read(conversations, &id)?;
+    Ok((id, stored))
+}
+
 /// One conversation, folded.
 ///
 /// # Errors

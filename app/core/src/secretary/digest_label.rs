@@ -86,7 +86,7 @@ impl Kind {
     #[must_use]
     pub fn of(entry: &Entry) -> Self {
         match entry {
-            Entry::Opened { .. } => Kind::Opened,
+            Entry::Opened { .. } | Entry::SetUp { .. } => Kind::Opened,
             Entry::Titled { .. } => Kind::Titled,
             Entry::Said { turn, by, .. } => match turn {
                 Turn::Person { .. } => Kind::Person,

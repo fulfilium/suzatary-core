@@ -161,7 +161,8 @@ export namespace program {
       case "Tree": {
         const basis = basisOf(q.basis)
         return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), lane).then(r => r.answer)
-      }
+      }      case "Line":
+        return storesync.seal(q.line, time.moment()).then(sealed => text.printed(sealed))
     }
   }
 

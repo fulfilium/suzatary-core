@@ -56,12 +56,14 @@ impl World {
         }
     }
 
-    /// Both topic stores begun, so a tab's first write has a prodrome to rest on.
+    /// Every store a tab writes begun (the topic stores and the lines), so a tab's first write
+    /// has a prodrome to rest on: a tab may not begin one.
     ///
     /// # Errors
-    /// Either store unreadable or not begun.
-    pub fn begin_topics(&self) -> Result<(), suzatary_store::store::StoreError> {
-        self.opened.topics.begin()
+    /// A store unreadable or not begun.
+    pub fn begin_written(&self) -> Result<(), suzatary_store::store::StoreError> {
+        self.opened.topics.begin()?;
+        self.opened.remembering.conversations.lines.begin()
     }
 
     /// The stores a tapped act and the coding poll write through: this world's own handles.

@@ -251,9 +251,10 @@ function reach(objects: readonly Obj[], names: readonly string[]): number {
   return count;
 }
 
-/** One refusal per name: a final word over a wait for a key, then the least sentence, so either order keeps the same one. */
+/** One refusal per name: a final word, then an outdated one, over a wait for a key, then the least sentence, so either order keeps the same one. */
+const KIND_RANK: Readonly<Record<RefusedObject["kind"], number>> = { final: 0, outdated: 1, trust: 2 };
 function refusedBoth(a: readonly RefusedObject[], b: readonly RefusedObject[]): RefusedObject[] {
-  const rank = (one: RefusedObject): string => `${one.kind === "final" ? 0 : 1}${one.reason}`;
+  const rank = (one: RefusedObject): string => `${KIND_RANK[one.kind]}${one.reason}`;
   const byName = new Map<string, RefusedObject>();
   for (const one of [...a, ...b]) {
     const was = byName.get(one.hash);
@@ -465,7 +466,8 @@ function refusedAfter(held: readonly RefusedObject[], refused: readonly RefusedO
   );
 }
 
-const FINAL = (one: RefusedObject): boolean => one.kind === "final";
+// A final refusal and an outdated one both hold a write back; only one awaiting trust is posted again.
+const FINAL = (one: RefusedObject): boolean => one.kind !== "trust";
 const EVERY = (): boolean => true;
 
 /** A child of a refused object can never be adopted, so one refusal stops the whole branch above it. */

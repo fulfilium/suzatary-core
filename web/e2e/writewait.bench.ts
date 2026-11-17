@@ -67,17 +67,15 @@ const frontier = async (path: string): Promise<string> => ((await get(path)) as 
 const device = await keyed()
 atTheTerminal(["device", "trust", device.public], INSTANCE)
 
-const opened = (await post(device, "/api/secretary/conversations", { title: "" })).json as { id: string }
-const conversation = `/api/secretary/conversations/${encodeURIComponent(opened.id)}`
+// A tab opens and renames a conversation by a line it seals (stage 2c): no route is timed for either.
+const conversation = "/api/secretary/conversations/bulk-1"
 const linesSince = await frontier("/api/stores/lines/skeleton")
 
 const results: Timed[] = [
   // What every page pull costs with nothing new: the floor under each "then the page pulls" below.
   await timed("pull: lines skeleton, nothing new", async () => (await fetch(`${BASE}/api/stores/lines/skeleton?since=${linesSince}`)).status),
   await timed("pull: inbox objects, whole", async () => (await fetch(`${BASE}/api/stores/inbox/objects`)).status),
-  await timed("open a conversation", async () => (await post(device, "/api/secretary/conversations", { title: "" })).status),
   await timed("say (202, before the round runs)", async (n) => (await post(device, `${conversation}/say`, { say: `measured question ${n}`, references: [], attachments: [] })).status),
-  await timed("rename a conversation", async (n) => (await post(device, `${conversation}/title`, { title: `Measured ${n}` })).status),
   // Every tenth bulk proposal stands (`fixture.rs`, `bulk_proposals`): an email card, recorded and not sent by the fixture.
   await timed("tap an email card", async (n) => (await post(device, `/api/secretary/conversations/bulk-proposals/proposals/${n * 10}/tap`, { note: "" })).status),
   await timed("dismiss a card", async (n) => (await post(device, `/api/secretary/conversations/bulk-proposals/proposals/${n * 10 + 100}/dismiss`, { reason: "measured" })).status),

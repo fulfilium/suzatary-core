@@ -338,3 +338,56 @@ pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader
         step: Step::of(line.shape()),
     }
 }
+
+/// One line's node, as the box serves it and the tab computes its own: its name, what it rests
+/// on, its print's length and its header.
+#[must_use]
+pub fn skeleton_node(
+    name: &prodrome_core::event::Hash,
+    envelope: &prodrome_core::event::Envelope<LineEvent>,
+) -> SkeletonNode {
+    sized_node(
+        name,
+        envelope,
+        prodrome_core::event::canonical_envelope(envelope).len(),
+    )
+}
+
+/// One line's node, sized by `size`.
+#[must_use]
+pub fn sized_node(
+    name: &prodrome_core::event::Hash,
+    envelope: &prodrome_core::event::Envelope<LineEvent>,
+    size: usize,
+) -> SkeletonNode {
+    let header = match envelope.event() {
+        Some(line) => line_header(line),
+        None => NodeHeader::Structure {
+            kind: constructor(envelope).to_owned(),
+        },
+    };
+    SkeletonNode {
+        hash: name.as_str().to_owned(),
+        parents: prodrome_core::event::parents_of(envelope)
+            .iter()
+            .map(|parent| parent.as_str().to_owned())
+            .collect(),
+        size,
+        header,
+    }
+}
+
+/// An envelope's constructor.
+fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str {
+    use prodrome_core::event::Envelope;
+    match envelope {
+        Envelope::Sealed { .. } => "Sealed",
+        Envelope::Woven { .. } => "Woven",
+        Envelope::Genesis(_) => "Genesis",
+        Envelope::Change(_) => "Change",
+        Envelope::Snapshot(_) => "Snapshot",
+        Envelope::Signed(_) => "Signed",
+        Envelope::KeyAdded(_) => "KeyAdded",
+        Envelope::KeyRevoked(_) => "KeyRevoked",
+    }
+}

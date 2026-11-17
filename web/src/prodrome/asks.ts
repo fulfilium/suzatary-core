@@ -2,7 +2,7 @@
 // A monotone act is sealed into the tab's own replica; every other is a request the box answers under its lock.
 
 import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
-import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, fixProposal, forgetFact, regenerate, renameConversation, retractSummary, say, stopAnswer, tapProposal } from "../wire/api"
+import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, fixProposal, forgetFact, regenerate, retractSummary, say, stopAnswer, tapProposal } from "../wire/api"
 import { parsed } from "../chat/refs"
 import type vouch from "./vouch"
 import type topics from "./topics"
@@ -106,13 +106,12 @@ export namespace asks {
   const asked = (kind: "Say" | "Edit", { conversation: c, text, references, files, after }: Question): Promise<unknown> =>
     kind === "Say" ? say(c, text, parsed(references), files, after) : editQuestion(c, text, parsed(references), files)
 
-  // A secret's value travels beside the ask, never in it, so no key, set or log holds it. A seal and a topic are the
-  // shell's, since each writes the tab's own replica.
-  export const send = (a: Exclude<Ask, { type: "Seal" | "Topic" }>, secret?: string): Promise<unknown> =>
+  // A secret's value travels beside the ask, never in it, so no key, set or log holds it. A seal, a topic and a rename
+  // are the shell's, since each writes the tab's own replica.
+  export const send = (a: Exclude<Ask, { type: "Seal" | "Topic" | "Rename" }>, secret?: string): Promise<unknown> =>
     a.type === "Answer" ? answered(a.at, a.answer, secret)
     : a.type === "Question" ? asked(a.kind, a.question)
     : a.type === "Round" ? (a.kind === "Stop" ? stopAnswer(a.conversation) : regenerate(a.conversation))
-    : a.type === "Rename" ? renameConversation(a.conversation, a.title)
     : a.type === "Erase" ? eraseTurns(a.conversation, a.turns)
     : a.type === "Retract" ? retractSummary(a.node)
     : forgetFact(a.fact)

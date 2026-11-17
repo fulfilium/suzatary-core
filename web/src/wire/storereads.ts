@@ -29,9 +29,14 @@ export namespace storereads {
   export const content = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
     http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND, "Never")
 
-  // What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the
-  // request was proven for.
-  export const post = (store: stores.Written, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
-    http.act(`/api/stores/${store}/objects`, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload)
+  // What a replica of a store a tab writes holding the frontier `since` lacks on the box: the box takes each as the actor
+  // the request was proven for. `keys` travel beside the objects, never in one: each slot's key by its line's name, the
+  // lines' alone.
+  export const post = (store: stores.Written, objects: readonly string[], since: string, keys: Readonly<Record<string, readonly string[]>> = {}): Promise<ReceiptPayload> =>
+    http.act(
+      `/api/stores/${store}/objects`,
+      { objects: [...objects], since, keys: Object.fromEntries(Object.entries(keys).map(([name, k]) => [name, [...k]])) } satisfies PostedObjects,
+      payload.ReceiptPayload,
+    )
 }
 export default storereads

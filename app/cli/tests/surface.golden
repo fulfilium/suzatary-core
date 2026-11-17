@@ -34,7 +34,6 @@ GET /api/presence actor -
 GET /api/releases read -
 POST /api/secretary/attachments write signed
 GET /api/secretary/attachments/{id} read -
-POST /api/secretary/conversations write signed
 GET /api/secretary/conversations/{conversation}/blocks/{sha} read -
 GET /api/secretary/conversations/{conversation}/drawn read -
 POST /api/secretary/conversations/{conversation}/edit act signed
@@ -47,13 +46,11 @@ POST /api/secretary/conversations/{conversation}/regenerate act signed
 POST /api/secretary/conversations/{conversation}/say act signed
 POST /api/secretary/conversations/{conversation}/stop act signed
 GET /api/secretary/conversations/{conversation}/stream read -
-POST /api/secretary/conversations/{conversation}/title act signed
 GET /api/secretary/memory read -
 POST /api/secretary/memory/{id}/forget act signed
 GET /api/secretary/record read -
 POST /api/secretary/record/{node}/retract tap signed
 POST /api/secretary/replace/{handle} write signed
-POST /api/secretary/setup/{template} write signed
 GET /api/stores/events read -
 GET /api/stores/lines/skeleton read -
 GET /api/stores/{store}/content read -

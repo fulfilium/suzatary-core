@@ -10,7 +10,7 @@ use crate::chrome::{self, Chrome, Masthead, Shape, Status};
 use crate::composer::{self, Composer};
 use crate::places::Place;
 use crate::runtime::{
-    self, Act, Body, Context, Outcome, Question, Questioning, Reach, Said, Secret, answered,
+    self, Act, Context, Outcome, Question, Questioning, Reach, Said, Secret, answered,
 };
 
 /// The composer's key for the draft, a name no conversation can have.
@@ -67,11 +67,6 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Draft {}
 
-#[derive(Debug, Deserialize)]
-struct Opening {
-    id: String,
-}
-
 fn say(id: &str, sent: composer::Sent) -> Effect {
     Effect::Act {
         ask: Ask::Said(id.to_owned()),
@@ -101,12 +96,13 @@ fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
             Opened::Opening(waiting) => waiting.push(sent),
             Opened::No => {
                 m.opened = Opened::Opening(vec![sent]);
-                effects.push(Effect::Post {
+                effects.push(Effect::Core {
                     ask: Ask::Open,
-                    path: "/api/secretary/conversations".to_owned(),
-                    body: Body::Titling(suzatary_api::wire::Titling {
-                        title: m.name.clone(),
-                    }),
+                    question: runtime::Core::Line {
+                        line: runtime::Sealing::Open {
+                            title: m.name.clone(),
+                        },
+                    },
                 });
             }
         }
@@ -167,8 +163,8 @@ impl Program for Draft {
                         Opened::Opening(w) => w,
                         Opened::No | Opened::Yes(_) => Vec::new(),
                     };
-                    match answered::<Opening>(answer) {
-                        Ok(Opening { id }) => {
+                    match answered::<runtime::Sealed>(answer) {
+                        Ok(runtime::Sealed { conversation: id }) => {
                             let effects = waiting.into_iter().map(|s| say(&id, s)).collect();
                             m.opened = Opened::Yes(id);
                             effects

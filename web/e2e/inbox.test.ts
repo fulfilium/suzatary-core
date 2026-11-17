@@ -29,7 +29,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import { fold, PROPOSED_BASE, SIGNED_POST, suite, WRITE_BASE } from "./harness";
+import { fold, PROPOSED_BASE, SIGNED_POST, suite, WRITE_BASE, opened } from "./harness";
 import cast from "../test/cast";
 
 const { proposed } = cast.world;
@@ -81,7 +81,7 @@ async function freshConversation(base: string): Promise<string> {
   await app.page.navigate(`${base}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
   return app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   );
 }
 

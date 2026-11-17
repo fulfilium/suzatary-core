@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 
 import type { Landed } from "./harness"
-import { LANDED_ROW, PHONE, SIGNED_POST, suite, trustThisDevice, withCore } from "./harness"
+import { LANDED_ROW, PHONE, suite, trustThisDevice, withCore, opened } from "./harness"
 
 const app = await suite("epoch")
 
@@ -26,7 +26,7 @@ async function converse(text: string): Promise<string> {
   await app.page.navigate(`${EPOCH_BASE}/#/secretary/default`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   const id = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   )
   await app.page.navigate(`${EPOCH_BASE}/#/secretary/${id}`)
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 })

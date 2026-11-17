@@ -313,14 +313,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         "acts-say-unconfirmed",
         [r#"{"say": "Seen."}"#, r#"{"say": "Seen."}"#],
     );
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Pointing"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "Pointing");
     let stamped = |todo: &str| {
         let say = common::act(
             &format!("{base}/api/secretary/conversations/{id}/say"),
@@ -379,14 +372,7 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         "acts-edit-unconfirmed",
         [r#"{"say": "Seen."}"#, r#"{"say": "Seen again."}"#],
     );
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Editing"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "Editing");
     let say = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
         &serde_json::json!({"say": "this one"}),

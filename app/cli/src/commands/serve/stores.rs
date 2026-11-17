@@ -8,7 +8,9 @@ use suzatary_api::wire::{StoreName, WrittenName};
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
 use suzatary_core::asks::AskEvent;
+use suzatary_core::secretary::lines_rule::SlotKeys;
 use suzatary_core::wire::lines::ReceiptPayload;
+use suzatary_store::admission::Beside;
 use suzatary_store::store::{Prodrome, StoreError};
 
 use super::Chained;
@@ -131,8 +133,14 @@ impl Params for Written {
     }
 }
 
+/// What a store a tab writes takes beside its objects, read at the door.
+fn beside<B: Beside>(literals: &Literals) -> Result<B, Refusal> {
+    B::parse(&literals.keys).map_err(Refusal::bad_request)
+}
+
 /// `POST /api/stores/<store>/objects`: a store a tab writes, each change taken only beside a
-/// trusted signature and where the rule its row names takes it.
+/// trusted signature and where the rule its row names takes it. The lines keep each slot's key a
+/// taken line came with before they take the line, and no key of a line they refuse.
 pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayload>, Refusal> {
     let caps = call.state.first.caps;
     let topics = caps.secretary.topics;
@@ -147,15 +155,69 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
         asks: &*call.state.asks,
         at: caps.secretary.clock.now(),
     };
+    let keyless = || beside::<()>(&call.body);
+    let nothing = |_: &[prodrome_core::event::Hash]| Ok(());
     match call.params.0 {
+        WrittenName::Lines => {
+            let conversations = caps.secretary.conversations;
+            let keys = beside::<SlotKeys>(&call.body)?;
+            let keep = |taken: &[prodrome_core::event::Hash]| -> Result<(), Refusal> {
+                for name in taken {
+                    for key in keys.of(name) {
+                        conversations.keys.set(&key.name(), key)?;
+                    }
+                }
+                Ok(())
+            };
+            let beside = routes::Beside {
+                posted: &keys,
+                keep: &keep,
+            };
+            let lines = conversations.lines;
+            let receipt =
+                routes::receive_changes(lines, posted, &beside, frontiers, writer, recording)?;
+            woken(&call.state, &call.body.objects, &receipt);
+            Ok(receipt)
+        }
         WrittenName::Topics => {
-            routes::receive_changes(topics.memberships, posted, frontiers, writer, recording)
+            let shared = routes::Beside {
+                posted: &keyless()?,
+                keep: &nothing,
+            };
+            let memberships = topics.memberships;
+            routes::receive_changes(memberships, posted, &shared, frontiers, writer, recording)
         }
         WrittenName::TopicAliases => {
-            routes::receive_changes(topics.aliases, posted, frontiers, writer, recording)
+            let shared = routes::Beside {
+                posted: &keyless()?,
+                keep: &nothing,
+            };
+            let aliases = topics.aliases;
+            routes::receive_changes(aliases, posted, &shared, frontiers, writer, recording)
         }
     }
     .map(Json)
+}
+
+/// Each conversation a line the box took is in told to its worker, so what the line starts (a
+/// setup's opening note) is written.
+fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
+    let vocabulary = suzatary_core::secretary::line_event::LineVocabulary;
+    let conversations: std::collections::BTreeSet<_> = posted
+        .iter()
+        .filter_map(|literal| {
+            let envelope = prodrome_core::event::parse_envelope::<
+                suzatary_core::secretary::line_event::LineEvent,
+            >(&vocabulary, literal)
+            .ok()?;
+            let name = prodrome_core::event::seal_hash(&envelope);
+            let taken = receipt.adopted.iter().any(|n| n == name.as_str());
+            taken.then(|| envelope.event().map(|line| line.conversation().clone()))?
+        })
+        .collect();
+    for id in &conversations {
+        state.heard(id);
+    }
 }
 
 /// The frontier a replica of the lines holds.

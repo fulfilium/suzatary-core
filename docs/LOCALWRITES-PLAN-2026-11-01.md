@@ -205,7 +205,7 @@ what the sink performs at most once, and the request names it:
 
 A said line and a title are words, and the lines store seals every slot's
 words under a key of its own (`secretary::locked_text`, ChaCha20-Poly1305,
-one key per text), after the redaction door (`line_event.rs:392`, `seal`).
+one key per text), after the redaction door (`line_event.rs`, `seal`).
 The seal is a function of the core, so the tab runs the same function in the
 core's worker (`suzatary-wasm`), with the browser's entropy as the `Entropy`
 port. The tab posts the slot's key beside the object, as a pull answer
@@ -224,7 +224,8 @@ destroyable, so a key inside an object would make an erasure impossible. Then:
   as it does for `CLIENT_MIN`, and the new bundle seals the words again.
   So no unscrubbed word reaches the store, and the box stays the one door.
 - **The stamp is checked at acceptance.** A said line carries its stamp
-  (`Stamp::Actor(Speaker { actor, seat })`, `app/core/src/seat.rs`). The rule computes the
+  (`Stamp::Actor(Speaker { actor, seat })`, `secretary/stamp.rs`; `Seat` is in
+  `app/signatures`). The rule computes the
   stamp from the signer: the actor the history trusts the key for, and the
   seat (`Device` for a device key, `Operator` for the root key). A mismatch is
   a final refusal. So a tab cannot claim a seat or another actor.
@@ -298,8 +299,8 @@ state.
 | rename a topic | `Aliased` / `Unaliased` (`AliasEvent`) | `secretary-topic-aliases` | acceptance | the new name at once | the old name again |
 | a todo act (done, cancel, reopen, tend, add, update, confirm) | the chain's events, as today | the chain | acceptance | as today | as today |
 | rename a conversation | a `Titled` line, sealed in the tab | lines | acceptance | the new title | the old title |
-| open a conversation | none of its own: the first `Said` of a new conversation id, which the tab mints as the first 32 hex of the said line's name | lines | acceptance | the new conversation with its question | the conversation is gone; the draft returns to the composer |
-| begin a setup conversation from Settings | a `SetUp { template }` line, the first line of a new conversation id the tab mints as above | lines | acceptance, then the box's opening note, which the box writes as a reading of a `SetUp` line with no note after it | the conversation, titled for the template, at once | the conversation is gone; Settings again |
+| open a conversation | an `Opened` line, sealed in the tab, the first line of a new conversation whose id is a function of that line's clear fields (32 hex digits of a SHA-256 over its print with no conversation and no words), which the box's own start uses too | lines | acceptance | the new conversation with its question | the conversation is gone; the draft returns to the composer |
+| begin a setup conversation from Settings | a `SetUp { template }` line, a new shape, the first line of a new conversation whose id is minted as above | lines | acceptance, then the box's opening note (a `Said` act stamped `Box`), which the box writes as a reading of a `SetUp` line with no note after it | the conversation, titled for the template, at once | the conversation is gone; Settings again |
 | say, edit | a `Said` line, sealed in the tab | lines | acceptance, then `Began` (the claim, §4.4), then the answer lines | the question at once; "queued", then "working" | the question goes; the words return to the composer |
 | regenerate, stop | a `Regenerate { round }` / `Stop { round }` line | lines | the worker's next line | "asked again" / "stopping" | the round as the box holds it |
 | tap a card | `Tapped { answer, endorsement, sealed_value }` on the proposal | inbox | `Trying` (the claim), then `Sent`, `Applied`, `Acted`, `MayHaveGone` or `NotSent` | the card reads "sending" or "applying" | the card stands again, with the refusal |
@@ -733,20 +734,27 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
      of core or record: `Writes<N>`, `receipt` and a per-schema `Admission`;
      one hand-over engine; writability read from the `stores!` row. *Law:*
      the rollback law, stated once over `Writes<N>`.
-   - **2c. The lines.** The lines' vocabulary (the first `Said` of a
-     conversation, whose id is the first 32 hex digits of its name;
-     `SetUp { template }`; `Refused::Outdated`) and their admission rule (the
+   - **2c. The lines.** The lines' vocabulary (`Titled` and `Opened` as the
+     box seals them, a new conversation's id a function of its opening
+     line's clear fields, disjoint from every id the box mints; a new shape
+     `SetUp { template }`;
+     `Refused::Outdated`) and their admission rule (the
      scrub and the stamp checked at acceptance, §2.3, and the slot keys posted
      beside the objects); the core's seal in the worker, own nodes (§5.5),
      and the lines' row never dropping an unsent object. Rename, open and
      setup stop calling their routes; the routes are deleted. What an
-     accepted line starts (an answer, the setup's opening note) is a reading
-     of what no outcome follows yet, run at most once per line name. *Laws:*
+     accepted line starts (the setup's opening note; an answer is stage 3's)
+     is a reading of what no outcome follows yet, written under the lines'
+     lock only while it is still owed. *Laws:*
      a line the tab seals and the line the box seals from the same words read
      alike; the admission rule refuses a slot whose scrub changes its words
      and a stamp the signer does not prove; the node the tab computes equals
      the box's; an accepted line starts its effect once, across a restart.
      *Measure:* rename drawn with no round trip; the box's acceptance time.
+     *Measured (#492):* a rename's Enter to its title drawn, 1,154 ms through the route to 114 ms
+     median (`bigstore`, 400 ms each way); the box's acceptance of one posted line over 14,111
+     lines, 273 ms median in a release build, the whole store read twice per post. A second tab
+     of the device sees an own line only once the box serves it back.
 3. **Say, edit, regenerate and stop as lines; rounds claimed by `Began`.** The
    owed reading and the claim (§4.4), generic in the Prodrome; the run id and
    its lifetime `flock`; one automatic retry. *Law:* at most two model calls
@@ -754,7 +762,10 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
    acceptances, process restarts and two workers; a line interrupted twice
    reads "interrupted" and is owed nothing. *Measure:* Send to the question drawn (no round
    trip); Send to the first answer delta; the warm snapshot's rewrite cost
-   after a conversation.
+   after a conversation; the box's acceptance of one posted line, against
+   stage 2c's 273 ms, with the store read once per post. *Answers:* a second
+   tab of the device sees a `Said` this tab sealed before the box serves it
+   back (stage 2c's lines reach other tabs only through the box).
 4. **Taps as inbox objects, claimed per proposal.** `Tapped`, `Dismissed`,
    `Checked`, `Dropped`; the performer's claim (§4.5); the sending rule at
    admission; secret values sealed to the card's key (§4.6). The four

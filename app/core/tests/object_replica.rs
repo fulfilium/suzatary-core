@@ -498,7 +498,7 @@ proptest! {
                 name.clone(),
                 at,
                 suzatary_core::asks::keeper(),
-                store,
+                (store, suzatary_store::receipt::Grounds::Final),
                 "rests on what this box does not hold".to_owned(),
             ))
             .expect("appended");
@@ -535,7 +535,7 @@ proptest! {
             .map(|o| o.name().clone())
             .collect();
         prop_assert_eq!(names(&refused), joined, "the landed row stands whole beside every write not taken back");
-        let told: BTreeSet<Hash> = refused.refusals().iter().map(|(o, _)| o.name().clone()).collect();
+        let told: BTreeSet<Hash> = refused.refusals().iter().map(|(o, _, _)| o.name().clone()).collect();
         prop_assert_eq!(told, f);
     }
 }

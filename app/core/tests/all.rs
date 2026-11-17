@@ -20,6 +20,8 @@ mod chain_set;
 mod connect;
 #[path = "context_cost.rs"]
 mod context_cost;
+#[path = "conversation_id.rs"]
+mod conversation_id;
 #[path = "decisions_schema.rs"]
 mod decisions_schema;
 #[path = "digest.rs"]
@@ -48,6 +50,8 @@ mod laws;
 mod line_replica;
 #[path = "line_words.rs"]
 mod line_words;
+#[path = "lines_rule.rs"]
+mod lines_rule;
 #[path = "memory.rs"]
 mod memory;
 #[path = "memory_schema.rs"]

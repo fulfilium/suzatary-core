@@ -1,6 +1,6 @@
 //! One line of a conversation, and the instant every line carries.
 
-use super::{Decision, Kind, Namer, Scope, Title};
+use super::{Begun, Decision, Kind, Namer, Scope, Start, Title};
 use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::stamp::Stamp;
@@ -27,6 +27,18 @@ pub enum Entry {
         model: String,
         /// What it is for.
         kind: Kind,
+    },
+    /// A conversation begun on a template's opening ([`crate::connect::TemplateId`]): a topic
+    /// titled by the template, whose first note the box writes from it.
+    SetUp {
+        /// When.
+        #[serde(serialize_with = "stamped")]
+        at: Datetime,
+        /// What it is about, for the list.
+        title: Words<String>,
+        /// The template it sets up.
+        #[serde(serialize_with = "template_name")]
+        template: crate::connect::TemplateId,
     },
     /// The conversation was named; the last one wins, so a rename is an append.
     Titled {
@@ -234,7 +246,7 @@ impl Entry {
     #[must_use]
     pub fn title(&self) -> Option<Words<String>> {
         match self {
-            Entry::Opened { title, .. } => Some(title.clone()),
+            Entry::Opened { title, .. } | Entry::SetUp { title, .. } => Some(title.clone()),
             Entry::Titled { title, .. } => Some(named(title)),
             Entry::Said { .. }
             | Entry::Proposed { .. }
@@ -258,6 +270,7 @@ impl Entry {
     pub fn at(&self) -> Datetime {
         match self {
             Entry::Opened { at, .. }
+            | Entry::SetUp { at, .. }
             | Entry::Titled { at, .. }
             | Entry::Said { at, .. }
             | Entry::Proposed { at, .. }
@@ -278,6 +291,50 @@ impl Entry {
 }
 
 impl Entry {
+    /// What this line begins, where it begins a conversation; every reader of a start asks
+    /// here, so a new beginning is one arm.
+    #[must_use]
+    pub fn start(&self) -> Option<Start<'_>> {
+        match self {
+            Entry::Opened {
+                at,
+                title,
+                model,
+                kind,
+            } => Some(Start {
+                at: *at,
+                title,
+                kind: *kind,
+                begun: Begun::Opened { model },
+            }),
+            Entry::SetUp {
+                at,
+                title,
+                template,
+            } => Some(Start {
+                at: *at,
+                title,
+                kind: Kind::Topic,
+                begun: Begun::SetUp(*template),
+            }),
+            Entry::Titled { .. }
+            | Entry::Said { .. }
+            | Entry::Proposed { .. }
+            | Entry::Reviewed { .. }
+            | Entry::ReviewFailed { .. }
+            | Entry::Stopped { .. }
+            | Entry::Rewound { .. }
+            | Entry::MemorySeen { .. }
+            | Entry::Session { .. }
+            | Entry::Kept { .. }
+            | Entry::Unheard { .. }
+            | Entry::Scoped { .. }
+            | Entry::Coding { .. }
+            | Entry::Erased { .. }
+            | Entry::Resealed { .. } => None,
+        }
+    }
+
     /// The box's own act line: words it composed from its own state (a proposal's number, a
     /// key's name, a restart, the owner's note on his own tap), carrying nobody else's, stamped
     /// [`Stamp::Box`] so taint reads it clean and no round counts it the owner's.
@@ -314,6 +371,18 @@ impl Entry {
 /// An instant as [`stamp`] prints it, for [`Entry`]'s print.
 fn stamped<S: serde::Serializer>(at: &Datetime, to: S) -> Result<S::Ok, S::Error> {
     to.serialize_str(&crate::secretary::stamp::stamp(*at))
+}
+
+/// A template as its name, for [`Entry`]'s print.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's serialize_with hands a reference"
+)]
+fn template_name<S: serde::Serializer>(
+    template: &crate::connect::TemplateId,
+    to: S,
+) -> Result<S::Ok, S::Error> {
+    to.serialize_str(template.as_str())
 }
 
 /// A naming's title, as the conversation holds it.

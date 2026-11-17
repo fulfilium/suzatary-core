@@ -16,7 +16,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { PHONE, SIGNED_POST, suite, WRITE_BASE } from "./harness";
+import { PHONE, suite, WRITE_BASE, opened } from "./harness";
 import cast from "../test/cast";
 
 const { notice } = cast.world;
@@ -55,7 +55,7 @@ async function converse(said: string): Promise<void> {
   await app.page.navigate(`${WRITE_BASE}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
   const id = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   );
   await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });

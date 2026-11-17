@@ -1010,7 +1010,7 @@ fn destroy<'l>(
                 .remove(name)
                 .map_err(|failed| failed.to_string()),
             // Out of the box's reach: the erase question names them.
-            Holder::Vault | Holder::DataHistory => Ok(()),
+            Holder::Vault | Holder::DataHistory | Holder::DeviceLines => Ok(()),
         });
         match emptied {
             Ok(()) => destroyed += 1,
@@ -1104,6 +1104,33 @@ pub fn start(
     write(conversations, id, 0, first)
 }
 
+/// Begin a new conversation with `first`, its id a function of that line
+/// ([`LineEvent::begun_id`]), as a tab's opening line is; answers the id.
+///
+/// # Errors
+/// [`StoreError::Taken`] where the store holds a line of that id already, an entry the door or
+/// the schema refuses, and the stores' own.
+pub fn begin(
+    conversations: Conversations<'_>,
+    first: &Entry,
+) -> Result<ConversationId, StoreError> {
+    let _held = conversations.lines.locked()?;
+    let (line, opens) = LineEvent::begin(writer(), first, conversations.entropy)
+        .map_err(|failed| StoreError::not_appended("conversation store", &failed))?;
+    let id = line.begun_id();
+    if keys(conversations)?.contains(&id) {
+        return Err(StoreError::Taken {
+            what: "conversation",
+            name: id.to_string(),
+        });
+    }
+    for key in &opens {
+        conversations.keys.set(&key.name(), key)?;
+    }
+    conversations.lines.append(line)?;
+    Ok(id)
+}
+
 /// Append `entry` to conversation `id`, its words through the redaction door and locked, resting
 /// on every line the conversation holds.
 ///
@@ -1118,6 +1145,25 @@ pub fn push(
     let _held = conversations.lines.locked()?;
     let held = read(conversations, id)?.lines().len();
     write(conversations, id, held, entry)
+}
+
+/// The line `owed` answers on conversation `id`'s reading, appended under the lines' lock, where
+/// one is still owed: a line two writers both owe is written once. Whether one was written.
+///
+/// # Errors
+/// [`push`]'s.
+pub fn push_owed(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    owed: impl FnOnce(&Transcript) -> Option<Entry>,
+) -> Result<bool, StoreError> {
+    let _held = conversations.lines.locked()?;
+    let reading = read(conversations, id)?;
+    let Some(entry) = owed(&reading) else {
+        return Ok(false);
+    };
+    write(conversations, id, reading.lines().len(), &entry)?;
+    Ok(true)
 }
 
 /// Each key kept first, then the line that names them. A key is never taken back when the

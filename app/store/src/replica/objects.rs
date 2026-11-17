@@ -156,7 +156,7 @@ impl Objects {
     }
 
     /// The asks' refusals, joined in as final where they name an own object.
-    pub fn refused(&mut self, refused: BTreeMap<Hash, String>) -> Move {
+    pub fn refused(&mut self, refused: BTreeMap<Hash, (crate::receipt::Grounds, String)>) -> Move {
         Move::Own(self.own.refused(refused))
     }
 
@@ -187,9 +187,9 @@ impl Objects {
         self.own.unsent(|name| reading.holds(name))
     }
 
-    /// What the box refused for good of this replica's writes, with its sentence.
+    /// What the box refused for good of this replica's writes, of which kind, with its sentence.
     #[must_use]
-    pub fn refusals(&self) -> Vec<(&Object, &str)> {
+    pub fn refusals(&self) -> Vec<(&Object, crate::replica::writes::Refusal, &str)> {
         self.own.refusals()
     }
 

@@ -134,16 +134,12 @@ fn served(
 }
 
 fn proposed(base: &str) -> (String, serde_json::Value) {
-    proposed_in(base, &serde_json::json!({"title": "The CV"}))
+    proposed_in(base, "The CV")
 }
 
-/// [`proposed`] in a conversation opened with `opening`.
-fn proposed_in(base: &str, opening: &serde_json::Value) -> (String, serde_json::Value) {
-    let mut opened = common::act(&format!("{base}/api/secretary/conversations"), opening);
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+/// [`proposed`] in a conversation opened under `title`.
+fn proposed_in(base: &str, title: &str) -> (String, serde_json::Value) {
+    let id = common::opened(base, title);
     let payload = common::said(base, &id, "retitle my cv properly");
     (id, payload)
 }
@@ -265,7 +261,7 @@ fn a_tapped_session_fires_the_routine_with_the_task_alone() {
 fn an_operators_tap_starts_a_session() {
     use suzatary_cli::commands::{ask, tap};
     let (routine, served_routine) = fake_routine();
-    let (running, _fakes) = served(
+    let (running, fakes) = served(
         "coding-operator",
         Firing::Endpoint {
             base: routine,
@@ -277,8 +273,12 @@ fn an_operators_tap_starts_a_session() {
     );
     let base = &running.base;
     let operator = common::operator(base);
-    let asked = ask::ask(&operator, &ask::Conversation::New, "retitle my cv properly")
-        .expect("the operator asks");
+    let asked = ask::ask(
+        &operator,
+        &common::topic(fakes.conversations.conversations()),
+        "retitle my cv properly",
+    )
+    .expect("the operator asks");
     let id = asked.conversation;
     let proposal = &conversation(base, id.as_str())["proposals"][0];
     assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");
@@ -488,7 +488,7 @@ fn a_new_conversations_session_is_reported_by_one_branch_among_many() {
             secrets: Arc::new(Holding),
         },
     );
-    let (id, _) = proposed_in(&base, &serde_json::json!({"title": ""}));
+    let (id, _) = proposed_in(&base, "");
     assert_eq!(answer(&base, &id, "tap", &serde_json::json!({})).0, 200);
     served.join().expect("the fake ran");
 
@@ -781,8 +781,12 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
     let (running, fakes) = afresh_box(routine);
     let base = &running.base;
     let operator = common::operator(base);
-    let asked = ask::ask(&operator, &ask::Conversation::New, "retitle my cv properly")
-        .expect("the operator asks");
+    let asked = ask::ask(
+        &operator,
+        &common::topic(fakes.conversations.conversations()),
+        "retitle my cv properly",
+    )
+    .expect("the operator asks");
     let old = asked.conversation;
     let proposals = conversation(base, old.as_str())["proposals"].clone();
     assert_eq!(proposals.as_array().map(Vec::len), Some(1), "{proposals}");

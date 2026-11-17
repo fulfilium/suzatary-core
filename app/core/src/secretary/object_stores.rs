@@ -61,6 +61,7 @@ pub fn answers(receipt: &ReceiptPayload) -> Vec<(Hash, Answer)> {
             let kind = match r.kind {
                 RefusalKind::Final => Refusal::Final,
                 RefusalKind::Trust => Refusal::Trust,
+                RefusalKind::Outdated => Refusal::Outdated,
             };
             (
                 n,

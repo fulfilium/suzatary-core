@@ -48,6 +48,8 @@ pub struct Wanted(query::Hashes);
 pub struct Literals {
     pub(super) objects: Vec<String>,
     pub(super) since: prodrome_core::store::frontier::Since,
+    /// What travels beside them, read by the store posted to ([`suzatary_store::admission::Beside`]).
+    pub(super) keys: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 impl Literals {
@@ -126,6 +128,7 @@ impl Body for Literals {
         Ok(Self {
             since: query::since(Some(&posted.since))?,
             objects: posted.objects,
+            keys: posted.keys,
         })
     }
 }
@@ -254,6 +257,8 @@ pub fn objects(
 pub fn take_objects(
     call: &Call<Poster, (), Literals>,
 ) -> Result<Json<suzatary_core::wire::lines::ReceiptPayload>, Refusal> {
+    <() as suzatary_store::admission::Beside>::parse(&call.body.keys)
+        .map_err(Refusal::bad_request)?;
     let caps = call.chain.caps;
     // A note's line is stamped by the todos it names as they stood before the post.
     let before = call.state.chains_read();

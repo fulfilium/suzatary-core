@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 
-import { PHONE, SIGNED_POST, suite, WRITE_BASE } from "./harness";
+import { PHONE, suite, WRITE_BASE, opened } from "./harness";
 
 const app = await suite("waiting");
 
@@ -40,7 +40,7 @@ const cutPlaceholders = `(async () => {
 async function freshConversation(): Promise<string> {
   await app.open(WRITE_BASE);
   return app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Waiting"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Waiting"),
   );
 }
 

@@ -107,7 +107,14 @@ impl Act {
             body,
         };
         match self {
-            Act::Begin { template } => post(Question::Setup(template), Body::Empty {}),
+            Act::Begin { template } => Effect::Core {
+                ask: Ask::Run(self.clone()),
+                question: runtime::Core::Line {
+                    line: runtime::Sealing::SetUp {
+                        template: template.clone(),
+                    },
+                },
+            },
             Act::AskTrust { key } => post(
                 Question::Key,
                 Body::Key(wire::KeyAsked { key: key.clone() }),
@@ -122,11 +129,6 @@ impl Act {
             Act::Replace { handle } => post(Question::Replace(handle), Body::Empty {}),
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct Opened {
-    id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -404,8 +406,10 @@ fn answered(m: &mut Model, act: &Act, answer: Answer) -> Vec<Effect> {
             }
         }
         Answer::Done { body } => match act {
-            Act::Begin { .. } => vec![match runtime::answered::<Opened>(Answer::Done { body }) {
-                Ok(Opened { id }) => Effect::Go { href: focused(&id) },
+            Act::Begin { .. } => vec![match runtime::answered::<runtime::Sealed>(Answer::Done { body }) {
+                Ok(runtime::Sealed { conversation }) => Effect::Go {
+                    href: focused(&conversation),
+                },
                 Err(words) => Effect::Toast { words },
             }],
             Act::Pair { .. } => {

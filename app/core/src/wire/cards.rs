@@ -40,7 +40,7 @@ pub struct Overview {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Offer {
-    /// What `POST /api/secretary/setup/<template>` takes.
+    /// The template's name, which a `SetUp` line names.
     pub template: String,
     pub group: crate::connect::Group,
     /// As a sentence ends with it: `a Google account (its mail and calendars)`.

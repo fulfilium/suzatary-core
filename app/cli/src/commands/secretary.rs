@@ -1358,7 +1358,11 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.action {
         Action::Ask { conversation, text } => {
             let operator = crate::commands::call::Operator::of(&instance)?;
-            let asked = crate::commands::ask::ask(&operator, conversation, text)?;
+            let id = match conversation {
+                crate::commands::ask::Conversation::New => begun_topic(&instance)?,
+                crate::commands::ask::Conversation::Named(id) => id.clone(),
+            };
+            let asked = crate::commands::ask::ask(&operator, &id, text)?;
             println!("{}", asked.answer);
             eprintln!("conversation: {}", asked.conversation);
             eprintln!("request: {}", asked.request.as_str());
@@ -1849,8 +1853,11 @@ pub fn dismiss(
     if !chain.policy.roster.contains(&who) {
         anyhow::bail!("{actor} is not on {}'s roster", chain.policy.name.as_str());
     }
-    let id = ConversationId::new(conversation).map_err(|failed| anyhow::anyhow!("{failed}"))?;
     let opened = crate::wiring::Opened::of(instance, DECLARED);
+    let held = suzatary_core::secretary::transcript::keys(
+        opened.remembering.conversations.conversations(),
+    )?;
+    let id = ConversationId::among(conversation, &held)?;
     let stored = suzatary_core::secretary::dismiss(
         opened.remembering.conversations.conversations(),
         opened.memories(),
@@ -2088,6 +2095,22 @@ fn brief(
     Ok(())
 }
 
+/// A topic begun on the box's own store, its title left to the title job, as `brief --new`
+/// begins one: no route opens a conversation, since a tab begins one with its opening line.
+fn begun_topic(instance: &Instance) -> anyhow::Result<ConversationId> {
+    let wired = wired(instance, None)?;
+    let caps = &wired.secretary();
+    let (id, _) = suzatary_core::secretary::conversations::begin(
+        caps.conversations,
+        caps.model,
+        "",
+        suzatary_core::secretary::store::Kind::Topic,
+        caps.clock.now(),
+    )
+    .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    Ok(id)
+}
+
 fn run_brief(
     instance: &Instance,
     wired: &Wired,
@@ -2097,17 +2120,9 @@ fn run_brief(
     let chains = wired.bound();
     let caps = &wired.secretary();
     let id = if new {
-        let taken = suzatary_core::secretary::transcript::keys(caps.conversations)
-            .context("reading the conversations directory")?;
-        let today = instance
-            .persona
-            .zone
-            .day(prodrome_core::fpl::instant_of(caps.clock.now()));
-        let id = ConversationId::minted(today, &taken);
-        suzatary_core::secretary::conversations::start(
+        let (id, _) = suzatary_core::secretary::conversations::begin(
             caps.conversations,
             caps.model,
-            &id,
             title,
             suzatary_core::secretary::store::Kind::Topic,
             caps.clock.now(),
@@ -2550,7 +2565,8 @@ fn list(instance: &Instance) -> anyhow::Result<()> {
 
 fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
     let store = conversations(instance);
-    let id = ConversationId::new(id).map_err(|failed| anyhow::anyhow!("{failed}"))?;
+    let held = suzatary_core::secretary::transcript::keys(store.conversations())?;
+    let id = ConversationId::among(id, &held)?;
     let stored = suzatary_core::secretary::conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     println!("{}  {}  ({})", stored.id, stored.title, stored.model);

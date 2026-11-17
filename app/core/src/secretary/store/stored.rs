@@ -24,7 +24,9 @@ pub struct Stored {
     pub title: Words<String>,
     /// What it is for.
     pub kind: Kind,
-    /// Which model is behind it.
+    /// Which model is behind it, for the page's tooltip: the one its opening named, or, where the
+    /// opening names none (a tab's, and a setup's), the first that opened a session in it; empty
+    /// until one does.
     pub model: String,
     /// Every turn, oldest first, each with the instant it was said.
     pub turns: Vec<Said>,
@@ -135,7 +137,10 @@ impl Stored {
             // A second opening line is ignored, not refused: the first is the fact, and one
             // stray line must not cost a whole transcript. An erasure's slots were read as gone
             // where they stood, and a reseal's words where the slot it seals stands.
-            Entry::Opened { .. } | Entry::Erased { .. } | Entry::Resealed { .. } => {}
+            Entry::Opened { .. }
+            | Entry::SetUp { .. }
+            | Entry::Erased { .. }
+            | Entry::Resealed { .. } => {}
             Entry::Titled { title, .. } => self.title = super::entry::named(title),
             Entry::Said { .. } => self.turns.extend(Said::of(entry)),
             Entry::Proposed {
@@ -189,6 +194,7 @@ impl Stored {
                 // A line from before the opening window was recorded: what it was sent is not
                 // known, so it is read as holding every turn.
                 self.session = Some(Kept::of(session, model, cwd, *at, surface.clone(), 0));
+                self.named(model);
             }
             Entry::Kept {
                 at,
@@ -199,6 +205,7 @@ impl Stored {
                 from,
             } => {
                 self.session = Some(Kept::of(session, model, cwd, *at, surface.clone(), *from));
+                self.named(model);
             }
             Entry::Scoped { scope, .. } => self.scope = *scope,
             // Only the session that did not hear ends: a later one heard the turn.
@@ -240,20 +247,25 @@ impl Stored {
 
     /// The conversation as its opening line alone says it is.
     fn opened(id: &ConversationId, first: Option<&Entry>) -> Result<Self, NotAConversation> {
-        let Some(Entry::Opened {
-            at,
-            title,
-            model,
-            kind,
-        }) = first
-        else {
+        let Some(start) = first.and_then(Entry::start) else {
             return Err(NotAConversation::Unopened(id.clone()));
         };
+        let model = match start.begun {
+            super::Begun::Opened { model } => model.to_owned(),
+            super::Begun::SetUp(_) => String::new(),
+        };
         Ok(Self {
-            title: title.clone(),
-            model: model.clone(),
-            ..Self::empty(id, *kind, *at)
+            title: start.title.clone(),
+            model,
+            ..Self::empty(id, start.kind, start.at)
         })
+    }
+
+    /// `model` as the model behind it, where nothing named one before.
+    fn named(&mut self, model: &str) {
+        if self.model.is_empty() {
+            model.clone_into(&mut self.model);
+        }
     }
 
     /// Whether turn `index` is on the live path: no rewind set it aside.

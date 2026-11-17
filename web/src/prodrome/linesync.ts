@@ -2,12 +2,14 @@
 // and keeps each move it answers on the device as its frame (`replicalog`), holding no node, key or head of its own.
 
 import type { Lines } from "./core"
-import { admitsOf, framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
+import { CoreError, admitsOf, framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
 import content from "./content"
 import replicasync from "./replicasync"
 import excluded from "./excluded"
 import type heads from "./heads"
 import keep from "./keep"
+import ownlines from "./ownlines"
+import d from "../wire/decoder"
 import type lines from "./lines"
 import { CONTENT } from "./objects"
 import phases from "./phases"
@@ -48,6 +50,8 @@ export namespace linesync {
     readonly lacking: (scope: lines.Scope) => number
     // Which blocks the device may keep, decided against every frame on it (`rendered.Admit`).
     readonly admit: rendered.Admit
+    // A move of what this tab wrote, its `delta` the device's record of those own lines: its moves heard.
+    readonly ownStepped: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
   }
 
   const NAME = "lines"
@@ -236,6 +240,36 @@ export namespace linesync {
       setTimeout(() => void inTurn(purge), 0)
     }
 
+    const Took = d.json(d.obj<{ moved: unknown; unread: string[] }>({ moved: d.unknown, unread: d.arr(d.str) }))
+    // What this tab wrote and the box has not served back, read from the device's row of own lines into the core: on
+    // every load, whatever form the log was of, so no unsent line is dropped with it.
+    const ownRead = async (): Promise<void> => {
+      if (!idb.available()) return
+      const kept = await ownlines.kept()
+      if (kept.type === "Error") return fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${kept.e}); they stay on the device untouched`))
+      if (kept.v.length === 0) return
+      const took = held.take_own(JSON.stringify(kept.v))
+      void ownlines.settled()
+      const said = Took(took)
+      if (said.type === "Error") throw new CoreError(`own lines taken: unexpected shape (${said.e})`)
+      moved(JSON.stringify(said.v.moved))
+      const unread = said.v.unread
+      if (unread.length > 0) fx.told(`own/${KEPT}`, replicasync.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
+    }
+    // A move of the own lines kept on the device before it is heard: a write the device could not keep is said, since a
+    // reload would forget it.
+    const ownStepped = async (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> => {
+      const [delta, said] = [step.delta, step.moved]
+      step.free()
+      const records = ownlines.ofDelta(delta)
+      if (records.type === "Error") throw new Error(`a move of this tab's own lines: ${records.e}`)
+      if (idb.available() && records.v.length > 0) {
+        const kept = await ownlines.keep(records.v)
+        if (kept.type === "Error") fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines were not kept on this device (${kept.e}); a reload forgets them`))
+      }
+      moved(said)
+    }
+
     // One read of the device's log per page: the core loaded from it, before anything reads the lines.
     const restored = once.of(async (): Promise<void> => {
       phases.mark("lines restore")
@@ -244,6 +278,7 @@ export namespace linesync {
         if (kept.type === "Error") told(kept.e)
         else await loaded(kept.v)
       }
+      await ownRead()
       phases.mark("lines restored")
       // A wake lost is caught up before the next pull.
       log.heard(() => void inTurn(caughtUp))
@@ -394,6 +429,7 @@ export namespace linesync {
         admits: async (ks, s) => ((await log.behind(s, after, mine)) ? "Behind" : admitsOf(held, ks)),
         behind: () => inTurn(caughtUp),
       },
+      ownStepped,
     }
   }
 }

@@ -963,8 +963,8 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         serving.peers,
         serving.brain,
     )));
-    if let Err(failed) = world.begin_topics() {
-        tracing::warn!("serve: the topic stores are not begun: {failed}");
+    if let Err(failed) = world.begin_written() {
+        tracing::warn!("serve: the stores a tab writes are not begun: {failed}");
     }
     let mut bound = world.chains.iter().map(|stores| Chained {
         caps: Box::leak(Box::new(world.server(stores))),
@@ -1672,6 +1672,14 @@ pub async fn instance_watched(state: State, path: PathBuf) {
 
 fn resume_waiting(state: &State) {
     let caps = state.first.caps;
+    match suzatary_core::secretary::set_up::owing(caps.secretary.conversations) {
+        Ok(owing) => {
+            for id in &owing {
+                state.heard(id);
+            }
+        }
+        Err(failed) => tracing::warn!("secretary: the openings owed did not read: {failed}"),
+    }
     let answered = match state.answered.healths() {
         Ok(answered) => answered,
         Err(failed) => {

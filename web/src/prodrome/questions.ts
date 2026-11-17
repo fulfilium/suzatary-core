@@ -145,6 +145,8 @@ export namespace questions {
     Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<Worded<Dressed<Streamed>>> }
     // A refusal fails in the box's words.
     Topic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: null }
+    // Sealed as this tab's line, read at once and handed over behind the answer: its name and its conversation.
+    Line: { q: { readonly line: lines.Sealing; readonly at: string; readonly actor: string }; a: lines.Sealed }
   }
   export type Kind = keyof Table
   export type Question = { [k in Kind]: { readonly type: k } & Table[k]["q"] }[Kind]
@@ -457,6 +459,8 @@ export namespace questions {
           ).then(async (w): Promise<Whole<Worded<Dressed<Streamed>>>> => (w.type === "Held" ? { type: "Held", v: await dressing(w.v.read, w.v.blocks, []) } : w))
         case "Topic":
           return stores.write(q.write, q.at, q.actor).then(() => null)
+        case "Line":
+          return stores.seal(q.line, q.at, q.actor)
       }
     }
   }

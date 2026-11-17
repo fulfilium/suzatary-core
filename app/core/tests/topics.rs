@@ -12,7 +12,9 @@
 //! - Every event, topic and target prints and parses back to itself.
 
 use std::collections::BTreeSet;
-use suzatary_store::admission::{Admission, Shared};
+use suzatary_core::sync::Holding;
+use suzatary_store::admission::{Admission, Inadmissible, Shared};
+use suzatary_store::receipt::Grounds;
 
 use prodrome_core::event::{
     Actor, Envelope, canonical, canonical_envelope, parse_event, seal_hash,
@@ -506,8 +508,16 @@ fn posted<E: Schema<Vocabulary: Default>>(
         .keys()
         .cloned()
         .collect();
-    let received =
-        suzatary_core::sync::receive_changes::<Shared<E>>(&held, &mine, actor, &TRUSTING);
+    let received = suzatary_core::sync::receive_changes::<Shared<E>>(
+        &Holding {
+            names: &held,
+            held: &(),
+        },
+        &mine,
+        &(),
+        actor,
+        &TRUSTING,
+    );
     let prints: std::collections::BTreeMap<_, _> = received
         .outcome
         .taken
@@ -574,7 +584,14 @@ impl Door {
         trusting: &suzatary_signatures::signatures::Trusting,
     ) -> suzatary_core::sync::Received {
         suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
-            &self.held, prints, &self.ada, trusting,
+            &Holding {
+                names: &self.held,
+                held: &(),
+            },
+            prints,
+            &(),
+            &self.ada,
+            trusting,
         )
     }
 
@@ -664,14 +681,19 @@ fn the_box_door_takes_only_the_posters_changes() {
             seal_hash(&signature(&door.child)),
         ]
     );
+    let held: BTreeSet<prodrome_core::event::Hash> = door
+        .held
+        .iter()
+        .cloned()
+        .chain([seal_hash(&door.theirs)])
+        .collect();
     let again = suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
-        &door
-            .held
-            .iter()
-            .cloned()
-            .chain([seal_hash(&door.theirs)])
-            .collect(),
+        &Holding {
+            names: &held,
+            held: &(),
+        },
         &[print(&door.theirs)],
+        &(),
         &door.ada,
         &TRUSTING,
     );
@@ -688,8 +710,17 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
     struct Roots;
     impl Admission for Roots {
         type Schema = MembershipEvent;
-        fn refuses(change: &prodrome_core::change::Change<MembershipEvent>) -> Option<String> {
-            (!change.deps.is_empty()).then(|| "only a first write is taken here".to_owned())
+        type Beside = ();
+        type Held = ();
+        fn held<'e>(_: impl Iterator<Item = &'e MembershipEvent>) {}
+        fn refuses(
+            change: &prodrome_core::change::Change<MembershipEvent>,
+            _: &suzatary_store::admission::Post<'_, Self>,
+        ) -> Option<Inadmissible> {
+            (!change.deps.is_empty()).then(|| Inadmissible {
+                grounds: Grounds::Final,
+                reason: "only a first write is taken here".to_owned(),
+            })
         }
     }
     let door = Door::new();
@@ -705,8 +736,16 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         4,
         "the shared rule takes all four"
     );
-    let ruled =
-        suzatary_core::sync::receive_changes::<Roots>(&door.held, &prints, &door.ada, &TRUSTING);
+    let ruled = suzatary_core::sync::receive_changes::<Roots>(
+        &Holding {
+            names: &door.held,
+            held: &(),
+        },
+        &prints,
+        &(),
+        &door.ada,
+        &TRUSTING,
+    );
     let taken: BTreeSet<_> = ruled
         .outcome
         .taken
@@ -722,7 +761,10 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         .collect();
     assert!(refused.contains(&(
         Some(seal_hash(child)),
-        Reason::Inadmissible("only a first write is taken here".to_owned())
+        Reason::Inadmissible(Inadmissible {
+            grounds: Grounds::Final,
+            reason: "only a first write is taken here".to_owned(),
+        })
     )));
     assert!(
         refused
@@ -733,7 +775,7 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         ruled
             .recorded
             .iter()
-            .any(|(name, _)| *name == seal_hash(child))
+            .any(|(name, _, _)| *name == seal_hash(child))
     );
 }
 
@@ -783,9 +825,15 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
         door.refused(&[print(&signature(mine))]),
         vec![Reason::NotYetHeld(seal_hash(mine))]
     );
+    let held: BTreeSet<prodrome_core::event::Hash> =
+        door.held.iter().cloned().chain([seal_hash(mine)]).collect();
     let lone = suzatary_core::sync::receive_changes::<Shared<MembershipEvent>>(
-        &door.held.iter().cloned().chain([seal_hash(mine)]).collect(),
+        &Holding {
+            names: &held,
+            held: &(),
+        },
         &[print(&signature(mine))],
+        &(),
         &door.ada,
         &TRUSTING,
     );
@@ -825,7 +873,7 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
     assert!(
         matches!(
             rests.recorded.as_slice(),
-            [(name, Reason::RestsOn { kind: RefusalKind::Final, .. })] if *name == seal_hash(on_theirs)
+            [(name, Grounds::Final, Reason::RestsOn { kind: RefusalKind::Final, .. })] if *name == seal_hash(on_theirs)
         ),
         "recorded once, however often the post names it"
     );

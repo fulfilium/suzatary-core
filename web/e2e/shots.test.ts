@@ -27,7 +27,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, SIGNED_POST, suite, switchChain, topicRounds, WIDE, WRITE_BASE } from "./harness";
+import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, suite, switchChain, topicRounds, WIDE, WRITE_BASE, opened } from "./harness";
 import type { Page } from "./cdp";
 import cast from "../test/cast";
 
@@ -292,7 +292,7 @@ const SHOTS: readonly Shot[] = [
     act: async (page: Page): Promise<void> => {
       if ((await page.evaluate<number>(`document.querySelectorAll(".memorypage .memorygroup").length`)) > 1) return;
       const id = await page.evaluate<string>(
-        `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Gallery memory"})).then((r) => r.json()).then((j) => j.id)`,
+        opened("Gallery memory"),
       );
       await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
       await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
@@ -324,7 +324,7 @@ const SHOTS: readonly Shot[] = [
     base: WRITE_BASE,
     act: async (page: Page): Promise<void> => {
       const id = await page.evaluate<string>(
-        `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Gallery shot"})).then((r) => r.json()).then((j) => j.id)`,
+        opened("Gallery shot"),
       );
       await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
       await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
@@ -359,7 +359,7 @@ const SHOTS: readonly Shot[] = [
     base: WRITE_BASE,
     act: async (page: Page): Promise<void> => {
       const id = await page.evaluate<string>(
-        `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Gallery waiting"})).then((r) => r.json()).then((j) => j.id)`,
+        opened("Gallery waiting"),
       );
       held = await page.holdRequests(["/api/"]);
       await page.evaluate(`location.hash = "#/secretary/${id}"`);
@@ -530,7 +530,7 @@ function release(drawn: string): (page: Page) => Promise<void> {
 /** A fresh conversation, asked `said`. */
 async function ask(page: Page, said: string): Promise<void> {
   const id = await page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Gallery"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Gallery"),
   );
   await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
   await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });

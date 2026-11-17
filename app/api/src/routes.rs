@@ -23,7 +23,6 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
-use suzatary_core::secretary::line_form::line_header;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use suzatary_core::wire::lines::{
@@ -1156,56 +1155,8 @@ fn held_sizes(
         .collect()
 }
 
-/// One line's node.
-#[must_use]
-pub fn skeleton_node(
-    name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
-) -> SkeletonNode {
-    node_of(
-        name,
-        envelope,
-        prodrome_core::event::canonical_envelope(envelope).len(),
-    )
-}
-
-/// One line's node.
-fn node_of(
-    name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
-    size: usize,
-) -> SkeletonNode {
-    let header = match envelope.event() {
-        Some(line) => line_header(line),
-        None => NodeHeader::Structure {
-            kind: constructor(envelope).to_owned(),
-        },
-    };
-    SkeletonNode {
-        hash: name.as_str().to_owned(),
-        parents: prodrome_core::event::parents_of(envelope)
-            .iter()
-            .map(|parent| parent.as_str().to_owned())
-            .collect(),
-        size,
-        header,
-    }
-}
-
-/// An envelope's constructor.
-fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str {
-    use prodrome_core::event::Envelope;
-    match envelope {
-        Envelope::Sealed { .. } => "Sealed",
-        Envelope::Woven { .. } => "Woven",
-        Envelope::Genesis(_) => "Genesis",
-        Envelope::Change(_) => "Change",
-        Envelope::Snapshot(_) => "Snapshot",
-        Envelope::Signed(_) => "Signed",
-        Envelope::KeyAdded(_) => "KeyAdded",
-        Envelope::KeyRevoked(_) => "KeyRevoked",
-    }
-}
+use suzatary_core::secretary::line_form::sized_node as node_of;
+pub use suzatary_core::secretary::line_form::skeleton_node;
 
 /// About how many bytes a node is on the wire.
 fn weight(node: &SkeletonNode) -> usize {
@@ -1501,15 +1452,25 @@ pub struct Recording<'a> {
     pub at: Datetime,
 }
 
+/// What a post carries beside its objects for a store, parsed at the door, and what keeps it for
+/// the objects the store takes, under the store's lock and before they are taken.
+pub struct Beside<'a, B> {
+    /// What travels beside the objects.
+    pub posted: &'a B,
+    /// Keeps it for the names taken; a failure takes nothing.
+    pub keep: &'a dyn Fn(&[prodrome_core::event::Hash]) -> Result<(), Refusal>,
+}
+
 /// `POST /api/stores/<store>/objects`: decided under the store's lock by the shared rule and the
-/// rule the store's row names, taken in, then each proven refusal recorded once in the asks under its own
-/// lock.
+/// rule the store's row names, what travels beside the objects kept, the objects taken in, then
+/// each proven refusal recorded once in the asks under its own lock.
 ///
 /// # Errors
 /// More than `MAX_POSTED` objects, or a store not read or not written.
 pub fn receive_changes<E: suzatary_core::stores::Written>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
+    beside: &Beside<'_, <E::Rule as suzatary_store::admission::Admission>::Beside>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     writer: Writer<'_>,
     recording: Recording<'_>,
@@ -1531,9 +1492,29 @@ where
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.
         let trusting = suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)?;
-        let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
-        let received =
-            suzatary_core::sync::receive_changes::<E::Rule>(&held, posted, writer.actor, &trusting);
+        let objects = store.objects()?;
+        let ruled = <E::Rule as suzatary_store::admission::Admission>::held(
+            objects.iter().filter_map(|(_, object)| object.event()),
+        );
+        let names = objects.into_iter().map(|(name, _)| name).collect();
+        let held = suzatary_core::sync::Holding::<E::Rule> {
+            names: &names,
+            held: &ruled,
+        };
+        let received = suzatary_core::sync::receive_changes::<E::Rule>(
+            &held,
+            posted,
+            beside.posted,
+            writer.actor,
+            &trusting,
+        );
+        let taken: Vec<_> = received
+            .outcome
+            .taken
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        (beside.keep)(&taken)?;
         store.accept(&received.outcome.taken)?;
         received
     };
@@ -1544,7 +1525,11 @@ where
 
 /// Each of `refused` recorded once in the asks.
 fn record(
-    refused: &[(prodrome_core::event::Hash, suzatary_core::sync::Reason)],
+    refused: &[(
+        prodrome_core::event::Hash,
+        suzatary_store::receipt::Grounds,
+        suzatary_core::sync::Reason,
+    )],
     store: suzatary_core::stores::Kind,
     Recording { asks, at }: Recording<'_>,
 ) -> Result<(), Refusal> {
@@ -1557,13 +1542,16 @@ fn record(
         objects.iter().map(|(name, object)| (name, object)),
         &store,
     );
-    for (name, reason) in refused {
-        if recorded.insert(name.clone(), reason.said()).is_none() {
+    for (name, grounds, reason) in refused {
+        if recorded
+            .insert(name.clone(), (*grounds, reason.said()))
+            .is_none()
+        {
             asks.append(suzatary_store::receipt::refused(
                 name.clone(),
                 at,
                 suzatary_core::asks::keeper(),
-                store,
+                (store, *grounds),
                 reason.said(),
             ))?;
         }

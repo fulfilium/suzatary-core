@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, suite, topicRounds, WRITE_BASE } from "./harness";
+import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, suite, topicRounds, WRITE_BASE, opened } from "./harness";
 import cast from "../test/cast";
 
 const { owner, counsel } = cast.world;
@@ -28,7 +28,7 @@ async function freshConversation(base: string): Promise<string> {
   await app.page.navigate(`${base}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
   return app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   );
 }
 
@@ -97,7 +97,7 @@ app.scene("dismissing a proposal drops it from the Inbox and shows the reason", 
 
   // A second writer: another conversation's round files a proposal of its own.
   const other = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   );
   assert.equal(
     await app.page.evaluate<number>(
@@ -712,7 +712,7 @@ app.scene("a photo sent in the chat is drawn on its turn", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
   const conversation = await app.page.evaluate<string>(`(async () => {
     const post = ${SIGNED_POST};
-    const opened = await (await post("/api/secretary/conversations", JSON.stringify({ title: "A photo" }))).json();
+    const opened = { id: await ${opened("A photo")} };
     const canvas = document.createElement("canvas");
     canvas.width = 8;
     canvas.height = 8;
@@ -770,7 +770,7 @@ const photographed = (name: string): Promise<void> => app.page.screenshot(join(S
 app.scene("a PDF picked in the composer is sent and named on its turn", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
   const conversation = await app.page.evaluate<string>(`(async () => {
-    const opened = await (await ${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({ title: "A PDF" }))).json();
+    const opened = { id: await ${opened("A PDF")} };
     return opened.id;
   })()`);
   // A full load, so a sheet an earlier scene left open is not over the page.
@@ -795,7 +795,7 @@ app.scene("a PDF picked in the composer is sent and named on its turn", async ()
 app.scene("a PDF naming an SSN waits for the owner, then goes to the Drive", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
   const conversation = await app.page.evaluate<string>(`(async () => {
-    const opened = await (await ${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({ title: "Taxes" }))).json();
+    const opened = { id: await ${opened("Taxes")} };
     return opened.id;
   })()`);
   await app.page.navigate(`${WRITE_BASE}/?fresh=${conversation}#/secretary/${conversation}`);
@@ -830,7 +830,7 @@ app.scene("a new request pops up in an open app and Open lands on its row", asyn
   await app.page.waitFor(`document.querySelector(".tree .row, .todospane .empty:not([hidden])") !== null`, { timeout: 15000 });
   await app.page.evaluate(`(async () => {
     const post = ${SIGNED_POST};
-    const opened = await (await post("/api/secretary/conversations", JSON.stringify({ title: "The deposit page" }))).json();
+    const opened = { id: await ${opened("The deposit page")} };
     await post("/api/secretary/conversations/" + opened.id + "/say", JSON.stringify({ say: "look up the deposit page" }));
     return opened.id;
   })()`);
@@ -865,7 +865,7 @@ app.scene("a blank new topic is named after its first answer, and renamed in pla
   await app.page.waitFor(`document.activeElement?.classList.contains("composebox") === true`, { timeout: 15000 });
   await app.page.type(".composebox", "when is the zephyr filing due");
   await app.page.click(".composesend");
-  await app.page.waitFor(`/^#\\/secretary\\/[0-9-]+$/.test(location.hash)`, { timeout: 15000 });
+  await app.page.waitFor(`/^#\\/secretary\\/[0-9a-f-]+$/.test(location.hash)`, { timeout: 15000 });
   await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "A named topic"`, { timeout: 30000 });
   const id = await app.page.evaluate<string>(`location.hash.replace(/^#\\/secretary\\//, "").replace(/\\?.*$/, "")`);
 
@@ -969,7 +969,7 @@ app.scene("search finds what was said and a hit opens its conversation", async (
     "a search replaces the stream while it is on",
   );
   await app.page.click(".chathit");
-  await app.page.waitFor(`/^#\\/secretary\\/[0-9-]+\\?at=0$/.test(location.hash)`, { timeout: 15000 });
+  await app.page.waitFor(`/^#\\/secretary\\/[0-9a-f-]+\\?at=0$/.test(location.hash)`, { timeout: 15000 });
   await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "The zephyr filing"`, { timeout: 15000 });
   await app.page.waitFor(
     `[...document.querySelectorAll(".turntext")].some((t) => t.textContent.includes("when is the zephyr filing due"))`,
@@ -1023,7 +1023,7 @@ app.scene("a remembered fact shows as a receipt and on the memory page, and Forg
   );
   assert.match(
     await app.page.evaluate<string>(`document.querySelector(".memoryfact .memorysaid").getAttribute("href")`),
-    /^#\/secretary\/[0-9-]+\?at=\d+$/,
+    /^#\/secretary\/[0-9a-f-]+\?at=\d+$/,
     "the fact links to the round that said it",
   );
   await app.page.click(".memoryfact .act.forget");

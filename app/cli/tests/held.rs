@@ -199,14 +199,7 @@ fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
         .start();
     let base = &running.base;
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The filing"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(base, "The filing");
     let proposed = common::said(base, &id, "draft the filing reply");
     let proposals = proposed["proposals"].as_array().expect("proposals");
     assert_eq!(
@@ -385,14 +378,7 @@ fn serving_files(tag: &str, model: FakeModel) -> (Arc<Fakes>, common::Running) {
 
 /// A conversation opened on `running` that says `said` once and settles.
 fn conversation(base: &str, said: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The W-2"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(base, "The W-2");
     common::said(base, &id, said);
     id
 }

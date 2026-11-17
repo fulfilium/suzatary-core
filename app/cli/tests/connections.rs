@@ -491,14 +491,7 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
         |server, _| server,
     );
     let base = &served.base;
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The calendar"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(base, "The calendar");
 
     let before = common::said(base, &id, "ask for the Work calendar's link");
     assert!(
@@ -1167,14 +1160,7 @@ fn a_connected_channel_is_on_the_overview_with_no_restart() {
 
 /// A topic opened for `served`, its id.
 fn topic(served: &Box) -> String {
-    let mut opened = common::act(
-        &format!("{}/api/secretary/conversations", served.base),
-        &serde_json::json!({"title": "Setup"}),
-    );
-    common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    common::opened(&served.base, "Setup")
 }
 
 /// The secretary's `propose_act` that files a Connect card for the Work calendar.

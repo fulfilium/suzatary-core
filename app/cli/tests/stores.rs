@@ -263,11 +263,7 @@ fn a_store_s_objects_are_asked_for_by_hash_and_kept_for_good() {
             .collect();
         assert_eq!(got, held, "{store}: the literal of each object asked");
         // The lines and the inbox move: another conversation is opened.
-        let opened = common::act(
-            &format!("{base}/api/secretary/conversations"),
-            &serde_json::json!({"title": format!("After {store}")}),
-        );
-        assert_eq!(common::status(&opened), 200);
+        let _ = common::opened(&base, &format!("After {store}"));
         assert_ne!(literals(&base, "lines").len(), 0);
         assert_eq!(content(&url), (status, cache, body), "{store}: asked again");
     }
@@ -725,7 +721,7 @@ fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
         objects(&base, "topics", "")["heads"],
         serde_json::json!(heads)
     );
-    for store in ["inbox", "lines", "asks"] {
+    for store in ["inbox", "asks"] {
         assert_eq!(
             common::status(&common::act(
                 &format!("{base}/api/stores/{store}/objects"),
@@ -735,4 +731,119 @@ fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
             "{store}"
         );
     }
+}
+
+/// Each key one more than the last.
+struct Counting(std::sync::atomic::AtomicU8);
+
+impl suzatary_base::capability::Entropy for Counting {
+    fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
+        bytes.fill(self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+        Ok(())
+    }
+}
+
+/// A tab opens a conversation by posting its sealed opening with each slot's key beside it: the
+/// box takes the line and keeps its key, which the lines' pull then hands every device. A line it
+/// refuses in the same post leaves its key nowhere, and a key posted to a store that takes none
+/// refuses the post.
+#[test]
+fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::secretary::store::{Entry, Kind, Namer, Title};
+    use suzatary_memory::secretary::words::Words;
+    let base = writing("stores-lines");
+    let _ = answered(&base);
+    let skeleton = |base: &str| {
+        let mut answer = common::get(&format!("{base}/api/stores/lines/skeleton"));
+        common::body_json(&mut answer)
+    };
+    let genesis = prodrome_core::event::Hash::new(
+        skeleton(&base)["geneses"][0]
+            .as_str()
+            .expect("the lines began"),
+    )
+    .expect("a name");
+    let at = prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 0, 0, 0).expect("an instant");
+    let entropy = Counting(std::sync::atomic::AtomicU8::new(7));
+    let change = |line: LineEvent| {
+        prodrome_core::event::Envelope::Change(
+            prodrome_core::change::mk_change(genesis.clone(), Vec::new(), line).expect("a change"),
+        )
+    };
+    let (open, open_keys) = LineEvent::begin(
+        common::actor("ada"),
+        &Entry::Opened {
+            at,
+            title: Words::kept("Trip".to_owned()),
+            model: String::new(),
+            kind: Kind::Topic,
+        },
+        &entropy,
+    )
+    .expect("a line");
+    let (forged, forged_keys) = LineEvent::write(
+        open.conversation().clone(),
+        common::actor("ada"),
+        1,
+        &Entry::Titled {
+            at,
+            title: Words::kept(Title::new("Theirs").expect("a title")),
+            by: Namer::Person {
+                actor: "bob".to_owned(),
+            },
+        },
+        &entropy,
+    )
+    .expect("a line");
+    let (open, forged) = (change(open), change(forged));
+    let hex = |keys: &[suzatary_memory::secretary::locked_text::TextKey]| -> Vec<String> {
+        keys.iter().map(|key| hex::encode(key.bytes())).collect()
+    };
+    let name = |o: &prodrome_core::event::Envelope<LineEvent>| {
+        prodrome_core::event::seal_hash(o).as_str().to_owned()
+    };
+    let signed = |o: &prodrome_core::event::Envelope<LineEvent>| {
+        let signature: prodrome_core::event::Envelope<LineEvent> =
+            prodrome_core::event::Envelope::Signed(
+                phone().sign(&prodrome_core::event::seal_hash(o)),
+            );
+        [
+            prodrome_core::event::canonical_envelope(o),
+            prodrome_core::event::canonical_envelope(&signature),
+        ]
+    };
+    let posted = serde_json::json!({
+        "objects": signed(&open).into_iter().chain(signed(&forged)).collect::<Vec<_>>(),
+        "keys": { name(&open): hex(&open_keys), name(&forged): hex(&forged_keys) },
+    });
+    let mut answer = common::act(&format!("{base}/api/stores/lines/objects"), &posted);
+    let status = common::status(&answer);
+    let receipt = common::body_json(&mut answer);
+    assert_eq!(status, 200, "{receipt}");
+    assert_eq!(
+        receipt["adopted"].as_array().map(Vec::len),
+        Some(2),
+        "{receipt}"
+    );
+    assert_eq!(receipt["refused"][0]["hash"], name(&forged), "{receipt}");
+    assert_eq!(receipt["refused"][0]["kind"], "final", "{receipt}");
+    let keys = skeleton(&base)["keys"].clone();
+    assert!(
+        keys.get(open_keys[0].name().to_string()).is_some(),
+        "{keys}"
+    );
+    assert!(
+        keys.get(forged_keys[0].name().to_string()).is_none(),
+        "{keys}"
+    );
+
+    let keyed = serde_json::json!({ "objects": [], "keys": { name(&open): hex(&open_keys) } });
+    assert_eq!(
+        common::status(&common::act(
+            &format!("{base}/api/stores/topics/objects"),
+            &keyed
+        )),
+        400
+    );
 }

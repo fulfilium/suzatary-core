@@ -291,6 +291,7 @@ pub fn whole(entry: &Entry) -> String {
             "A conversation opened.".to_owned()
         }
         Entry::Opened { title, .. } => format!("A conversation opened: {title}"),
+        Entry::SetUp { title, .. } => format!("A conversation set up: {title}"),
         Entry::Titled { title, .. } => format!("The conversation was named: {title}"),
         Entry::Said { turn, by, .. } => said_turn(turn, by.as_ref()),
         Entry::Proposed { revises: None, .. } => {

@@ -19,7 +19,7 @@ use super::serve::route::Method;
 /// The conversation a question goes into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Conversation {
-    /// A topic opened for it, as the topic bar's new topic opens one.
+    /// A topic begun for it on the box's own store.
     New,
     Named(ConversationId),
 }
@@ -50,17 +50,14 @@ pub struct Asked {
 /// How long a round may take before the question is left to the box.
 const ROUND: Duration = Duration::from_mins(15);
 
-/// Say `text` into `conversation` as `operator`, then wait for the round to end.
+/// Say `text` into conversation `id` as `operator`, then wait for the round to end.
 ///
 /// The stream is followed before the question is said, so no frame of its round is missed.
 ///
 /// # Errors
 /// A route's refusal, a stream that closes early, or a round longer than 15 minutes.
-pub fn ask(operator: &Operator, conversation: &Conversation, text: &str) -> anyhow::Result<Asked> {
-    let id = match conversation {
-        Conversation::New => opened(operator)?,
-        Conversation::Named(id) => id.clone(),
-    };
+pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Result<Asked> {
+    let id = id.clone();
     let frames = followed(operator, &id);
     // The stream's first frame is the conversation's state before the question.
     frames
@@ -138,24 +135,6 @@ fn answered(operator: &Operator, id: &ConversationId) -> anyhow::Result<String> 
         })
         .collect::<Vec<_>>()
         .join("\n\n"))
-}
-
-/// A new topic, its title left to the title job.
-fn opened(operator: &Operator) -> anyhow::Result<ConversationId> {
-    #[derive(serde::Deserialize)]
-    struct Opened {
-        id: String,
-    }
-    let answer = operator.request(
-        Method::Post,
-        "/api/secretary/conversations",
-        &serde_json::to_vec(&wire::Titling {
-            title: String::new(),
-        })?,
-    )?;
-    let opened: Opened =
-        serde_json::from_slice(&answer.body).context("the opened conversation's answer")?;
-    Ok(ConversationId::new(opened.id)?)
 }
 
 /// The frames of `id`'s stream, read on a thread of their own until the receiver is dropped.

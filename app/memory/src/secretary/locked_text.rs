@@ -178,6 +178,14 @@ impl TextKey {
         KeyName::of(&self.0)
     }
 
+    /// The key whose bytes `hex` spells, as a writer posts it beside the object it opens; `None`
+    /// for anything but 64 hex digits.
+    #[must_use]
+    pub fn from_hex(hex: &str) -> Option<Self> {
+        let bytes: [u8; KEY_BYTES] = hex::decode(hex).ok()?.try_into().ok()?;
+        Some(Self(bytes))
+    }
+
     /// The key file: the bytes and nothing else.
     #[must_use]
     pub fn bytes(&self) -> &[u8; KEY_BYTES] {

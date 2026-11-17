@@ -29,7 +29,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-import { SIGNED_POST, suite, trustThisDevice } from "./harness";
+import { suite, trustThisDevice, opened } from "./harness";
 
 const app = await suite("google");
 
@@ -183,7 +183,7 @@ app.scene("a Google account connects from Settings in one walk, and a calendar c
   await app.page.navigate(`${GOOGLE}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
   const id = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "The dentist"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("The dentist"),
   );
   await app.page.navigate(`${GOOGLE}/#/secretary/${id}`);
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });

@@ -10,23 +10,71 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
+use crate::connect::TemplateId;
 use crate::secretary::held_lines::HeldLines;
+use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
+use crate::secretary::own_line::OwnLine;
+use crate::secretary::store::{Entry, Kind, Namer, Title};
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
+use prodrome_core::event::{Actor, Envelope};
 use suzatary_base::answer::Renderable;
+use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_memory::secretary::words::Words;
+use suzatary_store::replica::held::Node as _;
 use suzatary_store::replica::held::Said;
+use suzatary_store::replica::row::Keys as _;
+use suzatary_store::replica::writes::{Answer, Own, Writes};
 
-/// The lines held: the rows, and the readings of the landed one.
+/// The lines held: the rows, what this tab wrote, and the readings of the landed row with the
+/// own lines it does not hold yet.
 #[derive(Default)]
 pub struct HeldReplica {
-    /// The prints and the keys of their words, the landed row's keys.
+    /// The prints and the keys of their words, the landed row's keys and the own lines'.
     pub lines: HeldLines,
     outlines: Outlines,
     kept: LineReplica,
+    own: Writes<OwnLine>,
+}
+
+/// A line a tab seals.
+#[derive(Debug, Clone)]
+pub enum Sealing {
+    /// A conversation renamed.
+    Rename {
+        /// Which.
+        conversation: ConversationId,
+        /// Its new title.
+        title: Title,
+    },
+    /// A topic opened under `title`; none leaves it for the title job.
+    Open {
+        /// Its title.
+        title: Option<Title>,
+    },
+    /// A conversation set up from a template, titled by it.
+    SetUp(TemplateId),
+}
+
+/// Why a tab cannot seal a line now.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NotSealed {
+    /// The rows name no genesis of the lines yet: nothing was pulled.
+    #[error("the lines are not on this device yet, so nothing is written to them")]
+    Unpulled,
+    /// The conversation renamed is not one the tab reads.
+    #[error("no conversation {0} on this device")]
+    Unknown(ConversationId),
+    /// The line itself.
+    #[error(transparent)]
+    Line(#[from] crate::secretary::line_event::NotALine),
+    /// The change over it.
+    #[error("no change of the lines: {0}")]
+    Change(String),
 }
 
 /// Which conversations a move of the landed row moved: every one, where the row was reset or
@@ -97,6 +145,158 @@ impl HeldReplica {
     #[must_use]
     pub fn kept(&self) -> &LineReplica {
         &self.kept
+    }
+
+    /// What this tab wrote, and how the box answered each.
+    #[must_use]
+    pub fn own(&self) -> &Writes<OwnLine> {
+        &self.own
+    }
+
+    /// `sealing` written by `actor` at `at`, its words sealed under keys drawn from `entropy`,
+    /// resting on the heads of its conversation among the lines read: the own line, held and read
+    /// at once, its name, and what it moved.
+    ///
+    /// # Errors
+    /// [`NotSealed`]: nothing pulled yet, a rename of a conversation not read here, or words the
+    /// door refuses.
+    pub fn seal(
+        &mut self,
+        sealing: Sealing,
+        at: Datetime,
+        actor: &Actor,
+        entropy: &dyn Entropy,
+    ) -> Result<(Vec<Own<OwnLine>>, Hash, Moved), NotSealed> {
+        let genesis = self
+            .kept
+            .rows
+            .landed()
+            .replica()
+            .read()
+            .word()
+            .and_then(|word| word.geneses.first().cloned())
+            .ok_or(NotSealed::Unpulled)?;
+        let (line, keys, deps) = match sealing {
+            Sealing::Rename {
+                conversation,
+                title,
+            } => {
+                let lines: Vec<&crate::wire::lines::SkeletonNode> = self
+                    .outlines
+                    .given()
+                    .filter(|node| {
+                        matches!(&node.header, crate::wire::lines::NodeHeader::Line {
+                            conversation: of, ..
+                        } if of == conversation.as_str())
+                    })
+                    .collect();
+                if lines.is_empty() {
+                    return Err(NotSealed::Unknown(conversation));
+                }
+                let under: BTreeSet<&str> = lines
+                    .iter()
+                    .flat_map(|node| node.parents.iter().map(String::as_str))
+                    .collect();
+                let deps: Vec<Hash> = lines
+                    .iter()
+                    .filter(|node| !under.contains(node.hash.as_str()))
+                    .filter_map(|node| Hash::new(node.hash.clone()).ok())
+                    .collect();
+                let entry = Entry::Titled {
+                    at,
+                    title: Words::kept(title),
+                    by: Namer::Person {
+                        actor: actor.as_str().to_owned(),
+                    },
+                };
+                let held = u32::try_from(lines.len()).unwrap_or(u32::MAX);
+                let (line, keys) =
+                    LineEvent::write(conversation, actor.clone(), held, &entry, entropy)?;
+                (line, keys, deps)
+            }
+            Sealing::Open { title } => {
+                let entry = Entry::Opened {
+                    at,
+                    title: Words::kept(title.map_or_else(String::new, String::from)),
+                    model: String::new(),
+                    kind: Kind::Topic,
+                };
+                let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
+                (line, keys, Vec::new())
+            }
+            Sealing::SetUp(template) => {
+                let entry = Entry::SetUp {
+                    at,
+                    title: Words::kept(template.template().called()),
+                    template,
+                };
+                let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
+                (line, keys, Vec::new())
+            }
+        };
+        let change = prodrome_core::change::mk_change(genesis, deps, line)
+            .map_err(|e| NotSealed::Change(e.to_string()))?;
+        let envelope = Envelope::Change(change);
+        let own = OwnLine::sealed(&envelope, &keys).unwrap_or_else(|_| {
+            unreachable!("a line this tab sealed reads back with the keys it sealed it under")
+        });
+        let name = own.name().clone();
+        self.lines
+            .hold(vec![(name.clone(), own.print().as_bytes().to_vec())], &[]);
+        let owned = self.own.write(vec![own]);
+        let moved = self.moving(|_| ()).1;
+        Ok((owned, name, moved))
+    }
+
+    /// `owned` taken, whoever made it: another tab's writes, or the device's own read back; each
+    /// line's print held.
+    pub fn take_own(&mut self, owned: &[Own<OwnLine>]) -> Moved {
+        let prints: Vec<(Hash, Vec<u8>)> = owned
+            .iter()
+            .filter(|own| matches!(own.node, OwnLine::Line { .. }))
+            .map(|own| {
+                (
+                    own.node.name().clone(),
+                    own.node.print().as_bytes().to_vec(),
+                )
+            })
+            .collect();
+        self.lines.hold(prints, &[]);
+        self.own.apply(owned);
+        self.moving(|_| ()).1
+    }
+
+    /// A move of the own writes made by `step`: what it joined in, and what it moved.
+    pub fn answer_own(
+        &mut self,
+        step: impl FnOnce(&mut Writes<OwnLine>) -> Vec<Own<OwnLine>>,
+    ) -> (Vec<Own<OwnLine>>, Moved) {
+        let owned = step(&mut self.own);
+        let moved = self.moving(|_| ()).1;
+        (owned, moved)
+    }
+
+    /// The own writes the box has not taken and may take, beside what is held, landed or not, in
+    /// posts of at most `most`, each line beside its signatures.
+    #[must_use]
+    pub fn unsent(&self, most: usize) -> Vec<Vec<&OwnLine>> {
+        let holding = self.kept.rows.holding();
+        let reading = holding.replica().read();
+        self.own
+            .pieces(|name| reading.holds(name), OwnLine::role, most)
+    }
+
+    /// The own lines no signature written here covers.
+    #[must_use]
+    pub fn unsigned(&self) -> Vec<&OwnLine> {
+        let holding = self.kept.rows.holding();
+        let reading = holding.replica().read();
+        self.own.unsigned(|name| reading.holds(name), OwnLine::role)
+    }
+
+    /// The box's answers to the own writes.
+    pub fn answered(&mut self, answers: Vec<(Hash, Answer)>) -> (Vec<Own<OwnLine>>, Moved) {
+        self.answer_own(|own| own.answered(answers))
     }
 
     /// The piece the box answered, `answer` heard at `fetched_at` with the keys `keys`, kept
@@ -352,15 +552,30 @@ impl HeldReplica {
         let taken = step(&mut self.kept.rows);
         let landed = self.kept.rows.landed();
         let reading = landed.replica().read();
+        let mut keys = landed.keys().clone();
+        let mut own: BTreeMap<&Hash, &Parsed> = BTreeMap::new();
+        for line in self
+            .own
+            .standing(|name| reading.holds(name), reading.gone())
+        {
+            if let OwnLine::Line {
+                node, keys: opens, ..
+            } = line
+            {
+                own.insert(node.name(), node);
+                keys = keys.union(opens);
+            }
+        }
         let came: Vec<Parsed> = reading
             .nodes()
+            .chain(own.values().copied())
             .filter(|node| !self.outlines.holds(node.name()))
             .cloned()
             .collect();
         let went: Vec<Hash> = self
             .outlines
             .names()
-            .filter(|name| !reading.holds(name))
+            .filter(|name| !reading.holds(name) && !own.contains_key(name))
             .cloned()
             .collect();
         let mut touched = if came.is_empty() && went.is_empty() {
@@ -368,7 +583,7 @@ impl HeldReplica {
         } else {
             self.outlines.hold(came, &went)
         };
-        let rekeyed = self.lines.rekey(landed.keys().clone());
+        let rekeyed = self.lines.rekey(keys);
         touched.extend(self.outlines.naming(&rekeyed));
         let moved = if (landed.generation(), landed.replica().epoch()) == was {
             Moved::These(touched)

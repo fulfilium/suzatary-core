@@ -31,7 +31,8 @@ allowance = 2000
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.152 for the roadmap's picture and door 2's redraw (#525, +12,309 over #527's figure: `prodrome draw` and its template, the carry's closed items, which stage 4 deletes, and their tests); accepted at the review of #525.
 # 2026-11-17: raised by hand to the figure of the tree merged with 2.1.155 for the roadmap's static pages (#526, +8,452: `prodrome pages`, the readings `todos open` and `todo show` share with it, its two templates, the workflow `init` writes, and their laws); accepted at the review of #526.
 # 2026-11-17: raised by hand to the figure of the tree merged with 2.1.157 for door 1's reading of what a markup field draws (#531, +6,276: `Site`, `Reading` and `drawing` at the door, `prodrome texts` for door 2, `Remembered`, and the pages setting each field's drawing in place); accepted at the review of #531.
-reading = 3012125
+# 2026-11-17: raised by hand to the figure of the tree merged with #534 for stage 2c, the tab's lines (#492, +21,265: the lines' admission rule, the worker's seal and its own lines, the device's row of own lines, the `Opening` rule, and their laws); accepted at the review of #492, on the plan's promise that stage 8 deletes `intents.ts`, `intentsync.ts` and `asks.ts`.
+reading = 3033390
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 
 use crate::coding::{Branch, Session, SessionUrl};
+use crate::connect::TemplateId;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::model::SessionId;
 use crate::secretary::stamp::Stamp;
@@ -31,6 +32,8 @@ pub enum LineShape {
         /// [`unkinded`] reads off its conversation's id.
         kind: Option<Kind>,
     },
+    /// A conversation begun on a template's opening, for a topic. Words: its title.
+    SetUp { template: TemplateId },
     /// Named. Words: the name.
     Titled { by: Namer },
     /// Something said. Words: the turn's slots.
@@ -144,6 +147,7 @@ impl LineShape {
         match self {
             LineShape::Said { turn, .. } => turn.slots(),
             LineShape::Opened { .. }
+            | LineShape::SetUp { .. }
             | LineShape::Titled { .. }
             | LineShape::Reviewed { .. }
             | LineShape::ReviewFailed { .. }
@@ -170,6 +174,7 @@ impl LineShape {
     pub fn name(&self) -> &'static str {
         match self {
             LineShape::Opened { .. } => "Opened",
+            LineShape::SetUp { .. } => "SetUp",
             LineShape::Titled { .. } => "Titled",
             LineShape::Said { .. } => "Said",
             LineShape::Proposed { .. } => "Proposed",
@@ -202,6 +207,16 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
             LineShape::Opened {
                 model: model.clone(),
                 kind: Some(*kind),
+            },
+            one(title.get().map(|title| LineWords::Title {
+                title: title.clone(),
+            })),
+        ),
+        Entry::SetUp {
+            title, template, ..
+        } => (
+            LineShape::SetUp {
+                template: *template,
             },
             one(title.get().map(|title| LineWords::Title {
                 title: title.clone(),
@@ -413,6 +428,14 @@ pub fn join(
             }),
             model,
             kind: kind.unwrap_or_else(|| unkinded(id)),
+        },
+        LineShape::SetUp { template } => Entry::SetUp {
+            at,
+            title: take(&mut slot, |words| match words {
+                LineWords::Title { title } => Some(title),
+                _ => None,
+            }),
+            template,
         },
         LineShape::Titled { by } => Entry::Titled {
             at,

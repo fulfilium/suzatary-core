@@ -37,6 +37,7 @@ impl Said {
                 by: Some(by.as_str().into()),
             }),
             Entry::Opened { .. }
+            | Entry::SetUp { .. }
             | Entry::Titled { .. }
             | Entry::Proposed { .. }
             | Entry::Reviewed { .. }

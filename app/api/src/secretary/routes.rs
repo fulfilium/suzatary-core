@@ -23,7 +23,7 @@ use suzatary_core::secretary::proposal::{Draft, Proposal};
 use suzatary_core::secretary::read_holders::ReadHolders;
 use suzatary_core::secretary::readings::{self, Draw, Dress, Window};
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::store::{Entry, Kind, Stored, Title};
+use suzatary_core::secretary::store::{Entry, Kind, Stored};
 use suzatary_core::secretary::transcript;
 use suzatary_core::secrets::Secrets;
 use suzatary_core::settings::{Edits, Settable, Settables, Writes};
@@ -263,51 +263,21 @@ impl Draw for Drawn<'_> {
     }
 }
 
-/// `POST /api/secretary/conversations`: open a topic.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for a title that is not one, and the store's own failures.
-pub fn open(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    title: &str,
-) -> Answered<wire::ConversationPayload> {
-    let title = if title.trim().is_empty() {
-        String::new()
-    } else {
-        Title::new(title)
-            .map_err(|refused| Refusal::bad_request(refused.to_string()))?
-            .into()
-    };
-    let id = begun(caps, cards, &title, None)?;
-    newest(caps, cards, &id)
-}
-
-/// `POST /api/secretary/setup/<template>`: a conversation begun on `template`'s opening.
-///
-/// # Errors
-/// The conversation store's.
-pub fn setup(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    template: suzatary_core::connect::TemplateId,
-) -> Answered<wire::ConversationPayload> {
-    let template = template.template();
-    let title: String = Title::new(template.called())
-        .map_err(|refused| Refusal::internal(refused.to_string()))?
-        .into();
+/// A topic begun with `title` and, where given, `first` after its opening: what an afresh tap
+/// begins.
+fn begun(caps: &Server<'_>, title: &str, first: Option<&Entry>) -> Result<ConversationId, Refusal> {
     let at = caps.secretary.clock.now();
-    let id = begun(
-        caps,
-        cards,
-        &title,
-        Some(&Entry::noted(
-            at,
-            template.opening(google_client_kept(caps.secretary.secrets, cards.settables)),
-            Vec::new(),
-        )),
+    let (id, _) = conversations::begin(
+        caps.secretary.conversations,
+        caps.secretary.model,
+        title,
+        Kind::Topic,
+        at,
     )?;
-    newest(caps, cards, &id)
+    if let Some(first) = first {
+        conversations::append(caps.secretary.conversations, &id, first)?;
+    }
+    Ok(id)
 }
 
 /// File the box's Secret card for a new value of `handle`'s secret, unless one already asks.
@@ -335,55 +305,6 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
         .holding()
         .file(caps.secretary.conversations, caps.secretary.inbox, at)?;
     Ok(())
-}
-
-fn begun(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    title: &str,
-    first: Option<&Entry>,
-) -> Result<ConversationId, Refusal> {
-    let taken = transcript::keys(caps.secretary.conversations)
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let at = caps.secretary.clock.now();
-    let today = cards
-        .deployment
-        .zone
-        .day(prodrome_core::fpl::instant_of(at));
-    let id = ConversationId::minted(today, &taken);
-    conversations::start(
-        caps.secretary.conversations,
-        caps.secretary.model,
-        &id,
-        title,
-        Kind::Topic,
-        at,
-    )?;
-    if let Some(first) = first {
-        conversations::append(caps.secretary.conversations, &id, first)?;
-    }
-    Ok(id)
-}
-
-/// `POST …/<id>/title`: rename one.
-///
-/// # Errors
-/// [`suzatary_core::secretary::title::rename`]'s.
-pub fn rename(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    by: &prodrome_core::event::Actor,
-    id: &ConversationId,
-    title: &str,
-) -> Answered<wire::ConversationPayload> {
-    let stored = suzatary_core::secretary::title::rename(
-        caps.secretary.conversations,
-        caps.secretary.clock,
-        by,
-        id,
-        title,
-    )?;
-    payload(&stored, caps, cards)
 }
 
 /// `POST …/erase`'s body: `{"turns": [<index>, …]}` or `{"whole": true}`.
@@ -1133,7 +1054,7 @@ fn performed(
                     "this card asks again a request of {conversation}, and it is drawn in {id}"
                 )));
             }
-            let (opened, performed) = afresh(caps, cards, conversation, turn)?;
+            let (opened, performed) = afresh(caps, conversation, turn)?;
             *then = Some(Then::Opened(opened));
             performed
         }
@@ -2070,7 +1991,7 @@ fn google_account(
     };
     if suzatary_core::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
         Ok(())
-    } else if google_client_kept(secrets, settables).is_set() {
+    } else if suzatary_core::secretary::set_up::client_kept(secrets, settables).is_set() {
         Err(Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
             account: account.clone(),
             grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
@@ -2080,25 +2001,6 @@ fn google_account(
             suzatary_mail::mail::lacking::Lacking::GoogleClient,
         ))
     }
-}
-
-/// Whether the box's Google client is stored, its id and its secret both.
-fn google_client_kept(
-    secrets: &dyn Secrets,
-    settables: &Settables,
-) -> suzatary_core::secrets::SecretState {
-    suzatary_core::secrets::SecretState::all(
-        [
-            suzatary_core::google::CLIENT_ID,
-            suzatary_core::google::CLIENT_SECRET,
-        ]
-        .map(|name| {
-            Settable::mint(settables, name)
-                .map_or(suzatary_core::secrets::SecretState::Missing, |name| {
-                    secrets.secret_state(&name)
-                })
-        }),
-    )
 }
 
 /// Keep the pasted Google client only when it is a web client listing `redirect`; a refusal
@@ -2173,7 +2075,6 @@ fn erased(
 /// A topic opened for turn `turn`, read again.
 fn afresh(
     caps: &Server<'_>,
-    cards: &Cards<'_>,
     conversation: &ConversationId,
     turn: usize,
 ) -> Result<(ConversationId, Performed), Refusal> {
@@ -2181,12 +2082,7 @@ fn afresh(
         &conversations::read(caps.secretary.conversations, conversation)?,
         turn,
     )?;
-    let opened = begun(
-        caps,
-        cards,
-        "",
-        Some(&request.entry(caps.secretary.clock.now())),
-    )?;
+    let opened = begun(caps, "", Some(&request.entry(caps.secretary.clock.now())))?;
     let what = format!("asked your request again in a fresh conversation, {opened}");
     Ok((opened, Done::Acted { what }.into()))
 }

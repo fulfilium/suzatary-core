@@ -1,7 +1,7 @@
 // Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, SayPayload, Saying, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
@@ -43,7 +43,7 @@ export const ours = (h: heads.Heads): void => {
 
 /** Literals only: the box rehashes each. */
 const posted = (path: string, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
-  http.act(path, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload);
+  http.act(path, { objects: [...objects], since, keys: {} } satisfies PostedObjects, payload.ReceiptPayload);
 
 export const postObjects = (objects: readonly string[], since: string): Promise<ReceiptPayload> =>
   posted(onChain("objects"), objects, since).then(receipt => {
@@ -86,13 +86,6 @@ const conversationPath = (id: string, rest = ""): string =>
   `/api/secretary/conversations/${encodeURIComponent(id)}${rest}`;
 const proposalPath = (id: string, index: number, verb: string): string =>
   conversationPath(id, `/proposals/${index}/${verb}`);
-
-/** A blank title is left for the box to name after the first answer. */
-export const openConversation = (title: string): Promise<ConversationPayload> =>
-  http.act("/api/secretary/conversations", { title } satisfies Titling, payload.ConversationPayload);
-
-export const renameConversation = (id: string, title: string): Promise<ConversationPayload> =>
-  http.act(conversationPath(id, "/title"), { title } satisfies Titling, payload.ConversationPayload);
 
 /** The owner's tap: the words are destroyed on the box and, at their next pull, on every device. */
 export const eraseTurns = (id: string, turns: readonly number[]): Promise<ConversationPayload> =>

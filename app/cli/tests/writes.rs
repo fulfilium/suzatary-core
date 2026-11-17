@@ -66,6 +66,7 @@ fn every_write_route_refuses_a_bare_post_from_loopback() {
         // The error report's gate keeps the log to the logins that may write.
         "/api/client-errors",
         // Loopback writing a topic would be the box's shell or the triage agent writing one.
+        "/api/stores/lines/objects",
         "/api/stores/topics/objects",
         "/api/stores/topic-aliases/objects",
     ] {
@@ -125,12 +126,9 @@ fn nothing_but_the_named_writes_answers_a_post() {
 fn every_secretary_write_refuses_a_bare_post_from_loopback() {
     let base = base();
     for path in [
-        "/api/secretary/conversations",
-        "/api/secretary/setup/google",
         // Asking to replace a secret files its card.
         "/api/secretary/replace/0000000000000000",
         "/api/secretary/conversations/anything/say",
-        "/api/secretary/conversations/anything/title",
         "/api/secretary/conversations/anything/stop",
         "/api/secretary/conversations/anything/regenerate",
         "/api/secretary/conversations/anything/edit",

@@ -22,15 +22,7 @@ fn serving(tag: &str, model: FakeModel) -> (String, Arc<Fakes>) {
 }
 
 fn open(base: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    common::opened(base, "A morning")
 }
 
 fn post(base: &str, id: &str, verb: &str, body: &serde_json::Value) -> u16 {

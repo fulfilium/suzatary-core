@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 use proptest::prelude::*;
+use suzatary_store::receipt::Grounds;
 use suzatary_store::replica::held::Node;
 use suzatary_store::replica::writes::{Answer, Own, Refusal, Writes};
 
@@ -117,7 +118,16 @@ proptest! {
 
         let mut refused = Writes::default();
         refused.write(own.clone());
-        refused.refused(f.iter().map(|n| (n.clone(), "refused".to_owned())).collect());
+        // Each refusal for good is final or outdated: both hold a write back alike.
+        refused.refused(
+            f.iter()
+                .enumerate()
+                .map(|(i, n)| {
+                    let kind = if i % 2 == 0 { Grounds::Final } else { Grounds::Outdated };
+                    (n.clone(), (kind, "refused".to_owned()))
+                })
+                .collect(),
+        );
         let taken_back = resting_on(&own, &f);
         let mut never = Writes::default();
         never.write(own.iter().filter(|n| !taken_back.contains(&n.name)).cloned().collect());
@@ -137,7 +147,7 @@ proptest! {
             .filter(|n| !taken_back.contains(n) && !lost.contains(n))
             .collect();
         prop_assert_eq!(names(never.standing(in_rows, &gone)), standing);
-        prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _)| n)), f);
+        prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _, _)| n)), f);
     }
 
     #[test]

@@ -137,7 +137,8 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         Ok(Some(Step::of(framed(&m)?, said(true).to_owned())))
     }
 
-    /// `[[{hash, literal}]]`: the unsent, in posts the box takes whole.
+    /// `[[{hash, literal, keys}]]`: the unsent, in posts the box takes whole; an object of a store
+    /// that locks no words travels with no keys.
     pub fn unsent(&self) -> Result<String, JsError> {
         json(
             &self
@@ -147,7 +148,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
                 .map(|piece| {
                     piece
                         .iter()
-                        .map(|o| serde_json::json!({ "hash": o.name().as_str(), "literal": o.literal() }))
+                        .map(|o| serde_json::json!({ "hash": o.name().as_str(), "literal": o.literal(), "keys": [] }))
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>(),
@@ -173,14 +174,14 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         )
     }
 
-    /// `[{hash, reason}]`: what the box refused for good.
+    /// `[{hash, kind, reason}]`: what the box refused for good, `kind` `Final` or `Outdated`.
     pub fn refusals(&self) -> Result<String, JsError> {
         json(
             &self
                 .replica
                 .refusals()
                 .iter()
-                .map(|(o, reason)| serde_json::json!({ "hash": o.name().as_str(), "reason": reason }))
+                .map(|(o, kind, reason)| serde_json::json!({ "hash": o.name().as_str(), "kind": kind, "reason": reason }))
                 .collect::<Vec<_>>(),
         )
     }
@@ -291,16 +292,22 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     }
 }
 
-impl<E: suzatary_core::stores::Store<Vocabulary: Default>> Store<E> {
-    /// The asks' refusals of what the tab wrote here, held as refused; none where none is new.
-    pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
+impl Store<AskEvent> {
+    /// Every standing refusal, parsed.
+    pub(crate) fn standing_envelopes(&self) -> Vec<(Hash, Envelope<AskEvent>)> {
         let schema = AskVocabulary::default();
-        let objects: Vec<(Hash, Envelope<AskEvent>)> = asks
-            .replica
+        self.replica
             .standing()
             .iter()
             .filter_map(|o| Some((o.name().clone(), parse_envelope(&schema, o.literal()).ok()?)))
-            .collect();
+            .collect()
+    }
+}
+
+impl<E: suzatary_core::stores::Store<Vocabulary: Default>> Store<E> {
+    /// The asks' refusals of what the tab wrote here, held as refused; none where none is new.
+    pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
+        let objects = asks.standing_envelopes();
         let refused = receipt::refusals(objects.iter().map(|(name, o)| (name, o)), &E::KIND);
         let (m, moved) = self.moved(|r| r.refused(refused));
         match &m {

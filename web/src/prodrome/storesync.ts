@@ -17,6 +17,7 @@ import progress from "./progress"
 import replicasync from "./replicasync"
 import stores from "./stores"
 import type topics from "./topics"
+import type sealing from "./lines"
 import type time from "../app/time"
 import type grouped from "../chat/grouped"
 import app from "../app/app"
@@ -94,6 +95,18 @@ export namespace storesync {
     const start = performance.now()
     await inflight.held(remote.ask({ type: "Topic", write: w, at, actor }, "Page"))
     measure("write:worker", start)
+  }
+
+  // `line` sealed by the worker as this tab's actor, read at once and handed to the box: its name and conversation,
+  // answered once the box holds a line that begins a conversation, and at once for a rename. A refusal is thrown in
+  // the box's words.
+  export const seal = async (line: sealing.Sealing, at: string): Promise<sealing.Sealed> => {
+    const actor = app.actor(app.now())
+    if (actor === null) throw new Error("this device only reads, so it writes no line")
+    const start = performance.now()
+    const sealed = await inflight.held(remote.ask({ type: "Line", line, at, actor }, "Page"))
+    measure("write:line", start)
+    return sealed
   }
 
   // One conversation over its own lines, read as the whole store reads it; absent where they hold none of it.

@@ -2105,21 +2105,181 @@ pub fn settled(base: &str, id: &str) -> serde_json::Value {
     poll_conversation(base, id, |read| read["state"] == "idle")
 }
 
-/// A new conversation, by its id.
+/// A new conversation opened as a tab opens one: its opening line sealed as the poster's,
+/// signed by the owner's [`phone`] and handed to the lines with its key beside it; its id.
 ///
 /// # Panics
-/// If the box does not open it.
+/// If the lines name no genesis within five seconds, or the box does not take the line.
 #[must_use]
 pub fn opened(base: &str, title: &str) -> String {
-    let mut opened = act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({ "title": title }),
+    opening(
+        base,
+        &suzatary_core::secretary::store::Entry::Opened {
+            at: next_instant(),
+            title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
+            model: String::new(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+    )
+}
+
+/// A topic begun on the box's own store, as `secretary ask new` begins one; its id.
+///
+/// # Panics
+/// If the store refuses it.
+#[must_use]
+pub fn topic(
+    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+) -> suzatary_base::conversation_id::ConversationId {
+    suzatary_core::secretary::transcript::begin(
+        conversations,
+        &suzatary_core::secretary::store::Entry::Opened {
+            at: next_instant(),
+            title: suzatary_memory::secretary::words::Words::kept(String::new()),
+            model: "a-cli/small".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+    )
+    .expect("begun")
+}
+
+/// A conversation begun by `first`, an opening or a setup, as a tab begins one; its id.
+///
+/// # Panics
+/// As [`opened`].
+#[must_use]
+pub fn opening(base: &str, first: &suzatary_core::secretary::store::Entry) -> String {
+    use suzatary_core::secretary::line_event::LineEvent;
+    let (line, keys) = LineEvent::begin(poster(base), first, &Drawing).expect("a line");
+    let id = line.conversation().as_str().to_owned();
+    handed(base, line, &keys, Vec::new());
+    id
+}
+
+/// Conversation `id` renamed `title` as a tab renames it: a `Titled` line by the poster over the
+/// conversation's heads, handed to the lines with its key beside it.
+///
+/// # Panics
+/// If the box serves no line of `id`, or does not take the rename.
+pub fn renamed(base: &str, id: &str, title: &str) {
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::secretary::store::{Entry, Namer, Title};
+    let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
+    let skeleton = body_json(&mut answer);
+    let nodes: Vec<&serde_json::Value> = skeleton["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .filter(|n| n["header"]["conversation"] == id)
+        .collect();
+    assert!(!nodes.is_empty(), "the box serves {id}");
+    let under: std::collections::BTreeSet<&str> = nodes
+        .iter()
+        .flat_map(|n| n["parents"].as_array().expect("parents").iter())
+        .filter_map(|p| p.as_str())
+        .collect();
+    let heads = nodes
+        .iter()
+        .filter_map(|n| n["hash"].as_str())
+        .filter(|n| !under.contains(n))
+        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .collect();
+    let by = poster(base);
+    let entry = Entry::Titled {
+        at: next_instant(),
+        title: suzatary_memory::secretary::words::Words::kept(Title::new(title).expect("a title")),
+        by: Namer::Person {
+            actor: by.as_str().to_owned(),
+        },
+    };
+    let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
+    let count = u32::try_from(nodes.len()).expect("a count");
+    let (line, keys) = LineEvent::write(conversation, by, count, &entry, &Drawing).expect("a line");
+    handed(base, line, &keys, heads);
+}
+
+/// The actor `base` maps this test's peer to.
+fn poster(base: &str) -> prodrome_core::event::Actor {
+    let mut me = get(&format!("{base}/api/me"));
+    actor(
+        body_json(&mut me)["actor"]
+            .as_str()
+            .expect("a poster who writes"),
+    )
+}
+
+/// `line` resting on `deps`, signed by the owner's [`phone`] and handed to the lines with `keys`
+/// beside it.
+fn handed(
+    base: &str,
+    line: suzatary_core::secretary::line_event::LineEvent,
+    keys: &[suzatary_memory::secretary::locked_text::TextKey],
+    deps: Vec<prodrome_core::event::Hash>,
+) {
+    use suzatary_core::secretary::line_event::LineEvent;
+    let genesis = lines_genesis(base);
+    let change = prodrome_core::event::Envelope::Change(
+        prodrome_core::change::mk_change(genesis, deps, line).expect("a change"),
     );
-    assert_eq!(status(&opened), 200);
-    body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    let name = prodrome_core::event::seal_hash(&change);
+    let signature: prodrome_core::event::Envelope<LineEvent> =
+        prodrome_core::event::Envelope::Signed(phone().sign(&name));
+    let posted = serde_json::json!({
+        "objects": [
+            prodrome_core::event::canonical_envelope(&change),
+            prodrome_core::event::canonical_envelope(&signature),
+        ],
+        "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
+    });
+    let mut taken = act(&format!("{base}/api/stores/lines/objects"), &posted);
+    let receipt = body_json(&mut taken);
+    assert!(
+        receipt["adopted"]
+            .as_array()
+            .is_some_and(|adopted| adopted.iter().any(|n| n == name.as_str())),
+        "the box took the line: {receipt}"
+    );
+}
+
+/// The lines' genesis, once the box has begun the lines.
+fn lines_genesis(base: &str) -> prodrome_core::event::Hash {
+    let began = std::time::Instant::now();
+    loop {
+        let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
+        let skeleton = body_json(&mut answer);
+        if let Some(genesis) = skeleton["geneses"][0].as_str() {
+            return prodrome_core::event::Hash::new(genesis).expect("a name");
+        }
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(5),
+            "the box began no lines"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// A later instant at every call, so two openings in one test are two conversations.
+#[must_use]
+pub fn next_instant() -> prodrome_core::literal::Datetime {
+    static DRAWN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = DRAWN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    prodrome_core::literal::Datetime::new(2026, 11, 17, 9, n / 60 % 60, n % 60, n / 3600)
+        .expect("an instant")
+}
+
+/// Fresh bytes at every call, for a tab's keys.
+struct Drawing;
+
+impl suzatary_base::capability::Entropy for Drawing {
+    fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
+        static DRAWN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let seed = DRAWN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let spread = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).to_le_bytes();
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = spread[i % 8] ^ u8::try_from(i % 256).unwrap_or(0);
+        }
+        Ok(())
+    }
 }
 
 /// `text` said in conversation `id`, read once its round has ended.
@@ -2270,6 +2430,16 @@ impl Fakes {
             root.join("secretary-topic-aliases"),
         );
         topics.begin().expect("the scene begins its topic stores");
+        let conversations = Conversations::open(
+            root.join("secretary-lines"),
+            root.join("secretary-lines-keys"),
+            Arc::clone(&forgot) as _,
+            Arc::clone(&forgot) as _,
+        );
+        conversations
+            .lines
+            .begin()
+            .expect("the scene begins its lines, as the box does at start");
         Self {
             topics,
             chain,
@@ -2305,12 +2475,7 @@ impl Fakes {
                 root.join("secretary/upload-index"),
                 upload_store(&root),
             ),
-            conversations: Conversations::open(
-                root.join("secretary-lines"),
-                root.join("secretary-lines-keys"),
-                Arc::clone(&forgot) as _,
-                Arc::clone(&forgot) as _,
-            ),
+            conversations,
             forgot,
             memory: suzatary_io::objects::Objects::open(root.join("memory")),
             decisions: suzatary_io::objects::Objects::open(root.join("decisions")),

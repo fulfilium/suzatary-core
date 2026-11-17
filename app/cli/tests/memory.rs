@@ -28,15 +28,7 @@ fn served(tag: &str, model: FakeModel) -> (Arc<Fakes>, String) {
 
 /// Say something in a fresh conversation and wait for the round to end.
 fn said(base: &str, words: &str) -> (String, serde_json::Value) {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Memory"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(base, "Memory");
     let say = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
         &serde_json::json!({"say": words}),

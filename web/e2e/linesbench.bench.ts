@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 
 import type { CpuProfile } from "./cdp";
-import { PHONE, SIGNED_POST, suite, trustThisDevice } from "./harness";
+import { PHONE, suite, trustThisDevice, opened } from "./harness";
 import { mapped } from "./sourcemap";
 
 const BULK = process.env["E2E_BASE_LINES"] ?? "";
@@ -154,7 +154,7 @@ app.scene("measured: a first load, a landing and an eviction over about 6,000 li
 
   const landing = await measured(
     async () =>
-      assert.ok(await app.page.evaluate<boolean>(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({ title: "A new one" })).then((r) => r.ok)`), "the box opened a conversation"),
+      assert.ok(await app.page.evaluate<boolean>(`${opened("A new one")}.then(() => true)`), "the box opened a conversation"),
     `(${HELD}).then((h) => h.conversations > ${store.conversations} && h.held === h.lines)`,
     10 * 60_000,
   );

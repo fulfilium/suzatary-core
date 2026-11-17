@@ -38,15 +38,7 @@ fn writer_idle(
 }
 
 fn open(base: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    common::opened(base, "A morning")
 }
 
 fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
@@ -229,11 +221,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
         .start()
         .base;
     // A write the engine hears, on a reading whose rules are all discharged.
-    let renamed = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/title"),
-        &serde_json::json!({"title": "A renamed morning"}),
-    );
-    assert_eq!(common::status(&renamed), 200);
+    common::renamed(&base, &id, "A renamed morning");
     assert_eq!(common::status(&say(&base, &id, "and now?")), 202);
     let payload = common::settled(&base, &id);
     assert_eq!(

@@ -26,15 +26,7 @@ fn writer(tag: &str, model: FakeModel) -> (String, Arc<suzatary_cli::serve::Work
 }
 
 fn open(base: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    common::opened(base, "A morning")
 }
 
 fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {

@@ -802,14 +802,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
 
 /// A conversation opened and asked for the dentist, once the model's calendar card is its first.
 fn event_proposed(base: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The dentist"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(base, "The dentist");
     let said = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
         &serde_json::json!({"say": "put the dentist in my calendar"}),
@@ -1171,13 +1164,21 @@ fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
 #[test]
 fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
     let serving = serving("google-opening", None);
+    // As Settings sets one up: a `SetUp` line a tab seals, whose note the box writes once it is
+    // taken.
     let opening = || {
-        let mut opened = common::act(
-            &format!("{}/api/secretary/setup/google", serving.base),
-            &serde_json::json!({}),
+        let template = suzatary_core::connect::TemplateId::Google;
+        let id = common::opening(
+            &serving.base,
+            &suzatary_core::secretary::store::Entry::SetUp {
+                at: common::next_instant(),
+                title: suzatary_memory::secretary::words::Words::kept(template.template().called()),
+                template,
+            },
         );
-        assert_eq!(common::status(&opened), 200);
-        common::body_json(&mut opened)["turns"][0]["text"]
+        common::poll_conversation(&serving.base, &id, |read| {
+            read["turns"][0]["text"].is_string()
+        })["turns"][0]["text"]
             .as_str()
             .expect("the box's first line")
             .to_owned()

@@ -61,7 +61,7 @@ impl Step {
     #[must_use]
     pub fn of(shape: &LineShape) -> Self {
         match shape {
-            LineShape::Opened { .. } => Step::Opened,
+            LineShape::Opened { .. } | LineShape::SetUp { .. } => Step::Opened,
             LineShape::Said { turn, by } => match turn {
                 TurnShape::Act { .. } if *by == Some(Stamp::Box) => Step::Noted,
                 TurnShape::Person { .. } | TurnShape::Act { .. } => Step::Asks,

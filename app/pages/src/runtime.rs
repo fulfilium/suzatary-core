@@ -194,6 +194,9 @@ pub(crate) enum Core {
         members: Vec<Placed>,
         by: String,
     },
+    /// A line sealed as this tab's and handed to the box (`Line`): answered `{name, conversation}`
+    /// once the box holds a line that begins a conversation, and at once for a rename.
+    Line { line: Sealing },
     /// A todo's thirty days at an instant (`Thirty`).
     Thirty {
         chain: String,
@@ -201,6 +204,22 @@ pub(crate) enum Core {
         #[ts(type = "number")]
         ms: i64,
     },
+}
+
+/// A line a page asks the tab to seal, as `web/src/prodrome/lines.ts` names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "type")]
+pub(crate) enum Sealing {
+    /// A topic opened under `title`; empty leaves it to the title job.
+    Open { title: String },
+    /// A conversation set up from the template named `template`.
+    SetUp { template: String },
+}
+
+/// A line sealed: its conversation, a new one's the id of its opening line.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Sealed {
+    pub(crate) conversation: String,
 }
 
 /// A todo the list places.
@@ -383,7 +402,6 @@ pub enum Body {
     Key(suzatary_api::wire::KeyAsked),
     Pair(suzatary_api::wire::Pairing),
     /// `POST /api/secretary/conversations` and `…/title`.
-    Titling(suzatary_api::wire::Titling),
     Upload(suzatary_api::wire::Uploading),
     /// `POST /api/<chain>/author`: an event the box prints.
     Author(suzatary_api::wire::Authoring),

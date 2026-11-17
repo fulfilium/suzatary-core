@@ -393,6 +393,11 @@ async fn due(id: &ConversationId, state: &Arc<State>) -> Option<(Conversational,
 async fn perform(rule: Conversational, firing: &Firing, id: &ConversationId, state: &Arc<State>) {
     tracing::info!("secretary: {firing}");
     match rule {
+        Conversational::Opening => {
+            if noted(id, state).await {
+                state.workers.stream(id).turn();
+            }
+        }
         Conversational::Answer => round(id, state).await,
         Conversational::Title => {
             if titled(id, state).await {
@@ -481,6 +486,35 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
 }
 
 /// The title job; `true` when a title landed.
+/// A set-up conversation's opening note: the template's steps the box still owes, read now.
+async fn noted(id: &ConversationId, state: &Arc<State>) -> bool {
+    let caps = state.first.caps;
+    let settables = state.settables();
+    let asked = id.clone();
+    let noted = tokio::task::spawn_blocking(move || {
+        let client =
+            suzatary_core::secretary::set_up::client_kept(caps.secretary.secrets, &settables);
+        secretary::set_up::open(
+            caps.secretary.conversations,
+            &asked,
+            caps.secretary.clock.now(),
+            |template| template.template().opening(client),
+        )
+    })
+    .await;
+    match noted {
+        Ok(Ok(noted)) => noted,
+        Ok(Err(failed)) => {
+            tracing::warn!("secretary: {id}'s opening was not written: {failed}");
+            false
+        }
+        Err(_join_error) => {
+            tracing::warn!("secretary: {id}'s opening did not complete");
+            false
+        }
+    }
+}
+
 async fn titled(id: &ConversationId, state: &Arc<State>) -> bool {
     let caps = state.first.caps;
     let titler = state.titler.clone();

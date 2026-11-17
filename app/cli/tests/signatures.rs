@@ -694,13 +694,8 @@ impl Replaying {
         format!("{}{path}", self.running.base)
     }
 
-    /// `body` posted to `path` by the phone, as a fresh request.
-    fn ask(&self, path: &str, body: &serde_json::Value) -> (u16, serde_json::Value) {
-        let (status, text) = self.fresh(path, body);
-        (status, serde_json::from_str(&text).expect("a JSON body"))
-    }
-
-    /// [`Replaying::ask`], its body as the box sent it.
+    /// `body` posted to `path` by the phone, as a fresh request: its status and its body as the
+    /// box sent it.
     fn fresh(&self, path: &str, body: &serde_json::Value) -> (u16, String) {
         let mut answer = common::act_signed(&self.url(path), body, &self.phone);
         assert!(
@@ -747,12 +742,7 @@ impl Replaying {
 
     /// Open a conversation titled `title`, its id.
     fn open(&self, title: &str) -> String {
-        let (status, opened) = self.ask(
-            "/api/secretary/conversations",
-            &serde_json::json!({ "title": title }),
-        );
-        assert_eq!(status, 200, "{opened}");
-        opened["id"].as_str().expect("an id").to_owned()
+        common::opened(&self.running.base, title)
     }
 
     fn settled(&self, id: &str) -> serde_json::Value {
@@ -943,9 +933,6 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
                 "file": base64::engine::general_purpose::STANDARD.encode(jpeg),
                 "name": MARKER,
             })
-        }
-        "secretary/conversations" | "secretary/conversations/{conversation}/title" => {
-            serde_json::json!({ "title": MARKER })
         }
         "secretary/conversations/{conversation}/erase" => serde_json::json!({ "turns": [0] }),
         "secretary/conversations/{conversation}/say"

@@ -214,6 +214,45 @@ export const SIGNED_POST = `(async (path, body) => {
   return fetch(path, { method: "POST", headers: { ...${WRITE_HEADERS}, ...signed }, body });
 })`;
 
+/**
+ * A NEW CONVERSATION OPENED AS A TAB OPENS ONE, in the page: the app's own core module pulls the lines' skeleton, seals
+ * an opening titled `title` as this device's actor, and the device's key signs it; the line goes to the lines with its
+ * key beside it. No route opens a conversation. The expression answers the new conversation's id.
+ */
+export const opened = (title: string): string => `(async (title) => {
+  // The build's files sit beside its app, which the page preloaded.
+  const app = [...document.querySelectorAll("link[rel=modulepreload]")].map((l) => l.href).find((h) => h.endsWith("/app.js"));
+  const beside = (file) => new URL(file, app ?? document.baseURI).href;
+  const core = await import(beside("prodrome.js"));
+  await core.default({ module_or_path: fetch(beside("prodrome_bg.wasm")) });
+  const lines = new core.Lines();
+  let since = "";
+  for (;;) {
+    const piece = await (await fetch("/api/stores/lines/skeleton?since=" + since)).json();
+    lines.piece(JSON.stringify(piece), JSON.stringify(piece.keys), Date.now());
+    if (piece.rest === 0) break;
+    since = piece.frontier.digest;
+  }
+  lines.land().free();
+  const me = await (await fetch("/api/me")).json();
+  const at = new Date().toISOString().slice(0, 23);
+  const sealed = lines.seal(JSON.stringify({ type: "Open", title }), at, me.actor, crypto.getRandomValues(new Uint8Array(32)));
+  const conversation = sealed.conversation;
+  sealed.free();
+  const [[line]] = JSON.parse(lines.unsent());
+  const request = (r) => new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  const db = await request(indexedDB.open("suzatary-keys", 1));
+  const key = await request(db.transaction("keys", "readonly").objectStore("keys").get("device"));
+  db.close();
+  const hex = (bytes) => Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
+  const signature = hex(await crypto.subtle.sign({ name: "Ed25519" }, key.key, new TextEncoder().encode("prodrome object " + line.hash)));
+  const signed = JSON.parse(core.signed(line.hash, key.public, signature));
+  const body = JSON.stringify({ objects: [line.literal, signed.text], since: "", keys: { [line.hash]: line.keys } });
+  const answer = await (await ${SIGNED_POST}("/api/stores/lines/objects", body)).json();
+  if (!answer.adopted.includes(line.hash)) throw new Error("the box did not take the opening: " + JSON.stringify(answer));
+  return conversation;
+})(${JSON.stringify(title)})`;
+
 /** The rounds the topic scenes and shots read, each given its topics by the scripted model's `add_topics`. */
 export const TOPIC_ROUNDS: readonly (readonly [string, readonly string[]])[] = [
   ["tag the garden invoices", ["garden", "invoices"]],
@@ -234,7 +273,7 @@ export async function topicRounds(page: Page): Promise<void> {
   );
   if (held) return;
   const id = await page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Topics"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Topics"),
   );
   await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
   await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });

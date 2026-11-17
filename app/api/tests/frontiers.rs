@@ -235,6 +235,10 @@ impl TheBox {
                 objects: &own,
                 since,
             },
+            &routes::Beside {
+                posted: &(),
+                keep: &|_| Ok(()),
+            },
             &self.frontiers,
             routes::Writer {
                 actor: &device.actor,

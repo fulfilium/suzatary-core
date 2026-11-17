@@ -17,22 +17,24 @@ export namespace written {
     readonly store: Written
     readonly stepped: (step: LineStep) => Promise<void>
   }
-  // One for every store a tab writes, so a store left out does not compile.
-  export type Entries = { readonly [N in stores.Written]: Entry }
+  // One for every store `N` names, so a store left out does not compile.
+  export type Entries<N extends stores.Written> = { readonly [K in N]: Entry }
 
-  export type T = {
+  export type T<N extends stores.Written> = {
     // Every unsigned change of `name` signed, so a write made keyless is signed later.
-    readonly sign: (name: stores.Written) => Promise<void>
+    readonly sign: (name: N) => Promise<void>
     // What `name` holds unsent, signed and posted; an answer kept, a refusal said.
-    readonly handOver: (name: stores.Written) => Promise<void>
+    readonly handOver: (name: N) => Promise<void>
     // The asks' refusals of every store's writes, held as refused.
     readonly refusedIn: (asks: ObjectStore) => Promise<void>
   }
 
   const BAD_REQUEST = 400
 
-  // In posts the box takes whole, each change beside its signatures.
-  const Unsent = d.json(d.arr(d.arr(d.obj<{ hash: string; literal: string }>({ hash: d.str, literal: d.str }))))
+  // In posts the box takes whole, each change beside its signatures, and each line beside its slots' keys, which
+  // travel beside the objects and never in one.
+  type Posted = { hash: string; literal: string; keys: readonly string[] }
+  const Unsent = d.json(d.arr(d.arr(d.obj<Posted>({ hash: d.str, literal: d.str, keys: d.arr(d.str) }))))
   const Names = d.json(d.arr(d.str))
   const Refusals = d.json(d.arr(d.obj<{ hash: string; reason: string }>({ hash: d.str, reason: d.str })))
   const read = <A>(what: string, decoded: lo.Settled<A>): A => {
@@ -41,8 +43,8 @@ export namespace written {
   }
   const refusalsIn = (store: Written): ReadonlyMap<string, string> => new Map(read("refusals", Refusals(store.refusals())).map(r => [r.hash, r.reason]))
 
-  export const of = (core: Core, entries: Entries, say: (why: string) => void): T => {
-    const entry = (name: stores.Written): Entry => entries[name]
+  export const of = <N extends stores.Written>(core: Core, entries: Entries<N>, say: (why: string) => void): T<N> => {
+    const entry = (name: N): Entry => entries[name]
 
     // `step`, a move of a store this tab writes, kept; each newly refused object said once, in the box's words.
     const settled = async (e: Entry, step: () => LineStep | undefined): Promise<void> => {
@@ -53,7 +55,7 @@ export namespace written {
       for (const [hash, reason] of refusalsIn(e.store)) if (!before.has(hash)) say(`The box refused a ${e.noun}: ${reason}`)
     }
 
-    const sign = async (name: stores.Written): Promise<void> => {
+    const sign = async (name: N): Promise<void> => {
       const e = entry(name)
       const unsigned = read("unsigned", Names(e.store.unsigned()))
       if (unsigned.length === 0) return
@@ -65,15 +67,17 @@ export namespace written {
     // A post with no answer leaves everything for the next sync. A 400 refuses the post's shape, not its objects: they
     // stay unsent, and the box's words are said once per tab.
     const shapes = new Set<string>()
-    const handOver = async (name: stores.Written): Promise<void> => {
+    const handOver = async (name: N): Promise<void> => {
       await sign(name)
       const e = entry(name)
       for (const posting of read("unsent", Unsent(e.store.unsent()))) {
         try {
+          const keys = Object.fromEntries(posting.filter(o => o.keys.length > 0).map(o => [o.hash, o.keys]))
           const receipt = await storereads.post(
             name,
             posting.map(o => o.literal),
             e.store.since(),
+            keys,
           )
           await settled(e, () => e.store.answered(JSON.stringify(receipt)))
         } catch (x: unknown) {

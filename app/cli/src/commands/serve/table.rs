@@ -98,21 +98,10 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             proposals::drop_session,
         ),
-        Route::post("/api/secretary/conversations", Scope::Box, secretary::open),
-        Route::post(
-            "/api/secretary/setup/{template}",
-            Scope::Box,
-            secretary::setup,
-        ),
         Route::post(
             "/api/secretary/replace/{handle}",
             Scope::Box,
             secretary::replace,
-        ),
-        Route::post(
-            "/api/secretary/conversations/{conversation}/title",
-            Scope::Box,
-            secretary::rename,
         ),
         // An erasure takes the same `Tap` witness as a send.
         Route::post(

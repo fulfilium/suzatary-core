@@ -20,7 +20,7 @@
 import assert from "node:assert/strict"
 
 import type { Recorded } from "./harness"
-import { LANDED_ROW, PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, snapshotKept, streamAnswered, suite } from "./harness"
+import { LANDED_ROW, PHONE, REPLICA_ROWS, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, snapshotKept, streamAnswered, suite, opened } from "./harness"
 
 const app = await suite("lines")
 
@@ -105,7 +105,7 @@ async function converse(text: string): Promise<string> {
   await app.page.navigate(`${WRITE_BASE}/#/secretary/default`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   const id = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Untitled"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Untitled"),
   )
   await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`)
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 })
@@ -198,11 +198,11 @@ app.scene("a conversation the box opened after the device kept its snapshot draw
   await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
   // A conversation the box opens once the device kept its snapshot of the lines (`linesync.QUIET_MS`), while no page
   // of this device reads them: the Inbox pulls the inbox alone.
-  const opened = async (n: string): Promise<string> => {
+  const openedSince = async (n: string): Promise<string> => {
     await app.page.waitFor(snapshotKept("lines"), { timeout: 60000 })
     await app.page.navigate(`${WRITE_BASE}/?away${n}#/inbox`)
     await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-    return app.page.evaluate<string>(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Opened since ${n}"})).then((r) => r.json()).then((j) => j.id)`)
+    return app.page.evaluate<string>(opened(`Opened since ${n}`))
   }
   // The page draws the conversation, and nothing says it does not exist.
   const drawn = async (id: string): Promise<void> => {
@@ -210,17 +210,17 @@ app.scene("a conversation the box opened after the device kept its snapshot draw
     assert.equal(await app.page.evaluate<boolean>(`document.body.textContent.includes("no conversation named")`), false, `${id} is drawn`)
   }
   // Opened at once.
-  const first = await opened("1")
+  const first = await openedSince("1")
   await app.page.navigate(`${WRITE_BASE}/?warm1#/secretary/${first}`)
   await drawn(first)
   // From the stream, whose answer the snapshot gave.
-  const second = await opened("2")
+  const second = await openedSince("2")
   await app.page.navigate(`${WRITE_BASE}/?warm2#/secretary`)
   await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
   await app.page.evaluate(`void (location.hash = "#/secretary/${second}")`)
   await drawn(second)
   // Across a build update: a load the browser cannot answer from what it holds.
-  const third = await opened("3")
+  const third = await openedSince("3")
   await app.page.navigate(`${WRITE_BASE}/?upgraded=1#/secretary/${third}`)
   await drawn(third)
 })
@@ -237,7 +237,7 @@ app.scene("a conversation another tab landed draws from the device, with the box
     // This tab runs no app now, so only the other tab's worker can land what the box opens next.
     await app.page.navigate(`${WRITE_BASE}/api/about`)
     const held = await other.evaluate<number>(`${LANDED_ROW}.then((row) => row.nodes.length)`)
-    const id = await other.evaluate<string>(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Opened in the other tab"})).then((r) => r.json()).then((j) => j.id)`)
+    const id = await other.evaluate<string>(opened("Opened in the other tab"))
     // The other tab hears the box's heads move and lands the new line: the landed row the device keeps grows. (A tab in
     // the background draws nothing, so its worker's landing is what is waited for; a piece's frame alone lands nothing.)
     await other.waitFor(`${LANDED_ROW}.then((row) => row.nodes.length > ${held})`, { timeout: 20000 })

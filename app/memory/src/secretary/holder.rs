@@ -17,6 +17,8 @@ pub enum Holder {
     Vault,
     /// The proposals and briefings a conversation led to, pushed in the clear.
     DataHistory,
+    /// The lines a device sealed and has not handed over, with their keys, on that device.
+    DeviceLines,
 }
 
 /// What an erasure leaves in a holder.
@@ -30,13 +32,14 @@ pub enum Fate {
 
 impl Holder {
     /// In the order the sweep empties them.
-    pub const ALL: [Holder; 6] = [
+    pub const ALL: [Holder; 7] = [
         Holder::Opened,
         Holder::Renders,
         Holder::ModelSessions,
         Holder::Keys,
         Holder::Vault,
         Holder::DataHistory,
+        Holder::DeviceLines,
     ];
 
     /// As the erase question names it.
@@ -51,6 +54,7 @@ impl Holder {
             Holder::DataHistory => {
                 "the proposals and briefings it led to, in the data repository's history"
             }
+            Holder::DeviceLines => "the lines a device wrote and has not handed over yet",
         }
     }
 
@@ -63,6 +67,11 @@ impl Holder {
             // `scripts/vault-backup.sh` keeps seven daily snapshots.
             Holder::Vault => Fate::Remains("for up to seven days"),
             Holder::DataHistory => Fate::Remains("until that history is rewritten"),
+            // `web/src/prodrome/ownlines.ts`: kept until the box answers them; a revoked
+            // device's wipe deletes them with every database of the origin.
+            Holder::DeviceLines => {
+                Fate::Remains("on that device until it hands them over, or its wipe")
+            }
         }
     }
 }

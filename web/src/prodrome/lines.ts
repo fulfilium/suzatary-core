@@ -12,6 +12,16 @@ export namespace lines {
     | { readonly type: "Objects"; readonly names: readonly string[] }
     | { readonly type: "Naming"; readonly keys: readonly string[] }
 
+  // A line a page asks this tab to seal (`Lines.seal`): a rename, an opening under a title (empty leaves it to the title
+  // job), or a setup of a template by its name.
+  export type Sealing =
+    | { readonly type: "Rename"; readonly conversation: string; readonly title: string }
+    | { readonly type: "Open"; readonly title: string }
+    | { readonly type: "SetUp"; readonly template: string }
+
+  // A line sealed: its name, and its conversation, a new one's the id of its opening line.
+  export type Sealed = { readonly name: string; readonly conversation: string }
+
   export const WHOLE: Scope = { type: "Whole" }
   export const one = (id: string): Scope => ({ type: "Conversations", ids: [id] })
 }

@@ -67,13 +67,7 @@ fn writing(tag: &str) -> (String, Arc<Recorder>) {
 
 /// Open a conversation, say something, and poll until the model's answer lands.
 fn exchange(base: &str, said: &str) -> serde_json::Value {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    assert_eq!(common::status(&opened), 200);
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(base, "A morning");
 
     let said = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
@@ -107,14 +101,7 @@ fn a_question_asked_twice_is_asked_once() {
     let base = common::Server::new(Arc::new(fakes), deployment, Vec::new())
         .start()
         .base;
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "asked once"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "asked once");
     let say = |after: u64| {
         let response = common::act(
             &format!("{base}/api/secretary/conversations/{id}/say"),
@@ -215,12 +202,7 @@ fn a_proposal_without_a_why_or_a_source_is_refused_to_the_model() {
         ..
     } = common::Server::new(Arc::new(fakes), deployment, Vec::new()).start();
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(&base, "A morning");
     let payload = common::said(&base, &id, "propose the harrow reply");
     assert!(
         payload["proposals"]
@@ -422,12 +404,7 @@ fn an_undeclared_secret_name_is_refused_and_nothing_is_stored() {
         .start()
         .base;
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(&base, "A morning");
     let payload = common::said(&base, &id, "set GITHUB_PAT");
     assert!(
         payload["proposals"]
@@ -786,12 +763,7 @@ fn a_changeset_with_one_bad_act_stores_and_appends_nothing() {
         ..
     } = common::Server::new(Arc::new(fakes), deployment, Vec::new()).start();
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(&base, "A morning");
     let payload = common::said(&base, &id, "add secretarychangetest2, twice");
     assert!(
         payload["proposals"]
@@ -843,7 +815,6 @@ fn a_viewer_may_read_the_conversations_and_tap_nothing() {
     );
 
     for (path, body) in [
-        ("/api/secretary/conversations", serde_json::json!({})),
         (
             "/api/secretary/conversations/anything/say",
             serde_json::json!({"say": "hello"}),
@@ -878,12 +849,7 @@ fn a_viewer_may_read_the_conversations_and_tap_nothing() {
 #[test]
 fn a_turn_carries_what_it_points_at_and_the_box_loads_it() {
     let (base, _) = writing("secretary-references");
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(&base, "A morning");
 
     let refused = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
@@ -959,12 +925,7 @@ fn loopback_may_neither_tap_nor_dismiss() {
 #[test]
 fn the_two_refusals_a_say_can_earn() {
     let (base, _) = writing("secretary-refusals");
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let opened = common::body_json(&mut opened);
-    let id = opened["id"].as_str().expect("an id").to_owned();
+    let id = common::opened(&base, "A morning");
 
     let blank = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
@@ -1007,14 +968,7 @@ fn a_broken_answer_is_its_source_block_by_block() {
         Vec::new(),
     );
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "A morning");
     let payload = common::said(&base, &id, "say something broken");
     let turns = payload["turns"].as_array().expect("turns");
     let model_turn = turns
@@ -1031,10 +985,10 @@ fn a_broken_answer_is_its_source_block_by_block() {
     );
 }
 
-/// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a fresh dated id.
+/// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a conversation it begins.
 mod default_conversation {
-    use suzatary_base::conversation_id::{ConversationId, DEFAULT};
-    use suzatary_core::secretary::conversations::{read_or_open_default, start};
+    use suzatary_base::conversation_id::DEFAULT;
+    use suzatary_core::secretary::conversations::read_or_open_default;
     use suzatary_core::secretary::converse;
 
     use super::{ada, common};
@@ -1102,24 +1056,18 @@ mod default_conversation {
     }
 
     #[test]
-    fn new_still_mints_a_dated_conversation_and_never_touches_the_default() {
+    fn new_begins_a_conversation_of_its_own_and_never_touches_the_default() {
         let fakes = common::Fakes::new("brief-new").model(simple_reply());
         let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
-        let taken = suzatary_core::secretary::transcript::keys(fakes.conversations.conversations())
-            .expect("reads the empty conversations directory");
-        let today = chrono::NaiveDate::from_ymd_opt(2026, 9, 14).expect("a day");
-        let id = ConversationId::minted(today, &taken);
-        assert_ne!(id.as_str(), DEFAULT.as_str(), "a dated id, not the default");
-
-        start(
+        let (id, _) = suzatary_core::secretary::conversations::begin(
             fakes.conversations.conversations(),
             &fakes.model,
-            &id,
             "Morning",
             suzatary_core::secretary::store::Kind::Topic,
             common::now(),
         )
-        .expect("opens a fresh, dated conversation");
+        .expect("begins a fresh conversation");
+        assert_ne!(id.as_str(), DEFAULT.as_str(), "its own id, not the default");
         let answered = converse(
             &fakes.secretary(),
             &deployment,
@@ -1373,14 +1321,7 @@ fn revises_leaves_exactly_one_waiting() {
         .start()
         .base;
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A morning"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "A morning");
 
     let after_first = common::said(&base, &id, "propose the harrow reply");
     assert_eq!(
@@ -1792,14 +1733,7 @@ fn a_photo_is_kept_served_as_an_image_and_named_by_a_turn() {
     let bytes = served.body_mut().read_to_vec().expect("a body");
     assert_eq!(bytes, [0xFF, 0xD8, 0xFF, 0xE0]);
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A photo"}),
-    );
-    let conversation = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let conversation = common::opened(&base, "A photo");
     let said = common::act(
         &format!("{base}/api/secretary/conversations/{conversation}/say"),
         &serde_json::json!({"say": "", "attachments": [{"id": id}]}),
@@ -1862,14 +1796,7 @@ fn a_pdf_naming_an_ssn_is_held_then_kept_privately_in_the_drive() {
     let served = common::get(&format!("{base}/api/secretary/attachments/{id}"));
     assert_eq!(common::status(&served), 404, "a private file is not served");
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Taxes"}),
-    );
-    let conversation = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let conversation = common::opened(&base, "Taxes");
     let mut said = common::act(
         &format!("{base}/api/secretary/conversations/{conversation}/say"),
         &serde_json::json!({"say": "send this to the accountant", "attachments": [{"id": id, "name": "renamed.pdf"}]}),
@@ -1915,14 +1842,7 @@ fn sending(base: &str, id: &str, say: &str, files: &[(&str, &str)]) -> serde_jso
 
 /// A new conversation's id.
 fn opened(base: &str, title: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({ "title": title }),
-    );
-    common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned()
+    common::opened(base, title)
 }
 
 /// Every answer `verb` gave in this conversation, as JSON, in the order given.
@@ -2224,14 +2144,7 @@ fn what_is_not_a_stored_photo_is_refused() {
     );
     assert_eq!(common::status(&svg), 400);
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "No photo"}),
-    );
-    let conversation = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let conversation = common::opened(&base, "No photo");
     let unknown = common::act(
         &format!("{base}/api/secretary/conversations/{conversation}/say"),
         &serde_json::json!({"say": "look", "attachments": [{"id": "a".repeat(64)}]}),

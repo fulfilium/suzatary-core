@@ -5,6 +5,7 @@ import asks from "./asks"
 import intents from "./intents"
 import storesync from "./storesync"
 import { appendAct } from "./sync"
+import time from "../app/time"
 import http from "../wire/http"
 import sources from "../algebra/source"
 import beacon from "../app/beacon"
@@ -28,7 +29,7 @@ export namespace intentsync {
 
   // An answer the box decided is a refusal in its own words; one it may not have decided may have reached it or not.
   const answerOf = (a: asks.Ask) => (e: unknown): intents.Answer =>
-    a.type === "Seal" || a.type === "Topic" || !http.unanswered(e)
+    a.type === "Seal" || a.type === "Topic" || a.type === "Rename" || !http.unanswered(e)
       ? { type: "Refused", e: lo.reason(e) }
       : { type: "Lost", e: lo.reason(e) }
 
@@ -48,18 +49,25 @@ export namespace intentsync {
     retract(asks.holds(id => read.get(id) ?? null))
   }
 
-  // One ask: nothing if it is already asked; otherwise sent, answered (told to `heard`), and read back. A seal or a topic
-  // is held once the tab's replica has it, and a forgotten fact or a retracted summary by the box's answer, since no
+  // One ask: nothing if it is already asked; otherwise sent, answered (told to `heard`), and read back. A seal, a topic or
+  // a rename is held once the tab's replica has it, and a forgotten fact or a retracted summary by the box's answer, since no
   // replica carries the memory's words or the record's.
   export const ask = async (a: asks.Ask, secret?: string, heard: (answer: intents.Answer) => void = () => {}): Promise<Outcome> => {
     const key = intents.key(a)
     if (!intents.wants(source.state(), key)) return { type: "Already" }
     source.dispatch({ type: "Asked", key, act: a })
     const asked = source.state().asked.get(key)?.asks ?? 0
-    const answer = await (a.type === "Seal" ? appendAct(a.event) : a.type === "Topic" ? storesync.write(a.write, a.at) : asks.send(a, secret)).then(() => TAKEN, answerOf(a))
+    const answer = await (a.type === "Seal"
+      ? appendAct(a.event)
+      : a.type === "Topic"
+        ? storesync.write(a.write, a.at)
+        : a.type === "Rename"
+          ? storesync.seal({ type: "Rename", conversation: a.conversation, title: a.title }, time.moment())
+          : asks.send(a, secret)
+    ).then(() => TAKEN, answerOf(a))
     source.dispatch({ type: "Answered", key, asks: asked, answer })
     heard(answer)
-    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Forget" || a.type === "Retract")) source.dispatch({ type: "Subsumed", key })
+    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Rename" || a.type === "Forget" || a.type === "Retract")) source.dispatch({ type: "Subsumed", key })
     else if (answer.type === "Taken") {
       // A pull asked after the box's answer holds what it wrote, whatever the record's words became on the way in; a pull
       // that did not reach the box leaves the ask in view, and the next sync retracts it.

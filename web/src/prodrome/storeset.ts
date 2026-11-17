@@ -5,6 +5,7 @@ import type { Core, Lines, ObjectStore, Proposals, TopicReading, TopicStore } fr
 import type excluded from "./excluded"
 import type heads from "./heads"
 import linesync from "./linesync"
+import type sealing from "./lines"
 import type progress from "./progress"
 import replicasync from "./replicasync"
 import stores from "./stores"
@@ -17,6 +18,7 @@ import type rendered from "../app/rendered"
 import storereads from "../wire/storereads"
 import type { StorePayload } from "../wire/generated/wire"
 import { measure } from "../app/perf"
+import d from "../wire/decoder"
 
 export namespace storeset {
   export type Said =
@@ -30,7 +32,7 @@ export namespace storeset {
   const SCOPE_NAMES: readonly Scope[] = ["Inbox", "All"]
 
   // The core's two topic stores and their one reading, made once per move of either.
-  export type Topics = { readonly replicas: { readonly [N in stores.Written]: TopicStore }; readonly reading: TopicReading }
+  export type Topics = { readonly replicas: { readonly [N in topics.Store]: TopicStore }; readonly reading: TopicReading }
 
   export type T = {
     readonly lines: linesync.T
@@ -48,14 +50,32 @@ export namespace storeset {
     readonly reset: (store: stores.Name) => Promise<readonly string[]>
     // `w` written into its store as `actor` and signed, settled before the box hears of it; a refusal arrives as a move.
     readonly write: (w: topics.Write, at: string, actor: string) => Promise<void>
+    // `line` sealed as `actor`'s, read at once and signed, handed over behind the answer.
+    readonly seal: (line: sealing.Sealing, at: string, actor: string) => Promise<sealing.Sealed>
   }
 
-  // The stores this tab writes, each with the noun a refusal names.
-  const NOUNS: { readonly [N in stores.Written]: string } = { topics: "topic", "topic-aliases": "topic's new name" }
-  const listed = <const L extends readonly stores.Written[]>(names: L): L => names
+  // A line refused is named so.
+  const LINE = "line"
+  // What the owner reads where a line sealed under older rules is refused, or one the box did not answer: the words stay
+  // where they were typed.
+  export const OUTDATED = "This page is older than the box: reload to send it. Your words stay here."
+  const UNANSWERED = "The box did not answer: your words stay here, and the line goes with the next sync."
+  type Kind = "Trust" | "Final" | "Outdated"
+  type Refused = { Refused: { kind: Kind; reason: string } }
+  const Answered = d.json(
+    d.alt(
+      d.alt(d.lit("Unsent"), d.lit("Taken")),
+      d.obj<Refused>({ Refused: d.obj<Refused["Refused"]>({ kind: d.oneOf<Kind>({ Trust: null, Final: null, Outdated: null }), reason: d.str }) }),
+    ),
+  )
+  // The bytes a seal draws its keys from: one key of 32 for each slot, and a line this tab writes holds one.
+  const ENTROPY = 32
+  // The topic stores this tab writes, each with the noun a refusal names.
+  const NOUNS: { readonly [N in topics.Store]: string } = { topics: "topic", "topic-aliases": "topic's new name" }
+  const listed = <const L extends readonly topics.Store[]>(names: L): L => names
   const WRITTEN = listed(["topics", "topic-aliases"])
-  // Every store a tab writes is in the list: a name left out fails to compile here.
-  const everyWritten: [Exclude<stores.Written, (typeof WRITTEN)[number]>] extends [never] ? true : never = true
+  // Every topic store is in the list: a name left out fails to compile here.
+  const everyWritten: [Exclude<topics.Store, (typeof WRITTEN)[number]>] extends [never] ? true : never = true
   void everyWritten
 
   export const of = (core: Core, held: Lines, say: (s: Said) => void, blocks: rendered.Device): T => {
@@ -91,7 +111,7 @@ export namespace storeset {
       blocks,
     )
     const inbox = objectStore("inbox", new core.Proposals())
-    const topicStores: { readonly [N in stores.Written]: { readonly store: TopicStore; readonly sync: replicasync.T } } = {
+    const topicStores: { readonly [N in topics.Store]: { readonly store: TopicStore; readonly sync: replicasync.T } } = {
       topics: objectStore("topics", new core.Memberships()),
       "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()),
     }
@@ -108,10 +128,15 @@ export namespace storeset {
     }
 
     // Read again whenever it moves: each store this tab writes holds what it records as refused.
-    const entry = (name: stores.Written): written.Entry => ({ noun: NOUNS[name], store: topicStores[name].store, stepped: step => topicStores[name].sync.stepped(step) })
-    const writes = written.of(core, { topics: entry("topics"), "topic-aliases": entry("topic-aliases") }, why => say({ type: "Refused", why }))
+    const entry = (name: topics.Store): written.Entry => ({ noun: NOUNS[name], store: topicStores[name].store, stepped: step => topicStores[name].sync.stepped(step) })
+    const writes = written.of(
+      core,
+      { topics: entry("topics"), "topic-aliases": entry("topic-aliases"), lines: { noun: LINE, store: held, stepped: lines.ownStepped } },
+      why => say({ type: "Refused", why }),
+    )
     // A hand-over that failed is said, and the next sync tries it again.
-    const failed = (name: stores.Written) => (e: unknown): void => say({ type: "Refused", why: `This tab's ${NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
+    const failed = (name: stores.Written) => (e: unknown): void =>
+      say({ type: "Refused", why: `This tab's ${name === "lines" ? LINE : NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
 
     // Which stores a reading has asked for so far: a reconnect pulls those alone.
     let wanted: "None" | Scope = "None"
@@ -130,7 +155,12 @@ export namespace storeset {
         ),
       )
       const asked = topicPulls.then(ts => asks.sync.want().then(a => ts.every(t => t) && a))
-      return lines.engine.want().then(l => inbox.sync.want().then(i => asked.then(t => l && i && t)))
+      const linesPulled = lines.engine.sync.restored
+        .get()
+        .then(() => writes.handOver("lines"))
+        .catch(failed("lines"))
+        .then(() => lines.engine.want())
+      return linesPulled.then(l => inbox.sync.want().then(i => asked.then(t => l && i && t)))
     }
     // The inbox alone; a move pulls the rest too once a reading asked for all.
     const inboxOnly = (): Promise<boolean> => {
@@ -173,6 +203,29 @@ export namespace storeset {
       void writes.handOver(name).catch(failed(name))
     }
 
+    // Sealed in the worker, its keys drawn here: the first seal compiles the scrub's patterns, paid off the page's thread.
+    // A rename is answered at once and handed over behind the answer. A line that begins a conversation is answered once
+    // the box holds it, since what a page does next (a question, the note of a setup) is the box's own.
+    const seal = async (line: sealing.Sealing, at: string, actor: string): Promise<sealing.Sealed> => {
+      const start = performance.now()
+      await readies.All.get()
+      const sealed = held.seal(JSON.stringify(line), at, actor, crypto.getRandomValues(new Uint8Array(ENTROPY)))
+      const answer = { name: sealed.name, conversation: sealed.conversation }
+      await lines.ownStepped(sealed)
+      measure("write:seal", start, { store: "lines" })
+      await writes.sign("lines")
+      if (line.type === "Rename") {
+        void writes.handOver("lines").catch(failed("lines"))
+        return answer
+      }
+      await writes.handOver("lines")
+      const said = Answered(held.answer(answer.name))
+      if (said.type === "Error") throw new Error(`the box's answer to a line: ${said.e}`)
+      const v = said.v
+      if (v === "Taken") return answer
+      throw new Error(v === "Unsent" ? UNANSWERED : v.Refused.kind === "Outdated" ? OUTDATED : v.Refused.reason)
+    }
+
     return {
       lines,
       proposals: () => inbox.store,
@@ -184,6 +237,7 @@ export namespace storeset {
       shown: on => Promise.all([lines.shown(on), inbox.sync.shown(on), asks.sync.shown(on), ...WRITTEN.map(name => topicStores[name].sync.shown(on))]).then(() => undefined),
       reset: store => engines[store].reset(),
       write,
+      seal,
     }
   }
 }

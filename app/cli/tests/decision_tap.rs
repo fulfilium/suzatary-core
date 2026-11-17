@@ -35,14 +35,7 @@ fn a_proposed_decision_is_recorded_by_his_tap_alone() {
     };
     let plugins = DecisionId::new("plugins").expect("an id");
 
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Decisions"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "Decisions");
     let payload = common::said(&base, &id, "record the plugins decision");
     let card = &payload["proposals"][0];
     assert_eq!(card["act"]["kind"], "decision", "{payload}");

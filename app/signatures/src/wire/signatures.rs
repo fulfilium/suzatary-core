@@ -31,4 +31,7 @@ pub enum RefusalKind {
     Final,
     /// Taken once its device is trusted and it is signed.
     Trust,
+    /// Sealed under redaction rules older than the box's: held and named like a final refusal,
+    /// never posted again, its words kept where they were typed until a reload seals them anew.
+    Outdated,
 }

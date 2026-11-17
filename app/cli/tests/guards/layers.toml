@@ -54,10 +54,12 @@ conversations = ["nonempty", "secretary/about", "secretary/found", "secretary/mo
   "secretary/verb_name"]
 lines = ["first_read", "parts", "timings", "secretary/act_lines", "secretary/conversation_json",
   "secretary/conversations", "secretary/held_lines", "secretary/held_replica", "secretary/husks",
-  "secretary/line_event", "secretary/line_form", "secretary/line_shape", "secretary/object_stores",
+  "secretary/line_event", "secretary/line_form", "secretary/line_shape", "secretary/lines_rule",
+  "secretary/object_stores", "secretary/own_line",
   "secretary/opened", "secretary/outline", "secretary/outlines", "secretary/prune",
   "secretary/rescrub", "secretary/step", "secretary/targets", "secretary/transcript", "wire/lines"]
-topics = ["secretary/answers", "secretary/readings", "secretary/rules", "secretary/stream",
+topics = ["secretary/answers", "secretary/readings", "secretary/rules", "secretary/set_up",
+  "secretary/stream",
   "secretary/title", "secretary/topics", "wire/topics"]
 digest = ["model_name", "secretary/caused", "secretary/compact", "secretary/compact_ask",
   "secretary/compact_budget", "secretary/compacting", "secretary/compaction", "secretary/compactor",

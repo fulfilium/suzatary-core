@@ -110,6 +110,7 @@ pub fn line(entry: &Entry) -> Taint {
         | Entry::Erased { .. }
         | Entry::Resealed { .. } => Taint::Clean,
         Entry::Opened { .. }
+        | Entry::SetUp { .. }
         | Entry::Titled { .. }
         | Entry::Reviewed { .. }
         | Entry::ReviewFailed { .. }

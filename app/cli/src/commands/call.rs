@@ -362,7 +362,7 @@ mod tests {
             (route::Method::Get, "/api/todo/lease"),
             (route::Method::Get, "/api/life/todo/lease"),
             (route::Method::Get, "/api/mail/search?q=from:a"),
-            (route::Method::Post, "/api/secretary/conversations"),
+            (route::Method::Post, "/api/stores/lines/objects"),
             (
                 route::Method::Post,
                 "/api/secretary/conversations/c1/proposals/0/tap",

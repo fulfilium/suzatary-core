@@ -1,0 +1,141 @@
+//! What a tab wrote to the lines and the box has not served back yet: each line it sealed, with
+//! its node as the box computes it ([`line_form::skeleton_node`]), its print and its slots' keys,
+//! and each signature of one by the device's key. A reading reads an own line where the rows do
+//! not hold it yet, so a rename draws at once.
+//!
+//! An own line reads back from its print and its keys alone ([`OwnLine::read`]), which is all the
+//! device keeps of it beside the box's rows: no form of this build's is needed to hand it over.
+
+use std::collections::BTreeMap;
+
+use prodrome_core::event::{Envelope, Hash, parse_envelope};
+use sha2::{Digest as _, Sha256};
+
+use crate::secretary::line_event::{LineEvent, LineVocabulary};
+use crate::secretary::line_form;
+use crate::secretary::outlines::Parsed;
+use suzatary_memory::secretary::key_ring::{KeyRing, spelled};
+use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
+use suzatary_store::replica::held::Node;
+use suzatary_store::replica::writes::Role;
+
+/// One object a tab wrote to the lines.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnLine {
+    /// A line: its node, its print, and the key of each of its slots.
+    Line {
+        /// Its node, as the box would serve it.
+        node: Box<Parsed>,
+        /// Its canonical print.
+        print: String,
+        /// Its slots' keys.
+        keys: KeyRing,
+    },
+    /// The device's signature of a line.
+    Signature {
+        /// Its name.
+        name: Hash,
+        /// The line it signs, the one name it rests on.
+        signs: [Hash; 1],
+        /// Its canonical print.
+        print: String,
+    },
+}
+
+impl OwnLine {
+    /// The object `print` is, with the keys `keys` (by name, in hex) of a line's slots.
+    ///
+    /// # Errors
+    /// Why `print` is no line or signature of the lines, or why `keys` do not open each of its
+    /// slots.
+    pub fn read(print: String, keys: &BTreeMap<KeyName, String>) -> Result<Self, String> {
+        let name = Hash::new(hex::encode(Sha256::digest(print.as_bytes())))
+            .unwrap_or_else(|_| unreachable!("a SHA-256 in lowercase hex is a name"));
+        match parse_envelope::<LineEvent>(&LineVocabulary, &print).map_err(|e| e.to_string())? {
+            Envelope::Signed(signed) => Ok(OwnLine::Signature {
+                name,
+                signs: [signed.object],
+                print,
+            }),
+            envelope @ Envelope::Change(_) => {
+                let keys = KeyRing::of(keys);
+                let line = envelope.event().unwrap_or_else(|| unreachable!("a change"));
+                if let Some(missing) = line
+                    .keys()
+                    .find(|key| keys.iter().all(|(name, _)| name != *key))
+                {
+                    return Err(format!("no key for the slot locked under {missing}"));
+                }
+                let node = Parsed::of(line_form::skeleton_node(&name, &envelope))
+                    .map_err(|e| e.to_string())?;
+                Ok(OwnLine::Line {
+                    node: Box::new(node),
+                    print,
+                    keys,
+                })
+            }
+            other => Err(format!(
+                "a tab writes a line or its signature, not a {}",
+                other.name()
+            )),
+        }
+    }
+
+    /// `line` sealed by this tab, opened by `keys`, as an own line.
+    ///
+    /// # Errors
+    /// [`OwnLine::read`]'s, which a line just sealed never meets.
+    pub fn sealed(line: &Envelope<LineEvent>, keys: &[TextKey]) -> Result<Self, String> {
+        let keys = keys.iter().map(|key| (key.name(), spelled(key))).collect();
+        Self::read(prodrome_core::event::canonical_envelope(line), &keys)
+    }
+
+    /// Its canonical print.
+    #[must_use]
+    pub fn print(&self) -> &str {
+        match self {
+            OwnLine::Line { print, .. } | OwnLine::Signature { print, .. } => print,
+        }
+    }
+
+    /// Each key of its slots, in hex by name; none for a signature.
+    #[must_use]
+    pub fn keys(&self) -> BTreeMap<KeyName, String> {
+        match self {
+            OwnLine::Line { keys, .. } => keys
+                .iter()
+                .map(|(name, bytes)| (name.clone(), hex::encode(bytes)))
+                .collect(),
+            OwnLine::Signature { .. } => BTreeMap::new(),
+        }
+    }
+
+    /// What it is to a post.
+    #[must_use]
+    pub fn role(&self) -> Role {
+        match self {
+            OwnLine::Line { .. } => Role::Change,
+            OwnLine::Signature { signs: [line], .. } => Role::Signs(line.clone()),
+        }
+    }
+}
+
+impl Node for OwnLine {
+    fn name(&self) -> &Hash {
+        match self {
+            OwnLine::Line { node, .. } => node.name(),
+            OwnLine::Signature { name, .. } => name,
+        }
+    }
+
+    fn rests_on(&self) -> &[Hash] {
+        match self {
+            OwnLine::Line { node, .. } => node.parents(),
+            OwnLine::Signature { signs, .. } => signs,
+        }
+    }
+
+    fn prodrome(&self) -> Option<&Hash> {
+        None
+    }
+}

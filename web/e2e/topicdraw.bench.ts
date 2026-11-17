@@ -8,7 +8,8 @@
  *
  * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
  * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write: its duration, and for a
- * step of the page `<step>@`, when it began after the tap.
+ * step of the page `<step>@`, when it began after the tap. A second scene times a rename's Enter to its title drawn, and
+ * writes it to `$SUZATARY_RENAMEDRAW`.
  */
 
 import assert from "node:assert/strict"
@@ -97,5 +98,48 @@ app.scene("measured: the tap on a topic to the sheet closed and the chip drawn, 
   const report = { latency: LATENCY_MS, closed: summary(runs.map(r => r.closed)), drawn: summary(runs.map(r => r.drawn)), steps: perStep, runs }
   console.log(JSON.stringify(report, null, 2))
   const out = process.env["SUZATARY_TOPICDRAW"]
+  if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
+})
+
+// In the page: the rename's Enter to the first frame whose page title is `name`. The start is the field's own keydown, so
+// the channel from this script to the page costs nothing.
+const renamed = (name: string): string => `new Promise((done) => {
+  const field = document.querySelector(".renamefield")
+  field.addEventListener("keydown", () => {
+    const start = performance.now()
+    const look = () => {
+      const now = performance.now()
+      if (document.querySelector(".pagetitle")?.textContent === ${JSON.stringify(name)}) return done(now - start)
+      if (now - start > 60000) return done(-1)
+      requestAnimationFrame(look)
+    }
+    requestAnimationFrame(look)
+  }, { once: true, capture: true })
+})`
+
+app.scene("measured: a rename's Enter to the new title drawn, over a slow network", async () => {
+  await app.page.navigate(`${BULK}/#/secretary`)
+  await app.page.waitFor(`document.querySelector(".streamround .streammeta a") !== null`, { timeout: 30 * 60_000 })
+  const href = await app.page.evaluate<string>(`document.querySelector(".streamround .streammeta a").getAttribute("href").replace(/\\?.*$/, "")`)
+  await app.page.navigate(`${BULK}/${href}`)
+  await app.page.waitFor(`document.querySelector(".act-rename") !== null`, { timeout: 60_000 })
+  await app.page.network({ offline: false, latency: LATENCY_MS, downloadThroughput: THROUGHPUT, uploadThroughput: THROUGHPUT })
+  const drawn: number[] = []
+  for (let n = 0; n < RUNS; n++) {
+    const name = `Renamed ${Date.now()} ${n}`
+    await app.page.click(".act-rename")
+    await app.page.waitFor(`document.activeElement?.classList.contains("renamefield") === true`, { timeout: 15000 })
+    await app.page.evaluate(`document.querySelector(".renamefield").value = ${JSON.stringify(name)}`)
+    // Set and not awaited: the promise ends only after the Enter below.
+    await app.page.evaluate(`(window.e2eRename = ${renamed(name)}, true)`)
+    await app.page.press("Enter")
+    const ms = await app.page.evaluate<number>(`window.e2eRename`, 90_000)
+    assert.ok(ms >= 0, `the title ${name} was drawn`)
+    drawn.push(ms)
+  }
+  await app.page.network(null)
+  const report = { latency: LATENCY_MS, renameDrawn: summary(drawn), runs: drawn }
+  console.log(JSON.stringify(report, null, 2))
+  const out = process.env["SUZATARY_RENAMEDRAW"]
   if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
 })

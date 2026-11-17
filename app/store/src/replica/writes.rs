@@ -21,6 +21,18 @@ pub enum Refusal {
     Trust,
     /// Never taken as it is: held back, with everything resting on it.
     Final,
+    /// Sealed under rules the box no longer seals by: held back as a final refusal is.
+    Outdated,
+}
+
+impl Refusal {
+    /// Whether it holds the write back for good, with everything resting on it.
+    fn holds_back(self) -> bool {
+        match self {
+            Refusal::Final | Refusal::Outdated => true,
+            Refusal::Trust => false,
+        }
+    }
 }
 
 /// How the box answered a node this replica wrote. The order is the join's: an answer only
@@ -42,27 +54,17 @@ pub enum Answer {
 
 impl Answer {
     fn is_final(&self) -> bool {
-        matches!(
-            self,
-            Answer::Refused {
-                kind: Refusal::Final,
-                ..
-            }
-        )
+        match self {
+            Answer::Refused { kind, .. } => kind.holds_back(),
+            Answer::Unsent | Answer::Taken => false,
+        }
     }
 
     fn may_post(&self) -> bool {
         match self {
-            Answer::Unsent
-            | Answer::Refused {
-                kind: Refusal::Trust,
-                ..
-            } => true,
-            Answer::Refused {
-                kind: Refusal::Final,
-                ..
-            }
-            | Answer::Taken => false,
+            Answer::Unsent => true,
+            Answer::Refused { kind, .. } => !kind.holds_back(),
+            Answer::Taken => false,
         }
     }
 }
@@ -139,18 +141,18 @@ impl<N: Node> Writes<N> {
         owned
     }
 
-    /// Refusals for good in the keeper's words, joined in where they name a write not refused
-    /// for good already: the move.
-    pub fn refused(&mut self, refused: BTreeMap<Hash, String>) -> Vec<Own<N>> {
+    /// Refusals for good in the keeper's words, each of its kind, joined in where they name a
+    /// write not refused for good already: the move.
+    pub fn refused(
+        &mut self,
+        refused: BTreeMap<Hash, (crate::receipt::Grounds, String)>,
+    ) -> Vec<Own<N>> {
         let answers: Vec<(Hash, Answer)> = refused
             .into_iter()
             .filter(|(name, _)| self.0.get(name).is_some_and(|own| !own.answer.is_final()))
-            .map(|(name, reason)| {
-                let answer = Answer::Refused {
-                    kind: Refusal::Final,
-                    reason,
-                };
-                (name, answer)
+            .map(|(name, (grounds, reason))| {
+                let kind = grounds.kind();
+                (name, Answer::Refused { kind, reason })
             })
             .collect();
         self.answered(answers)
@@ -199,22 +201,16 @@ impl<N: Node> Writes<N> {
             .collect()
     }
 
-    /// What the box refused for good of these writes, with its sentence.
+    /// What the box refused for good of these writes, of which kind, with its sentence.
     #[must_use]
-    pub fn refusals(&self) -> Vec<(&N, &str)> {
+    pub fn refusals(&self) -> Vec<(&N, Refusal, &str)> {
         self.0
             .values()
             .filter_map(|own| match &own.answer {
-                Answer::Refused {
-                    kind: Refusal::Final,
-                    reason,
-                } => Some((&own.node, reason.as_str())),
-                Answer::Unsent
-                | Answer::Refused {
-                    kind: Refusal::Trust,
-                    ..
+                Answer::Refused { kind, reason } if kind.holds_back() => {
+                    Some((&own.node, *kind, reason.as_str()))
                 }
-                | Answer::Taken => None,
+                Answer::Unsent | Answer::Refused { .. } | Answer::Taken => None,
             })
             .collect()
     }

@@ -127,6 +127,9 @@ pub enum NotALine {
     NoKey(String),
 }
 
+/// The domain of a conversation's id ([`LineEvent::begun_id`]).
+const CONVERSATION: &[u8] = b"suzatary conversation v1\n";
+
 impl LineEvent {
     /// Line `entry` of `conversation`, written here by `actor` holding `held` lines, each slot of
     /// its words through the redaction door and locked under a key drawn from `entropy`; the keys
@@ -141,25 +144,100 @@ impl LineEvent {
         entry: &Entry,
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
-        let at = entry.at();
+        let (line, words) = Self::unsealed(conversation, actor, held, entry)?;
+        line.sealed(&words, entropy)
+    }
+
+    /// The first line of a new conversation, `entry`, written here by `actor`: the
+    /// conversation is [`LineEvent::begun_id`] of the line, set before its words are sealed,
+    /// since each slot is bound to it.
+    ///
+    /// # Errors
+    /// [`LineEvent::write`]'s.
+    pub fn begin(
+        actor: Actor,
+        entry: &Entry,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let placeholder = suzatary_base::conversation_id::DEFAULT.clone();
+        let (mut line, words) = Self::unsealed(placeholder, actor, 0, entry)?;
+        line.conversation = line.begun_id();
+        line.sealed(&words, entropy)
+    }
+
+    /// The conversation a line that begins one names: the first 32 hex digits of a SHA-256 over
+    /// a domain string and the line's print without its words and with its conversation printed
+    /// as `''`. So it is a pure function of the line's clear fields (`at`, `actor`, `held`,
+    /// `carried` and its shape), never of its conversation or its words, which are erasable while
+    /// an id is kept forever; and, 32 hex digits with no `-`, it is never an id the box mints by
+    /// day (the daily rounds) or by name (`default`, `setup`).
+    #[must_use]
+    pub fn begun_id(&self) -> ConversationId {
+        use sha2::{Digest as _, Sha256};
+        let ((name, fields), mut values) = self.bare();
+        if let Some(conversation) = values.first_mut() {
+            *conversation = String::new().to_value();
+        }
+        let print = print_literal(&Value::call(
+            name,
+            fields
+                .iter()
+                .copied()
+                .filter(|field| *field != "words")
+                .map(str::to_owned)
+                .zip(values)
+                .collect(),
+        ));
+        let digest = Sha256::new()
+            .chain_update(CONVERSATION)
+            .chain_update(print.as_bytes())
+            .finalize();
+        let hex = digest
+            .iter()
+            .take(16)
+            .fold(String::with_capacity(32), |mut hex, b| {
+                use std::fmt::Write as _;
+                let _ = write!(hex, "{b:02x}");
+                hex
+            });
+        ConversationId::new(hex)
+            .unwrap_or_else(|_| unreachable!("32 lowercase hex digits are a slug"))
+    }
+
+    /// The line's head and shape, its words not yet sealed, and the words to seal.
+    fn unsealed(
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        entry: &Entry,
+    ) -> Result<(Self, Vec<LineWords>), NotALine> {
         let (shape, words) = line_shape::split(entry);
         let words = words.ok_or(NotALine::Gone)?;
-        let mut line = Self {
+        let line = Self {
             conversation,
-            at,
+            at: entry.at(),
             actor,
             held,
             carried: Carried::Written,
             shape,
             words: Vec::new(),
         };
+        Ok((line, words))
+    }
+
+    /// The line with each of `words` sealed in its slot, and the keys that open them.
+    fn sealed(
+        mut self,
+        words: &[LineWords],
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let mut keys = Vec::with_capacity(words.len());
         for (slot, words) in words.iter().enumerate() {
-            let (sealed, opens) = seal(&line, slot, words, entropy)?;
-            line.words.push(sealed);
+            let (sealed, opens) = seal(&self, slot, words, entropy)?;
+            self.words.push(sealed);
             keys.push(opens);
         }
-        Ok((line, keys))
+        Ok((self, keys))
     }
 
     /// The words of slot `of` of a line of `conversation`, sealed again from the seal locked
@@ -234,6 +312,34 @@ impl LineEvent {
             keys.push(opens);
         }
         Ok((line, keys))
+    }
+
+    /// A line of `shape` holding `words`, through the door and sealed as [`LineEvent::write`]
+    /// seals, with no entry to say the words are what the shape reads: a line a writer that is
+    /// not the box's could post, for the tests of the lines' rule.
+    ///
+    /// # Errors
+    /// [`NotALine`] for words the door refuses, or no key.
+    #[cfg(any(test, feature = "nothing", feature = "fixture"))]
+    pub fn sealed_as(
+        conversation: ConversationId,
+        at: Datetime,
+        actor: Actor,
+        held: u32,
+        shape: LineShape,
+        words: &[LineWords],
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let line = Self {
+            conversation,
+            at,
+            actor,
+            held,
+            carried: Carried::Written,
+            shape,
+            words: Vec::new(),
+        };
+        line.sealed(words, entropy)
     }
 
     /// An erasure of `keys` in `conversation`, at `at`, written by `actor` holding `held` lines.
@@ -449,6 +555,7 @@ fn seal(
 fn shape_fields(shape: &LineShape) -> Vec<Value> {
     match shape {
         LineShape::Opened { model, kind } => vec![model.to_value(), kind.to_value()],
+        LineShape::SetUp { template } => vec![template.to_value()],
         LineShape::Titled { by } => vec![json(by)],
         LineShape::Said { turn, by } => vec![json(turn), by.to_value()],
         LineShape::Proposed { object, revises } => vec![object.to_value(), revises.to_value()],
@@ -504,6 +611,9 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
         "Opened" => LineShape::Opened {
             model: fields.get("model")?,
             kind: fields.get("kind")?,
+        },
+        "SetUp" => LineShape::SetUp {
+            template: fields.get("template")?,
         },
         "Titled" => LineShape::Titled {
             by: parsed(fields, "by")?,
@@ -577,6 +687,7 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
 fn signature(shape: &LineShape) -> Constructor {
     match shape {
         LineShape::Opened { .. } => OPENED,
+        LineShape::SetUp { .. } => SET_UP,
         LineShape::Titled { .. } => TITLED,
         LineShape::Said { .. } => SAID,
         LineShape::Proposed { .. } => PROPOSED,
@@ -665,6 +776,19 @@ const OPENED: Constructor = (
         "carried",
         "model",
         "kind",
+        "words",
+    ],
+);
+/// `SetUp(conversation, at, actor, held, carried, template, words)`.
+const SET_UP: Constructor = (
+    "SetUp",
+    &[
+        "conversation",
+        "at",
+        "actor",
+        "held",
+        "carried",
+        "template",
         "words",
     ],
 );
@@ -862,6 +986,7 @@ const LINES: &[Constructor] = &[
     CODING,
     ERASED,
     RESEALED,
+    SET_UP,
 ];
 
 /// The lines' whitelist: their constructors, `Scrubbed` and `Locked`, nothing else.
@@ -1368,6 +1493,39 @@ mod tests {
             };
             proptest::prop_assert_eq!(LineWords::Model { text }, said);
         }
+    }
+
+    /// A conversation set up from a template is a line of its own, `SetUp`, that prints, parses
+    /// back to itself and reads its start as a topic of that template, titled by its one slot;
+    /// a template this build does not hold is no line at all.
+    #[test]
+    fn a_set_up_line_reads_back_and_an_unknown_template_is_no_line() {
+        use crate::connect::TemplateId;
+        use crate::secretary::store::{Begun, Kind};
+        let entry = Entry::SetUp {
+            at: at(),
+            title: Words::kept("Connect Gmail".to_owned()),
+            template: TemplateId::Gmail,
+        };
+        let (line, keys) = LineEvent::begin(
+            Actor::new("ada").expect("an actor"),
+            &entry,
+            &Counting::default(),
+        )
+        .expect("a line");
+        let print = canonical(&line);
+        assert!(print.starts_with("SetUp("), "{print}");
+        let back: LineEvent = parse_event(&LineVocabulary, &print).expect("parses");
+        assert_eq!(back, line);
+        let read = back.entry(&opened_by(&keys));
+        assert_eq!(read, entry);
+        let start = read.start().expect("a set-up line begins a conversation");
+        assert_eq!(start.kind, Kind::Topic);
+        assert_eq!(start.begun, Begun::SetUp(TemplateId::Gmail));
+        assert_eq!(start.title.get().map(String::as_str), Some("Connect Gmail"));
+        let unknown = print.replace("template='lieer'", "template='fax'");
+        assert_ne!(unknown, print, "the print names its template");
+        assert!(parse_event::<LineEvent>(&LineVocabulary, &unknown).is_err());
     }
 
     #[test]

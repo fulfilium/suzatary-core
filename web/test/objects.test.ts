@@ -11,6 +11,8 @@ import type { Write } from "../src/prodrome/objects"
 import { CHAIN, alterRow, heldRow, holdRow, keepRow } from "../src/prodrome/objects"
 import { replicaWith } from "./held"
 import door from "../src/app/idb"
+import ownlines from "../src/prodrome/ownlines"
+import { forAllAsync } from "./gen"
 
 // IndexedDB as far as `objects.ts` reaches into it: one database of named stores, each request answered on a later
 // turn, a transaction committing once its last request has answered.
@@ -262,4 +264,52 @@ test("a device before version 8 keeps no row, and every chain is pulled again", 
     assert.equal((await holdRow(CHAIN, "life", keep_(synced))).type, "Val")
     assert.deepEqual(await row(), join(NOTHING, synced), "what the pull brings is joined into nothing left of the old row")
   }
+})
+
+// This tab's own lines (`ownlines`): a row of the rows' store that only climbs, kept by every upgrade from version 8,
+// beside the chains' rows. The law: whatever moves two tabs keep in any order, and whatever upgrade the device sees
+// between them, the row holds every own line any move kept, each at the furthest answer any move gave it.
+const ANSWERS: readonly unknown[] = ["Unsent", { Refused: { kind: "Trust", reason: "a key" } }, { Refused: { kind: "Outdated", reason: "reload" } }, "Taken"]
+test("law: no own line is dropped, and each holds its furthest answer, whatever order and upgrade", async () => {
+  await forAllAsync(40, async r => {
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB(r.pick([8, 11, 12, 13])) })
+    const furthest = new Map<string, number>()
+    const moves = Array.from({ length: 1 + r.int(6) }, () =>
+      Array.from({ length: 1 + r.int(3) }, () => {
+        const literal = `Titled(conversation='default', at=datetime(2026, 11, 17, 9, 0, ${r.int(4)}), …)`
+        const climbed = r.int(ANSWERS.length)
+        furthest.set(literal, Math.max(furthest.get(literal) ?? 0, climbed))
+        return { literal, keys: { [name(String(r.int(9)))]: name("7") }, answer: ANSWERS[climbed] }
+      }),
+    )
+    for (const move of moves) {
+      assert.equal((await ownlines.keep(move)).type, "Val")
+      // A reload, which reopens the device, between some moves.
+      if (r.bool(0.3)) door.reset()
+    }
+    const kept = await ownlines.kept()
+    assert.equal(kept.type, "Val")
+    if (kept.type !== "Val") return
+    assert.deepEqual(
+      new Map(kept.v.map(k => [k.literal, ANSWERS.indexOf(ANSWERS.find(a => JSON.stringify(a) === JSON.stringify(k.answer)))])),
+      furthest,
+    )
+  })
+})
+
+test("a device from version 8 keeps this tab's own lines through the upgrade, as it keeps a chain's unsent act", async () => {
+  const own = { records: [{ literal: "Opened(…)", keys: { [name("1")]: name("2") }, answer: "Unsent" }] }
+  for (const from of [8, 11, 12]) {
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB(from, { "objects:own/lines": own }) })
+    assert.deepEqual(await ownlines.kept(), { type: "Val", v: own.records }, `from ${from}`)
+  }
+})
+
+test("a load lets go of the own lines the box answered for good, and keeps every one it may still take", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const records = ANSWERS.map((answer, n) => ({ literal: `Titled(… ${n})`, keys: {}, answer }))
+  assert.equal((await ownlines.keep(records)).type, "Val")
+  assert.equal((await ownlines.settled()).type, "Val")
+  const kept = await ownlines.kept()
+  assert.deepEqual(kept.type === "Val" ? kept.v.map(r => r.answer) : kept, [ANSWERS[0], ANSWERS[1]])
 })

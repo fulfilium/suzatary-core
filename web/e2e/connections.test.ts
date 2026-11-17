@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-import { SIGNED_POST, suite, trustThisDevice } from "./harness";
+import { suite, trustThisDevice, opened } from "./harness";
 
 const app = await suite("connections");
 
@@ -100,7 +100,7 @@ app.scene("asked to add a calendar, the secretary files a Connect card whose tap
   await app.page.navigate(`${CONNECT}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
   const id = await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Setup"})).then((r) => r.json()).then((j) => j.id)`,
+    opened("Setup"),
   );
   await app.page.navigate(`${CONNECT}/#/secretary/${id}`);
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
