@@ -361,6 +361,7 @@ mod tests {
                 untrusted: Untrusted::of([]),
                 roster: BTreeSet::new(),
                 root: crate::cast::keys::root(),
+                naming: suzatary_base::chains::Naming::AsActs,
             }])
             .expect("one chain"),
             categories: (0..categories)

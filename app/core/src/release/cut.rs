@@ -38,7 +38,7 @@ impl Cut {
     }
 
     /// `changelog` with its Unreleased section closed under this version on `day`, the
-    /// completed todos (on `chain`) first, then `fragments`, and a new empty Unreleased above it;
+    /// completed todos first, then `fragments`, and a new empty Unreleased above it;
     /// the section of the version it folds, if any, joins it under the same heading.
     ///
     /// # Errors
@@ -48,7 +48,6 @@ impl Cut {
         changelog: &str,
         fragments: &Fragment,
         day: NaiveDate,
-        chain: &str,
     ) -> Result<String, TreeError> {
         let folded = self.folds.map(|v| format!("## [{v}] - "));
         let all: Vec<&str> = changelog.split_inclusive('\n').collect();
@@ -68,7 +67,7 @@ impl Cut {
             .iter()
             .position(|line| line.trim_end() == UNRELEASED)
             .ok_or(TreeError::NoUnreleased)?;
-        let listed = self.completes.changelog(chain);
+        let listed = self.completes.changelog();
         let listed = if listed.is_empty() {
             String::new()
         } else {

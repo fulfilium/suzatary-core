@@ -231,6 +231,7 @@ fn deployment() -> Deployment {
             untrusted: Untrusted::of([]),
             roster: BTreeSet::new(),
             root: suzatary_core::cast::keys::root(),
+            naming: suzatary_base::chains::Naming::AsActs,
         }])
         .expect("one chain"),
         categories: std::collections::BTreeMap::new(),

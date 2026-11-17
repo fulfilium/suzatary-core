@@ -225,6 +225,7 @@ mod tests {
                 untrusted: Untrusted::of([actor("triage")]),
                 roster: BTreeSet::from([actor("ada"), actor("triage")]),
                 root: suzatary_core::cast::keys::root(),
+                naming: suzatary_base::chains::Naming::AsActs,
             }])
             .expect("one chain"),
             categories: BTreeMap::from([("home".to_owned(), 3)]),

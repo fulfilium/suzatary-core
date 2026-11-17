@@ -105,12 +105,13 @@ fn build(state: &State, now: suzatary_base::capability::Datetime) -> Result<Buil
     let about = || {
         state
             .stamp
-            .about(&state.chains_read().set(now))
+            .about(&state.mounts, &state.chains_read().set(now))
             .map(|about| Build::of(&about))
     };
-    let plan = suzatary_core::release::Plan::declared()
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let Some(project) = state.chains.get(plan.chain()) else {
+    let Some(project) = state
+        .project()?
+        .and_then(|project| state.chains.get(project.chain.as_str()))
+    else {
         return about();
     };
     let function = format!(

@@ -255,7 +255,6 @@
           ./app/health/src
           ./app/triage/src
           ./app/api/src
-          ./app/core/releases.toml
           ./app/core/examples
           ./app/core/tests/support
           ./app/base/tests/support
@@ -397,8 +396,6 @@
                 ./app/health/src
                 ./app/triage/src
                 ./app/api/src
-                # The release plan, which the core compiles in.
-                ./app/core/releases.toml
               ] ++ crates);
             };
             inherit cargoVendorDir;

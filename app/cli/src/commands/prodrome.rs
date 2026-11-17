@@ -1,9 +1,7 @@
-//! `suzatary prodrome init|carry|draw|pages|texts`: a todo store begun at a path, such as a
-//! project's roadmap, the upkeep chain's project todos carried to it, its open list drawn, the
-//! store written as static pages, and what door 1 reads of its objects written out for door 2.
+//! `suzatary prodrome init|draw|pages|texts`: a todo store begun at a path, such as a project's
+//! roadmap, its open list drawn, the store written as static pages, and what door 1 reads of its
+//! objects written out for door 2.
 
-mod carry;
-mod list;
 mod pages;
 mod picture;
 
@@ -31,9 +29,6 @@ pub enum Action {
         #[arg(long)]
         public: bool,
     },
-    /// Carry the upkeep chain's open todos that the carried list carries, and its releases, to a
-    /// public store. Without `--apply` it prints what it would write, to stdout alone.
-    Carry(Carrying),
     /// Draw a public store's open list as `roadmap.svg` and `roadmap-dark.svg`, and write the
     /// `README.md` that shows them, beside the store; or print, for door 2, what they are as
     /// drawn now.
@@ -49,28 +44,7 @@ pub enum Action {
     },
 }
 
-/// What `prodrome carry` takes.
-#[derive(Debug, clap::Args)]
-pub struct Carrying {
-    /// The public store, begun with `prodrome init --public`.
-    #[arg(long, value_name = "DIR")]
-    to: std::path::PathBuf,
-    /// The carried list; absent is the box-local tier's `carried-list.toml`.
-    #[arg(long, value_name = "FILE")]
-    list: Option<std::path::PathBuf>,
-    /// The name the deployment will mount the public store as, which each successor's
-    /// reference names.
-    #[arg(long, value_name = "NAME", default_value = "roadmap")]
-    named: String,
-    /// Who restates and cancels; the upkeep chain's owner when absent.
-    #[arg(long)]
-    actor: Option<String>,
-    /// Write it: the destination first, then each source's `Cancelled`.
-    #[arg(long)]
-    apply: bool,
-}
-
-pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
+pub fn run(args: &Args) -> anyhow::Result<()> {
     match &args.action {
         Action::Init { store, public } => init(
             store,
@@ -80,7 +54,6 @@ pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
                 Charter::Private
             },
         ),
-        Action::Carry(carrying) => carry::run(path, carrying),
         Action::Draw(drawing) => picture::run(drawing),
         Action::Pages(paging) => pages::run(paging),
         Action::Texts { objects } => texts(objects),

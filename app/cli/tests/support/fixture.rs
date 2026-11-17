@@ -1083,6 +1083,7 @@ fn instance_file(
         untrusted: vec![actor("triage")],
         actors: roster(),
         owner: actor(CAST.owner.actor),
+        public_names: std::collections::BTreeMap::new(),
     };
     let web = Web {
         viewers: vec![

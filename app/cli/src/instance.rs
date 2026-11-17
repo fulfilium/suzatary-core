@@ -8,6 +8,7 @@ mod edits;
 mod file;
 mod local;
 mod plugins;
+pub(crate) mod project;
 mod reserve;
 mod roots;
 
@@ -19,6 +20,7 @@ pub use file::{Mail, Secretary, Serving, Triage};
 pub use local::Local;
 pub use plugins::Plugins;
 use plugins::plugins_of;
+pub use project::{Mounts, Project};
 pub use reserve::{BadReserve, Reserve};
 use roots::resolve_under;
 pub use roots::{CodeRoot, DataRoot, Roots};
@@ -187,6 +189,17 @@ impl Instance {
     #[must_use]
     pub fn first(&self) -> &ChainDir {
         self.chains.first()
+    }
+
+    /// Where each chain's store is mounted, in the file's order.
+    #[must_use]
+    pub fn mounts(&self) -> Mounts {
+        Mounts(
+            self.chains
+                .iter()
+                .map(|chain| (chain.policy.name.clone(), chain.events.clone()))
+                .collect(),
+        )
     }
 
     /// The chain a flag named, or the first one when it named none.

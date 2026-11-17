@@ -2415,7 +2415,8 @@ pub fn acknowledge(
     payload(&after, caps, cards)
 }
 
-/// `POST …/todo/<id>/build`: file the card whose tap fires a coding session for `todo`.
+/// `POST …/todo/<id>/build`: file the card whose tap fires a coding session for `todo`, a todo of
+/// the plan store `plan_store`.
 ///
 /// # Errors
 /// The builder's, the build module's and the stores'.
@@ -2424,8 +2425,9 @@ pub fn build(
     by: &Tap,
     cards: &Cards<'_>,
     todo: &TodoRef,
+    plan_store: Option<&suzatary_base::chains::ChainName>,
 ) -> Answered<wire::ConversationPayload> {
-    cards.deployment.builder(&todo.chain)?;
+    cards.deployment.builder(&todo.chain, plan_store)?;
     let bound = suzatary_core::secretary::bound_of(cards.chains, Some(todo.chain.as_str()))?;
     let at = caps.secretary.clock.now();
     let believed = suzatary_signatures::believed::Believed::of(

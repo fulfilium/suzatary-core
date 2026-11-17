@@ -7,7 +7,7 @@ use anyhow::bail;
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::sign::PublicKey;
-use suzatary_base::chains::ChainPolicy;
+use suzatary_base::chains::{ChainPolicy, Naming};
 
 use super::charter::Charter;
 use super::file::Chain;
@@ -71,14 +71,39 @@ impl ChainDir {
             );
         }
         let events = data.under(&chain.events);
+        let charter = Charter::read(&events)?;
+        let naming = match charter {
+            Charter::Private if chain.public_names.is_empty() => Naming::AsActs,
+            Charter::Private => bail!(
+                "{}: chain {:?} names public_names, and its store's charter is not public",
+                path.display(),
+                chain.name.as_str()
+            ),
+            Charter::Public => {
+                let trusted =
+                    |name: &Actor| roster.contains(name) && !chain.untrusted.contains(name);
+                if let Some((_, name)) = chain.public_names.iter().find(|(_, name)| !trusted(name))
+                {
+                    bail!(
+                        "{}: chain {:?} publishes as {:?}, whom its roster does not name as \
+                         trusted",
+                        path.display(),
+                        chain.name.as_str(),
+                        name.as_str()
+                    );
+                }
+                Naming::Published(chain.public_names)
+            }
+        };
         Ok(Self {
             policy: ChainPolicy {
                 name: chain.name,
                 untrusted: Untrusted::of(chain.untrusted),
                 roster,
                 root: root.clone(),
+                naming,
             },
-            charter: match Charter::read(&events)? {
+            charter: match charter {
                 Charter::Private => Charted::Private,
                 Charter::Public => Charted::Public(lists.clone()),
             },

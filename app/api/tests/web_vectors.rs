@@ -266,6 +266,7 @@ fn chain_policy() -> ChainPolicy {
             .into_iter()
             .collect(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     }
 }
 

@@ -203,6 +203,11 @@ impl Train {
             String::from_utf8_lossy(&out.stdout).trim().to_owned()
         };
         let docs = tree(&format!("100644 blob {blob}\tnotes.md\n"));
+        // A release's files, which a land publishes before it records the release.
+        let app = tree(&format!(
+            "100644 blob {blob}\tCargo.toml\n100644 blob {blob}\trelease.toml\n"
+        ));
+        let scripts = tree(&format!("100755 blob {blob}\tapp-bin.sh\n"));
         let known = [
             "CHANGELOG.md",
             "README.md",
@@ -215,7 +220,11 @@ impl Train {
         ]
         .iter()
         .map(|path| format!("100644 blob {blob}\t{path}\n"))
-        .chain([format!("040000 tree {docs}\tdocs\n")])
+        .chain([
+            format!("040000 tree {app}\tapp\n"),
+            format!("040000 tree {docs}\tdocs\n"),
+            format!("040000 tree {scripts}\tscripts\n"),
+        ])
         .collect::<String>();
         let known = tree(&known);
         let populated = run_git(&author, &["commit-tree", &known, "-m", "populated once"]);
@@ -2507,8 +2516,10 @@ fn train_publish_never_skips_on_a_check_that_could_not_run() {
     }
 }
 
-/// The release fixture's instance file: `{data}` and `{key}` are filled in. Its upkeep chain is a
-/// third chain, `ops`, so a filer that spelled the project chain's name would miss it.
+/// The release fixture's instance file: `{data}` and `{key}` are filled in. The roadmap is mounted
+/// at its clone's absolute path, as a deployment mounts a public store, and its public names are
+/// invented: `ada` writes there as `adalogin`, and `bea` has no public name. Its upkeep chain is a
+/// third chain, `ops`, so a filer that spelled the roadmap's name would miss it.
 const RELEASE_INSTANCE: &str = r#"repo = "{data}"
 [signatures]
 root = "{key}"
@@ -2516,19 +2527,22 @@ root = "{key}"
 name = "life"
 events = "events"
 untrusted = ["triage"]
-actors = ["assistant", "ada", "triage"]
+actors = ["assistant", "ada", "bea", "triage"]
 owner = "ada"
 [[chains]]
-name = "suzatary"
-events = "events-suzatary"
-untrusted = ["triage"]
-actors = ["assistant", "ada", "triage"]
-owner = "ada"
+name = "roadmap"
+events = "{data}/roadmap"
+untrusted = []
+actors = ["adalogin", "assistant"]
+owner = "adalogin"
+[chains.public_names]
+ada = "adalogin"
+assistant = "assistant"
 [[chains]]
 name = "ops"
 events = "events-ops"
 untrusted = ["triage"]
-actors = ["assistant", "ada", "triage"]
+actors = ["assistant", "ada", "bea", "triage"]
 owner = "ada"
 [upkeep]
 chain = "ops"
@@ -2557,21 +2571,26 @@ subdir = "someone"
 sync = "gmail"
 "#;
 
-/// The project chain a release reads, under `data`: `suzatarytwo` composing three items, one
-/// done; and the instance naming it, as `SUZATARY_INSTANCE` names the box's.
+/// The plan beside the fixture's roadmap: `alpha` ships 1.1, `calendarlinks` 1.2 and `suzatarytwo`
+/// 2.0, all from 1.
+const PLAN: &str = "base = 1\n\n[[release]]\ntodo = \"alpha\"\nmajor = 1\nminor = 1\n\n\
+                    [[release]]\ntodo = \"calendarlinks\"\nmajor = 1\nminor = 2\n\n\
+                    [[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n";
+
+/// The deployment a release reads, under `data`: the roadmap, a public store in a clone of its
+/// own origin (`roadmap.git`), holding `suzatarytwo` composing three items, one done, with the plan
+/// beside it and its pictures drawn; the upkeep chain `ops` holding the private todo `opsonly`; the
+/// box-local lists door 1 and door 2 read; and the instance naming them all, as
+/// `SUZATARY_INSTANCE` names the box's.
 fn a_release_deployment(data: &Path) -> PathBuf {
     use prodrome_core::fpl;
     use suzatary_record::record::{EventStore, GENESIS, MarkupSource, mk_authored};
     let at = prodrome_core::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0).expect("an instant");
-    let store = EventStore::new(
-        data.join("events-suzatary"),
-        prodrome_core::policy::Untrusted::none(),
-    );
-    let todo = |id: &str, spec| {
+    let todo = |id: &str, actor: &str, spec| {
         mk_authored(
             id,
             at,
-            "ada",
+            actor,
             "todo",
             at,
             MarkupSource::escaped(&format!("the {id} item")),
@@ -2587,6 +2606,8 @@ fn a_release_deployment(data: &Path) -> PathBuf {
         )
         .expect("a record")
     };
+    let roadmap = data.join("roadmap");
+    let store = EventStore::new(roadmap.clone(), prodrome_core::policy::Untrusted::none());
     let items = ["alpha", "bravo", "calendarlinks"];
     let mut terms = vec![fpl::mk_flat(0.6).expect("a term")];
     terms.extend(
@@ -2596,17 +2617,61 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     );
     let mut events = vec![todo(
         "suzatarytwo",
+        "adalogin",
         fpl::mk_conj(terms, -4.0).expect("a conjunction"),
     )];
     events.extend(
         items
             .iter()
-            .map(|i| todo(i, fpl::mk_flat(0.7).expect("a term"))),
+            .map(|i| todo(i, "adalogin", fpl::mk_flat(0.7).expect("a term"))),
     );
-    events.push(prodrome_core::event::mk_completed("alpha", at, "ada", "").expect("an event"));
+    events.push(prodrome_core::event::mk_completed("alpha", at, "adalogin", "").expect("an event"));
     for event in events {
         suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
     }
+    let ops = EventStore::new(
+        data.join("events-ops"),
+        prodrome_core::policy::Untrusted::none(),
+    );
+    suzatary_store::store::append_to(
+        &ops,
+        GENESIS,
+        todo("opsonly", "ada", fpl::mk_flat(0.7).expect("a term")),
+    )
+    .expect("appends");
+    write(&roadmap, "charter.toml", "public = true\n");
+    write(&roadmap, ".gitignore", "/.heads\n/.lock\n/_site\n");
+    write(&roadmap, "flake.lock", &pinned("0".repeat(40).as_str()));
+    write(
+        &roadmap,
+        "releases.toml",
+        &format!("genesis = \"{}\"\n{PLAN}", genesis_of(&roadmap)),
+    );
+    run(
+        isolated(Command::new(drawing(data)))
+            .args(["prodrome", "draw", "--store"])
+            .arg(&roadmap)
+            .args(["--link", "https://example.test/roadmap/"]),
+        "the first draw",
+    );
+    run_git(
+        data,
+        &["init", "-q", "--bare", "-b", "master", "roadmap.git"],
+    );
+    run_git(&roadmap, &["init", "-q", "-b", "master"]);
+    run_git(&roadmap, &["remote", "add", "origin", "../roadmap.git"]);
+    run_git(&roadmap, &["add", "-A"]);
+    run_git(&roadmap, &["commit", "-q", "-m", "The roadmap begins"]);
+    run_git(&roadmap, &["push", "-q", "-u", "origin", "master"]);
+    std::fs::create_dir_all(data.join("local")).expect("the box-local tier");
+    write(data, "local/personal-terms.txt", "zzperson\n");
+    write(data, "local/context-terms.txt", "zzcontext\n");
+    std::fs::create_dir_all(data.join("scripts")).expect("scripts");
+    std::fs::copy(
+        repo().join("scripts/secret-rules.toml"),
+        data.join("scripts/secret-rules.toml"),
+    )
+    .expect("the secret rules");
     let path = data.join("instance.toml");
     let file = RELEASE_INSTANCE
         .replace("{data}", &data.display().to_string())
@@ -2615,14 +2680,53 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     path
 }
 
-/// What a train run needs to read and write the fixture's project chain.
+/// The name of the `Genesis` the store at `store` holds.
+fn genesis_of(store: &Path) -> String {
+    std::fs::read_dir(store.join("objects"))
+        .expect("the objects")
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| std::fs::read_to_string(path).is_ok_and(|t| t.starts_with("Genesis(")))
+        .and_then(|path| Some(path.file_stem()?.to_string_lossy().into_owned()))
+        .expect("a genesis")
+}
+
+/// A `flake.lock` pinning the application at `rev`, as the roadmap's lock spells it.
+fn pinned(rev: &str) -> String {
+    format!(
+        "{{\n  \"nodes\": {{\n    \"suzatary\": {{\n      \"locked\": {{\n        \"rev\": \"{rev}\"\n      }}\n    }}\n  }}\n}}\n"
+    )
+}
+
+/// The binary under test, drawing the roadmap's pictures with the design system this test's shell
+/// names: a cargo build has no package of its own, and a gate refuses an inherited `TYPST_` name.
+fn drawing(data: &Path) -> PathBuf {
+    suzatary_testkit::fake_program(
+        &data.join("bin"),
+        "suzatary-drawing",
+        &format!(
+            "#!/bin/sh\nTYPST_PACKAGE_PATH='{}' exec '{}' \"$@\"\n",
+            std::env::var("TYPST_PACKAGE_PATH").unwrap_or_default(),
+            super::binary::path()
+        ),
+    )
+}
+
+/// The stub of `nix flake lock` a land moves the pin with: `<clone> <rev>` pins `rev`.
+const PIN: &str = "#!/bin/sh\nprintf '{\\n  \"nodes\": {\\n    \"suzatary\": {\\n      \"locked\": {\\n        \"rev\": \"%s\"\\n      }\\n    }\\n  }\\n}\\n' \"$2\" >\"$1/flake.lock\"\n";
+
+/// What a train run needs to read and write the fixture's roadmap and upkeep chain, and to move
+/// the roadmap's pin.
 fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
     let data = instance.parent().expect("the instance's directory");
     for dir in ["home", "run"] {
         std::fs::create_dir_all(data.join(dir)).expect("a scratch directory");
     }
+    let pin = suzatary_testkit::fake_program(&data.join("bin"), "pin", PIN);
     vec![
         ("SUZATARY_INSTANCE", instance.display().to_string()),
+        ("SUZATARY_TRAIN_PIN", pin.display().to_string()),
+        ("SUZATARY_TRAIN_BIN", drawing(data).display().to_string()),
         // A login session's, as the box's operator has: the binary's paths live under them.
         ("HOME", data.join("home").display().to_string()),
         ("XDG_RUNTIME_DIR", data.join("run").display().to_string()),
@@ -2642,10 +2746,11 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
 }
 
 /// THE VERSION IS NO COMPILED INPUT: what a release cut writes (the changelog and
-/// `app/release.toml`, pinned by `train_releases_what_the_chain_reads_and_tags_it`) is
+/// `app/release.toml`, pinned by `train_releases_what_the_roadmap_reads_and_records_it_there`) is
 /// included by no crate's source, and no crate has a build script that could read it, so a
 /// train's release moves no crate's inputs and no gate key. The binary reads its release at run
-/// time, from the file the flake installs beside it (`suzatary_cli::stamp`).
+/// time, from the file the flake installs beside it (`suzatary_cli::stamp`), and its plan from
+/// beside the roadmap store.
 #[test]
 fn a_release_cut_changes_no_file_a_crate_compiles() {
     let app = repo().join("app");
@@ -2659,12 +2764,14 @@ fn a_release_cut_changes_no_file_a_crate_compiles() {
         .map(super::includes::Include::target)
         .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
         .collect();
-    assert!(
-        paths.iter().any(|p| p.ends_with("app/core/releases.toml")),
-        "the scan finds the plan the core includes: {paths:?}"
-    );
+    assert!(!paths.is_empty(), "the scan finds the crates' includes");
     for path in &paths {
         assert!(!cut.contains(path), "a crate includes {}", path.display());
+        assert!(
+            !path.ends_with("releases.toml"),
+            "a crate compiles a release plan in: {}",
+            path.display()
+        );
     }
     for crate_ in std::fs::read_dir(&app).expect("app/").flatten() {
         assert!(
@@ -2675,7 +2782,7 @@ fn a_release_cut_changes_no_file_a_crate_compiles() {
     }
 }
 
-/// A tree that declares a release plan, at `version`.
+/// A tree at `version`.
 fn release_files(version: &str) -> Vec<(&'static str, String)> {
     vec![
         (
@@ -2683,22 +2790,72 @@ fn release_files(version: &str) -> Vec<(&'static str, String)> {
             "[workspace.package]\nversion = \"0.0.0\"\n".to_owned(),
         ),
         ("app/release.toml", format!("version = \"{version}\"\n")),
-        (
-            "app/core/releases.toml",
-            "chain = \"suzatary\"\nbase = 1\n\n[[release]]\ntodo = \"alpha\"\nmajor = 1\nminor = 1\n\n\
-             [[release]]\ntodo = \"calendarlinks\"\nmajor = 1\nminor = 2\n\n\
-             [[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n"
-                .to_owned(),
-        ),
     ]
 }
 
-/// The todos a PR names complete are recorded done when it lands, and the train's release is
-/// the version the chain then reads: cut at build so the gate judges it, checked against the
-/// chain at land, and pushed with its tag in one push. The next train that completes nothing
-/// is the next patch.
+/// `git <args>` in the fixture roadmap's origin, its stdout trimmed.
+fn roadmap_origin(data: &Path, args: &[&str]) -> String {
+    run_git(&data.join("roadmap.git"), args)
+}
+
+/// The roadmap's origin's commits naming `rev` in a `Shipped:` trailer.
+fn shipped(data: &Path, rev: &str) -> usize {
+    roadmap_origin(
+        data,
+        &[
+            "log",
+            "--format=%(trailers:key=Shipped,valueonly,separator=%x2C)",
+            "master",
+        ],
+    )
+    .lines()
+    .filter(|line| *line == rev)
+    .count()
+}
+
+/// The `Completed` events of `todo` in the store `dir` under `data`, as (actor, note).
+fn completions(data: &Path, dir: &str, todo: &str) -> Vec<(String, String)> {
+    suzatary_record::record::EventStore::new(
+        data.join(dir),
+        prodrome_core::policy::Untrusted::none(),
+    )
+    .events()
+    .expect("the store reads")
+    .iter()
+    .filter_map(|e| match e {
+        suzatary_record::record::TodoEvent::Completed(done) if done.todo.as_str() == todo => {
+            Some((done.actor.as_str().to_owned(), done.note.clone()))
+        }
+        _ => None,
+    })
+    .collect()
+}
+
+/// The roadmap's origin's master written out, read as a store: what a visitor reads.
+fn published_roadmap(data: &Path, name: &str) -> PathBuf {
+    let out = data.join(name);
+    let _ = std::fs::remove_dir_all(&out);
+    run_git(
+        data,
+        &[
+            "clone",
+            "-q",
+            "roadmap.git",
+            &out.file_name().expect("a name").to_string_lossy(),
+        ],
+    );
+    out
+}
+
+/// The todos a PR names complete are recorded done where each is found when it lands, and the
+/// train's release is the version the roadmap then reads: cut at build from the roadmap commit
+/// its `Tasks:` trailer names, checked at land against the roadmap's head, pushed with its tag in
+/// one push, published, and then recorded in ONE roadmap commit holding exactly the `Completes:`
+/// todos done, the pin moved to core's publication and the pictures drawn, pushed after door 2.
+/// A private todo is completed on the upkeep chain and named nowhere public. Recording again
+/// writes nothing.
 #[test]
-fn train_releases_what_the_chain_reads_and_tags_it() {
+fn train_releases_what_the_roadmap_reads_and_records_it_there() {
     let t = Train::new("release");
     let data = t.scratch.join("data");
     std::fs::create_dir_all(&data).expect("a data root");
@@ -2708,6 +2865,7 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
     let files = release_files("1.1.0");
     let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
     t.master_moves(&files);
+    let tasks = roadmap_origin(&data, &["rev-parse", "master"]);
 
     t.pr(
         1,
@@ -2716,13 +2874,13 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
     );
     std::fs::write(
         t.scratch.join("prs/1.body"),
-        "Links in the calendar.\n\nCompletes: calendarlinks\n",
+        "Links in the calendar.\n\nCompletes: calendarlinks opsonly\n",
     )
     .expect("a description");
     let built = t.train_with(&["build", "1"], &env);
     assert!(built.status.success(), "build: {}", text(&built.stderr));
     assert!(
-        text(&built.stdout).contains("release 1.2.0, completing calendarlinks"),
+        text(&built.stdout).contains("release 1.2.0, completing calendarlinks opsonly"),
         "{}",
         text(&built.stdout)
     );
@@ -2730,10 +2888,15 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
         t.git(&["log", "-1", "--format=%s", "train"]),
         "release: 1.2.0"
     );
-    assert!(
-        t.git(&["log", "-1", "--format=%b", "train^"])
-            .contains("Completes: calendarlinks"),
-        "the merge keeps what its PR completes"
+    assert_eq!(
+        t.git(&[
+            "log",
+            "-1",
+            "--format=%(trailers:key=Tasks,valueonly)",
+            "train"
+        ]),
+        tasks,
+        "the release names the roadmap commit it was cut from"
     );
     assert_eq!(
         t.git(&["diff", "--name-only", "train^", "train"]),
@@ -2744,24 +2907,23 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
     let changelog = t.git(&["show", "train:CHANGELOG.md"]);
     assert!(
         changelog.contains("## [Unreleased]\n\n## [1.2.0] - ")
-            && changelog.contains("- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n### Added\n- calendar links\n"),
-        "{changelog}"
+            && changelog.contains(
+                "- Completes `calendarlinks`: the calendarlinks item\n\n### Added\n- calendar links\n"
+            )
+            && !changelog.contains("opsonly"),
+        "the public changelog names the roadmap's todo and never the private one: {changelog}"
+    );
+    assert!(
+        t.git(&["show", "train:app/release.toml"])
+            .contains("completes = [\"calendarlinks\"]"),
+        "the code's copy of the reading names the roadmap's todos alone"
     );
 
-    // PR 2 is branched now, before 1.2.0 lands.
-    t.pr(
-        2,
-        "a fix",
-        &[("changelog.d/fix.md", "### Fixed\n- a fix\n")],
-    );
-
-    // Land checks the chain reads 1.2, pushes master with its tag, then records it done. A
-    // local tag of that name, a leftover of a refused land, does not stop it.
     assert!(t.train_with(&["gate"], &env).status.success());
-    t.git(&["tag", "v1.2.0", "origin/master"]);
     let landed = t.train_with(&["land"], &env);
     let train = t.git(&["rev-parse", "train"]);
-    assert_eq!(t.origin_master(), train, "land: {}", text(&landed.stderr));
+    assert!(landed.status.success(), "land: {}", text(&landed.stderr));
+    assert_eq!(t.origin_master(), train);
     assert_eq!(
         run_git(
             &t.scratch.join("origin.git"),
@@ -2770,45 +2932,155 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
         train,
         "the tag is the landed release"
     );
-    assert!(
-        recorded(&data, "calendarlinks", "PR #1"),
-        "done, as the assistant, naming the PR"
-    );
-
-    // Recording again records nothing more.
+    recorded_once(&t, &data, &train);
     let again = t.train_with(&["record"], &env);
-    assert!(
-        again.status.success(),
-        "record: {:?} {} {}",
-        again.status,
-        text(&again.stderr),
-        text(&again.stdout)
-    );
-    assert!(
-        text(&again.stdout).contains("nothing more"),
-        "{}",
-        text(&again.stdout)
-    );
+    assert!(again.status.success(), "record: {}", text(&again.stderr));
+    assert_eq!(shipped(&data, &train), 1, "recording again writes nothing");
+    assert_eq!(completions(&data, "events-ops", "opsonly").len(), 1);
+}
 
-    // A train that completes nothing is the next patch, and PR 2's fragment is 1.2.1's.
-    let next = t.train_with(&["build", "2"], &env);
-    assert!(next.status.success(), "build: {}", text(&next.stderr));
-    assert_eq!(
-        t.git(&["log", "-1", "--format=%s", "train"]),
-        "release: 1.2.1"
-    );
-    let changelog = t.git(&["show", "train:CHANGELOG.md"]);
-    let (newer, older) = changelog.split_at(changelog.find("## [1.2.0]").expect("1.2.0"));
+/// What a visitor reads after the land of `train`, the fixture's release 1.2.0 completing
+/// `calendarlinks` (and the private `opsonly`): one roadmap commit naming it, holding exactly one
+/// new object and the pin at core's publication, and the private todo done on the upkeep chain.
+fn recorded_once(t: &Train, data: &Path, train: &str) {
+    let core = t.core(&["rev-parse", "master"]);
+    assert_eq!(shipped(data, train), 1, "one roadmap commit records it");
+    let head = roadmap_origin(data, &["log", "-1", "--format=%s%n%b", "master"]);
     assert!(
-        newer.contains("- a fix") && !older.contains("- a fix"),
-        "{changelog}"
+        head.starts_with("Ship 1.2.0") && head.contains("Release: 1.2.0"),
+        "{head}"
+    );
+    assert_eq!(
+        roadmap_origin(data, &["show", "master:flake.lock"]),
+        pinned(&core).trim(),
+        "the pin is core's publication of the release"
+    );
+    let added = roadmap_origin(
+        data,
+        &[
+            "diff",
+            "--name-only",
+            "--diff-filter=A",
+            "master^",
+            "master",
+            "--",
+            "objects",
+        ],
+    );
+    assert_eq!(added.lines().count(), 1, "exactly one object: {added}");
+    let object = roadmap_origin(data, &["show", &format!("master:{}", added.trim())]);
+    assert!(
+        !object.contains("PR #") && !head.contains("PR #"),
+        "the roadmap names nothing of the private repository: {object}{head}"
+    );
+    let visible = published_roadmap(data, "visible");
+    assert_eq!(
+        completions(data, "visible", "calendarlinks"),
+        vec![("assistant".to_owned(), "the release 1.2.0".to_owned())],
+        "a visitor reads it completed"
+    );
+    for todo in ["bravo", "suzatarytwo", "opsonly"] {
+        assert!(
+            completions(data, "visible", todo).is_empty(),
+            "the roadmap completes exactly the train's: {todo}"
+        );
+    }
+    assert!(visible.join("roadmap.svg").is_file());
+    assert_eq!(
+        completions(data, "events-ops", "opsonly"),
+        vec![("assistant".to_owned(), "PR #1, 1.2.0".to_owned())],
+        "the private todo is completed on the upkeep chain"
     );
 }
 
-/// A release completed by hand between build and land is the next train's: the chain reads above
+/// A cut is a function of the code tree and the roadmap commit it names: what the box's clone
+/// holds and its origin does not (an edit not pushed yet) moves nothing, and a cut from the same
+/// commit by the binary alone, with no deployment, is the same release.
+#[test]
+fn train_cut_reads_the_roadmap_commit_it_names() {
+    let t = Train::new("release-tasks");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let files = release_files("1.1.0");
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+    t.master_releases(&files, "1.1.0");
+    // Completing 2.0 in the clone alone, not pushed: no public input names it.
+    let closed = crate::binary::keyed()
+        .args(["--instance", &instance.to_string_lossy()])
+        .args([
+            "todo",
+            "--chain",
+            "roadmap",
+            "done",
+            "suzatarytwo",
+            "--actor",
+            "ada",
+        ])
+        .output()
+        .expect("the binary runs");
+    assert!(closed.status.success(), "{}", text(&closed.stderr));
+    t.pr(1, "a fix", &[("a.txt", "a\n")]);
+    let built = t.train_with(&["build", "1"], &env);
+    assert!(built.status.success(), "build: {}", text(&built.stderr));
+    assert_eq!(
+        t.git(&["log", "-1", "--format=%s", "train"]),
+        "release: 1.1.1",
+        "the clone's unpushed edit moves no version"
+    );
+    let tasks = t.git(&[
+        "log",
+        "-1",
+        "--format=%(trailers:key=Tasks,valueonly)",
+        "train",
+    ]);
+    let commit = data.join("at-tasks");
+    std::fs::create_dir_all(&commit).expect("a directory");
+    run(
+        Command::new("sh").arg("-c").arg(format!(
+            "git -C '{}' archive {tasks} | tar -x -C '{}'",
+            data.join("roadmap.git").display(),
+            commit.display()
+        )),
+        "the roadmap commit written out",
+    );
+    let tree = data.join("tree");
+    std::fs::create_dir_all(&tree).expect("a directory");
+    run(
+        Command::new("sh").arg("-c").arg(format!(
+            "git -C '{}' archive origin/master | tar -x -C '{}'",
+            t.work().display(),
+            tree.display()
+        )),
+        "origin/master's tree written out",
+    );
+    let alone = crate::binary::keyed()
+        .args(["--instance", "/nonexistent/instance.toml"])
+        .args(["release", "cut", "--last", "1.1.0", "--tree"])
+        .arg(&tree)
+        .arg("--store")
+        .arg(&commit)
+        .output()
+        .expect("the binary runs");
+    assert!(alone.status.success(), "{}", text(&alone.stderr));
+    assert!(
+        text(&alone.stdout).contains("\"version\":\"1.1.1\""),
+        "{}",
+        text(&alone.stdout)
+    );
+    assert_eq!(
+        std::fs::read_to_string(tree.join("app/release.toml")).expect("the release"),
+        t.git(&["show", "train:app/release.toml"]) + "\n",
+        "the same tree and commit cut the same release, with no deployment"
+    );
+}
+
+/// A release completed between build and land is the next train's: the roadmap's head reads above
 /// the cut, so the land goes ahead, and the tag is the cut.
 #[test]
-fn train_land_takes_a_chain_that_moved_above_the_cut() {
+fn train_land_takes_a_roadmap_that_moved_above_the_cut() {
     let t = Train::new("release-moved");
     let data = t.scratch.join("data");
     std::fs::create_dir_all(&data).expect("a data root");
@@ -2826,12 +3098,11 @@ fn train_land_takes_a_chain_that_moved_above_the_cut() {
     );
     assert!(t.train_with(&["gate"], &env).status.success());
     let closed = crate::binary::keyed()
+        .args(["--instance", &instance.to_string_lossy()])
         .args([
-            "--instance",
-            &instance.to_string_lossy(),
             "todo",
             "--chain",
-            "suzatary",
+            "roadmap",
             "done",
             "calendarlinks",
             "--actor",
@@ -2840,6 +3111,18 @@ fn train_land_takes_a_chain_that_moved_above_the_cut() {
         .output()
         .expect("the binary runs");
     assert!(closed.status.success(), "{}", text(&closed.stderr));
+    let pushed = isolated(Command::new(repo().join("scripts/roadmap-push.sh")))
+        .arg(data.join("roadmap"))
+        .envs(env.iter().copied())
+        .env("SUZATARY_BIN", drawing(&data))
+        .output()
+        .expect("roadmap-push.sh runs");
+    assert!(pushed.status.success(), "{}", text(&pushed.stderr));
+    assert_eq!(
+        roadmap_origin(&data, &["log", "-1", "--format=%B", "master"]),
+        "The box's writes",
+        "an ordinary push's commit carries the script's own subject and nothing a caller wrote"
+    );
     let landed = t.train_with(&["land"], &env);
     let train = t.git(&["rev-parse", "train"]);
     assert_eq!(t.origin_master(), train, "land: {}", text(&landed.stderr));
@@ -2853,9 +3136,9 @@ fn train_land_takes_a_chain_that_moved_above_the_cut() {
     );
 }
 
-/// THE BINARY THAT WRITES THE CHAIN IS A NAMED COMMIT'S: with no `SUZATARY_TRAIN_BIN`, every app the
-/// train asks `scripts/app-bin.sh` for is a commit's, origin/master's at build and the train's at
-/// land, or the deployed one, which reads each publication's tree; never the checkout as it is.
+/// THE BINARY THAT WRITES IS A NAMED COMMIT'S: with no `SUZATARY_TRAIN_BIN`, every app the train
+/// asks `scripts/app-bin.sh` for is a commit's, origin/master's at build and the train's at land,
+/// or the deployed one, which reads each publication's tree; never the checkout as it is.
 #[test]
 fn train_builds_the_app_from_a_named_commit() {
     let t = Train::new("release-named");
@@ -2868,7 +3151,11 @@ fn train_builds_the_app_from_a_named_commit() {
     let asked = t.scratch.join("asked");
     let app = t.scratch.join("app");
     std::fs::create_dir_all(app.join("bin")).expect("an app");
-    std::os::unix::fs::symlink(crate::binary::path(), app.join("bin/suzatary")).expect("a link");
+    let _ = suzatary_testkit::fake_program(
+        &app.join("bin"),
+        "suzatary",
+        &format!("#!/bin/sh\nexec '{}' \"$@\"\n", drawing(&data).display()),
+    );
     let stub = format!(
         "#!/bin/sh\necho \"${{SUZATARY_APP_REV:-the checkout}}\" >>'{asked}'\necho '{app}'\n",
         asked = asked.display(),
@@ -2909,10 +3196,7 @@ fn train_builds_the_app_from_a_named_commit() {
             && at_land.lines().all(|rev| rev == train || rev == master),
         "land checks and records with the train's app: {at_land}"
     );
-    assert!(
-        recorded(&data, "calendarlinks", "PR #1"),
-        "done, as the assistant, naming the PR"
-    );
+    assert_eq!(shipped(&data, &train), 1, "{}", text(&landed.stderr));
 }
 
 /// A cut whose tag origin already holds is refused at build, not after the whole gate at land.
@@ -2927,7 +3211,7 @@ fn train_build_refuses_a_cut_origin_already_tagged() {
     let files = release_files("1.1.0");
     let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
     t.master_releases(&files, "1.1.0");
-    // A tag of the version the chain reads, on a commit no release on master names.
+    // A tag of the version the roadmap reads, on a commit no release on master names.
     run_git(&t.author(), &["tag", "v1.1.1", "HEAD"]);
     run_git(&t.author(), &["push", "-q", "origin", "v1.1.1"]);
     t.pr(1, "a fix", &[("a.txt", "a\n")]);
@@ -2964,13 +3248,14 @@ fn train_record_refuses_what_never_landed() {
         "version = \"1.2.0\"\ncompletes = [\"calendarlinks\"]\n",
     );
     t.git(&["add", "-A"]);
+    let tasks = roadmap_origin(&data, &["rev-parse", "master"]);
     t.git(&[
         "commit",
         "-q",
         "-m",
         "release: 1.2.0",
         "-m",
-        "Release: 1.2.0",
+        &format!("Release: 1.2.0\nCompletes: calendarlinks\nTasks: {tasks}"),
     ]);
     let aside = t.git(&["rev-parse", "HEAD"]);
     t.git(&["checkout", "-q", "--detach", "origin/master"]);
@@ -2985,14 +3270,14 @@ fn train_record_refuses_what_never_landed() {
         text(&refused.stderr)
     );
     assert!(
-        !completed(&data, "calendarlinks"),
+        completions(&data, "roadmap", "calendarlinks").is_empty(),
         "nothing is written for it"
     );
 }
 
-/// The count reads origin's newest release alone, and a land whose record failed is repaired by
-/// the next command: a local tag moves nothing, and the next build records what the land did
-/// not.
+/// The count reads origin's newest release alone, and a land cut short before its roadmap commit
+/// (its completions refused) is repaired by the next command: a local tag moves nothing, and the
+/// next build records what the land did not, once.
 #[test]
 fn train_reads_origin_first_and_repairs_a_failed_record() {
     let t = Train::new("release-sync");
@@ -3004,9 +3289,9 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
         &t.scratch.join("bin"),
         "suzatary-failing",
         &format!(
-            "#!/bin/sh\n[ \"$1 $2\" != \"release record\" ] || [ ! -e '{flag}' ] || {{ echo 'the chain is busy' >&2; exit 1; }}\nexec '{real}' \"$@\"\n",
+            "#!/bin/sh\n[ \"$1 $2\" != \"release complete\" ] || [ ! -e '{flag}' ] || {{ echo 'the store is busy' >&2; exit 1; }}\nexec '{real}' \"$@\"\n",
             flag = flag.display(),
-            real = crate::binary::path()
+            real = drawing(&data).display()
         ),
     );
     let mut env = release_env(&instance);
@@ -3032,6 +3317,7 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
         "{}",
         text(&landed.stderr)
     );
+    let train = t.git(&["rev-parse", "train"]);
     assert_eq!(
         run_git(
             &t.scratch.join("origin.git"),
@@ -3040,26 +3326,215 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
         t.origin_master(),
         "master and the tag landed"
     );
-    assert!(
-        !recorded(&data, "calendarlinks", "PR #1"),
-        "the record failed"
-    );
+    assert_eq!(shipped(&data, &train), 0, "the record failed");
 
     // No local v1.2.0, a stale local v1.7.0, and the record no longer failing: the next build
-    // counts from origin's tag and records the land's todo first.
+    // counts from origin's tag and records the land's release first.
     std::fs::remove_file(&flag).expect("the flag goes");
     t.git(&["tag", "-d", "v1.2.0"]);
     t.git(&["tag", "-f", "v1.7.0", "origin/master"]);
     let next = t.train_with(&["build", "2"], &env);
     assert!(next.status.success(), "build: {}", text(&next.stderr));
-    assert!(
-        recorded(&data, "calendarlinks", "PR #1"),
-        "the next command recorded it"
-    );
+    assert_eq!(shipped(&data, &train), 1, "the next command recorded it");
+    published_roadmap(&data, "visible");
+    assert_eq!(completions(&data, "visible", "calendarlinks").len(), 1);
     assert_eq!(
         t.git(&["log", "-1", "--format=%s", "train"]),
         "release: 1.2.1",
         "counted from origin's v1.2.0, not the local v1.7.0"
+    );
+}
+
+/// A land whose roadmap commit was made and not pushed (its origin refusing) leaves the commit in
+/// the clone; the next command finds it by its `Shipped:` trailer and pushes it, writing nothing
+/// again: each todo is completed once, and one commit records the release.
+#[test]
+fn train_repairs_a_roadmap_commit_its_land_did_not_push() {
+    let t = Train::new("release-unpushed");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let files = release_files("1.1.0");
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+    t.master_moves(&files);
+    t.pr(1, "calendar links", &[("a.txt", "a\n")]);
+    std::fs::write(t.scratch.join("prs/1.body"), "Completes: calendarlinks\n").expect("a body");
+    t.pr(2, "a fix", &[("b.txt", "b\n")]);
+    assert!(t.train_with(&["build", "1"], &env).status.success());
+    assert!(t.train_with(&["gate"], &env).status.success());
+    // The roadmap's origin refuses every push while the flag is there.
+    let flag = data.join("refuse-pushes");
+    let hook = data.join("roadmap.git/hooks/pre-receive");
+    write(
+        &data,
+        "roadmap.git/hooks/pre-receive",
+        &format!("#!/bin/sh\n[ ! -e '{}' ]\n", flag.display()),
+    );
+    run(Command::new("chmod").arg("+x").arg(&hook), "chmod");
+    std::fs::write(&flag, "").expect("the flag");
+    let landed = t.train_with(&["land"], &env);
+    let train = t.git(&["rev-parse", "train"]);
+    assert!(!landed.status.success(), "a land whose push failed says so");
+    assert!(
+        text(&landed.stderr).contains("not pushed"),
+        "{}",
+        text(&landed.stderr)
+    );
+    assert_eq!(t.origin_master(), train, "master landed");
+    assert_eq!(shipped(&data, &train), 0, "origin was not written");
+    assert_eq!(
+        run_git(
+            &data.join("roadmap"),
+            &["log", "-1", "--format=%(trailers:key=Shipped,valueonly)"]
+        ),
+        train,
+        "the clone holds the commit"
+    );
+
+    std::fs::remove_file(&flag).expect("the flag goes");
+    let next = t.train_with(&["build", "2"], &env);
+    assert!(next.status.success(), "build: {}", text(&next.stderr));
+    assert_eq!(shipped(&data, &train), 1, "pushed once");
+    published_roadmap(&data, "visible");
+    assert_eq!(
+        completions(&data, "visible", "calendarlinks").len(),
+        1,
+        "completed once"
+    );
+}
+
+/// The roadmap's push refuses a range door 2 refuses: a commit in the clone holding a term the
+/// lists name stays in the clone, origin unchanged, and the push names where, never the word. One
+/// upkeep todo says where, and the pushes after it, refused the same, file nothing more.
+#[test]
+fn roadmap_push_refuses_a_range_door_2_refuses() {
+    let t = Train::new("roadmap-push-refused");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let roadmap = data.join("roadmap");
+    let before = roadmap_origin(&data, &["rev-parse", "master"]);
+    write(&roadmap, "notes.md", "a note about zzperson\n");
+    run_git(&roadmap, &["add", "notes.md"]);
+    run_git(&roadmap, &["commit", "-q", "-m", "a note"]);
+    let push = || {
+        isolated(Command::new(repo().join("scripts/roadmap-push.sh")))
+            .arg(&roadmap)
+            .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
+            .env("SUZATARY_BIN", drawing(&data))
+            .output()
+            .expect("roadmap-push.sh runs")
+    };
+    let out = push();
+    let said = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{said}");
+    assert!(said.contains("notes.md:1"), "{said}");
+    assert!(!said.contains("zzperson"), "{said}");
+    assert_eq!(
+        roadmap_origin(&data, &["rev-parse", "master"]),
+        before,
+        "nothing is pushed"
+    );
+    let filed = || -> Vec<String> {
+        suzatary_record::record::EventStore::new(
+            data.join("events-ops"),
+            prodrome_core::policy::Untrusted::none(),
+        )
+        .events()
+        .expect("the upkeep chain reads")
+        .iter()
+        .filter_map(|e| match e {
+            suzatary_record::record::TodoEvent::Authored(made)
+                if made.todo.as_str().starts_with("doortwo") =>
+            {
+                Some(made.payload.detail.as_str().to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+    };
+    let [detail] = &filed()[..] else {
+        panic!("one upkeep todo: {:?}", filed())
+    };
+    assert!(
+        detail.contains("`notes.md:1`") && !detail.contains("zzperson"),
+        "{detail}"
+    );
+    let again = push();
+    assert_eq!(again.status.code(), Some(1), "{}", text(&again.stderr));
+    assert_eq!(
+        filed().len(),
+        1,
+        "a refusal of the same hits files nothing more"
+    );
+}
+
+/// A pass with nothing new costs nothing: a clone holding no new object and no commit its origin
+/// lacks returns at once, reaching no remote (its origin here is gone) and drawing nothing.
+#[test]
+fn roadmap_push_with_nothing_new_reaches_no_remote() {
+    let t = Train::new("roadmap-push-quiet");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let roadmap = data.join("roadmap");
+    run_git(
+        &roadmap,
+        &["remote", "set-url", "origin", "/nonexistent/roadmap.git"],
+    );
+    std::fs::remove_file(roadmap.join("roadmap.svg")).expect("the picture goes");
+    run_git(&roadmap, &["checkout", "-q", "--", "roadmap.svg"]);
+    let out = isolated(Command::new(repo().join("scripts/roadmap-push.sh")))
+        .arg(&roadmap)
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
+        .env("SUZATARY_BIN", "/nonexistent/suzatary")
+        .output()
+        .expect("roadmap-push.sh runs");
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stderr).contains("nothing to push"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
+/// An event written to a public store names only a public name: at the mount, `ada` writes under
+/// the public name its entry gives, and `bea`, which has none, is refused before the store holds
+/// anything, the refusal naming the actor and the chain.
+#[test]
+fn a_write_by_an_actor_with_no_public_name_is_refused_at_the_mount() {
+    let t = Train::new("roadmap-names");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let done = |actor: &str, todo: &str| {
+        crate::binary::keyed()
+            .args(["--instance", &instance.to_string_lossy()])
+            .args(["todo", "--chain", "roadmap", "done", todo, "--actor", actor])
+            .output()
+            .expect("the binary runs")
+    };
+    let refused = done("bea", "bravo");
+    assert!(!refused.status.success(), "an unnamed actor wrote");
+    assert!(
+        text(&refused.stderr).contains("chain roadmap is public, and bea has no public name there"),
+        "{}",
+        text(&refused.stderr)
+    );
+    assert!(
+        completions(&data, "roadmap", "bravo").is_empty(),
+        "nothing is stored"
+    );
+    let taken = done("ada", "bravo");
+    assert!(taken.status.success(), "{}", text(&taken.stderr));
+    assert_eq!(
+        completions(&data, "roadmap", "bravo"),
+        vec![("adalogin".to_owned(), String::new())],
+        "the event names the public name"
     );
 }
 
@@ -3191,33 +3666,6 @@ fn train_build_keeps_completes_through_a_join_and_skips_only_an_unknown_todo() {
         .trim(),
         "1.2.0"
     );
-}
-
-/// Whether the fixture's project chain holds `todo` completed as `assistant` with `note`.
-/// Whether anyone recorded `todo` done on the project chain under `data`.
-fn completed(data: &Path, todo: &str) -> bool {
-    suzatary_record::record::EventStore::new(
-        data.join("events-suzatary"),
-        prodrome_core::policy::Untrusted::none(),
-    )
-    .events()
-    .expect("the chain reads")
-    .iter()
-    .any(|e| matches!(e, suzatary_record::record::TodoEvent::Completed(done) if done.todo.as_str() == todo))
-}
-
-fn recorded(data: &Path, todo: &str, note: &str) -> bool {
-    suzatary_record::record::EventStore::new(
-        data.join("events-suzatary"),
-        prodrome_core::policy::Untrusted::none(),
-    )
-    .events()
-    .expect("the chain reads")
-    .iter()
-    .any(|e| {
-        matches!(e, suzatary_record::record::TodoEvent::Completed(done)
-            if done.todo.as_str() == todo && done.actor.as_str() == "assistant" && done.note == note)
-    })
 }
 
 impl Train {
@@ -3439,7 +3887,7 @@ fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
         !detail.contains("the page said"),
         "and never the assertion: {detail}"
     );
-    for other in ["events", "events-suzatary"] {
+    for other in ["events", "roadmap"] {
         assert!(
             Train::nightly_todos_in(&data, other).is_empty(),
             "nothing on {other}"
@@ -3472,7 +3920,7 @@ fn train_nightly_files_nothing_without_an_upkeep_chain() {
         "{}",
         text(&unfiled.stderr)
     );
-    for chain in ["events", "events-suzatary", "events-ops"] {
+    for chain in ["events", "roadmap", "events-ops"] {
         assert!(
             Train::nightly_todos_in(&data, chain).is_empty(),
             "nothing on {chain}"

@@ -200,6 +200,7 @@ mod tests {
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: std::collections::BTreeSet::new(),
             root: crate::cast::keys::root(),
+            naming: suzatary_base::chains::Naming::AsActs,
         };
         let (life, ops) = (policy("life"), policy("ops"));
         let deployment = Deployment {

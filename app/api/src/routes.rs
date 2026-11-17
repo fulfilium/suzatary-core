@@ -1630,15 +1630,18 @@ fn receipt<E: prodrome_core::schema::Schema>(
 /// `GET /api/about`: the release this binary runs and the todos it completed; `dev` unstamped.
 ///
 /// # Errors
-/// The plan's chain held and not read.
+/// The plan store held and not read.
 pub fn about(
     released: Option<&suzatary_core::release::Released>,
     build: &str,
-    plan: &suzatary_core::release::Plan,
+    plan_store: Option<&suzatary_base::chains::ChainName>,
     set: &ChainSet<'_>,
 ) -> Answered<AboutPayload> {
     let completes = released.map_or(&[][..], |r| r.completes.as_slice());
-    let mut held = held_todos(plan, set, completes)?.unwrap_or_default();
+    let mut held = match plan_store {
+        Some(store) => held_todos(store, set, completes)?.unwrap_or_default(),
+        None => std::collections::BTreeMap::new(),
+    };
     Ok(AboutPayload {
         version: released.map_or_else(|| "dev".to_owned(), |r| r.version.to_string()),
         build: build.to_owned(),
@@ -1652,20 +1655,18 @@ pub fn about(
     })
 }
 
-/// Each of `todos` as `plan`'s chain reads it now; `None` where the set lacks the chain.
+/// Each of `todos` as the plan store `name` reads it now; `None` where the set lacks it.
 fn held_todos(
-    plan: &suzatary_core::release::Plan,
+    name: &suzatary_base::chains::ChainName,
     set: &ChainSet<'_>,
     todos: &[prodrome_core::event::TodoId],
 ) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
-    let name = suzatary_base::chains::ChainName::new(plan.chain())
-        .map_err(|e| Refusal::internal(e.to_string()))?;
-    match set.held(&name) {
+    match set.held(name) {
         Ok(_) => {}
         Err(suzatary_signatures::chain_set::NotAMember::Absent(_)) => return Ok(None),
         Err(failure) => return Err(not_a_member(failure)),
     }
-    let (by_hash, _, rows) = rows(set, &name)?;
+    let (by_hash, _, rows) = rows(set, name)?;
     let wanted: std::collections::BTreeSet<&str> = todos
         .iter()
         .map(prodrome_core::event::TodoId::as_str)
@@ -1690,31 +1691,16 @@ fn held_todos(
     ))
 }
 
-/// `GET /api/releases`: `plan`'s releases as `set` reads them.
+/// `GET /api/releases`: `plan`'s releases as `set` reads the plan store `name`.
 ///
 /// # Errors
-/// The chain held and not read.
+/// The store held and not read.
 pub fn releases(
+    name: &suzatary_base::chains::ChainName,
     plan: &suzatary_core::release::Plan,
     set: &ChainSet<'_>,
 ) -> Answered<wire::ReleasesPayload> {
-    let name = suzatary_base::chains::ChainName::new(plan.chain())
-        .map_err(|e| Refusal::internal(e.to_string()))?;
-    let held = match set.held(&name) {
-        Ok(held) => held,
-        Err(suzatary_signatures::chain_set::NotAMember::Absent(_)) => {
-            return Ok(wire::ReleasesPayload {
-                chain: plan.chain().to_owned(),
-                reads: suzatary_core::release::Counted {
-                    major: plan.base(),
-                    minor: 0,
-                }
-                .to_string(),
-                releases: Vec::new(),
-            });
-        }
-        Err(failure) => return Err(not_a_member(failure)),
-    };
+    let held = set.held(name).map_err(not_a_member)?;
     let current = Believed::of(held.nodes, set.at(), held.untrusted)
         .map_err(|e| Refusal::internal(e.to_string()))?
         .specs;
@@ -1732,10 +1718,10 @@ pub fn releases(
                 .chain(release.items.iter().map(|item| item.todo.clone()))
         })
         .collect();
-    let by_id = held_todos(plan, set, &todos)?.unwrap_or_default();
+    let by_id = held_todos(name, set, &todos)?.unwrap_or_default();
     let held_todo = |todo: &prodrome_core::event::TodoId| by_id.get(todo.as_str()).cloned();
     Ok(wire::ReleasesPayload {
-        chain: plan.chain().to_owned(),
+        chain: name.as_str().to_owned(),
         reads: reading.counted.to_string(),
         releases: reading
             .releases
@@ -1761,7 +1747,8 @@ pub fn releases(
     })
 }
 
-/// `GET /api/<chain>/me`: the login and the actor it writes as; `null` for a viewer.
+/// `GET /api/<chain>/me`: the login and the name it writes under on `chain`; `null` for a viewer,
+/// and on a public chain for an actor with no public name there.
 #[must_use]
 pub fn me(
     deployment: &Deployment,
@@ -1773,7 +1760,8 @@ pub fn me(
         login: login.map_or_else(String::new, |login| login.as_str().to_owned()),
         actor: login
             .and_then(|login| deployment.actor_of(login))
-            .filter(|actor| chain.roster.contains(*actor))
+            .and_then(|actor| chain.named(actor).ok())
+            .filter(|actor| chain.roster.contains(actor))
             .map(|actor| actor.as_str().to_owned()),
         chains: deployment
             .chains
@@ -2248,6 +2236,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                 root: suzatary_core::cast::keys::root(),
+                naming: suzatary_base::chains::Naming::AsActs,
             };
             Self {
                 deployment: Deployment {

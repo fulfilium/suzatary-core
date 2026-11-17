@@ -137,6 +137,14 @@ pub(crate) struct Chain {
     /// Whom a command with no `--actor` acts as; must be trusted and on the roster.
     #[serde(with = "text")]
     pub(crate) owner: Actor,
+    /// A public store's alone: each actor of this deployment beside the public name its events
+    /// carry there, one on the roster. An actor with none writes nothing to the store.
+    #[serde(
+        default,
+        with = "text_map",
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub(crate) public_names: BTreeMap<Actor, Actor>,
 }
 
 // `toml` serialises plain values ahead of tables, so `act_as` and `serving` come last.

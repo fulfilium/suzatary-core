@@ -1,6 +1,6 @@
-//! `suzatary release` through the real binary, against a fixture project chain and a scratch
-//! checkout: the reading, the cut that writes the release file and the changelog,
-//! and the check a land asks before it tags.
+//! `suzatary release` through the real binary, against a fixture roadmap store mounted beside an
+//! upkeep chain, and a scratch checkout: the reading, the cut that writes the release file and the
+//! changelog, the check a land asks before it tags, and the completions it writes.
 
 mod common;
 
@@ -45,10 +45,30 @@ fn authored(id: &str, body: &str, spec: prodrome_core::term::Term) -> TodoEvent 
     .expect("a record")
 }
 
-/// The project chain under `root`: the release, its items, and the lifecycle above.
+/// The roadmap store's directory under `root`.
+fn roadmap(root: &Path) -> String {
+    root.join("roadmap").to_string_lossy().into_owned()
+}
+
+/// The roadmap under `root`: the release, its items, the lifecycle above, and the plan beside it;
+/// and the upkeep chain, holding one private todo of its own.
 fn a_project_chain(root: &Path) {
+    let upkeep = EventStore::new(
+        root.join("events-ops"),
+        prodrome_core::policy::Untrusted::none(),
+    );
+    suzatary_store::store::append_to(
+        &upkeep,
+        GENESIS,
+        authored(
+            "opsonly",
+            "a task about this box",
+            fpl::mk_flat(0.7).expect("a term"),
+        ),
+    )
+    .expect("appends");
     let store = EventStore::new(
-        root.join("events-suzatary"),
+        root.join("roadmap"),
         prodrome_core::policy::Untrusted::none(),
     );
     let append = |event| {
@@ -80,6 +100,10 @@ fn a_project_chain(root: &Path) {
             append(event.expect("an event"));
         }
     }
+    common::plan_beside(
+        &root.join("roadmap"),
+        "base = 1\n\n[[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n",
+    );
 }
 
 fn an_instance(root: &Path) -> PathBuf {
@@ -101,11 +125,21 @@ actors = ["assistant", "ada", "triage"]
 owner = "ada"
 
 [[chains]]
-name = "suzatary"
-events = "events-suzatary"
+name = "roadmap"
+events = "roadmap"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"
+
+[[chains]]
+name = "ops"
+events = "events-ops"
+untrusted = ["triage"]
+actors = ["assistant", "ada", "triage"]
+owner = "ada"
+
+[upkeep]
+chain = "ops"
 
 [web]
 viewers = ["someone@example.com"]
@@ -148,7 +182,7 @@ sync = "gmail"
 /// A checkout at 1.3.0 with one entry unreleased.
 fn a_checkout(root: &Path) -> PathBuf {
     let tree = root.join("tree");
-    std::fs::create_dir_all(tree.join("app/core")).expect("a tree");
+    std::fs::create_dir_all(tree.join("app")).expect("a tree");
     std::fs::write(tree.join("app/release.toml"), "version = \"1.3.0\"\n").expect("a release");
     std::fs::write(
         tree.join("CHANGELOG.md"),
@@ -163,11 +197,6 @@ fn a_checkout(root: &Path) -> PathBuf {
         "### Added\n- a calendar link\n",
     )
     .expect("a fragment");
-    std::fs::write(
-        tree.join("app/core/releases.toml"),
-        "chain = \"suzatary\"\nbase = 1\n\n[[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n",
-    )
-    .expect("a plan");
     tree
 }
 
@@ -195,6 +224,13 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
     let instance = an_instance(&root);
     let tree = a_checkout(&root);
     let tree_arg = tree.to_string_lossy().into_owned();
+    let store = roadmap(&root);
+    let check = || {
+        ok(&suzatary(
+            &instance,
+            &["release", "check", "--tree", &tree_arg, "--store", &store],
+        ))
+    };
 
     let read = ok(&suzatary(&instance, &["release", "read", "--json"]));
     assert_eq!(read["reads"], "1.0", "no release is completed");
@@ -213,6 +249,8 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
             "calendarlinks",
             "--tree",
             &tree_arg,
+            "--store",
+            &store,
         ],
     ));
     assert_eq!(cut["version"], "2.0.0");
@@ -222,7 +260,7 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
         changelog.contains(
             "## [Unreleased]\n\n## [2.0.0] - 20"
         ) && changelog.contains(
-            "\n- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n### Added\n- a calendar link\n\n### Fixed\n- a fix\n"
+            "\n- Completes `calendarlinks`: the calendarlinks item\n\n### Added\n- a calendar link\n\n### Fixed\n- a fix\n"
         ),
         "{changelog}"
     );
@@ -243,18 +281,14 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
     );
 
     // Land checks before it records: the chain with the tree's completions done reads 2.0.
-    let before = ok(&suzatary(
-        &instance,
-        &["release", "check", "--tree", &tree_arg],
-    ));
-    assert_eq!(before["version"], "2.0.0");
+    assert_eq!(check()["version"], "2.0.0");
 
     ok_status(&suzatary(
         &instance,
         &[
             "todo",
             "--chain",
-            "suzatary",
+            "roadmap",
             "done",
             "suzatarytwo",
             "--actor",
@@ -263,17 +297,15 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
             "PR #7",
         ],
     ));
-    let checked = ok(&suzatary(
-        &instance,
-        &["release", "check", "--tree", &tree_arg],
-    ));
-    assert_eq!(checked["version"], "2.0.0");
+    assert_eq!(check()["version"], "2.0.0");
 
     // The next train completes no release: the next patch after the last release, which the
     // train reads off origin's newest `Release:` trailer.
     let again = ok(&suzatary(
         &instance,
-        &["release", "cut", "--last", "2.0.0", "--tree", &tree_arg],
+        &[
+            "release", "cut", "--last", "2.0.0", "--tree", &tree_arg, "--store", &store,
+        ],
     ));
     assert_eq!(again["version"], "2.0.1");
 }
@@ -293,6 +325,8 @@ fn a_cut_names_only_todos_the_chain_holds() {
             "nosuchtodo",
             "--tree",
             &tree.to_string_lossy(),
+            "--store",
+            &roadmap(&root),
         ],
     );
     assert!(!out.status.success(), "an unknown todo was cut");
@@ -317,6 +351,8 @@ fn a_cut_below_the_tree_is_refused() {
             "1.9.0",
             "--tree",
             &tree.to_string_lossy(),
+            "--store",
+            &roadmap(&root),
         ],
     );
     assert!(!out.status.success(), "the version went down");
@@ -335,33 +371,37 @@ fn ok_status(out: &std::process::Output) {
     );
 }
 
-/// `known` names every todo the chain does not hold, and passes those it does: what a train
-/// asks of one PR's `Completes:` line.
+/// `known` says where each todo is found, the roadmap before the upkeep chain, and names every
+/// todo found in neither: what a train asks of one PR's `Completes:` line.
 #[test]
-fn known_names_what_the_chain_does_not_hold() {
+fn known_says_where_each_todo_is_found() {
     let root = common::scratch("release-known");
     a_project_chain(&root);
     let instance = an_instance(&root);
-    let tree = a_checkout(&root);
-    let tree = tree.to_string_lossy().into_owned();
-    ok_status(&suzatary(
+    let store = roadmap(&root);
+    let found = suzatary(
         &instance,
         &[
             "release",
             "known",
-            "--tree",
-            &tree,
+            "--store",
+            &store,
             "calendarlinks",
-            "portsuites",
+            "opsonly",
         ],
-    ));
+    );
+    ok_status(&found);
+    assert_eq!(
+        String::from_utf8_lossy(&found.stdout),
+        "roadmap calendarlinks\nupkeep opsonly\n"
+    );
     let out = suzatary(
         &instance,
         &[
             "release",
             "known",
-            "--tree",
-            &tree,
+            "--store",
+            &store,
             "calendarlinks",
             "nosuch",
             "Bad Id",
@@ -395,6 +435,8 @@ fn a_cut_from_the_tag_folds_an_untagged_version() {
             "0.17.0",
             "--tree",
             &tree.to_string_lossy(),
+            "--store",
+            &roadmap(&root),
         ],
     ));
     assert_eq!(cut["version"], "1.0.0");
@@ -422,6 +464,8 @@ fn a_check_wants_the_chain_at_least_at_the_cut() {
             "calendarlinks",
             "--tree",
             &tree_arg,
+            "--store",
+            &roadmap(&root),
         ],
     ));
     ok_status(&suzatary(
@@ -429,7 +473,7 @@ fn a_check_wants_the_chain_at_least_at_the_cut() {
         &[
             "todo",
             "--chain",
-            "suzatary",
+            "roadmap",
             "done",
             "suzatarytwo",
             "--actor",
@@ -438,12 +482,29 @@ fn a_check_wants_the_chain_at_least_at_the_cut() {
     ));
     let above = ok(&suzatary(
         &instance,
-        &["release", "check", "--tree", &tree_arg],
+        &[
+            "release",
+            "check",
+            "--tree",
+            &tree_arg,
+            "--store",
+            &roadmap(&root),
+        ],
     ));
     assert_eq!(above["version"], "1.0.0", "the tag is the cut");
 
     std::fs::write(tree.join("app/release.toml"), "version = \"2.1.0\"\n").expect("a release");
-    let below = suzatary(&instance, &["release", "check", "--tree", &tree_arg]);
+    let below = suzatary(
+        &instance,
+        &[
+            "release",
+            "check",
+            "--tree",
+            &tree_arg,
+            "--store",
+            &roadmap(&root),
+        ],
+    );
     assert!(!below.status.success(), "a tree above the chain passed");
     assert!(
         String::from_utf8_lossy(&below.stderr).contains("below the tree's 2.1.0"),
@@ -524,11 +585,9 @@ fn known_tells_an_unknown_todo_from_a_failure() {
     let root = common::scratch("release-known-codes");
     a_project_chain(&root);
     let instance = an_instance(&root);
-    let tree = a_checkout(&root);
-    let tree = tree.to_string_lossy().into_owned();
     let unknown = suzatary(
         &instance,
-        &["release", "known", "--tree", &tree, "nosuchtodo"],
+        &["release", "known", "--store", &roadmap(&root), "nosuchtodo"],
     );
     assert_eq!(unknown.status.code(), Some(3));
     let broken = suzatary(
@@ -536,7 +595,7 @@ fn known_tells_an_unknown_todo_from_a_failure() {
         &[
             "release",
             "known",
-            "--tree",
+            "--store",
             "/nonexistent",
             "calendarlinks",
         ],
@@ -544,65 +603,83 @@ fn known_tells_an_unknown_todo_from_a_failure() {
     assert_eq!(broken.status.code(), Some(1));
 }
 
-/// `release record` writes each of the tree's completed todos the chain lacks, with its note,
-/// and nothing the second time.
+/// `release complete` writes each todo done where it is found, the roadmap's there with the
+/// release alone as its note and a private one on the upkeep chain with the pull request's, skips one already done, and writes nothing the second
+/// time; a todo found nowhere writes nothing at all.
 #[test]
-fn record_is_idempotent() {
-    let root = common::scratch("release-record");
+fn complete_writes_where_each_todo_is_found_once() {
+    let root = common::scratch("release-complete");
     a_project_chain(&root);
     let instance = an_instance(&root);
-    let tree = a_checkout(&root);
-    let tree_arg = tree.to_string_lossy().into_owned();
-    ok(&suzatary(
-        &instance,
-        &[
-            "release",
-            "cut",
-            "--completes",
-            "calendarlinks",
-            "--completes",
-            "wireonce",
-            "--tree",
-            &tree_arg,
-        ],
-    ));
     let first = ok(&suzatary(
         &instance,
         &[
             "release",
-            "record",
-            "--tree",
-            &tree_arg,
+            "complete",
+            "--release",
+            "2.0.0",
+            "calendarlinks",
+            "wireonce",
+            "opsonly",
             "--note",
             "calendarlinks=PR #7",
+            "--note",
+            "opsonly=PR #7",
         ],
     ));
     assert_eq!(
-        first["recorded"],
-        serde_json::json!(["calendarlinks"]),
+        first,
+        serde_json::json!({"roadmap": ["calendarlinks"], "upkeep": ["opsonly"]}),
         "wireonce was done already"
     );
     let again = ok(&suzatary(
         &instance,
-        &["release", "record", "--tree", &tree_arg],
+        &[
+            "release",
+            "complete",
+            "--release",
+            "2.0.0",
+            "calendarlinks",
+            "opsonly",
+        ],
     ));
-    assert_eq!(again["recorded"], serde_json::json!([]));
-    let events = EventStore::new(
-        root.join("events-suzatary"),
-        prodrome_core::policy::Untrusted::none(),
-    )
-    .events()
-    .expect("the chain reads");
-    let notes: Vec<&str> = events
-        .iter()
-        .filter_map(|e| match e {
-            TodoEvent::Completed(done) if done.todo.as_str() == "calendarlinks" => {
-                Some(done.note.as_str())
-            }
-            _ => None,
-        })
-        .collect();
-    assert_eq!(notes, vec!["PR #7"]);
+    assert_eq!(again, serde_json::json!({"roadmap": [], "upkeep": []}));
+    let refused = suzatary(
+        &instance,
+        &[
+            "release",
+            "complete",
+            "--release",
+            "2.0.0",
+            "portsuites",
+            "nosuch",
+        ],
+    );
+    assert!(
+        !refused.status.success(),
+        "a todo found nowhere was written"
+    );
+    let notes = |dir: &str, todo: &str| -> Vec<String> {
+        EventStore::new(root.join(dir), prodrome_core::policy::Untrusted::none())
+            .events()
+            .expect("the store reads")
+            .iter()
+            .filter_map(|e| match e {
+                TodoEvent::Completed(done) if done.todo.as_str() == todo => Some(done.note.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        notes("roadmap", "calendarlinks"),
+        vec!["the release 2.0.0".to_owned()],
+        "a public store's note names nothing of the private repository"
+    );
+    assert_eq!(notes("events-ops", "opsonly"), vec!["PR #7".to_owned()]);
+    assert!(
+        notes("roadmap", "portsuites").is_empty(),
+        "the refused call wrote nothing"
+    );
 }
 
 /// The binary copied into the layout the flake's package installs, `<out>/bin/suzatary` beside
@@ -677,7 +754,17 @@ fn fragments_are_read_as_a_cut_reads_them() {
     );
     a_project_chain(&root);
     let instance = an_instance(&root);
-    let cut = suzatary(&instance, &["release", "cut", "--tree", &tree_arg]);
+    let cut = suzatary(
+        &instance,
+        &[
+            "release",
+            "cut",
+            "--tree",
+            &tree_arg,
+            "--store",
+            &roadmap(&root),
+        ],
+    );
     let said = String::from_utf8_lossy(&cut.stderr);
     assert!(
         !cut.status.success() && said.contains("c-bare.md"),

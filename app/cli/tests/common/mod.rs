@@ -85,6 +85,7 @@ pub fn chain() -> suzatary_base::chains::ChainPolicy {
             .into_iter()
             .collect(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     }
 }
 
@@ -2717,6 +2718,7 @@ pub struct Server {
     watching: Option<PathBuf>,
     google: Googled,
     reveal: Option<Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>>,
+    mounts: suzatary_cli::instance::Mounts,
 }
 
 /// Where a test server asks Google and keeps what a sign-in with Google keeps: Google's own and
@@ -2889,6 +2891,7 @@ impl Server {
             publishing: None,
             drive: None,
             firing: None,
+            mounts: suzatary_cli::instance::Mounts::default(),
             keys: Some(cast_keys()),
             models: Reaching::default(),
             checks: None,
@@ -3038,6 +3041,11 @@ impl Server {
 
     /// With this routine behind a tapped coding session; a test points it at
     /// loopback, never the real one.
+    /// Where the server finds each chain's store, so a plan beside one is found.
+    pub fn mounting(self, mounts: suzatary_cli::instance::Mounts) -> Self {
+        Self { mounts, ..self }
+    }
+
     pub fn firing(self, firing: suzatary_cli::commands::coding::Firing) -> Self {
         Self {
             firing: Some(firing),
@@ -3179,6 +3187,7 @@ impl Server {
             self.settings.over(Arc::new(held.root.clone())),
         )
         .with_keys(self.keys)
+        .with_mounts(self.mounts)
         .with_wall(stamped)
         // The store the fakes' upload index reads, under their scratch root.
         .with_uploads(upload_store(&held.root), vault.clone());
@@ -4334,4 +4343,38 @@ pub fn file_read(
         suzatary_held::file_read::read(layer),
     );
     read
+}
+
+/// `releases` written as the `releases.toml` beside the store at `dir`, naming the store's
+/// genesis: what a deployment finds its plan store by.
+pub fn plan_beside(dir: &std::path::Path, releases: &str) {
+    let genesis = std::fs::read_dir(dir.join("objects"))
+        .expect("the objects")
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| std::fs::read_to_string(path).is_ok_and(|text| text.starts_with("Genesis(")))
+        .and_then(|path| Some(path.file_stem()?.to_string_lossy().into_owned()))
+        .expect("a genesis");
+    std::fs::write(
+        dir.join("releases.toml"),
+        format!("genesis = \"{genesis}\"\n{releases}"),
+    )
+    .expect("the plan");
+}
+
+/// A store under `root` holding only a `Genesis` and, beside it, a plan declaring `suzatarytwo` as
+/// 2.0: what a deployment mounts as its plan store.
+#[must_use]
+pub fn a_plan_store(root: &std::path::Path) -> PathBuf {
+    let dir = root.join("roadmap");
+    let store = suzatary_record::record::EventStore::new(
+        dir.clone(),
+        prodrome_core::policy::Untrusted::none(),
+    );
+    suzatary_store::store::begun(&store, suzatary_record::record::GENESIS).expect("begun");
+    plan_beside(
+        &dir,
+        "base = 1\n\n[[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n",
+    );
+    dir
 }

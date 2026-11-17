@@ -125,18 +125,12 @@ impl Completes {
     }
 
     /// The changelog's lines for these, first in the version's section: one per todo, its
-    /// reference on `chain` and its title.
+    /// id in the roadmap store and its title.
     #[must_use]
-    pub fn changelog(&self, chain: &str) -> Vec<String> {
+    pub fn changelog(&self) -> Vec<String> {
         self.0
             .iter()
-            .map(|c| {
-                format!(
-                    "- Completes `todo:{chain}/{}`: {}",
-                    c.todo.as_str(),
-                    c.title
-                )
-            })
+            .map(|c| format!("- Completes `{}`: {}", c.todo.as_str(), c.title))
             .collect()
     }
 

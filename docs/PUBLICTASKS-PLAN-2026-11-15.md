@@ -298,12 +298,18 @@ What stays on the box at a land, and why:
 
 ## 7. Reuse: the same shape for another project
 
-1. Create a public repository.
+1. Create a public repository whose default branch is `master`, and set the `github-pages`
+   environment's deployment branch to `master`. GitHub's default is `main`, and `pages.yml`
+   builds only the default branch, while the store is pushed as `master`: the first push of
+   this project's roadmap was skipped until both were set (stage 3).
 2. Run `suzatary prodrome init --store . --public` (stage 1): the `Genesis`, `charter.toml`,
    `.gitattributes`, `.gitignore`, and the flake template pinning the application.
-3. Optionally add a `releases.toml`. Nothing assumes one.
-4. In the deployment's instance file, add a `[[chains]]` entry at the clone, set `[coding]
-   chain` to it, and name its push token in `secretspec.toml`.
+3. Optionally add a `releases.toml` naming the store's `genesis`. Nothing assumes one; a
+   deployment that mounts a store with one counts its releases (stage 4).
+4. In the deployment's instance file, add a `[[chains]]` entry at the clone's absolute path, its
+   roster the public names its events carry and `public_names` mapping the deployment's actors to
+   them (stage 5). `scripts/safe-push.sh` pushes it with the credential git holds for its
+   `origin`; a narrower one is that clone's own (`git -C <clone> config credential.helper`).
 5. Copy the roadmap CI from the template. It needs no secret.
 
 | Special to this project today | Becomes | Stage |

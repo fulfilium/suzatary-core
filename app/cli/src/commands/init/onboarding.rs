@@ -232,6 +232,7 @@ impl Onboarding {
                     untrusted: Vec::new(),
                     actors: roster.clone(),
                     owner: self.owner.clone(),
+                    public_names: std::collections::BTreeMap::new(),
                 })
             })
             .collect::<anyhow::Result<_>>()?;

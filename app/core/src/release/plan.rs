@@ -1,19 +1,20 @@
-//! Which todos are releases: the declaration `app/core/releases.toml` holds.
+//! Which todos are releases: the declaration `releases.toml` holds, beside the store whose todos
+//! they are.
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::TodoId;
+use prodrome_core::event::{Hash, TodoId};
 use serde::Deserialize;
 
 use super::Counted;
 
-/// The releases the version counts toward, in the order they ship, on one chain.
+/// The releases the version counts toward, in the order they ship, in one store.
 ///
 /// Only [`Plan::new`] makes one, so every plan has distinct todos whose versions strictly
 /// increase, the first above `base.0`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
-    chain: String,
+    genesis: Hash,
     base: u32,
     releases: Vec<Release>,
 }
@@ -34,6 +35,9 @@ pub enum PlanError {
     /// Not the file's shape.
     #[error("releases.toml: {0}")]
     Unread(String),
+    /// Its `genesis` is not an object's name.
+    #[error("releases.toml: genesis {0:?} is not an object's name")]
+    NotAGenesis(String),
     /// A release's todo is not a todo id.
     #[error("releases.toml: {0:?} is not a todo id")]
     NotATodo(String),
@@ -56,7 +60,7 @@ pub enum PlanError {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Declared {
-    chain: String,
+    genesis: String,
     base: u32,
     #[serde(default)]
     release: Vec<DeclaredRelease>,
@@ -70,22 +74,16 @@ struct DeclaredRelease {
     minor: u32,
 }
 
-/// The declaration this build carries.
-const DECLARED: &str = include_str!("../../releases.toml");
-
 impl Plan {
-    /// The plan of `releases` on `chain`, the version being `base.0` until one completes.
+    /// The plan of `releases` in the store begun by `genesis`, the version being `base.0` until
+    /// one completes.
     ///
     /// The versions strictly increase, so the last completed release in the plan's order is
     /// also the greatest, and completing any release never lowers what the chain reads.
     ///
     /// # Errors
     /// A todo twice, or a version not above the one before it (`base.0` for the first).
-    pub fn new(
-        chain: impl Into<String>,
-        base: u32,
-        releases: Vec<Release>,
-    ) -> Result<Plan, PlanError> {
+    pub fn new(genesis: Hash, base: u32, releases: Vec<Release>) -> Result<Plan, PlanError> {
         let mut seen = BTreeSet::new();
         let mut floor = Counted {
             major: base,
@@ -105,7 +103,7 @@ impl Plan {
             floor = release.version;
         }
         Ok(Plan {
-            chain: chain.into(),
+            genesis,
             base,
             releases,
         })
@@ -133,21 +131,16 @@ impl Plan {
                     .map_err(|_| PlanError::NotATodo(r.todo))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Plan::new(declared.chain, declared.base, releases)
+        let genesis = Hash::new(declared.genesis.clone())
+            .map_err(|_| PlanError::NotAGenesis(declared.genesis))?;
+        Plan::new(genesis, declared.base, releases)
     }
 
-    /// The plan this build was compiled with (`app/core/releases.toml`).
-    ///
-    /// # Errors
-    /// Never for a build whose tests passed: `the_declared_plan_reads` pins it.
-    pub fn declared() -> Result<Plan, PlanError> {
-        Plan::parse(DECLARED)
-    }
-
-    /// The chain the releases are todos of.
+    /// The genesis of the store whose todos the releases are: that store's name wherever a
+    /// deployment mounts it.
     #[must_use]
-    pub fn chain(&self) -> &str {
-        &self.chain
+    pub fn genesis(&self) -> &Hash {
+        &self.genesis
     }
 
     /// The major before any release completes, whose minor is 0.

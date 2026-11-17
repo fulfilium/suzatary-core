@@ -27,8 +27,6 @@ mod binary;
 mod briefings;
 #[path = "calendar.rs"]
 mod calendar;
-#[path = "carry.rs"]
-mod carry;
 #[path = "clienterrors.rs"]
 mod clienterrors;
 #[path = "coding.rs"]

@@ -175,6 +175,7 @@ fn a_write_to_one_chain_rereads_that_chain_alone() {
         untrusted: Untrusted::none(),
         roster: std::collections::BTreeSet::new(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     };
     let (life, project) = (policy("life"), policy("suzatary"));
     let (life_store, project_store) = (
@@ -243,6 +244,7 @@ fn a_policy_that_moved_is_a_new_reading() {
         untrusted,
         roster: std::collections::BTreeSet::new(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     };
     let (open, closed) = (policy(Untrusted::none()), policy(Untrusted::of([triage])));
     let of = |policy| {

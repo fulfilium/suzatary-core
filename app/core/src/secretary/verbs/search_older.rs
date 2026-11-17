@@ -219,6 +219,7 @@ mod tests {
             untrusted: Untrusted::of([Actor::new("triage").expect("an actor")]),
             roster: std::collections::BTreeSet::new(),
             root: crate::cast::keys::root(),
+            naming: suzatary_base::chains::Naming::AsActs,
         };
         let deployment = Deployment {
             viewers: std::collections::BTreeSet::new(),

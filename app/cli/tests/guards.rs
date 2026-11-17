@@ -33,6 +33,8 @@ mod context;
 mod credential;
 #[path = "guards/deploy.rs"]
 mod deploy;
+#[path = "guards/door_two.rs"]
+mod door_two;
 #[path = "guards/gate_yml.rs"]
 mod gate_yml;
 #[path = "guards/guide.rs"]
@@ -1877,7 +1879,11 @@ impl PushFixture {
         let verified = fixture.root.join("verified");
         fixture.script(
             "code/scripts/app-bin.sh",
-            &format!("echo \"$@\" >> '{}'\nexit {exit}", verified.display()),
+            // `instance public` names no public store: the data push alone is under test.
+            &format!(
+                "echo \"$@\" >> '{}'\n[ \"$1\" != instance ] || exit 0\nexit {exit}",
+                verified.display()
+            ),
         );
         let built = fixture.root.join("built");
         for tool in ["cargo", "nix"] {
@@ -1946,8 +1952,9 @@ impl PushFixture {
             .expect("safe-push.sh runs")
     }
 
+    /// Whether the deployed program was asked to verify.
     fn verified(&self) -> bool {
-        self.root.join("verified").exists()
+        self.asked().lines().any(|verb| verb == "verify")
     }
 
     /// Every verb the deployed program was asked for, one line each.
@@ -2152,8 +2159,8 @@ fn safe_push_dry_commits_nothing_and_reaches_no_remote() {
     assert!(stdout.contains("requests/ names nothing git could stage; skipped"));
     assert_eq!(
         std::fs::read_to_string(&ran).expect("the named program ran"),
-        "verify\n",
-        "a dry run verifies the data and runs no suite"
+        "verify\ninstance public\n",
+        "a dry run verifies the data, names the public stores and runs no suite"
     );
     assert!(!fixture.verified(), "the deployed program was resolved");
     assert_eq!(fixture.commits(), 1, "a dry run committed: {stdout}");
@@ -2200,7 +2207,7 @@ fn safe_push_verifies_the_data_and_builds_nothing() {
     let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
     assert_eq!(code(&out), 0, "{said}");
     assert_eq!(fixture.built(), "", "the data push built code: {said}");
-    assert_eq!(fixture.asked(), "verify\n", "{said}");
+    assert_eq!(fixture.asked(), "verify\ninstance public\n", "{said}");
     assert_eq!(fixture.pushed(), 2, "{said}");
     assert_eq!(fixture.last_commit(), format!("A\t{object}\n"));
 }
@@ -2252,20 +2259,38 @@ fn commands(script: &str) -> String {
         .join("\n")
 }
 
+/// The data push's message is private: the one call that pushes a public store's clone hands
+/// `roadmap-push.sh` the clone alone, so the public commit takes that script's own subject.
+#[test]
+fn safe_push_gives_a_public_commit_nothing_of_its_message() {
+    let script = commands(&safe_push_script());
+    let calls: Vec<&str> = script
+        .lines()
+        .filter(|line| line.contains("/roadmap-push.sh\""))
+        .collect();
+    assert_eq!(
+        calls,
+        vec!["    \"$SCRIPTS/roadmap-push.sh\" \"$clone\" || status=$?"],
+        "safe-push.sh pushes a clone in one call, naming the clone alone"
+    );
+}
+
 /// No exit under the UNEXPECTED branch, which would fail every agent pass over a file a human
 /// left open: the branch reports, and the judged index is what bounds the commit.
 #[test]
 fn safe_push_the_unexpected_branch_reports_and_never_exits() {
     let script = safe_push_script();
-    let branch = script
+    let after = script
         .split_once("if [ -n \"$UNEXPECTED\" ]; then")
         .expect("the UNEXPECTED branch is present")
-        .1
-        .split_once("\nfi\n")
-        .expect("the branch closes with fi")
-        .0;
+        .1;
+    let end = after
+        .lines()
+        .position(|line| line.trim() == "fi")
+        .expect("the branch closes with fi");
+    let branch = after.lines().take(end).collect::<Vec<_>>().join("\n");
     assert!(
-        !commands(branch).contains("exit"),
+        !commands(&branch).contains("exit"),
         "the UNEXPECTED branch exits: {branch}"
     );
 }

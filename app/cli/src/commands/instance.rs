@@ -41,6 +41,9 @@ enum Action {
     /// Print this deployment's own words, one per line: the words the leak guard and door 1
     /// refuse beside the term lists. Read from the file as written, as `get` reads it.
     Words,
+    /// Print the store directory of each chain whose charter is public, one per line: the clones
+    /// `scripts/safe-push.sh` pushes through `scripts/roadmap-push.sh`.
+    Public,
 }
 
 /// A key of the instance file: TOML's dotted key, a segment that is a number naming a member of
@@ -91,6 +94,14 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Words => {
             for word in words(path)? {
                 println!("{word}");
+            }
+            Ok(())
+        }
+        Action::Public => {
+            for chain in &crate::instance::Instance::open(path)?.chains {
+                if let crate::instance::Charted::Public(_) = chain.charter {
+                    println!("{}", chain.events.display());
+                }
             }
             Ok(())
         }

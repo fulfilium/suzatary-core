@@ -153,6 +153,8 @@ let
     "every unit links into the units' roots, never roots-dev" =
       lib.all (unit: unit.environment.SUZATARY_ROOTS == "/home/ada/.local/state/suzatary/roots")
         (lib.attrValues units);
+    "the hourly pass has every program door 2 runs on its path, so a public store's push is scanned" =
+      lib.all (program: lib.elem program units.suzatary-triage.path) (lib.attrValues services.doorTwo);
     "the web runs its wrapper" =
       lib.hasSuffix "/bin/suzatary-web" (execOf units.suzatary-web);
     "a minimal host (enable, user, userRepo) runs the core units and nothing else" =

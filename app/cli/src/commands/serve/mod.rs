@@ -193,6 +193,8 @@ pub struct Inner {
     pub epochs: Arc<suzatary_signatures::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     pub portal: Arc<suzatary_api::portal::Portal>,
+    /// Where each chain's store is, so the plan store is found per request.
+    pub mounts: Arc<crate::instance::Mounts>,
 }
 
 /// A store that holds no secret.
@@ -270,6 +272,7 @@ impl Stamp {
     /// What `GET /api/about` answers.
     pub fn about(
         &self,
+        mounts: &crate::instance::Mounts,
         set: &suzatary_signatures::chain_set::ChainSet<'_>,
     ) -> Result<suzatary_core::wire::cards::AboutPayload, Refusal> {
         let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
@@ -277,8 +280,13 @@ impl Stamp {
             crate::stamp::Release::Released(released) => Some(released),
             crate::stamp::Release::Dev => None,
         };
-        let plan = suzatary_core::release::Plan::declared().map_err(|e| internal(&e))?;
-        suzatary_api::routes::about(released, &self.build(), &plan, set)
+        let project = mounts.project().map_err(|e| internal(&e))?;
+        suzatary_api::routes::about(
+            released,
+            &self.build(),
+            project.as_ref().map(|project| &project.chain),
+            set,
+        )
     }
 }
 
@@ -401,6 +409,7 @@ impl State {
                 prodrome_core::store::frontier::KEPT,
             )),
             portal: Arc::new(suzatary_api::portal::Portal::Quiet),
+            mounts: Arc::default(),
             models,
         }))
     }
@@ -516,6 +525,23 @@ impl State {
     pub fn with_grants(mut self, tokens: suzatary_io::oauth::TokenStore) -> Self {
         self.building().forget = Arc::new(mail_cache::Unkept(Some(tokens)));
         self
+    }
+
+    #[must_use]
+    pub fn with_mounts(mut self, mounts: crate::instance::Mounts) -> Self {
+        self.building().mounts = Arc::new(mounts);
+        self
+    }
+
+    /// The plan store's chain and plan, `None` where no mount holds a plan: the one question
+    /// "Build it", `GET /api/releases` and `GET /api/about` ask.
+    ///
+    /// # Errors
+    /// A plan that does not read, or two.
+    pub fn project(&self) -> Result<Option<crate::instance::Project>, Refusal> {
+        self.mounts
+            .project()
+            .map_err(|failed| Refusal::internal(format!("{failed:#}")))
     }
 
     #[must_use]
@@ -987,6 +1013,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_keys(world.signers.held().cloned())
     .with_plugins(instance.plugins.clone())
     .with_reach(instance.reach())
+    .with_mounts(instance.mounts())
     .with_repos(instance.repos.clone())
     .with_portal(instance.portal.clone())
     .with_mail_cache(mail_cache::MailCache::of(instance))

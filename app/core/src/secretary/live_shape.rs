@@ -243,6 +243,7 @@ pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: BTreeSet::new(),
             root: crate::cast::keys::root(),
+            naming: suzatary_base::chains::Naming::AsActs,
         }])
         .expect("one chain"),
         categories: std::collections::BTreeMap::new(),

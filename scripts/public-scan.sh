@@ -41,8 +41,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   echo "public-scan: no instance file, so no lists to scan with" >&2
   exit 2
 }
+# The deployed matcher, as every operator script takes: a scan never builds what it reads with.
 bin="${SUZATARY_BIN:-}"
-[ -n "$bin" ] || bin="$("$root/scripts/app-bin.sh")/bin/suzatary"
+[ -n "$bin" ] || bin="$("$root/scripts/app-bin.sh" --deployed)/bin/suzatary"
+# public-tree.sh reads with the same one.
+export SUZATARY_BIN="$bin"
 scan="$(mktemp -d)"
 trap 'rm -rf "$scan"' EXIT
 mkdir -p "$scan/tree"

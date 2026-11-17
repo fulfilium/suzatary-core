@@ -1062,6 +1062,7 @@ pub(crate) mod tests {
                 untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
                 roster: [actor("ada"), actor("triage")].into_iter().collect(),
                 root: crate::cast::keys::root(),
+                naming: suzatary_base::chains::Naming::AsActs,
             };
             Deployment {
                 viewers: BTreeSet::new(),

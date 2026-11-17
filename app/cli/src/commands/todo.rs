@@ -276,9 +276,9 @@ fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
     let chain = instance.chain(chain)?;
     let keys = &instance.signers();
-    let who = |actor: Option<String>| actor.unwrap_or_else(|| chain.owner.as_str().to_owned());
+    let who = |actor: Option<String>| named(chain, actor.as_deref());
     match act {
-        Act::Confirm { id, actor, note } => confirm(chain, keys, &id, &who(actor), &note),
+        Act::Confirm { id, actor, note } => confirm(chain, keys, &id, &who(actor)?, &note),
         Act::Add {
             id,
             body,
@@ -307,7 +307,7 @@ fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
                 detail,
                 waiting_on,
                 parent,
-                actor: who(actor),
+                actor: who(actor)?,
             },
         ),
         Act::Update {
@@ -325,7 +325,7 @@ fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
             chain,
             keys,
             &id,
-            &who(actor),
+            &who(actor)?,
             // No category, checklist or deferral: those want this deployment's vocabulary, a
             // ticked line or a date picker, which are the app's edit form.
             &todo::TodoPatch {
@@ -343,8 +343,8 @@ fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
         Act::Cancel(event) => lifecycle(chain, keys, "cancel", mk_cancelled, &event),
         Act::Reopen(event) => lifecycle(chain, keys, "reopen", mk_reopened, &event),
         Act::Tend(event) => lifecycle(chain, keys, "tend", mk_tended, &event),
-        Act::Undo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Undo, &id, &who(actor)),
-        Act::Redo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Redo, &id, &who(actor)),
+        Act::Undo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Undo, &id, &who(actor)?),
+        Act::Redo(UndoRedo { id, actor }) => undo_redo(chain, keys, Turn::Redo, &id, &who(actor)?),
     }
 }
 
@@ -408,6 +408,14 @@ struct Authoring {
     waiting_on: String,
     parent: Option<String>,
     actor: String,
+}
+
+/// The name `actor` (the chain's owner when absent) writes under on `chain`: on a public store its
+/// public name, and refused where it has none (`ChainPolicy::named`).
+pub(crate) fn named(chain: &ChainDir, actor: Option<&str>) -> anyhow::Result<String> {
+    let actor =
+        Actor::new(actor.unwrap_or(chain.owner.as_str())).map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(chain.policy.named(&actor)?.as_str().to_owned())
 }
 
 /// The store `actor` writes through, after the roster check, signed by that actor's key: an
@@ -659,7 +667,7 @@ fn lifecycle(
     event: &Lifecycle,
 ) -> anyhow::Result<()> {
     let Lifecycle { id, note, actor } = event;
-    let actor = actor.as_deref().unwrap_or(chain.owner.as_str());
+    let actor = &named(chain, actor.as_deref())?;
     let store = writer(chain, keys, actor)?;
     let now = SystemClock.now();
     let _held = store.locked().context("taking the chain's write lock")?;

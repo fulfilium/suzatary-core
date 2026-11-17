@@ -6,8 +6,9 @@
 #   gate [--full]    both halves of scripts/merge-gate.sh on the train
 #   bisect           the merge that turned a red half red
 #   land             master and v<version> := the gated train, pushed as one while master has not
-#                    moved; then its todos recorded done, then published
-#   record [<rev>]   the todos the release at <rev> completed, recorded done (a land's last step)
+#                    moved; then published; then its release recorded on the roadmap
+#   record [<rev>]   the release at <rev> recorded: its todos done where each is found, the
+#                    roadmap's pin moved and its pictures drawn in one commit, scanned and pushed
 #   nightly          both halves, full, on origin/master; a red one files a todo
 #   check <pr>       the runners' jobs over <pr>'s head merged on master, posted on the PR; no lock
 #   publish [--skip <sha>]... [--admit <path>]... [<rev>]
@@ -177,7 +178,7 @@ newest_release() {
     | awk 'NF > 1 && !found { print $1; found = 1 }'
 }
 
-# Records origin/master's newest release on the chain first, repairing a land's failed record.
+# Records origin/master's newest release on the roadmap first, repairing a land cut short.
 sync() {
   fetch_origin
   record_origin
@@ -187,28 +188,59 @@ fetch_origin() {
   git fetch --quiet --tags origin master || die "origin could not be fetched."
 }
 
+# The repair is the land's own last step: what the roadmap holds says what is left to do.
 record_origin() {
   local rev
   rev="$(newest_release origin/master)"
-  [[ -n "$rev" && ! -e "$state/recorded/$rev" ]] || return 0
-  if (record_release "$rev" origin/master) >&2; then
-    mkdir -p "$state/recorded" && : >"$state/recorded/$rev"
-  else
-    say "the release at ${rev:0:12} is still not recorded on the chain; the next command tries again (scripts/train.sh record)"
-  fi
+  [[ -n "$rev" ]] || return 0
+  (record_release "$rev") >&2 \
+    || say "the release at ${rev:0:12} is still not recorded on the roadmap; the next command tries again (scripts/train.sh record)"
 }
 
-# The train's last commit: the release the chain reads once the train's todos are done.
+# Sets `roadmap` to the clone of the plan store <rev>'s app finds mounted, empty where the
+# deployment mounts none or there is no deployment: then a train cuts no release.
+roadmap=""
+find_roadmap() {
+  roadmap=""
+  [[ -n "${SUZATARY_INSTANCE:-}" || -e "$root/instance.toml" ]] || return 0
+  resolve_app "$1"
+  roadmap="$("$app_bin" release store)" || die "the deployment's plan store could not be found (above)."
+  [[ -z "$roadmap" ]] || git -C "$roadmap" fetch --quiet origin master \
+    || die "the roadmap's origin could not be fetched, so nothing is read of it."
+}
+
+# store_at <commit> <dir>: the roadmap as <commit> holds it, written out at <dir>.
+store_at() {
+  mkdir -p "$2" && git -C "$roadmap" archive "$1" | tar -x -C "$2" \
+    || die "the roadmap at ${1:0:12} could not be written out."
+}
+
+# The roadmap commit a cut and a check read: what its origin publishes now.
+tasks_head() { git -C "$roadmap" rev-parse --verify origin/master; }
+
+# The train's last commit: the release the roadmap reads once the train's todos are done.
 cut_release() {
-  [[ -f app/core/releases.toml ]] || return 0
-  local todos=() args=() todo out version last
+  find_roadmap origin/master
+  [[ -n "$roadmap" ]] || return 0
+  local todos=() public=() args=() todo out version last tasks dir place placed=""
   mapfile -t todos < <(train_completes)
-  for todo in "${todos[@]}"; do args+=(--completes "$todo"); done
+  tasks="$(tasks_head)"
+  dir="$(mktemp -d)"
+  store_at "$tasks" "$dir"
+  if ((${#todos[@]})); then
+    placed="$("$app_bin" release known --store "$dir" "${todos[@]}")" \
+      || { rm -rf "$dir"; die "the train's Completes: todos could not be placed (above)."; }
+  fi
+  # A todo found only on the upkeep chain is completed at land and counts toward no version.
+  while read -r place todo; do
+    [[ "$place" != roadmap ]] || public+=("$todo")
+  done <<<"$placed"
+  for todo in "${public[@]}"; do args+=(--completes "$todo"); done
   last="$(last_release)"
   [[ -z "$last" ]] || args+=(--last "$last")
-  resolve_app origin/master
-  out="$("$app_bin" release cut --tree "$root" "${args[@]}")" \
-    || die "the release could not be cut (above), so the train is not built; nothing is gated until it is."
+  out="$("$app_bin" release cut --tree "$root" --store "$dir" "${args[@]}")" \
+    || { rm -rf "$dir"; die "the release could not be cut (above), so the train is not built; nothing is gated until it is."; }
+  rm -rf "$dir"
   version="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' <<<"$out")"
   [[ -n "$version" ]] || die "suzatary release cut printed no version: $out"
   # Else the tag would be refused only at land, after the whole gate.
@@ -217,7 +249,7 @@ cut_release() {
   # No crate compiles any of them, so the release moves no gate key. The cut removed every fragment.
   git add -- CHANGELOG.md app/release.toml && git rm -rq --cached --ignore-unmatch -- changelog.d
   git commit --quiet -m "release: $version" \
-    -m "$(trailers Release "$version" Completes "${todos[*]}")" \
+    -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks")" \
     || die "the release $version did not commit (a hook?)."
   printf 'release %s%s\n' "$version" "$( ((${#todos[@]} == 0)) || printf ', completing %s' "${todos[*]}")"
 }
@@ -234,10 +266,12 @@ build() {
   local rows=() prs meta title url head current said code unknown ids=() checker=""
   local ready=()
   local -A head_of=() title_of=() url_of=() todos_of=() growth_lines=() carrier_of=()
-  # `Completes:` todos are checked against the chain by master's binary.
-  if git cat-file -e origin/master:app/core/releases.toml 2>/dev/null; then
-    resolve_app origin/master
-    checker="$app_bin"
+  # `Completes:` todos are placed, on the roadmap's head or the upkeep chain, by master's binary.
+  local tasks_dir=""
+  find_roadmap origin/master
+  if [[ -n "$roadmap" ]]; then
+    checker="$app_bin" tasks_dir="$(mktemp -d)"
+    store_at "$(tasks_head)" "$tasks_dir"
   fi
   mapfile -t prs < <(printf '%s\n' "$@" | sort -nu)
   for n in "${prs[@]}"; do
@@ -280,20 +314,21 @@ build() {
     read -r -a ids <<<"${todos_of[$n]}"
     if ((${#ids[@]})) && [[ -n "$checker" ]]; then
       code=0
-      unknown="$("$checker" release known --tree "$root" "${ids[@]}" 2>&1)" || code=$?
+      unknown="$("$checker" release known --store "$tasks_dir" "${ids[@]}" 2>&1)" || code=$?
       case "$code" in
         0) ;;
         3)
-          rows+=("#$n|skipped|its Completes: line names a todo the chain does not hold: ${unknown##*: }")
+          rows+=("#$n|skipped|its Completes: line names a todo neither the roadmap nor the upkeep chain holds: ${unknown##*: }")
           echo "#$n Completes: unknown todo" >>"$state/skipped"
           continue
           ;;
-        *) die "the project chain could not be asked about #$n's Completes: line, so no PR is judged by it:\n$unknown" ;;
+        *) die "the roadmap could not be asked about #$n's Completes: line, so no PR is judged by it:\n$unknown" ;;
       esac
     fi
     head_of[$n]="$head" title_of[$n]="$title" url_of[$n]="$url"
     ready+=("$n")
   done
+  [[ -z "$tasks_dir" ]] || rm -rf "$tasks_dir"
   # The order is a function of the heads: most other heads contained first, then head name.
   local order=() m held
   mapfile -t order < <(for n in "${ready[@]}"; do
@@ -469,7 +504,7 @@ run_here() {
 }
 
 # The train's own test seams and signing keys; a gate is handed none of them.
-train_reads=(SUZATARY_TRAIN_BIN SUZATARY_TRAIN_GATE SUZATARY_TRAIN_GH SUZATARY_TRAIN_POLL
+train_reads=(SUZATARY_TRAIN_BIN SUZATARY_TRAIN_GATE SUZATARY_TRAIN_GH SUZATARY_TRAIN_POLL SUZATARY_TRAIN_PIN
   SUZATARY_TRAIN_PUBLIC SUZATARY_TRAIN_CACHE_TIMEOUT SUZATARY_BOX_KEY SUZATARY_AGENT_KEY SUZATARY_DEDUP_KEY)
 # Variables the gate's steps read: an inherited one would be judged beside the tree.
 gate_reads='^(SUZATARY_|CARGO|RUST|PROPTEST_|TYPST|NODE_OPTIONS$|LD_PRELOAD$|LD_LIBRARY_PATH$|LIBRARY_PATH$)'
@@ -1050,46 +1085,91 @@ report_nightly() {
   return 1
 }
 
-# HEAD's release version, once the chain reads at least it and origin has no such tag.
+# HEAD's release version, once the roadmap's head reads at least it and origin has no such tag.
 checked_release() {
-  [[ -f app/core/releases.toml ]] || return 0
-  local version
+  find_roadmap HEAD
+  [[ -n "$roadmap" ]] || return 0
+  local version dir
   version="$(trailer_of HEAD Release)"
   [[ -n "$version" ]] \
     || die "the train's HEAD is not its release (no Release: trailer), so it has no version to tag: scripts/train.sh build again. Nothing landed."
   # Only origin's tags count; a local one is a refused land's leftover, replaced on tagging.
   ! git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null \
-    || die "origin has v$version already, so this train's release would be a second $version: scripts/train.sh build again, which reads the chain afresh. Nothing landed."
-  resolve_app HEAD
-  "$app_bin" release check --tree "$root" >/dev/null \
-    || die "the project chain, with this train's todos done, reads below $version (above): scripts/train.sh build again. Nothing landed."
+    || die "origin has v$version already, so this train's release would be a second $version: scripts/train.sh build again, which reads the roadmap afresh. Nothing landed."
+  dir="$(mktemp -d)"
+  store_at "$(tasks_head)" "$dir"
+  "$app_bin" release check --tree "$root" --store "$dir" >/dev/null \
+    || { rm -rf "$dir"; die "the roadmap, with this train's todos done, reads below $version (above): scripts/train.sh build again. Nothing landed."; }
+  rm -rf "$dir"
   echo "$version"
 }
 
-# record_release <rev> <from>: <rev>'s release recorded on the chain by <from>'s binary; idempotent.
+# Whether a commit of the roadmap at <ref> names <rev> in its `Shipped:` trailer (awk reads to
+# the end, so git log never dies of a closed pipe).
+shipped() {
+  git -C "$roadmap" log --format='%(trailers:key=Shipped,valueonly,separator=%x2C)' "$2" \
+    | awk -v rev="$1" '$0 == rev { f = 1 } END { exit !f }'
+}
+
+# record_release <rev>: the land's writes for the release at <rev>, by <rev>'s app, each skipped
+# where the roadmap already holds it. In order: its Completes: todos done where each is found
+# (`release complete`: the roadmap's through the mount, a private one on the upkeep chain), the
+# roadmap's pin moved to core's publication of <rev>, then one roadmap commit naming <rev> in its
+# `Shipped:` trailer, with the pictures drawn, scanned by door 2 and pushed (roadmap-push.sh). A
+# release with no `Tasks:` trailer was cut before the roadmap and has nothing to record there.
+# What reaches the roadmap names nothing of the private repository: the release's version and the
+# landed commit, which core's publication already names as its `Source:`.
 record_release() {
-  local rev="$1" from="$2" version tree subject release completes todo out notes=()
+  local rev="$1" version tasks subject release completes todo core notes=() todos=()
   version="$(trailer_of "$rev" Release)"
   [[ -n "$version" ]] || die "${rev:0:12} is not a release (no Release: trailer); nothing to record."
-  # The PRs since the previous release, in one pass of the log.
-  while IFS=$'\x1f' read -r subject release completes; do
-    [[ -z "$release" ]] || break
-    [[ "$subject" =~ ^Merge\ \#([0-9]+): ]] || continue
-    for todo in $completes; do notes+=(--note "$todo=PR #${BASH_REMATCH[1]}"); done
-  done < <(git log --first-parent \
-    --format='%s%x1f%(trailers:key=Release,valueonly,separator= )%x1f%(trailers:key=Completes,valueonly,separator= )' \
-    "$rev^")
-  tree="$(mktemp -d)"
-  if ! git archive "$rev" app/core/releases.toml app/release.toml \
-    | tar -x -C "$tree"; then
-    rm -rf "$tree"
-    die "${rev:0:12}'s release files could not be read: scripts/train.sh record ${rev:0:12}"
+  tasks="$(trailer_of "$rev" Tasks)"
+  [[ -n "$tasks" ]] || return 0
+  find_roadmap "$rev"
+  [[ -n "$roadmap" ]] \
+    || die "${rev:0:12} names the roadmap commit ${tasks:0:12}, and the deployment mounts no plan store to record $version on."
+  if shipped "$rev" origin/master; then
+    return 0
   fi
-  resolve_app "$from"
-  out="$("$app_bin" release record --tree "$tree" "${notes[@]}")" \
-    || { rm -rf "$tree"; die "$version is not recorded on the project chain (above): scripts/train.sh record ${rev:0:12}"; }
-  rm -rf "$tree"
-  printf 'recorded: %s for %s\n' "$(sed -n 's/.*"recorded":\[\([^]]*\)\].*/\1/p' <<<"$out" | tr -d '"' | sed 's/^$/nothing more/')" "$version"
+  if ! shipped "$rev" HEAD; then
+    # The PRs since the previous release, in one pass of the log.
+    while IFS=$'\x1f' read -r subject release completes; do
+      [[ -z "$release" ]] || break
+      [[ "$subject" =~ ^Merge\ \#([0-9]+): ]] || continue
+      for todo in $completes; do
+        todos+=("$todo")
+        # The PR is an upkeep completion's note alone: the roadmap's names the release.
+        notes+=(--note "$todo=PR #${BASH_REMATCH[1]}, $version")
+      done
+    done < <(git log --first-parent \
+      --format='%s%x1f%(trailers:key=Release,valueonly,separator= )%x1f%(trailers:key=Completes,valueonly,separator= )' \
+      "$rev^")
+    if ((${#todos[@]})); then
+      "$app_bin" release complete --release "$version" "${todos[@]}" "${notes[@]}" >&2 \
+        || die "the todos $version completed are not all recorded done (above): scripts/train.sh record ${rev:0:12}"
+    fi
+    git fetch --quiet core "+refs/heads/$core_branch:refs/remotes/core/$core_branch" \
+      || die "core could not be fetched, so the roadmap's pin has nothing to move to: scripts/train.sh record ${rev:0:12}"
+    core="$(published "$rev")"
+    [[ -n "$core" ]] \
+      || die "core does not publish ${rev:0:12} yet, and the roadmap pins the published code: scripts/train.sh publish, which records it after."
+    pin "$core"
+  fi
+  SUZATARY_BIN="$app_bin" "$scripts/roadmap-push.sh" "$roadmap" "Ship $version" \
+    "Release: $version" "Shipped: $rev" >&2 \
+    || die "$version is recorded in the roadmap's clone and not pushed (above): scripts/train.sh record ${rev:0:12}"
+  printf 'recorded: %s on the roadmap\n' "$version"
+}
+
+# pin <core commit>: the roadmap's flake.lock moved to that commit of the application.
+pin() {
+  if [[ -n "${SUZATARY_TRAIN_PIN:-}" ]]; then
+    "$SUZATARY_TRAIN_PIN" "$roadmap" "$1"
+  else
+    (cd "$roadmap" && nix flake lock --update-input suzatary)
+  fi || die "the roadmap's pin could not be moved (above)."
+  grep -q "\"rev\": \"$1\"" "$roadmap/flake.lock" \
+    || die "the roadmap's flake.lock does not pin core's ${1:0:12}, its publication of the release: core moved since, so record again."
 }
 
 # `record [<rev>]`: only a release on origin/master's first-parent chain (what landed) is recorded.
@@ -1103,8 +1183,7 @@ record_done() {
   # grep -c reads to the end: -q would leave early and SIGPIPE rev-list under pipefail.
   (($(git rev-list --first-parent origin/master | grep -cxF "$rev"))) \
     || die "${rev:0:12} is not on origin/master's first-parent chain, so it never landed; nothing recorded."
-  record_release "$rev" origin/master
-  mkdir -p "$state/recorded" && : >"$state/recorded/$rev"
+  record_release "$rev"
 }
 
 land() {
@@ -1135,7 +1214,6 @@ land() {
     die "the train is built again: scripts/train.sh gate, then land. Nothing landed."
   fi
   local version tag=()
-  [[ ! -f app/core/releases.toml ]] || resolve_app HEAD
   # A refusal exits this substitution, and its failure stops the land here.
   version="$(checked_release)"
   # One atomic push of master and v<version>; a refusal leaves the train as it was.
@@ -1154,19 +1232,11 @@ land() {
   local landed
   landed="$(git rev-parse HEAD)"
   printf 'landed: master is %s%s\n' "$landed" "${version:+, tagged v$version}"
-  # Recorded only once origin holds the release; a failure still lets the publication run.
-  local recorded=0
-  if [[ -n "$version" ]]; then
-    if (record_release "$landed" "$landed"); then
-      mkdir -p "$state/recorded" && : >"$state/recorded/$landed"
-    else
-      recorded=1
-    fi
-  fi
+  # In order: code, core, roadmap. The roadmap pins core's row, so it is recorded last.
   (publish "$landed") \
-    || die "master landed at ${landed:0:12}, and its public tree was not published, so no deploy can run it yet; scripts/train.sh publish, once the cause above is mended."
-  ((recorded == 0)) \
-    || die "master landed and v$version is tagged, and its todos are not all recorded done: scripts/train.sh record ${landed:0:12}"
+    || die "master landed at ${landed:0:12}, and its public tree was not published, so no deploy can run it yet; scripts/train.sh publish, once the cause above is mended, then records its release."
+  [[ -z "$version" ]] || (record_release "$landed") \
+    || die "master landed, v$version is tagged and published, and the roadmap does not record it yet: scripts/train.sh record ${landed:0:12}"
   printf 'next, by the operator (this script deploys nothing):\n'
   printf '  scripts/deploy.sh %s\n' "$landed"
 }
@@ -1426,6 +1496,6 @@ case "${1:-}" in
   record) shift && record_done "$@" ;;
   nightly) shift && nightly_gate "$@" ;;
   check) shift && check "$@" ;;
-  publish) shift && sync && publish "$@" ;;
+  publish) shift && fetch_origin && publish "$@" && record_origin ;;
   *) usage ;;
 esac

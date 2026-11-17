@@ -9,8 +9,41 @@
 let
   inherit (pkgs) lib;
 
+  # Every program door 2 runs (scripts/roadmap-push.sh, public-scan.sh and public-tree.sh), by
+  # the name the scripts call it: the hourly pass pushes a public store's clone behind door 2.
+  # app/cli/tests/guards/door_two.rs reads the names off the scripts and holds them to this set.
+  doorTwo = with pkgs; {
+    awk = gawk;
+    basename = coreutils;
+    cat = coreutils;
+    comm = coreutils;
+    cut = coreutils;
+    dirname = coreutils;
+    find = findutils;
+    flock = util-linux;
+    git = git;
+    gitleaks = gitleaks;
+    grep = gnugrep;
+    head = coreutils;
+    ls = coreutils;
+    mkdir = coreutils;
+    mktemp = coreutils;
+    mv = coreutils;
+    nix = nix;
+    nix-store = nix;
+    paste = coreutils;
+    realpath = coreutils;
+    rm = coreutils;
+    sed = gnused;
+    sha256sum = coreutils;
+    sort = coreutils;
+    tar = gnutar;
+    tr = coreutils;
+    wc = coreutils;
+  };
+
   # Everything the wrapper scripts shell out to; `nix` re-enters this repo's pinned flake.
-  runtimeDeps = with pkgs; [
+  runtimeDeps = lib.unique (lib.attrValues doorTwo ++ (with pkgs; [
     bash
     coreutils     # df, date, cat, cp, rm, mktemp, sleep
     gnugrep
@@ -30,7 +63,7 @@ let
     secretspec
     pass
     gnupg
-  ];
+  ]));
 
   # A nix evaluation before DNS is up does not fail: it builds from source. So a service that
   # evaluates the flake at run time waits for the substituter first.
@@ -87,7 +120,7 @@ let
     '' // { runsTheApp = true; };
 in
 rec {
-  inherit runtimeDeps waitForNetwork;
+  inherit doorTwo runtimeDeps waitForNetwork;
 
   # THE ONE READER OF THE LOCK, started by the module's path unit when
   # flake.lock changes and by scripts/deploy.sh. It reads only a COMMITTED lock

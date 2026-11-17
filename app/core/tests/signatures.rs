@@ -379,6 +379,7 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
         untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
         roster: [actor("ada"), actor("triage")].into_iter().collect(),
         root: root().public(),
+        naming: suzatary_base::chains::Naming::AsActs,
     };
     adopt(&store, &keys, &chain).expect("adopted");
     let findings = |store: &InMemory<TodoEvent>| {
@@ -416,6 +417,7 @@ fn chain_trusting(untrusted: Untrusted) -> suzatary_base::chains::ChainPolicy {
             .into_iter()
             .collect(),
         root: root().public(),
+        naming: suzatary_base::chains::Naming::AsActs,
     }
 }
 

@@ -74,7 +74,8 @@ impl Deployment {
 
     /// Every line of `[web.act_as]` that stops startup, as the sentence that says why: a login
     /// that is no viewer, or an actor off a chain's roster or one the chain does not trust (a
-    /// person would write and tap as, say, the triage agent).
+    /// person would write and tap as, say, the triage agent). On a public chain the name tested
+    /// is the actor's public name; an actor with none only reads there.
     #[must_use]
     pub fn refused_writers(&self) -> Vec<String> {
         let unseen = self
@@ -85,6 +86,7 @@ impl Deployment {
             unseen.map(|login| format!("{:?} may write but is not a viewer", login.as_str()));
         let per_chain = self.chains.iter().flat_map(|policy| {
             self.actors.iter().filter_map(move |(login, actor)| {
+                let actor = &policy.named(actor).ok()?;
                 let whom = if !policy.roster.contains(actor) {
                     "'s roster does not name"
                 } else if policy.untrusted.actors().contains(actor) {
@@ -111,24 +113,28 @@ impl Deployment {
         }
     }
 
-    /// The routine "Build it" fires for a todo of `chain`: `[coding]`'s, on the chain whose todos a
-    /// pull request's `Completes:` line closes.
+    /// The routine "Build it" fires for a todo of `chain`: `[coding]`'s, when `chain` is the mount
+    /// whose store holds the release plan's genesis (`plan_store`), whose todos a pull request's
+    /// `Completes:` line closes.
     ///
     /// # Errors
-    /// [`Refusal::conflict`] without `[coding]` or for any other chain.
-    pub fn builder(&self, chain: &suzatary_base::chains::ChainName) -> Result<&RoutineId, Refusal> {
+    /// [`Refusal::conflict`] without `[coding]`, without a plan store, or for any other chain.
+    pub fn builder(
+        &self,
+        chain: &ChainName,
+        plan_store: Option<&ChainName>,
+    ) -> Result<&RoutineId, Refusal> {
         let coding = self.coding.as_ref().ok_or_else(|| {
             Refusal::conflict("this deployment declares no [coding], so no todo is built")
         })?;
-        let plan = crate::release::Plan::declared()
-            .map_err(|failed| Refusal::internal(failed.to_string()))?;
-        if chain.as_str() == plan.chain() {
-            Ok(&coding.routine)
-        } else {
-            Err(Refusal::conflict(format!(
-                "only todos of {} are built: a pull request's Completes: line closes those",
-                plan.chain()
-            )))
+        match plan_store {
+            Some(store) if store == chain => Ok(&coding.routine),
+            Some(store) => Err(Refusal::conflict(format!(
+                "only todos of {store} are built: a pull request's Completes: line closes those"
+            ))),
+            None => Err(Refusal::conflict(
+                "no chain this deployment mounts holds a release plan, so no todo is built",
+            )),
         }
     }
 }
@@ -147,6 +153,7 @@ mod tests {
             untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
             roster: [actor("ada"), actor("triage")].into_iter().collect(),
             root: crate::cast::keys::root(),
+            naming: suzatary_base::chains::Naming::AsActs,
         }
     }
 

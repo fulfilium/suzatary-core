@@ -46,13 +46,9 @@ pub struct Drawing {
     /// The store, chartered public.
     #[arg(long, value_name = "DIR")]
     store: std::path::PathBuf,
-    /// The page that hosts the list, which the README's picture links to.
-    #[arg(
-        long,
-        value_name = "URL",
-        required_unless_present = "admissions",
-        conflicts_with = "admissions"
-    )]
+    /// The page that hosts the list, which the README's picture links to; absent, the pictures
+    /// are drawn again and the README is left as it is.
+    #[arg(long, value_name = "URL", conflicts_with = "admissions")]
     link: Option<String>,
     /// Write nothing; print each picture as drawn now, `<sha256>  <path>` as `sha256sum` prints
     /// it, for door 2 (`scripts/public-scan.sh`). Prints nothing for a store not chartered public.
@@ -64,6 +60,8 @@ pub struct Drawing {
 enum Asked {
     /// Write the pictures and the README linking to this page.
     Write(Link),
+    /// Write the pictures alone: a push's redraw, beside the README its first draw wrote.
+    Redraw,
     /// Print what door 2 admits.
     Admissions,
 }
@@ -172,15 +170,16 @@ impl Drawn {
 
 /// `suzatary prodrome draw`.
 pub(crate) fn run(args: &Drawing) -> anyhow::Result<()> {
-    // clap takes exactly one of `--link` and `--admissions`.
-    let asked = match &args.link {
-        Some(link) => Asked::Write(Link::parse(link)?),
-        None => Asked::Admissions,
+    // clap takes at most one of `--link` and `--admissions`.
+    let asked = match (&args.link, args.admissions) {
+        (Some(link), _) => Asked::Write(Link::parse(link)?),
+        (None, true) => Asked::Admissions,
+        (None, false) => Asked::Redraw,
     };
     let public = Charter::read(&args.store)? == Charter::Public;
     match (asked, public) {
         (Asked::Admissions, false) => Ok(()),
-        (Asked::Write(_), false) => bail!(
+        (Asked::Write(_) | Asked::Redraw, false) => bail!(
             "{} is not chartered public, and draw draws a picture to publish",
             args.store.display()
         ),
@@ -193,27 +192,33 @@ pub(crate) fn run(args: &Drawing) -> anyhow::Result<()> {
             }
             Ok(())
         }
+        (Asked::Redraw, true) => {
+            write_beside(&args.store, &drawn(&args.store)?.files())?;
+            println!("drew {LIGHT} and {DARK} in {}", args.store.display());
+            Ok(())
+        }
         (Asked::Write(link), true) => {
             let drawn = drawn(&args.store)?;
             let readme = shown(&link);
-            for (path, text) in drawn.files().into_iter().chain([(README, readme.as_str())]) {
-                let at = args.store.join(path);
-                suzatary_io::durable::replace(
-                    &at,
-                    text.as_bytes(),
-                    suzatary_io::durable::Mode::Readable,
-                )
-                .with_context(|| format!("writing {}", at.display()))?;
-            }
+            let [light, dark] = drawn.files();
+            write_beside(&args.store, &[light, dark, (README, readme.as_str())])?;
             println!(
-                "drew {} and {} and wrote {README} in {}",
-                LIGHT,
-                DARK,
+                "drew {LIGHT} and {DARK} and wrote {README} in {}",
                 args.store.display()
             );
             Ok(())
         }
     }
+}
+
+/// Each `(name, text)` written beside the store at `store`.
+fn write_beside(store: &Path, files: &[(&str, &str)]) -> anyhow::Result<()> {
+    for (path, text) in files {
+        let at = store.join(path);
+        suzatary_io::durable::replace(&at, text.as_bytes(), suzatary_io::durable::Mode::Readable)
+            .with_context(|| format!("writing {}", at.display()))?;
+    }
+    Ok(())
 }
 
 /// The store at `store` drawn in both themes.

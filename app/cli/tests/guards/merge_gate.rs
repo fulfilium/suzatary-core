@@ -2417,11 +2417,7 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
         .map(|krate| format!("{krate}/src/"))
         .chain(["app/core/examples/".to_owned(), "app/wasm/".to_owned()])
         .collect();
-    let files = [
-        "app/Cargo.lock",
-        "app/core/releases.toml",
-        "app/plugin-ics/ics.schema",
-    ];
+    let files = ["app/Cargo.lock", "app/plugin-ics/ics.schema"];
     let mut sources = Vec::new();
     for krate in LIBRARY_CRATES {
         files_under(&repo().join(krate).join("src"), &mut sources);

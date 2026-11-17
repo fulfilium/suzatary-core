@@ -113,7 +113,7 @@ impl Verb {
             Verb::Todo(args) => todo::run(path, args),
             Verb::Todos(args) => todos::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
-            Verb::Prodrome(args) => prodrome::run(path, &args),
+            Verb::Prodrome(args) => prodrome::run(&args),
             Verb::Release(args) => release::run(path, &args),
             Verb::Device(args) => device::run(path, &args),
             Verb::Sync => mail::sync(path),

@@ -598,18 +598,28 @@ fn a_fired_session_is_dropped_with_a_reason() {
     assert_eq!(dropped["proposals"][0]["coding"]["reason"], "done by hand");
 }
 
-/// A deployment whose one chain is the one a pull request's `Completes:` closes, and which
-/// declares the routine.
+/// The chain a pull request's `Completes:` closes: the mount beside whose store the plan is.
+const PLANNED: &str = "roadmap";
+
+/// A deployment whose one chain is the plan store, and which declares the routine.
 fn building() -> suzatary_core::deployment::Deployment {
-    let plan = suzatary_core::release::Plan::declared().expect("the plan reads");
     suzatary_core::deployment::Deployment {
         chains: suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
-            name: suzatary_base::chains::ChainName::new(plan.chain()).expect("a chain"),
+            name: suzatary_base::chains::ChainName::new(PLANNED).expect("a chain"),
             ..common::chain()
         }])
         .expect("one chain"),
         ..deployment()
     }
+}
+
+/// The mount table that finds the plan beside the store `PLANNED` names.
+fn planned(tag: &str) -> suzatary_cli::instance::Mounts {
+    let root = common::scratch(tag);
+    suzatary_cli::instance::Mounts(vec![(
+        suzatary_base::chains::ChainName::new(PLANNED).expect("a chain"),
+        common::a_plan_store(&root),
+    )])
 }
 
 /// "Build it" on `todo`: the status and the answer.
@@ -649,6 +659,7 @@ fn a_todo_is_built_from_its_card_at_most_two_at_once() {
         Fakes::new("coding-build").whois(common::FakeWhois::new().naming(common::v4(), owner())),
     );
     let base = common::Server::new(Arc::clone(&fakes), building(), Vec::new())
+        .mounting(planned("coding-build-plan"))
         .real_acts(
             "coding-build",
             "her@study.test",
@@ -662,10 +673,7 @@ fn a_todo_is_built_from_its_card_at_most_two_at_once() {
         })
         .start()
         .base;
-    let chain = suzatary_core::release::Plan::declared()
-        .expect("the plan reads")
-        .chain()
-        .to_owned();
+    let chain = PLANNED.to_owned();
     let todos = &CAST.todos;
     let card = |index: usize| common::reading(&base, "build", &[])["proposals"][index].clone();
     let answered = |index: usize, verb: &str, body: serde_json::Value| {

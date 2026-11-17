@@ -28,6 +28,7 @@ fn deployment() -> Deployment {
         untrusted: Untrusted::of([actor("triage")]),
         roster: [actor("owner"), actor("triage")].into_iter().collect(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     };
     Deployment {
         viewers: std::collections::BTreeSet::new(),

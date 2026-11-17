@@ -8,7 +8,6 @@ use prodrome_core::event::Actor;
 use suzatary_api::clienterror::{MAX_BODY_BYTES, Report, Sent};
 use suzatary_api::{routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::release::Plan;
 use suzatary_signatures::devices;
 
 use super::body::{Body, MAX_ACT_BYTES};
@@ -98,7 +97,7 @@ pub fn about(
     let now = call.chain.caps.secretary.clock.now();
     call.state
         .stamp
-        .about(&call.state.chains_read().set(now))
+        .about(&call.state.mounts, &call.state.chains_read().set(now))
         .map(Json)
 }
 
@@ -107,11 +106,19 @@ pub fn portal(call: &Call<Reader, (), ()>) -> Json<wire::PortalPayload> {
     Json(wire::PortalPayload::from(call.state.portal.as_ref()))
 }
 
-/// `GET /api/releases`: the releases this build's plan declares.
+/// `GET /api/releases`: the releases the plan store's plan declares.
 pub fn releases(call: &Call<Reader, (), ()>) -> Result<Json<wire::ReleasesPayload>, Refusal> {
-    let plan = Plan::declared().map_err(|e| Refusal::internal(e.to_string()))?;
+    let project = call
+        .state
+        .project()?
+        .ok_or_else(|| Refusal::conflict("no chain this deployment mounts holds a release plan"))?;
     let now = call.chain.caps.secretary.clock.now();
-    routes::releases(&plan, &call.state.chains_read().set(now)).map(Json)
+    routes::releases(
+        &project.chain,
+        &project.plan,
+        &call.state.chains_read().set(now),
+    )
+    .map(Json)
 }
 
 /// `POST /api/client-errors`: a tab's uncaught failure, logged as one `warn` line.

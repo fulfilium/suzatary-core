@@ -104,7 +104,7 @@ impl Reading {
     /// - an event counts when it is stamped at or before `at`;
     /// - the `major.minor` is the last completed release's, `plan.base()`.0 before any; the
     ///   plan's versions strictly increase, so that is the greatest completed one;
-    /// - a release's items are every todo its spec has named (`Ref`, or `RefIn` its own chain),
+    /// - a release's items are every todo of its store its spec has named (an unqualified `Ref`),
     ///   in any record or revision, and never a release itself; they move no version.
     ///
     /// A todo's lot is a join over its events, so the reading is a function of the SET (no
@@ -157,7 +157,7 @@ impl Reading {
                     .get(&release.todo)
                     .into_iter()
                     .flatten()
-                    .flat_map(|spec| refs(spec, plan.chain()).collect::<Vec<_>>())
+                    .flat_map(|spec| refs(spec).collect::<Vec<_>>())
                     .collect();
                 let items = named
                     .get(release.todo.as_str())
@@ -241,7 +241,7 @@ fn gathered<'a>(
             named
                 .entry(event.todo().as_str().to_owned())
                 .or_default()
-                .extend(refs(spec, plan.chain()).filter(|id| !releases.contains(id.as_str())));
+                .extend(refs(spec).filter(|id| !releases.contains(id.as_str())));
         }
     }
     (lots, named)
@@ -253,12 +253,14 @@ fn join(lots: &mut BTreeMap<String, Lot>, todo: &TodoId, lot: Lot) {
     *held = (*held).max(lot);
 }
 
-/// The todos `spec` refers to on `chain`: its unqualified `Ref`s and its `RefIn`s of `chain`.
-fn refs<'t>(spec: &'t Term, chain: &'t str) -> impl Iterator<Item = String> + 't {
+/// The todos of its own store `spec` refers to: its unqualified `Ref`s. A `RefIn` names a
+/// deployment's local chain, which a store read by path has no name for.
+fn refs(spec: &Term) -> impl Iterator<Item = String> + '_ {
     spec.cata(|layer: TermF<BTreeSet<String>>| match layer {
-        TermF::Ref { store, entity } if store.as_deref().is_none_or(|s| s == chain) => {
-            BTreeSet::from([entity])
-        }
+        TermF::Ref {
+            store: None,
+            entity,
+        } => BTreeSet::from([entity]),
         other => other.children().into_iter().flatten().cloned().collect(),
     })
     .into_iter()

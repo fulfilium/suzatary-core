@@ -176,7 +176,12 @@ pub fn fold(call: &Call<Reader, Folding, ()>) -> Result<Json<wire::FoldPayload>,
 pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, Refusal> {
     let caps = call.chain.caps;
     // A chain no session builds offers no button; a plan that does not read is the box's fault.
-    let builder = match call.state.deployment.builder(&call.chain.policy.name) {
+    let project = call.state.project()?;
+    let builder = match call
+        .state
+        .deployment
+        .builder(&call.chain.policy.name, project.as_ref().map(|p| &p.chain))
+    {
         Ok(routine) => Some(routine),
         Err(refused) if refused.status() == Status::Conflict => None,
         Err(refused) => return Err(refused),
@@ -197,9 +202,17 @@ pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, 
 pub fn build(
     call: &Call<Tap, TodoRef, ()>,
 ) -> Result<Json<suzatary_core::wire::topics::ConversationPayload>, Refusal> {
+    let project = call.state.project()?;
+    let plan_store = project.as_ref().map(|project| &project.chain);
     call.state
         .with_cards(|caps, cards| {
-            suzatary_api::secretary::routes::build(caps, &call.guard, cards, &call.params)
+            suzatary_api::secretary::routes::build(
+                caps,
+                &call.guard,
+                cards,
+                &call.params,
+                plan_store,
+            )
         })
         .map(Json)
 }
@@ -244,13 +257,18 @@ pub fn take_objects(
     let caps = call.chain.caps;
     // A note's line is stamped by the todos it names as they stood before the post.
     let before = call.state.chains_read();
+    let poster = call
+        .chain
+        .policy
+        .named(&call.guard.0)
+        .map_err(|unnamed| Refusal::forbidden(unnamed.to_string()))?;
     let (receipt, heard) = routes::receive_objects(
         caps.secretary.chain,
         caps.secretary.render,
         &call.chain.policy,
         &call.body.posted(),
         &call.state.frontiers,
-        &call.guard.0,
+        &poster,
     )?;
     if !heard.is_empty() {
         noted(
@@ -269,12 +287,17 @@ pub fn take_objects(
 pub fn author(
     call: &Call<Actor, (), wire::Authoring>,
 ) -> Result<Json<wire::AuthoredPayload>, Refusal> {
+    let named = call
+        .chain
+        .policy
+        .named(&call.guard)
+        .map_err(|unnamed| Refusal::forbidden(unnamed.to_string()))?;
     routes::author(
         call.chain.caps,
         &call.state.deployment,
         &call.chain.policy,
         &call.body,
-        &call.guard,
+        &named,
     )
     .map(Json)
 }

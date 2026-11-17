@@ -411,27 +411,28 @@ changes and one line on how you tested them.
 
 ## Releases and `Completes:`
 
-The version is read from the project chain, and `scripts/train.sh` writes it. Never change the
-version in `app/release.toml` or `app/Cargo.toml` (fixed at 0.0.0), and never edit `CHANGELOG.md`.
-A train writes both files in one release commit.
+The version is read from the public roadmap store and its `releases.toml`, and `scripts/train.sh`
+writes it. Never change the version in `app/release.toml` or `app/Cargo.toml` (fixed at 0.0.0), and
+never edit `CHANGELOG.md`. A train writes both files in one release commit, whose `Tasks:` trailer
+names the roadmap commit it was cut from.
 
 Write your changelog entry as a new file, `changelog.d/<branch>.md` (the branch's `/` as `-`):
 Keep a Changelog `### <kind>` headings, each over `- ` entries. The gate's `changelog` step
 refuses an `app/` or `web/` change that adds none, and any other edit of `CHANGELOG.md`. The
 release folds the fragments into its section and deletes them.
 
-When your pull request finishes a todo on the project chain, say so on its own line of the
-description:
+When your pull request finishes a task, say so on its own line of the description:
 
 ```
 Completes: calendarlinks
 ```
 
-Name each todo by its id; separate several with spaces or commas. The train checks each id
-against the chain and skips a pull request that names a todo the chain does not hold. When the
-train lands, it marks each todo done and lists it first in the release's changelog section.
-Name only a todo that your change finishes. A pull request that only moves a todo forward has no
-`Completes:` line.
+Name each todo by its id; separate several with spaces or commas. The train looks each id up on
+the roadmap, then on the deployment's upkeep chain, and skips a pull request that names a todo
+found in neither. When the train lands, it marks each todo done where it was found: a roadmap todo
+in the land's roadmap commit, listed first in the release's changelog section, and an upkeep todo
+on the private chain, named nowhere public. Name only a todo that your change finishes. A pull
+request that only moves a todo forward has no `Completes:` line.
 
 A pull request that grows a shipped wasm module by more than 16,000 bytes raises its line of
 `web/wasm-budget` (measured on the merged tree, for each Nix system) and says why on its own line

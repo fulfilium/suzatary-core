@@ -484,9 +484,11 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 
 ## Versioning, changelog, roadmap
 
-- **THE VERSION IS A READING OF THE PROJECT CHAIN**: a release is a todo on the
-  `suzatary` chain whose spec composes its items, declared in
-  `app/core/releases.toml`; `scripts/train.sh` cuts it and tags it. Never set
+- **THE VERSION IS A READING OF THE ROADMAP**: a release is a todo of the
+  public roadmap store whose spec composes its items, declared in the
+  `releases.toml` beside that store; `scripts/train.sh` cuts it from the code
+  tree and one roadmap commit (`Tasks:`), and its land completes the
+  `Completes:` todos there. Never set
   the version by hand; how a PR names what it
   completes is AGENTS.md's "Releases and `Completes:`" (→ `versionreading`).
   The version is no compiled input: the binary reads `app/release.toml` at run

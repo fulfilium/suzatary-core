@@ -9,7 +9,7 @@
 //! document and every verb with no `--chain` serve, so [`Chains`] is an ordered non-empty list,
 //! not a map.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
@@ -93,6 +93,49 @@ pub struct ChainPolicy {
     /// proven by a key it registered, every device request signed by one, and every deployment
     /// declares one.
     pub root: PublicKey,
+    /// The name each of this deployment's actors writes under here.
+    pub naming: Naming,
+}
+
+/// The name a deployment's actor (a `[web.act_as]` value, a `--actor`) writes under on a chain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Naming {
+    /// A private chain's: every actor writes under its own name.
+    AsActs,
+    /// A public store's (`[[chains]] public_names`): an actor writes under its public name, and
+    /// an actor with none writes nothing there. The roster is the public names.
+    Published(BTreeMap<Actor, Actor>),
+}
+
+/// An actor with no public name, writing to a public store.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "chain {chain} is public, and {actor} has no public name there: an event written to a public \
+     store names only a public name ([[chains]] public_names)"
+)]
+pub struct Unnamed {
+    /// The chain.
+    pub chain: String,
+    /// The actor.
+    pub actor: String,
+}
+
+impl ChainPolicy {
+    /// The name `actor`'s events carry on this chain: its own on a private chain; on a public
+    /// one, its own where that is already a public name (on the roster), else its public name.
+    ///
+    /// # Errors
+    /// An actor with no public name, on a public chain.
+    pub fn named(&self, actor: &Actor) -> Result<Actor, Unnamed> {
+        match &self.naming {
+            Naming::AsActs => Ok(actor.clone()),
+            Naming::Published(_) if self.roster.contains(actor) => Ok(actor.clone()),
+            Naming::Published(names) => names.get(actor).cloned().ok_or_else(|| Unnamed {
+                chain: self.name.to_string(),
+                actor: actor.as_str().to_owned(),
+            }),
+        }
+    }
 }
 
 impl ChainPolicy {

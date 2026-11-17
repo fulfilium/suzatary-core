@@ -136,6 +136,7 @@ fn fold_breakdown() {
         untrusted: untrusted.clone(),
         roster: std::collections::BTreeSet::new(),
         root: suzatary_core::cast::keys::root(),
+        naming: suzatary_base::chains::Naming::AsActs,
     };
     let chain: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent> =
         &bench.fakes.chain;

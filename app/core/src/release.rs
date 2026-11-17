@@ -1,8 +1,8 @@
-//! Suzatary's version, read off its project chain.
+//! Suzatary's version, read off its roadmap store.
 //!
-//! A release is a todo on the project chain whose spec composes its items (`Ref`s): `2.0` is
+//! A release is a todo of the roadmap whose spec composes its items (`Ref`s): `2.0` is
 //! `suzatarytwo`, and its fulfillment is the release's progress. [`Plan`] declares which todos
-//! are releases and the `major.minor` each one ships as (`app/core/releases.toml`);
+//! are releases and the `major.minor` each one ships as (`releases.toml`, beside the store);
 //! [`Reading::of`] is the one rule from the chain to the `major.minor` it reads, the last
 //! completed release's, a pure and monotone function of the chain's objects; and
 //! [`Version::next`] is the step from the last release to the next, the patch counting the
@@ -19,7 +19,7 @@ mod version;
 
 pub use cut::Cut;
 pub use fragment::{Fragment, FragmentError, Kind};
-pub use plan::{Plan, Release};
+pub use plan::{Plan, PlanError, Release};
 pub use reading::{Item, Lot, Named, Place, Reading, binding};
 pub use released::{Completed, Completes, Released, ReleasedError};
 pub use version::{Behind, Counted, NotAVersion, Version};

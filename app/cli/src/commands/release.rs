@@ -1,6 +1,8 @@
-//! `suzatary release` — the version the project chain reads, and the release a train cuts.
+//! `suzatary release` — the version the roadmap store reads, and the release a train cuts.
 //!
-//! `scripts/train.sh` writes a tree and a tag only from what this verb prints.
+//! A cut and a check read a store by path (`--store`, a roadmap commit written out), so each is
+//! a function of the code tree and that commit. The other readings and acts take the plan store
+//! the instance mounts. `scripts/train.sh` writes a tree and a tag only from what this verb prints.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -9,6 +11,7 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::{TodoEvent, TodoId};
 use prodrome_core::literal::Datetime;
+use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::markup_text;
@@ -19,8 +22,8 @@ use suzatary_io::clock::SystemClock;
 use suzatary_record::record::Node;
 use suzatary_store::store::Prodrome;
 
-use super::store_of;
-use crate::instance::{ChainDir, Instance};
+use super::{chain_at, store_of};
+use crate::instance::{ChainDir, Instance, project};
 use suzatary_store::store::Reads as _;
 
 /// Which reading or act.
@@ -34,15 +37,18 @@ pub struct Args {
 /// Every `release` reading and act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
-    /// The `major.minor` the chain reads now (the last completed release's), and each release
+    /// The `major.minor` the store reads now (the last completed release's), and each release
     /// with its items.
     Read {
         /// Print the reading as JSON instead of as a list.
         #[arg(long)]
         json: bool,
+        /// A store with its `releases.toml`, read by path; absent is the plan store mounted.
+        #[arg(long, value_name = "DIR")]
+        store: Option<PathBuf>,
     },
-    /// Attach todos to a release, or detach them, as one revision of its spec, written trusted.
-    /// A detached item stays listed, as dropped.
+    /// Attach todos to a release, or detach them, as one revision of its spec written on the
+    /// mounted plan store. A detached item stays listed, as dropped.
     Items {
         /// The release's todo, one the plan declares.
         release: String,
@@ -56,22 +62,23 @@ pub enum Action {
         #[arg(long)]
         actor: Option<String>,
     },
-    /// Refuse, naming them, unless every todo given is on the plan's chain: what a train asks
-    /// of each PR's `Completes:` line before it merges the PR. An unknown todo exits 3, any
-    /// other failure 1, so a train skips only the PR and stops on the rest.
+    /// Print where each todo is found, `roadmap <id>` for one the store at `--store` holds and
+    /// `upkeep <id>` for one only the instance's `[upkeep]` chain holds: what a train asks of each
+    /// PR's `Completes:` line before it merges the PR. A todo found in neither exits 3, any other
+    /// failure 1, so a train skips only the PR and stops on the rest.
     Known {
-        /// The checkout whose plan names the chain.
-        #[arg(long, default_value = ".")]
-        tree: PathBuf,
+        /// The roadmap store, written out at the commit the train reads.
+        #[arg(long, value_name = "DIR")]
+        store: PathBuf,
         /// The todos.
         #[arg(required = true)]
         todos: Vec<String>,
     },
     /// Write the next release into a checkout: `app/release.toml` and the changelog's Unreleased
-    /// section closed under it, `changelog.d/` folded in and removed. The version is the chain's
-    /// once `--completes` are recorded done (a land's work); nothing is written to the chain.
+    /// section closed under it, `changelog.d/` folded in and removed. The version is the store's
+    /// once `--completes` are done (a land's work); nothing is written to the store.
     Cut {
-        /// A todo this release completes, on the plan's chain; once per todo.
+        /// A todo this release completes, held by the store; once per todo.
         #[arg(long = "completes", value_name = "TODO")]
         completes: Vec<String>,
         /// Who will record them done.
@@ -80,32 +87,45 @@ pub enum Action {
         /// The checkout to write.
         #[arg(long, default_value = ".")]
         tree: PathBuf,
+        /// The roadmap store, written out at the commit the release names in `Tasks:`.
+        #[arg(long, value_name = "DIR")]
+        store: PathBuf,
         /// The last release (origin/master's newest `Release:` trailer); absent before the
         /// first. A version the checkout declares past it was never released: its section joins.
         #[arg(long, value_name = "VERSION")]
         last: Option<Version>,
     },
-    /// Record done, as `--actor` and under the chain's write lock, each todo the checkout's
-    /// release completed and the chain does not hold done: a land's last step, idempotent.
-    Record {
-        /// The release's files (its plan and `app/release.toml`), checked out or extracted.
+    /// Refuse unless the store, with every todo the checkout says it completed done, reads at
+    /// least the checkout's version: what a land asks before it pushes.
+    Check {
+        /// The checkout to read.
         #[arg(long, default_value = ".")]
         tree: PathBuf,
-        /// `<todo>=<note>`: the note a todo's record carries (the PR that completed it); the
-        /// release's version otherwise.
+        /// The roadmap store, written out at its head.
+        #[arg(long, value_name = "DIR")]
+        store: PathBuf,
+    },
+    /// Record done, under each store's write lock, each todo given that is not done: on the
+    /// mounted plan store when it holds the todo, else on the `[upkeep]` chain. A land's write,
+    /// idempotent; it prints what it wrote where.
+    Complete {
+        /// The todos.
+        #[arg(required = true)]
+        todos: Vec<String>,
+        /// The release that completes them: a roadmap completion's whole note.
+        #[arg(long, value_name = "VERSION")]
+        release: Version,
+        /// `<todo>=<note>`: the note an upkeep completion carries (the PR that completed it);
+        /// never written to the roadmap, which names nothing of the private repository.
         #[arg(long = "note", value_name = "TODO=NOTE")]
         notes: Vec<String>,
         /// Who records them.
         #[arg(long, default_value = "assistant")]
         actor: String,
     },
-    /// Refuse unless the chain, with every todo the checkout says it completed recorded done,
-    /// reads at least the checkout's version: what a land asks before it pushes.
-    Check {
-        /// The checkout to read.
-        #[arg(long, default_value = ".")]
-        tree: PathBuf,
-    },
+    /// Print the directory of the mounted plan store, the clone a land commits to; nothing where
+    /// no mount holds a plan, so a deployment without one cuts no release.
+    Store,
     /// Read the checkout's `changelog.d/` as a cut does: the merge gate's `changelog` step.
     Fragments {
         /// The checkout to read.
@@ -117,59 +137,51 @@ pub enum Action {
 /// `suzatary release <action>`.
 ///
 /// # Errors
-/// The instance, the chain, the plan or the tree.
+/// The instance, the store, the plan or the tree.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    // A release is cut and checked by the plan of the tree it is written into, so a train
-    // that changes the plan is read by its own; the reading serves the compiled one.
-    let plan = match &args.action {
-        Action::Fragments { tree } => return read_fragments(tree),
-        Action::Read { .. } | Action::Items { .. } => {
-            Plan::declared().context("the release plan this build carries")?
-        }
-        Action::Known { tree, .. }
-        | Action::Cut { tree, .. }
-        | Action::Check { tree, .. }
-        | Action::Record { tree, .. } => Plan::parse(&readable(&Files::of(tree).plan)?)?,
-    };
-    let instance = Instance::open(path)?;
-    let dir = instance.chain(Some(plan.chain()))?;
-    let nodes = store_of(dir).nodes().context("reading the project chain")?;
-    let chain = Chain {
-        dir,
-        nodes: &nodes,
-        now: SystemClock.now(),
-    };
+    let now = SystemClock.now();
     match &args.action {
-        Action::Read { json } => read(&plan, &chain, *json),
-        Action::Known { todos, .. } => {
-            if let Err(unknown) = known(&plan, &chain, todos) {
-                eprintln!("suzatary: {unknown}");
-                std::process::exit(UNKNOWN);
+        Action::Fragments { tree } => read_fragments(tree),
+        Action::Read { json, store } => {
+            let source = match store {
+                Some(dir) => Source::at(dir, now)?,
+                None => Source::mounted(&Instance::open(path)?, now)?,
+            };
+            read(&source, *json)
+        }
+        Action::Known { store, todos } => {
+            let source = Source::at(store, now)?;
+            let instance = Instance::open(path)?;
+            match found(&source, &upkeep(&instance)?, todos) {
+                Ok(places) => {
+                    for (todo, place) in places {
+                        println!("{} {}", place.word(), todo.as_str());
+                    }
+                    Ok(())
+                }
+                Err(unknown) => {
+                    eprintln!("suzatary: {unknown}");
+                    std::process::exit(UNKNOWN);
+                }
             }
-            Ok(())
         }
         Action::Items {
             release,
             add,
             remove,
             actor,
-        } => items(
-            &instance,
-            &plan,
-            &chain,
-            release,
-            add,
-            remove,
-            actor.as_deref().unwrap_or(dir.owner.as_str()),
-        ),
+        } => {
+            let instance = Instance::open(path)?;
+            items(&instance, now, release, add, remove, actor.as_deref())
+        }
         Action::Cut {
             completes,
             actor,
             tree,
+            store,
             last,
         } => cut(
-            &plan,
-            &chain,
+            &Source::at(store, now)?,
             &Asked {
                 completes,
                 actor,
@@ -177,54 +189,194 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 last: *last,
             },
         ),
-        Action::Check { tree } => check(&plan, &chain, tree),
-        Action::Fragments { tree } => read_fragments(tree),
-        Action::Record { tree, notes, actor } => {
-            record(&instance, &plan, &chain, tree, notes, actor)
+        Action::Check { tree, store } => check(&Source::at(store, now)?, tree),
+        Action::Complete {
+            todos,
+            release,
+            notes,
+            actor,
+        } => complete(
+            &Instance::open(path)?,
+            now,
+            todos,
+            &Noted {
+                release: *release,
+                notes,
+            },
+            actor,
+        ),
+        Action::Store => {
+            if let Some(project) = Instance::open(path)?.mounts().project()? {
+                println!("{}", project.store.display());
+            }
+            Ok(())
         }
     }
 }
 
-/// What `release known` exits with when a todo is not on the chain.
+/// What `release known` exits with when a todo is found nowhere.
 const UNKNOWN: i32 = 3;
 
-/// The plan's chain, read once.
-struct Chain<'a> {
-    dir: &'a ChainDir,
-    nodes: &'a [Node],
+/// A store read once for its releases: its objects, whom it does not believe, and its plan.
+struct Source {
+    nodes: std::sync::Arc<[Node]>,
+    untrusted: Untrusted,
+    plan: Plan,
     now: Datetime,
 }
 
-impl Chain<'_> {
+impl Source {
+    /// The store at `dir` with the plan beside it, believing every writer, as `--store` reads.
+    fn at(dir: &Path, now: Datetime) -> anyhow::Result<Source> {
+        let plan = project::beside(dir)?
+            .ok_or_else(|| anyhow::anyhow!("{} holds no {}", dir.display(), project::PLAN))?;
+        let untrusted = Untrusted::none();
+        let nodes = chain_at(dir.to_owned(), untrusted.clone())
+            .nodes()
+            .with_context(|| format!("reading the store at {}", dir.display()))?;
+        Ok(Source {
+            nodes,
+            untrusted,
+            plan,
+            now,
+        })
+    }
+
+    /// The plan store the instance mounts, under its chain's trust policy.
+    fn mounted(instance: &Instance, now: Datetime) -> anyhow::Result<Source> {
+        let (dir, plan) = mounted(instance)?;
+        Ok(Source {
+            nodes: store_of(dir).nodes().context("reading the plan store")?,
+            untrusted: dir.policy.untrusted.clone(),
+            plan,
+            now,
+        })
+    }
+
     fn binding(&self) -> impl Iterator<Item = &suzatary_record::record::TodoEvent> {
-        binding(self.nodes, &self.dir.policy.untrusted)
+        binding(&self.nodes, &self.untrusted)
     }
 
     /// Each todo's spec in force.
     fn current(&self) -> anyhow::Result<BTreeMap<TodoId, Vec<Term>>> {
-        Ok(suzatary_signatures::believed::Believed::of(
-            self.nodes,
-            self.now,
-            &self.dir.policy.untrusted,
+        Ok(
+            suzatary_signatures::believed::Believed::of(&self.nodes, self.now, &self.untrusted)
+                .context("folding the store")?
+                .specs,
         )
-        .context("folding the project chain")?
-        .specs)
     }
 
-    /// A todo's action line as plain text, `None` when the chain holds no record of it.
+    /// A todo's action line as plain text, `None` when the store holds no record of it.
     fn title(&self, todo: &TodoId) -> Option<String> {
-        suzatary_todo::todos::current(self.nodes, self.now, todo.as_str())
-            .map(|record| markup_text(record.payload.body.as_str()))
-    }
-
-    fn completed(&self, todo: &TodoId) -> bool {
-        self.binding()
-            .any(|event| matches!(event, TodoEvent::Completed(e) if e.todo == *todo))
+        title(&self.nodes, self.now, todo)
     }
 }
 
-fn read(plan: &Plan, chain: &Chain<'_>, json: bool) -> anyhow::Result<()> {
-    let reading = Reading::of(plan, chain.binding(), chain.now, &chain.current()?);
+fn title(nodes: &[Node], now: Datetime, todo: &TodoId) -> Option<String> {
+    suzatary_todo::todos::current(nodes, now, todo.as_str())
+        .map(|record| markup_text(record.payload.body.as_str()))
+}
+
+fn completed(nodes: &[Node], untrusted: &Untrusted, todo: &TodoId) -> bool {
+    binding(nodes, untrusted)
+        .any(|event| matches!(event, TodoEvent::Completed(e) if e.todo == *todo))
+}
+
+/// The mount whose store holds the plan, and the plan.
+fn mounted(instance: &Instance) -> anyhow::Result<(&ChainDir, Plan)> {
+    let project = instance.mounts().project()?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "no chain of {} holds a {} beside its store, so no store counts releases",
+            instance.path.display(),
+            project::PLAN
+        )
+    })?;
+    Ok((instance.chain(Some(project.chain.as_str()))?, project.plan))
+}
+
+/// Where a `Completes:` todo is found: the place answers, never a flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// The roadmap holds it: a release counts it, and the land completes it there.
+    Roadmap,
+    /// Only the deployment's upkeep chain holds it: a private task, completed there.
+    Upkeep,
+}
+
+impl Place {
+    fn word(self) -> &'static str {
+        match self {
+            Place::Roadmap => "roadmap",
+            Place::Upkeep => "upkeep",
+        }
+    }
+}
+
+/// The `[upkeep]` chain's objects, none where the instance names no upkeep chain.
+fn upkeep(instance: &Instance) -> anyhow::Result<std::sync::Arc<[Node]>> {
+    match &instance.deployment.upkeep {
+        Some(name) => store_of(instance.chain(Some(name.as_str()))?)
+            .nodes()
+            .context("reading the upkeep chain"),
+        None => Ok(std::sync::Arc::from(Vec::new())),
+    }
+}
+
+/// Each todo with where it is found, the roadmap first; a refusal names those found nowhere.
+fn found(
+    roadmap: &Source,
+    upkeep: &[Node],
+    todos: &[String],
+) -> anyhow::Result<Vec<(TodoId, Place)>> {
+    let mut places = Vec::new();
+    let mut unknown = Vec::new();
+    for id in todos {
+        let Ok(todo) = TodoId::new(id.clone()) else {
+            unknown.push(id.as_str());
+            continue;
+        };
+        if roadmap.title(&todo).is_some() {
+            places.push((todo, Place::Roadmap));
+        } else if title(upkeep, roadmap.now, &todo).is_some() {
+            places.push((todo, Place::Upkeep));
+        } else {
+            unknown.push(id.as_str());
+        }
+    }
+    if unknown.is_empty() {
+        Ok(places)
+    } else {
+        bail!(
+            "no todo {} on the roadmap or the upkeep chain",
+            unknown.join(", ")
+        )
+    }
+}
+
+/// The todos named, each one the store holds, or a refusal naming those it does not.
+fn held(source: &Source, todos: &[String]) -> anyhow::Result<Vec<TodoId>> {
+    let mut held = Vec::new();
+    let mut unknown = Vec::new();
+    for id in todos {
+        match TodoId::new(id.clone()) {
+            Ok(todo) if source.title(&todo).is_some() => held.push(todo),
+            Ok(_) | Err(_) => unknown.push(id.as_str()),
+        }
+    }
+    if unknown.is_empty() {
+        Ok(held)
+    } else {
+        bail!("no todo {} in the roadmap store", unknown.join(", "))
+    }
+}
+
+fn read(source: &Source, json: bool) -> anyhow::Result<()> {
+    let reading = Reading::of(
+        &source.plan,
+        source.binding(),
+        source.now,
+        &source.current()?,
+    );
     if json {
         let releases: Vec<_> = reading
             .releases
@@ -232,7 +384,7 @@ fn read(plan: &Plan, chain: &Chain<'_>, json: bool) -> anyhow::Result<()> {
             .map(|r| {
                 serde_json::json!({
                     "todo": r.todo.as_str(),
-                    "title": chain.title(&r.todo),
+                    "title": source.title(&r.todo),
                     "version": r.version.to_string(),
                     "lot": r.lot,
                     "place": r.place,
@@ -250,7 +402,7 @@ fn read(plan: &Plan, chain: &Chain<'_>, json: bool) -> anyhow::Result<()> {
         );
         return Ok(());
     }
-    println!("the chain reads {}", reading.counted);
+    println!("the store reads {}", reading.counted);
     for r in &reading.releases {
         println!(
             "{} ({}): {:?}, {:?}",
@@ -266,54 +418,65 @@ fn read(plan: &Plan, chain: &Chain<'_>, json: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The store `dir` written through from the terminal, and the name `actor` writes under there.
+fn writer(
+    instance: &Instance,
+    dir: &ChainDir,
+    actor: Option<&str>,
+) -> anyhow::Result<(
+    suzatary_store::store::Signing<
+        suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
+    >,
+    String,
+)> {
+    let actor = super::todo::named(dir, actor)?;
+    if !dir.policy.roster.iter().any(|a| a.as_str() == actor) {
+        bail!("{actor:?} is not on the {} chain's roster", dir.policy.name);
+    }
+    let writer = Instance::writer_of(
+        dir,
+        &instance.signers(),
+        &prodrome_core::event::Actor::new(actor.as_str()).map_err(|e| anyhow::anyhow!("{e}"))?,
+        crate::commands::door::Opened::AtTerminal,
+    );
+    Ok((writer, actor))
+}
+
 /// `suzatary release items <release> --add … --remove …`: one trusted revision of the release's
-/// spec, read and written under the chain's write lock.
+/// spec, read and written under the plan store's write lock.
 fn items(
     instance: &Instance,
-    plan: &Plan,
-    chain: &Chain<'_>,
+    now: Datetime,
     release: &str,
     add: &[String],
     remove: &[String],
-    actor: &str,
+    actor: Option<&str>,
 ) -> anyhow::Result<()> {
+    let source = Source::mounted(instance, now)?;
+    let plan = &source.plan;
     if !plan.releases().iter().any(|r| r.todo.as_str() == release) {
         bail!("{release:?} is not a release the plan declares");
     }
-    known(plan, chain, add)?;
-    if !chain.dir.policy.roster.iter().any(|a| a.as_str() == actor) {
-        bail!("{actor:?} is not on the {} chain's roster", plan.chain());
-    }
-    let writer = Instance::writer_of(
-        chain.dir,
-        &instance.signers(),
-        &prodrome_core::event::Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?,
-        crate::commands::door::Opened::AtTerminal,
-    );
-    let _held = writer.locked().context("taking the chain's write lock")?;
-    let nodes = writer.nodes().context("reading the project chain")?;
-    let Some(parent) = suzatary_todo::todos::current(&nodes, chain.now, release) else {
-        bail!("no todo {release:?} on the {} chain", plan.chain());
+    held(&source, add)?;
+    let (dir, _) = mounted(instance)?;
+    let (writer, actor) = writer(instance, dir, actor)?;
+    let actor = actor.as_str();
+    let _held = writer.locked().context("taking the store's write lock")?;
+    let nodes = writer.nodes().context("reading the plan store")?;
+    let Some(parent) = suzatary_todo::todos::current(&nodes, now, release) else {
+        bail!("no todo {release:?} in the plan store");
     };
-    let functions =
-        suzatary_signatures::believed::Believed::of(&nodes, chain.now, &chain.dir.policy.untrusted)
-            .context("folding the project chain")?
-            .linkable();
-    let event =
-        suzatary_todo::authoring::rescope(&parent, add, remove, &functions, chain.now, actor)
-            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    let functions = suzatary_signatures::believed::Believed::of(&nodes, now, &dir.policy.untrusted)
+        .context("folding the plan store")?
+        .linkable();
+    let event = suzatary_todo::authoring::rescope(&parent, add, remove, &functions, now, actor)
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     writer.append(event).context("appending the revision")?;
-    let after = writer.nodes().context("re-reading the project chain")?;
-    let current =
-        suzatary_signatures::believed::Believed::of(&after, chain.now, &chain.dir.policy.untrusted)
-            .context("folding the project chain")?
-            .specs;
-    let reading = Reading::of(
-        plan,
-        binding(&after, &chain.dir.policy.untrusted),
-        chain.now,
-        &current,
-    );
+    let after = writer.nodes().context("re-reading the plan store")?;
+    let current = suzatary_signatures::believed::Believed::of(&after, now, &dir.policy.untrusted)
+        .context("folding the plan store")?
+        .specs;
+    let reading = Reading::of(plan, binding(&after, &dir.policy.untrusted), now, &current);
     println!(
         "{}",
         serde_json::json!({
@@ -329,17 +492,17 @@ fn items(
     Ok(())
 }
 
-/// `suzatary release record`: the tree's completed todos the chain lacks, recorded done.
-fn record(
+/// `suzatary release complete`: each todo found and not done, recorded done where it is found.
+/// Every todo is placed before anything is written, so one found nowhere writes nothing.
+fn complete(
     instance: &Instance,
-    plan: &Plan,
-    chain: &Chain<'_>,
-    tree: &Path,
-    notes: &[String],
+    now: Datetime,
+    todos: &[String],
+    noted: &Noted<'_>,
     actor: &str,
 ) -> anyhow::Result<()> {
-    let Released { version, completes } = released(&Files::of(tree))?;
-    let notes = notes
+    let by_todo = noted
+        .notes
         .iter()
         .map(|pair| {
             pair.split_once('=')
@@ -347,69 +510,65 @@ fn record(
                 .ok_or_else(|| anyhow::anyhow!("{pair:?} is not <todo>=<note>"))
         })
         .collect::<anyhow::Result<BTreeMap<String, String>>>()?;
-    if !chain.dir.policy.roster.iter().any(|a| a.as_str() == actor) {
-        bail!("{actor:?} is not on the {} chain's roster", plan.chain());
-    }
-    let writer = Instance::writer_of(
-        chain.dir,
-        &instance.signers(),
-        &prodrome_core::event::Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?,
-        crate::commands::door::Opened::AtTerminal,
-    );
-    let _held = writer.locked().context("taking the chain's write lock")?;
-    let objects = writer.nodes().context("reading the project chain")?;
-    let held = Chain {
-        dir: chain.dir,
-        nodes: &objects,
-        now: chain.now,
-    };
-    let mut recorded = Vec::new();
-    for todo in &completes {
-        if held.completed(todo) {
+    let roadmap = Source::mounted(instance, now)?;
+    let places = found(&roadmap, &upkeep(instance)?, todos)?;
+    let mut written: BTreeMap<&str, Vec<String>> =
+        BTreeMap::from([("roadmap", Vec::new()), ("upkeep", Vec::new())]);
+    for place in [Place::Roadmap, Place::Upkeep] {
+        let todos: Vec<&TodoId> = places
+            .iter()
+            .filter(|(_, at)| *at == place)
+            .map(|(todo, _)| todo)
+            .collect();
+        if todos.is_empty() {
             continue;
         }
-        let note = notes
-            .get(todo.as_str())
-            .cloned()
-            .unwrap_or_else(|| format!("the release {version}"));
-        let event = prodrome_core::event::mk_completed(todo.as_str(), chain.now, actor, &note)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        writer
-            .append(event)
-            .with_context(|| format!("recording {} done", todo.as_str()))?;
-        recorded.push(todo.as_str().to_owned());
+        let dir = match place {
+            Place::Roadmap => mounted(instance)?.0,
+            Place::Upkeep => instance.chain(
+                instance
+                    .deployment
+                    .upkeep
+                    .as_ref()
+                    .map(suzatary_base::chains::ChainName::as_str),
+            )?,
+        };
+        let (writer, actor) = writer(instance, dir, Some(actor))?;
+        let _held = writer.locked().context("taking the store's write lock")?;
+        let held = writer.nodes().context("reading the store")?;
+        for todo in todos {
+            if completed(&held, &dir.policy.untrusted, todo) {
+                continue;
+            }
+            // A public store's event names nothing of the private repository, as it names only
+            // public actors (`ChainPolicy::named`): the roadmap's note is the release alone.
+            let note = match place {
+                Place::Roadmap => format!("the release {}", noted.release),
+                Place::Upkeep => by_todo.get(todo.as_str()).cloned().unwrap_or_default(),
+            };
+            let event = prodrome_core::event::mk_completed(todo.as_str(), now, &actor, &note)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            writer
+                .append(event)
+                .with_context(|| format!("recording {} done", todo.as_str()))?;
+            written
+                .entry(place.word())
+                .or_default()
+                .push(todo.as_str().to_owned());
+        }
     }
-    println!(
-        "{}",
-        serde_json::json!({ "version": version.to_string(), "recorded": recorded })
-    );
+    println!("{}", serde_json::json!(written));
     Ok(())
 }
 
-/// The todos named, each one the chain holds, or a refusal naming those it does not.
-fn known(plan: &Plan, chain: &Chain<'_>, todos: &[String]) -> anyhow::Result<Vec<TodoId>> {
-    let mut held = Vec::new();
-    let mut unknown = Vec::new();
-    for id in todos {
-        match TodoId::new(id.clone()) {
-            Ok(todo) if chain.title(&todo).is_some() => held.push(todo),
-            Ok(_) | Err(_) => unknown.push(id.as_str()),
-        }
-    }
-    if unknown.is_empty() {
-        Ok(held)
-    } else {
-        bail!(
-            "no todo {} on the {} chain",
-            unknown.join(", "),
-            plan.chain()
-        )
-    }
+/// What `release complete` writes as each completion's note.
+struct Noted<'a> {
+    release: Version,
+    notes: &'a [String],
 }
 
-/// The two files a release writes under `tree`, the fragments it folds and the plan it reads.
+/// The two files a release writes under `tree`, and the fragments it folds.
 struct Files {
-    plan: PathBuf,
     changelog: PathBuf,
     fragments: PathBuf,
     released: PathBuf,
@@ -418,7 +577,6 @@ struct Files {
 impl Files {
     fn of(tree: &Path) -> Files {
         Files {
-            plan: tree.join("app/core/releases.toml"),
             changelog: tree.join("CHANGELOG.md"),
             fragments: tree.join("changelog.d"),
             released: tree.join("app/release.toml"),
@@ -476,15 +634,15 @@ struct Asked<'a> {
     last: Option<Version>,
 }
 
-fn cut(plan: &Plan, chain: &Chain<'_>, asked: &Asked<'_>) -> anyhow::Result<()> {
-    let todos = known(plan, chain, asked.completes)?;
+fn cut(source: &Source, asked: &Asked<'_>) -> anyhow::Result<()> {
+    let todos = held(source, asked.completes)?;
     let reading = Reading::assuming(
-        plan,
-        chain.binding(),
+        &source.plan,
+        source.binding(),
         &todos,
         asked.actor,
-        chain.now,
-        &chain.current()?,
+        source.now,
+        &source.current()?,
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     let files = Files::of(asked.tree);
@@ -493,16 +651,17 @@ fn cut(plan: &Plan, chain: &Chain<'_>, asked: &Asked<'_>) -> anyhow::Result<()> 
         .with_context(|| format!("reading {}", files.released.display()))?
         .version;
     let version = Version::after(asked.last, reading.counted)?;
-    let completes = titled(chain, &todos);
+    let completes = titled(source, &todos);
     let release = Cut {
         version,
         completes,
         folds: (asked.last != Some(declared)).then_some(declared),
     };
-    let day = chrono::NaiveDate::from_ymd_opt(chain.now.year(), chain.now.month(), chain.now.day())
+    let now = source.now;
+    let day = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
         .context("the clock's day")?;
     let (paths, folded) = fragments(&files.fragments)?;
-    let changelog = release.changelog(&readable(&files.changelog)?, &folded, day, plan.chain())?;
+    let changelog = release.changelog(&readable(&files.changelog)?, &folded, day)?;
     write(&files.changelog, &changelog)?;
     for path in &paths {
         std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))?;
@@ -512,13 +671,13 @@ fn cut(plan: &Plan, chain: &Chain<'_>, asked: &Asked<'_>) -> anyhow::Result<()> 
     Ok(())
 }
 
-/// `todos`, each with its title on the chain (its id where the chain holds none): the words a
+/// `todos`, each with its title in the store (its id where the store holds none): the words a
 /// cut lists in the changelog and prints, never what the public release file stores.
-fn titled(chain: &Chain<'_>, todos: &[TodoId]) -> Completes {
+fn titled(source: &Source, todos: &[TodoId]) -> Completes {
     Completes::new(todos.iter().map(|todo| {
         Completed {
             todo: todo.clone(),
-            title: chain
+            title: source
                 .title(todo)
                 .unwrap_or_else(|| todo.as_str().to_owned()),
         }
@@ -536,27 +695,26 @@ fn printed(release: &Cut) -> serde_json::Value {
     })
 }
 
-fn check(plan: &Plan, chain: &Chain<'_>, tree: &Path) -> anyhow::Result<()> {
+fn check(source: &Source, tree: &Path) -> anyhow::Result<()> {
     let Released {
         version,
         completes: todos,
     } = released(&Files::of(tree))?;
     let reading = Reading::assuming(
-        plan,
-        chain.binding(),
+        &source.plan,
+        source.binding(),
         &todos,
         "assistant",
-        chain.now,
-        &chain.current()?,
+        source.now,
+        &source.current()?,
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     // At least, not exactly: a release completed since the cut is the next train's, and the
-    // tag stays the cut. Below it, the tree claims more than the chain holds.
+    // tag stays the cut. Below it, the tree claims more than the store holds.
     if reading.counted < version.counted() {
         bail!(
-            "the {} chain, with {} done, reads {}, below the tree's {version}: the tree claims \
-             more than the chain holds, so build the train again",
-            plan.chain(),
+            "the roadmap, with {} done, reads {}, below the tree's {version}: the tree claims \
+             more than the store holds, so build the train again",
             if todos.is_empty() {
                 "nothing more".to_owned()
             } else {
@@ -573,7 +731,7 @@ fn check(plan: &Plan, chain: &Chain<'_>, tree: &Path) -> anyhow::Result<()> {
         "{}",
         printed(&Cut {
             version,
-            completes: titled(chain, &todos),
+            completes: titled(source, &todos),
             folds: None,
         })
     );

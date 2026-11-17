@@ -39,10 +39,15 @@ fn release(id: &str, major: u32, minor: u32) -> Release {
     }
 }
 
-/// 2.0, 2.1 and 3.0, on the chain `suzatary`, from 1.
+/// A genesis, as a store's first object is named.
+fn genesis() -> prodrome_core::event::Hash {
+    prodrome_core::event::Hash::new("a".repeat(64)).expect("an object's name")
+}
+
+/// 2.0, 2.1 and 3.0, in one store, from 1.
 fn plan() -> Plan {
     Plan::new(
-        "suzatary",
+        genesis(),
         1,
         vec![
             release("two", 2, 0),
@@ -257,7 +262,16 @@ proptest! {
 /// items; completing 2.2 then reads 2.2.0.
 #[test]
 fn completing_two_one_after_two_one_two_is_two_one_three() {
-    let plan = Plan::declared().expect("app/core/releases.toml reads");
+    let plan = Plan::new(
+        genesis(),
+        1,
+        vec![
+            release("suzatarytwo", 2, 0),
+            release("suzatarytwoone", 2, 1),
+            release("suzatarytwotwo", 2, 2),
+        ],
+    )
+    .expect("a plan");
     let reading =
         |objects: &[TodoEvent]| Reading::of(&plan, objects, day(60), &BTreeMap::new()).counted;
     let last = Version {
@@ -298,14 +312,26 @@ fn completing_two_one_after_two_one_two_is_two_one_three() {
     );
 }
 
-/// The declaration this build carries reads, and its releases are 2.0, 2.1 and 2.2's todos.
+/// A plan names its store by the store's genesis, and a name that is no object's is refused.
 #[test]
-fn the_declared_plan_reads() {
-    let plan = Plan::declared().expect("app/core/releases.toml reads");
-    assert_eq!(plan.chain(), "suzatary");
+fn a_plan_names_its_store_by_genesis() {
+    let text = format!(
+        "genesis = \"{}\"\nbase = 1\n\n[[release]]\ntodo = \"two\"\nmajor = 2\nminor = 0\n",
+        genesis().as_str()
+    );
+    let plan = Plan::parse(&text).expect("a plan");
+    assert_eq!(plan.genesis(), &genesis());
     assert_eq!(
         plan.releases().first().map(|r| r.todo.as_str()),
-        Some("suzatarytwo")
+        Some("two")
+    );
+    assert!(matches!(
+        Plan::parse("genesis = \"suzatary\"\nbase = 1\n"),
+        Err(suzatary_core::release::PlanError::NotAGenesis(_))
+    ));
+    assert!(
+        Plan::parse("chain = \"suzatary\"\nbase = 1\n").is_err(),
+        "a plan naming a deployment's chain is refused"
     );
 }
 
@@ -351,10 +377,10 @@ fn a_release_prints_and_parses_as_itself() {
         "{printed}"
     );
     assert_eq!(
-        completes.changelog("suzatary"),
+        completes.changelog(),
         vec![
-            "- Completes `todo:suzatary/calendarlinks`: calendar \"links\"".to_owned(),
-            "- Completes `todo:suzatary/portsuites`: ports as traits".to_owned(),
+            "- Completes `calendarlinks`: calendar \"links\"".to_owned(),
+            "- Completes `portsuites`: ports as traits".to_owned(),
         ]
     );
     // The fragments fold under the version, after what it completed.
@@ -367,13 +393,12 @@ fn a_release_prints_and_parses_as_itself() {
             "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-01\n",
             &fragments,
             day,
-            "suzatary"
         )
         .expect("closes"),
         format!(
             "# Changelog\n\n## [Unreleased]\n\n## [{version}] - 2026-10-14\n\n{}\n{}\n\n### Added\n- a\n  more of a\n\n### Fixed\n- b\n\n## [1.0.0] - 2026-10-01\n",
-            "- Completes `todo:suzatary/calendarlinks`: calendar \"links\"",
-            "- Completes `todo:suzatary/portsuites`: ports as traits",
+            "- Completes `calendarlinks`: calendar \"links\"",
+            "- Completes `portsuites`: ports as traits",
         )
     );
 }
@@ -415,13 +440,13 @@ fn an_unreleased_version_folds_into_the_first_release() {
     let changelog = "## [Unreleased]\n\n## [1.10.0] - 2026-10-12\n\nWhy.\n\n### Added\n- a\n\n## [0.17.0] - 2026-09-29\n";
     let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 14).expect("a day");
     assert_eq!(
-        cut.changelog(changelog, &Fragment::default(), day, "suzatary")
+        cut.changelog(changelog, &Fragment::default(), day)
             .expect("closes"),
         "## [Unreleased]\n\n## [1.9.0] - 2026-10-14\n\nWhy.\n\n### Added\n- a\n\n## [0.17.0] - 2026-09-29\n"
     );
     let entries = "## [Unreleased]\n\n### Fixed\n- b\n\n## [1.10.0] - 2026-10-12\n\nWhy.\n";
     assert_eq!(
-        cut.changelog(entries, &Fragment::default(), day, "suzatary")
+        cut.changelog(entries, &Fragment::default(), day)
             .expect("closes"),
         "## [Unreleased]\n\n## [1.9.0] - 2026-10-14\n\n### Fixed\n- b\n\nWhy.\n",
         "one blank line where the folded heading stood"

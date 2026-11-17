@@ -80,7 +80,7 @@ parsing the instance file <file>: TOML parse error at line 19, column 1
    |
 19 | colour = 1
    | ^^^^^^
-unknown field `colour`, expected one of `name`, `events`, `untrusted`, `actors`, `owner`
+unknown field `colour`, expected one of `name`, `events`, `untrusted`, `actors`, `owner`, `public_names`
 
 
 ## no chains
