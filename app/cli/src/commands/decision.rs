@@ -45,7 +45,7 @@ pub enum Action {
         #[arg(long, default_value = "assistant")]
         actor: String,
         /// When it was withdrawn; absent is now.
-        #[arg(long, value_name = "INSTANT", value_parser = instant)]
+        #[arg(long, value_name = "INSTANT", value_parser = super::at::instant)]
         at: Option<Datetime>,
     },
     /// Every decision, newest lineage first, each above what it supersedes.
@@ -89,7 +89,7 @@ pub struct Stated {
     #[arg(long, default_value = "assistant")]
     actor: String,
     /// When it was decided, an ISO date or instant (UTC); absent is now.
-    #[arg(long, value_name = "INSTANT", value_parser = instant)]
+    #[arg(long, value_name = "INSTANT", value_parser = super::at::instant)]
     at: Option<Datetime>,
 }
 
@@ -159,15 +159,9 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             );
         }
         Action::View { html } => {
-            use suzatary_io::typeset::Compiler as _;
             let called = suzatary_todo::rendering::DECISIONS
                 .call(&suzatary_todo::decisions::document(&decisions.ledger()?))?;
-            let page = typeset.compile(called.job()).map_err(|rejected| {
-                anyhow::anyhow!("{}", rejected.said(called.job().main_text()))
-            })?;
-            if let Some(reason) = suzatary_base::tripwire::suspicious(&page) {
-                bail!("typst's HTML for the decisions carried {reason}; not written");
-            }
+            let page = suzatary_io::render::drawn(&typeset, &called)?;
             match html {
                 None => print!("{page}"),
                 Some(out) => std::fs::write(out, page)
@@ -253,13 +247,6 @@ fn draft(stated: &Stated) -> anyhow::Result<Draft> {
         &stated.rationale,
         stated.supersedes.split(','),
     )?)
-}
-
-/// `--at`'s instant, parsed once where it enters.
-fn instant(text: &str) -> Result<Datetime, String> {
-    prodrome_core::fpl::parse_iso(text)
-        .map_err(|refused| refused.to_string())
-        .and_then(|at| prodrome_core::fpl::datetime_of(at).map_err(|refused| refused.to_string()))
 }
 
 fn decision(id: &str) -> anyhow::Result<DecisionId> {

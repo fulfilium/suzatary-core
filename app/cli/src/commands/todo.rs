@@ -44,6 +44,8 @@ pub enum Action {
         id: String,
         #[command(flatten)]
         store: StoreAt,
+        #[command(flatten)]
+        at: super::at::At,
     },
     #[command(flatten)]
     Act(Box<Act>),
@@ -262,7 +264,9 @@ pub struct Lifecycle {
 /// `suzatary todo <act>`.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     match args.action {
-        Action::Show { id, store } => show(&store.todos(path, args.chain.as_deref())?, &id),
+        Action::Show { id, store, at } => {
+            show(&store.todos(path, args.chain.as_deref())?, at.or_now(), &id)
+        }
         Action::Act(act) => act_on(path, args.chain.as_deref(), *act),
     }
 }
@@ -605,24 +609,34 @@ fn appended(
     Ok(())
 }
 
-fn show((read, name): &(Read, ChainName), id: &str) -> anyhow::Result<()> {
-    let now = SystemClock.now();
-    let set = read.set(now);
+/// One todo whole at `at`: its state, its price, every content candidate as its block, and its
+/// history.
+fn show(
+    (read, name): &(Read, ChainName),
+    at: prodrome_core::literal::Datetime,
+    id: &str,
+) -> anyhow::Result<()> {
+    let set = read.set(at);
     let held = set.held(name).context("reading the chain")?;
-    let Some(found) = suzatary_todo::todos::current(held.nodes, now, id) else {
+    let by_hash = held
+        .dag
+        .objects()
+        .iter()
+        .map(|(name, envelope)| (name.clone(), envelope))
+        .collect();
+    let shown = set
+        .entries(name)
+        .context("folding the chain")?
+        .iter()
+        .find(|entry| entry.key.as_str() == id)
+        .map(|entry| suzatary_todo::shown::shown(entry, &by_hash))
+        .transpose()
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
+        .flatten();
+    let Some(shown) = shown else {
         bail!("no todo with id {id:?} on the chain");
     };
-    let block = suzatary_todo::todos::render_current(held.nodes, now, held.untrusted, &found)
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    println!(
-        "{}",
-        serde_json::json!({
-            "todo": id,
-            "kind": found.payload.kind.as_str(),
-            "authored_by": found.actor.as_str(),
-            "block": block,
-        })
-    );
+    println!("{}", serde_json::to_string(&shown)?);
     Ok(())
 }
 

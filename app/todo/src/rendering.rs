@@ -106,10 +106,37 @@ pub static DECISIONS: Template<crate::decisions::DecisionsPage> = Template::new(
     &[],
 );
 
+/// A store's open list as a static page; every datum is data.
+pub static TODOS: Template<crate::pages::TodosPage> = Template::new(
+    "/todos.typ",
+    &[
+        ("/todos.typ", include_str!("rendering/todos.typ")),
+        ("/page.typ", include_str!("rendering/page.typ")),
+        ("/priority.typ", include_str!("rendering/priority.typ")),
+    ],
+    Library::Open,
+    Output::Body,
+    Kept::Nowhere,
+    &[],
+);
+
+/// One todo of a store as a static page, in the closed world, since a body is a writer's markup.
+pub static TODO: Template<crate::pages::TodoPage> = Template::new(
+    "/todo.typ",
+    &[
+        ("/todo.typ", include_str!("rendering/todo.typ")),
+        ("/priority.typ", include_str!("rendering/priority.typ")),
+    ],
+    Library::Closed,
+    Output::Body,
+    Kept::Nowhere,
+    &[],
+);
+
 /// Every template, for the build to compile against its type's examples.
 #[must_use]
-pub fn all() -> [&'static dyn Checked; 4] {
-    [&MARKUP, &ANSWER, &CALENDAR, &DECISIONS]
+pub fn all() -> [&'static dyn Checked; 6] {
+    [&MARKUP, &ANSWER, &CALENDAR, &DECISIONS, &TODOS, &TODO]
 }
 
 #[cfg(test)]

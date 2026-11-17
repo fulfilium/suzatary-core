@@ -1,0 +1,59 @@
+name: pages
+
+# The store as static pages on GitHub Pages: the application at the revision this repository's
+# flake.lock pins draws the open list and each todo's page from the checkout, priced at the pushed
+# commit's instant, and the run publishes the directory with its own token. The lock is the pin:
+# with none committed, `--no-update-lock-file` refuses the run rather than take master.
+#
+# A push to any branch starts a run, and only the default branch's builds and deploys. Each ref
+# waits in its own group, so another branch's run never replaces a pending deploy. No pull request
+# event is named, so a fork's pull request runs nothing here. The token may do nothing but what each
+# job names: the build reads the repository and keeps no credential, and the deploy holds the two
+# permissions Pages needs. There is no secret. Every action is pinned by its commit. The
+# application's public binary cache is read as a substituter, so a pinned revision it holds is not
+# built again.
+on:
+  push:
+    branches: [ '**' ]
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+
+jobs:
+  build:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-substituters = https://bmabsout.cachix.org
+            extra-trusted-public-keys = bmabsout.cachix.org-1:/GhCEayGQ3NHMIlJiUelQrLtHHXVdGjHtyDz32xNAo4=
+      - name: Draw the store
+        run: |
+          at="$(TZ=UTC0 git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%S)"
+          nix run --no-update-lock-file . -- prodrome pages --store . --at "$at" --into _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

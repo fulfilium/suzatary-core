@@ -164,6 +164,9 @@
             # The site vouches for the Android app, and a test pins the file
             # that says so; the sandbox has to hold it to run that test.
             ./web/static/.well-known/assetlinks.json
+            # The app's own stylesheets, which `prodrome pages` writes beside a store's pages.
+            ./web/static/tokens.css
+            ./web/static/style.css
             # THE SAMPLE, NOT THE DEPLOYMENT: `tests/init.rs` pins it as `suzatary init`'s output;
             # the tests that read this box's deployment skip when it is absent, as it is here.
             ./instance.sample.toml

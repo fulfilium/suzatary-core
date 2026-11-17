@@ -88,6 +88,8 @@ mod objects;
 mod operator;
 #[path = "overview_cost.rs"]
 mod overview_cost;
+#[path = "pages.rs"]
+mod pages;
 #[path = "paths.rs"]
 mod paths;
 #[path = "perf_fold_chain.rs"]

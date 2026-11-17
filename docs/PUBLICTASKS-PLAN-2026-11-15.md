@@ -365,6 +365,12 @@ the owner approves.
   by Typst, as every page of the app is. It publishes them with the run's own `GITHUB_TOKEN`
   and Pages permission, and it holds no secret. The Prodrome's viewer reads the reference todo
   payload, not `Record`, so the roadmap uses the application's own pages and not that viewer.
+  - **Built** as `suzatary prodrome pages --store <DIR> --at <INSTANT> --into <DIR>`, which
+    `prodrome init --public` writes `pages.yml` to run. The list page's rows are `todos open`'s
+    and each todo's page is `todo show`'s at the same instant, and no page holds a word that is
+    neither the store's nor the application's
+    (`the_pages_show_what_todos_open_and_todo_show_read`). The workflow asks only what Pages
+    needs (`the_pages_workflow_runs_the_verb_holding_no_secret`).
 - **The code repository's front page shows the same picture.** Its `README.md` shows the
   roadmap repository's raw `roadmap.svg` and `roadmap-dark.svg` by their URLs, in the same
   `<picture>`, wrapped in the same link to the Pages viewer. It is a link in a text file, not

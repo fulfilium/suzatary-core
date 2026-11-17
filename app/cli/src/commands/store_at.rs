@@ -45,14 +45,7 @@ impl StoreAt {
                 if let Some(name) = chain {
                     bail!("--chain {name} names a chain of an instance file; --store reads none");
                 }
-                let name = ChainName::new("store")?;
-                let objects = super::chain_at(dir.to_owned(), Untrusted::none())
-                    .objects()
-                    .context("reading the store")?;
-                Ok((
-                    Read::of_objects([(name.clone(), Untrusted::none(), objects)]),
-                    name,
-                ))
+                by_path(dir)
             },
             |instance| {
                 let name = instance.chain(chain)?.policy.name.clone();
@@ -60,4 +53,16 @@ impl StoreAt {
             },
         )
     }
+}
+
+/// The store at `dir` read alone, believing every writer, and the name it is read under.
+pub(crate) fn by_path(dir: &Path) -> anyhow::Result<(Read, ChainName)> {
+    let name = ChainName::new("store")?;
+    let objects = super::chain_at(dir.to_owned(), Untrusted::none())
+        .objects()
+        .context("reading the store")?;
+    Ok((
+        Read::of_objects([(name.clone(), Untrusted::none(), objects)]),
+        name,
+    ))
 }

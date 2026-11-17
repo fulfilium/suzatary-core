@@ -1,8 +1,10 @@
-//! `suzatary prodrome init|carry|draw`: a todo store begun at a path, such as a project's
-//! roadmap, the upkeep chain's project todos carried to it, and its open list drawn.
+//! `suzatary prodrome init|carry|draw|pages`: a todo store begun at a path, such as a project's
+//! roadmap, the upkeep chain's project todos carried to it, its open list drawn, and the store
+//! written as static pages.
 
 mod carry;
 mod list;
+mod pages;
 mod picture;
 
 use std::path::Path;
@@ -36,6 +38,8 @@ pub enum Action {
     /// `README.md` that shows them, beside the store; or print, for door 2, what they are as
     /// drawn now.
     Draw(picture::Drawing),
+    /// Write a store as static pages: the open list and each todo's page, at one instant.
+    Pages(pages::Paging),
 }
 
 /// What `prodrome carry` takes.
@@ -71,12 +75,14 @@ pub fn run(path: &std::path::Path, args: &Args) -> anyhow::Result<()> {
         ),
         Action::Carry(carrying) => carry::run(path, carrying),
         Action::Draw(drawing) => picture::run(drawing),
+        Action::Pages(paging) => pages::run(paging),
     }
 }
 
 /// Refuses a store begun under another charter, or none, so no object reaches a public store
 /// unchartered. The `.gitignore` goes first, so the store keeps it in place of its own, and
-/// names the store's derived files exactly: `flake.lock` beside them is committed.
+/// names the store's derived files exactly: `flake.lock` beside them is committed, and a public
+/// store's `_site`, where its Pages workflow draws it.
 fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     let begun = !super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none())
         .tips()?
@@ -89,13 +95,26 @@ fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     }
     std::fs::create_dir_all(dir)?;
     charter.write(dir)?;
-    unless_there(&dir.join(".gitignore"), "/.heads\n/.lock\n")?;
+    unless_there(
+        &dir.join(".gitignore"),
+        match charter {
+            Charter::Public => "/.heads\n/.lock\n/_site\n",
+            Charter::Private => "/.heads\n/.lock\n",
+        },
+    )?;
     unless_there(&dir.join(".gitattributes"), ATTRIBUTES)?;
     super::init::begin_chain(dir)?;
     unless_there(
         &dir.join("flake.nix"),
         include_str!("prodrome/roadmap.flake.nix"),
     )?;
+    // Only a public store is published: the workflow publishes every page of it.
+    if charter == Charter::Public {
+        unless_there(
+            &dir.join(".github/workflows/pages.yml"),
+            include_str!("prodrome/roadmap.pages.yml"),
+        )?;
+    }
     println!("began {} as {charter:?}", dir.display());
     Ok(())
 }

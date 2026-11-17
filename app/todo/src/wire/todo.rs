@@ -272,7 +272,7 @@ pub struct Neighbour {
     pub unconfirmed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 pub struct FieldChange {
     pub field: String,
     /// `""` for the first record.

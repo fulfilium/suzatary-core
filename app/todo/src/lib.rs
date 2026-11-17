@@ -5,10 +5,12 @@
 
 pub mod authoring;
 pub mod decisions;
+pub mod pages;
 pub mod reading;
 pub mod render;
 pub mod render_cache;
 pub mod rendering;
+pub mod shown;
 pub mod template;
 pub mod todos;
 pub mod view;

@@ -501,8 +501,9 @@ fn gate_yml_restores_the_dependency_build_gate_store_saves() {
     );
 }
 
-/// actionlint passes the workflows the gate and the caches rest on: their syntax, their
-/// expressions, their runner labels and the shell of each step.
+/// actionlint passes the workflows the gate and the caches rest on, and the Pages workflow
+/// `prodrome init --public` writes: their syntax, their expressions, their runner labels and the
+/// shell of each step.
 #[test]
 fn gate_workflows_pass_actionlint() {
     let out = Command::new("actionlint")
@@ -511,6 +512,7 @@ fn gate_workflows_pass_actionlint() {
             ".github/workflows/gate-store.yml",
             ".github/workflows/gate-passes.yml",
             ".github/workflows/publication.yml",
+            "app/cli/src/commands/prodrome/roadmap.pages.yml",
         ])
         .current_dir(repo())
         .output()

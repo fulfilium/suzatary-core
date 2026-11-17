@@ -67,24 +67,14 @@ impl Typst {
     }
 
     /// `called`'s output: what its key keeps, or else compiled, narrowed and kept.
-    pub fn rendered(&self, called: &Called) -> Result<Html, RenderError> {
+    fn rendered(&self, called: &Called) -> Result<Html, RenderError> {
         let table = self.table(called);
         if let Some(table) = table
             && let Some(kept) = table.recall(called.key()).map_err(|e| unread(&e))?
         {
             return Ok(Html::from_render(kept));
         }
-        let document = self
-            .compiler
-            .compile(called.job())
-            .map_err(|rejected| RenderError::Refused(rejected.said(called.job().main_text())))?;
-        let output = match called.output() {
-            Output::Body => narrowed(&document)?,
-            Output::Document => match suspicious(&document) {
-                Some(reason) => return Err(RenderError::Suspicious(reason.to_string())),
-                None => document,
-            },
-        };
+        let output = drawn(&*self.compiler, called)?;
         if let Some(table) = table {
             // A finding is kept as evidence and answers nothing; this compile is still the answer.
             let _ = table.remember(called.key().clone(), &output);
@@ -93,7 +83,7 @@ impl Typst {
     }
 
     /// One answer block to typst's HTML.
-    pub fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
+    fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
         self.rendered(&ANSWER.call(block).map_err(|e| unprintable(&e))?)
     }
 
@@ -107,6 +97,23 @@ impl Typst {
             self.answers.findings(),
         ]
         .concat()
+    }
+}
+
+/// `called` compiled and past the tripwire, kept nowhere.
+///
+/// # Errors
+/// Typst's refusal or the tripwire's.
+pub fn drawn(compiler: &dyn Compiler, called: &Called) -> Result<String, RenderError> {
+    let document = compiler
+        .compile(called.job())
+        .map_err(|rejected| RenderError::Refused(rejected.said(called.job().main_text())))?;
+    match called.output() {
+        Output::Body => narrowed(&document),
+        Output::Document => match suspicious(&document) {
+            Some(reason) => Err(RenderError::Suspicious(reason.to_string())),
+            None => Ok(document),
+        },
     }
 }
 

@@ -32,6 +32,9 @@ rendering = [
   { file = "rendering/decisions.typ", sha256 = "fc82d41babf85349bb8dbb31f8e8c9c57ac1256a0f6068ae65e409fad2a49294" },
   { file = "rendering/markup.typ", sha256 = "584e04ebd82a4de7e1f7fc480e981641be1f59fea67b63561188833b6a0f92e3" },
   { file = "rendering/page.typ", sha256 = "6026dca27037a3f4136ef1b98812994481255ff7e273174068ca50862f1fc62c" },
+  { file = "rendering/priority.typ", sha256 = "59cdc09eb2bef3c0b48e072e4b9ae63f6bbdf7ea15e009f8cf6484632be69128" },
+  { file = "rendering/todo.typ", sha256 = "867b374dc69d87165871f0e53259166a056a821d2ccb7e7b9c73e6b2c5c676fa" },
+  { file = "rendering/todos.typ", sha256 = "4f6cb4abb66a897420936d9da4b0e8c5672afd05b24ff3d7ce0c4b5598186161" },
   { file = "../../base/src/tripwire.rs", sha256 = "7dc746a1b9202ce6ec2551799a2745a263e04253b553571b830cc124c1c67f00" },
 ]
 

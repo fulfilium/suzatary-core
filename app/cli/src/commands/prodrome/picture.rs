@@ -262,19 +262,13 @@ fn listed(store: &Path, typeset: &dyn Typeset) -> anyhow::Result<Listed> {
     let nodes = set.held(&name).context("reading the store")?.nodes;
     let entries = set.entries(&name).context("folding the store")?;
     let records = suzatary_record::decoration::records_of(nodes);
-    let open = crate::commands::todos::open(&entries, &records);
+    let open = suzatary_todo::shown::open(&entries, &records);
     let more = open.len().saturating_sub(ROWS);
     let rows = open
         .into_iter()
         .take(ROWS)
-        .map(|entry| Line {
-            title: entry
-                .content()
-                .first()
-                .and_then(|name| records.get(name))
-                .map_or_else(String::new, |record| {
-                    title(record.payload.body.as_str(), typeset)
-                }),
+        .map(|(entry, record)| Line {
+            title: title(record.payload.body.as_str(), typeset),
             price: match entry.value() {
                 Ok(Some(value)) => Price::Valued { value },
                 Ok(None) => Price::Absent,
