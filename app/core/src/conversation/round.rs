@@ -1,7 +1,6 @@
 //! One exchange with a model: ask, append its turn, run the verbs it called, until it answers
 //! without a call or reaches its bound.
 
-use prodrome_core::event::Hash;
 use serde_json::{Map, Value};
 
 use crate::conversation::ask::{Answered, Ask, Asked, Sent};
@@ -14,10 +13,12 @@ use suzatary_base::escape::escape_markup;
 use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::model::{Halt, ModelError, ToolCall, Turn};
 use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::RunId;
 use suzatary_conversations::secretary::store::{Entry, Scope, Stored};
 use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::transcript::Retry;
 
 /// Who says the turn that ends an exchange the model did not finish.
 const BOX: &str = "the box";
@@ -53,6 +54,8 @@ pub struct Rules<'a> {
     /// Runs once something waits, before the model is first asked: the secretary loads what the
     /// question points at. A refusal ends the round like any other, with the box's words.
     pub load: &'a Load<'a>,
+    /// Whether a round a lost run left may be claimed again: not while the model is failing.
+    pub retry: Retry,
 }
 
 /// Runs one call of a verb the round's surface lists, read whole.
@@ -123,7 +126,7 @@ impl Ending {
         match self {
             Ending::Answered
             | Ending::Ended {
-                why: Why::Silent { .. } | Why::Bound(_) | Why::Stopped(_),
+                why: Why::Silent { .. } | Why::Bound(_) | Why::Stopped(_) | Why::Unanswered,
             } => Ok(()),
             Ending::Ended {
                 why: Why::Model { failed, .. },
@@ -156,6 +159,9 @@ pub enum Why {
     Refused(Refusal),
     /// Somebody pulled the round's [`Halt`]; the line is an [`Entry::Stopped`] naming them.
     Stopped(prodrome_core::event::Actor),
+    /// No round answered in time: two runs that covered it were lost, or it was asked longer
+    /// ago than [`transcript::ANSWERED_WITHIN`].
+    Unanswered,
 }
 
 impl From<Refusal> for Why {
@@ -186,6 +192,7 @@ impl Why {
                 format!("I could not finish: {}. Ask again.", refusal.message())
             }
             Why::Stopped(by) => format!("{} stopped this answer.", by.as_str()),
+            Why::Unanswered => "This was not answered in time; ask again.".to_owned(),
         }
     }
 }
@@ -247,24 +254,38 @@ pub struct Closed {
 
 impl Round {
     /// Answer what waits in the conversation; `None` when nothing does, and no model is asked.
-    /// A round that ran ends on the model's answer or on the box's line saying why it did not,
-    /// so the conversation never ends on a call or a verb's answer and nothing is asked again; a
-    /// stop in one write, so no reading between two writes finds its question queued again.
+    ///
+    /// The round draws a run and claims what it answers under the lines' lock before it spends
+    /// anything ([`transcript::claim`]): one run answers a turn at a time, and a run lost with
+    /// its round open is retried once, then closed by the box. A round that ran ends on the
+    /// model's answer or on the box's line saying why it did not, so the conversation never ends
+    /// on a call or a verb's answer; a stop in one write.
     ///
     /// # Errors
-    /// The store's, when it refuses the box's closing line too.
+    /// The store's, when it refuses the claim or the box's closing line.
     pub fn answer(rules: &Rules<'_>, at: &Transcript<'_>) -> Result<Option<Closed>, Refusal> {
-        // The question is fixed before the model is asked, and the round's closing line is
-        // written only while it is owed, so a round resumed after a restart beside one that
-        // answered the same question answers nothing.
-        let Some(asked) = transcript::read(at.conversations, at.id)?.asked().cloned() else {
-            return Ok(None);
-        };
+        let held = at.conversations.runs.begin()?;
+        let run = &held.run;
+        let now = at.clock.now();
+        match transcript::claim(at.conversations, at.id, run, now, rules.retry, |stored| {
+            closing(stored, now, &Why::Unanswered)
+        })? {
+            transcript::Claimed::Nothing => return Ok(None),
+            transcript::Claimed::Closed => {
+                return Ok(Some(Closed {
+                    round: Round::default(),
+                    ending: Ending::Ended {
+                        why: Why::Unanswered,
+                    },
+                }));
+            }
+            transcript::Claimed::Began => {}
+        }
         let mut round = Round::default();
-        let ending = match round.run(rules, at, &asked) {
+        let ending = match round.run(rules, at, run) {
             Ok(Ran::Nothing) => return Ok(None),
             Ok(Ran::Answered) => Ending::Answered,
-            Err(why) => match round.close(at, &asked, &why)? {
+            Err(why) => match round.close(at, run, &why)? {
                 transcript::Answering::Written => Ending::Ended { why },
                 transcript::Answering::Answered => return Ok(None),
             },
@@ -272,13 +293,17 @@ impl Round {
         Ok(Some(Closed { round, ending }))
     }
 
-    /// Step until the model answers `asked` without a call, or say why it did not.
-    fn run(&mut self, rules: &Rules<'_>, at: &Transcript<'_>, asked: &Hash) -> Result<Ran, Why> {
+    /// Step until the model answers what the round of `run` covers without a call, or say why it
+    /// did not.
+    fn run(&mut self, rules: &Rules<'_>, at: &Transcript<'_>, run: &RunId) -> Result<Ran, Why> {
         let tools = rules.verbs.tools();
         loop {
-            let stored = read(at)?;
-            // A round with nothing new does not run: a continuation would buy an answer to nothing.
-            let Some(waiting) = queue::Pending::of(&stored) else {
+            // A turn said since the last ask joins the round before the model reads it.
+            transcript::join(at.conversations, at.id, run, at.clock.now())
+                .map_err(Refusal::from)?;
+            let read = transcript::read(at.conversations, at.id).map_err(Refusal::from)?;
+            let stored = read.stored();
+            let Some(waiting) = queue::Pending::of_turns(&read.sending(run)) else {
                 return Ok(Ran::Nothing);
             };
             // When a stop arrives before the model is asked, the round asks the model nothing.
@@ -296,11 +321,11 @@ impl Round {
                 suzatary_conversations::secretary::model::pulled::Asking::of(rules.sink.halt);
             let reply = rules
                 .ask
-                .ask(at.id, rules.system, &tools, &stored, &waiting, rules.sink)
+                .ask(at.id, rules.system, &tools, stored, &waiting, rules.sink)
                 .map_err(|failed| unasked(failed, after.clone(), rules.sink.halt))?;
             obeyed(rules.sink.halt)?;
             let silent = reply.reply.say.trim().is_empty() && reply.reply.calls.is_empty();
-            if self.said(at, &stored, reply, rules.ask.scope(), asked)?
+            if self.said(at, stored, reply, rules.ask.scope(), run)?
                 == transcript::Answering::Answered
             {
                 return Ok(Ran::Nothing);
@@ -320,14 +345,14 @@ impl Round {
     }
 
     /// The model's turn, after the memory it was told and the session it opened, if either moved;
-    /// nothing of the turn's own while `question` is answered already.
+    /// nothing of the turn's own once the round of `run` is closed.
     fn said(
         &mut self,
         at: &Transcript<'_>,
         stored: &Stored,
         asked: Asked,
         scope: Scope,
-        question: &Hash,
+        run: &RunId,
     ) -> Result<transcript::Answering, Refusal> {
         if let Some(version) = asked.seen
             && stored.memory_seen != Some(version)
@@ -358,15 +383,15 @@ impl Round {
         self.calls.clone_from(&asked.reply.calls);
         self.answering(
             at,
-            question,
-            Entry::Said {
+            run,
+            vec![Entry::Said {
                 at: at.clock.now(),
                 turn: Turn::Model {
                     text: asked.reply.say,
                     calls: asked.reply.calls,
                 },
                 by: None,
-            },
+            }],
         )
     }
 
@@ -398,67 +423,46 @@ impl Round {
         )
     }
 
-    /// The line that ends a round short of an answer. A stop is its own line; every other
-    /// ending is a model turn with no calls, since "over" is derived from the transcript, holding
-    /// `why`'s words escaped, since they quote a backend's or a verb's text and are not markup.
-    /// The box says it, not the session, so the session never hears it nor the turns it closes.
+    /// The lines that end the round of `run` short of an answer, while it is open. A stop is its
+    /// own line; every other ending is [`closing`]'s.
     fn close(
         &mut self,
         at: &Transcript<'_>,
-        question: &Hash,
+        run: &RunId,
         why: &Why,
     ) -> Result<transcript::Answering, Refusal> {
-        match why {
-            Why::Stopped(by) => self.answering(
-                at,
-                question,
-                Entry::Stopped {
-                    at: at.clock.now(),
-                    by: by.as_str().to_owned(),
-                },
-            ),
-            Why::Model { .. } | Why::Silent { .. } | Why::Bound(_) | Why::Refused(_) => {
-                self.unheard(at, &read(at)?, BOX)?;
-                self.answering(
-                    at,
-                    question,
-                    Entry::Said {
-                        at: at.clock.now(),
-                        turn: Turn::Model {
-                            text: escape_markup(&why.said()).as_str().to_owned(),
-                            calls: Vec::new(),
-                        },
-                        by: None,
-                    },
-                )
-            }
-        }
+        let now = at.clock.now();
+        let lines = match why {
+            Why::Stopped(by) => vec![Entry::Stopped {
+                at: now,
+                by: by.as_str().to_owned(),
+            }],
+            Why::Model { .. }
+            | Why::Silent { .. }
+            | Why::Bound(_)
+            | Why::Refused(_)
+            | Why::Unanswered => closing(&read(at)?, now, why),
+        };
+        self.answering(at, run, lines)
     }
 
     /// When `stored` keeps a session, that it did not hear what `by` says next: a session is sent
     /// only the turns since its last, so the next held round must open one with the whole window.
     fn unheard(&mut self, at: &Transcript<'_>, stored: &Stored, by: &str) -> Result<(), Refusal> {
-        let Some(kept) = &stored.session else {
-            return Ok(());
-        };
-        self.append(
-            at,
-            Entry::Unheard {
-                at: at.clock.now(),
-                session: kept.session.id.clone(),
-                model: by.to_owned(),
-            },
-        )
+        if let Some(line) = unheard(stored, at.clock.now(), by) {
+            self.append(at, line)?;
+        }
+        Ok(())
     }
 
-    /// [`Self::append`] while `question` is owed an answer, or once this round has written a
-    /// model turn for it: that turn made the question this round's, and a silent one closes it
-    /// before the box's words that end the round.
+    /// `lines`, appended in one hold of the lock while the round of `run` is open, or once this
+    /// round has written a model turn: a silent one closed the round, and the box's words that
+    /// end it follow.
     fn answering(
         &mut self,
         at: &Transcript<'_>,
-        question: &Hash,
-        entry: Entry,
+        run: &RunId,
+        lines: Vec<Entry>,
     ) -> Result<transcript::Answering, Refusal> {
         if self.appended.iter().any(|written| {
             matches!(
@@ -469,12 +473,14 @@ impl Round {
                 }
             )
         }) {
-            self.append(at, entry)?;
+            for line in lines {
+                self.append(at, line)?;
+            }
             return Ok(transcript::Answering::Written);
         }
-        let answering = transcript::push_answering(at.conversations, at.id, question, &entry)?;
+        let answering = transcript::push_open(at.conversations, at.id, run, &lines)?;
         if answering == transcript::Answering::Written {
-            self.appended.push(entry);
+            self.appended.extend(lines);
         }
         Ok(answering)
     }
@@ -484,6 +490,33 @@ impl Round {
         self.appended.push(entry);
         Ok(())
     }
+}
+
+/// The lines that end an exchange the model did not finish: a model turn with no calls, since
+/// "over" is derived from the transcript, holding `why`'s words escaped, since they quote a
+/// backend's or a verb's text and are not markup. The box says it, not the session, so a kept
+/// session first hears that it did not hear it, nor the turns it closes.
+fn closing(stored: &Stored, now: suzatary_base::capability::Datetime, why: &Why) -> Vec<Entry> {
+    unheard(stored, now, BOX)
+        .into_iter()
+        .chain([Entry::Said {
+            at: now,
+            turn: Turn::Model {
+                text: escape_markup(&why.said()).as_str().to_owned(),
+                calls: Vec::new(),
+            },
+            by: None,
+        }])
+        .collect()
+}
+
+/// That the session `stored` keeps did not hear what `by` says next; none when it keeps none.
+fn unheard(stored: &Stored, now: suzatary_base::capability::Datetime, by: &str) -> Option<Entry> {
+    stored.session.as_ref().map(|kept| Entry::Unheard {
+        at: now,
+        session: kept.session.id.clone(),
+        model: by.to_owned(),
+    })
 }
 
 fn read(at: &Transcript<'_>) -> Result<Stored, Refusal> {

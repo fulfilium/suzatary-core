@@ -152,6 +152,8 @@ fn a_round_over_a_session() {
             "you are the secretary",
             &suzatary_core::secretary::surface::Subset::ALL,
             &sink,
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            suzatary_core::secretary::Holder::Task,
         )
         .expect("the exchange runs")
         .expect("a round ran");
@@ -218,6 +220,7 @@ fn round_under(
             bound,
             sink: &Sink::quiet(halt),
             load,
+            retry: suzatary_lines::secretary::transcript::Retry::Allowed,
         },
         &Transcript {
             conversations: caps.conversations.conversations(),
@@ -604,4 +607,465 @@ proptest::proptest! {
         let stored = conversations::read(caps.conversations.conversations(), &id()).expect("reads");
         proptest::prop_assert!(suzatary_conversations::secretary::queue::Pending::of(&stored).is_none());
     }
+}
+
+/// A model that, while it writes each answer, lets `during` land a line, as a `say` does when the
+/// person asks again before the answer is written.
+struct Interrupted<'a> {
+    model: &'a FakeModel,
+    during: &'a (dyn Fn() + Sync),
+}
+
+impl suzatary_conversations::secretary::model::Model for Interrupted<'_> {
+    fn name(&self) -> String {
+        suzatary_conversations::secretary::model::Model::name(self.model)
+    }
+
+    fn turn(
+        &self,
+        conversation: &suzatary_conversations::secretary::model::Conversation,
+        tools: &serde_json::Value,
+    ) -> Result<suzatary_conversations::secretary::model::Reply, ModelError> {
+        let reply =
+            suzatary_conversations::secretary::model::Model::turn(self.model, conversation, tools);
+        (self.during)();
+        reply
+    }
+}
+
+/// Regression: a question said while the model writes its final answer was settled unseen, since
+/// the answer rests on it. It is owed after that answer, and the next round sends it.
+#[test]
+fn a_question_said_during_the_last_answer_is_still_owed() {
+    let caps = Fakes::new("round-swallowed").model(FakeModel::saying([
+        r#"{"say": "Friday."}"#,
+        r#"{"say": "Yes, the same office."}"#,
+    ]));
+    said_first(&caps);
+    let late = std::sync::atomic::AtomicBool::new(true);
+    let during = || {
+        if late.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            transcript::push(
+                caps.conversations.conversations(),
+                &id(),
+                &suzatary_conversations::secretary::store::Entry::Said {
+                    at: common::now(),
+                    turn: Turn::Person {
+                        text: "and is it the same office?".to_owned(),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    },
+                    by: None,
+                },
+            )
+            .expect("the late question appends");
+        }
+    };
+    let model = Interrupted {
+        model: &caps.model,
+        during: &during,
+    };
+    let answered = || {
+        use suzatary_core::conversation::ask::Ask;
+        use suzatary_core::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
+        Round::answer(
+            &Rules {
+                ask: Ask::Transcript { model: &model },
+                system: "you are the secretary",
+                verbs: &suzatary_core::secretary::surface::Subset::ALL,
+                run: &|_| Ok(serde_json::json!("unused").into()),
+                bound: 8,
+                sink: &Sink::quiet(&Halt::new()),
+                load: LOAD_NOTHING,
+                retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+            },
+            &Transcript {
+                conversations: caps.conversations.conversations(),
+                clock: &caps.clock,
+                id: &id(),
+            },
+        )
+        .expect("runs")
+    };
+    assert_eq!(answered().expect("a round ran").ending, Ending::Answered);
+    let owed: Vec<String> = transcript::read(caps.conversations.conversations(), &id())
+        .expect("reads")
+        .owed()
+        .into_iter()
+        .filter_map(|(_, said)| match &said.turn {
+            Turn::Person { text, .. } => Some(text.clone()),
+            Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => None,
+        })
+        .collect();
+    assert_eq!(owed, ["and is it the same office?"]);
+    assert_eq!(
+        answered().expect("a second round ran").ending,
+        Ending::Answered
+    );
+    let sent = caps.model.asked();
+    assert!(
+        sent[1].turns.iter().any(|turn| matches!(
+            turn,
+            Turn::Person { text, .. } if text == "and is it the same office?"
+        )),
+        "the second round sent the late question"
+    );
+    assert!(
+        transcript::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .owed()
+            .is_empty()
+    );
+}
+
+/// A model whose first `panics` calls panic, as a round's task that ends with no close.
+struct Panicking<'a> {
+    model: &'a FakeModel,
+    panics: std::sync::atomic::AtomicUsize,
+}
+
+impl suzatary_conversations::secretary::model::Model for Panicking<'_> {
+    fn name(&self) -> String {
+        suzatary_conversations::secretary::model::Model::name(self.model)
+    }
+
+    fn turn(
+        &self,
+        conversation: &suzatary_conversations::secretary::model::Conversation,
+        tools: &serde_json::Value,
+    ) -> Result<suzatary_conversations::secretary::model::Reply, ModelError> {
+        let left = self.panics.load(std::sync::atomic::Ordering::SeqCst);
+        if left > 0 {
+            self.panics
+                .store(left - 1, std::sync::atomic::Ordering::SeqCst);
+            panic!("the round's task ends here, with no close");
+        }
+        suzatary_conversations::secretary::model::Model::turn(self.model, conversation, tools)
+    }
+}
+
+/// One round over `model`, a panic inside it caught as a task's end (`Err`).
+fn round_over(
+    caps: &Fakes,
+    model: &dyn suzatary_conversations::secretary::model::Model,
+) -> std::thread::Result<Option<suzatary_core::conversation::round::Closed>> {
+    use suzatary_core::conversation::ask::Ask;
+    use suzatary_core::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        Round::answer(
+            &Rules {
+                ask: Ask::Transcript { model },
+                system: "you are the secretary",
+                verbs: &suzatary_core::secretary::surface::Subset::ALL,
+                run: &|_| Ok(serde_json::json!("unused").into()),
+                bound: 8,
+                sink: &Sink::quiet(&Halt::new()),
+                load: LOAD_NOTHING,
+                retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+            },
+            &Transcript {
+                conversations: caps.conversations.conversations(),
+                clock: &caps.clock,
+                id: &id(),
+            },
+        )
+        .expect("runs")
+    }))
+}
+
+/// The runs of every claim in the conversation, in order.
+fn claimed_by(caps: &Fakes) -> Vec<String> {
+    transcript::lines(caps.conversations.conversations(), &id())
+        .expect("reads")
+        .into_iter()
+        .filter_map(|entry| match entry {
+            suzatary_conversations::secretary::store::Entry::Began { run, .. } => {
+                Some(run.as_str().to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A round whose task ends with no close is retried once by a new run, which answers.
+#[test]
+fn a_lost_round_is_retried_once_by_a_new_run() {
+    let caps = Fakes::new("round-lost-once").model(FakeModel::saying([r#"{"say": "Friday."}"#]));
+    said_first(&caps);
+    let model = Panicking {
+        model: &caps.model,
+        panics: std::sync::atomic::AtomicUsize::new(1),
+    };
+    assert!(
+        round_over(&caps, &model).is_err(),
+        "the first round's task ended"
+    );
+    let retried = round_over(&caps, &model)
+        .expect("the retry runs")
+        .expect("a round ran");
+    assert_eq!(retried.ending, Ending::Answered);
+    let runs = claimed_by(&caps);
+    assert_eq!(runs.len(), 2, "a claim and its retry");
+    assert_ne!(runs[0], runs[1], "the retry is a new run");
+    assert!(
+        transcript::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .owed()
+            .is_empty()
+    );
+}
+
+/// A question two lost rounds covered is closed by the box, which asks no model and claims it no
+/// third time.
+#[test]
+fn a_question_lost_twice_is_closed_by_the_box() {
+    let caps = Fakes::new("round-lost-twice").model(FakeModel::saying([r#"{"say": "Friday."}"#]));
+    said_first(&caps);
+    let model = Panicking {
+        model: &caps.model,
+        panics: std::sync::atomic::AtomicUsize::new(2),
+    };
+    assert!(round_over(&caps, &model).is_err());
+    assert!(round_over(&caps, &model).is_err());
+    let closed = round_over(&caps, &model)
+        .expect("the claim step runs")
+        .expect("the box closed it");
+    assert_eq!(
+        closed.ending,
+        Ending::Ended {
+            why: Why::Unanswered
+        }
+    );
+    assert_eq!(claimed_by(&caps).len(), 2, "no third claim");
+    assert!(caps.model.asked().is_empty(), "no model answered");
+    assert_eq!(
+        last_turn(&caps),
+        Turn::Model {
+            text: "This was not answered in time; ask again.".to_owned(),
+            calls: Vec::new(),
+        }
+    );
+    assert!(
+        round_over(&caps, &model).expect("runs").is_none(),
+        "closed once"
+    );
+}
+
+/// A question asked longer ago than the bound is never claimed: the box closes it, so Regenerate
+/// can ask it again.
+#[test]
+fn a_question_past_the_bound_is_closed_unclaimed() {
+    let caps = Fakes::new("round-past-bound").model(FakeModel::saying([r#"{"say": "Friday."}"#]));
+    said_first(&caps);
+    caps.clock.set(common::shift(common::now(), 1));
+    let closed = round_over(&caps, &caps.model)
+        .expect("the claim step runs")
+        .expect("the box closed it");
+    assert_eq!(
+        closed.ending,
+        Ending::Ended {
+            why: Why::Unanswered
+        }
+    );
+    assert!(claimed_by(&caps).is_empty());
+    assert!(caps.model.asked().is_empty());
+}
+
+/// A question said while a round runs joins it: the round claims it under its own run before
+/// its next ask, and sends it then.
+#[test]
+fn a_question_said_during_a_round_joins_it_at_its_next_ask() {
+    let caps = Fakes::new("round-join").model(FakeModel::saying([
+        WEATHER,
+        r#"{"say": "Sunny, and yes."}"#,
+    ]));
+    said_first(&caps);
+    let late = std::sync::atomic::AtomicBool::new(true);
+    let during = || {
+        if late.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            transcript::push(
+                caps.conversations.conversations(),
+                &id(),
+                &suzatary_conversations::secretary::store::Entry::Said {
+                    at: common::now(),
+                    turn: Turn::Person {
+                        text: "and tomorrow?".to_owned(),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    },
+                    by: None,
+                },
+            )
+            .expect("the follow-up appends");
+        }
+    };
+    let model = Interrupted {
+        model: &caps.model,
+        during: &during,
+    };
+    let closed = round_over(&caps, &model)
+        .expect("runs")
+        .expect("a round ran");
+    assert_eq!(closed.ending, Ending::Answered);
+    assert_eq!(closed.round.steps, 2, "one round, asked twice");
+    let runs = claimed_by(&caps);
+    assert_eq!(runs.len(), 2, "the claim and its join");
+    assert_eq!(runs[0], runs[1], "the join is the round's own run");
+    assert!(
+        caps.model.asked()[1].turns.iter().any(|turn| matches!(
+            turn,
+            Turn::Person { text, .. } if text == "and tomorrow?"
+        )),
+        "the next ask sent the follow-up"
+    );
+    assert!(
+        transcript::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .owed()
+            .is_empty()
+    );
+}
+
+/// Regression: an old question left unanswered beside a fresh one is sent with it, since the bound
+/// decides whether a round starts and never what a started round covers; no box line about time
+/// follows the answer.
+#[test]
+fn an_old_question_beside_a_fresh_one_is_sent_with_it() {
+    let caps =
+        Fakes::new("round-old-beside-fresh").model(FakeModel::saying([r#"{"say": "Both."}"#]));
+    opened(&caps);
+    let ask = |at: suzatary_base::capability::Datetime, text: &str| {
+        transcript::push(
+            caps.conversations.conversations(),
+            &id(),
+            &suzatary_conversations::secretary::store::Entry::Said {
+                at,
+                turn: Turn::Person {
+                    text: text.to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: None,
+            },
+        )
+        .expect("asked");
+    };
+    ask(common::shift(common::now(), -1), "is the permit renewed?");
+    ask(common::now(), "and the office hours?");
+    let answered = round_over(&caps, &caps.model)
+        .expect("runs")
+        .expect("a round ran");
+    assert_eq!(answered.ending, Ending::Answered);
+    let sent = &caps.model.asked()[0];
+    for question in ["is the permit renewed?", "and the office hours?"] {
+        assert!(
+            sent.turns
+                .iter()
+                .any(|turn| matches!(turn, Turn::Person { text, .. } if text == question)),
+            "{question} was sent"
+        );
+    }
+    assert!(
+        round_over(&caps, &caps.model).expect("runs").is_none(),
+        "nothing is owed"
+    );
+    assert_eq!(
+        last_turn(&caps),
+        Turn::Model {
+            text: "Both.".to_owned(),
+            calls: Vec::new(),
+        }
+    );
+}
+
+/// Two holders: while one holder's round writes its last answer, a question lands, and the other
+/// holder's claim step finds the round's run alive and appends nothing. The first holder claims
+/// again after its own round, so the question is answered before it returns, not at the next
+/// write.
+#[test]
+fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder() {
+    let caps = Fakes::new("round-two-holders").model(FakeModel::saying([
+        r#"{"say": "Friday."}"#,
+        r#"{"say": "Yes, the same office."}"#,
+    ]));
+    said_first(&caps);
+    let late = std::sync::atomic::AtomicBool::new(true);
+    let during = || {
+        if late.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            transcript::push(
+                caps.conversations.conversations(),
+                &id(),
+                &suzatary_conversations::secretary::store::Entry::Said {
+                    at: common::now(),
+                    turn: Turn::Person {
+                        text: "and is it the same office?".to_owned(),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    },
+                    by: None,
+                },
+            )
+            .expect("the late question appends");
+            let other = caps
+                .conversations
+                .conversations()
+                .runs
+                .begin()
+                .expect("the other holder's run");
+            assert_eq!(
+                transcript::claim(
+                    caps.conversations.conversations(),
+                    &id(),
+                    &other.run,
+                    common::now(),
+                    suzatary_lines::secretary::transcript::Retry::Allowed,
+                    |_| Vec::new(),
+                )
+                .expect("reads"),
+                transcript::Claimed::Nothing,
+                "the other holder finds the round's run alive"
+            );
+        }
+    };
+    let model = Interrupted {
+        model: &caps.model,
+        during: &during,
+    };
+    let policy = common::chain();
+    let deployment = deployment();
+    let chains = [Bound {
+        name: "life",
+        caps: caps.secretary(),
+        policy: &policy,
+    }];
+    let answered = suzatary_core::secretary::answer(
+        &caps.secretary(),
+        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(&model)),
+        &deployment,
+        &suzatary_connect::settings::Settables::default(),
+        &chains,
+        &id(),
+        "you are the secretary",
+        &suzatary_core::secretary::surface::Subset::ALL,
+        &Sink::quiet(&Halt::new()),
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        suzatary_core::secretary::Holder::Alone,
+    )
+    .expect("runs")
+    .expect("a round ran");
+    assert_eq!(answered.ending, Ending::Answered);
+    assert_eq!(answered.rounds, 2, "two rounds, one ask each");
+    assert!(
+        caps.model.asked()[1].turns.iter().any(|turn| matches!(
+            turn,
+            Turn::Person { text, .. } if text == "and is it the same office?"
+        )),
+        "the second round sent the late question"
+    );
+    assert!(
+        transcript::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .owed()
+            .is_empty()
+    );
 }

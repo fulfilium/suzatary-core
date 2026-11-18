@@ -92,7 +92,8 @@ impl Voices {
             | Step::Titled
             | Step::Resealed { .. }
             | Step::Erased { .. }
-            | Step::Still => Voices::Others,
+            | Step::Still
+            | Step::Began { .. } => Voices::Others,
         }
     }
 
@@ -220,7 +221,7 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
                         .insert(line.name.clone());
                 }
             }
-            Step::Opened | Step::Still | Step::Coding { .. } => {}
+            Step::Opened | Step::Still | Step::Coding { .. } | Step::Began { .. } => {}
         }
     }
     let live = turns

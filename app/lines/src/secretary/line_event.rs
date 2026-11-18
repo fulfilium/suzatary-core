@@ -611,6 +611,7 @@ fn shape_fields(shape: &LineShape) -> Vec<Value> {
         LineShape::Coding { proposal, session } => vec![proposal.to_value(), json(session)],
         LineShape::Erased { keys, erasure } => vec![keys.to_value(), json(erasure)],
         LineShape::Resealed { of, from } => vec![of.to_value(), from.to_value()],
+        LineShape::Began { covers, run } => vec![covers.to_value(), run.to_value()],
     }
 }
 
@@ -688,6 +689,10 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
             of: fields.get("of")?,
             from: fields.get("from")?,
         },
+        "Began" => LineShape::Began {
+            covers: fields.get("covers")?,
+            run: fields.get("run")?,
+        },
         other => return Err(no_arm("a conversation line", other)),
     })
 }
@@ -712,6 +717,7 @@ fn signature(shape: &LineShape) -> Constructor {
         LineShape::Coding { .. } => CODING,
         LineShape::Erased { .. } => ERASED,
         LineShape::Resealed { .. } => RESEALED,
+        LineShape::Began { .. } => BEGAN,
     }
 }
 
@@ -977,6 +983,20 @@ const RESEALED: Constructor = (
     ],
 );
 
+/// `Began(conversation, at, actor, held, carried, covers, run)`.
+const BEGAN: Constructor = (
+    "Began",
+    &[
+        "conversation",
+        "at",
+        "actor",
+        "held",
+        "carried",
+        "covers",
+        "run",
+    ],
+);
+
 /// The lines' constructors, in print order.
 const LINES: &[Constructor] = &[
     OPENED,
@@ -996,17 +1016,24 @@ const LINES: &[Constructor] = &[
     ERASED,
     RESEALED,
     SET_UP,
+    BEGAN,
 ];
 
-/// The lines' whitelist: their constructors, `Scrubbed` and `Locked`, nothing else.
+/// The lines' whitelist: their constructors, `Scrubbed`, `Locked` and a claim's `Covered`,
+/// nothing else.
 #[derive(Debug, Clone, Default)]
 pub struct LineVocabulary;
 
 impl Vocabulary for LineVocabulary {
     fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
-        Table(LINES)
+        Table(LINES).find(name).or_else(|| {
+            Table(&[
+                SCRUBBED,
+                LOCKED,
+                suzatary_conversations::secretary::store::COVERED,
+            ])
             .find(name)
-            .or_else(|| Table(&[SCRUBBED, LOCKED]).find(name))
+        })
     }
 }
 
@@ -1392,6 +1419,20 @@ mod tests {
                 at: at(),
                 reason: Words::kept("down".to_owned()),
                 standing: usize::MAX,
+            },
+            Entry::Began {
+                at: at(),
+                covers: vec![
+                    suzatary_conversations::secretary::store::Covered {
+                        line: Hash::new("a".repeat(64)).expect("a name"),
+                        taint: suzatary_conversations::secretary::taint::Taint::Tainted,
+                    },
+                    suzatary_conversations::secretary::store::Covered {
+                        line: Hash::new("b".repeat(64)).expect("a name"),
+                        taint: suzatary_conversations::secretary::taint::Taint::Clean,
+                    },
+                ],
+                run: suzatary_conversations::secretary::store::RunId::of([u8::MAX; 16]),
             },
         ] {
             let (line, _) = LineEvent::write(

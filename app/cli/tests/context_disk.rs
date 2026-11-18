@@ -46,6 +46,7 @@ impl Disk {
             lines: ConversationStores::open(
                 root.join("lines"),
                 root.join("keys"),
+                root.join("runs"),
                 Arc::new(suzatary_base::capability::Nothing),
                 Arc::new(suzatary_base::capability::Nothing),
             ),

@@ -944,9 +944,11 @@ mod tests {
     /// The conversations' lines at `root`, their keys beside them.
     fn lines_at(root: std::path::PathBuf) -> crate::conversations::ConversationStores {
         let keys = root.with_file_name("lines-keys");
+        let runs = root.with_file_name("lines-runs");
         crate::conversations::ConversationStores::open(
             root,
             keys,
+            runs,
             std::sync::Arc::new(suzatary_base::capability::Nothing),
             std::sync::Arc::new(suzatary_base::capability::Nothing),
         )

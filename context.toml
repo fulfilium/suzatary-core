@@ -34,7 +34,8 @@ allowance = 2000
 # 2026-11-17: raised by hand to the figure of the tree merged with #534 for stage 2c, the tab's lines (#492, +21,265: the lines' admission rule, the worker's seal and its own lines, the device's row of own lines, the `Opening` rule, and their laws); accepted at the review of #492, on the plan's promise that stage 8 deletes `intents.ts`, `intentsync.ts` and `asks.ts`.
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.162 for the inbox, conversations and lines crates (#538, +6,511: three manifests and roots, `Derived`, and paths that name a crate where they named a module); accepted at the review of #538.
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.163 for the box's order and reads (#539, +6,512: `sequence.rs`, `compare.rs` and its verb, the skeleton's `LineWriter`, the receipt's `left` and the `carried` check, less `causal`'s old body); accepted at the review of #539.
-reading = 3047291
+# 2026-11-18: raised by hand to the figure of the tree merged with 2.1.166 for the claim (#543, +15,067 over #539's: `claim.rs` and its laws' generator, the transcript's claim step, join and guarded close, `began.rs`, the runs and their lock files, and `compare.rs`'s baseline); accepted at the review of #543.
+reading = 3058358
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
@@ -46,8 +47,9 @@ core = 44449
 # 2026-11-18: `digest` left core over the line; the core split's plan names its further cut (rows 27 to 29). Core's figure is lowered by hand to the same tree's.
 digest = 28369
 inbox = 33570
-io = 52061
-lines = 37725
+# 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
+io = 54058
+lines = 40905
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.

@@ -214,10 +214,11 @@ pub fn pinned(name: &str, got: &str) {
 /// shown and sent.
 #[must_use]
 pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> String {
-    let lines: String = transcript::lines(caps.conversations.conversations(), id)
+    let lines: String = transcript::read(caps.conversations.conversations(), id)
+        .map(|read| claims_named(&read))
         .unwrap_or_default()
         .iter()
-        .map(|entry| serde_json::to_string(entry).expect("an entry is plain data") + "\n")
+        .map(|line| line.clone() + "\n")
         .collect();
     format!(
         "# lines\n{lines}# shown\n{}\n# asked\n{:#?}\n# opened\n{}\n# resumed with\n{:#?}\n",
@@ -231,6 +232,43 @@ pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) 
         caps.model.opened().len(),
         caps.model.resumed_with(),
     )
+}
+
+/// Every line of `read` as JSON, a claim's covered lines named by their turn's index and its run
+/// by the order runs first claim, since names and runs are drawn afresh on every run of a test.
+fn claims_named(read: &transcript::Transcript) -> Vec<String> {
+    let turn = |name: &prodrome_core::event::Hash| {
+        (0..read.stored().turns.len()).find(|&turn| {
+            read.line_of(turn)
+                .is_some_and(|line| read.lines()[line].name == *name)
+        })
+    };
+    let mut runs: Vec<String> = Vec::new();
+    read.lines()
+        .iter()
+        .map(|written| match &written.entry {
+            suzatary_conversations::secretary::store::Entry::Began { at, covers, run } => {
+                let run = run.as_str().to_owned();
+                if !runs.contains(&run) {
+                    runs.push(run.clone());
+                }
+                serde_json::to_string(&serde_json::json!({
+                    "line": "began",
+                    "at": suzatary_inbox::secretary::stamp::stamp(*at),
+                    "covers": covers
+                        .iter()
+                        .map(|covered| serde_json::json!({
+                            "turn": turn(&covered.line),
+                            "taint": covered.taint.as_str(),
+                        }))
+                        .collect::<Vec<_>>(),
+                    "run": runs.iter().position(|seen| *seen == run),
+                }))
+                .expect("a claim is plain data")
+            }
+            entry => serde_json::to_string(entry).expect("an entry is plain data"),
+        })
+        .collect()
 }
 
 /// The fixed instant the six-todo chain is authored around, so every price is
@@ -989,6 +1027,8 @@ pub struct FakeModel {
     shown: Mutex<Vec<Vec<String>>>,
     /// The limit its account is under, as a door reads it.
     limited: Option<suzatary_health::health::Limited>,
+    /// How many next calls panic, as a round's task that ends with no close.
+    panics: Mutex<usize>,
 }
 
 impl FakeModel {
@@ -1012,6 +1052,7 @@ impl FakeModel {
             holding: Mutex::new(None),
             shown: Mutex::new(Vec::new()),
             limited: None,
+            panics: Mutex::new(0),
         }
     }
 
@@ -1030,6 +1071,7 @@ impl FakeModel {
             holding: Mutex::new(None),
             shown: Mutex::new(Vec::new()),
             limited: None,
+            panics: Mutex::new(0),
         }
     }
 
@@ -1095,8 +1137,24 @@ impl FakeModel {
         Err(ModelError::Halted)
     }
 
-    /// Block in the gate, if one is set, before a reply is popped.
+    /// The next `n` calls panic, whichever of `open`, `resume` or `turn` they are.
+    #[must_use]
+    pub fn panicking(self, n: usize) -> Self {
+        *self.panics.lock().expect("not poisoned") = n;
+        self
+    }
+
+    /// Block in the gate, if one is set, before a reply is popped; panic first while the
+    /// panics last.
     fn wait_for_gate(&self) {
+        {
+            let mut panics = self.panics.lock().expect("not poisoned");
+            if *panics > 0 {
+                *panics -= 1;
+                drop(panics);
+                panic!("the fake ends the round's task here, with no close");
+            }
+        }
         if let Some(gate) = self.gate.lock().expect("not poisoned").clone() {
             gate.enter();
         }
@@ -2437,6 +2495,7 @@ impl Fakes {
         let conversations = Conversations::open(
             root.join("secretary-lines"),
             root.join("secretary-lines-keys"),
+            root.join("secretary-lines-runs"),
             Arc::clone(&forgot) as _,
             Arc::clone(&forgot) as _,
         );

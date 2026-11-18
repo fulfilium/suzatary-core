@@ -6,6 +6,7 @@ pub mod first_read;
 pub mod parts;
 pub mod secretary {
     pub mod act_lines;
+    pub(crate) mod claim;
     pub mod compare;
     #[cfg(feature = "wasm")]
     mod conversation_json;
@@ -25,6 +26,7 @@ pub mod secretary {
     pub mod own_line;
     pub mod prune;
     pub mod rescrub;
+    pub mod run;
     pub mod sequence;
     pub mod step;
     pub mod targets;

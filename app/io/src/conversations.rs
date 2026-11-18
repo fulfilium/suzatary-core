@@ -11,6 +11,7 @@ use suzatary_lines::secretary::opened::Opened;
 use suzatary_todo::render_cache::RenderCache;
 
 use crate::objects;
+use crate::runs::Locks;
 use crate::text_keys::{self, TextKeys};
 use crate::texts::SystemEntropy;
 
@@ -27,6 +28,7 @@ pub struct ConversationStores {
     /// One cache per keys directory in the process, so a sweep by any holder forgets the words
     /// for every holder.
     opened: Arc<Opened>,
+    runs: Locks,
 }
 
 impl ConversationStores {
@@ -34,6 +36,7 @@ impl ConversationStores {
     pub fn open(
         lines: impl Into<PathBuf>,
         keys: PathBuf,
+        runs: PathBuf,
         renders: Arc<dyn RenderCache + Send + Sync>,
         sessions: Arc<dyn ModelSessions + Send + Sync>,
     ) -> Self {
@@ -42,6 +45,7 @@ impl ConversationStores {
             keys: text_keys::open(keys.clone()),
             opened: opened_at(&keys),
             keys_at: keys,
+            runs: Locks::at(runs),
             renders,
             sessions,
         }
@@ -53,6 +57,7 @@ impl ConversationStores {
         Self::open(
             crate::object_files::ObjectFiles::root(self.lines.inner()).to_path_buf(),
             self.keys_at.clone(),
+            self.runs.dir().to_path_buf(),
             Arc::clone(&self.renders),
             Arc::clone(&self.sessions),
         )
@@ -68,6 +73,7 @@ impl ConversationStores {
             renders: &*self.renders,
             sessions: &*self.sessions,
             opened: &self.opened,
+            runs: &self.runs,
         }
     }
 }
@@ -103,6 +109,7 @@ mod tests {
             ConversationStores::open(
                 dir.path().join("lines"),
                 dir.path().join(keys),
+                dir.path().join("runs"),
                 Arc::clone(&renders),
                 Arc::new(suzatary_base::capability::Nothing),
             )

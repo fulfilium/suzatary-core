@@ -185,7 +185,7 @@ fn sweep(
         super::run(deployment, settables, chains, &id, request)
     };
     let halt = Halt::new();
-    let answered = super::rounded(
+    let answered = super::held(
         caps,
         &id,
         &Rules {
@@ -196,6 +196,7 @@ fn sweep(
             bound: MAX_ROUNDS,
             sink: &Sink::quiet(&halt),
             load: crate::conversation::round::LOAD_NOTHING,
+            retry: suzatary_lines::secretary::transcript::Retry::Allowed,
         },
     )?;
     if let Some(answered) = &answered {

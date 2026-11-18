@@ -12,6 +12,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::wire::lines::{LineWriter, NodeHeader, SkeletonNode};
+use suzatary_conversations::secretary::store::RunId;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::{KEY_BYTES, KeyName};
 use suzatary_store::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
@@ -129,6 +130,7 @@ enum StepForm {
     Resealed { of: Name, from: Name },
     Erased { keys: Vec<Name> },
     Still,
+    Began { covers: Vec<Name>, run: String },
 }
 
 impl snapshot::Held for LineReplica {
@@ -316,6 +318,10 @@ fn step_form(step: &Step) -> StepForm {
             keys: keys.iter().map(|k| bytes(k.as_str())).collect(),
         },
         Step::Still => StepForm::Still,
+        Step::Began { covers, run } => StepForm::Began {
+            covers: covers.iter().map(|line| bytes(line.as_str())).collect(),
+            run: run.as_str().to_owned(),
+        },
     }
 }
 
@@ -338,6 +344,10 @@ fn step_of(form: StepForm) -> Result<Step, String> {
             keys: keys.iter().map(name).collect::<Result<_, _>>()?,
         },
         StepForm::Still => Step::Still,
+        StepForm::Began { covers, run } => Step::Began {
+            covers: covers.iter().map(hash).collect::<Result<_, _>>()?,
+            run: RunId::parse(&run).ok_or("a claim's run is no run")?,
+        },
     })
 }
 

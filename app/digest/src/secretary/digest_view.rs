@@ -314,6 +314,11 @@ pub fn whole(entry: &Entry) -> String {
             format!("The model session ended: {model} said a turn the session never heard.")
         }
         Entry::Coding { .. } => "A coding session moved on.".to_owned(),
+        Entry::Began { covers, .. } => format!(
+            "The secretary began answering {} turn{}.",
+            covers.len(),
+            if covers.len() == 1 { "" } else { "s" }
+        ),
         Entry::Resealed { .. } => {
             "A part of this conversation was sealed again under the current redaction rules."
                 .to_owned()

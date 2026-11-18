@@ -59,16 +59,21 @@ fn queued(answer: &mut ureq::http::Response<ureq::Body>, text: &str) -> bool {
         .any(|turn| turn["who"] == "person" && turn["text"] == text && turn["queued"] == true)
 }
 
-/// Two `say`s during one turn produce one exchange, and both person lines are delivered.
+/// A `say` while the model writes its answer to the first is not settled by that answer, which
+/// the model wrote without it: the next exchange answers it.
 ///
 /// `wait_until_entered` blocks until the fake has registered the call, since a 202 says nothing
 /// about whether the worker had reached the model yet.
 #[test]
-fn two_says_in_one_turn_are_one_exchange() {
+fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     let gate = Gate::new();
     let (base, workers) = writer(
         "worker-coalesce",
-        FakeModel::saying(["{\"say\": \"got both\"}"]).gated(gate.clone()),
+        FakeModel::saying([
+            "{\"say\": \"got the first\"}",
+            "{\"say\": \"got the second\"}",
+        ])
+        .gated(gate.clone()),
     );
     let id = open(&base);
 
@@ -92,19 +97,27 @@ fn two_says_in_one_turn_are_one_exchange() {
     );
     gate.release();
 
-    let payload = common::settled(&base, &id);
+    // The page reads the queue by position until a tab folds the claim, so it is not asked
+    // whether it is idle between the two rounds: the second answer is waited for.
+    let payload = common::poll_conversation(&base, &id, |payload| {
+        payload["turns"]
+            .as_array()
+            .is_some_and(|turns| turns.len() == 4)
+    });
     let turns = payload["turns"].as_array().expect("turns");
     assert_eq!(
         turns.len(),
-        3,
-        "two person turns and one model turn: {turns:?}"
+        4,
+        "two person turns and two model turns: {turns:?}"
     );
     assert_eq!(turns[0]["who"], "person");
     assert_eq!(turns[0]["text"], "first");
     assert_eq!(turns[1]["who"], "person");
     assert_eq!(turns[1]["text"], "second");
     assert_eq!(turns[2]["who"], "model");
-    assert_eq!(turns[2]["text"], "got both");
+    assert_eq!(turns[2]["text"], "got the first");
+    assert_eq!(turns[3]["who"], "model");
+    assert_eq!(turns[3]["text"], "got the second");
 
     // And `queue::delta` is empty: the last turn is a finished model turn, which is what the
     // worker's idle check reads.
@@ -232,4 +245,21 @@ fn a_restarted_box_refires_nothing_already_answered() {
     );
     let turns = payload["turns"].as_array().expect("turns");
     assert_eq!(turns.last().expect("a turn")["text"], "the new one");
+}
+
+/// A round whose task ends with no close (here, a panic in the model's call) leaves its claim
+/// open; its run is gone once the task is, so the conversation's task claims it again with a new
+/// run at its next reading, and that round answers.
+#[test]
+fn a_round_that_ends_with_no_close_is_retried_by_its_conversation() {
+    let (base, _workers) = writer(
+        "worker-lost",
+        FakeModel::saying(["{\"say\": \"after the retry\"}"]).panicking(1),
+    );
+    let id = open(&base);
+    assert_eq!(common::status(&say(&base, &id, "is it Friday?")), 202);
+    let payload = common::settled(&base, &id);
+    let turns = payload["turns"].as_array().expect("turns");
+    assert_eq!(turns.len(), 2, "{turns:?}");
+    assert_eq!(turns[1]["text"], "after the retry");
 }

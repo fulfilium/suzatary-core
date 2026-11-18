@@ -86,7 +86,12 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   await app.page.waitFor(`${LANDED_ROW}.then((row) => row.epoch > 1 && row.nodes.length > 0 && !row.nodes.includes("${old.hash}"))`, { timeout: 20000 })
   const after = await app.page.evaluate<Landed>(LANDED_ROW)
-  assert.deepEqual(new Set(after.nodes), new Set(box.nodes.map((o) => o.hash)), "the device holds the box's lines and nothing else")
+  // The round goes on meanwhile (its claim is a line of the box's), so the device is read against the box's lines as they
+  // stand after it landed: every line it held then, and none the box does not hold.
+  const now = await app.page.evaluate<{ nodes: { hash: string }[] }>(`fetch("/api/stores/lines/skeleton").then((r) => r.json())`)
+  const held = new Set(now.nodes.map((o) => o.hash))
+  assert.deepEqual(after.nodes.filter((n) => !held.has(n)), [], "the device holds the box's lines and nothing else")
+  assert.deepEqual(box.nodes.map((o) => o.hash).filter((n) => !after.nodes.includes(n)), [], "every line the box held before")
   assert.ok(after.generation > was.generation, "in the generation after, so no copy from before reaches it")
   assert.ok(after.keys.length > 0, "the keys taken again with the lines")
   // The conversation reads again from the box's lines alone.

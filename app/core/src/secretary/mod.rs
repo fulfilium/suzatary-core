@@ -30,7 +30,7 @@ pub mod verbs;
 use serde_json::{Map, Value};
 
 use crate::conversation::ask::Ask;
-use crate::conversation::round::{Round, Rules, Sink, Transcript};
+use crate::conversation::round::{Ending, Round, Rules, Sink, Transcript, Why};
 use crate::verb::Request;
 pub use call::Call;
 pub use record::Secretary;
@@ -46,7 +46,7 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::secretary::model::{Halt, Turn};
 use suzatary_conversations::secretary::store::{Entry, Stored};
-use suzatary_conversations::secretary::{queue, store, tool_name};
+use suzatary_conversations::secretary::{store, tool_name};
 use suzatary_digest::secretary::memories;
 use suzatary_inbox::secretary::proposal;
 use suzatary_inbox::secretary::{inbox, own_round, stamp};
@@ -145,16 +145,29 @@ pub fn converse(
         system,
         &Subset::ALL,
         &Sink::quiet(&Halt::new()),
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Alone,
     )
 }
 
-/// Answer what waits with the model `pick` names.
+/// Who runs a conversation's rounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Holder {
+    /// The server's worker, whose task reads its conversation again after each round, so a
+    /// `Turn` frame and a push come between two: one round.
+    Task,
+    /// A holder with no task to read it again (`ask`, `brief`, the review): a round, then another
+    /// while one is owed.
+    Alone,
+}
+
+/// Answer what waits with the model `pick` names, as `holder` runs rounds.
 ///
 /// # Errors
 /// As [`converse`].
 #[expect(
     clippy::too_many_arguments,
-    reason = "a round's model, its deployment and live names, its chains, its verbs and its sink"
+    reason = "a round's model, its deployment and live names, its chains, its verbs, its sink and its holder"
 )]
 pub fn answer<'p>(
     caps: &Secretary<'_>,
@@ -166,8 +179,10 @@ pub fn answer<'p>(
     system: &str,
     verbs: &Subset,
     sink: &Sink<'_>,
+    retry: suzatary_lines::secretary::transcript::Retry,
+    holder: Holder,
 ) -> Result<Option<Answered>, Refusal> {
-    if queue::Pending::of(&read(caps.conversations, id)?).is_none() {
+    if !transcript::read(caps.conversations, id)?.owes_a_round() {
         return Ok(None);
     }
     let pick = pick();
@@ -188,7 +203,11 @@ pub fn answer<'p>(
             topics: caps.topics,
         },
     };
-    rounded(
+    let rounds = match holder {
+        Holder::Task => rounded,
+        Holder::Alone => held,
+    };
+    rounds(
         caps,
         id,
         &Rules {
@@ -199,6 +218,7 @@ pub fn answer<'p>(
             bound: MAX_ROUNDS,
             sink,
             load: &load,
+            retry,
         },
     )
 }
@@ -213,7 +233,7 @@ pub fn stop_waiting(
     id: &ConversationId,
     by: &Actor,
 ) -> Result<(), Refusal> {
-    if queue::Pending::of(&read(conversations, id)?).is_none() {
+    if !transcript::read(conversations, id)?.owes_a_round() {
         return Err(Refusal::conflict(format!(
             "nothing is being answered in {id}, so there is nothing to stop"
         )));
@@ -246,6 +266,49 @@ pub(crate) fn rounded(
                 stored: read(caps.conversations, id)?,
                 rounds: closed.round.steps,
                 ending: closed.ending,
+            })
+        })
+        .transpose()
+}
+
+/// A [`Round`] under `rules`, then another while one is owed, and the conversation as they leave
+/// it: its first round's ending, and every round's asks: [`Holder::Alone`]'s, and the sweep's.
+/// While a round runs, its
+/// run holds the conversation, so another holder's claim step finds nothing to do, and a
+/// question said during its last ask is joined by no one; the holder claims again after its own
+/// round, so that question is answered now and not at the next write. A stop ends the holder's
+/// rounds, since the halt it pulled stays pulled.
+pub(crate) fn held(
+    caps: &Secretary<'_>,
+    id: &ConversationId,
+    rules: &Rules<'_>,
+) -> Result<Option<Answered>, Refusal> {
+    let transcript = Transcript {
+        conversations: caps.conversations,
+        clock: caps.clock,
+        id,
+    };
+    let mut first: Option<Ending> = None;
+    let mut asks = 0;
+    while let Some(closed) = Round::answer(rules, &transcript)? {
+        asks += closed.round.steps;
+        let stopped = matches!(
+            closed.ending,
+            Ending::Ended {
+                why: Why::Stopped(_)
+            }
+        );
+        first.get_or_insert(closed.ending);
+        if stopped {
+            break;
+        }
+    }
+    first
+        .map(|ending| {
+            Ok(Answered {
+                stored: read(caps.conversations, id)?,
+                rounds: asks,
+                ending,
             })
         })
         .transpose()

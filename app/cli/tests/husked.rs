@@ -30,6 +30,7 @@ fn stores_at(root: &Path) -> ConversationStores {
     ConversationStores::open(
         root.join("secretary-lines"),
         root.join("secretary-lines-keys"),
+        root.join("secretary-lines-runs"),
         Arc::new(suzatary_base::capability::Nothing),
         Arc::new(suzatary_base::capability::Nothing),
     )

@@ -170,7 +170,8 @@ fn begins(line: &LineEvent, post: &Post<'_, LinesRule>) -> Result<(), Inadmissib
         | LineShape::Scoped { .. }
         | LineShape::Coding { .. }
         | LineShape::Erased { .. }
-        | LineShape::Resealed { .. } => Err(Inadmissible::finally(format!(
+        | LineShape::Resealed { .. }
+        | LineShape::Began { .. } => Err(Inadmissible::finally(format!(
             "the box alone writes a {} line",
             line.shape().name()
         ))),
@@ -261,7 +262,8 @@ fn fits(shape: &LineShape, words: &LineWords) -> Result<(), Inadmissible> {
         | LineShape::Scoped { .. }
         | LineShape::Coding { .. }
         | LineShape::Erased { .. }
-        | LineShape::Resealed { .. } => Err(Inadmissible::finally(format!(
+        | LineShape::Resealed { .. }
+        | LineShape::Began { .. } => Err(Inadmissible::finally(format!(
             "the box alone writes a {} line",
             shape.name()
         ))),

@@ -54,6 +54,7 @@ pub mod repository;
 pub mod requests;
 pub mod routine;
 pub mod run;
+pub(crate) mod runs;
 pub mod scratch;
 pub mod secrets;
 pub mod setup_token;

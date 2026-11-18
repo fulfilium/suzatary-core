@@ -257,6 +257,7 @@ fn a_sweep_that_cannot_read_a_naming_deletes_nothing() {
             history: &summaries,
             texts: &digest_texts,
             lines: suzatary_lines::secretary::conversations::Conversations {
+                runs: &*suzatary_lines::nothing::RUNS,
                 lines: &lines,
                 keys: &suzatary_memory::secretary::locked_text::InMemoryKeys::default(),
                 entropy: &entropy,

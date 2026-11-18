@@ -17,6 +17,8 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema as _;
 
+pub use crate::secretary::claim::Retry;
+use crate::secretary::claim::{Asked, Bound, Claims, Due, Line, Mark, Standing, Wakes};
 use crate::secretary::conversations::Conversations;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
@@ -24,8 +26,11 @@ use crate::secretary::line_shape::LineShape;
 use crate::secretary::sequence;
 use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::model::{SessionId, Turn};
-use suzatary_conversations::secretary::store::{Entry, NotAConversation, Said, Stored};
+use suzatary_conversations::secretary::model::SessionId;
+use suzatary_conversations::secretary::store::{
+    Covered, Entry, NotAConversation, RunId, Said, Stored,
+};
+use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::holder::Holder;
 use suzatary_memory::secretary::line_words::LineWords;
@@ -34,13 +39,16 @@ use suzatary_memory::secretary::slots::Slots;
 use suzatary_memory::secretary::words::{Gone, Words};
 use suzatary_store::store::{Prodrome, StoreError};
 
-/// One conversation's lines in causal order, and their fold.
+/// One conversation's lines in causal order, their fold, and the claims' reading of them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transcript {
     lines: Vec<Written>,
     stored: std::sync::Arc<Stored>,
     /// Each turn's line, by the turn's index in [`Stored::turns`].
     turns: Vec<usize>,
+    /// What each line is to the claim, by its position.
+    marks: Vec<Mark<RunId>>,
+    claims: Claims<RunId>,
 }
 
 /// One line beside its name, its reading and the lines it rests on.
@@ -124,17 +132,30 @@ impl Transcript {
             .collect();
         let stored = Stored::of_lines(id, lines.iter().map(|w| &w.entry))?;
         // The fold makes a turn of each said line and each stop, and of nothing else.
-        let turns = lines
+        let turns: Vec<usize> = lines
             .iter()
             .enumerate()
             .skip(1)
             .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
             .map(|(at, _)| at)
             .collect();
+        let marks = marks(&lines, &stored, &turns);
+        let claims = Claims::of(
+            &marks
+                .iter()
+                .zip(&lines)
+                .map(|(mark, line)| Line {
+                    mark,
+                    rests_on: &line.rests_on,
+                })
+                .collect::<Vec<_>>(),
+        );
         Ok(Self {
             lines,
             stored: std::sync::Arc::new(stored),
             turns,
+            marks,
+            claims,
         })
     }
 
@@ -190,123 +211,310 @@ impl Transcript {
         &self.stored
     }
 
-    /// The owed register: every live turn that no live closing turn rests on or is, with its
-    /// index; a turn [closes](Stored::closes) when it is an answer with no calls or a stop.
-    ///
-    /// For one writer this is [`suzatary_conversations::secretary::queue::delta`]. It reads descent, not position,
-    /// so it is the same for every order a replica received the lines in.
+    /// The owed register: every live turn the claims do not read as settled, with its index. A
+    /// person's or an act's turn is settled by a closed round that covered it, or by a stop or a
+    /// close with no round open that rests on it; a model's or a verb's by any close resting on it.
+    /// It reads descent and claims, not position, so it is the same for every order a replica
+    /// received the lines in.
     #[must_use]
     pub fn owed(&self) -> Vec<(usize, &Said)> {
-        let mut settled = vec![false; self.lines.len()];
-        let mut pending: Vec<usize> = self
-            .turns
-            .iter()
-            .enumerate()
-            .filter(|(turn, _)| self.stored.is_live(*turn) && self.stored.closes(*turn))
-            .map(|(_, &line)| line)
-            .collect();
-        while let Some(line) = pending.pop() {
-            if !settled[line] {
-                settled[line] = true;
-                pending.extend(&self.lines[line].rests_on);
-            }
-        }
         self.stored
             .live()
             .into_iter()
-            .filter(|(turn, _)| !settled[self.turns[*turn]])
+            .filter(|(turn, _)| self.claims.standing(self.turns[*turn]) != Standing::Settled)
             .collect()
     }
 
-    /// The question a round answers: the first owed turn that wakes a model, by its line's name,
-    /// which stays the question's whatever is written after it.
+    /// Whether a turn that wakes a model is owed: what the conversation's answer rule reads.
     #[must_use]
-    pub fn asked(&self) -> Option<&Hash> {
-        self.owed()
-            .into_iter()
-            .find(|(_, said)| suzatary_conversations::secretary::queue::wakes(said))
-            .map(|(turn, _)| &self.lines[self.turns[turn]].name)
-    }
-
-    /// Whether a round was owed here at or after `since` and none answered: a round already in
-    /// flight (a model's or a verb's turn still owed), or a person's question, which the routes
-    /// wake a model for. An act line alone is not: an acknowledgement wakes no model, by design.
-    #[must_use]
-    pub fn interrupted(&self, since: suzatary_health::health::Instant) -> bool {
-        self.owed().iter().any(|(_, said)| {
-            prodrome_core::fpl::instant_of(said.at) >= since
-                && match said.turn {
-                    Turn::Person { .. } | Turn::Model { .. } | Turn::Tool { .. } => true,
-                    Turn::Act { .. } | Turn::Erased { .. } => false,
-                }
-        })
-    }
-
-    /// Whether the turn the line named `line` says is still owed an answer.
-    #[must_use]
-    pub(crate) fn owes(&self, line: &Hash) -> bool {
+    pub fn owes_a_round(&self) -> bool {
         self.owed()
             .iter()
-            .any(|(turn, _)| self.lines[self.turns[*turn]].name == *line)
+            .any(|(_, said)| suzatary_conversations::secretary::queue::wakes(said))
+    }
+
+    /// The claims' reading of these lines.
+    #[must_use]
+    pub(crate) fn claims(&self) -> &Claims<RunId> {
+        &self.claims
+    }
+
+    /// Every live request (a person's or an act's turn, or a model's or a verb's) as a claim step
+    /// at `now` reads it.
+    #[must_use]
+    pub(crate) fn asked(&self, now: Datetime) -> Vec<Asked> {
+        let now = prodrome_core::fpl::instant_of(now);
+        self.stored
+            .live()
+            .into_iter()
+            .map(|(turn, said)| (self.turns[turn], said))
+            .filter(|(line, _)| matches!(self.marks[*line], Mark::Request | Mark::Answer))
+            .map(|(at, said)| Asked {
+                at,
+                wakes: if suzatary_conversations::secretary::queue::wakes(said) {
+                    Wakes::Model
+                } else {
+                    Wakes::RidesAlong
+                },
+                bound: if now - prodrome_core::fpl::instant_of(said.at) <= ANSWERED_WITHIN {
+                    Bound::Within
+                } else {
+                    Bound::Past
+                },
+            })
+            .collect()
+    }
+
+    /// What the open round of `run` sends its model: every live turn it covers, in order.
+    #[must_use]
+    pub fn sending(&self, run: &RunId) -> Vec<(usize, &Said)> {
+        let covered: &[usize] = self
+            .claims
+            .open(run)
+            .map_or(&[], |round| &self.claims.rounds()[round].covers);
+        self.stored
+            .live()
+            .into_iter()
+            .filter(|(turn, _)| covered.contains(&self.turns[*turn]))
+            .collect()
     }
 }
 
 /// What a round's write for one question did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Answering {
-    /// The line was written.
+    /// The lines were written.
     Written,
-    /// A closing line already rests on the question, so nothing was written.
+    /// The round was closed already (a stop, or the box's close of a run it read as gone), so
+    /// nothing was written.
     Answered,
 }
 
-/// [`push`] `entry`, a round's line for the question named `asked`, unless a closing line already
-/// rests on that question: a round resumed beside one that answered it writes nothing.
+/// [`push`] each of `entries`, a round's lines, in one hold of the lock, while the round of `run`
+/// is open: a round that another line closed writes nothing more.
 ///
 /// # Errors
 /// As [`push`].
-pub fn push_answering(
+pub fn push_open(
     conversations: Conversations<'_>,
     id: &ConversationId,
-    asked: &Hash,
-    entry: &Entry,
+    run: &RunId,
+    entries: &[Entry],
 ) -> Result<Answering, StoreError> {
     let _held = conversations.lines.locked()?;
     let read = read(conversations, id)?;
-    if !read.owes(asked) {
+    if read.claims().open(run).is_none() {
         return Ok(Answering::Answered);
     }
-    write(conversations, id, read.lines().len(), entry)?;
+    for (more, entry) in entries.iter().enumerate() {
+        write(conversations, id, read.lines().len() + more, entry)?;
+    }
     Ok(Answering::Written)
 }
 
-/// How long before a restart a question it left unanswered is still answered after it.
-pub(crate) const RESUMED: chrono::Duration = chrono::Duration::hours(1);
+/// How long after a request is made a round may still claim it: past it, the box closes it
+/// unanswered, and asking again is the person's.
+pub const ANSWERED_WITHIN: chrono::Duration = chrono::Duration::hours(1);
 
-/// Every conversation a restart at `now` left unanswered ([`Transcript::interrupted`]) within
-/// `RESUMED`, to be answered now; none while the model's last observed call, `model`, failed,
-/// since a round would only close each question with "did not finish", and the owner's next write
-/// asks again.
+/// What a claim step did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Claimed {
+    /// Nothing was owed, or a round of another run is running.
+    Nothing,
+    /// A `Began` of the run was written: the round may ask.
+    Began,
+    /// The box's close was written: of a lost round it will not retry, or of a question past
+    /// [`ANSWERED_WITHIN`].
+    Closed,
+}
+
+/// The claim step of conversation `id` at `now`, under the lines' lock: what the claim reading
+/// owes (a first claim, a retry of a lost round, the box's close, or nothing while another run's
+/// round runs), written for the round of `run`. A covered turn's taint is the box's judgment of it now. The
+/// box's close is `close` of the conversation as read.
+///
+/// # Errors
+/// As [`push`].
+pub fn claim(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    run: &RunId,
+    now: Datetime,
+    retry: Retry,
+    close: impl FnOnce(&Stored) -> Vec<Entry>,
+) -> Result<Claimed, StoreError> {
+    let _held = conversations.lines.locked()?;
+    let read = read(conversations, id)?;
+    let held = read.lines().len();
+    let covers =
+        match read
+            .claims()
+            .due(&read.asked(now), |run| conversations.runs.gone(run), retry)
+        {
+            Due::Nothing => return Ok(Claimed::Nothing),
+            Due::Claim(covers) | Due::Retry(covers) => covers,
+            Due::Close => {
+                for (more, entry) in close(read.stored()).iter().enumerate() {
+                    write(conversations, id, held + more, entry)?;
+                }
+                return Ok(Claimed::Closed);
+            }
+        };
+    write(conversations, id, held, &read.began(&covers, run, now))?;
+    Ok(Claimed::Began)
+}
+
+/// Before the round of `run` asks again, under the lines' lock: a `Began` of its run covering
+/// every request queued, when there is any. A retry round takes none.
+///
+/// # Errors
+/// As [`push`].
+pub fn join(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    run: &RunId,
+    now: Datetime,
+) -> Result<(), StoreError> {
+    let _held = conversations.lines.locked()?;
+    let read = read(conversations, id)?;
+    let covers = read.claims().joins(&read.asked(now), run);
+    if covers.is_empty() {
+        return Ok(());
+    }
+    write(
+        conversations,
+        id,
+        read.lines().len(),
+        &read.began(&covers, run, now),
+    )
+}
+
+impl Transcript {
+    /// The lines the claim step of a start at `now` claims: a retry of a lost round, or a first
+    /// claim that covers a person's question. A conversation owed only an act, a note or the
+    /// box's close waits for its next write, as a start before claims left it.
+    #[must_use]
+    pub(crate) fn resumes(
+        &self,
+        now: Datetime,
+        gone: impl Fn(&RunId) -> bool,
+        retry: Retry,
+    ) -> Vec<usize> {
+        match self.claims.due(&self.asked(now), gone, retry) {
+            Due::Retry(covers) => covers,
+            Due::Claim(covers)
+                if covers.iter().any(|&line| {
+                    matches!(
+                        self.lines[line].line.shape(),
+                        LineShape::Said {
+                            turn: TurnShape::Person { .. },
+                            ..
+                        }
+                    )
+                }) =>
+            {
+                covers
+            }
+            Due::Claim(_) | Due::Close | Due::Nothing => Vec::new(),
+        }
+    }
+
+    /// The claim of `run` over the lines at `covers`, each judged as the box reads it now.
+    fn began(&self, covers: &[usize], run: &RunId, now: Datetime) -> Entry {
+        let turn_of = |line: usize| self.turns.iter().position(|&at| at == line);
+        Entry::Began {
+            at: now,
+            covers: covers
+                .iter()
+                .filter_map(|&line| {
+                    Some(Covered {
+                        line: self.lines[line].name.clone(),
+                        taint: suzatary_conversations::secretary::taint::turn(
+                            &self.stored.turns[turn_of(line)?],
+                        ),
+                    })
+                })
+                .collect(),
+            run: run.clone(),
+        }
+    }
+}
+
+/// Every conversation a start at `now` resumes, oldest id first: one whose claim step would retry
+/// a lost round, or claim a person's question. One owed only an act, a note or the box's close
+/// waits for its next write, as a start before claims left it.
 ///
 /// # Errors
 /// The store's.
-pub fn waiting(
+pub fn resumed(
     conversations: Conversations<'_>,
-    model: Option<&suzatary_health::health::Reading>,
     now: Datetime,
+    retry: Retry,
 ) -> Result<Vec<ConversationId>, StoreError> {
-    match model {
-        Some(suzatary_health::health::Reading::Failing { .. }) => return Ok(Vec::new()),
-        Some(suzatary_health::health::Reading::Ok { .. }) | None => {}
-    }
-    let since = prodrome_core::fpl::instant_of(now) - RESUMED;
-    let mut waiting: Vec<ConversationId> = each(conversations)?
+    let mut resumed: Vec<ConversationId> = each(conversations)?
         .into_iter()
-        .filter(|(_, read)| read.as_ref().is_ok_and(|read| read.interrupted(since)))
+        .filter(|(_, read)| {
+            read.as_ref().is_ok_and(|read| {
+                !read
+                    .resumes(now, |run| conversations.runs.gone(run), retry)
+                    .is_empty()
+            })
+        })
         .map(|(id, _)| id)
         .collect();
-    waiting.reverse();
-    Ok(waiting)
+    resumed.reverse();
+    Ok(resumed)
+}
+
+/// What each line is to the claim: a live answer or stop closes, and one a rewind set aside is
+/// withdrawn; a `Began` claims, its covers by their positions here.
+fn marks(lines: &[Written], stored: &Stored, turns: &[usize]) -> Vec<Mark<RunId>> {
+    let mut turn_of = vec![None; lines.len()];
+    for (turn, &line) in turns.iter().enumerate() {
+        turn_of[line] = Some(turn);
+    }
+    let position: BTreeMap<&Hash, usize> = lines
+        .iter()
+        .enumerate()
+        .map(|(at, written)| (&written.name, at))
+        .collect();
+    let live = |at: usize| turn_of[at].is_some_and(|turn| stored.is_live(turn));
+    lines
+        .iter()
+        .enumerate()
+        .map(|(at, written)| match written.line.shape() {
+            LineShape::Said { turn, .. } => match turn {
+                TurnShape::Person { .. } | TurnShape::Act { .. } => Mark::Request,
+                TurnShape::Model { calls } if calls.is_empty() && live(at) => Mark::Close,
+                TurnShape::Model { calls } if calls.is_empty() => Mark::Withdrawn,
+                TurnShape::Model { .. } | TurnShape::Tool { .. } => Mark::Answer,
+            },
+            LineShape::Stopped { .. } if live(at) => Mark::Stop,
+            LineShape::Stopped { .. } => Mark::Withdrawn,
+            LineShape::Began { covers, run } => Mark::Claim {
+                run: run.clone(),
+                covers: covers
+                    .iter()
+                    .filter_map(|covered| position.get(&covered.line).copied())
+                    .collect(),
+            },
+            LineShape::Opened { .. }
+            | LineShape::SetUp { .. }
+            | LineShape::Titled { .. }
+            | LineShape::Proposed { .. }
+            | LineShape::Reviewed { .. }
+            | LineShape::ReviewFailed { .. }
+            | LineShape::Rewound { .. }
+            | LineShape::MemorySeen { .. }
+            | LineShape::Session { .. }
+            | LineShape::Unheard { .. }
+            | LineShape::Kept { .. }
+            | LineShape::Scoped { .. }
+            | LineShape::Coding { .. }
+            | LineShape::Erased { .. }
+            | LineShape::Resealed { .. } => Mark::Other,
+        })
+        .collect()
 }
 
 /// A conversation's reading is named by its heads, the lines no other line rests on: the down-set

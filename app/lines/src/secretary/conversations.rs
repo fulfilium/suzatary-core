@@ -39,6 +39,8 @@ pub struct Conversations<'a> {
     pub sessions: &'a dyn ModelSessions,
     /// The lines' fold, holding the words opened so far, forgotten before their key is destroyed.
     pub opened: &'a Opened,
+    /// Where a round draws the run that claims it, and whether another's is gone.
+    pub runs: &'a dyn crate::secretary::run::Runs,
 }
 
 /// The conversations as a reader holds them: no field reaches a write of a line, a key or a

@@ -346,6 +346,7 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
     rooted(&lines, "lines");
     let entropy = Counted::default();
     let store = suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
@@ -420,6 +421,7 @@ fn memories(root: &Path) {
             history: &digests,
             texts: &digest_texts,
             lines: suzatary_lines::secretary::conversations::Conversations {
+                runs: &*suzatary_lines::nothing::RUNS,
                 lines: &lines,
                 keys: &keys,
                 entropy: &Pinned,
@@ -779,6 +781,7 @@ fn conversations_of<'a>(
     database: &suzatary_core::stores::Database<'a>,
 ) -> suzatary_lines::secretary::conversations::Conversations<'a> {
     suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: database.conversations,
         keys: database.line_keys,
         entropy: &Pinned,
@@ -1061,6 +1064,7 @@ fn digest_at_scale() {
     let entropy = suzatary_io::texts::SystemEntropy;
     let stores =
         |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
+            runs: &*suzatary_lines::nothing::RUNS,
             lines: &lines,
             keys: &keys,
             entropy: &entropy,
@@ -1119,6 +1123,7 @@ fn lines_for_a_tab() {
     let entropy = suzatary_io::texts::SystemEntropy;
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
@@ -1228,6 +1233,7 @@ fn lines_written_before_kinds_were_stored_read_whole() {
     );
     let (lines, keys) = lines_at(dir.path());
     let store = suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: &lines,
         keys: &keys,
         entropy: &Pinned,
@@ -1273,6 +1279,7 @@ fn digest_nodes_at_scale() {
         history: &history,
         texts: &texts,
         lines: suzatary_lines::secretary::conversations::Conversations {
+            runs: &*suzatary_lines::nothing::RUNS,
             lines: &lines,
             keys: &keys,
             entropy: &entropy,
@@ -1367,8 +1374,13 @@ fn digest_nodes_at_scale() {
     }
     let first = ConversationId::new("2026-10-09-1").expect("a slug");
     transcript::push(digests.lines, &first, &said(301)).expect("said");
-    time("waiting, right after one line", &mut || {
-        transcript::waiting(digests.lines, None, at(23, 59)).expect("reads");
+    time("resumed, right after one line", &mut || {
+        transcript::resumed(
+            digests.lines,
+            at(23, 59),
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+        )
+        .expect("reads");
     });
     time("the conversation list, after it", &mut || {
         transcript::each(digests.lines).expect("reads");
@@ -1422,6 +1434,7 @@ fn a_rules_change_over_a_stored_digest() {
     let entropy = suzatary_io::texts::SystemEntropy;
     let stores =
         |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
+            runs: &*suzatary_lines::nothing::RUNS,
             lines: &lines,
             keys: &keys,
             entropy: &entropy,
@@ -1576,6 +1589,7 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
     let entropy: &'static Counted = Box::leak(Box::default());
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: writer,
         keys,
         entropy,
@@ -1628,6 +1642,7 @@ fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
     let entropy: &'static suzatary_io::texts::SystemEntropy = Box::leak(Box::default());
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines,
         keys,
         entropy,

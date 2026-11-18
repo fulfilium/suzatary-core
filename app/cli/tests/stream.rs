@@ -343,3 +343,56 @@ fn a_streaming_block_renders_by_its_sha() {
     mid.release();
     common::settled(&base, &id);
 }
+
+/// A question said while the last answer streams is answered by a round of its own, and the page
+/// sees the first answer land as a turn before the second answer's first delta, so the two never
+/// run together in one streaming bubble.
+#[test]
+fn a_question_said_while_the_answer_streams_gets_a_turn_of_its_own() {
+    let mid = Gate::new();
+    let (base, _workers) = writer(
+        "stream-late-question",
+        FakeModel::saying([
+            "{\"say\": \"opened\"}",
+            "{\"say\": \"first\"}",
+            "{\"say\": \"second\"}",
+        ])
+        .streaming([vec!["fir", "st"], vec!["sec", "ond"]])
+        .mid_stream(mid.clone()),
+    );
+    let id = open(&base);
+    let rx = first_round(&base, &id);
+
+    assert_eq!(common::status(&say(&base, &id, "what is due?")), 202);
+    assert_eq!(
+        next(&rx),
+        serde_json::json!({"kind": "state", "state": "thinking"})
+    );
+    assert_eq!(
+        next(&rx),
+        serde_json::json!({"kind": "delta", "text": "fir"})
+    );
+    mid.wait_until_entered();
+    assert_eq!(
+        common::status(&say(&base, &id, "and when?")),
+        202,
+        "said during the last ask"
+    );
+    mid.release();
+
+    let mut frames = Vec::new();
+    while !frames.contains(&serde_json::json!({"kind": "delta", "text": "sec"})) {
+        assert!(frames.len() < 16, "no second answer: {frames:?}");
+        frames.push(next(&rx));
+    }
+    let at = |frame: serde_json::Value| frames.iter().position(|seen| *seen == frame);
+    let first_end =
+        at(serde_json::json!({"kind": "delta", "text": "st"})).expect("the first answer ends");
+    let turn = at(serde_json::json!({"kind": "turn"})).expect("a turn frame");
+    let second =
+        at(serde_json::json!({"kind": "delta", "text": "sec"})).expect("the second answer starts");
+    assert!(
+        first_end < turn && turn < second,
+        "the first answer lands as a turn before the second streams: {frames:?}"
+    );
+}

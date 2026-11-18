@@ -202,6 +202,8 @@ fn review(
         system,
         &SURFACE,
         &quiet,
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        super::Holder::Alone,
     )
     .and_then(|answered| {
         answered

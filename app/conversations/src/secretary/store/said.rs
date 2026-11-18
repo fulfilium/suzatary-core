@@ -50,7 +50,8 @@ impl Said {
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }
-            | Entry::Resealed { .. } => None,
+            | Entry::Resealed { .. }
+            | Entry::Began { .. } => None,
         }
     }
 }

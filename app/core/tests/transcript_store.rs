@@ -7,6 +7,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::transcript::Retry;
 use suzatary_lines::secretary::transcript::*;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -71,11 +72,11 @@ impl suzatary_todo::render_cache::RenderCache for Stuck {
     }
 }
 
-/// After a restart, a person's question and a round in flight within the hour are answered;
-/// an acknowledgement, which wakes no model, and a question from an earlier deploy are not;
-/// and while the model fails nothing is, so no question is closed by "did not finish".
+/// A start resumes a person's question asked within the hour, whatever the model's health; an
+/// acknowledgement, a model's turn with no question owed, and a question from an earlier deploy
+/// wait for their conversation's next write.
 #[test]
-fn a_restart_answers_only_what_it_cut_off() {
+fn a_start_resumes_only_what_it_cut_off() {
     let held = suzatary_core::stores::conversations::InMemory::default();
     let store = held.conversations();
     let hours_ago =
@@ -124,41 +125,49 @@ fn a_restart_answers_only_what_it_cut_off() {
         start(store, &id(conversation), &opened()).expect("started");
         push(store, &id(conversation), line).expect("written");
     }
-    assert_eq!(
-        waiting(store, None, at(30)).expect("reads"),
-        [id("2026-09-30-1"), id("2026-09-30-2")]
-    );
-    let failing = suzatary_health::health::Healths::<String>::one(
-        "a-cli/large".to_owned(),
-        prodrome_core::fpl::instant_of(at(20)),
-        suzatary_health::health::Outcome::Failed(suzatary_health::health::Failure::Unclassified),
-        "it failed",
-    );
-    assert!(
-        waiting(store, failing.reading("a-cli/large").as_ref(), at(30))
-            .expect("reads")
-            .is_empty()
-    );
+    for retry in [Retry::Allowed, Retry::Held] {
+        assert_eq!(
+            resumed(store, at(30), retry).expect("reads"),
+            [id("2026-09-30-1")]
+        );
+    }
 }
 
-/// A question left unanswered, as a restart leaves it, is waiting; a round's closing line for
-/// it is written once, and a second round's for the same question writes nothing.
+/// A question is claimed by one run at a time, only the round that claimed it closes it, and a
+/// question claimed and closed is owed nothing more.
 #[test]
-fn a_question_is_answered_once_whichever_round_answers_it() {
+fn a_question_is_answered_once_by_the_round_that_claimed_it() {
+    use suzatary_lines::secretary::run::Runs as _;
     let held = suzatary_core::stores::conversations::InMemory::default();
     let store = held.conversations();
     let morning = id("2026-09-30-1");
     start(store, &morning, &opened()).expect("started");
     push(store, &morning, &person(1, "when is the permit due")).expect("asked");
     assert_eq!(
-        waiting(store, None, at(2)).expect("reads"),
+        resumed(store, at(2), Retry::Allowed).expect("reads"),
         std::slice::from_ref(&morning)
     );
-    let asked = read(store, &morning)
+    let (first, second) = (
+        held.runs.begin().expect("a run"),
+        held.runs.begin().expect("a run"),
+    );
+    let claim = |run: &suzatary_lines::secretary::run::Held| {
+        suzatary_lines::secretary::transcript::claim(
+            store,
+            &morning,
+            &run.run,
+            at(2),
+            Retry::Allowed,
+            |_| panic!("nothing is closed by the box"),
+        )
         .expect("reads")
-        .asked()
-        .cloned()
-        .expect("a question");
+    };
+    assert_eq!(claim(&first), Claimed::Began);
+    assert_eq!(
+        claim(&second),
+        Claimed::Nothing,
+        "the first run's round is running"
+    );
     let answer = |second: u32| Entry::Said {
         at: at(second),
         turn: Turn::Model {
@@ -168,16 +177,21 @@ fn a_question_is_answered_once_whichever_round_answers_it() {
         by: None,
     };
     assert_eq!(
-        push_answering(store, &morning, &asked, &answer(2)).expect("written"),
+        push_open(store, &morning, &second.run, &[answer(2)]).expect("read"),
+        Answering::Answered
+    );
+    assert_eq!(
+        push_open(store, &morning, &first.run, &[answer(2)]).expect("written"),
         Answering::Written
     );
     let lines = held.lines.objects().expect("reads").len();
     assert_eq!(
-        push_answering(store, &morning, &asked, &answer(3)).expect("read"),
+        push_open(store, &morning, &first.run, &[answer(3)]).expect("read"),
         Answering::Answered
     );
     assert_eq!(held.lines.objects().expect("reads").len(), lines);
-    assert!(waiting(store, None, at(4)).expect("reads").is_empty());
+    assert!(read(store, &morning).expect("reads").owed().is_empty());
+    assert_eq!(claim(&second), Claimed::Nothing);
 }
 
 #[test]

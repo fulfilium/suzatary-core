@@ -1200,9 +1200,10 @@ pub struct Args {
 /// A verb over a store named on the command line, or one over the instance's stores.
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// Print, per conversation of a copy of the lines, the turns owed, the turns a restart would
-    /// answer now (with the model answering) and whether the next deploy moves a turn; then the
-    /// counts. Writes nothing; needs no server and no key.
+    /// Print, per conversation of a copy of the lines, the turns owed by the reading before the
+    /// claim and by the claim's, the turns a start before the claim sent beside those the first
+    /// start under it claims, and whether the turns' order moves; then the counts, and both
+    /// differences. Writes nothing; needs no server and no key.
     Owed {
         /// Compare today's readings with the next deploy's.
         #[arg(long, required = true)]
@@ -1432,11 +1433,30 @@ pub fn owed_compare(
     let lines: Objects<_, suzatary_io::husked::Husked<_>> = Objects::husked(store);
     let compared = compare(&lines, now)?;
     let (mut owed, mut resumed, mut reordered, mut unread) = (0, 0, 0, 0);
+    let (mut owed_apart, mut claimed_beyond, mut past) = (0, 0, 0);
     for (id, read) in &compared {
         match read {
             Ok(read) => {
                 owed += read.owed.len();
                 resumed += read.resumed.len();
+                let apart = read
+                    .owed
+                    .iter()
+                    .filter(|turn| !read.owed_by_claims.contains(turn))
+                    .chain(
+                        read.owed_by_claims
+                            .iter()
+                            .filter(|turn| !read.owed.contains(turn)),
+                    )
+                    .count();
+                let beyond = read
+                    .claimed
+                    .iter()
+                    .filter(|turn| !read.resumed.contains(turn))
+                    .count();
+                owed_apart += apart;
+                past += usize::from(!read.past.is_empty());
+                claimed_beyond += beyond;
                 let order = match read.order {
                     Order::Kept => "the turns keep their order".to_owned(),
                     Order::Moves { from } => {
@@ -1444,8 +1464,11 @@ pub fn owed_compare(
                         format!("the turns' order moves from turn {from}")
                     }
                 };
-                let (o, r) = (&read.owed, &read.resumed);
-                writeln!(out, "{id}: owed {o:?}; a restart answers {r:?}; {order}")?;
+                writeln!(
+                    out,
+                    "{id}: owed {:?}, by the claim {:?}; a start sent {:?}, the first start claims {:?}; past the bound alone {:?}; {order}",
+                    read.owed, read.owed_by_claims, read.resumed, read.claimed, read.past,
+                )?;
             }
             Err(refused) => {
                 unread += 1;
@@ -1456,7 +1479,7 @@ pub fn owed_compare(
     let all = compared.len();
     writeln!(
         out,
-        "{all} conversations: {owed} turns owed, {resumed} a restart answers, {reordered} reordered, {unread} that do not fold"
+        "{all} conversations: {owed} turns owed, {resumed} a start sent, {reordered} reordered, {unread} that do not fold; {owed_apart} turns owed by one reading alone, {claimed_beyond} the first start claims that no start sent; {past} conversations whose next write that asks nothing writes the box's sentence"
     )?;
     Ok(())
 }
@@ -2805,6 +2828,7 @@ mod sign_in_completion {
         let conversations = suzatary_io::conversations::ConversationStores::open(
             dir.path().join("lines"),
             dir.path().join("lines-keys"),
+            dir.path().join("lines-runs"),
             std::sync::Arc::new(suzatary_base::capability::Nothing),
             std::sync::Arc::new(suzatary_base::capability::Nothing),
         );

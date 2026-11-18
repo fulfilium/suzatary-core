@@ -239,6 +239,17 @@ pub enum Entry {
         /// The key of the seal it was sealed again from, which it supersedes.
         from: locked_text::KeyName,
     },
+    /// The box claims a round: run `run` covers these turns, each with the taint the box judged
+    /// it to carry. It says nothing of its own, so no turn's index moves.
+    Began {
+        /// When.
+        #[serde(serialize_with = "stamped")]
+        at: Datetime,
+        /// The turns it adds to its round, in order.
+        covers: Vec<super::Covered>,
+        /// The run.
+        run: super::RunId,
+    },
 }
 
 impl Entry {
@@ -262,7 +273,8 @@ impl Entry {
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }
-            | Entry::Resealed { .. } => None,
+            | Entry::Resealed { .. }
+            | Entry::Began { .. } => None,
         }
     }
 
@@ -286,7 +298,8 @@ impl Entry {
             | Entry::Scoped { at, .. }
             | Entry::Coding { at, .. }
             | Entry::Erased { at, .. }
-            | Entry::Resealed { at, .. } => *at,
+            | Entry::Resealed { at, .. }
+            | Entry::Began { at, .. } => *at,
         }
     }
 }
@@ -332,7 +345,8 @@ impl Entry {
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }
-            | Entry::Resealed { .. } => None,
+            | Entry::Resealed { .. }
+            | Entry::Began { .. } => None,
         }
     }
 

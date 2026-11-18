@@ -14,8 +14,8 @@
 # <module> <system> <bytes>
 # #510 set every line on 2026-11-15: x86_64 by `nix build`, aarch64 from the runners' gate run.
 views_bg.wasm x86_64-linux 3610000
-prodrome_bg.wasm x86_64-linux 4870000
+prodrome_bg.wasm x86_64-linux 4880000
 typst_bg.wasm x86_64-linux 22020000
 views_bg.wasm aarch64-linux 3610000
-prodrome_bg.wasm aarch64-linux 4880000
+prodrome_bg.wasm aarch64-linux 4890000
 typst_bg.wasm aarch64-linux 22090000

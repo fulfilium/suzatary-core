@@ -14,6 +14,7 @@
 
 mod aside;
 mod asking;
+mod began;
 mod decision;
 mod entry;
 mod kept;
@@ -34,6 +35,7 @@ mod title;
 
 pub use aside::Aside;
 pub use asking::Asking;
+pub use began::{COVERED, Covered, RunId};
 pub use decision::{Decision, Outcome, Settle};
 pub use entry::Entry;
 pub use kept::Kept;

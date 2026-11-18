@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
+use prodrome_core::event::Hash;
+use suzatary_conversations::secretary::store::RunId;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -54,6 +56,14 @@ pub enum Step {
     },
     /// Moves no turn and holds no words a round reads.
     Still,
+    /// Claims a round: run `run` covers the turns of these lines.
+    Began {
+        #[ts(as = "Vec<String>")]
+        #[serde(with = "names")]
+        covers: Vec<Hash>,
+        #[ts(as = "String")]
+        run: RunId,
+    },
 }
 
 impl Step {
@@ -86,6 +96,27 @@ impl Step {
             | LineShape::Unheard { .. }
             | LineShape::Kept { .. }
             | LineShape::Scoped { .. } => Step::Still,
+            LineShape::Began { covers, run } => Step::Began {
+                covers: covers.iter().map(|covered| covered.line.clone()).collect(),
+                run: run.clone(),
+            },
         }
+    }
+}
+
+/// Line names as their text.
+mod names {
+    use prodrome_core::event::Hash;
+    use serde::{Deserialize as _, Deserializer, Serializer};
+
+    pub(super) fn serialize<S: Serializer>(names: &[Hash], to: S) -> Result<S::Ok, S::Error> {
+        to.collect_seq(names.iter().map(Hash::as_str))
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(from: D) -> Result<Vec<Hash>, D::Error> {
+        Vec::<String>::deserialize(from)?
+            .into_iter()
+            .map(|name| Hash::new(name).map_err(serde::de::Error::custom))
+            .collect()
     }
 }

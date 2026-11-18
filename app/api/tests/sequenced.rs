@@ -156,8 +156,8 @@ fn every_conversation_reads_its_turns_in_the_order_it_read_them_before() {
 }
 
 /// Printed as a measurement: the first read of one conversation (the whole store folded, from a
-/// fresh cache), and the order alone over every conversation, under [`sequence::causal`] and
-/// [`sequence::sequenced`].
+/// fresh cache), a round's start after it (the claim step), and the order alone over every
+/// conversation, under [`sequence::causal`] and [`sequence::sequenced`].
 #[test]
 fn a_conversation_s_first_read_measured() {
     let median = |mut runs: Vec<std::time::Duration>| {
@@ -172,6 +172,30 @@ fn a_conversation_s_first_read_measured() {
                 let started = std::time::Instant::now();
                 transcript::read(lines.conversations(), &crate::known_pull::id(0)).expect("reads");
                 started.elapsed()
+            })
+            .collect(),
+    );
+    let start = median(
+        (0..3)
+            .map(|_| {
+                use suzatary_lines::secretary::run::Runs as _;
+                let lines = crate::known_pull::store();
+                renamed(&lines);
+                transcript::read(lines.conversations(), &crate::known_pull::id(0)).expect("reads");
+                let run = lines.runs.begin().expect("a run");
+                let started = std::time::Instant::now();
+                let claimed = transcript::claim(
+                    lines.conversations(),
+                    &crate::known_pull::id(0),
+                    &run.run,
+                    Datetime::new(2026, 9, 30, 4, 0, 0, 0).expect("an instant"),
+                    suzatary_lines::secretary::transcript::Retry::Allowed,
+                    |_| Vec::new(),
+                )
+                .expect("claims");
+                let took = started.elapsed();
+                assert_eq!(claimed, transcript::Claimed::Began);
+                took
             })
             .collect(),
     );
@@ -196,7 +220,7 @@ fn a_conversation_s_first_read_measured() {
     let causal = timed(&|view| sequence::causal(view));
     let sequenced = timed(&|view| sequence::sequenced(view, LineWriter::spine));
     println!(
-        "a conversation's first read over {} objects: median {first:?}; the order of all {} conversations: causal {causal:?}, sequenced {sequenced:?}",
+        "a conversation's first read over {} objects: median {first:?}; a round's start after it (the claim step: the read under the lock, the claim and its Began): median {start:?}; the order of all {} conversations: causal {causal:?}, sequenced {sequenced:?}",
         nodes.len(),
         views.len(),
     );
@@ -353,31 +377,45 @@ proptest::proptest! {
 }
 
 /// THE COMPARE LAW, on the big-store fixture: `secretary owed --compare`'s reading finds no
-/// conversation whose turns' order moves, and, reading no key, finds a restart answering exactly
-/// the conversations the box's own reading with its keys resumes.
+/// conversation whose turns' order moves; the claims' reading owes exactly what the reading before
+/// it owed, on a store no claim was written to; and THE LAW OF THE FIRST START: the first claim
+/// step claims no turn a start before the claim would not have sent, and reading no key, it
+/// resumes exactly the conversations the box's own reading with its keys resumes.
 #[test]
-fn the_compare_finds_no_reorder_on_the_big_store() {
+fn the_compare_finds_no_reorder_and_no_new_claim_on_the_big_store() {
     use suzatary_lines::secretary::compare::{self, Order};
     let lines = crate::known_pull::store();
     renamed(&lines);
     let now = Datetime::new(2026, 9, 30, 4, 0, 0, 0).expect("an instant");
-    let since = prodrome_core::fpl::instant_of(now) - chrono::Duration::hours(1);
     let compared = compare::compare(&lines.lines, now).expect("reads");
     assert_eq!(compared.len(), 100);
-    let resumed = compared
+    let claiming = compared
         .iter()
-        .filter(|(_, read)| !read.as_ref().expect("folds").resumed.is_empty())
+        .filter(|(_, read)| !read.as_ref().expect("folds").claimed.is_empty())
         .count();
-    assert!(resumed > 0, "the last hour's questions are owed");
+    assert!(claiming > 0, "the last hour's questions are claimed");
+    let resumed = transcript::resumed(
+        lines.conversations(),
+        now,
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+    )
+    .expect("reads");
     for (id, read) in compared {
         let read = read.expect("folds");
         assert_eq!(read.order, Order::Kept, "{id}");
-        let with_keys = transcript::read(lines.conversations(), &id).expect("reads");
-        assert_eq!(
-            !read.resumed.is_empty(),
-            with_keys.interrupted(since),
-            "{id}"
+        assert_eq!(read.owed_by_claims, read.owed, "{id}");
+        assert!(
+            read.claimed.iter().all(|turn| read.resumed.contains(turn)),
+            "{id}: {:?} claimed, {:?} resumed",
+            read.claimed,
+            read.resumed
         );
+        assert_eq!(
+            !read.claimed.is_empty(),
+            resumed.contains(&id),
+            "{id}: the keyless reading resumes what the box's own does"
+        );
+        let with_keys = transcript::read(lines.conversations(), &id).expect("reads");
         assert_eq!(
             read.owed,
             with_keys

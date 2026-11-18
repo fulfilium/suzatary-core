@@ -20,6 +20,8 @@ pub struct InMemory {
     pub forgot: Forgot,
     /// The words opened.
     pub opened: Opened,
+    /// The runs that claim its rounds.
+    pub runs: suzatary_lines::nothing::InMemory,
 }
 
 /// A render cache and a session store that keep nothing and remember what they were told to
@@ -73,6 +75,7 @@ impl InMemory {
             renders: &self.forgot,
             sessions: &self.forgot,
             opened: &self.opened,
+            runs: &self.runs,
         }
     }
 }

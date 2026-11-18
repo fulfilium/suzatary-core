@@ -79,6 +79,10 @@ fn held() -> LineReplica {
             keys: [b.clone()].into(),
         },
         Step::Still,
+        Step::Began {
+            covers: vec![Hash::new(name(1)).expect("a name")],
+            run: suzatary_conversations::secretary::store::RunId::of([9; 16]),
+        },
     ];
     let mut nodes = vec![genesis];
     for (at, step) in (1u8..).zip(steps) {

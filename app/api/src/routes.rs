@@ -1175,6 +1175,13 @@ fn weight(node: &SkeletonNode) -> usize {
                     Step::Erased { keys } => {
                         keys.iter().map(|key| key.as_str().len() + 3).sum::<usize>()
                     }
+                    Step::Began { covers, run } => {
+                        covers
+                            .iter()
+                            .map(|line| line.as_str().len() + 3)
+                            .sum::<usize>()
+                            + run.as_str().len()
+                    }
                     Step::Opened
                     | Step::Asks
                     | Step::Noted

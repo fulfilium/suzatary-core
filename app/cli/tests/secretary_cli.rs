@@ -1235,8 +1235,9 @@ fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
 }
 
 /// `secretary owed --compare` over a lines directory with no instance and no key: it prints each
-/// conversation's owed turns, the turns a restart would answer, and that the turns keep their
-/// order, then the counts; and it leaves every file of the store as it was.
+/// conversation's owed turns by the reading before the claim and by the claim's, the turns a start
+/// before the claim sent beside those the first start claims, and that the turns keep their order,
+/// then the counts and both differences; and it leaves every file of the store as it was.
 #[test]
 fn owed_compare_reads_a_copy_and_changes_nothing() {
     use suzatary_conversations::secretary::model::Turn;
@@ -1251,6 +1252,7 @@ fn owed_compare_reads_a_copy_and_changes_nothing() {
         let stores = suzatary_io::conversations::ConversationStores::open(
             dir.join("lines"),
             dir.join("keys"),
+            dir.join("runs"),
             Arc::new(suzatary_base::capability::Nothing),
             Arc::new(suzatary_base::capability::Nothing),
         );
@@ -1304,12 +1306,12 @@ fn owed_compare_reads_a_copy_and_changes_nothing() {
     let printed = String::from_utf8(out).expect("text");
     assert!(
         printed
-            .contains("2026-11-18-1: owed [0]; a restart answers [0]; the turns keep their order"),
+            .contains("2026-11-18-1: owed [0], by the claim [0]; a start sent [0], the first start claims [0]; past the bound alone []; the turns keep their order"),
         "{printed}"
     );
     assert!(
         printed.ends_with(
-            "1 conversations: 1 turns owed, 1 a restart answers, 0 reordered, 0 that do not fold\n"
+            "1 conversations: 1 turns owed, 1 a start sent, 0 reordered, 0 that do not fold; 0 turns owed by one reading alone, 0 the first start claims that no start sent; 0 conversations whose next write that asks nothing writes the box's sentence\n"
         ),
         "{printed}"
     );

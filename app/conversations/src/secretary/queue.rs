@@ -51,7 +51,13 @@ impl<'a> Pending<'a> {
     /// What waits in `stored`, or `None` when nothing that [`wakes`] does.
     #[must_use]
     pub fn of(stored: &'a Stored) -> Option<Self> {
-        let waiting = delta(stored);
+        Self::of_turns(&delta(stored))
+    }
+
+    /// What waits among `waiting`, a round's turns in order, or `None` when nothing that
+    /// [`wakes`] does.
+    #[must_use]
+    pub fn of_turns(waiting: &[(usize, &'a Said)]) -> Option<Self> {
         if !waiting.iter().any(|(_, said)| wakes(said)) {
             return None;
         }

@@ -3,6 +3,7 @@
 
 use prodrome_core::schema::Schema as _;
 
+use crate::secretary::claim;
 use crate::secretary::conversations::ReadConversations;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
@@ -18,13 +19,22 @@ use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 use suzatary_memory::secretary::words::Gone;
 use suzatary_store::store::{Gets, Reads, StoreError};
 
-/// One conversation as the two readings see it.
+/// One conversation as the readings before and after the claim see it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Compared {
-    /// The turns owed, by index.
+    /// The turns owed before the claim, by index: every live turn no live close rests on.
     pub owed: Vec<usize>,
-    /// The turns a restart now would answer ([`Transcript::interrupted`]), by index.
+    /// The turns a start before the claim sent: every turn owed before the claim, in a
+    /// conversation where a person's, a model's or a verb's owed turn was said within the bound.
     pub resumed: Vec<usize>,
+    /// The turns the claims' reading owes ([`Transcript::owed`]).
+    pub owed_by_claims: Vec<usize>,
+    /// The turns the first claim step at `now` claims, every run of the store read as gone, as it
+    /// is at a first start.
+    pub claimed: Vec<usize>,
+    /// The waking turns queued past the bound, none within it, so the next claim step, at the
+    /// next write that asks nothing, writes the box's sentence under them.
+    pub past: Vec<usize>,
     pub order: Order,
 }
 
@@ -56,26 +66,79 @@ pub fn compare(
         keys: &NoKeys,
         opened: &opened,
     };
-    let since = prodrome_core::fpl::instant_of(now) - transcript::RESUMED;
     Ok(read
         .fold(HeldLines::transcripts)?
         .into_iter()
-        .map(|(id, read)| {
-            let compared = read.map(|read| Compared {
-                owed: read.owed().into_iter().map(|(turn, _)| turn).collect(),
-                resumed: read
-                    .owed()
-                    .into_iter()
-                    .filter(|(_, said)| {
-                        prodrome_core::fpl::instant_of(said.at) >= since && answered(&said.turn)
-                    })
-                    .map(|(turn, _)| turn)
-                    .collect(),
-                order: order(&read),
-            });
-            (id, compared)
-        })
+        .map(|(id, read)| (id, read.map(|read| compared(&read, now))))
         .collect())
+}
+
+/// One conversation compared at `now`.
+fn compared(read: &Transcript, now: Datetime) -> Compared {
+    let owed = owed_before_claims(read);
+    let since = prodrome_core::fpl::instant_of(now) - transcript::ANSWERED_WITHIN;
+    let interrupted = owed.iter().any(|&turn| {
+        let said = &read.stored().turns[turn];
+        prodrome_core::fpl::instant_of(said.at) >= since && answered(&said.turn)
+    });
+    let covers = read.resumes(now, |_| true, claim::Retry::Allowed);
+    let turns = |lines: &[usize]| -> Vec<usize> {
+        (0..read.stored().turns.len())
+            .filter(|&turn| read.line_of(turn).is_some_and(|line| lines.contains(&line)))
+            .collect()
+    };
+    let claimed = turns(&covers);
+    let asked = read.asked(now);
+    let past = match read.claims().due(&asked, |_| true, claim::Retry::Allowed) {
+        claim::Due::Close => turns(
+            &asked
+                .iter()
+                .filter(|asked| {
+                    asked.wakes == claim::Wakes::Model
+                        && asked.bound == claim::Bound::Past
+                        && read.claims().standing(asked.at) == claim::Standing::Queued
+                })
+                .map(|asked| asked.at)
+                .collect::<Vec<_>>(),
+        ),
+        claim::Due::Nothing | claim::Due::Claim(_) | claim::Due::Retry(_) => Vec::new(),
+    };
+    Compared {
+        resumed: if interrupted {
+            owed.clone()
+        } else {
+            Vec::new()
+        },
+        owed,
+        owed_by_claims: read.owed().into_iter().map(|(turn, _)| turn).collect(),
+        claimed,
+        past,
+        order: order(read),
+    }
+}
+
+/// The turns owed before the claim: every live turn no live closing turn (an answer with no
+/// calls, or a stop) rests on or is.
+fn owed_before_claims(read: &Transcript) -> Vec<usize> {
+    let stored = read.stored();
+    let lines = read.lines();
+    let mut settled = vec![false; lines.len()];
+    let mut pending: Vec<usize> = (0..stored.turns.len())
+        .filter(|&turn| stored.is_live(turn) && stored.closes(turn))
+        .filter_map(|turn| read.line_of(turn))
+        .collect();
+    while let Some(line) = pending.pop() {
+        if !settled[line] {
+            settled[line] = true;
+            pending.extend(&lines[line].rests_on);
+        }
+    }
+    stored
+        .live()
+        .into_iter()
+        .filter(|(turn, _)| read.line_of(*turn).is_some_and(|line| !settled[line]))
+        .map(|(turn, _)| turn)
+        .collect()
 }
 
 /// Whether `read`'s turns, in its order, are in [`sequence::causal`]'s.
@@ -112,7 +175,7 @@ fn order(read: &Transcript) -> Order {
     }
 }
 
-/// Whether a restart answers an owed `turn` as the box reads it, with the key of every slot no
+/// Whether a start before the claim answers an owed `turn` as the box reads it, with the key of every slot no
 /// erasure names: a person's, a model's or a verb's. A turn whose words are gone here only for
 /// want of their key is the turn its shape says.
 fn answered(turn: &Turn) -> bool {

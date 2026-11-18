@@ -366,6 +366,27 @@ fn the_rule_refuses_what_the_signer_does_not_prove_and_words_the_box_would_not_s
     assert!(refused_finally(&door.post(&[&spoken]), &spoken).contains("the box alone writes"));
 }
 
+/// Only the box claims a round, so no tab can say a turn of its own was answered or judged: a
+/// posted `Began` is refused for good, whatever it names.
+#[test]
+fn a_posted_claim_is_refused_for_good() {
+    let door = Door::new();
+    let claim = door.line(
+        "default",
+        &Entry::Began {
+            at: at(12),
+            covers: vec![suzatary_conversations::secretary::store::Covered {
+                line: Hash::new("a".repeat(64)).expect("a name"),
+                taint: suzatary_conversations::secretary::taint::Taint::Clean,
+            }],
+            run: suzatary_conversations::secretary::store::RunId::of([7; 16]),
+        },
+    );
+    assert!(
+        refused_finally(&door.post(&[&claim]), &claim).contains("the box alone writes a Began")
+    );
+}
+
 /// A second opening of one conversation is refused once the first is held: two tabs never join
 /// one conversation, and an id is never taken twice.
 #[test]

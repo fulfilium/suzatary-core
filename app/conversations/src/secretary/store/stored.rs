@@ -136,11 +136,13 @@ impl Stored {
         match entry {
             // A second opening line is ignored, not refused: the first is the fact, and one
             // stray line must not cost a whole transcript. An erasure's slots were read as gone
-            // where they stood, and a reseal's words where the slot it seals stands.
+            // where they stood, and a reseal's words where the slot it seals stands. A claim is
+            // the transcript's reading of who answers, never a turn.
             Entry::Opened { .. }
             | Entry::SetUp { .. }
             | Entry::Erased { .. }
-            | Entry::Resealed { .. } => {}
+            | Entry::Resealed { .. }
+            | Entry::Began { .. } => {}
             Entry::Titled { title, .. } => self.title = super::entry::named(title),
             Entry::Said { .. } => self.turns.extend(Said::of(entry)),
             Entry::Proposed {

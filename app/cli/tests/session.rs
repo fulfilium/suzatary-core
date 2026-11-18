@@ -9,7 +9,7 @@ use suzatary_conversations::secretary::model::{Halt, Pick, SessionId, Turn};
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::conversation::round::Sink;
-use suzatary_core::secretary::{Bound, answer};
+use suzatary_core::secretary::{Bound, Holder, answer};
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
 
@@ -107,6 +107,8 @@ fn no_session_opens_once() {
             on_working: &|_| {},
             halt: &Halt::new(),
         },
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs")
     .expect("a round ran");
@@ -182,6 +184,8 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
             on_working: &|_| {},
             halt: &Halt::new(),
         },
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs")
     .expect("a round ran");
@@ -266,6 +270,8 @@ fn a_retraction_reopens_a_stored_session() {
             on_working: &|_| {},
             halt: &Halt::new(),
         },
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs")
     .expect("a round ran");
@@ -323,6 +329,8 @@ fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
             on_working: &|_| {},
             halt: &Halt::new(),
         },
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs, recovered")
     .expect("a round ran");
@@ -405,6 +413,8 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         "you are the secretary",
         &suzatary_core::secretary::surface::Subset::ALL,
         &sink,
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs")
     .expect("a round ran");
@@ -445,6 +455,8 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         "you are the secretary",
         &suzatary_core::secretary::surface::Subset::ALL,
         &sink,
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the second exchange runs");
     assert_eq!(caps.model.opened().len(), 1, "no second open");
@@ -496,11 +508,9 @@ fn the_memory_heads_a_batch_once() {
             &id(),
             "you are the secretary",
             &suzatary_core::secretary::surface::Subset::ALL,
-            &Sink {
-                on_delta: &|_| {},
-                on_working: &|_| {},
-                halt: &Halt::new(),
-            },
+            &Sink::quiet(&Halt::new()),
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange runs")
         .expect("a round ran")
@@ -612,6 +622,8 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
                 on_working: &|_| {},
                 halt,
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange ends")
         .expect("a round ran")
@@ -717,6 +729,8 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
                 on_working: &|_| {},
                 halt,
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
     };
     let lines = || {
@@ -803,6 +817,8 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
                 on_working: &|_| {},
                 halt: &Halt::new(),
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange runs")
     };
@@ -885,6 +901,8 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
                 on_working: &|_| {},
                 halt: &Halt::new(),
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange runs")
     };
@@ -990,6 +1008,8 @@ fn answered_once(
             on_working: &|_| {},
             halt: &Halt::new(),
         },
+        suzatary_lines::secretary::transcript::Retry::Allowed,
+        Holder::Task,
     )
     .expect("the exchange runs")
     .expect("a round ran")
@@ -1122,6 +1142,8 @@ fn a_round_another_model_answered_ends_the_session() {
                 on_working: &|_| {},
                 halt: &Halt::new(),
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange runs")
         .expect("a round ran")
@@ -1193,6 +1215,8 @@ fn a_round_the_box_ended_ends_the_session() {
                 on_working: &|_| {},
                 halt: &Halt::new(),
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
         .expect("the exchange runs")
         .expect("a round ran")
@@ -1477,6 +1501,8 @@ proptest::proptest! {
                 "you are the secretary",
                 &suzatary_core::secretary::surface::Subset::ALL,
                 &Sink { on_delta: &|_| {}, on_working: &|_| {}, halt: &Halt::new() },
+                suzatary_lines::secretary::transcript::Retry::Allowed,
+                Holder::Task,
             )
             .expect("the exchange runs");
             let had = kept_by_script;
@@ -1550,6 +1576,8 @@ fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
                 on_working: &|_| {},
                 halt: &Halt::new(),
             },
+            suzatary_lines::secretary::transcript::Retry::Allowed,
+            Holder::Task,
         )
     };
     let push = |text: &str| {

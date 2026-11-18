@@ -424,6 +424,7 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
     let stream = state.workers.stream(id);
     stream.state(ConversationState::Thinking);
     let for_round = Arc::clone(&stream);
+    let retry = state.retry();
     // Asked per round: only the `claude` subprocess holds a session, and which model
     // answers can change between rounds.
     let result = tokio::task::spawn_blocking(move || {
@@ -450,6 +451,8 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
             &system,
             &secretary::surface::Subset::ALL,
             &sink,
+            retry,
+            secretary::Holder::Task,
         )
     })
     .await;

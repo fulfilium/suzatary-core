@@ -540,6 +540,7 @@ fn secretary(
                 renders: &suzatary_base::capability::Nothing,
                 sessions: &suzatary_base::capability::Nothing,
                 opened: &OPENED,
+                runs: &*suzatary_lines::nothing::RUNS,
             },
             junk: fixed,
             mail: fixed,

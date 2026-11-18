@@ -108,7 +108,8 @@ pub fn line(entry: &Entry) -> Taint {
         | Entry::Scoped { .. }
         | Entry::Unheard { .. }
         | Entry::Erased { .. }
-        | Entry::Resealed { .. } => Taint::Clean,
+        | Entry::Resealed { .. }
+        | Entry::Began { .. } => Taint::Clean,
         Entry::Opened { .. }
         | Entry::SetUp { .. }
         | Entry::Titled { .. }

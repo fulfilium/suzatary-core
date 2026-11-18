@@ -11,7 +11,9 @@ use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_base::repo_ids::CommitId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::model::SessionId;
-use suzatary_conversations::secretary::store::{Decision, Entry, Kind, Namer, Scope};
+use suzatary_conversations::secretary::store::{
+    Covered, Decision, Entry, Kind, Namer, RunId, Scope,
+};
 use suzatary_conversations::secretary::turn_shape;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::coding::{Branch, Session, SessionUrl};
@@ -113,6 +115,8 @@ pub enum LineShape {
         /// The key of the seal it was sealed again from.
         from: KeyName,
     },
+    /// A round claimed.
+    Began { covers: Vec<Covered>, run: RunId },
 }
 
 /// A coding session without its words.
@@ -168,7 +172,8 @@ impl LineShape {
             | LineShape::Unheard { .. }
             | LineShape::Scoped { .. }
             | LineShape::Coding { .. }
-            | LineShape::Erased { .. } => 0,
+            | LineShape::Erased { .. }
+            | LineShape::Began { .. } => 0,
         }
     }
 
@@ -193,6 +198,7 @@ impl LineShape {
             LineShape::Coding { .. } => "Coding",
             LineShape::Erased { .. } => "Erased",
             LineShape::Resealed { .. } => "Resealed",
+            LineShape::Began { .. } => "Began",
         }
     }
 }
@@ -352,6 +358,13 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
                 from: from.clone(),
             },
             None,
+        ),
+        Entry::Began { covers, run, .. } => (
+            LineShape::Began {
+                covers: covers.clone(),
+                run: run.clone(),
+            },
+            Some(Vec::new()),
         ),
     }
 }
@@ -544,6 +557,7 @@ pub fn join(
         },
         LineShape::Erased { keys, erasure } => Entry::Erased { at, keys, erasure },
         LineShape::Resealed { of, from } => Entry::Resealed { at, of, from },
+        LineShape::Began { covers, run } => Entry::Began { at, covers, run },
     }
 }
 

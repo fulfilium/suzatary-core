@@ -18,6 +18,7 @@ fn an_append_at_scale() {
     let (lines, keys) = lines_at(dir.path());
     let (ids, _) = conversations_at_scale(&lines, &keys, 100, 300);
     let conversations = Conversations {
+        runs: &*suzatary_lines::nothing::RUNS,
         lines: &lines,
         keys: &keys,
         entropy: &suzatary_io::texts::SystemEntropy,

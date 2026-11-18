@@ -347,6 +347,12 @@ impl Secretary {
         self.beside("-lines-keys")
     }
 
+    /// The runs that claim the conversations' rounds: box-local, a lock file each.
+    #[must_use]
+    pub fn line_runs(&self) -> PathBuf {
+        self.beside("-lines-runs")
+    }
+
     /// The conversations; an erasure also empties `renders` and `sessions`.
     #[must_use]
     pub fn conversation_stores(
@@ -356,7 +362,13 @@ impl Secretary {
             dyn suzatary_conversations::secretary::model_sessions::ModelSessions + Send + Sync,
         >,
     ) -> ConversationStores {
-        ConversationStores::open(self.line_store(), self.line_keys(), renders, sessions)
+        ConversationStores::open(
+            self.line_store(),
+            self.line_keys(),
+            self.line_runs(),
+            renders,
+            sessions,
+        )
     }
 
     /// The memory's texts, box-local and never pushed.

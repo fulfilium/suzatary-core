@@ -661,6 +661,25 @@ impl State {
     }
 
     /// Nudge this conversation's task and the compactor.
+    /// Whether a round a lost run left may be claimed again: not while the model's last observed
+    /// call failed, nor while its health does not read.
+    pub fn retry(&self) -> suzatary_lines::secretary::transcript::Retry {
+        use suzatary_lines::secretary::transcript::Retry;
+        match self.answered.healths() {
+            Ok(answered) => match suzatary_health::health::reading_of(
+                &answered,
+                self.models.recorded().as_str(),
+            ) {
+                Some(suzatary_health::health::Reading::Failing { .. }) => Retry::Held,
+                Some(suzatary_health::health::Reading::Ok { .. }) | None => Retry::Allowed,
+            },
+            Err(failed) => {
+                tracing::warn!("secretary: the model health did not read, so no retry: {failed}");
+                Retry::Held
+            }
+        }
+    }
+
     pub fn heard(&self, id: &suzatary_base::conversation_id::ConversationId) {
         self.workers.nudge(id, Arc::new(self.clone()));
         if let Some(compactor) = &self.compactor {
@@ -1663,29 +1682,19 @@ fn resume_waiting(state: &State) {
         }
         Err(failed) => tracing::warn!("secretary: the openings owed did not read: {failed}"),
     }
-    let answered = match state.answered.healths() {
-        Ok(answered) => answered,
-        Err(failed) => {
-            tracing::warn!(
-                "secretary: the model health did not read, so nothing is resumed: {failed}"
-            );
-            return;
-        }
-    };
-    let model = state.models.recorded();
-    match transcript::waiting(
+    match transcript::resumed(
         caps.secretary.conversations,
-        suzatary_health::health::reading_of(&answered, model.as_str()).as_ref(),
         caps.secretary.clock.now(),
+        state.retry(),
     ) {
-        Ok(waiting) => {
-            if !waiting.is_empty() {
+        Ok(resumed) => {
+            if !resumed.is_empty() {
                 tracing::info!(
                     "secretary: resuming {} unanswered conversation(s)",
-                    waiting.len()
+                    resumed.len()
                 );
             }
-            for id in &waiting {
+            for id in &resumed {
                 state.heard(id);
             }
         }
