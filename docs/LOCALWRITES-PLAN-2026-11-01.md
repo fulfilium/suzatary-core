@@ -62,9 +62,9 @@ callers in `web/src/`.
 
 | Route | What it writes | Effect, and when the answer comes | Page waits? | What the owner sees meanwhile |
 |---|---|---|---|---|
-| `POST /api/secretary/conversations/{c}/say` (`secretary::say`, `app/core/src/secretary/routes.rs:454`) | lines: `Entry::Said { turn, by: Stamp }`, authored, sealed and stamped by the box | nudges the conversation worker (`conversation_worker.rs:237-247`); answers 202 before the round runs | yes: `chat/source.ts:303-306` draws the question only after the answer, a pull of every store and a settle (`intentsync.ts:167`) | the draft empties (`composing.ts:134`); nothing else until the line is pulled |
-| `…/edit`, `…/regenerate` (`secretary/mod.rs:752`, `:736`) | lines: a `Said` that sets later rounds aside; or a new round | as say | yes, as say | nothing |
-| `…/stop` (`conversation_worker.rs:266`) | lines: the halt's note | waits up to `STOP_WAIT` for the round to end | yes | nothing; a toast on failure |
+| `POST /api/secretary/conversations/{c}/say` (`serve/secretary.rs:359`, `app/api/src/secretary/routes.rs:437`; at 2.1.160) | lines: `Entry::Said { turn, by: Stamp }`, authored, sealed and stamped by the box | nudges the conversation worker (`conversation_worker.rs:236-247`); answers 202 before the round runs | yes: the ask (`prodrome/asks.ts:106`) draws the question only after the answer, a pull of every store and a settle (`intentsync.ts:167`) | the draft empties (`composing.ts:134`); nothing else until the line is pulled |
+| `…/edit`, `…/regenerate` (`secretary/mod.rs:749`, `:734`) | lines: a `Rewound { to }` that sets the last round aside by turn index, then for an edit a `Said`, in two appends | as say | yes, as say | nothing |
+| `…/stop` (`conversation_worker.rs:264`) | lines: a `Stopped` when no round has taken the question (`secretary/mod.rs:309`); else the running round's halt, which the round answers with its own `Stopped` | waits up to `STOP_WAIT` for the round to end | yes | nothing; a toast on failure |
 | `POST /api/secretary/conversations` (`secretary::open`, `routes.rs:274`) | lines: `Opened` under an id the box mints | none | yes, then a say | nothing |
 | `POST /api/secretary/setup/{template}` (`secretary::setup`, `routes.rs:312`, 2.1.45) | lines: `Opened` under an id the box mints, titled for the template, and the box's note with the template's opening | none | yes (`pages/settings.ts:94`): Settings navigates to the conversation after the answer | Settings, unchanged |
 | `…/title` (`secretary/title.rs:123`) | lines: `Titled` | `heard` | yes (`pages/conversation.ts:97`); the field stays open | the old title |
@@ -180,7 +180,18 @@ Two cases must be the same request, and they are:
 `deps` also replaces the say route's `after` field ("how many turns the asker
 saw", `wire.rs:1044-1047`). A said line rests on the conversation's heads in
 the tab's replica, so a question written before the tab saw an answer is
-concurrent with that answer, and the transcript's causal order places it.
+concurrent with that answer.
+
+*Corrected at stage 3's note:* the transcript's order does not place such a
+question safely. `transcript::causal` breaks a tie between concurrent lines by
+their `at`, then their name (`transcript.rs:760-807`), so a question whose
+tab's clock reads earlier than an answer it did not see is placed before that
+answer. Every turn after it then moves by one, and so does every index a box
+line stores (`Rewound.to`, `Kept.from`, a proposal's `after_turn`) and every
+turn index the page names (`TurnRow.index`, the erase route's `turns`). Only
+the box writes turns today, and its lines are one chain, so nothing has moved
+yet. Stage 3's note orders the box's lines first (its "The box's lines are the
+sequence").
 
 An object whose store the box no longer serves (a migration moved its
 genesis) is never accepted. It stays in the row, named as stranded, and is
@@ -461,6 +472,25 @@ with a name of its own, spends again.
 `Began` also carries the round's taint, decided at each claim (§5.4). The
 usage budget is checked at the same claim, so a round over the budget is
 answered with `Failed { class: Budget }` and spends nothing.
+
+*Corrected at stage 3's note, where the code says otherwise:*
+
+- **A round answers a batch, not one line.** `Round::answer` fixes the first
+  owed turn that wakes a model (`Transcript::asked`), then each step sends
+  every owed turn (`queue::Pending`, read again before each ask,
+  `conversation/round.rs:275-318`). So a claim names the turns it sends.
+- **There is no `Failed` line.** A round that fails in a live process is
+  closed by a model turn with no calls holding the box's words
+  (`Round::close`, `round.rs:403-434`). When the store refuses that line
+  too, the worker logs it and writes nothing (`conversation_worker.rs:473`).
+  So a `Began` with no outcome does not prove that its process died: the
+  worker's own run must also hold no task for it.
+- **There is no round budget.** No usage budget is read before a round
+  today; a claim is where one would be read.
+- **A restart retries without a bound.** `transcript::waiting` resumes every
+  conversation with an owed turn said within the last hour
+  (`transcript.rs:276-302`), at every start. A round that kills its process
+  is asked again at each restart within that hour.
 
 ### 4.5 Outputs: a coding session, a patch, mail
 
@@ -766,6 +796,36 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
    stage 2c's 273 ms, with the store read once per post. *Answers:* a second
    tab of the device sees a `Said` this tab sealed before the box serves it
    back (stage 2c's lines reach other tabs only through the box).
+   *Measured before it (stage 3's note, 2.1.160):* Send to the question drawn, 2,843 and 5,148 ms
+   median in two runs of 7 (slowest 4,977 and 8,970), and to its answer drawn, 5,121 and 5,180 ms
+   (`topicdraw`'s third scene, `bigstore`, 400 ms each way, the fixture's debug build). In 5 of
+   the 14 Sends the question was drawn only with its answer. The box's acceptance of one posted
+   line over 14,111 lines, 185 to 203 ms median in three runs (release build), of which one whole
+   read of the store is 19 to 26 ms, and that read with the DAG the receipt builds of it 42 to
+   57 ms.
+   *As the note's review settled it (2026-11-18):*
+   - **The order.** One conversation's lines are ordered with the box's lines as the spine
+     (`sequenced`), so a tab's line never moves a line the box has written. The tab orders the
+     skeleton, whose header gains each line's writer.
+   - **The claim.** `Began { covers, run }` names the turns it sends. A round is the claims of
+     one run up to its close, and a turn said while a round runs joins it with a claim of that
+     run before the next ask; a retry round takes no joins. The attempts of a turn are the runs
+     that covered it. A closed round settles what it covered, which also fixes a question said
+     during the last answer being closed unseen.
+   - **The bound.** One bound, an hour from the request's `at`, for the first claim and the
+     retry; past it the box closes the turn with `Round::close`'s shape, said by the box, and
+     Regenerate asks again. The first start claims nothing today's `waiting` would not resume,
+     except a question answered unseen. `suzatary secretary owed --compare` prints both
+     readings, and the reorders, for a store before the deploy.
+   - **The shapes.** A stop is the shipped `Stopped`. A rewind is `Again { question, how }`,
+     taken only when it rests on every live turn descending from its question and refused
+     while a working claim covers it. Erase names lines, not turn indices.
+   - **Taint.** A tab's turn reads `Tainted` until a claim judges it, and the join of every
+     judgment after.
+   - **`CLIENT_MIN`** becomes 14 where the box first writes `Began`, since an older tab cannot
+     decode the skeleton, and 15 where the say and stop routes go.
+   - **Three pull requests:** the box's order and reads (with the shipped rule's missing
+     `carried` check and the compare command); the claim; then the tab.
 4. **Taps as inbox objects, claimed per proposal.** `Tapped`, `Dismissed`,
    `Checked`, `Dropped`; the performer's claim (§4.5); the sending rule at
    admission; secret values sealed to the card's key (§4.6). The four

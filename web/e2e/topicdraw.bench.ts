@@ -9,7 +9,8 @@
  * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
  * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write: its duration, and for a
  * step of the page `<step>@`, when it began after the tap. A second scene times a rename's Enter to its title drawn, and
- * writes it to `$SUZATARY_RENAMEDRAW`.
+ * writes it to `$SUZATARY_RENAMEDRAW`; a third times Send to the question drawn and to its answer drawn, written to
+ * `$SUZATARY_SENDDRAW`.
  */
 
 import assert from "node:assert/strict"
@@ -141,5 +142,50 @@ app.scene("measured: a rename's Enter to the new title drawn, over a slow networ
   const report = { latency: LATENCY_MS, renameDrawn: summary(drawn), runs: drawn }
   console.log(JSON.stringify(report, null, 2))
   const out = process.env["SUZATARY_RENAMEDRAW"]
+  if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
+})
+
+// In the page: Send's click to the first frame that draws the question `said`, and to the first frame that draws a model
+// turn after it. The fixture's model answers whole, so its first delta is its answer turn.
+const sent = (said: string): string => `new Promise((done) => {
+  const send = document.querySelector("#view .composesend")
+  send.addEventListener("click", () => {
+    const start = performance.now()
+    let question = null
+    const look = () => {
+      const now = performance.now()
+      const asked = [...document.querySelectorAll("#view .turn-person")].find((t) => t.textContent.includes(${JSON.stringify(said)}))
+      if (question === null && asked !== undefined) question = now - start
+      const answered = asked !== undefined && [...document.querySelectorAll("#view .turn-model")].some((m) => (asked.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
+      if (answered) return done({ question, answer: now - start })
+      if (now - start > 60000) return done({ question: question ?? -1, answer: -1 })
+      requestAnimationFrame(look)
+    }
+    requestAnimationFrame(look)
+  }, { once: true, capture: true })
+})`
+
+app.scene("measured: Send to the question drawn and to its answer drawn, over a slow network", async () => {
+  await app.page.navigate(`${BULK}/#/secretary`)
+  await app.page.waitFor(`document.querySelector(".streamround .streammeta a") !== null`, { timeout: 30 * 60_000 })
+  const href = await app.page.evaluate<string>(`document.querySelector(".streamround .streammeta a").getAttribute("href").replace(/\\?.*$/, "")`)
+  await app.page.navigate(`${BULK}/${href}`)
+  await app.page.waitFor(`document.querySelector("#view .composebox") !== null`, { timeout: 60_000 })
+  await app.page.network({ offline: false, latency: LATENCY_MS, downloadThroughput: THROUGHPUT, uploadThroughput: THROUGHPUT })
+  const runs: { question: number; answer: number }[] = []
+  for (let n = 0; n < RUNS; n++) {
+    const said = `measured send ${Date.now()} ${n}`
+    await app.page.type("#view .composebox", said)
+    // Set and not awaited: the promise ends only after the click below.
+    await app.page.evaluate(`(window.e2eSent = ${sent(said)}, true)`)
+    await app.page.click("#view .composesend")
+    const run = await app.page.evaluate<{ question: number; answer: number }>(`window.e2eSent`, 90_000)
+    assert.ok(run.question >= 0 && run.answer >= 0, `${said} was drawn and answered`)
+    runs.push(run)
+  }
+  await app.page.network(null)
+  const report = { latency: LATENCY_MS, questionDrawn: summary(runs.map(r => r.question)), answerDrawn: summary(runs.map(r => r.answer)), runs }
+  console.log(JSON.stringify(report, null, 2))
+  const out = process.env["SUZATARY_SENDDRAW"]
   if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
 })

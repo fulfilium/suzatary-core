@@ -270,11 +270,30 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
         assert!(receipt.adopted.contains(&name.as_str().to_owned()), "taken");
     }
     took.sort();
+    // One whole read of the store, the part each of the post's two reads costs, and that read
+    // with the DAG the receipt builds of it.
+    let timed = |with_dag: bool| {
+        let mut runs: Vec<_> = (0..5)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                let held = lines.lines.objects().expect("held");
+                let count = held.len();
+                if with_dag {
+                    let dag: prodrome_core::dag::Dag<LineEvent> = held.into_iter().collect();
+                    std::hint::black_box(dag);
+                }
+                (started.elapsed(), count)
+            })
+            .collect();
+        runs.sort();
+        runs[runs.len() / 2]
+    };
+    let (read, held) = timed(false);
+    let (dag, _) = timed(true);
     println!(
-        "the box's acceptance of one posted line over {} objects: median {:?}, slowest {:?}",
-        lines.lines.objects().expect("held").len(),
+        "the box's acceptance of one posted line over {held} objects: median {:?}, slowest {:?}; one whole read of the store: median {read:?}; with its DAG: median {dag:?}",
         took[took.len() / 2],
-        took[took.len() - 1]
+        took[took.len() - 1],
     );
 }
 
