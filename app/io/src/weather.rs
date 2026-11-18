@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use suzatary_base::persona::Persona;
-use suzatary_core::weather::WeatherError;
+use suzatary_services::weather::WeatherError;
 
 use crate::http::{Http, Req, Ureq};
 
@@ -48,6 +48,6 @@ pub fn line(now: chrono::DateTime<chrono::Utc>, persona: &Persona) -> Result<Str
     use chrono::Timelike as _;
     let hour = persona.zone.wall(now.naive_utc()).hour();
     let payload = fetch(&Ureq::new(), &persona.city, Duration::from_secs(20))?;
-    let (hours, low, high) = suzatary_core::weather::parse(&payload)?;
-    Ok(suzatary_core::weather::line(&hours, hour, low, high))
+    let (hours, low, high) = suzatary_services::weather::parse(&payload)?;
+    Ok(suzatary_services::weather::line(&hours, hour, low, high))
 }

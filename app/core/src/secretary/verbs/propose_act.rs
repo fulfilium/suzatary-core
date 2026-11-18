@@ -6,11 +6,12 @@ use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
-use crate::settings::Settable;
 use crate::verb::{Caught, Verb};
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::topic_target::Target;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::settings::Settable;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::memory;
 
@@ -218,13 +219,13 @@ fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal
         required(&args.start, "start")?,
         required(&args.end, "end")?
     );
-    let when = crate::calendar::When::parse(&span).map_err(|_| {
+    let when = suzatary_google::calendar::When::parse(&span).map_err(|_| {
         Refusal::bad_request(
             "start and end must be two UTC instants (2026-10-20T14:00:00Z) or two days \
              (2026-10-20), the end after the start",
         )
     })?;
-    let event = crate::google::NewEvent::new(
+    let event = suzatary_google::google::NewEvent::new(
         &required(&args.title, "title")?,
         when,
         args.place.read()?.as_deref().unwrap_or_default(),
@@ -279,10 +280,7 @@ fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
 }
 
 /// The connection `args` names, refused as the tap would refuse it.
-fn connect(
-    call: &Call<'_>,
-    args: &ProposeActArgs,
-) -> Result<(crate::connect::Connection, Reference), Refusal> {
+fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<(Connection, Reference), Refusal> {
     let round = owners_round(call, CONNECT_OUTSIDE)?;
     let template = args
         .template
@@ -290,7 +288,7 @@ fn connect(
         .as_deref()
         .ok_or_else(|| Refusal::bad_request("template is required for act=\"connect\""))?;
     let params = args.params.read()?.clone().unwrap_or_default();
-    let connection = crate::connect::Connection::parse(template, &params)
+    let connection = Connection::parse(template, &params)
         .map_err(|refused| Refusal::bad_request(format!("no card was filed: {refused}")))?;
     let declared = call
         .caps

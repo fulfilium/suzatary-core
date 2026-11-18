@@ -16,13 +16,14 @@ use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
-use crate::deployment::Deployment;
 use crate::secretary::Secretary;
 use crate::secretary::model::Halt;
 use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown as quoted};
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::settings::Settables;
 use suzatary_signatures::believed::one_outcome;
 
 /// At most this many candidates per todo, in [`Match`] rank order then newest first.
@@ -127,7 +128,7 @@ pub struct Swept {
 pub fn sweep(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Run<Swept>, Refusal> {
@@ -229,7 +230,7 @@ pub struct DryRun {
 pub fn dry_run(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
 ) -> Result<DryRun, Refusal> {
     let bound_chain = chains
@@ -326,7 +327,7 @@ fn since(
 /// The round's user turn, loading messages through the `show` verb so there is no second reader.
 fn user_turn(
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
     gathered: &Bounded,

@@ -18,7 +18,7 @@ fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment([ada()], [(ada(), common::actor("ada"))])
 }
 

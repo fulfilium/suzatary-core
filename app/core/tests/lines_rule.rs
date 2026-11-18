@@ -90,7 +90,7 @@ impl Posted {
     }
 
     fn prints(&self) -> [String; 2] {
-        let key = suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE);
+        let key = suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE);
         let signed: Envelope<LineEvent> = Envelope::Signed(key.sign(&self.name()));
         [
             canonical_envelope(&self.change),
@@ -110,7 +110,7 @@ static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> 
     std::sync::LazyLock::new(|| {
         suzatary_signatures::signatures::Trusting::held(
             &[&suzatary_core::stores::phone_trusted(&["device0"])],
-            &suzatary_core::cast::keys::root(),
+            &suzatary_connect::cast::keys::root(),
         )
         .expect("reads")
     });
@@ -226,7 +226,7 @@ fn refused_finally(received: &Received, posted: &Posted) -> String {
 /// are taken; each again is `already`, and changes nothing.
 #[test]
 fn a_tab_s_lines_sealed_as_the_box_seals_them_are_taken_once() {
-    use suzatary_core::connect::TemplateId;
+    use suzatary_connect::connect::TemplateId;
     let mut door = Door::new();
     let open = door.opening(&opened(1));
     let conversation = open.change.event().expect("a line").conversation().clone();
@@ -395,7 +395,7 @@ fn keys_are_parsed_at_the_door() {
 /// an empty opening is taken.
 #[test]
 fn the_rule_takes_a_title_only_as_the_box_reads_one() {
-    use suzatary_core::connect::TemplateId;
+    use suzatary_connect::connect::TemplateId;
     use suzatary_core::secretary::line_shape::LineShape;
     use suzatary_memory::secretary::line_words::LineWords;
     let door = Door::new();

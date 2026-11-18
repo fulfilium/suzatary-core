@@ -1,8 +1,8 @@
-use crate::repository::Repository;
 use crate::secretary::recollection::Recollection;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_mail::mail::mailbox::Mailbox;
 use suzatary_record::record::TodoEvent;
+use suzatary_services::repository::Repository;
 use suzatary_store::store::Reads;
 use suzatary_todo::render::Render;
 use suzatary_triage::mail::corpus::Corpus;

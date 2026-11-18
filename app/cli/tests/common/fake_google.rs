@@ -332,8 +332,8 @@ fn consent(stream: TcpStream, request: &Request, held: &mut Held) {
     let location = format!(
         "{}?state={}&code={}",
         asked("redirect_uri"),
-        suzatary_core::url::percent_encode(&asked("state")),
-        suzatary_core::url::percent_encode(&code)
+        suzatary_google::url::percent_encode(&asked("state")),
+        suzatary_google::url::percent_encode(&code)
     );
     respond(stream, 302, &[("Location", location)], "{}");
 }
@@ -359,7 +359,7 @@ fn token(stream: TcpStream, request: &Request, held: &mut Held) {
                 refused(stream, "invalid_grant", "Bad Request");
             } else if field("redirect_uri") != issued.redirect {
                 refused(stream, "redirect_uri_mismatch", "Bad Request");
-            } else if suzatary_core::google::Challenge::s256(&field("code_verifier")).as_str()
+            } else if suzatary_google::google::Challenge::s256(&field("code_verifier")).as_str()
                 != issued.challenge
             {
                 refused(stream, "invalid_grant", "Invalid code verifier.");

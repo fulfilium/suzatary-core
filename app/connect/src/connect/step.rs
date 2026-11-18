@@ -1,0 +1,207 @@
+//! One thing a person does for a connection.
+
+use super::{Checked, Params, Reach, Run, Seen, Standing};
+use crate::settings::{Help, Words};
+use suzatary_health::health::plugin::{CredentialName, PluginName};
+use suzatary_mail::mail::address::EmailAddress;
+
+/// Which secret a step asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretName {
+    /// One name, whatever the parameters.
+    Fixed(&'static str),
+    /// The link its label names on the template's plugin: `PLUGIN_<PLUGIN>_<LABEL>`.
+    Link,
+}
+
+/// A step as a template declares it: data, its blanks filled by a connection's parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepShape {
+    /// A secret, with the template's words on what it is and where it is issued.
+    Secret { name: SecretName, help: Words },
+    /// The account's device-code sign-in, to read its mail.
+    DeviceCode,
+    /// The account's device-code consent to send mail, a grant apart from reading's.
+    SendingConsent,
+    /// The box's one Google Cloud client, made by the owner and pasted into its card.
+    GoogleClient,
+    /// The account's sign-in with Google, by an authorization code.
+    AuthCode,
+    /// The model's sign-in, which the deployment runs.
+    SignIn,
+    /// A command at a terminal; `{email}` and `{subdir}` stand for the account's.
+    Terminal {
+        run: Run<&'static str>,
+        why: &'static str,
+    },
+}
+
+/// One thing the person does for a connection, filled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Step {
+    /// Paste a secret into a card's write-only field: the value travels only in the tap.
+    Secret { name: String, help: Words },
+    /// Tap the account's sign-in, by the device-code flow, IMAP only.
+    DeviceCode { account: EmailAddress },
+    /// Tap the account's consent to send, by the device-code flow, SMTP only.
+    SendingConsent { account: EmailAddress },
+    /// Make the box's Google Cloud client and paste its downloaded file into the card's field.
+    GoogleClient,
+    /// Tap the account's sign-in with Google, which reads and sends its mail.
+    AuthCode { account: EmailAddress },
+    /// Tap the model's sign-in, which the deployment runs on the box.
+    SignIn,
+    /// Run a command at a terminal on the box, which only the person can do.
+    Terminal { run: Run<String>, why: &'static str },
+}
+
+impl StepShape {
+    /// What the person does, before any parameter is chosen.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        match self {
+            StepShape::Secret { help, .. } => format!(
+                "paste {} into the field of its card. {}",
+                help.label.replace("{label} ", ""),
+                help.text
+            ),
+            StepShape::DeviceCode => {
+                "tap the account's sign-in card, open the link it shows and type the code it shows"
+                    .to_owned()
+            }
+            StepShape::SendingConsent => {
+                "tap its second sign-in card the same way, which lets the box send mail from it"
+                    .to_owned()
+            }
+            StepShape::GoogleClient => {
+                "make the box's Google Cloud client, once for every Google account: its card \
+                 lists each step in the Google Cloud console and takes the file Google gives you"
+                    .to_owned()
+            }
+            StepShape::AuthCode => {
+                "tap the account's Sign in with Google card: Google asks you to let the box \
+                 read and send its mail and edit its calendars, then sends you back here"
+                    .to_owned()
+            }
+            StepShape::SignIn => "tap the model's sign-in card".to_owned(),
+            StepShape::Terminal { why, .. } => {
+                format!(
+                    "run one command at a terminal on the box ({why}); its line in Settings shows \
+                     the command"
+                )
+            }
+        }
+    }
+
+    /// This step for a connection of `params`, on `plugin` where the template writes a
+    /// plugin's credential; `None` where its blanks name a parameter the shape lacks, which
+    /// the catalog's law rules out for every template.
+    #[must_use]
+    pub fn fill(&self, plugin: Option<&PluginName>, params: &Params) -> Option<Step> {
+        let email = match params {
+            Params::Address(email) | Params::Microsoft { email, .. } => Some(email),
+            Params::Nothing | Params::Label(_) | Params::Folder(_) => None,
+        };
+        Some(match *self {
+            StepShape::Secret {
+                name: SecretName::Fixed(name),
+                help,
+            } => Step::Secret {
+                name: name.to_owned(),
+                help,
+            },
+            StepShape::Secret {
+                name: SecretName::Link,
+                help,
+            } => match (plugin, params) {
+                (Some(plugin), Params::Label(label)) => Step::Secret {
+                    name: CredentialName::link(plugin, label).as_str().to_owned(),
+                    help,
+                },
+                _ => return None,
+            },
+            StepShape::DeviceCode => Step::DeviceCode {
+                account: email?.clone(),
+            },
+            StepShape::SendingConsent => Step::SendingConsent {
+                account: email?.clone(),
+            },
+            StepShape::GoogleClient => Step::GoogleClient,
+            StepShape::AuthCode => Step::AuthCode {
+                account: email?.clone(),
+            },
+            StepShape::SignIn => Step::SignIn,
+            StepShape::Terminal { run, why } => {
+                let text = run.text();
+                let names = text.contains("{email}") || text.contains("{subdir}");
+                // Each value is one shell word wherever it stands, so no address is read as
+                // more of the command than itself.
+                let run = match email {
+                    Some(email) => run.map(|text| {
+                        text.replace("{email}", &super::reach::word(email.as_str()))
+                            .replace(
+                                "{subdir}",
+                                &super::reach::word(&suzatary_mail::mail::account::slug_of(
+                                    email.as_str(),
+                                )),
+                            )
+                    }),
+                    None if names => return None,
+                    None => run.map(str::to_owned),
+                };
+                Step::Terminal { run, why }
+            }
+        })
+    }
+}
+
+impl Step {
+    /// What the person does, as a card lists it, a terminal's command spelled as `reach` reaches
+    /// the app; a secret by its words, never its name.
+    #[must_use]
+    pub fn sentence(&self, reach: &Reach) -> String {
+        match self {
+            Step::Secret { name, .. } => format!("set {} in its card's field", Help::label(name)),
+            Step::DeviceCode { account } => format!("sign {account} in from its card"),
+            Step::SendingConsent { account } => {
+                format!("sign {account} in to send mail from its card")
+            }
+            Step::GoogleClient => {
+                "make the box's Google Cloud client and paste its file into its card".to_owned()
+            }
+            Step::AuthCode { account } => format!("sign {account} in with Google from its card"),
+            Step::SignIn => "sign the model in from its card".to_owned(),
+            Step::Terminal { run, why } => {
+                format!("at a terminal on the box: {} ({why})", run.shown(reach))
+            }
+        }
+    }
+
+    /// Where it stands as `seen` reads it: in place once taken, else what it asks.
+    #[must_use]
+    pub fn standing(&self, seen: &Seen<'_>) -> Standing {
+        match (self, seen.checked) {
+            (Step::Secret { name, .. }, _) => Standing::of_secret(name, (seen.secret)(name)),
+            (Step::DeviceCode { account }, _) if (seen.signed_in)(account) => Standing::Kept,
+            (Step::DeviceCode { .. }, _) => Standing::missing("its sign-in to read mail"),
+            (Step::SendingConsent { account }, _) if (seen.may_send)(account) => Standing::Kept,
+            (Step::SendingConsent { .. }, _) => Standing::missing("its sign-in to send mail"),
+            (Step::GoogleClient, _) => [
+                suzatary_google::google::CLIENT_ID,
+                suzatary_google::google::CLIENT_SECRET,
+            ]
+            .into_iter()
+            .map(|name| Standing::of_secret(name, (seen.secret)(name)))
+            .fold(Standing::Kept, Standing::join),
+            (Step::AuthCode { account }, _) if (seen.signed_in)(account) => Standing::Kept,
+            (Step::AuthCode { .. }, _) => Standing::missing("its sign-in with Google"),
+            (Step::SignIn | Step::Terminal { .. }, Checked::Once) => Standing::Kept,
+            (Step::SignIn, Checked::Never) => Standing::missing("the model's sign-in"),
+            (Step::Terminal { run, why }, Checked::Never) => Standing::ByHand {
+                step: 0,
+                command: run.shown(seen.reach),
+                why: (*why).to_owned(),
+            },
+        }
+    }
+}

@@ -12,7 +12,7 @@ use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::sign_in::SignInUrl;
-use crate::settings::{Settable, Settables};
+use suzatary_connect::settings::{Settable, Settables};
 use suzatary_health::health::{Healths, Instant, Reading};
 
 /// What the box knows of its model.

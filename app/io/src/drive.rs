@@ -10,10 +10,10 @@ use std::time::Duration;
 
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::drive_path::DrivePath;
-use suzatary_core::drive::{
+use suzatary_held::file_read::FileRead;
+use suzatary_services::drive::{
     DriveEntry, EntryKind, MAX_FILE, Port, WritePort, extension_of, mime_of,
 };
-use suzatary_held::file_read::FileRead;
 
 use crate::run::{Cmd, RunError, succeed};
 use crate::scratch::Scratch;

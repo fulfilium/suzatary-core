@@ -1,4 +1,4 @@
-/** The made-up world every test and scene draws from: `suzatary_core::cast`, as `web_vectors.rs` writes it. */
+/** The made-up world every test and scene draws from: `suzatary_connect::cast`, as `web_vectors.rs` writes it. */
 
 import { readFileSync } from "node:fs"
 

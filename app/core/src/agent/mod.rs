@@ -29,8 +29,8 @@ pub use surface::{TriageCall, TriageVerb, tools};
 // Public so `app/cli/tests/live.rs` can weigh the answers on the live manuals.
 pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 
-use crate::deployment::Deployment;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_connect::deployment::Deployment;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Reads;
 

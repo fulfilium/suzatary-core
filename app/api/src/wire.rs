@@ -1191,7 +1191,7 @@ mod tests {
     #[test]
     fn the_portal_answer_is_the_json_the_android_portal_reads() {
         use crate::portal::{Portal, Sender};
-        use suzatary_core::connect::Channel;
+        use suzatary_connect::connect::Channel;
         use suzatary_core::nonempty::NonEmpty;
         let sender = || Sender::try_from("100000000000".to_owned()).expect("a number");
         let fcm = NonEmpty::of(vec![Channel::Ntfy, Channel::Fcm]);

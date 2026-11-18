@@ -3,10 +3,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::calendar::Day;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_google::calendar::Day;
 
 /// The owner's calendars, day by day.
 pub struct Calendar;

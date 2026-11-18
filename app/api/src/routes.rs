@@ -19,7 +19,7 @@ use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
-use suzatary_core::deployment::Deployment;
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
@@ -165,7 +165,7 @@ pub fn todo(
     zone: suzatary_base::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
-    builder: Option<&suzatary_core::connect::RoutineId>,
+    builder: Option<&suzatary_connect::connect::RoutineId>,
 ) -> Answered<wire::TodoPayload> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let id = todo_id(id)?;
@@ -2010,7 +2010,7 @@ pub fn overview(
         &declared.settables.names(),
         asking,
         suzatary_base::conversation_id::SETUP.as_str().to_owned(),
-        suzatary_core::connect::offered(declared.channels)
+        suzatary_connect::connect::offered(declared.channels)
             .into_iter()
             .map(|template| Offer {
                 template: template.id.as_str().to_owned(),
@@ -2023,7 +2023,7 @@ pub fn overview(
 
 /// `GET /api/calendar/<date>`: a week of the owner's calendars, as Typst's HTML and plain text.
 pub fn calendar(
-    calendar: &dyn suzatary_core::calendar::effect::Calendar,
+    calendar: &dyn suzatary_google::calendar::effect::Calendar,
     render: &dyn Render,
     from: NaiveDate,
 ) -> Answered<wire::CalendarPayload> {
@@ -2034,9 +2034,9 @@ pub fn calendar(
     Ok(wire::CalendarPayload {
         from: from.to_string(),
         days: DAYS,
-        text: suzatary_core::calendar::page::calendar_text(&days),
+        text: suzatary_google::calendar::page::calendar_text(&days),
         rich: suzatary_todo::rendering::CALENDAR
-            .call(&suzatary_core::calendar::page::calendar(&days))
+            .call(&suzatary_google::calendar::page::calendar(&days))
             .ok()
             .and_then(|page| render.page(&page).ok())
             .map(|html| html.as_str().to_owned()),
@@ -2087,7 +2087,7 @@ pub fn lines_readings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::secrets::SecretState;
+    use suzatary_connect::secrets::SecretState;
 
     /// A value the fake's store reads as locked.
     const LOCKED: &str = "<the store is locked>";
@@ -2095,11 +2095,11 @@ mod tests {
     /// A fake `Secrets` holding real-shaped values, so a leak would show.
     struct FakeSecrets {
         values: BTreeMap<String, String>,
-        grants: BTreeMap<String, suzatary_core::secrets::MailGrants>,
+        grants: BTreeMap<String, suzatary_connect::secrets::MailGrants>,
     }
 
-    impl suzatary_core::secrets::Secrets for FakeSecrets {
-        fn secret_state(&self, settable: &suzatary_core::settings::Settable) -> SecretState {
+    impl suzatary_connect::secrets::Secrets for FakeSecrets {
+        fn secret_state(&self, settable: &suzatary_connect::settings::Settable) -> SecretState {
             match self.values.get(settable.name()).map(String::as_str) {
                 Some(LOCKED) => SecretState::Locked,
                 Some(_) => SecretState::Set,
@@ -2110,7 +2110,7 @@ mod tests {
         fn mail_grants(
             &self,
             account: &suzatary_mail::mail::account::MailAccount,
-        ) -> suzatary_core::secrets::MailGrants {
+        ) -> suzatary_connect::secrets::MailGrants {
             self.grants
                 .get(account.email.as_str())
                 .copied()
@@ -2120,8 +2120,8 @@ mod tests {
         fn google_grant(
             &self,
             _: &suzatary_mail::mail::address::EmailAddress,
-        ) -> suzatary_core::google::Held {
-            suzatary_core::google::Held::NotSignedIn
+        ) -> suzatary_google::google::Held {
+            suzatary_google::google::Held::NotSignedIn
         }
     }
 
@@ -2156,12 +2156,12 @@ mod tests {
 
     /// Counts the lookups it does not answer.
     struct Counting<'a>(
-        &'a dyn suzatary_core::secrets::Secrets,
+        &'a dyn suzatary_connect::secrets::Secrets,
         std::sync::atomic::AtomicUsize,
     );
 
-    impl suzatary_core::secrets::Secrets for Counting<'_> {
-        fn secret_state(&self, settable: &suzatary_core::settings::Settable) -> SecretState {
+    impl suzatary_connect::secrets::Secrets for Counting<'_> {
+        fn secret_state(&self, settable: &suzatary_connect::settings::Settable) -> SecretState {
             let state = self.0.secret_state(settable);
             if matches!(state, SecretState::Locked | SecretState::Failed) {
                 self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -2172,14 +2172,14 @@ mod tests {
         fn mail_grants(
             &self,
             account: &suzatary_mail::mail::account::MailAccount,
-        ) -> suzatary_core::secrets::MailGrants {
+        ) -> suzatary_connect::secrets::MailGrants {
             self.0.mail_grants(account)
         }
 
         fn google_grant(
             &self,
             account: &suzatary_mail::mail::address::EmailAddress,
-        ) -> suzatary_core::google::Held {
+        ) -> suzatary_google::google::Held {
             self.0.google_grant(account)
         }
     }
@@ -2190,17 +2190,17 @@ mod tests {
     /// What the overview's tests declare.
     struct Instance {
         deployment: Deployment,
-        settables: suzatary_core::settings::Settables,
-        channels: Vec<suzatary_core::connect::Channel>,
+        settables: suzatary_connect::settings::Settables,
+        channels: Vec<suzatary_connect::connect::Channel>,
         accounts: suzatary_mail::mail::account::Roster,
         jobs: Vec<suzatary_core::settings::overview::ModelJob>,
-        plugins: Vec<suzatary_core::plugin::Manifest>,
+        plugins: Vec<suzatary_services::plugin::Manifest>,
         build: suzatary_core::settings::overview::Build,
     }
 
     impl Instance {
         fn new() -> Self {
-            let channels = suzatary_core::connect::Channel::ALL.to_vec();
+            let channels = suzatary_connect::connect::Channel::ALL.to_vec();
             let plugins = vec![suzatary_core::settings::overview::calendar()];
             let account = |email: &str, sync| suzatary_mail::mail::account::MailAccount {
                 email: suzatary_mail::mail::account_email::AccountEmail::new(email)
@@ -2223,7 +2223,7 @@ mod tests {
                     .map(|name| prodrome_core::event::Actor::new(name).expect("an actor"))
                     .into_iter()
                     .collect(),
-                root: suzatary_core::cast::keys::root(),
+                root: suzatary_connect::cast::keys::root(),
                 naming: suzatary_base::chains::Naming::AsActs,
             };
             Self {
@@ -2237,8 +2237,8 @@ mod tests {
                     upkeep: None,
                     zone: suzatary_base::zone::Zone::UTC,
                 },
-                settables: suzatary_core::settings::Settables::derive(
-                    suzatary_core::settings::MODEL_TOKEN,
+                settables: suzatary_connect::settings::Settables::derive(
+                    suzatary_connect::settings::MODEL_TOKEN,
                     channels.iter().copied(),
                     None,
                     &plugins,
@@ -2256,7 +2256,7 @@ mod tests {
                     detail: "Chat, reviews and titles run a-model.".to_owned(),
                     calls: suzatary_core::settings::overview::Calls::Recorded {
                         key: "a-cli/a-model".to_owned(),
-                        credential: suzatary_core::settings::MODEL_TOKEN.to_owned(),
+                        credential: suzatary_connect::settings::MODEL_TOKEN.to_owned(),
                     },
                 }],
                 channels,
@@ -2269,7 +2269,7 @@ mod tests {
             }
         }
 
-        fn overview(&self, secrets: &dyn suzatary_core::secrets::Secrets) -> Overview {
+        fn overview(&self, secrets: &dyn suzatary_connect::secrets::Secrets) -> Overview {
             let declared = suzatary_core::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,
@@ -2280,16 +2280,16 @@ mod tests {
                 drive: &[],
                 storage: &suzatary_core::settings::overview::Storage {
                     root: "/srv/data".to_owned(),
-                    pushed: suzatary_core::settings::remote::Remote::parse(
+                    pushed: suzatary_connect::settings::remote::Remote::parse(
                         "git@example.test:ada/data.git",
                     )
                     .map_or(
-                        suzatary_core::settings::remote::Pushed::Nowhere,
-                        suzatary_core::settings::remote::Pushed::To,
+                        suzatary_connect::settings::remote::Pushed::Nowhere,
+                        suzatary_connect::settings::remote::Pushed::To,
                     ),
                 },
                 build: &self.build,
-                reach: &suzatary_core::connect::PLAIN,
+                reach: &suzatary_connect::connect::PLAIN,
             };
             let calendar = BTreeMap::from([(
                 suzatary_health::health::plugin::PluginName::parse("ics").expect("a name"),
@@ -2325,7 +2325,7 @@ mod tests {
 
     fn group(
         page: &Overview,
-        which: suzatary_core::connect::Group,
+        which: suzatary_connect::connect::Group,
     ) -> &[suzatary_core::wire::cards::OverviewLine] {
         &page
             .groups
@@ -2352,12 +2352,12 @@ mod tests {
         let counting = Counting(&locked, std::sync::atomic::AtomicUsize::new(0));
         let page = instance.overview(&counting);
         assert_eq!(counting.1.load(std::sync::atomic::Ordering::SeqCst), 1);
-        let models = group(&page, suzatary_core::connect::Group::Models);
+        let models = group(&page, suzatary_connect::connect::Group::Models);
         let chat = models
             .iter()
             .find(|line| line.key == "job:Chat")
             .expect("the model's line");
-        assert_eq!(chat.standing, suzatary_core::connect::Standing::Locked);
+        assert_eq!(chat.standing, suzatary_connect::connect::Standing::Locked);
     }
 
     /// No resolved value, and no secret's stored name, is drawn: names travel only where a card

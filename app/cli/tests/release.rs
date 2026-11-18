@@ -172,7 +172,7 @@ subdir = "someone"
 sync = "gmail"
 "#,
             repo = root.display(),
-            key = suzatary_core::cast::keys::root().as_str(),
+            key = suzatary_connect::cast::keys::root().as_str(),
         ),
     )
     .expect("an instance file");

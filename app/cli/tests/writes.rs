@@ -519,7 +519,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     );
 }
 
-/// No capability file names [`suzatary_core::settings::Writes`], so no verb can reach it.
+/// No capability file names [`suzatary_connect::settings::Writes`], so no verb can reach it.
 #[test]
 fn no_capability_file_ever_names_the_settings_writer() {
     let capability_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

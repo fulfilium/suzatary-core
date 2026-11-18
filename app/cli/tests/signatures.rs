@@ -52,7 +52,7 @@ fn signing_server(tag: &str, phone: &Secret) -> (common::Running, Arc<Fakes>) {
 /// at the terminal, and the agent's key for triage.
 fn signing_over(
     fakes: Fakes,
-    mut deployment: suzatary_core::deployment::Deployment,
+    mut deployment: suzatary_connect::deployment::Deployment,
     settings: Option<common::SettingsFixture>,
     phone: &Secret,
 ) -> (common::Running, Arc<Fakes>) {
@@ -635,10 +635,10 @@ fn replaying_model() -> common::FakeModel {
 }
 
 /// The secret names a deployment with an ntfy channel may set.
-fn ntfy() -> suzatary_core::settings::Settables {
-    suzatary_core::settings::Settables::derive(
+fn ntfy() -> suzatary_connect::settings::Settables {
+    suzatary_connect::settings::Settables::derive(
         suzatary_io::model::TOKEN,
-        [suzatary_core::connect::Channel::Ntfy],
+        [suzatary_connect::connect::Channel::Ntfy],
         None,
         &[],
     )

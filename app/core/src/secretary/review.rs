@@ -11,13 +11,13 @@ use super::store::{Decision, Entry, Outcome, Review, Stored};
 use super::surface::{SecretaryVerb, Subset};
 use super::verb_name::Effect;
 use super::verbs::{answered, listed, standing};
-use crate::deployment::Deployment;
 use crate::secretary::Secretary;
 use crate::secretary::conversations;
 use crate::secretary::model::Turn;
 use crate::secretary::transcript;
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_connect::deployment::Deployment;
 use suzatary_memory::secretary::words::Words;
 
 /// What one review did.
@@ -80,7 +80,7 @@ pub(crate) const SURFACE: Subset = Subset {
 pub fn review(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Run<Reviewed>, Refusal> {

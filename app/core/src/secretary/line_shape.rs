@@ -8,7 +8,6 @@
 use std::collections::BTreeSet;
 
 use crate::coding::{Branch, Session, SessionUrl};
-use crate::connect::TemplateId;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::model::SessionId;
 use crate::secretary::stamp::Stamp;
@@ -16,6 +15,7 @@ use crate::secretary::store::{Decision, Entry, Kind, Namer, Scope};
 use crate::secretary::turn_shape::{self, TurnShape};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_base::repo_ids::CommitId;
+use suzatary_connect::connect::TemplateId;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::KeyName;

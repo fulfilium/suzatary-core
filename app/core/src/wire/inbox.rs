@@ -217,7 +217,7 @@ pub enum ProposedAct {
     },
     /// `target` is exactly what would leave the box.
     Web {
-        request: crate::web::WebKind,
+        request: suzatary_services::web::WebKind,
         target: String,
         host: String,
         /// The drafted "Always allow" rule, `""` for none.
@@ -228,7 +228,7 @@ pub enum ProposedAct {
     Patch {
         /// `owner/name`.
         repo: String,
-        visibility: crate::repos::Visibility,
+        visibility: suzatary_services::repos::Visibility,
         base: String,
         message: String,
         files: Vec<String>,

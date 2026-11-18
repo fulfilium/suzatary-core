@@ -6,11 +6,11 @@ use suzatary_held::vault::{folder, holds};
 #[test]
 fn the_folder_is_a_drive_path_no_allowance_opens() {
     let inside = folder().join("w2.pdf").expect("a name");
-    assert!(!suzatary_core::drive::allowed(
+    assert!(!suzatary_services::drive::allowed(
         &["/my-files".parse().expect("a path")],
         &inside
     ));
-    assert!(!suzatary_core::drive::allowed(&[folder()], &inside));
+    assert!(!suzatary_services::drive::allowed(&[folder()], &inside));
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn the_folder_is_held_whatever_its_case() {
         let path: DrivePath = path.parse().expect("a path");
         assert!(holds(&path), "{path}");
         assert!(
-            !suzatary_core::drive::allowed(&["/my-files".parse().expect("a path")], &path),
+            !suzatary_services::drive::allowed(&["/my-files".parse().expect("a path")], &path),
             "{path}"
         );
     }

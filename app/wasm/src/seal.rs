@@ -15,7 +15,7 @@ use prodrome_core::fpl::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::connect::TemplateId;
+use suzatary_connect::connect::TemplateId;
 use suzatary_core::secretary::held_replica::{Moved, Sealing};
 use suzatary_core::secretary::object_stores;
 use suzatary_core::secretary::own_line::OwnLine;

@@ -3,8 +3,8 @@
 
 use std::fmt;
 
-use crate::conformance::{Broken, hold};
 use crate::secretary::model::{Conversation, Model, Reply, Turn};
+use suzatary_connect::conformance::{Broken, hold};
 
 /// A law of a model, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

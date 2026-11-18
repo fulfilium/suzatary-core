@@ -5,7 +5,7 @@
 use super::{Scratch, repo};
 use std::process::Command;
 
-use suzatary_core::connect::Reach;
+use suzatary_connect::connect::Reach;
 
 /// The variable `claude` reads the subscription's token from.
 const TOKEN: &str = "CLAUDE_CODE_OAUTH_TOKEN";

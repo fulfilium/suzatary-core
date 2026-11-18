@@ -2,7 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::settings::EditError;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::settings::EditError;
 
 /// The lock every edit of the instance file holds from read to write, across processes
 /// (`suzatary instance set` takes it too): an `flock` on a sidecar, never on the file itself,
@@ -69,38 +70,38 @@ fn doc(text: &str) -> Result<toml_edit::DocumentMut, EditError> {
         .map_err(|failed: toml_edit::TomlError| EditError::Malformed(failed.to_string()))
 }
 
-impl suzatary_core::settings::Configuration for InstanceEdits {
-    fn declared(&self) -> Result<suzatary_core::connect::Declared, EditError> {
+impl suzatary_connect::settings::Configuration for InstanceEdits {
+    fn declared(&self) -> Result<suzatary_connect::connect::Declared, EditError> {
         super::connections::declared(&self.path, &self.read_text()?)
     }
 }
 
-impl suzatary_core::settings::Edits for InstanceEdits {
+impl suzatary_connect::settings::Edits for InstanceEdits {
     fn allow_web(
         &self,
-        rule: &suzatary_core::web::AllowRule,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        rule: &suzatary_services::web::AllowRule,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.allow("web_allow", rule.to_string())
     }
 
     fn allow_drive(
         &self,
         folder: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.allow("drive_allow", folder.to_string())
     }
 
     fn add_connection(
         &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        connection: &Connection,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.edit(|path, text| super::connections::add(path, text, connection))
     }
 
     fn remove_connection(
         &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        connection: &Connection,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.edit(|path, text| super::connections::remove(path, text, connection))
     }
 
@@ -108,7 +109,7 @@ impl suzatary_core::settings::Edits for InstanceEdits {
         &self,
         plugin: &suzatary_health::health::plugin::PluginName,
         origin: &suzatary_health::health::plugin::Origin,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.edit(|path, text| super::connections::add_origin(path, text, plugin, origin))
     }
 }

@@ -1500,8 +1500,8 @@ mod tests {
     /// a template this build does not hold is no line at all.
     #[test]
     fn a_set_up_line_reads_back_and_an_unknown_template_is_no_line() {
-        use crate::connect::TemplateId;
         use crate::secretary::store::{Begun, Kind};
+        use suzatary_connect::connect::TemplateId;
         let entry = Entry::SetUp {
             at: at(),
             title: Words::kept("Connect Gmail".to_owned()),

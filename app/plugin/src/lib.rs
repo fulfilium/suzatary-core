@@ -1,7 +1,7 @@
 //! The plugin host: it runs a component of `app/wit/plugin.wit`'s `source` world with its grant.
 //!
 //! One [`Host`] holds one wasmtime `Engine` and one `Linker`. The linker holds `fetch`, which
-//! crosses `suzatary_core::plugin::Target::admit`, and the WASI clocks, random numbers and
+//! crosses `suzatary_services::plugin::Target::admit`, and the WASI clocks, random numbers and
 //! standard streams; it holds no WASI filesystem or sockets, so [`Host::load`] refuses a
 //! component that imports either. A credential is resolved here by name and never handed in.
 //!

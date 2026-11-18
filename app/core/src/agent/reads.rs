@@ -8,11 +8,11 @@ use suzatary_signatures::believed::Believed;
 
 use super::events_of;
 use crate::agent::Agent;
-use crate::deployment::Deployment;
 use crate::secretary::shown_record::OwnersRecord;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_connect::deployment::Deployment;
 use suzatary_memory::secretary::memory::Memory;
 use suzatary_store::store::Reads;
 use suzatary_todo::todos;
@@ -360,7 +360,7 @@ mod tests {
                 name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([]),
                 roster: BTreeSet::new(),
-                root: crate::cast::keys::root(),
+                root: suzatary_connect::cast::keys::root(),
                 naming: suzatary_base::chains::Naming::AsActs,
             }])
             .expect("one chain"),

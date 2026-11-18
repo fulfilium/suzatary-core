@@ -4142,7 +4142,9 @@ dependencies = [
  "sha2",
  "suzatary-api",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
  "suzatary-held",
  "suzatary-io",
@@ -4150,6 +4152,7 @@ dependencies = [
  "suzatary-memory",
  "suzatary-plugin",
  "suzatary-record",
+ "suzatary-services",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-testkit",
@@ -4178,12 +4181,15 @@ dependencies = [
  "serde_json",
  "suzatary-api",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
  "suzatary-held",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
+ "suzatary-services",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-todo",
@@ -4215,6 +4221,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-connect"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-google",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-mail",
+ "suzatary-record",
+ "suzatary-services",
+ "thiserror",
+ "toml 0.9.12+spec-1.1.0",
+ "ts-rs",
+]
+
+[[package]]
 name = "suzatary-core"
 version = "0.0.0"
 dependencies = [
@@ -4232,12 +4263,15 @@ dependencies = [
  "serde_json",
  "sha2",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
  "suzatary-held",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
+ "suzatary-services",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-todo",
@@ -4248,6 +4282,26 @@ dependencies = [
  "ts-rs",
  "typst-syntax",
  "unicode-normalization",
+]
+
+[[package]]
+name = "suzatary-google"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-google",
+ "suzatary-mail",
+ "suzatary-services",
+ "suzatary-store",
+ "suzatary-todo",
+ "thiserror",
 ]
 
 [[package]]
@@ -4313,12 +4367,15 @@ dependencies = [
  "serde_json",
  "sha2",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
  "suzatary-held",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
+ "suzatary-services",
  "suzatary-signatures",
  "suzatary-store",
  "suzatary-testkit",
@@ -4384,6 +4441,7 @@ dependencies = [
  "serde_json",
  "suzatary-api",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
  "suzatary-health",
  "suzatary-mail",
@@ -4403,8 +4461,10 @@ dependencies = [
  "prodrome-core",
  "suzatary-base",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
  "suzatary-io",
+ "suzatary-services",
  "thiserror",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
@@ -4433,7 +4493,9 @@ dependencies = [
  "serde",
  "serde_json",
  "suzatary-core",
+ "suzatary-google",
  "suzatary-health",
+ "suzatary-services",
  "suzatary-store",
  "wit-bindgen 0.62.0",
 ]
@@ -4452,6 +4514,25 @@ dependencies = [
  "thiserror",
  "ts-rs",
  "typst-syntax",
+]
+
+[[package]]
+name = "suzatary-services"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-services",
+ "thiserror",
+ "toml 0.9.12+spec-1.1.0",
+ "ts-rs",
 ]
 
 [[package]]
@@ -4547,6 +4628,7 @@ dependencies = [
  "serde_json",
  "suzatary-api",
  "suzatary-base",
+ "suzatary-connect",
  "suzatary-core",
  "suzatary-held",
  "suzatary-memory",

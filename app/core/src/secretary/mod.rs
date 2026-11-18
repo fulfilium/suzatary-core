@@ -124,7 +124,6 @@ use serde_json::{Map, Value};
 
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
-use crate::deployment::Deployment;
 use crate::secretary::conversations::{append, read};
 use crate::secretary::model::{Halt, Turn};
 use crate::verb::Request;
@@ -140,6 +139,8 @@ use suzatary_base::chains::ChainPolicy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::settings::Settables;
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
@@ -209,7 +210,7 @@ impl Speaker<'_> {
 pub fn converse(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
     said: Saying<'_>,
@@ -259,7 +260,7 @@ pub fn answer<'p>(
     caps: &Secretary<'_>,
     pick: impl FnOnce() -> crate::secretary::model::Pick<'p>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
     system: &str,
@@ -354,7 +355,7 @@ pub(crate) fn rounded(
 fn load_references(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
 ) -> Result<(), Refusal> {
@@ -416,7 +417,7 @@ fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)>
 fn load(
     caps: &Secretary<'_>,
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     here: &ConversationId,
     reference: &Reference,
@@ -567,7 +568,7 @@ pub(crate) fn chains_read(chains: &[Bound<'_>]) -> suzatary_signatures::chain_se
 /// An unknown verb or chain, a missing or ill-typed argument, or a capability's failure.
 pub fn call(
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
     verb: &str,
@@ -583,7 +584,7 @@ pub fn call(
 /// An unknown chain, or whatever the verb refuses.
 pub fn run(
     deployment: &Deployment,
-    settables: &crate::settings::Settables,
+    settables: &Settables,
     chains: &[Bound<'_>],
     id: &ConversationId,
     request: Request<SecretaryCall>,

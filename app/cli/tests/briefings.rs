@@ -57,7 +57,7 @@ fn a_day_the_secretary_briefed_is_its_brief_block_by_block() {
     converse(
         &fakes.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &[],
         &DEFAULT,
         suzatary_core::secretary::Saying {

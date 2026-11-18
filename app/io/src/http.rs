@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use suzatary_core::web::is_public;
+use suzatary_services::web::is_public;
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
@@ -106,7 +106,7 @@ impl Req {
 
     #[must_use]
     pub fn form(url: impl Into<String>, fields: &[(&str, &str)]) -> Self {
-        Self::post(url, suzatary_core::url::encode_form(fields))
+        Self::post(url, suzatary_google::url::encode_form(fields))
             .header("Content-Type", "application/x-www-form-urlencoded")
     }
 
@@ -140,7 +140,7 @@ pub(crate) fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<
 
 impl std::fmt::Debug for Req {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let origin = suzatary_core::plugin::PluginUrl::parse(&self.url).map_or_else(
+        let origin = suzatary_services::plugin::PluginUrl::parse(&self.url).map_or_else(
             || "an unreadable URL".to_owned(),
             |url| url.origin().to_string(),
         );

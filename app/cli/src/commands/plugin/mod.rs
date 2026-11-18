@@ -12,7 +12,6 @@ use clap::{Args as ClapArgs, Subcommand};
 use prodrome_core::declared::Declared;
 use prodrome_core::fpl::instant_of;
 use suzatary_base::capability::Clock as _;
-use suzatary_core::plugin::{Answer, Came, LastRun, Manifest, admit};
 use suzatary_health::health::plugin::CredentialName;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::durable;
@@ -21,6 +20,7 @@ use suzatary_io::objects::Objects;
 use suzatary_io::plugin_store::{How, PluginStore};
 use suzatary_io::present::Present as _;
 use suzatary_plugin::{Budget, Effects, Fetch, Host, Run, Source};
+use suzatary_services::plugin::{Answer, Came, LastRun, Manifest, admit};
 use suzatary_store::store::{Learnt, learn};
 
 use crate::instance::{Instance, Plugins};
@@ -85,7 +85,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
         probe_drive(&instance, &health);
         super::google::sync_calendars(
             &instance,
-            suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
+            suzatary_io::google::Google::new(suzatary_google::google::Endpoints::google()),
             &health,
         )
     } else {
@@ -126,10 +126,10 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
 /// List every Drive folder the secretary may read and join what came of it into `health`; a
 /// register that cannot be written is a journal line, since the next run probes again.
 fn probe_drive(instance: &Instance, health: &suzatary_io::source_health::Health) {
-    use suzatary_core::drive::Drive as _;
+    use suzatary_services::drive::Drive as _;
     let drive = super::serve::interpreters::DriveAccess::of(instance);
     let at = instant_of(SystemClock.now());
-    let probed = suzatary_core::drive::probe(drive.port(), &drive.allowed_folders(), at);
+    let probed = suzatary_services::drive::probe(drive.port(), &drive.allowed_folders(), at);
     if let Err(failed) = health.join(&probed) {
         println!("drive: its probe was not recorded: {failed}");
     }

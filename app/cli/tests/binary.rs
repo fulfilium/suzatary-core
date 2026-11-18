@@ -46,15 +46,15 @@ pub(crate) fn keyed() -> Command {
     command
         .env(
             suzatary_signatures::signatures::BOX_KEY,
-            suzatary_core::cast::keys::ROOT,
+            suzatary_connect::cast::keys::ROOT,
         )
         .env(
             suzatary_signatures::signatures::AGENT_KEY,
-            suzatary_core::cast::keys::AGENT,
+            suzatary_connect::cast::keys::AGENT,
         )
         .env(
             suzatary_mail::mail::dedup_key::DEDUP_KEY,
-            suzatary_core::cast::keys::DEDUP,
+            suzatary_connect::cast::keys::DEDUP,
         );
     command
 }

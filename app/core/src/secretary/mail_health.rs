@@ -5,7 +5,6 @@
 //! The act is a function of the account and the instant it last synced, so asking again asks for
 //! the same object; a new failure after a success is a new act.
 
-use crate::deployment::Deployment;
 use crate::secretary::changes::{self, Act, Changeset};
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
@@ -13,6 +12,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::escape_markup;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::Refusal;
+use suzatary_connect::deployment::Deployment;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Instant, Reading};
 use suzatary_record::todo::{Price, TodoFields};
@@ -199,7 +199,7 @@ mod tests {
             name: ChainName::new(name).expect("a slug"),
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: std::collections::BTreeSet::new(),
-            root: crate::cast::keys::root(),
+            root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,
         };
         let (life, ops) = (policy("life"), policy("ops"));

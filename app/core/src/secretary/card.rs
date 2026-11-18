@@ -1,17 +1,18 @@
 //! Every card's words and answers are decided here, so the web app draws any card with one
 //! function and never asks its kind.
 
-use crate::connect::RoutineId;
-use crate::repos::Visibility;
 use crate::secretary::inbox_reading::Reading;
 use crate::secretary::proposal::Style;
 use crate::secretary::responded::{Responded, Tried};
-use crate::web::WebKind;
 use crate::wire::inbox::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
     RememberWords, ReplacedFact,
 };
+use suzatary_connect::connect::RoutineId;
+use suzatary_connect::settings::Help;
 use suzatary_memory::secretary::memory;
+use suzatary_services::repos::Visibility;
+use suzatary_services::web::WebKind;
 
 /// The Memory page.
 pub(crate) const MEMORY_PAGE: &str = "#/secretary/memory";
@@ -209,7 +210,7 @@ fn google_client(redirect: &str, steps: &[String]) -> Card {
         }],
         link: Some(CardLink::Page {
             label: "Open the Google Cloud console".to_owned(),
-            href: crate::google::CONSOLE.to_owned(),
+            href: suzatary_google::google::CONSOLE.to_owned(),
         }),
         ..card(
             "Make the box's Google client",
@@ -395,7 +396,7 @@ fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
             asks: Asks::Confirm {
                 question: format!(
                     "Let {} fetch from {origin}?",
-                    crate::connect::plugin_called(plugin)
+                    suzatary_connect::connect::plugin_called(plugin)
                 ),
                 yes: "Yes, allow it".to_owned(),
             },
@@ -404,7 +405,7 @@ fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
         ..card(
             &format!(
                 "Let {} reach a new address",
-                crate::connect::plugin_called(plugin)
+                suzatary_connect::connect::plugin_called(plugin)
             ),
             sentence,
             vec![
@@ -911,9 +912,9 @@ pub fn secret_act(name: &str, routine: Option<&RoutineId>, model: Option<&str>) 
             link: None,
         };
     }
-    let help = crate::settings::Help::of(name, routine);
+    let help = Help::of(name, routine);
     ProposedAct::Secret {
-        label: crate::settings::Help::label(name),
+        label: Help::label(name),
         found: help.as_ref().map(|help| help.text.to_owned()),
         link: help.and_then(|help| help.link),
     }
@@ -1431,7 +1432,7 @@ mod tests {
             Some(CardLink::Fix {
                 label: "Connect me@example.test".to_owned(),
                 then: crate::wire::inbox::FixThen::Leave {
-                    href: format!("{}{}", crate::google::CONSENT, id().as_str()),
+                    href: format!("{}{}", suzatary_google::google::CONSENT, id().as_str()),
                 },
             })
         );

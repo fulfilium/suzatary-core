@@ -621,7 +621,7 @@ only when nothing in §3 fits the service.
 1. Branch off upstream's current `master` in the app's checkout:
    `git fetch upstream && git switch -c fix/<slug> upstream/master`.
 2. Apply only the general fix. Leave out the person's names, addresses, configuration
-   and data, even as examples. Tests use the neutral cast (`suzatary_core::cast`).
+   and data, even as examples. Tests use the neutral cast (`suzatary_connect::cast`).
 3. Run the gate that `CONTRIBUTING.md` names, and fix whatever it reports.
 4. **Scan for private content before any push.** Commit first, then run:
    ```console

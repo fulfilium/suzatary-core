@@ -246,7 +246,7 @@ fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none()
 
 /// The cast's deployment keys, what a test's `init` keeps rather than mints.
 fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
-    use suzatary_core::cast::keys;
+    use suzatary_connect::cast::keys;
     suzatary_signatures::signatures::BoxKeys::of(
         &keys::root(),
         &suzatary_base::capability::Secret::new(keys::ROOT),
@@ -306,15 +306,15 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
     let seeded = init(&[
         (
             suzatary_signatures::signatures::BOX_KEY,
-            suzatary_core::cast::keys::ROOT,
+            suzatary_connect::cast::keys::ROOT,
         ),
         (
             suzatary_signatures::signatures::AGENT_KEY,
-            suzatary_core::cast::keys::AGENT,
+            suzatary_connect::cast::keys::AGENT,
         ),
         (
             suzatary_mail::mail::dedup_key::DEDUP_KEY,
-            suzatary_core::cast::keys::DEDUP,
+            suzatary_connect::cast::keys::DEDUP,
         ),
     ]);
     assert!(
@@ -359,7 +359,7 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
         &env_beside(&dir.join("instance-3.toml")),
     )
     .expect("the instance reads");
-    assert_eq!(*written.root(), suzatary_core::cast::keys::root());
+    assert_eq!(*written.root(), suzatary_connect::cast::keys::root());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

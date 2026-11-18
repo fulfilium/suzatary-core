@@ -23,12 +23,17 @@ use suzatary_base::answer::Renderable;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::{Answered, Refusal};
+use suzatary_connect::connect::AccountKind;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::connect::RoutineId;
+use suzatary_connect::connect::Table;
 use suzatary_held::secretary::attached;
 use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::salted_text::TextName;
 use suzatary_memory::secretary::words;
+use suzatary_services::web::WebRequest;
 use suzatary_todo::render::Html;
 use suzatary_todo::wire::todo::Fulfillment;
 
@@ -86,13 +91,13 @@ pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
     fn shown(&self, changeset: &Changeset) -> (Vec<ProposedObject>, String);
     /// The routine `[coding]` declares.
-    fn routine(&self) -> Option<&crate::connect::RoutineId>;
+    fn routine(&self) -> Option<&RoutineId>;
     /// The secret name of the model's credential.
     fn model(&self) -> Option<&str>;
     /// The origins `plugin` may fetch from now.
     fn origins(&self, plugin: &str) -> Option<Vec<String>>;
     /// How the person reaches the app at a terminal.
-    fn reach(&self) -> &crate::connect::Reach;
+    fn reach(&self) -> &suzatary_connect::connect::Reach;
     /// In the box's words: a message by sender, subject and date, a file by its source.
     fn source(&self, handle: &suzatary_held::held_value::Handle) -> String;
 }
@@ -112,7 +117,7 @@ impl Draw for Undrawn {
         (Vec::new(), String::new())
     }
 
-    fn routine(&self) -> Option<&crate::connect::RoutineId> {
+    fn routine(&self) -> Option<&RoutineId> {
         None
     }
 
@@ -124,8 +129,8 @@ impl Draw for Undrawn {
         None
     }
 
-    fn reach(&self) -> &crate::connect::Reach {
-        &crate::connect::PLAIN
+    fn reach(&self) -> &suzatary_connect::connect::Reach {
+        &suzatary_connect::connect::PLAIN
     }
 
     fn source(&self, _: &suzatary_held::held_value::Handle) -> String {
@@ -660,11 +665,7 @@ fn receipt(fact: memory::FactId, memory: Option<&wire::MemoryPayload>) -> wire::
     }
 }
 
-fn connect_on_wire(
-    connection: &crate::connect::Connection,
-    draws: &dyn Draw,
-    sentence: String,
-) -> ProposedAct {
+fn connect_on_wire(connection: &Connection, draws: &dyn Draw, sentence: String) -> ProposedAct {
     ProposedAct::Connect {
         connection: connection.called(),
         writes: connection.writes(),
@@ -675,41 +676,37 @@ fn connect_on_wire(
             .collect(),
         // The plugin's origins as declared now, or its template's for a first link.
         reach: match connection.template().table {
-            crate::connect::Table::Link(fragment) => {
-                draws.origins(fragment.plugin.as_str()).unwrap_or_else(|| {
-                    fragment
-                        .origins
-                        .iter()
-                        .map(|origin| (*origin).to_owned())
-                        .collect()
-                })
-            }
+            Table::Link(fragment) => draws.origins(fragment.plugin.as_str()).unwrap_or_else(|| {
+                fragment
+                    .origins
+                    .iter()
+                    .map(|origin| (*origin).to_owned())
+                    .collect()
+            }),
             _ => Vec::new(),
         },
         sentence,
     }
 }
 
-fn disconnect_on_wire(connection: &crate::connect::Connection, sentence: String) -> ProposedAct {
+fn disconnect_on_wire(connection: &Connection, sentence: String) -> ProposedAct {
     ProposedAct::Disconnect {
         connection: connection.called(),
         writes: connection.writes(),
         forgets: connection
             .secrets()
             .iter()
-            .map(|name| crate::settings::Help::label(name))
+            .map(|name| suzatary_connect::settings::Help::label(name))
             .chain(match connection.template().table {
-                crate::connect::Table::Account(crate::connect::AccountKind::Microsoft) => {
+                Table::Account(AccountKind::Microsoft) => {
                     Some("its sign-in to read and send mail".to_owned())
                 }
-                crate::connect::Table::Account(crate::connect::AccountKind::Google) => {
-                    Some("its sign-in with Google".to_owned())
-                }
+                Table::Account(AccountKind::Google) => Some("its sign-in with Google".to_owned()),
                 _ => None,
             })
             .collect(),
         cached: match connection.template().table {
-            crate::connect::Table::Account(_) => Cached::Mail,
+            Table::Account(_) => Cached::Mail,
             _ => Cached::Nothing,
         },
         sentence,
@@ -794,13 +791,13 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
         Act::Web { request, rule } => ProposedAct::Web {
             request: request.kind(),
             target: match request {
-                crate::web::WebRequest::Search { query } => query.as_str().to_owned(),
-                crate::web::WebRequest::Fetch { url } => url.as_str().to_owned(),
+                WebRequest::Search { query } => query.as_str().to_owned(),
+                WebRequest::Fetch { url } => url.as_str().to_owned(),
             },
             host: request.host().to_string(),
             always: rule
                 .as_ref()
-                .map(crate::web::AllowRule::sentence)
+                .map(suzatary_services::web::AllowRule::sentence)
                 .unwrap_or_default(),
             sentence: act.sentence(),
         },
@@ -859,7 +856,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
         },
         Act::GoogleClient { redirect } => ProposedAct::GoogleClient {
             redirect: redirect.to_string(),
-            steps: crate::google::CLIENT_STEPS
+            steps: suzatary_google::google::CLIENT_STEPS
                 .iter()
                 .map(|&step| step.to_owned())
                 .collect(),
@@ -1068,11 +1065,13 @@ pub fn proposal(
         }
         Proposal::Act(act) => act_on_wire(
             act,
-            standing
-                .object
-                .reading
-                .running()
-                .then(|| format!("{}{}", crate::google::CONSENT, standing.object.id.as_str())),
+            standing.object.reading.running().then(|| {
+                format!(
+                    "{}{}",
+                    suzatary_google::google::CONSENT,
+                    standing.object.id.as_str()
+                )
+            }),
             draws,
         ),
         Proposal::Remember {

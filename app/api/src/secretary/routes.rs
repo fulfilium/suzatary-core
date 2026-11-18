@@ -8,7 +8,15 @@ use suzatary_base::capability::{Clock, Secret};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
-use suzatary_core::deployment::Deployment;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::connect::Reach;
+use suzatary_connect::connect::RoutineId;
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::secrets::Secrets;
+use suzatary_connect::settings::Declaration;
+use suzatary_connect::settings::Help;
+use suzatary_connect::settings::Verify;
+use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::act_lines::ActLine;
 use suzatary_core::secretary::acts::Act;
@@ -25,9 +33,8 @@ use suzatary_core::secretary::readings::{self, Draw, Dress, Window};
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::store::{Entry, Kind, Stored};
 use suzatary_core::secretary::transcript;
-use suzatary_core::secrets::Secrets;
-use suzatary_core::settings::{Edits, Settable, Settables, Writes};
 use suzatary_core::wire::topics as wire;
+use suzatary_google::google::RedirectUri;
 use suzatary_health::health::plugin::{Origin, PluginName};
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
@@ -37,6 +44,7 @@ use suzatary_memory::secretary::erasure;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::salted_text;
+use suzatary_services::plugin::Manifest;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Tap;
 
@@ -68,9 +76,9 @@ pub struct Cards<'a> {
     /// Every chain this deployment serves.
     pub chains: &'a [Bound<'a>],
     /// The plugins the instance file declares now.
-    pub plugins: Option<&'a [suzatary_core::plugin::Manifest]>,
+    pub plugins: Option<&'a [Manifest]>,
     /// How the person reaches the app at a terminal.
-    pub reach: &'a suzatary_core::connect::Reach,
+    pub reach: &'a Reach,
     /// The names the deployment may set now.
     pub settables: &'a Settables,
 }
@@ -81,10 +89,10 @@ struct Drawn<'a> {
     typeset: &'a dyn suzatary_base::capability::Typeset,
     now: suzatary_base::zone::Moment,
     categories: Vec<String>,
-    routine: Option<suzatary_core::connect::RoutineId>,
+    routine: Option<RoutineId>,
     model: Option<Settable>,
-    plugins: Vec<suzatary_core::plugin::Manifest>,
-    reach: suzatary_core::connect::Reach,
+    plugins: Vec<Manifest>,
+    reach: Reach,
     sources: std::collections::BTreeMap<String, String>,
 }
 
@@ -201,7 +209,7 @@ fn sources(
 }
 
 impl Draw for Drawn<'_> {
-    fn routine(&self) -> Option<&suzatary_core::connect::RoutineId> {
+    fn routine(&self) -> Option<&RoutineId> {
         self.routine.as_ref()
     }
 
@@ -224,7 +232,7 @@ impl Draw for Drawn<'_> {
         format!("from {}", file.source().describe())
     }
 
-    fn reach(&self) -> &suzatary_core::connect::Reach {
+    fn reach(&self) -> &Reach {
         &self.reach
     }
 
@@ -289,10 +297,10 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
         .settables
         .by_handle(handle)
         .filter(|name| {
-            cards.settables.declaration(name).is_some_and(|by| {
-                by.iter()
-                    .any(suzatary_core::settings::Declaration::by_a_secret_card)
-            })
+            cards
+                .settables
+                .declaration(name)
+                .is_some_and(|by| by.iter().any(Declaration::by_a_secret_card))
         })
         .ok_or_else(|| {
             Refusal::not_found(format!(
@@ -570,9 +578,9 @@ pub struct Effectors<'a> {
     /// Stores a tapped secret.
     pub secrets: &'a dyn Writes,
     /// Calls a model once with a credential before it is stored.
-    pub verify: &'a dyn suzatary_core::settings::Verify,
+    pub verify: &'a dyn Verify,
     /// Syncs a plugin once its link is stored.
-    pub checks: &'a dyn suzatary_core::settings::Checks,
+    pub checks: &'a dyn suzatary_connect::settings::Checks,
     /// The sign-ins the box holds open.
     pub signing: &'a dyn suzatary_core::secretary::sign_in::Sessions,
     /// Edits the instance file.
@@ -654,7 +662,7 @@ impl TapAnswer {
 #[derive(Debug, Clone, Copy)]
 enum Allowing<'p> {
     Once,
-    Rule(&'p suzatary_core::web::AllowRule),
+    Rule(&'p suzatary_services::web::AllowRule),
     /// A document, whose folder is allowed.
     Document(&'p suzatary_base::drive_path::DrivePath),
 }
@@ -680,9 +688,9 @@ enum Prepared<'p, 'c> {
         code: &'p Secret,
         name: Settable,
     },
-    Connect(&'p suzatary_core::connect::Connection),
+    Connect(&'p Connection),
     Disconnect {
-        connection: &'p suzatary_core::connect::Connection,
+        connection: &'p Connection,
         mail: KeptMail,
     },
     Grant {
@@ -718,12 +726,12 @@ enum Prepared<'p, 'c> {
     },
     Decide(&'p suzatary_todo::decisions::Draft),
     GoogleClient {
-        redirect: &'p suzatary_core::google::RedirectUri,
+        redirect: &'p RedirectUri,
         file: &'p Secret,
     },
     GoogleSignIn {
         account: &'p suzatary_mail::mail::address::EmailAddress,
-        scopes: &'p suzatary_core::google::Scopes,
+        scopes: &'p suzatary_google::google::Scopes,
     },
     CalendarEvent {
         act: &'p Act,
@@ -787,7 +795,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
         answer: &'p TapAnswer,
         reach: &Preparing<'_, 'c>,
     ) -> Result<Self, Refusal> {
-        use suzatary_core::connect::Table;
+        use suzatary_connect::connect::Table;
         Ok(match act {
             Act::Restore { card } => {
                 answer.plain()?;
@@ -912,7 +920,7 @@ fn minted(settables: &Settables, name: &str) -> Result<Settable, Refusal> {
     Settable::mint(settables, name).map_err(|_| {
         Refusal::conflict(format!(
             "nothing was stored: {} is no longer a secret this deployment declares",
-            suzatary_core::settings::Help::label(name)
+            Help::label(name)
         ))
     })
 }
@@ -1169,7 +1177,7 @@ pub fn fix(
             caps.secretary.secrets.google_grant(account)
         }
         suzatary_mail::mail::lacking::Lacking::GoogleClient => {
-            suzatary_core::google::Held::NotSignedIn
+            suzatary_google::google::Held::NotSignedIn
         }
     };
     let fix = suzatary_core::secretary::fix::of(lacking, &held, effectors.consents.redirect())
@@ -1330,8 +1338,8 @@ enum Then {
     /// The sign-in card a code card finished.
     End(ProposalId, Performed),
     Grant(PluginName, Origin),
-    Connect(suzatary_core::connect::Connection),
-    Retire(suzatary_core::connect::Connection),
+    Connect(Connection),
+    Retire(Connection),
     Check(PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold.
     Forget(
@@ -1405,17 +1413,16 @@ enum Link {
         origin: Origin,
     },
     /// A Google account's own calendar: the account's connection is asked for instead.
-    Connect(suzatary_core::connect::Connection),
+    Connect(Connection),
     /// A calendar of an account signed in with Google: the link's removal is asked for instead.
-    Retire(suzatary_core::connect::Connection),
+    Retire(Connection),
 }
 
 /// Where `value` stands as `name`'s link.
 fn linked((edits, settables): (&dyn Edits, &Settables), name: &Settable, value: &Secret) -> Link {
-    let a_plugin_s = settables.declaration(name).is_some_and(|by| {
-        by.iter()
-            .any(|by| matches!(by, suzatary_core::settings::Declaration::Plugin(_)))
-    });
+    let a_plugin_s = settables
+        .declaration(name)
+        .is_some_and(|by| by.iter().any(|by| matches!(by, Declaration::Plugin(_))));
     let declared = match edits.declared() {
         Ok(declared) => declared,
         Err(failed) if a_plugin_s => {
@@ -1433,12 +1440,12 @@ fn linked((edits, settables): (&dyn Edits, &Settables), name: &Settable, value: 
     else {
         return Link::Stored;
     };
-    match suzatary_core::plugin::PluginUrl::parse(value.expose().trim()) {
+    match suzatary_services::plugin::PluginUrl::parse(value.expose().trim()) {
         None => Link::Refused(format!(
             "nothing was stored: that is not an http(s) link the {} plugin can fetch",
             manifest.name()
         )),
-        Some(url) if let Some(calendar) = suzatary_core::google::ical::linked(&url) => {
+        Some(url) if let Some(calendar) = suzatary_google::google::ical::linked(&url) => {
             google_calendar(&declared, name.name(), calendar)
         }
         // The plugin's fetch sends a secret link over TLS or loopback alone, so a grant for any
@@ -1457,17 +1464,17 @@ fn linked((edits, settables): (&dyn Edits, &Settables), name: &Settable, value: 
 
 /// A Google calendar's link, never stored: the calendar is read through the sign-in with Google.
 fn google_calendar(
-    declared: &suzatary_core::connect::Declared,
+    declared: &suzatary_connect::connect::Declared,
     name: &str,
-    calendar: suzatary_core::google::ical::Linked,
+    calendar: suzatary_google::google::ical::Linked,
 ) -> Link {
-    use suzatary_core::google::ical::Linked;
+    use suzatary_google::google::ical::Linked;
     const READ: &str = "nothing was stored: the box reads a Google calendar through its Google \
                         account, never by its link";
     let Linked::Account(account) = calendar else {
         return Link::Refused(format!("{READ}; connect the Google account that holds it"));
     };
-    match suzatary_core::connect::Connection::parse("google", &[account.as_str().to_owned()]) {
+    match Connection::parse("google", &[account.as_str().to_owned()]) {
         Ok(connection) => match declared.connections().get(&connection.key()) {
             Some(held) if !connection.moves(held) => declared
                 .connections()
@@ -1475,7 +1482,7 @@ fn google_calendar(
                 .find(|link| {
                     matches!(
                         link.template().table,
-                        suzatary_core::connect::Table::Link(_)
+                        suzatary_connect::connect::Table::Link(_)
                     ) && link.secrets().first().map(String::as_str) == Some(name)
                 })
                 .map_or_else(
@@ -1490,16 +1497,17 @@ fn google_calendar(
 
 fn secret(
     writer: &dyn Writes,
-    verify: &dyn suzatary_core::settings::Verify,
+    verify: &dyn Verify,
     reading: (&dyn Edits, &Settables),
     name: &Settable,
     value: &Secret,
     then: &mut Option<Then>,
 ) -> Performed {
-    if reading.1.declaration(name).is_some_and(|by| {
-        by.iter()
-            .any(suzatary_core::settings::Declaration::own_card)
-    }) {
+    if reading
+        .1
+        .declaration(name)
+        .is_some_and(|by| by.iter().any(Declaration::own_card))
+    {
         return Performed::Tried(Tried::NotSent {
             reason: "nothing was stored: this name is asked for by a card of its own".to_owned(),
         });
@@ -1545,7 +1553,7 @@ fn secret(
 }
 
 /// Write a connection's table; a refusal wrote nothing, so tapping again is safe.
-fn connected(edits: &dyn Edits, connection: &suzatary_core::connect::Connection) -> Performed {
+fn connected(edits: &dyn Edits, connection: &Connection) -> Performed {
     // A lieer account moves onto its sign-in with Google in the Google callback, never this tap.
     let moves = edits.declared().is_ok_and(|declared| {
         declared
@@ -1580,7 +1588,7 @@ fn connected(edits: &dyn Edits, connection: &suzatary_core::connect::Connection)
 fn disconnected(
     removing: &Effectors<'_>,
     cards: &Cards<'_>,
-    connection: &suzatary_core::connect::Connection,
+    connection: &Connection,
     mail: KeptMail,
     then: &mut Option<Then>,
 ) -> Performed {
@@ -1623,13 +1631,13 @@ fn disconnected(
             let read: Vec<String> = after
                 .connections()
                 .values()
-                .flat_map(suzatary_core::connect::Connection::kept)
+                .flat_map(Connection::kept)
                 .collect();
             owned
                 .iter()
                 .filter(|name| !read.iter().any(|held| held == name.name()))
                 .map(|name| {
-                    let label = suzatary_core::settings::Help::label(name.name());
+                    let label = Help::label(name.name());
                     match removing.secrets.clear_secret(name) {
                         Ok(()) => format!("; forgot {label}"),
                         Err(failed) => format!("; {label} is still stored: {failed}"),
@@ -1989,7 +1997,7 @@ fn google_account(
             ),
         });
     };
-    if suzatary_core::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
+    if suzatary_google::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
         Ok(())
     } else if suzatary_core::secretary::set_up::client_kept(secrets, settables).is_set() {
         Err(Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
@@ -2008,10 +2016,10 @@ fn google_account(
 fn google_client(
     writer: &dyn Writes,
     settables: &Settables,
-    redirect: &suzatary_core::google::RedirectUri,
+    redirect: &RedirectUri,
     pasted: &Secret,
 ) -> Result<Performed, Refusal> {
-    let client = match suzatary_core::google::Client::of_download(pasted, redirect) {
+    let client = match suzatary_google::google::Client::of_download(pasted, redirect) {
         Ok(client) => client,
         Err(refused) => {
             return Ok(Performed::Tried(Tried::NotSent {
@@ -2027,8 +2035,8 @@ fn google_client(
         })
     };
     let (id, secret) = (
-        mint(suzatary_core::google::CLIENT_ID)?,
-        mint(suzatary_core::google::CLIENT_SECRET)?,
+        mint(suzatary_google::google::CLIENT_ID)?,
+        mint(suzatary_google::google::CLIENT_SECRET)?,
     );
     let written = writer
         .write_secret(&id, &Secret::new(client.id.as_str()))
@@ -2089,7 +2097,7 @@ fn afresh(
 
 /// Ask the store again for every declared name.
 fn store_answers(secrets: &dyn Secrets, settables: &Settables) -> Performed {
-    match suzatary_core::secrets::Snapshot::read(secrets, settables.iter()).answers() {
+    match suzatary_connect::secrets::Snapshot::read(secrets, settables.iter()).answers() {
         Ok(_) => Done::Acted {
             what: "the secret store answers".to_owned(),
         }
@@ -2105,7 +2113,7 @@ fn store_answers(secrets: &dyn Secrets, settables: &Settables) -> Performed {
 /// Keep `value` under `name` once a model answers a test call with it.
 fn verified(
     writer: &dyn Writes,
-    verify: &dyn suzatary_core::settings::Verify,
+    verify: &dyn Verify,
     name: &Settable,
     value: &Secret,
 ) -> Performed {
@@ -2119,10 +2127,7 @@ fn verified(
     }
     match writer.write_secret(name, value) {
         Ok(()) => Performed::Done(Done::Acted {
-            what: format!(
-                "stored {}",
-                suzatary_core::settings::Help::label(name.name())
-            ),
+            what: format!("stored {}", Help::label(name.name())),
         }),
         // A put, so a retry is safe whether or not this one landed.
         Err(reason) => {
@@ -2137,7 +2142,7 @@ fn verified(
 
 struct SignedIn<'a> {
     signing: &'a dyn suzatary_core::secretary::sign_in::Sessions,
-    verify: &'a dyn suzatary_core::settings::Verify,
+    verify: &'a dyn Verify,
     writer: &'a dyn Writes,
 }
 
@@ -2639,7 +2644,7 @@ mod tests {
             model: None,
             routine: None,
             plugins: Vec::new(),
-            reach: suzatary_core::connect::PLAIN.clone(),
+            reach: suzatary_connect::connect::PLAIN.clone(),
             sources: std::collections::BTreeMap::new(),
         }
     }
@@ -2991,16 +2996,16 @@ mod tests {
 
     fn endorsed() -> TapAnswer {
         TapAnswer::Endorsed(suzatary_signatures::signatures::Endorsement {
-            key: suzatary_core::cast::keys::root(),
+            key: suzatary_connect::cast::keys::root(),
             signature: prodrome_core::sign::Signature::new("00".repeat(64)).expect("a signature"),
         })
     }
 
     /// The names a deployment with an ntfy channel declares.
-    fn with_ntfy() -> suzatary_core::settings::Settables {
-        suzatary_core::settings::Settables::derive(
-            suzatary_core::settings::MODEL_TOKEN,
-            [suzatary_core::connect::Channel::Ntfy],
+    fn with_ntfy() -> suzatary_connect::settings::Settables {
+        suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
+            [suzatary_connect::connect::Channel::Ntfy],
             None,
             &[],
         )
@@ -3011,7 +3016,7 @@ mod tests {
     fn prepared<'p>(
         proposal: &'p Proposal,
         answer: &'p TapAnswer,
-        settables: &suzatary_core::settings::Settables,
+        settables: &suzatary_connect::settings::Settables,
     ) -> Result<Prepared<'p, 'static>, Refusal> {
         let tap = tapped();
         let hold = || Err(Refusal::internal("no memory in this test"));
@@ -3070,8 +3075,8 @@ mod tests {
             Ok(_) => panic!("not a secret"),
             Err(refusal) => panic!("{refusal}"),
         }
-        let undeclared = suzatary_core::settings::Settables::derive(
-            suzatary_core::settings::MODEL_TOKEN,
+        let undeclared = suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
             std::iter::empty(),
             None,
             &[],
@@ -3100,7 +3105,7 @@ mod tests {
         let answer = value();
         match prepared(&card, &answer, &with_ntfy()) {
             Ok(Prepared::Code { name, .. }) => {
-                assert_eq!(name.name(), suzatary_core::settings::MODEL_TOKEN);
+                assert_eq!(name.name(), suzatary_connect::settings::MODEL_TOKEN);
             }
             Ok(_) => panic!("not a code"),
             Err(refusal) => panic!("{refusal}"),
@@ -3108,7 +3113,7 @@ mod tests {
         let refusal = refused(prepared(
             &card,
             &answer,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
         ));
         assert_eq!(refusal.status(), suzatary_base::refusal::Status::Conflict);
         let refusal = refused(prepared(&card, &TapAnswer::Plain, &with_ntfy()));
@@ -3122,7 +3127,7 @@ mod tests {
     /// and refused by the same kinds of card that offer no wider yes.
     #[test]
     fn always_is_taken_only_by_a_card_with_a_wider_yes() {
-        let request = suzatary_core::web::WebRequest::Fetch {
+        let request = suzatary_services::web::WebRequest::Fetch {
             url: "https://example.com/a".parse().expect("a public URL"),
         };
         let ruled = Proposal::Act(Act::Web {
@@ -3151,7 +3156,7 @@ mod tests {
         assert_eq!(refusal.message(), ALWAYS_BELONGS);
 
         let account = Proposal::Act(Act::Disconnect {
-            connection: suzatary_core::connect::Connection::parse(
+            connection: suzatary_connect::connect::Connection::parse(
                 "lieer",
                 &["ada@example.test".to_owned()],
             )
@@ -3172,7 +3177,7 @@ mod tests {
             })
         ));
         let calendar = Proposal::Act(Act::Disconnect {
-            connection: suzatary_core::connect::Connection::parse("ics", &["Work".to_owned()])
+            connection: suzatary_connect::connect::Connection::parse("ics", &["Work".to_owned()])
                 .expect("a calendar"),
         });
         let refusal = refused(prepared(&calendar, &TapAnswer::Always, &with_ntfy()));
@@ -3185,7 +3190,7 @@ mod tests {
     fn a_device_card_needs_an_endorsement_and_a_root() {
         let card = Proposal::Act(Act::Device(suzatary_signatures::signatures::Enrolment {
             actor: prodrome_core::event::Actor::new("ada").expect("an actor"),
-            key: suzatary_core::cast::keys::root(),
+            key: suzatary_connect::cast::keys::root(),
         }));
         let refusal = refused(prepared(&card, &TapAnswer::Plain, &with_ntfy()));
         assert_eq!(refusal.status(), suzatary_base::refusal::Status::Forbidden);

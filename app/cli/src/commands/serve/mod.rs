@@ -52,11 +52,11 @@ use axum::http::{HeaderValue, header};
 
 use suzatary_api::server::Server;
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_core::deployment::Deployment;
-use suzatary_core::google::Endpoints;
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::parts::Parts;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::memories::Texts;
+use suzatary_google::google::Endpoints;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -66,6 +66,12 @@ pub use conversation_worker::Workers;
 pub use interpreters::{Brain, Peers};
 pub use live::Live;
 pub use settings::pushed_at;
+use suzatary_connect::connect::Reach;
+use suzatary_connect::secrets::Remembering;
+use suzatary_connect::settings::Declares;
+use suzatary_connect::settings::Settables;
+use suzatary_connect::settings::Verify;
+use suzatary_connect::settings::Writes;
 pub use world::World;
 
 /// The owner's uploads; only his confirm reaches the vault.
@@ -89,9 +95,9 @@ impl std::ops::Deref for State {
 pub struct Settings {
     pub live: live::Shared,
     pub models: Arc<models::Models>,
-    pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
-    pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
-    pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+    pub secrets: Arc<dyn Writes + Send + Sync>,
+    pub declares: Arc<dyn Declares + Send + Sync>,
+    pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     pub data: Arc<std::path::PathBuf>,
 }
 
@@ -126,18 +132,18 @@ pub struct Inner {
     pub live: live::Shared,
     pub models: Arc<models::Models>,
     /// Reached only by a tapped card.
-    pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
+    pub secrets: Arc<dyn Writes + Send + Sync>,
     /// Refuses undeclared names.
-    pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
+    pub declares: Arc<dyn Declares + Send + Sync>,
     /// Edits the instance file, by a tapped card.
-    pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+    pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_mail::mail::cache::Forget + Send + Sync>,
     /// Reads a held value back for a tap; outside every record, so no agent verb can.
     pub reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
     /// Syncs a plugin after a tap.
     pub checks: checks::Checks,
-    pub reach: Arc<suzatary_core::connect::Reach>,
+    pub reach: Arc<Reach>,
     /// `None` refuses an upload by name.
     pub uploads: Option<Arc<Uploads>>,
     /// `None` names a topic with the record's model.
@@ -149,7 +155,7 @@ pub struct Inner {
     pub stamp: Stamp,
     /// `None` declares no plugin.
     pub plugins: Option<Arc<crate::instance::Plugins>>,
-    pub repos: Arc<suzatary_core::repos::Declared>,
+    pub repos: Arc<suzatary_services::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
     pub read: Arc<Mutex<suzatary_signatures::chain_set::Read>>,
@@ -183,13 +189,13 @@ pub struct Inner {
     pub answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
     /// Reached only with a `Tap`.
     pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
-    pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
+    pub verify: Arc<dyn Verify + Send + Sync>,
     /// Begun only with a `Tap`, finished only by its callback.
     pub consenting: Arc<google::Consenting>,
     /// Held across a filing, so none files a card twice.
     pub noticing: Arc<Mutex<Option<Heard>>>,
     /// Secret store answers since the last filing.
-    pub secrets_answered: Arc<Mutex<suzatary_core::secrets::SecretAnswers>>,
+    pub secrets_answered: Arc<Mutex<suzatary_connect::secrets::SecretAnswers>>,
     pub epochs: Arc<suzatary_signatures::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     pub portal: Arc<suzatary_api::portal::Portal>,
@@ -233,10 +239,10 @@ impl suzatary_core::secretary::sign_in::Sessions for Closed {
 /// Keeps no model credential.
 pub struct Unverified;
 
-impl suzatary_core::settings::Verify for Unverified {
+impl Verify for Unverified {
     fn verify(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &suzatary_connect::settings::Settable,
         _: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         Err(format!(
@@ -373,7 +379,7 @@ impl State {
             forget: Arc::new(mail_cache::Unkept(None)),
             reveal: Arc::new(suzatary_held::held_value::Unread),
             checks: Arc::new(checks::Unsynced),
-            reach: Arc::new(suzatary_core::connect::PLAIN.clone()),
+            reach: Arc::new(suzatary_connect::connect::PLAIN.clone()),
             uploads: None,
             titler: None,
             compactor: None,
@@ -383,7 +389,7 @@ impl State {
             ))),
             stamp: Stamp::Compiled,
             plugins: None,
-            repos: Arc::new(suzatary_core::repos::Declared::default()),
+            repos: Arc::new(suzatary_services::repos::Declared::default()),
             data,
             read: Arc::default(),
             asking: Arc::new(Mutex::new(prodrome_core::memo::Cache::new(
@@ -460,7 +466,7 @@ impl State {
     pub fn with_sign_ins(
         mut self,
         signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
-        verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
+        verify: Arc<dyn Verify + Send + Sync>,
     ) -> Self {
         self.building().signing = signing;
         self.building().verify = verify;
@@ -507,7 +513,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_repos(mut self, repos: suzatary_core::repos::Declared) -> Self {
+    pub fn with_repos(mut self, repos: suzatary_services::repos::Declared) -> Self {
         self.building().repos = Arc::new(repos);
         self
     }
@@ -545,7 +551,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_reach(mut self, reach: suzatary_core::connect::Reach) -> Self {
+    pub fn with_reach(mut self, reach: Reach) -> Self {
         self.building().reach = Arc::new(reach);
         self
     }
@@ -573,7 +579,7 @@ impl State {
 
     /// Settable secret names, as of now.
     #[must_use]
-    pub fn settables(&self) -> suzatary_core::settings::Settables {
+    pub fn settables(&self) -> Settables {
         locks::read(&self.live).settables.clone()
     }
 
@@ -589,7 +595,7 @@ impl State {
         let read = self.edits.declared().and_then(|declared| {
             let accounts = suzatary_mail::mail::account::Roster::new(declared.accounts.clone())
                 .map_err(|refused| {
-                    suzatary_core::settings::EditError::Malformed(format!(
+                    suzatary_connect::settings::EditError::Malformed(format!(
                         "[[mail.accounts]]: {refused}"
                     ))
                 })?;
@@ -603,7 +609,7 @@ impl State {
             }
         };
         let next = live::Live {
-            settables: suzatary_core::settings::Settables::of_deployment(
+            settables: Settables::of_deployment(
                 suzatary_io::model::TOKEN,
                 declared.channels.iter().copied(),
                 self.deployment.coding.as_ref(),
@@ -624,11 +630,8 @@ impl State {
 
     /// `caps`' secret store, as last answered.
     #[must_use]
-    pub fn secrets<'a>(
-        &'a self,
-        caps: &'a suzatary_api::server::Server<'_>,
-    ) -> suzatary_core::secrets::Remembering<'a> {
-        suzatary_core::secrets::Remembering {
+    pub fn secrets<'a>(&'a self, caps: &'a suzatary_api::server::Server<'_>) -> Remembering<'a> {
+        Remembering {
             store: caps.secretary.secrets,
             answers: &self.secrets_answered,
         }
@@ -854,7 +857,7 @@ pub struct Serving {
     pub workers: Arc<Workers>,
     pub stamp: Stamp,
     pub signing: Arc<sign_ins::SignIns>,
-    pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
+    pub verify: Arc<dyn Verify + Send + Sync>,
     /// Rings `moved` when a reading moves.
     pub answered: suzatary_io::model_health::Answered,
     /// Rung when a model starts or stops answering.
@@ -1437,7 +1440,7 @@ fn performers(
 ) -> (
     Performing,
     Arc<sign_ins::SignIns>,
-    Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
+    Arc<dyn Verify + Send + Sync>,
 ) {
     let signing = Arc::new(sign_ins::SignIns::new("claude").ringing({
         let moved = Arc::clone(moved);
@@ -1574,11 +1577,11 @@ fn watch_from_now_on(
 }
 
 /// Calendars busy within the quiet span.
-pub type Heard = std::collections::BTreeSet<suzatary_core::calendar::CalendarName>;
+pub type Heard = std::collections::BTreeSet<suzatary_google::calendar::CalendarName>;
 
 /// `None`, logged, on a failed read.
 fn heard(
-    calendar: &dyn suzatary_core::calendar::effect::Calendar,
+    calendar: &dyn suzatary_google::calendar::effect::Calendar,
     now: suzatary_health::health::Instant,
 ) -> Option<Heard> {
     use suzatary_core::secretary::failing::{QUIET, quiet};

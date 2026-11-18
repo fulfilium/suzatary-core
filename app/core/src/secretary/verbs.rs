@@ -300,8 +300,8 @@ fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<memory::Origin, 
 }
 
 /// A read's failure, in the words the model can act on.
-pub(crate) fn refused_by(failure: &crate::repositories::RepoFailure) -> Refusal {
-    use crate::repositories::RepoFailure;
+pub(crate) fn refused_by(failure: &suzatary_services::repositories::RepoFailure) -> Refusal {
+    use suzatary_services::repositories::RepoFailure;
     match failure {
         RepoFailure::Unknown(_) | RepoFailure::Missing(_) => {
             Refusal::not_found(failure.to_string())

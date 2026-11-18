@@ -1,9 +1,9 @@
 //! What one of the triage agent's verbs runs against.
 
 use crate::agent::Agent;
-use crate::deployment::Deployment;
 use crate::secretary::filed::TriageCards;
 use suzatary_base::chains::ChainPolicy;
+use suzatary_connect::deployment::Deployment;
 
 /// One call's world: the agent's record over the chain the call named, that chain's policy, and
 /// the one door through which its writes reach the owner, as cards.

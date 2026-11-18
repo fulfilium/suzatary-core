@@ -58,7 +58,7 @@ in the binary. In `web/`, use no framework and no npm.
 - Never let a fixture touch live data. Use absolute paths under your scratch directory, and set
   `NOTMUCH_CONFIG` to a file of your own.
 - Never write a private term in a brief, a public file, a test or a fixture. Use the cast in
-  `suzatary_core::cast` and `web/test/cast.ts`, at reserved domains like `example.test`.
+  `suzatary_connect::cast` and `web/test/cast.ts`, at reserved domains like `example.test`.
 - Never put a secret's value in a file, a command line, a URL or a transcript.
 - Never add a tool or a code path that sends mail.
 - Never push to `master`. Code reaches `master` only through `scripts/train.sh`.

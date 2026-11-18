@@ -55,7 +55,7 @@ pub fn standing(
 /// The inbox or a chain that does not read.
 pub fn listed(
     chains: &[Bound<'_>],
-    deployment: &crate::deployment::Deployment,
+    deployment: &suzatary_connect::deployment::Deployment,
 ) -> Result<Vec<Value>, Refusal> {
     let Some(first) = chains.first() else {
         return Ok(Vec::new());

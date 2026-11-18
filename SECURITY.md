@@ -12,7 +12,7 @@ vulnerability*. Do not open a public issue or pull request for it.
 
 Say what you found, the commit you found it at, and the smallest steps that
 show it. A failing test is the best form, written against the fixture
-deployment and its made-up cast (`suzatary_core::cast`). The maintainer aims
+deployment and its made-up cast (`suzatary_connect::cast`). The maintainer aims
 to answer within a week. When a fix lands, the advisory is published and you
 are credited, unless you ask not to be.
 

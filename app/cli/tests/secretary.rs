@@ -226,16 +226,16 @@ fn a_proposal_without_a_why_or_a_source_is_refused_to_the_model() {
 }
 
 /// A deployment that declares a channel's secret, `NTFY_TOPIC`.
-fn declared_secret() -> suzatary_core::settings::Settables {
-    suzatary_core::settings::Settables::derive(
+fn declared_secret() -> suzatary_connect::settings::Settables {
+    suzatary_connect::settings::Settables::derive(
         suzatary_io::model::TOKEN,
-        [suzatary_core::connect::Channel::Ntfy],
+        [suzatary_connect::connect::Channel::Ntfy],
         None,
         &[],
     )
 }
 
-fn deployment_with_secret() -> suzatary_core::deployment::Deployment {
+fn deployment_with_secret() -> suzatary_connect::deployment::Deployment {
     common::deployment([ada(), guest()], [(ada(), common::actor("ada"))])
 }
 
@@ -1017,7 +1017,7 @@ mod default_conversation {
         let answered = converse(
             &fakes.secretary(),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &[],
             &id,
             suzatary_core::secretary::Saying {
@@ -1071,7 +1071,7 @@ mod default_conversation {
         let answered = converse(
             &fakes.secretary(),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &[],
             &id,
             suzatary_core::secretary::Saying {

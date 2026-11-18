@@ -443,13 +443,13 @@ static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> 
 fn trusting_of(
     chains: &[&dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>],
 ) -> suzatary_signatures::signatures::Trusting {
-    suzatary_signatures::signatures::Trusting::held(chains, &suzatary_core::cast::keys::root())
+    suzatary_signatures::signatures::Trusting::held(chains, &suzatary_connect::cast::keys::root())
         .expect("reads")
 }
 
 /// The phone's signature of `object`, as the object a tab posts beside it.
 fn signature<E: Schema>(object: &Envelope<E>) -> Envelope<E> {
-    let key = suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE);
+    let key = suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE);
     Envelope::Signed(key.sign(&seal_hash(object)))
 }
 
@@ -843,9 +843,9 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
     let revoking = suzatary_core::stores::phone_trusted(&["device0"]);
     suzatary_signatures::signatures::revoke(
         &revoking,
-        &suzatary_core::cast::keys::secret(suzatary_core::cast::keys::ROOT),
+        &suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::ROOT),
         &door.ada,
-        &suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE).public(),
+        &suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE).public(),
     )
     .expect("revokes");
     let fine = suzatary_core::stores::phone_trusted(&["device0"]);

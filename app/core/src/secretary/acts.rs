@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::settings::Help;
+use suzatary_google::google::NewEvent;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
@@ -41,19 +44,19 @@ pub enum Act {
     },
     /// Read the web once: a request no allow rule covers, sent only on a tap.
     Web {
-        request: crate::web::WebRequest,
+        request: suzatary_services::web::WebRequest,
         /// The rule the secretary drafted for "Always allow", if any.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        rule: Option<crate::web::AllowRule>,
+        rule: Option<suzatary_services::web::AllowRule>,
     },
     /// Propose this diff against this commit as a pull request; a person merges it.
     Patch {
         repo: suzatary_base::repo_ids::RepoName,
         /// Who can read the branch once pushed, as the listing said when proposed.
-        visibility: crate::repos::Visibility,
+        visibility: suzatary_services::repos::Visibility,
         /// The commit the diff was written against.
         base: suzatary_base::repo_ids::CommitId,
-        patch: crate::repos::Patch,
+        patch: suzatary_services::repos::Patch,
         message: String,
     },
     /// Read one of the owner's documents in a folder no `drive_allow` entry covers, redacted.
@@ -98,13 +101,9 @@ pub enum Act {
         after: Option<ProposalRef>,
     },
     /// Write a connection's table into the instance file.
-    Connect {
-        connection: crate::connect::Connection,
-    },
+    Connect { connection: Connection },
     /// Take a connection's table out; a mail account's mail goes only on the card's wider yes.
-    Disconnect {
-        connection: crate::connect::Connection,
-    },
+    Disconnect { connection: Connection },
     /// Let a plugin reach one more origin, naming the origin and never the link.
     Grant {
         plugin: suzatary_health::health::plugin::PluginName,
@@ -115,19 +114,19 @@ pub enum Act {
     #[serde(rename = "google_client")]
     GoogleClient {
         /// The box's callback, as the client must list it.
-        redirect: crate::google::RedirectUri,
+        redirect: suzatary_google::google::RedirectUri,
     },
     /// Sign a Google account in with Google, bound to the tapping owner.
     #[serde(rename = "google_sign_in")]
     GoogleSignIn {
         account: EmailAddress,
-        scopes: crate::google::Scopes,
+        scopes: suzatary_google::google::Scopes,
     },
     /// Write one event into a Google account's own calendar, as the card shows it.
     #[serde(rename = "calendar_event")]
     CalendarEvent {
         account: EmailAddress,
-        event: crate::google::NewEvent,
+        event: NewEvent,
     },
     /// Erase these words, which may restate a forgotten fact its erasure left in other words.
     Erase {
@@ -199,7 +198,7 @@ impl Act {
             Act::Auth { account } => format!("authorise {account} to sync mail (IMAP)"),
             Act::AuthSend { account } => format!("authorise {account} to send mail (SMTP)"),
             Act::Secret { name, why } => {
-                format!("store {} ({why})", crate::settings::Help::label(name))
+                format!("store {} ({why})", Help::label(name))
             }
             Act::Web { request, .. } => request.sentence(),
             Act::Patch {
@@ -251,7 +250,7 @@ impl Act {
                  it needs{}",
                 connection.called(),
                 connection.writes(),
-                if connection.id() == crate::connect::TemplateId::Google {
+                if connection.id() == suzatary_connect::connect::TemplateId::Google {
                     "; an address lieer reads already keeps its entry, read by lieer, until its \
                      sign-in with Google is kept and has read its mail"
                 } else {
@@ -266,7 +265,7 @@ impl Act {
             ),
             Act::Grant { plugin, origin } => format!(
                 "let {} reach {origin}",
-                crate::connect::plugin_called(plugin.as_str())
+                suzatary_connect::connect::plugin_called(plugin.as_str())
             ),
             Act::GoogleClient { redirect } => format!(
                 "keep the box's Google Cloud client, a web application client listing {redirect} \
@@ -596,11 +595,11 @@ fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
         }
         "CalendarEvent" => {
             let fields = Fields::of(value, CALENDAR_EVENT)?;
-            let when = crate::calendar::When::parse(&fields.get::<String>("when")?)
+            let when = suzatary_google::calendar::When::parse(&fields.get::<String>("when")?)
                 .map_err(|refused| ProdromeError::invalid(refused.to_string()))?;
             Act::CalendarEvent {
                 account: fields.get("account")?,
-                event: crate::google::NewEvent::new(
+                event: NewEvent::new(
                     &fields.get::<String>("title")?,
                     when,
                     &fields.get::<String>("place")?,
@@ -701,19 +700,21 @@ mod tests {
         let account = EmailAddress::new("ada@example.test").expect("an address");
         for act in [
             Act::GoogleClient {
-                redirect: crate::google::RedirectUri::of_app("https://box.example.test")
+                redirect: suzatary_google::google::RedirectUri::of_app("https://box.example.test")
                     .expect("a callback"),
             },
             Act::GoogleSignIn {
                 account: account.clone(),
-                scopes: crate::google::Scopes::all(),
+                scopes: suzatary_google::google::Scopes::all(),
             },
             Act::CalendarEvent {
                 account: account.clone(),
-                event: crate::google::NewEvent::new(
+                event: suzatary_google::google::NewEvent::new(
                     "Dentist",
-                    crate::calendar::When::parse("2026-10-20T14:00:00Z/2026-10-20T14:45:00Z")
-                        .expect("a span"),
+                    suzatary_google::calendar::When::parse(
+                        "2026-10-20T14:00:00Z/2026-10-20T14:45:00Z",
+                    )
+                    .expect("a span"),
                     "Main St 4",
                 )
                 .expect("an event"),

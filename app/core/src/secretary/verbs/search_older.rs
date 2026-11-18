@@ -100,10 +100,10 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::deployment::Deployment;
     use crate::secretary::Secretary;
     use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_connect::deployment::Deployment;
     use suzatary_held::mail_error::MailError;
     use suzatary_mail::mail::mailbox::{Mailbox, Query};
     use suzatary_triage::mail::older::{AccountOlder, Found, Matched, Outcome};
@@ -218,7 +218,7 @@ mod tests {
             name: ChainName::new("life").expect("a slug"),
             untrusted: Untrusted::of([Actor::new("triage").expect("an actor")]),
             roster: std::collections::BTreeSet::new(),
-            root: crate::cast::keys::root(),
+            root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,
         };
         let deployment = Deployment {
@@ -240,7 +240,7 @@ mod tests {
             &Call {
                 caps: &caps,
                 deployment: &deployment,
-                settables: &crate::settings::Settables::default(),
+                settables: &suzatary_connect::settings::Settables::default(),
                 chain: &policy,
                 chains: &[],
                 conversation: &ConversationId::new("default").expect("a slug"),

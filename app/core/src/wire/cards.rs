@@ -42,14 +42,14 @@ pub struct Overview {
 pub struct Offer {
     /// The template's name, which a `SetUp` line names.
     pub template: String,
-    pub group: crate::connect::Group,
+    pub group: suzatary_connect::connect::Group,
     /// As a sentence ends with it: `a Google account (its mail and calendars)`.
     pub title: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct OverviewGroup {
-    pub group: crate::connect::Group,
+    pub group: suzatary_connect::connect::Group,
     pub lines: Vec<OverviewLine>,
 }
 
@@ -59,7 +59,7 @@ pub struct OverviewLine {
     pub key: String,
     pub label: String,
     pub detail: Option<String>,
-    pub standing: crate::connect::Standing,
+    pub standing: suzatary_connect::connect::Standing,
     /// Each a `proposal:<conversation>/<n>`; every need's on one line only.
     pub cards: Vec<String>,
     /// Each stored secret it reads that a Secret card can replace.

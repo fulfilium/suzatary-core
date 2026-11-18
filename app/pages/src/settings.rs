@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire;
-use suzatary_core::connect::{Group, Standing};
+use suzatary_connect::connect::{Group, Standing};
 use suzatary_core::wire::cards::{Offer, Overview, OverviewGroup, OverviewLine};
 use suzatary_health::health::Failure;
 use ts_rs::TS;

@@ -4,11 +4,11 @@
 
 use prodrome_core::event::Hash;
 
-use crate::deployment::Deployment;
 use crate::secretary::changes::{self, Act, Changeset, Provenance};
-use crate::settings::{Help, Settable};
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::settings::{Help, Settable};
 use suzatary_record::todo::{Deadline, Price, TodoFields};
 
 /// The todo id for `name` expiring on `day`.
@@ -137,11 +137,11 @@ mod tests {
     /// completes the earlier day's todo and writes its own.
     #[test]
     fn one_todo_per_expiry_and_a_later_one_completes_the_last() {
-        let settables = crate::settings::Settables::declared(
-            crate::repos::TOKEN,
-            crate::settings::Declaration::Repos,
+        let settables = suzatary_connect::settings::Settables::declared(
+            suzatary_services::repos::TOKEN,
+            suzatary_connect::settings::Declaration::Repos,
         );
-        let name = Settable::mint(&settables, crate::repos::TOKEN).expect("declared");
+        let name = Settable::mint(&settables, suzatary_services::repos::TOKEN).expect("declared");
         let untrusted = prodrome_core::policy::Untrusted::none();
         let at = Datetime::new(2026, 11, 4, 12, 0, 0, 0).expect("an instant");
         let building = Building {

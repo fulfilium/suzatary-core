@@ -8,6 +8,8 @@
 mod act_literal;
 #[path = "attachment.rs"]
 mod attachment;
+#[path = "calendar_reading.rs"]
+mod calendar_reading;
 #[path = "calls.rs"]
 mod calls;
 #[path = "card_stages.rs"]

@@ -17,8 +17,8 @@ use prodrome_core::policy::Untrusted;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::persona::Persona;
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
-use suzatary_core::deployment::Deployment;
 use suzatary_core::secretary::compaction::Reading;
 use suzatary_core::secretary::conversations::InMemory as Lines;
 use suzatary_core::secretary::digest_event::DigestEvent;
@@ -67,7 +67,7 @@ fn stand_in() -> (Persona, Deployment) {
             name: ChainName::new("life").expect("a slug"),
             untrusted: Untrusted::of([]),
             roster: BTreeSet::new(),
-            root: suzatary_core::cast::keys::root(),
+            root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,
         }])
         .expect("one chain"),

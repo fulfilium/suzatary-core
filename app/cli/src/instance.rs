@@ -32,10 +32,11 @@ use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_base::chains::Chains;
-use suzatary_core::connect::Channel;
-use suzatary_core::deployment::Deployment;
+use suzatary_connect::connect::Channel;
+use suzatary_connect::connect::Reach;
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::settings::Settables;
 use suzatary_core::nonempty::NonEmpty;
-use suzatary_core::settings::Settables;
 use suzatary_core::stores::Kind;
 
 /// The environment variable that names an instance file.
@@ -88,8 +89,8 @@ pub struct Instance {
     /// What the triage agent is handed.
     pub agent: Triage,
     /// `[[secretary.repos]]` and `[coding] repo`.
-    pub repos: suzatary_core::repos::Declared,
-    /// The secret names a secret card's [`suzatary_core::settings::Settable`] is minted against.
+    pub repos: suzatary_services::repos::Declared,
+    /// The secret names a secret card's [`suzatary_connect::settings::Settable`] is minted against.
     pub settables: Settables,
     /// Those names: reading the instance writes nothing; the first store call writes the file.
     pub declarations: suzatary_io::secrets::Declarations,
@@ -156,17 +157,17 @@ impl Instance {
 
     /// The script [`crate::paths::RUN_ENV`] names, else the binary on `PATH`.
     #[must_use]
-    pub fn reach(&self) -> suzatary_core::connect::Reach {
+    pub fn reach(&self) -> Reach {
         match &self.run {
-            Some(script) => suzatary_core::connect::Reach::Script(script.clone()),
-            None => suzatary_core::connect::Reach::Installed,
+            Some(script) => Reach::Script(script.clone()),
+            None => Reach::Installed,
         }
     }
 
     /// The tables connections are read from.
     #[must_use]
-    pub fn declared(&self) -> suzatary_core::connect::Declared {
-        suzatary_core::connect::Declared {
+    pub fn declared(&self) -> suzatary_connect::connect::Declared {
+        suzatary_connect::connect::Declared {
             accounts: self.mail.accounts.accounts().to_vec(),
             plugins: self.plugins.manifests.clone(),
             drive: self.secretary.drive_allow.clone(),
@@ -610,7 +611,7 @@ mod tests {
     use super::*;
     use prodrome_core::event::Actor;
     use suzatary_base::capability::Login;
-    use suzatary_core::settings::Edits as _;
+    use suzatary_connect::settings::Edits as _;
 
     const GOOD: &str = r#"
 repo = "/tmp/suzatary-test"
@@ -1000,7 +1001,7 @@ sent_folder = "Sent Items"
     fn allow_web_adds_a_rule_once_and_the_file_still_reads() {
         let before = commented_instance();
         let path = write(&before, "edits-allow-web");
-        let rule: suzatary_core::web::AllowRule = "*.gov.uk".parse().expect("a rule");
+        let rule: suzatary_services::web::AllowRule = "*.gov.uk".parse().expect("a rule");
         let edits = InstanceEdits::new(path.clone());
         edits.allow_web(&rule).expect("allowed");
         edits

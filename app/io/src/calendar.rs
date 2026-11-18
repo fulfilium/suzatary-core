@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 use prodrome_core::store::Replica as _;
 use suzatary_base::zone::Zone;
-use suzatary_core::calendar::{Calendar as Reading, Day, Occurrence};
+use suzatary_google::calendar::{Calendar as Reading, Day, Occurrence};
 use suzatary_store::store::StoreError;
 
 use crate::plugin_store::PluginStore;
@@ -28,7 +28,7 @@ impl Clocked {
     }
 }
 
-impl suzatary_core::calendar::effect::Calendar for Clocked {
+impl suzatary_google::calendar::effect::Calendar for Clocked {
     fn days(&self, first: NaiveDate, count: u32) -> Result<Vec<Day>, StoreError> {
         let mut read = Reading::default();
         for place in &self.stores {

@@ -9,13 +9,13 @@ use axum::Json;
 use prodrome_core::store::Replica as _;
 use suzatary_api::routes;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::calendar::Occurrence;
+use suzatary_connect::settings::remote::{self, Pushed, Tip};
 use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
 };
-use suzatary_core::settings::remote::{self, Pushed, Tip};
 use suzatary_core::timings::{Part, Phase, timed};
 use suzatary_core::wire::cards as wire;
+use suzatary_google::calendar::Occurrence;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_store::store::StoreError;
@@ -194,7 +194,7 @@ fn tip(log: &std::path::Path) -> Option<Tip> {
 
 fn stores(
     state: &State,
-    manifests: &[suzatary_core::plugin::Manifest],
+    manifests: &[suzatary_services::plugin::Manifest],
 ) -> BTreeMap<PluginName, Store> {
     state
         .plugins

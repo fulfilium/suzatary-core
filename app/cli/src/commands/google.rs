@@ -50,14 +50,17 @@ pub fn read_calendars(
         // A store that does not answer reads as no grant: the account's next sync says why.
         let held = grants
             .held(account.email.address())
-            .unwrap_or(suzatary_core::google::Held::NotSignedIn);
-        if !suzatary_core::google::reads_calendars(&account.sync, &held) {
+            .unwrap_or(suzatary_google::google::Held::NotSignedIn);
+        if !suzatary_google::google::reads_calendars(&account.sync, &held) {
             continue;
         }
         let said = (grants.live(account.email.address()))
             .map_err(|failed| (failed.class().into(), failed.to_string()))
             .and_then(|grant| {
-                if !grant.parts.contains(suzatary_core::google::Scope::Calendar) {
+                if !grant
+                    .parts
+                    .contains(suzatary_google::google::Scope::Calendar)
+                {
                     return Err((
                         Failure::NeedsLogin,
                         "its grant holds no calendars: a sign-in card asks Google for them"

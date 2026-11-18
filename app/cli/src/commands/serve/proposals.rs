@@ -5,7 +5,7 @@ use suzatary_api::secretary::routes::{self as secretary_routes, Effectors, TapAn
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::settings::EditError;
+use suzatary_connect::settings::EditError;
 use suzatary_core::wire::topics as wire;
 use suzatary_signatures::signatures::Tap;
 
@@ -15,6 +15,8 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::secretary::conversation_named;
 use super::{Chained, State};
+use suzatary_connect::connect::Connection;
+use suzatary_connect::settings::Edits;
 
 /// Proposals of one conversation, named by their indices.
 pub struct Drawn {
@@ -196,12 +198,12 @@ pub fn tap(
 
 /// The instance file's editor, noting whether a tap moved the file.
 struct Noting<'a> {
-    edits: &'a dyn suzatary_core::settings::Edits,
+    edits: &'a dyn Edits,
     moved: std::sync::atomic::AtomicBool,
 }
 
 impl<'a> Noting<'a> {
-    fn new(edits: &'a dyn suzatary_core::settings::Edits) -> Self {
+    fn new(edits: &'a dyn Edits) -> Self {
         Self {
             edits,
             moved: std::sync::atomic::AtomicBool::new(false),
@@ -220,8 +222,8 @@ impl<'a> Noting<'a> {
     }
 }
 
-impl suzatary_core::settings::Edits for Noting<'_> {
-    fn allow_web(&self, rule: &suzatary_core::web::AllowRule) -> Result<(), EditError> {
+impl Edits for Noting<'_> {
+    fn allow_web(&self, rule: &suzatary_services::web::AllowRule) -> Result<(), EditError> {
         self.noted(self.edits.allow_web(rule))
     }
 
@@ -229,17 +231,11 @@ impl suzatary_core::settings::Edits for Noting<'_> {
         self.noted(self.edits.allow_drive(folder))
     }
 
-    fn add_connection(
-        &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), EditError> {
+    fn add_connection(&self, connection: &Connection) -> Result<(), EditError> {
         self.noted(self.edits.add_connection(connection))
     }
 
-    fn remove_connection(
-        &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), EditError> {
+    fn remove_connection(&self, connection: &Connection) -> Result<(), EditError> {
         self.noted(self.edits.remove_connection(connection))
     }
 
@@ -252,8 +248,8 @@ impl suzatary_core::settings::Edits for Noting<'_> {
     }
 }
 
-impl suzatary_core::settings::Configuration for Noting<'_> {
-    fn declared(&self) -> Result<suzatary_core::connect::Declared, EditError> {
+impl suzatary_connect::settings::Configuration for Noting<'_> {
+    fn declared(&self) -> Result<suzatary_connect::connect::Declared, EditError> {
         self.edits.declared()
     }
 }

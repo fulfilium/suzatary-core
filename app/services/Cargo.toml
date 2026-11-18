@@ -1,0 +1,34 @@
+[package]
+name = "suzatary-services"
+description = "Suzatary's sources by grant beside mail: Drive, repositories, web, weather, plugins"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_services"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-held.workspace = true
+suzatary-health.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+hex.workspace = true
+toml.workspace = true
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-held/nothing", "suzatary-health/nothing"]
+
+[dev-dependencies]
+suzatary-services = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

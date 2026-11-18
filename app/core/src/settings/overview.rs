@@ -5,19 +5,20 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::connect::{self, Checked, Connection, Group, Key, Standing};
-use crate::deployment::Deployment;
-use crate::plugin::Manifest;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
-use crate::secrets::{MailCredential, MailGrants, SecretState};
-use crate::settings::Help;
-use crate::settings::remote::Pushed;
 use crate::wire::cards as wire;
+use suzatary_connect::connect::{self, Checked, Connection, Group, Key, Standing};
+use suzatary_connect::deployment::Deployment;
+use suzatary_connect::secrets::{MailCredential, MailGrants, SecretState};
+use suzatary_connect::settings::Help;
+use suzatary_connect::settings::Settables;
+use suzatary_connect::settings::remote::Pushed;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_health::health::{Health, Healths};
 use suzatary_mail::mail::account::MailAccount;
+use suzatary_services::plugin::Manifest;
 
 /// What an open card asks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -168,7 +169,7 @@ pub struct Declared<'a> {
     /// The chains and `[coding]`.
     pub deployment: &'a Deployment,
     /// Every secret name declared now.
-    pub settables: &'a crate::settings::Settables,
+    pub settables: &'a Settables,
     /// `[notify].channels`.
     pub channels: &'a [connect::Channel],
     /// Every mail account.
@@ -250,11 +251,11 @@ impl Asked {
     /// Asks the store once per name and grant; a locked one is waited on once.
     #[must_use]
     pub fn of(
-        secrets: &dyn crate::secrets::Secrets,
-        settables: &crate::settings::Settables,
+        secrets: &dyn suzatary_connect::secrets::Secrets,
+        settables: &Settables,
         accounts: &[MailAccount],
     ) -> Self {
-        let snapshot = crate::secrets::Snapshot::read(secrets, settables.iter());
+        let snapshot = suzatary_connect::secrets::Snapshot::read(secrets, settables.iter());
         Self {
             secrets: settables
                 .iter()
@@ -561,7 +562,7 @@ pub fn overview(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
 impl Overview {
     /// Places each Secret-card secret on the lines reading it, else alone.
     fn replacing(mut self, declared: &Declared<'_>, observed: &Observed<'_>) -> Self {
-        let carded: Vec<crate::settings::Settable> = declared
+        let carded: Vec<suzatary_connect::settings::Settable> = declared
             .settables
             .declarations()
             .filter(|(_, by)| {
@@ -917,7 +918,7 @@ fn notifications(declared: &Declared<'_>, connected: &Connected<'_>) -> Overview
                 Slot::Channel(channel),
                 needing(
                     line(channel.as_str(), None, standing),
-                    crate::connect::channel_secrets(channel)
+                    suzatary_connect::connect::channel_secrets(channel)
                         .into_iter()
                         .map(secret),
                 ),
@@ -932,7 +933,7 @@ fn coding(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         .coding
         .as_ref()
         .map_or_else(Overview::default, |coding| {
-            let token = crate::connect::ROUTINE_TOKEN;
+            let token = suzatary_connect::connect::ROUTINE_TOKEN;
             Overview::line(
                 Group::Coding,
                 Slot::Routine,
@@ -1019,7 +1020,7 @@ pub(crate) mod tests {
     #[derive(Debug, Clone)]
     struct World {
         jobs: Vec<ModelJob>,
-        channels: Vec<crate::connect::Channel>,
+        channels: Vec<suzatary_connect::connect::Channel>,
         accounts: Vec<MailAccount>,
         plugins: Vec<Manifest>,
         coding: bool,
@@ -1061,7 +1062,7 @@ pub(crate) mod tests {
                 name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
                 roster: [actor("ada"), actor("triage")].into_iter().collect(),
-                root: crate::cast::keys::root(),
+                root: suzatary_connect::cast::keys::root(),
                 naming: suzatary_base::chains::Naming::AsActs,
             };
             Deployment {
@@ -1076,16 +1077,16 @@ pub(crate) mod tests {
             }
         }
 
-        fn coding(&self) -> Option<crate::connect::Coding> {
-            self.coding.then(|| crate::connect::Coding {
+        fn coding(&self) -> Option<suzatary_connect::connect::Coding> {
+            self.coding.then(|| suzatary_connect::connect::Coding {
                 routine: "trig01fixture".parse().expect("a routine id"),
                 repo: "example/repo".parse().expect("a repository"),
             })
         }
 
-        fn settables(&self) -> crate::settings::Settables {
-            crate::settings::Settables::derive(
-                crate::settings::MODEL_TOKEN,
+        fn settables(&self) -> suzatary_connect::settings::Settables {
+            suzatary_connect::settings::Settables::derive(
+                suzatary_connect::settings::MODEL_TOKEN,
                 self.channels.iter().copied(),
                 self.coding().as_ref(),
                 &self.plugins,
@@ -1139,7 +1140,7 @@ pub(crate) mod tests {
                     pushed: self.pushed.clone(),
                 },
                 build: &build,
-                reach: &crate::connect::PLAIN,
+                reach: &suzatary_connect::connect::PLAIN,
             };
             let health = self.mail().join(&self.links);
             let observed = Observed {
@@ -1207,7 +1208,7 @@ pub(crate) mod tests {
                 detail: "It runs a-model.".to_owned(),
                 calls: Calls::Recorded {
                     key: "a-model".to_owned(),
-                    credential: crate::settings::MODEL_TOKEN.to_owned(),
+                    credential: suzatary_connect::settings::MODEL_TOKEN.to_owned(),
                 },
             },
             ModelJob {
@@ -1347,9 +1348,9 @@ pub(crate) mod tests {
             let credential = format!("{}{link}", plugin.credential_prefix());
             let answer = match said {
                 None => continue,
-                Some(0) => crate::plugin::Answer::Status(200),
-                Some(1) => crate::plugin::Answer::Status(401),
-                Some(2) => crate::plugin::Answer::Refused(
+                Some(0) => suzatary_services::plugin::Answer::Status(200),
+                Some(1) => suzatary_services::plugin::Answer::Status(401),
+                Some(2) => suzatary_services::plugin::Answer::Refused(
                     suzatary_health::health::plugin::Refusal::CredentialUnset(
                         suzatary_health::health::plugin::CredentialName::parse(
                             &plugin,
@@ -1363,9 +1364,9 @@ pub(crate) mod tests {
             let tried = chrono::NaiveDate::from_ymd_opt(2026, 10, 5)
                 .and_then(|day| day.and_hms_opt(10, 0, 0))
                 .expect("an instant");
-            let run = crate::plugin::LastRun {
+            let run = suzatary_services::plugin::LastRun {
                 at: tried,
-                came: crate::plugin::Came::Learnt,
+                came: suzatary_services::plugin::Came::Learnt,
             };
             let credential =
                 suzatary_health::health::plugin::CredentialName::parse(&plugin, &credential)
@@ -1567,8 +1568,10 @@ pub(crate) mod tests {
             let line = overview.0[&(Group::Storage, Slot::Repository)].clone();
             (line.detail.unwrap_or_default(), line.standing)
         };
-        let remote = crate::settings::remote::Remote::parse("git@forge.example.test:ada/data.git")
-            .expect("a remote");
+        let remote = suzatary_connect::settings::remote::Remote::parse(
+            "git@forge.example.test:ada/data.git",
+        )
+        .expect("a remote");
         assert_eq!(
             said(Pushed::To(remote)),
             (

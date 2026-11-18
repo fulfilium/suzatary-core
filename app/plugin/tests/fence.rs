@@ -21,13 +21,13 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use suzatary_base::capability::Secret;
-use suzatary_core::plugin::{Manifest, admit};
 use suzatary_health::health::plugin::{
     CredentialName, MAX_FETCHES, MAX_SAID, Origin, Refusal, Said,
 };
 use suzatary_io::http::Ureq;
 use suzatary_io::secrets::Resolves;
 use suzatary_plugin::{Budget, Effects, Host, LoadError, Run, RunError, Source};
+use suzatary_services::plugin::{Manifest, admit};
 use wasmtime::component::Component;
 
 /// An HTTP server on 127.0.0.1 that keeps the path of every request it answers.
@@ -480,7 +480,7 @@ fn the_calendar_plugin_holds_to_the_same_fences() {
     for item in &synced.items {
         let event = admit(source.schema(), manifest.name(), item)
             .unwrap_or_else(|refused| panic!("{refused}"));
-        suzatary_core::calendar::Occurrence::of(&event)
+        suzatary_google::calendar::Occurrence::of(&event)
             .unwrap_or_else(|refused| panic!("{refused}"));
     }
     let mut asked = secrets.asked();

@@ -235,14 +235,14 @@ impl suzatary_base::capability::Manuals for Library {
 #[must_use]
 pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
     use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
-    let deployment = crate::deployment::Deployment {
+    let deployment = suzatary_connect::deployment::Deployment {
         viewers: BTreeSet::new(),
         actors: std::collections::BTreeMap::new(),
         chains: Chains::of(vec![ChainPolicy {
             name: ChainName::new("life").expect("a constant slug"),
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: BTreeSet::new(),
-            root: crate::cast::keys::root(),
+            root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,
         }])
         .expect("one chain"),

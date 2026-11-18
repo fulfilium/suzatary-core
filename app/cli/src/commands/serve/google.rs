@@ -8,11 +8,11 @@ use std::sync::{Arc, Mutex};
 use axum::response::Redirect;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::stamp::stamp;
+use suzatary_google::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_io::google::Google;
 use suzatary_io::secrets::Resolves;
 use suzatary_mail::mail::account::Sync as Strategy;
@@ -22,6 +22,7 @@ use super::call::Call;
 use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::{Chained, State};
+use suzatary_connect::settings::Edits;
 
 const BACK: &str = "/#/inbox";
 
@@ -30,7 +31,7 @@ pub struct Consenting {
     open: Mutex<Open>,
     google: Google,
     store: Arc<dyn Resolves + Send + Sync>,
-    edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+    edits: Arc<dyn Edits + Send + Sync>,
     redirect: Option<RedirectUri>,
     entropy: Arc<dyn Entropy + Send + Sync>,
 }
@@ -40,7 +41,7 @@ impl Consenting {
     pub fn new(
         google: Google,
         store: Arc<dyn Resolves + Send + Sync>,
-        edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+        edits: Arc<dyn Edits + Send + Sync>,
         app_url: &str,
     ) -> Self {
         Self {
@@ -123,7 +124,7 @@ impl google_sign_in::Consents for Consenting {
                 return not_sent(format!("no state could be drawn: {failed}"));
             }
         };
-        let link = suzatary_core::google::authorize(
+        let link = suzatary_google::google::authorize(
             self.google.endpoints(),
             &client.id,
             &redirect,
@@ -292,7 +293,7 @@ fn exchanged(
     state: &State,
     google: &Google,
     begun: &Begun,
-    code: &suzatary_core::google::Code,
+    code: &suzatary_google::google::Code,
 ) -> Performed {
     let read = google.exchange(
         &begun.client,
@@ -310,7 +311,7 @@ fn exchanged(
     let moving = match state.consenting.declared(&begun.account) {
         Ok(sync) => {
             matches!(sync, Some(Strategy::Gmail))
-                && begun.scopes.contains(suzatary_core::google::Scope::Mail)
+                && begun.scopes.contains(suzatary_google::google::Scope::Mail)
         }
         Err(failed) => {
             return not_sent(format!(
@@ -335,8 +336,8 @@ fn exchanged(
             ));
         }
     }
-    let name = suzatary_core::google::grant_name(&begun.account);
-    let stored = suzatary_core::settings::Settable::mint(&state.settables(), &name)
+    let name = suzatary_google::google::grant_name(&begun.account);
+    let stored = suzatary_connect::settings::Settable::mint(&state.settables(), &name)
         .map_err(|failed| failed.to_string())
         .and_then(|name| state.secrets.write_secret(&name, &kept.print()));
     if let Err(failed) = stored {
@@ -348,16 +349,18 @@ fn exchanged(
     if !moving {
         return performed;
     }
-    let moved =
-        suzatary_core::connect::Connection::parse("google", &[begun.account.as_str().to_owned()])
+    let moved = suzatary_connect::connect::Connection::parse(
+        "google",
+        &[begun.account.as_str().to_owned()],
+    )
+    .map_err(|failed| failed.to_string())
+    .and_then(|connection| {
+        state
+            .consenting
+            .edits
+            .add_connection(&connection)
             .map_err(|failed| failed.to_string())
-            .and_then(|connection| {
-                state
-                    .consenting
-                    .edits
-                    .add_connection(&connection)
-                    .map_err(|failed| failed.to_string())
-            });
+    });
     match (moved, performed) {
         (Ok(()), Performed::Done(Done::Acted { what })) => Performed::Done(Done::Acted {
             what: format!(

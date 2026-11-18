@@ -21,9 +21,9 @@ use serde_json::{Map, Value, json};
 use suzatary_base::capability::Entropy;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::Agent;
 use suzatary_core::agent::TriageVerb;
-use suzatary_core::deployment::Deployment;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::compaction::Reading;
 use suzatary_core::secretary::conversations::{InMemory as Lines, ReadConversations};
@@ -230,7 +230,7 @@ fn deployment() -> Deployment {
             name: ChainName::new("life").expect("a slug"),
             untrusted: Untrusted::of([]),
             roster: BTreeSet::new(),
-            root: suzatary_core::cast::keys::root(),
+            root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,
         }])
         .expect("one chain"),

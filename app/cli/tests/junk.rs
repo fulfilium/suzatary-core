@@ -5,7 +5,7 @@ mod common;
 
 use common::{FakeJunk, Fakes, JunkFolder};
 use serde_json::{Value, json};
-use suzatary_core::cast::CAST;
+use suzatary_connect::cast::CAST;
 use suzatary_triage::mail::junk::{ChurnList, JunkHeader, KeepList, Uid};
 
 const CHURN: &str = "offers.example.net";
@@ -61,7 +61,7 @@ fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_base::
     };
     suzatary_core::secretary::call(
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,

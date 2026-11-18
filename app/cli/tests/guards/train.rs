@@ -2675,7 +2675,7 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     let path = data.join("instance.toml");
     let file = RELEASE_INSTANCE
         .replace("{data}", &data.display().to_string())
-        .replace("{key}", suzatary_core::cast::keys::root().as_str());
+        .replace("{key}", suzatary_connect::cast::keys::root().as_str());
     std::fs::write(&path, file).expect("an instance file");
     path
 }
@@ -2732,15 +2732,15 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
         ("XDG_RUNTIME_DIR", data.join("run").display().to_string()),
         (
             suzatary_signatures::signatures::BOX_KEY,
-            suzatary_core::cast::keys::ROOT.to_owned(),
+            suzatary_connect::cast::keys::ROOT.to_owned(),
         ),
         (
             suzatary_signatures::signatures::AGENT_KEY,
-            suzatary_core::cast::keys::AGENT.to_owned(),
+            suzatary_connect::cast::keys::AGENT.to_owned(),
         ),
         (
             suzatary_mail::mail::dedup_key::DEDUP_KEY,
-            suzatary_core::cast::keys::DEDUP.to_owned(),
+            suzatary_connect::cast::keys::DEDUP.to_owned(),
         ),
     ]
 }

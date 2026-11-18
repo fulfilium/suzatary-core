@@ -2,10 +2,10 @@ use serde_json::Value;
 
 use crate::agent::reads;
 use crate::secretary::{Call, SecretarySurface};
-use crate::secrets::{Answer, Snapshot};
-use crate::settings::Settables;
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_connect::secrets::{Answer, Snapshot};
+use suzatary_connect::settings::Settables;
 
 /// The manuals and the vocabularies, first.
 pub struct Context;
@@ -65,8 +65,8 @@ impl Verb for Context {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secrets::{SecretState, Secrets};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use suzatary_connect::secrets::{SecretState, Secrets};
 
     /// A fake that answers `secret_state` from a fixed set; a name it does not hold is
     /// `locked` when listed so, else missing.
@@ -93,7 +93,7 @@ mod tests {
     }
 
     impl Secrets for FakeSecrets {
-        fn secret_state(&self, settable: &crate::settings::Settable) -> SecretState {
+        fn secret_state(&self, settable: &suzatary_connect::settings::Settable) -> SecretState {
             self.asked.fetch_add(1, Ordering::SeqCst);
             if self.resolves.contains(settable.name()) {
                 SecretState::Set
@@ -108,22 +108,22 @@ mod tests {
         fn mail_grants(
             &self,
             _account: &suzatary_mail::mail::account::MailAccount,
-        ) -> crate::secrets::MailGrants {
-            crate::secrets::MailGrants::default()
+        ) -> suzatary_connect::secrets::MailGrants {
+            suzatary_connect::secrets::MailGrants::default()
         }
 
         fn google_grant(
             &self,
             _: &suzatary_mail::mail::address::EmailAddress,
-        ) -> crate::google::Held {
-            crate::google::Held::NotSignedIn
+        ) -> suzatary_google::google::Held {
+            suzatary_google::google::Held::NotSignedIn
         }
     }
 
     fn declared() -> Settables {
         Settables::derive(
-            crate::settings::MODEL_TOKEN,
-            [crate::connect::Channel::Ntfy],
+            suzatary_connect::settings::MODEL_TOKEN,
+            [suzatary_connect::connect::Channel::Ntfy],
             None,
             &[],
         )
@@ -132,7 +132,10 @@ mod tests {
     /// A locked store names no secret unset, and is asked once, not once per name and state.
     #[test]
     fn a_locked_store_is_asked_once_and_names_nothing_unset() {
-        let caps = FakeSecrets::new(&[], &[crate::settings::MODEL_TOKEN, "NTFY_TOPIC"]);
+        let caps = FakeSecrets::new(
+            &[],
+            &[suzatary_connect::settings::MODEL_TOKEN, "NTFY_TOPIC"],
+        );
         assert_eq!(
             caps.missing(),
             "the secret store is locked, so no declared secret could be read"

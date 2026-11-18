@@ -85,7 +85,7 @@ pub(crate) fn a_chain(root: &Path) {
 
 /// An instance file naming that chain, and nothing this box depends on, under the cast's root.
 pub(crate) fn an_instance(root: &Path) -> PathBuf {
-    a_signing_instance(root, &suzatary_core::cast::keys::root())
+    a_signing_instance(root, &suzatary_connect::cast::keys::root())
 }
 
 /// [`an_instance`], declaring `key` its root.

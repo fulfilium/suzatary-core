@@ -10,6 +10,7 @@ use suzatary_io::clock::SystemClock;
 use suzatary_mail::mail::account::Sync;
 
 use crate::instance;
+use suzatary_connect::secrets::SecretState;
 
 /// What `suzatary doctor` was told; the default reads the deployment.
 #[derive(Debug, Default, clap::Args)]
@@ -250,12 +251,12 @@ fn signs(read: &instance::Instance) -> String {
 }
 
 /// A secret's state as `doctor` prints it: a locked store is never printed as missing.
-fn said(state: suzatary_core::secrets::SecretState) -> &'static str {
+fn said(state: SecretState) -> &'static str {
     match state {
-        suzatary_core::secrets::SecretState::Set => "resolves",
-        suzatary_core::secrets::SecretState::Missing => "MISSING",
-        suzatary_core::secrets::SecretState::Locked => "LOCKED (the store could not answer)",
-        suzatary_core::secrets::SecretState::Failed => "FAILED (the store could not be run)",
+        SecretState::Set => "resolves",
+        SecretState::Missing => "MISSING",
+        SecretState::Locked => "LOCKED (the store could not answer)",
+        SecretState::Failed => "FAILED (the store could not be run)",
     }
 }
 
@@ -285,7 +286,7 @@ fn print_models(read: &instance::Instance) {
         suzatary_io::model::TOKEN,
         "doctor: checking whether the model's token resolves",
     )) {
-        suzatary_core::secrets::SecretState::Missing => println!(
+        SecretState::Missing => println!(
             "  the model's token is not set: run {}, or connect the model from the app",
             read.reach().secret(suzatary_io::model::TOKEN)
         ),

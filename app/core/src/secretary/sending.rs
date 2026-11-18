@@ -1,9 +1,9 @@
 //! Whether performing a proposal sends mail, by a match the compiler holds complete.
 
-use crate::google::Scope;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use suzatary_base::refusal::Refusal;
+use suzatary_google::google::Scope;
 use suzatary_signatures::signatures::{Seat, Tap};
 
 /// Whether a tap on a proposal puts mail on a wire, or gives the box the consent to.

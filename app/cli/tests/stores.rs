@@ -581,7 +581,7 @@ fn signed_by(
 }
 
 fn phone() -> prodrome_core::sign::Secret {
-    suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE)
+    suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE)
 }
 
 /// The asks store's refusals, by their prints.

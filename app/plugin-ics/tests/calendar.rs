@@ -5,7 +5,7 @@ use std::fmt::{Debug, Write as _};
 
 use chrono::{NaiveDate, NaiveDateTime};
 use proptest::prelude::*;
-use suzatary_core::calendar::{self, Calendar, Occurrence};
+use suzatary_google::calendar::{self, Calendar, Occurrence};
 use suzatary_plugin_ics::item::{self, Item, SCHEMA, Status, When};
 use suzatary_plugin_ics::sync::{self, Fetched, Learned};
 
@@ -20,9 +20,9 @@ const NOTHING: [Item; 0] = [];
 /// occurrence, then learned into a store, read as the calendar reads it.
 fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
     use prodrome_core::declared::{Declaration, Declared};
-    use suzatary_core::plugin::admit;
     use suzatary_core::stores::InMemory;
     use suzatary_health::health::plugin::PluginName;
+    use suzatary_services::plugin::admit;
     use suzatary_store::store::{Reads, learn};
     let ics = PluginName::parse("ics").map_err(|refused| refused.to_string())?;
     let schema =

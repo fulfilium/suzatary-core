@@ -5,16 +5,16 @@
 
 use prodrome_core::literal::codec::Literal as _;
 use proptest::prelude::*;
-use suzatary_core::connect::{
+use suzatary_connect::connect::{
     CATALOG, Checked, Connection, Declared, PLAIN, Params, Seen, StepShape, Table, TemplateId,
 };
-use suzatary_core::plugin::Manifest;
-use suzatary_core::secrets::SecretState;
-use suzatary_core::settings::{Page, Settable, Settables};
+use suzatary_connect::secrets::SecretState;
+use suzatary_connect::settings::{Page, Settable, Settables};
 use suzatary_health::health::Refused;
 use suzatary_health::health::{Health, Outcome};
 use suzatary_mail::mail::account::Authority;
 use suzatary_mail::mail::address::EmailAddress;
+use suzatary_services::plugin::Manifest;
 
 fn email() -> impl Strategy<Value = EmailAddress> {
     "[a-c]{1,3}@example\\.test".prop_map(|text| EmailAddress::new(&text).expect("an address"))

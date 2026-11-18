@@ -308,7 +308,7 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
     use std::sync::{Arc, Mutex};
 
-    use suzatary_core::cast::CAST;
+    use suzatary_connect::cast::CAST;
     use suzatary_mail::mail::account::{Authority, MsImap, Sync};
 
     use super::*;

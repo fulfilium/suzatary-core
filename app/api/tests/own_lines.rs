@@ -161,7 +161,7 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
     let name = own.name().clone();
     let print = own.print().to_owned();
     let signed: Envelope<LineEvent> = Envelope::Signed(
-        suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE).sign(&name),
+        suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE).sign(&name),
     );
     let posted = [print, canonical_envelope(&signed)];
     let keys: BTreeMap<String, Vec<String>> =
@@ -173,7 +173,7 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
     );
     let trusting = suzatary_signatures::signatures::Trusting::held(
         &[&suzatary_core::stores::phone_trusted(&["ada"])],
-        &suzatary_core::cast::keys::root(),
+        &suzatary_connect::cast::keys::root(),
     )
     .expect("reads");
     let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
@@ -229,7 +229,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
             .expect("sealed");
         let own = &owned[0].node;
         let signed: Envelope<LineEvent> = Envelope::Signed(
-            suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE).sign(&name),
+            suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE).sign(&name),
         );
         let objects = [own.print().to_owned(), canonical_envelope(&signed)];
         let keys: BTreeMap<String, Vec<String>> =
@@ -258,7 +258,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
             routes::Writer {
                 actor: &ada,
                 chains: &[&chain],
-                root: &suzatary_core::cast::keys::root(),
+                root: &suzatary_connect::cast::keys::root(),
             },
             routes::Recording {
                 asks: &asks,
@@ -334,7 +334,7 @@ fn a_posted_key_never_opens_erased_words() {
         "sealed under the destroyed key"
     );
     let signed: Envelope<LineEvent> = Envelope::Signed(
-        suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE).sign(&posted),
+        suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE).sign(&posted),
     );
     let objects = [own.print().to_owned(), canonical_envelope(&signed)];
     let keys: BTreeMap<String, Vec<String>> = [(
@@ -368,7 +368,7 @@ fn a_posted_key_never_opens_erased_words() {
         routes::Writer {
             actor: &ada,
             chains: &[&chain],
-            root: &suzatary_core::cast::keys::root(),
+            root: &suzatary_connect::cast::keys::root(),
         },
         routes::Recording {
             asks: &asks,

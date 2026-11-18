@@ -8,17 +8,18 @@ use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::PluginName;
 
 use crate::instance::Instance;
+use suzatary_google::google::Endpoints;
 
 /// Syncs a source of the instance file at `instance`, read again for each check, so a link of
 /// a plugin declared since the server started is checked too; Google is asked at `google`.
 pub struct Synced {
     instance: PathBuf,
-    google: suzatary_core::google::Endpoints,
+    google: Endpoints,
 }
 
 impl Synced {
     #[must_use]
-    pub fn of(instance: &Instance, google: &suzatary_core::google::Endpoints) -> Self {
+    pub fn of(instance: &Instance, google: &Endpoints) -> Self {
         Self {
             instance: instance.path.clone(),
             google: google.clone(),
@@ -26,7 +27,7 @@ impl Synced {
     }
 }
 
-impl suzatary_core::settings::Checks for Synced {
+impl suzatary_connect::settings::Checks for Synced {
     fn check(&self, source: &SourceKey) {
         let instance = match Instance::open(&self.instance) {
             Ok(instance) => instance,
@@ -85,9 +86,9 @@ impl Synced {
 /// Syncs nothing at a tap: a server with no plugin host, as a test's is unless it says.
 pub struct Unsynced;
 
-impl suzatary_core::settings::Checks for Unsynced {
+impl suzatary_connect::settings::Checks for Unsynced {
     fn check(&self, _: &SourceKey) {}
 }
 
 /// The checks a state's taps run.
-pub type Checks = Arc<dyn suzatary_core::settings::Checks + Send + Sync>;
+pub type Checks = Arc<dyn suzatary_connect::settings::Checks + Send + Sync>;

@@ -684,7 +684,7 @@ mod tests {
 
     #[test]
     fn the_bridge_keeps_every_transport_law_behind_a_fake_bridge() {
-        use suzatary_core::conformance::transport::{Case, check};
+        use suzatary_connect::conformance::transport::{Case, check};
         use suzatary_mail::mail::send::{Composed, Outgoing};
         use suzatary_mail::mail::transport::Delivered;
 

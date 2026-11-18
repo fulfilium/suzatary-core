@@ -35,7 +35,7 @@ fn call_in(
     };
     suzatary_core::secretary::call(
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         id,
         verb,

@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn every_cast_todo_renders() {
         let (typst, cache) = typst_at("cast");
-        for todo in suzatary_core::cast::CAST.todos.all() {
+        for todo in suzatary_connect::cast::CAST.todos.all() {
             for text in [todo.body, todo.detail]
                 .into_iter()
                 .chain(todo.rationale.iter().copied())

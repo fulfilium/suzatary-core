@@ -452,7 +452,7 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
         &instance,
         text.replace("untrusted = [\"triage\"]", "untrusted = []")
             .replace(
-                suzatary_core::cast::keys::root().as_str(),
+                suzatary_connect::cast::keys::root().as_str(),
                 root_key.as_str(),
             ),
     )

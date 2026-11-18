@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use suzatary_base::capability::Secret;
-use suzatary_core::conformance::puller::{Rig, check};
+use suzatary_connect::conformance::puller::{Rig, check};
 use suzatary_io::google::{Google as Api, Grants};
 use suzatary_io::http::{HttpError, Resp, Scripted};
 use suzatary_io::imap::Outlook;
@@ -232,10 +232,10 @@ struct Kept;
 
 impl Resolves for Kept {
     fn get(&self, name: &str, _reason: &str) -> Result<Option<Secret>, SecretError> {
-        let grant = suzatary_core::google::grant_name(&address());
+        let grant = suzatary_google::google::grant_name(&address());
         Ok(match name {
-            suzatary_core::google::CLIENT_ID => Some("box.apps.googleusercontent.com"),
-            suzatary_core::google::CLIENT_SECRET => Some("box-client-secret"),
+            suzatary_google::google::CLIENT_ID => Some("box.apps.googleusercontent.com"),
+            suzatary_google::google::CLIENT_SECRET => Some("box-client-secret"),
             _ if name == grant => Some("mail,calendar 1//fake-refresh"),
             _ => None,
         }
@@ -274,7 +274,7 @@ impl Signed {
             account: address(),
             grants: Grants::new(
                 Api::with_http(
-                    suzatary_core::google::Endpoints::at("https://google.example.test"),
+                    suzatary_google::google::Endpoints::at("https://google.example.test"),
                     Arc::new(Scripted::always(token)),
                 ),
                 Arc::new(Kept),

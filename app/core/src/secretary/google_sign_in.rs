@@ -7,9 +7,10 @@ use std::collections::BTreeMap;
 use chrono::NaiveDateTime;
 use prodrome_core::event::Actor;
 
-use crate::google::{Client, Exchanged, RedirectUri, Scope, Scopes, State, Verifier};
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::responded::{Done, Performed, Tried};
+use suzatary_google::google::KeptGrant;
+use suzatary_google::google::{Client, Exchanged, RedirectUri, Scope, Scopes, State, Verifier};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::OauthError;
 
@@ -157,7 +158,7 @@ const AGAIN: &str = "tap Sign in with Google to ask Google again";
 pub fn exchanged(
     begun: &Begun,
     read: Result<Exchanged, OauthError>,
-) -> (Performed, Option<crate::google::KeptGrant>) {
+) -> (Performed, Option<KeptGrant>) {
     let read = read.map(|exchanged| {
         let parts = Scopes::of(exchanged.granted.iter().copied())
             .filter(|parts| keeps(&begun.scopes, parts));
@@ -181,7 +182,7 @@ pub fn exchanged(
             };
             (
                 Performed::Done(Done::Acted { what }),
-                Some(crate::google::KeptGrant { parts, refresh }),
+                Some(KeptGrant { parts, refresh }),
             )
         }
         Ok((_, None)) => (
@@ -288,7 +289,7 @@ pub fn end(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::google::{ClientId, ClientSecret};
+    use suzatary_google::google::{ClientId, ClientSecret};
 
     fn at(minute: u32) -> NaiveDateTime {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 17)
@@ -421,7 +422,7 @@ mod tests {
     fn a_grant_is_kept_only_with_its_mail_and_says_what_was_left_out() {
         let (_, begun) = begun(1, "ada");
         let grant = |parts: &[Scope]| Exchanged {
-            refresh: crate::google::RefreshToken::parse("1//r").expect("a token"),
+            refresh: suzatary_google::google::RefreshToken::parse("1//r").expect("a token"),
             granted: parts.iter().copied().collect(),
             account: begun.account.clone(),
         };

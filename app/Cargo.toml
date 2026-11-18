@@ -1,13 +1,13 @@
 # THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the repository's only one; the Prodrome
 # is a dependency by REVISION (→ `prodromedependency`). Arrows point down only: cli → plugin →
-# io → core → {todo → signatures, memory → held, {health, triage} → mail → {held, signatures}} →
+# io → core → {todo → signatures, memory → held, services → {held, health}, {health, triage} → mail → {held, signatures}} →
 # store, record → base → prodrome-core.
 # `wasm` is the browser's module; `plugin` the plugin host, alone because wasmtime is the largest
 # tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` the programs
 # `io`'s and `cli`'s tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -36,6 +36,9 @@ suzatary-memory = { path = "memory" }
 suzatary-mail = { path = "mail" }
 suzatary-health = { path = "health" }
 suzatary-triage = { path = "triage" }
+suzatary-services = { path = "services" }
+suzatary-google = { path = "google" }
+suzatary-connect = { path = "connect" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }

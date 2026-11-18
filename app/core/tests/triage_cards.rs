@@ -6,8 +6,8 @@ use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::Agent;
-use suzatary_core::deployment::Deployment;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::filed::TriageCards;
@@ -27,7 +27,7 @@ fn deployment() -> Deployment {
         name: ChainName::new("life").expect("a slug"),
         untrusted: Untrusted::of([actor("triage")]),
         roster: [actor("owner"), actor("triage")].into_iter().collect(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     };
     Deployment {
@@ -269,7 +269,7 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
     let call = |verb: &str, value: &Value| {
         suzatary_core::secretary::call(
             &deployment(),
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &DEFAULT,
             verb,

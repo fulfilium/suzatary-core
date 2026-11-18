@@ -47,7 +47,7 @@ pub fn table() -> Vec<Route> {
         Route::get("/api/overview", Scope::Box, settings::overview),
         // A GET with no CSRF triple: the one-use state, taken only for the tapping actor, admits it.
         Route::get(
-            suzatary_core::google::CALLBACK,
+            suzatary_google::google::CALLBACK,
             Scope::Box,
             google::callback,
         ),

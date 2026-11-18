@@ -2,10 +2,11 @@
 # The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
 # modules, never a higher one's. A file is in the cut of the longest module path below that
 # holds it. A cut that is its own crate (`app/base`, `app/record`, `app/store`, `app/signatures`,
-# `app/todo`, `app/held`, `app/memory`, `app/mail`, `app/health`, `app/triage`, `app/api`) is
-# held by the compiler. The guard layers.rs beside this file reads it; the core split's plan
-# (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
-order = ["services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
+# `app/todo`, `app/held`, `app/memory`, `app/mail`, `app/health`, `app/triage`, `app/services`,
+# `app/google`, `app/connect`, `app/api`) is held by the compiler. The guard layers.rs beside
+# this file reads it; the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why each
+# module is where it is.
+order = ["inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
@@ -39,9 +40,6 @@ rendering = [
 ]
 
 [layers.modules]
-services = ["drive", "plugin", "repos", "repositories", "repository", "usage", "weather", "web"]
-google = ["calendar", "google", "url"]
-connect = ["cast", "conformance", "connect", "deployment", "release", "secrets", "settings"]
 inbox = ["coding", "content_id", "priced", "secretary/act_vocabulary", "secretary/acts",
   "secretary/card", "secretary/changes", "secretary/decide", "secretary/diff", "secretary/fix",
   "secretary/inbox", "secretary/inbox_event", "secretary/inbox_json", "secretary/inbox_reading",
@@ -74,4 +72,4 @@ cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build",
   "secretary/merged_patches", "secretary/noticed", "secretary/request", "secretary/undo",
   "settings/overview", "wire/cards"]
 secretary = ["agent", "conversation", "secretary"]
-api = ["asks", "receipt", "secretary/live_shape", "stores", "sync", "wire"]
+api = ["asks", "receipt", "release", "secretary/live_shape", "stores", "sync", "wire"]

@@ -19,7 +19,7 @@ pub struct PrivateCopy {
     pub text: String,
 }
 
-/// The folder private files are kept in. `suzatary_core::drive::allowed` never answers yes inside
+/// The folder private files are kept in. `suzatary_services::drive::allowed` never answers yes inside
 /// it, whatever `drive_allow` says, so reading one is always a tap.
 pub const FOLDER: &str = "/my-files/Suzatary/Private";
 

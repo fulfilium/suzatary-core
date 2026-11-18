@@ -4,7 +4,6 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::zone::Zone;
-use suzatary_core::calendar::When;
 use suzatary_core::secretary::acts::Act;
 use suzatary_core::secretary::inbox::{self, Asked, Price};
 use suzatary_core::secretary::inbox_event::InboxEvent;
@@ -16,13 +15,14 @@ use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::secretary::responded::Responded;
 use suzatary_core::secretary::responded::Withdrawal;
 use suzatary_core::stores::InMemory;
+use suzatary_google::calendar::When;
 
 fn at(day: u32, hour: u32) -> Datetime {
     Datetime::new(2026, 11, day, hour, 0, 0, 0).expect("an instant")
 }
 
 fn card(inbox: &InMemory<InboxEvent>, index: usize, when: When) -> inbox::ProposalId {
-    let event = suzatary_core::google::NewEvent::new("Dentist", when, "").expect("an event");
+    let event = suzatary_google::google::NewEvent::new("Dentist", when, "").expect("an event");
     inbox::ask(
         inbox,
         Asked {

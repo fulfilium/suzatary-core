@@ -58,9 +58,9 @@ fn fresh_instance(name: &str) -> Instance {
     ]);
     init::run_keyed(&instance_path, args, &env_beside(&instance_path), |_| {
         Ok(suzatary_signatures::signatures::BoxKeys::of(
-            &suzatary_core::cast::keys::root(),
-            &suzatary_base::capability::Secret::new(suzatary_core::cast::keys::ROOT),
-            &suzatary_base::capability::Secret::new(suzatary_core::cast::keys::AGENT),
+            &suzatary_connect::cast::keys::root(),
+            &suzatary_base::capability::Secret::new(suzatary_connect::cast::keys::ROOT),
+            &suzatary_base::capability::Secret::new(suzatary_connect::cast::keys::AGENT),
         )?)
     })
     .expect("a fresh init");

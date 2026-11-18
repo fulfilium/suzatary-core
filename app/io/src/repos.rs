@@ -12,9 +12,9 @@ use base64::Engine as _;
 use suzatary_base::capability::Secret;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_core::coding::{BRANCH_PREFIX, Branch, REPORTS_DIR, ReportFile, Seen};
-use suzatary_core::repos::{Declared, Patch, RepoRow, RepoTarget, TOKEN, Visibility};
-use suzatary_core::repositories::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories};
 use suzatary_memory::coding_report::{FileStat, Lines};
+use suzatary_services::repos::{Declared, Patch, RepoRow, RepoTarget, TOKEN, Visibility};
+use suzatary_services::repositories::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories};
 
 use crate::http::{Http, Req, Ureq};
 use crate::run::{Cmd, Ran, RunError, run, succeed};

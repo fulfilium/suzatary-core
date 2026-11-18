@@ -1,7 +1,6 @@
 //! A calendar card whose event has ended needs nothing more, so it closes as no longer needed,
 //! by the rule that closes a card done another way ([`done_elsewhere`]).
 
-use crate::calendar::When;
 use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
@@ -10,6 +9,7 @@ use crate::secretary::responded::Withdrawal;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::zone::Zone;
+use suzatary_google::calendar::When;
 use suzatary_store::store::Prodrome;
 
 /// Close every waiting calendar card whose event ended by `at`; an all-day event ends when the

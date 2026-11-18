@@ -110,7 +110,7 @@ impl Push {
                 click: match open {
                     Some(id) => format!(
                         "{app}/#/inbox?open={}",
-                        crate::url::percent_encode(id.as_str())
+                        suzatary_google::url::percent_encode(id.as_str())
                     ),
                     None => format!("{app}/#/inbox"),
                 },

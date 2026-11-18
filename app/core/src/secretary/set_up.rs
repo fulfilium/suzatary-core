@@ -4,7 +4,6 @@
 //! lock only while it is still owed, so each setup gets one note whatever restarts and workers
 //! meet it.
 
-use crate::connect::TemplateId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::model::Turn;
 use crate::secretary::stamp::Stamp;
@@ -12,6 +11,8 @@ use crate::secretary::store::{Begun, Entry};
 use crate::secretary::transcript::{self, Transcript};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_connect::connect::TemplateId;
+use suzatary_connect::secrets::SecretState;
 use suzatary_store::store::StoreError;
 
 /// The template whose opening `reading` is owed: none for a conversation not set up, or one the
@@ -67,15 +68,17 @@ pub fn owing(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, St
 /// Whether the box's Google client is stored, its id and its secret both.
 #[must_use]
 pub fn client_kept(
-    secrets: &dyn crate::secrets::Secrets,
-    settables: &crate::settings::Settables,
-) -> crate::secrets::SecretState {
-    crate::secrets::SecretState::all(
-        [crate::google::CLIENT_ID, crate::google::CLIENT_SECRET].map(|name| {
-            crate::settings::Settable::mint(settables, name)
-                .map_or(crate::secrets::SecretState::Missing, |name| {
-                    secrets.secret_state(&name)
-                })
+    secrets: &dyn suzatary_connect::secrets::Secrets,
+    settables: &suzatary_connect::settings::Settables,
+) -> SecretState {
+    SecretState::all(
+        [
+            suzatary_google::google::CLIENT_ID,
+            suzatary_google::google::CLIENT_SECRET,
+        ]
+        .map(|name| {
+            suzatary_connect::settings::Settable::mint(settables, name)
+                .map_or(SecretState::Missing, |name| secrets.secret_state(&name))
         }),
     )
 }
@@ -140,7 +143,8 @@ mod tests {
                         let reading = transcript::read(lines, id).expect("reads");
                         if let Some((Conversational::Opening, _)) = engines[n].due(id, &reading) {
                             open(lines, id, at(2 + step), |t| {
-                                t.template().opening(crate::secrets::SecretState::Missing)
+                                t.template()
+                                    .opening(suzatary_connect::secrets::SecretState::Missing)
                             })
                             .expect("written");
                         }
@@ -151,7 +155,8 @@ mod tests {
             if !ran {
                 for id in owing(lines).expect("reads") {
                     open(lines, &id, at(30), |t| {
-                        t.template().opening(crate::secrets::SecretState::Missing)
+                        t.template()
+                            .opening(suzatary_connect::secrets::SecretState::Missing)
                     })
                     .expect("written");
                 }

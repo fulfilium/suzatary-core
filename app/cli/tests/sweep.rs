@@ -24,8 +24,8 @@ use suzatary_todo::authoring::{NewTodo, build_todo};
 /// The sweep run to its end; a scripted model is under no limit, so it always starts.
 fn sweep(
     caps: &suzatary_core::secretary::Secretary<'_>,
-    deployment: &suzatary_core::deployment::Deployment,
-    settables: &suzatary_core::settings::Settables,
+    deployment: &suzatary_connect::deployment::Deployment,
+    settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Swept, suzatary_base::refusal::Refusal> {
@@ -44,7 +44,7 @@ fn created() -> Datetime {
 }
 
 /// The fixture deployment; a sweep reaches no gate.
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment(
         [common::login("ada@example.com")],
         [(common::login("ada@example.com"), common::actor("ada"))],
@@ -163,7 +163,7 @@ fn an_open_todo_with_later_mail_gets_one_completed_proposal() {
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -237,7 +237,7 @@ fn a_sweep_the_model_cannot_answer_fails_the_verb() {
     let outcome = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     );
@@ -265,7 +265,7 @@ fn an_open_todo_with_no_later_mail_gets_no_proposal() {
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -318,7 +318,7 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -375,7 +375,7 @@ fn a_todo_add_call_is_refused_by_the_verb_set() {
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -438,7 +438,7 @@ fn completing_an_open_todo_with_no_candidates_is_refused_and_proposes_nothing() 
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -504,7 +504,7 @@ fn a_swept_completion_is_applied_through_the_real_tap_route() {
     let swept = sweep(
         &caps.secretary(),
         &dep,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -610,7 +610,7 @@ fn dry_run_over_the_fixture_opens_no_conversation_and_reports_counts() {
     let report = dry_run(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
     )
     .expect("the dry run runs");
@@ -671,7 +671,7 @@ fn the_sweeps_round_is_pinned() {
     let swept = sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )

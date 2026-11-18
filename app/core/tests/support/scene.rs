@@ -14,7 +14,7 @@ use suzatary_store::store::Prodrome as _;
 /// Never for the cast's keys.
 #[must_use]
 pub fn scene(actor: &str) -> Trusted {
-    use crate::cast::keys;
+    use suzatary_connect::cast::keys;
     let actor = Actor::new(actor).expect("a roster name");
     let chain: super::InMemory<TodoEvent> = super::InMemory::default();
     let begun = prodrome_core::event::mk_completed(
@@ -66,7 +66,7 @@ pub fn scene(actor: &str) -> Trusted {
 /// Never for the cast's keys.
 #[must_use]
 pub fn phone_trusted(actors: &[&str]) -> crate::stores::InMemory<TodoEvent> {
-    use crate::cast::keys;
+    use suzatary_connect::cast::keys;
     let chain: crate::stores::InMemory<TodoEvent> = crate::stores::InMemory::default();
     let begun = prodrome_core::event::mk_completed(
         "scene",

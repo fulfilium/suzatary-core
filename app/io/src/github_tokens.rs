@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::NaiveDateTime;
-use suzatary_core::settings::Settable;
+use suzatary_connect::settings::Settable;
 
 use crate::http::{Http, Req, Ureq};
 use crate::secrets::Resolves;
@@ -181,7 +181,7 @@ mod tests {
     use std::sync::Arc;
 
     use suzatary_base::capability::Secret;
-    use suzatary_core::settings::{Declaration, Settables};
+    use suzatary_connect::settings::{Declaration, Settables};
 
     use super::*;
     use crate::http::{Resp, Scripted};
@@ -196,8 +196,8 @@ mod tests {
             _reason: &str,
         ) -> Result<Option<Secret>, crate::secrets::SecretError> {
             Ok(match name {
-                suzatary_core::repos::TOKEN => Some(Secret::new("repos-value".to_owned())),
-                suzatary_core::settings::DATA_PUSH_TOKEN => {
+                suzatary_services::repos::TOKEN => Some(Secret::new("repos-value".to_owned())),
+                suzatary_connect::settings::DATA_PUSH_TOKEN => {
                     Some(Secret::new("push-value".to_owned()))
                 }
                 _ => None,
@@ -250,12 +250,11 @@ mod tests {
         }));
         let tokens = GithubTokens::new(temp.path(), Box::new(Tokens))
             .with_http(Box::new(Arc::clone(&github)));
-        let declared = Settables::declared(suzatary_core::repos::TOKEN, Declaration::Repos).join(
-            Settables::declared(
-                suzatary_core::settings::DATA_PUSH_TOKEN,
+        let declared = Settables::declared(suzatary_services::repos::TOKEN, Declaration::Repos)
+            .join(Settables::declared(
+                suzatary_connect::settings::DATA_PUSH_TOKEN,
                 Declaration::DataPush,
-            ),
-        );
+            ));
         let names: Vec<Settable> = declared.iter().collect();
         let day = |d| chrono::NaiveDate::from_ymd_opt(2027, 1, d).expect("a day");
         let read = |now| -> Vec<(String, chrono::NaiveDate)> {
@@ -266,8 +265,11 @@ mod tests {
                 .collect()
         };
         let both = vec![
-            (suzatary_core::settings::DATA_PUSH_TOKEN.to_owned(), day(10)),
-            (suzatary_core::repos::TOKEN.to_owned(), day(9)),
+            (
+                suzatary_connect::settings::DATA_PUSH_TOKEN.to_owned(),
+                day(10),
+            ),
+            (suzatary_services::repos::TOKEN.to_owned(), day(9)),
         ];
         assert_eq!(read(at(4, 9)), both);
         assert_eq!(github.sent().len(), 2, "one call per token");
@@ -282,7 +284,7 @@ mod tests {
         assert_eq!(github.sent().len(), 2, "and nothing is asked");
         assert_eq!(
             read(at(5, 10)),
-            vec![(suzatary_core::repos::TOKEN.to_owned(), day(9))],
+            vec![(suzatary_services::repos::TOKEN.to_owned(), day(9))],
             "a day on, each is asked again, and a refused token has no expiry"
         );
         assert_eq!(github.sent().len(), 4);

@@ -7,8 +7,8 @@ use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::{Reasoned, propose};
 use crate::secretary::{self, Call, SecretarySurface, taint};
 use crate::verb::Verb;
-use crate::web::{self, AllowRule, SearchQuery, WebError, WebRequest};
 use suzatary_base::refusal::Refusal;
+use suzatary_services::web::{self, AllowRule, SearchQuery, WebError, WebRequest};
 
 /// Read the web: an allowed host at once, any other on a tap.
 pub struct Web;

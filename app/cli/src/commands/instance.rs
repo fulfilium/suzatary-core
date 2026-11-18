@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn set_and_a_tap_wait_for_the_lock_beside_the_file() {
-        use suzatary_core::settings::Edits as _;
+        use suzatary_connect::settings::Edits as _;
         let dir = tempfile::tempdir().expect("scratch");
         let env = Env::under(dir.path(), dir.path());
         let path = dir.path().join("instance.toml");
@@ -394,7 +394,7 @@ mod tests {
             std::fs::read_to_string(sample()).expect("the sample"),
         )
         .expect("written");
-        let rule: suzatary_core::web::AllowRule = "*.gov.uk".parse().expect("a rule");
+        let rule: suzatary_services::web::AllowRule = "*.gov.uk".parse().expect("a rule");
         let held = crate::instance::editing(&path).expect("the lock");
         let (done, finished) = std::sync::mpsc::channel();
         let setting = {

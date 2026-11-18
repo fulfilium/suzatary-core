@@ -84,7 +84,7 @@ the wire, the page or the docs. Each commit must build and pass its tests on its
 
 ## Fixtures
 
-Tests and screenshots use the *cast*: `suzatary_core::cast` in Rust and `web/test/cast.ts` in
+Tests and screenshots use the *cast*: `suzatary_connect::cast` in Rust and `web/test/cast.ts` in
 TypeScript. The cast is Ada and her invented correspondents, at reserved domains such as
 `example.test`. Never use a real person, address or host.
 

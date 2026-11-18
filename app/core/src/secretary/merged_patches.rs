@@ -1,6 +1,5 @@
 //! A repository card whose patch the default branch already holds is done another way.
 
-use crate::repositories::Repositories;
 use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
@@ -8,6 +7,7 @@ use crate::secretary::proposal::Proposal;
 use crate::secretary::responded::Withdrawal;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_services::repositories::Repositories;
 use suzatary_store::store::Prodrome;
 
 /// Close every waiting repository card whose patch `repos` finds merged.

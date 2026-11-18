@@ -28,5 +28,5 @@ pub enum Begun<'a> {
         model: &'a str,
     },
     /// Set up from a template, whose opening the box notes.
-    SetUp(crate::connect::TemplateId),
+    SetUp(suzatary_connect::connect::TemplateId),
 }

@@ -12,7 +12,7 @@ use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
 use suzatary_base::persona::Persona;
 use suzatary_base::writer::Writer;
-use suzatary_core::connect::{AccountKind, Connection, Params, Reach};
+use suzatary_connect::connect::{AccountKind, Connection, Params, Reach};
 use suzatary_health::health::Refused;
 use suzatary_mail::mail::account::{Authority, MailAccount, Roster};
 use suzatary_mail::mail::address::EmailAddress;
@@ -424,7 +424,7 @@ impl FirstAccount {
                 .unwrap_or_default()
                 .into_iter()
                 .filter_map(|step| match step {
-                    suzatary_core::connect::Step::Terminal { run, why } => Some(Step {
+                    suzatary_connect::connect::Step::Terminal { run, why } => Some(Step {
                         command: run.spelled(reach),
                         // Lieer waits for Google's redirect to the box's own localhost.
                         why: if self.provider == Provider::Gmail {

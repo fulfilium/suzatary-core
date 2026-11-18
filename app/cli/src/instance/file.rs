@@ -12,12 +12,12 @@ use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_base::persona::Persona;
-use suzatary_core::connect::Coding;
+use suzatary_connect::connect::Coding;
 use suzatary_core::model_name::ModelName;
-use suzatary_core::plugin::Manifest;
-use suzatary_core::repos::Declared;
-use suzatary_core::web::AllowRule;
 use suzatary_mail::mail::account::Roster;
+use suzatary_services::plugin::Manifest;
+use suzatary_services::repos::Declared;
+use suzatary_services::web::AllowRule;
 use suzatary_triage::mail::junk::ChurnList;
 
 use super::{CodeRoot, DataRoot, Reserve};
@@ -447,7 +447,7 @@ impl Topics {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Notify {
     #[serde(default)]
-    pub(crate) channels: Vec<suzatary_core::connect::Channel>,
+    pub(crate) channels: Vec<suzatary_connect::connect::Channel>,
     /// The Firebase project's number the box hands the Android portal at pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) fcm_sender: Option<suzatary_api::portal::Sender>,
@@ -611,7 +611,7 @@ mod repos {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use suzatary_base::repo_ids::RepoName;
-    use suzatary_core::repos::{Declared, RepoTarget};
+    use suzatary_services::repos::{Declared, RepoTarget};
 
     #[derive(Deserialize, Serialize)]
     struct Entry {

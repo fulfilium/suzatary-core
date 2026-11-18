@@ -6,8 +6,8 @@
 
 use std::path::Path;
 
-use suzatary_core::connect::{Connection, Declared, Table};
-use suzatary_core::settings::EditError;
+use suzatary_connect::connect::{Connection, Declared, Table};
+use suzatary_connect::settings::EditError;
 use suzatary_health::health::plugin::{Origin, PluginName};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, TableLike, Value};
 
@@ -319,7 +319,7 @@ mod tests {
     use std::path::PathBuf;
 
     use proptest::prelude::*;
-    use suzatary_core::connect::{Connection, Params, TemplateId};
+    use suzatary_connect::connect::{Connection, Params, TemplateId};
     use suzatary_health::health::Refused;
     use suzatary_mail::mail::account::Authority;
     use suzatary_mail::mail::address::EmailAddress;

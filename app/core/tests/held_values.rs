@@ -7,8 +7,8 @@ use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::Agent;
-use suzatary_core::deployment::Deployment;
 use suzatary_core::secretary::{Bound, Secretary};
 use suzatary_mail::mail::mailbox::Query;
 use suzatary_mail::mail::sync_report::SyncReport;
@@ -101,7 +101,7 @@ fn chain() -> ChainPolicy {
         name: ChainName::new("life").expect("a slug"),
         untrusted: Untrusted::of([actor("triage")]),
         roster: [actor("owner"), actor("triage")].into_iter().collect(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     }
 }
@@ -154,7 +154,7 @@ fn secretary(verb: &str, call: Value) -> String {
     }];
     suzatary_core::secretary::call(
         &deployment(),
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,

@@ -13,7 +13,7 @@ use chrono::{Duration, Timelike};
 use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use suzatary_base::capability::Clock;
-use suzatary_core::cast::{self, CAST};
+use suzatary_connect::cast::{self, CAST};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::record::{EventStore, mk_authored, mk_source, mk_subtodo};
 use suzatary_store::store::{append_to, linearised};
@@ -55,7 +55,7 @@ fn fixture_root() -> prodrome_core::sign::PublicKey {
 
 /// The name of the secret the fixture's standing secret card asks for: the coding routine's
 /// token, which the writing server's `[coding]` declares.
-pub const SECRET_ASK_KEY: &str = suzatary_core::connect::ROUTINE_TOKEN;
+pub const SECRET_ASK_KEY: &str = suzatary_connect::connect::ROUTINE_TOKEN;
 /// The one calendar link `--settings` declares, on the `ics` plugin, which nothing stores.
 pub const SETTINGS_CALENDAR_LINK: &str = "PLUGIN_ICS_WORK";
 /// The `[[plugins]]` table `--settings` appends, as an operator adds one by hand: `File` never
@@ -471,11 +471,11 @@ pub const CONNECT_CONVERSATION: &str = "connect";
 /// removal standing as a card.
 fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_connect::settings::Edits as _;
     use suzatary_core::secretary::proposal::{Proposal, Reasons};
     use suzatary_core::secretary::store::{Entry, Kind};
-    use suzatary_core::settings::Edits as _;
 
-    let calendar = suzatary_core::connect::Connection::parse("ics", &[CONNECTED.to_owned()])?;
+    let calendar = suzatary_connect::connect::Connection::parse("ics", &[CONNECTED.to_owned()])?;
     crate::instance::InstanceEdits::new(root.join("instance.toml")).add_connection(&calendar)?;
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     let store = read.conversation_stores();
@@ -556,8 +556,8 @@ pub mod fake_google;
 /// begun at the reference plugin's schema, so the calendar reads it, and its last run and its
 /// link's fetch a success, so storing the link again makes its line healthy without a sync.
 fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<()> {
-    use suzatary_core::plugin::{Answer, Came, LastRun};
     use suzatary_health::health::plugin::{CredentialName, PluginName};
+    use suzatary_services::plugin::{Answer, Came, LastRun};
     let name = PluginName::parse("ics")?;
     let text = std::fs::read_to_string(repo.join("app/plugin-ics/ics.schema"))
         .context("reading the calendar plugin's schema")?;
@@ -1142,7 +1142,7 @@ fn instance_file(
         // Absent, so push setup never reads this box's secret store.
         notify: None,
         // A routine nothing can fire, so a tapped session fails in words.
-        coding: (settings && propose).then(|| suzatary_core::connect::Coding {
+        coding: (settings && propose).then(|| suzatary_connect::connect::Coding {
             routine: "trig01fixture".parse().expect("a routine id"),
             repo: "bmabsout/fixture".parse().expect("a repository"),
         }),

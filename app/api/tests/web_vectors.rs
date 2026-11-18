@@ -27,8 +27,8 @@ use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::Escaped;
 use suzatary_base::reference::{ProposalRef, Reference};
-use suzatary_core::cast::{self, CAST};
-use suzatary_core::deployment::Deployment;
+use suzatary_connect::cast::{self, CAST};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::about;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -265,7 +265,7 @@ fn chain_policy() -> ChainPolicy {
         roster: [actor(CAST.owner.actor), actor("triage")]
             .into_iter()
             .collect(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     }
 }
@@ -860,8 +860,8 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
         deployment: &deployment,
         chains: &[],
         plugins: None,
-        reach: &suzatary_core::connect::PLAIN,
-        settables: &suzatary_core::settings::Settables::default(),
+        reach: &suzatary_connect::connect::PLAIN,
+        settables: &suzatary_connect::settings::Settables::default(),
     };
     let conversation_payload =
         secretary_routes::newest(&server_of(&bundle), &cards, &conversation_id)
@@ -879,7 +879,7 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
 /// function of its standing alone, and `web/test/overview.test.ts` reads every one of these.
 #[test]
 fn the_standings_vector_is_every_standing_a_line_can_take() {
-    use suzatary_core::connect::{Group, Standing};
+    use suzatary_connect::connect::{Group, Standing};
     use suzatary_health::health::Failure;
     use suzatary_health::health::Outcome;
     type Healths = suzatary_health::health::Healths<String>;
@@ -1287,8 +1287,8 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
         deployment: &deployment,
         chains: &[],
         plugins: None,
-        reach: &suzatary_core::connect::PLAIN,
-        settables: &suzatary_core::settings::Settables::default(),
+        reach: &suzatary_connect::connect::PLAIN,
+        settables: &suzatary_connect::settings::Settables::default(),
     };
     let payload = secretary_routes::newest(&server_of(&bundle), &cards, &id)
         .expect("the conversation renders");
@@ -1356,8 +1356,8 @@ fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable
         deployment: &deployment,
         chains: &[],
         plugins: None,
-        reach: &suzatary_core::connect::PLAIN,
-        settables: &suzatary_core::settings::Settables::default(),
+        reach: &suzatary_connect::connect::PLAIN,
+        settables: &suzatary_connect::settings::Settables::default(),
     };
     let server = server_of(&bundle);
     let payload = secretary_routes::newest(&server, &cards, &id).expect("the conversation renders");
@@ -1434,8 +1434,8 @@ fn the_proposals_vector_is_every_stage_and_its_decision() {
         deployment: &deployment,
         chains: &[],
         plugins: None,
-        reach: &suzatary_core::connect::PLAIN,
-        settables: &suzatary_core::settings::Settables::default(),
+        reach: &suzatary_connect::connect::PLAIN,
+        settables: &suzatary_connect::settings::Settables::default(),
     };
     let payload =
         secretary_routes::newest(&server_of(&bundle), &cards, &id).expect("every stage folds");
@@ -2046,8 +2046,8 @@ fn the_answers_vector_holds_every_answer() {
         deployment: &deployment,
         chains: &[],
         plugins: None,
-        reach: &suzatary_core::connect::PLAIN,
-        settables: &suzatary_core::settings::Settables::default(),
+        reach: &suzatary_connect::connect::PLAIN,
+        settables: &suzatary_connect::settings::Settables::default(),
     };
     let policy = chain_policy();
     let at = now();
@@ -2741,7 +2741,7 @@ fn the_answers_vector_holds_every_answer() {
     }]);
 
     {
-        use suzatary_core::connect::{Group, Standing};
+        use suzatary_connect::connect::{Group, Standing};
         let line = |key: &str, label: &str, standing: Standing, cards: &[&str]| {
             suzatary_core::wire::cards::OverviewLine {
                 key: key.to_owned(),

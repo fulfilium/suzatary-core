@@ -3,11 +3,11 @@
 
 use std::sync::{Arc, RwLock};
 
-use suzatary_core::connect::Channel;
+use suzatary_connect::connect::Channel;
+use suzatary_connect::settings::Settables;
 use suzatary_core::nonempty::NonEmpty;
-use suzatary_core::plugin::Manifest;
-use suzatary_core::settings::Settables;
 use suzatary_mail::mail::account::Roster;
+use suzatary_services::plugin::Manifest;
 
 use crate::instance::Instance;
 

@@ -134,26 +134,21 @@
         # ===== THE APPLICATION (docs/ARCHITECTURE.md); above it, scaffolding and the ONE line
         # that takes the database, the Prodrome, off the input — one direction (§1, §2).
 
+        # The crates the core's library is cut into (`merge_gate.rs`'s `LIBRARY_CRATES`): each
+        # fileset below names the part of each it reads, so a new crate is one word here.
+        library = part: map (crate: ./app + "/${crate}${part}") [ "core" "base" "record" "store"
+          "signatures" "todo" "held" "memory" "mail" "health" "triage" "services" "google" "connect" "api" ];
+        # The test supports their libraries include, of the crates that have one.
+        supports = lib.filter builtins.pathExists (library "/tests/support");
+
         # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ: a `fileset`, so a briefing, a commit
         # or a document does not change this hash, and `target/` never reaches the store.
         appSrc = lib.fileset.toSource {
           root = ./.;
-          fileset = lib.fileset.unions [
+          fileset = lib.fileset.unions ([
             ./app/Cargo.toml
             ./app/Cargo.lock
             ./app/cli
-            ./app/core
-            ./app/base
-            ./app/record
-            ./app/store
-            ./app/signatures
-            ./app/todo
-            ./app/held
-            ./app/memory
-            ./app/mail
-            ./app/health
-            ./app/triage
-            ./app/api
             ./app/io
             ./app/plugin
             ./app/plugin-fence
@@ -175,7 +170,7 @@
             ./instance.sample.toml
             # The colour roles a picture of a public store is drawn in (`prodrome draw`).
             ./tokens.typ
-          ];
+          ] ++ library "");
         };
 
         # THE BUILD STAMP IS `appSrc`'s hash, so `GET /api/about`'s `build` moves with the
@@ -218,7 +213,7 @@
         # generator and the conformance vectors compile, so an edit to the
         # server, the CLI, a live pin or the core's own integration tests moves
         # neither.
-        coreFiles = lib.fileset.unions [
+        coreFiles = lib.fileset.unions ([
           ./app/Cargo.toml
           ./app/Cargo.lock
           ./app/cli/Cargo.toml
@@ -231,43 +226,8 @@
           ./app/viewtree/Cargo.toml
           ./app/pages/Cargo.toml
           ./app/wasm/Cargo.toml
-          ./app/core/Cargo.toml
-          ./app/base/Cargo.toml
-          ./app/record/Cargo.toml
-          ./app/store/Cargo.toml
-          ./app/signatures/Cargo.toml
-          ./app/todo/Cargo.toml
-          ./app/held/Cargo.toml
-          ./app/memory/Cargo.toml
-          ./app/mail/Cargo.toml
-          ./app/health/Cargo.toml
-          ./app/triage/Cargo.toml
-          ./app/api/Cargo.toml
-          ./app/core/src
-          ./app/base/src
-          ./app/record/src
-          ./app/store/src
-          ./app/signatures/src
-          ./app/todo/src
-          ./app/held/src
-          ./app/memory/src
-          ./app/mail/src
-          ./app/health/src
-          ./app/triage/src
-          ./app/api/src
           ./app/core/examples
-          ./app/core/tests/support
-          ./app/base/tests/support
-          ./app/store/tests/support
-          ./app/signatures/tests/support
-          ./app/todo/tests/support
-          ./app/held/tests/support
-          ./app/memory/tests/support
-          ./app/mail/tests/support
-          ./app/health/tests/support
-          ./app/triage/tests/support
-          ./app/api/tests/support
-        ];
+        ] ++ library "/Cargo.toml" ++ library "/src" ++ supports);
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
         # the generators are a `cargo test` and a `cargo run`, and with the core's
@@ -372,31 +332,7 @@
                 ./app/viewtree/Cargo.toml
                 ./app/pages/Cargo.toml
                 ./app/wasm/Cargo.toml
-                ./app/core/Cargo.toml
-                ./app/base/Cargo.toml
-                ./app/record/Cargo.toml
-                ./app/store/Cargo.toml
-                ./app/signatures/Cargo.toml
-                ./app/todo/Cargo.toml
-                ./app/held/Cargo.toml
-                ./app/memory/Cargo.toml
-                ./app/mail/Cargo.toml
-                ./app/health/Cargo.toml
-                ./app/triage/Cargo.toml
-                ./app/api/Cargo.toml
-                ./app/core/src
-                ./app/base/src
-                ./app/record/src
-                ./app/store/src
-                ./app/signatures/src
-                ./app/todo/src
-                ./app/held/src
-                ./app/memory/src
-                ./app/mail/src
-                ./app/health/src
-                ./app/triage/src
-                ./app/api/src
-              ] ++ crates);
+              ] ++ library "/Cargo.toml" ++ library "/src" ++ crates);
             };
             inherit cargoVendorDir;
             preBuild = ''
@@ -477,23 +413,11 @@
           pname = "suzatary-plugin-fence";
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.unions [
+            fileset = lib.fileset.unions ([
               ./app/Cargo.toml
               ./app/Cargo.lock
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
-              ./app/core/Cargo.toml
-              ./app/base/Cargo.toml
-              ./app/record/Cargo.toml
-              ./app/store/Cargo.toml
-              ./app/signatures/Cargo.toml
-              ./app/todo/Cargo.toml
-              ./app/held/Cargo.toml
-              ./app/memory/Cargo.toml
-              ./app/mail/Cargo.toml
-              ./app/health/Cargo.toml
-              ./app/triage/Cargo.toml
-              ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -502,7 +426,7 @@
               ./app/wasm/Cargo.toml
               ./app/plugin-fence
               ./app/wit
-            ];
+            ] ++ library "/Cargo.toml");
           };
           cargoArtifacts = null;
           inherit cargoVendorDir;
@@ -531,23 +455,11 @@
           pname = "suzatary-plugins";
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.unions [
+            fileset = lib.fileset.unions ([
               ./app/Cargo.toml
               ./app/Cargo.lock
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
-              ./app/core/Cargo.toml
-              ./app/base/Cargo.toml
-              ./app/record/Cargo.toml
-              ./app/store/Cargo.toml
-              ./app/signatures/Cargo.toml
-              ./app/todo/Cargo.toml
-              ./app/held/Cargo.toml
-              ./app/memory/Cargo.toml
-              ./app/mail/Cargo.toml
-              ./app/health/Cargo.toml
-              ./app/triage/Cargo.toml
-              ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -556,7 +468,7 @@
               ./app/wasm/Cargo.toml
               ./app/plugin-ics
               ./app/wit
-            ];
+            ] ++ library "/Cargo.toml");
           };
           cargoArtifacts = null;
           inherit cargoVendorDir;

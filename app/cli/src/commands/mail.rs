@@ -70,7 +70,7 @@ pub fn syncer(instance: &Instance) -> Syncer {
 #[must_use]
 pub fn google_grants(instance: &Instance) -> suzatary_io::google::Grants {
     suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::google()),
         std::sync::Arc::new(instance.secrets()),
     )
 }

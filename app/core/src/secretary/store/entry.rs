@@ -7,6 +7,7 @@ use crate::secretary::stamp::Stamp;
 use serde::Serialize;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::Reference;
+use suzatary_connect::connect::TemplateId;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::words::Words;
 
@@ -28,7 +29,7 @@ pub enum Entry {
         /// What it is for.
         kind: Kind,
     },
-    /// A conversation begun on a template's opening ([`crate::connect::TemplateId`]): a topic
+    /// A conversation begun on a template's opening ([`TemplateId`]): a topic
     /// titled by the template, whose first note the box writes from it.
     SetUp {
         /// When.
@@ -38,7 +39,7 @@ pub enum Entry {
         title: Words<String>,
         /// The template it sets up.
         #[serde(serialize_with = "template_name")]
-        template: crate::connect::TemplateId,
+        template: TemplateId,
     },
     /// The conversation was named; the last one wins, so a rename is an append.
     Titled {
@@ -378,10 +379,7 @@ fn stamped<S: serde::Serializer>(at: &Datetime, to: S) -> Result<S::Ok, S::Error
     clippy::trivially_copy_pass_by_ref,
     reason = "serde's serialize_with hands a reference"
 )]
-fn template_name<S: serde::Serializer>(
-    template: &crate::connect::TemplateId,
-    to: S,
-) -> Result<S::Ok, S::Error> {
+fn template_name<S: serde::Serializer>(template: &TemplateId, to: S) -> Result<S::Ok, S::Error> {
     to.serialize_str(template.as_str())
 }
 

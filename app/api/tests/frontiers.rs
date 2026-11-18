@@ -110,7 +110,7 @@ impl Device {
 
     /// Every object of this device's own writes, printed.
     fn own(&self) -> Vec<String> {
-        let key = suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE);
+        let key = suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE);
         let changes: Vec<Envelope<MembershipEvent>> = self
             .store
             .held()
@@ -243,7 +243,7 @@ impl TheBox {
             routes::Writer {
                 actor: &device.actor,
                 chains: &[&self.chain],
-                root: &suzatary_core::cast::keys::root(),
+                root: &suzatary_connect::cast::keys::root(),
             },
             routes::Recording {
                 asks: &self.asks,

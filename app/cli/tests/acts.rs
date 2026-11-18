@@ -24,7 +24,7 @@ fn writing(tag: &str, replies: impl IntoIterator<Item = &'static str>) -> (Strin
     (base, fakes)
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment([ada()], [(ada(), common::actor("ada"))])
 }
 

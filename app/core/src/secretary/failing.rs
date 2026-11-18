@@ -12,13 +12,13 @@ use std::collections::BTreeSet;
 
 use chrono::Duration;
 
-use crate::calendar::CalendarName;
-use crate::connect::{Connection, Declared, Key, Step, Table};
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::Proposal;
-use crate::settings::{Settable, Settables};
+use suzatary_connect::connect::{Connection, Declared, Key, Step, Table};
+use suzatary_connect::settings::{Settable, Settables};
+use suzatary_google::calendar::CalendarName;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Failure, Remedy};
 use suzatary_health::health::{Health, Healths, Instant, Reading};
@@ -101,7 +101,7 @@ impl Failing {
                     // and the consent asks for them all again.
                     Step::AuthCode { account } => Some(Act::GoogleSignIn {
                         account,
-                        scopes: crate::google::Scopes::all(),
+                        scopes: suzatary_google::google::Scopes::all(),
                     }),
                     Step::Secret { .. }
                     | Step::SendingConsent { .. }
@@ -360,7 +360,7 @@ mod tests {
                 .expect("declared");
             Self {
                 settables: Settables::derive(
-                    crate::settings::MODEL_TOKEN,
+                    suzatary_connect::settings::MODEL_TOKEN,
                     [],
                     None,
                     &declared.plugins,
@@ -554,8 +554,10 @@ mod tests {
         let asked = Owed::one(
             Proposal::Act(Act::GoogleSignIn {
                 account: bea.address().clone(),
-                scopes: crate::google::Scopes::of([crate::google::Scope::Calendar])
-                    .expect("one part"),
+                scopes: suzatary_google::google::Scopes::of([
+                    suzatary_google::google::Scope::Calendar,
+                ])
+                .expect("one part"),
             }),
             "it lacks its calendars".to_owned(),
         );

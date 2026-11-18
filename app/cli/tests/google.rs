@@ -12,7 +12,7 @@ use std::sync::Arc;
 use common::fake_google::{self, FakeGoogle};
 use common::{EditsRecorder, Fakes, SecretRecorder, SettingsFixture};
 use suzatary_base::conversation_id::SETUP;
-use suzatary_core::calendar::effect::Calendar as _;
+use suzatary_google::calendar::effect::Calendar as _;
 use suzatary_mail::mail::account::{MailAccount, Sync};
 use suzatary_mail::mail::address::EmailAddress;
 
@@ -72,14 +72,15 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
             (second, common::actor("bea")),
         ],
     );
-    let declared = suzatary_core::connect::Declared {
+    let declared = suzatary_connect::connect::Declared {
         accounts: vec![account(sync)],
-        ..suzatary_core::connect::Declared::default()
+        ..suzatary_connect::connect::Declared::default()
     };
     let settables =
-        suzatary_core::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]).join(
-            suzatary_core::settings::Settables::google(&declared.accounts),
-        );
+        suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[])
+            .join(suzatary_connect::settings::Settables::google(
+                &declared.accounts,
+            ));
     let empty = SettingsFixture::empty();
     let edits = Arc::new(EditsRecorder::declaring(declared));
     let checks = Arc::new(common::CheckRecorder::default());
@@ -107,7 +108,7 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
     let running = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
         .settings(settings)
         .google(
-            suzatary_core::google::Endpoints::at(&fake.base),
+            suzatary_google::google::Endpoints::at(&fake.base),
             Arc::clone(&secrets) as _,
         )
         .checks(Arc::clone(&checks))
@@ -227,7 +228,7 @@ fn consent(serving: &Serving) -> String {
     let path = row["card"]["link"]["href"]
         .as_str()
         .expect("the card draws the consent as its button");
-    assert!(path.starts_with(suzatary_core::google::CONSENT), "{path}");
+    assert!(path.starts_with(suzatary_google::google::CONSENT), "{path}");
     let (status, link) = redirected(&format!("{base}{path}"));
     assert_eq!(status, 303, "the box sends the browser on to Google");
     link
@@ -306,11 +307,11 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
         serving.secrets.calls()[..2],
         [
             (
-                suzatary_core::google::CLIENT_ID.to_owned(),
+                suzatary_google::google::CLIENT_ID.to_owned(),
                 fake_google::CLIENT_ID.to_owned()
             ),
             (
-                suzatary_core::google::CLIENT_SECRET.to_owned(),
+                suzatary_google::google::CLIENT_SECRET.to_owned(),
                 fake_google::CLIENT_SECRET.to_owned()
             ),
         ],
@@ -366,7 +367,9 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     let maildir =
         std::env::temp_dir().join(format!("suzatary-google-lieer-{}", std::process::id()));
     let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&serving.fake.base)),
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(
+            &serving.fake.base,
+        )),
         Arc::clone(&serving.secrets) as _,
     );
     grants
@@ -591,24 +594,25 @@ fn a_declined_consent_ends_the_card_and_keeps_nothing() {
 #[test]
 fn a_code_google_already_redeemed_keeps_nothing() {
     let fake = FakeGoogle::start(0, ADA);
-    let google = suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&fake.base));
+    let google =
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
-        suzatary_core::google::RedirectUri::of_app("https://example.test").expect("a callback");
-    let verifier = suzatary_core::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
+        suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
+    let verifier = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
         .expect("a verifier");
     let state =
-        suzatary_core::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
-    let client = suzatary_core::google::Client::of_download(
+        suzatary_google::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
+    let client = suzatary_google::google::Client::of_download(
         &suzatary_base::capability::Secret::new(fake_google::client_file(REDIRECT)),
         &redirect,
     )
     .expect("the fake's client");
-    let link = suzatary_core::google::authorize(
+    let link = suzatary_google::google::authorize(
         google.endpoints(),
         &client.id,
         &redirect,
         (&state, &verifier.challenge()),
-        &suzatary_core::google::Scopes::all(),
+        &suzatary_google::google::Scopes::all(),
         &ada(),
     );
     let (_, location) = redirected(&link);
@@ -622,8 +626,8 @@ fn a_code_google_already_redeemed_keeps_nothing() {
             .find_map(|pair| pair.strip_prefix(&format!("{name}=")))
             .map(|value| value.replace("%2F", "/"))
     };
-    let Ok(suzatary_core::google::Callback::Code { code, .. }) =
-        suzatary_core::google::Callback::of_query(
+    let Ok(suzatary_google::google::Callback::Code { code, .. }) =
+        suzatary_google::google::Callback::of_query(
             field("state").as_deref(),
             field("code").as_deref(),
             None,
@@ -648,12 +652,12 @@ fn a_code_google_already_redeemed_keeps_nothing() {
         .find_map(|pair| pair.strip_prefix("code="))
         .map(|code| code.replace("%2F", "/"))
         .expect("a second code");
-    let Ok(suzatary_core::google::Callback::Code { code, .. }) =
-        suzatary_core::google::Callback::of_query(Some(state.as_str()), Some(&fresh), None)
+    let Ok(suzatary_google::google::Callback::Code { code, .. }) =
+        suzatary_google::google::Callback::of_query(Some(state.as_str()), Some(&fresh), None)
     else {
         panic!("a code");
     };
-    let other = suzatary_core::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
+    let other = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
         .expect("a verifier");
     assert!(
         google
@@ -669,7 +673,7 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let fake = FakeGoogle::start(0, ADA);
     let secrets = Arc::new(SecretRecorder::new());
     let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&fake.base)),
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base)),
         Arc::clone(&secrets) as _,
     );
     let refused = grants.live(&ada()).expect_err("no client is kept");
@@ -678,19 +682,19 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
         suzatary_mail::mail::fault::Fault::Unresolved
     );
 
-    let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
+    let settables = suzatary_connect::settings::Settables::google(&[account(Sync::Google)]);
     let write = |name: &str, value: &str| {
-        use suzatary_core::settings::Writes as _;
+        use suzatary_connect::settings::Writes as _;
         secrets
             .write_secret(
-                &suzatary_core::settings::Settable::mint(&settables, name).expect("declared"),
+                &suzatary_connect::settings::Settable::mint(&settables, name).expect("declared"),
                 &suzatary_base::capability::Secret::new(value),
             )
             .expect("written");
     };
-    write(suzatary_core::google::CLIENT_ID, fake_google::CLIENT_ID);
+    write(suzatary_google::google::CLIENT_ID, fake_google::CLIENT_ID);
     write(
-        suzatary_core::google::CLIENT_SECRET,
+        suzatary_google::google::CLIENT_SECRET,
         fake_google::CLIENT_SECRET,
     );
     let unsigned = grants.live(&ada()).expect_err("never signed in");
@@ -715,39 +719,40 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     let fake = FakeGoogle::start(0, ADA);
     fake.answering_events(400);
     let secrets = Arc::new(SecretRecorder::new());
-    let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
+    let settables = suzatary_connect::settings::Settables::google(&[account(Sync::Google)]);
     for (name, value) in [
-        (suzatary_core::google::CLIENT_ID, fake_google::CLIENT_ID),
+        (suzatary_google::google::CLIENT_ID, fake_google::CLIENT_ID),
         (
-            suzatary_core::google::CLIENT_SECRET,
+            suzatary_google::google::CLIENT_SECRET,
             fake_google::CLIENT_SECRET,
         ),
     ] {
-        use suzatary_core::settings::Writes as _;
+        use suzatary_connect::settings::Writes as _;
         secrets
             .write_secret(
-                &suzatary_core::settings::Settable::mint(&settables, name).expect("declared"),
+                &suzatary_connect::settings::Settable::mint(&settables, name).expect("declared"),
                 &suzatary_base::capability::Secret::new(value),
             )
             .expect("written");
     }
     // The grant the fake issues, by its own exchange.
-    let google = suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&fake.base));
+    let google =
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
-        suzatary_core::google::RedirectUri::of_app("https://example.test").expect("a callback");
-    let verifier = suzatary_core::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
+        suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
+    let verifier = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
         .expect("a verifier");
     let state =
-        suzatary_core::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
+        suzatary_google::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
     let client = suzatary_io::google::Grant::client(secrets.as_ref())
         .expect("the store answers")
         .expect("a client");
-    let (_, location) = redirected(&suzatary_core::google::authorize(
+    let (_, location) = redirected(&suzatary_google::google::authorize(
         google.endpoints(),
         &client.id,
         &redirect,
         (&state, &verifier.challenge()),
-        &suzatary_core::google::Scopes::all(),
+        &suzatary_google::google::Scopes::all(),
         &ada(),
     ));
     let code = location
@@ -755,8 +760,8 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         .find_map(|pair| pair.strip_prefix("code="))
         .map(|code| code.replace("%2F", "/"))
         .expect("a code");
-    let Ok(suzatary_core::google::Callback::Code { code, .. }) =
-        suzatary_core::google::Callback::of_query(Some(state.as_str()), Some(&code), None)
+    let Ok(suzatary_google::google::Callback::Code { code, .. }) =
+        suzatary_google::google::Callback::of_query(Some(state.as_str()), Some(&code), None)
     else {
         panic!("a code");
     };
@@ -767,7 +772,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         account: ada(),
         client,
         refresh: granted.refresh,
-        parts: suzatary_core::google::Scopes::all(),
+        parts: suzatary_google::google::Scopes::all(),
     };
 
     let now = chrono::NaiveDate::from_ymd_opt(2026, 10, 17)
@@ -776,7 +781,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     let read = google.occurrences(&grant, now).expect("occurrences");
     assert_eq!(
         read.len(),
-        2 * suzatary_core::google::EVENTS,
+        2 * suzatary_google::google::EVENTS,
         "two calendars, each read to its bound"
     );
     let root =
@@ -985,7 +990,7 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
         .expect("the fix's page")
         .to_owned();
     assert_eq!(lacked["card"]["link"]["label"], format!("Connect {ADA}"));
-    assert!(href.starts_with(suzatary_core::google::CONSENT), "{href}");
+    assert!(href.starts_with(suzatary_google::google::CONSENT), "{href}");
     tap_event(&fix);
     assert!(
         card(&setup(base), "google_sign_in", "started").is_some(),
@@ -1005,7 +1010,7 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
         "a calendar asks for no mail: {link}"
     );
 
-    let path = suzatary_core::google::CALLBACK;
+    let path = suzatary_google::google::CALLBACK;
     let (status, _) = redirected(&format!(
         "{base}{path}?state={}&code=4%2Fforged",
         "A".repeat(43)
@@ -1031,7 +1036,7 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
         "the calendars' grant, without the mail"
     );
     assert_eq!(
-        suzatary_core::settings::Configuration::declared(serving.edits.as_ref())
+        suzatary_connect::settings::Configuration::declared(serving.edits.as_ref())
             .expect("the recorder reads")
             .accounts,
         vec![account(sync.clone())],
@@ -1045,7 +1050,9 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
 /// no grant is not read at all.
 fn calendars_are_read(serving: &Serving, sync: &Sync) {
     let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_core::google::Endpoints::at(&serving.fake.base)),
+        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(
+            &serving.fake.base,
+        )),
         Arc::clone(&serving.secrets) as _,
     );
     let unsigned = MailAccount {
@@ -1086,7 +1093,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         "its store is written"
     );
     assert_eq!(
-        suzatary_core::settings::Configuration::declared(serving.edits.as_ref())
+        suzatary_connect::settings::Configuration::declared(serving.edits.as_ref())
             .expect("the recorder reads")
             .accounts,
         vec![account(sync.clone())],
@@ -1167,7 +1174,7 @@ fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
     // As Settings sets one up: a `SetUp` line a tab seals, whose note the box writes once it is
     // taken.
     let opening = || {
-        let template = suzatary_core::connect::TemplateId::Google;
+        let template = suzatary_connect::connect::TemplateId::Google;
         let id = common::opening(
             &serving.base,
             &suzatary_core::secretary::store::Entry::SetUp {
@@ -1202,7 +1209,7 @@ fn the_google_calendar_writes_the_calendar_plugins_schema() {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-ics/ics.schema"),
     )
     .expect("the plugin's schema");
-    assert_eq!(declared, suzatary_core::google::SCHEMA);
+    assert_eq!(declared, suzatary_google::google::SCHEMA);
 }
 
 /// A Gmail account lieer reads moves onto the sign-in with Google only once Google's grant is
@@ -1212,7 +1219,7 @@ fn the_google_calendar_writes_the_calendar_plugins_schema() {
 /// A grant that reads the mail is kept, and the account's sync moves to Google, its folder kept.
 #[test]
 fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
-    use suzatary_core::settings::Configuration as _;
+    use suzatary_connect::settings::Configuration as _;
     let serving = serving_as("google-lieer", None, Sync::Gmail);
     let base = &serving.base;
     let declared = || {
@@ -1245,7 +1252,7 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
         &serving.fakes,
         "connect",
         suzatary_core::secretary::acts::Act::Connect {
-            connection: suzatary_core::connect::Connection::parse("google", &[ADA.to_owned()])
+            connection: suzatary_connect::connect::Connection::parse("google", &[ADA.to_owned()])
                 .expect("a Google account"),
         },
     );
@@ -1269,7 +1276,7 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
         .split(['?', '&'])
         .find_map(|part| part.strip_prefix("state="))
         .expect("the callback carries its state");
-    let path = suzatary_core::google::CALLBACK;
+    let path = suzatary_google::google::CALLBACK;
     let (status, _) = redirected(&format!("{base}{path}?state={state}&error=access_denied"));
     assert_eq!(status, 303);
     unchanged("a sign-in Google refused");

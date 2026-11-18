@@ -1,4 +1,4 @@
-//! The transport for `suzatary_core::google`'s sans-I/O sign-in and Calendar API. A secret's
+//! The transport for `suzatary_google::google`'s sans-I/O sign-in and Calendar API. A secret's
 //! bytes go only onto the wire and into the secret store, never into a log or an error.
 
 use std::sync::Arc;
@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use chrono::NaiveDateTime;
 use suzatary_base::capability::Secret;
-use suzatary_core::calendar::Occurrence;
-use suzatary_core::google::{
+use suzatary_google::calendar::Occurrence;
+use suzatary_google::google::{
     AccessToken, Client, ClientId, ClientSecret, Code, Endpoints, Exchanged, KeptGrant, NewEvent,
     RedirectUri, RefreshToken, Verifier,
 };
@@ -84,9 +84,9 @@ impl Google {
     ) -> Result<Exchanged, OauthError> {
         let answered = crate::oauth::post(
             self.http.as_ref(),
-            &suzatary_core::google::exchange(&self.endpoints, client, code, verifier, redirect),
+            &suzatary_google::google::exchange(&self.endpoints, client, code, verifier, redirect),
         )?;
-        suzatary_core::google::read_exchange(&answered, asked)
+        suzatary_google::google::read_exchange(&answered, asked)
     }
 
     /// A fresh access token for `account` from its kept grant.
@@ -98,9 +98,9 @@ impl Google {
     ) -> Result<Silent<AccessToken>, OauthError> {
         let answered = crate::oauth::post(
             self.http.as_ref(),
-            &suzatary_core::google::refresh(&self.endpoints, client, refresh),
+            &suzatary_google::google::refresh(&self.endpoints, client, refresh),
         )?;
-        suzatary_core::google::read_refresh(&answered, account)
+        suzatary_google::google::read_refresh(&answered, account)
     }
 
     fn read(&self, token: &AccessToken, url: &str) -> Result<Vec<u8>, String> {
@@ -110,7 +110,7 @@ impl Google {
                 Req::get(url)
                     .header("Authorization", format!("Bearer {}", token.token.expose()))
                     .timeout(TIMEOUT)
-                    .limit(suzatary_core::google::MAX_ANSWER as u64),
+                    .limit(suzatary_google::google::MAX_ANSWER as u64),
             )
             .map_err(|failed| failed.to_string())?;
         if resp.ok() {
@@ -129,22 +129,22 @@ impl Google {
     ) -> Result<Vec<Occurrence>, ReadError> {
         let token = self.token(grant)?;
         let listed = self
-            .read(&token, &suzatary_core::google::list_url(&self.endpoints))
+            .read(&token, &suzatary_google::google::list_url(&self.endpoints))
             .and_then(|body| {
-                suzatary_core::google::read_calendars(&body).map_err(|failed| failed.to_string())
+                suzatary_google::google::read_calendars(&body).map_err(|failed| failed.to_string())
             })
             .map_err(ReadError::Failed)?;
-        let window = suzatary_core::google::window(now);
+        let window = suzatary_google::google::window(now);
         let mut occurrences = Vec::new();
         for calendar in listed.iter() {
-            let Ok(name) = suzatary_core::google::calendar_name(&grant.account, calendar) else {
+            let Ok(name) = suzatary_google::google::calendar_name(&grant.account, calendar) else {
                 continue;
             };
-            let url = suzatary_core::google::events_url(&self.endpoints, &calendar.id, window);
+            let url = suzatary_google::google::events_url(&self.endpoints, &calendar.id, window);
             let read = self
                 .read(&token, &url)
                 .and_then(|body| {
-                    suzatary_core::google::read_events(&body, &name)
+                    suzatary_google::google::read_events(&body, &name)
                         .map_err(|failed| failed.to_string())
                 })
                 .map_err(ReadError::Failed)?;
@@ -157,12 +157,15 @@ impl Google {
     /// box hands lieer its tokens. Another account's mailbox fails.
     pub fn mailbox(&self, grant: &Grant) -> Result<u64, ReadError> {
         let token = self.token(grant)?;
-        self.read(&token, &suzatary_core::google::profile_url(&self.endpoints))
-            .and_then(|body| {
-                suzatary_core::google::read_profile(&body, &grant.account)
-                    .map_err(|failed| failed.to_string())
-            })
-            .map_err(ReadError::Failed)
+        self.read(
+            &token,
+            &suzatary_google::google::profile_url(&self.endpoints),
+        )
+        .and_then(|body| {
+            suzatary_google::google::read_profile(&body, &grant.account)
+                .map_err(|failed| failed.to_string())
+        })
+        .map_err(ReadError::Failed)
     }
 
     /// Write `event` into `grant`'s account's own calendar.
@@ -174,12 +177,12 @@ impl Google {
         };
         let sent = self.http.send(
             Req::json(
-                suzatary_core::google::insert_url(&self.endpoints),
-                &suzatary_core::google::insert_body(event),
+                suzatary_google::google::insert_url(&self.endpoints),
+                &suzatary_google::google::insert_body(event),
             )
             .header("Authorization", format!("Bearer {}", token.token.expose()))
             .timeout(TIMEOUT)
-            .limit(suzatary_core::google::MAX_ANSWER as u64),
+            .limit(suzatary_google::google::MAX_ANSWER as u64),
         );
         match sent {
             Ok(resp) if resp.ok() => Inserted::Done,
@@ -211,7 +214,7 @@ pub struct Grant {
     pub account: EmailAddress,
     pub client: Client,
     pub refresh: RefreshToken,
-    pub parts: suzatary_core::google::Scopes,
+    pub parts: suzatary_google::google::Scopes,
 }
 
 /// What the secret store keeps for one Google account.
@@ -230,8 +233,8 @@ impl Grant {
         let read = |name: &str| store.get(name, ASKING);
         Ok(
             match (
-                read(suzatary_core::google::CLIENT_ID)?,
-                read(suzatary_core::google::CLIENT_SECRET)?,
+                read(suzatary_google::google::CLIENT_ID)?,
+                read(suzatary_google::google::CLIENT_SECRET)?,
             ) {
                 (Some(id), Some(secret)) => ClientId::parse(id.expose())
                     .zip(ClientSecret::parse(secret.expose()))
@@ -246,7 +249,7 @@ impl Grant {
             return Ok(Kept::NoClient);
         };
         let Some(kept) = store
-            .get(&suzatary_core::google::grant_name(account), ASKING)?
+            .get(&suzatary_google::google::grant_name(account), ASKING)?
             .as_ref()
             .map(Secret::expose)
             .and_then(KeptGrant::parse)
@@ -337,10 +340,13 @@ impl Grants {
     ///
     /// # Errors
     /// The secret store's.
-    pub fn held(&self, account: &EmailAddress) -> Result<suzatary_core::google::Held, SecretError> {
+    pub fn held(
+        &self,
+        account: &EmailAddress,
+    ) -> Result<suzatary_google::google::Held, SecretError> {
         Ok(match Grant::read(self.store.as_ref(), account)? {
-            Kept::Grant(grant) => suzatary_core::google::Held::Signed(grant.parts),
-            Kept::NoClient | Kept::NotSignedIn(_) => suzatary_core::google::Held::NotSignedIn,
+            Kept::Grant(grant) => suzatary_google::google::Held::Signed(grant.parts),
+            Kept::NoClient | Kept::NotSignedIn(_) => suzatary_google::google::Held::NotSignedIn,
         })
     }
 
@@ -388,14 +394,14 @@ pub fn learn(
     at: suzatary_base::capability::Datetime,
 ) -> Result<suzatary_store::store::Learnt, String> {
     use prodrome_core::store::Replica as _;
-    let schema = prodrome_core::declared::Declaration::admit(suzatary_core::google::SCHEMA)
+    let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
     // Held until the learning ends, so no sync at another schema empties the store under it.
     let begun = crate::plugin_store::PluginStore::at(root)
         .begin(&schema)
         .map_err(|failed| failed.to_string())?;
     let store = begun.store();
-    let actor = prodrome_core::event::Actor::new(suzatary_core::google::ACTOR)
+    let actor = prodrome_core::event::Actor::new(suzatary_google::google::ACTOR)
         .map_err(|refused| refused.to_string())?;
     let items = occurrences
         .iter()
@@ -438,7 +444,7 @@ pub fn hand_to_lieer(
     );
     file.insert(
         "scopes".to_owned(),
-        suzatary_core::google::Scope::Mail.urls().to_vec().into(),
+        suzatary_google::google::Scope::Mail.urls().to_vec().into(),
     );
     std::fs::create_dir_all(maildir).map_err(|failed| failed.to_string())?;
     crate::durable::replace(
@@ -468,7 +474,7 @@ mod tests {
                 secret: ClientSecret::parse("GOCSPX-x").expect("a secret"),
             },
             refresh: RefreshToken::parse("1//refresh").expect("a token"),
-            parts: suzatary_core::google::Scopes::all(),
+            parts: suzatary_google::google::Scopes::all(),
         }
     }
 
@@ -506,7 +512,7 @@ mod tests {
         let sent = http.sent();
         assert_eq!(sent.len(), 3);
         for req in &sent[1..] {
-            assert_eq!(req.limit, suzatary_core::google::MAX_ANSWER as u64);
+            assert_eq!(req.limit, suzatary_google::google::MAX_ANSWER as u64);
             assert_eq!(
                 crate::http::header(&req.headers, "authorization"),
                 Some("Bearer ya29.a")
@@ -580,7 +586,7 @@ mod tests {
     fn an_insert_says_whether_it_may_have_gone() {
         let event = NewEvent::new(
             "Dentist",
-            suzatary_core::calendar::When::parse("2026-10-20/2026-10-21").expect("a span"),
+            suzatary_google::calendar::When::parse("2026-10-20/2026-10-21").expect("a span"),
             "",
         )
         .expect("an event");

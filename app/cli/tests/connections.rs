@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use common::{DeclaredStore, Fakes, SecretRecorder, SettingsFixture};
 use suzatary_base::conversation_id::SETUP;
-use suzatary_core::connect::Connection;
+use suzatary_connect::connect::Connection;
 use suzatary_core::secretary::acts::Act;
 
 /// The scratch instance: every required table, one account and nothing connected beside it.
@@ -146,35 +146,35 @@ fn scratch(tag: &str) -> std::path::PathBuf {
 /// A store holding the GitHub tokens and nothing else.
 struct GitHubHeld;
 
-impl suzatary_core::secrets::Secrets for GitHubHeld {
+impl suzatary_connect::secrets::Secrets for GitHubHeld {
     fn secret_state(
         &self,
-        settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::secrets::SecretState {
+        settable: &suzatary_connect::settings::Settable,
+    ) -> suzatary_connect::secrets::SecretState {
         if [
-            suzatary_core::settings::DATA_PUSH_TOKEN,
-            suzatary_core::repos::TOKEN,
+            suzatary_connect::settings::DATA_PUSH_TOKEN,
+            suzatary_services::repos::TOKEN,
         ]
         .contains(&settable.name())
         {
-            suzatary_core::secrets::SecretState::Set
+            suzatary_connect::secrets::SecretState::Set
         } else {
-            suzatary_core::secrets::SecretState::Missing
+            suzatary_connect::secrets::SecretState::Missing
         }
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_mail::mail::account::MailAccount,
-    ) -> suzatary_core::secrets::MailGrants {
-        suzatary_core::secrets::MailGrants::default()
+    ) -> suzatary_connect::secrets::MailGrants {
+        suzatary_connect::secrets::MailGrants::default()
     }
 
     fn google_grant(
         &self,
         _: &suzatary_mail::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
-        suzatary_core::google::Held::NotSignedIn
+    ) -> suzatary_google::google::Held {
+        suzatary_google::google::Held::NotSignedIn
     }
 }
 
@@ -664,7 +664,7 @@ fn a_tap_naming_two_answers_is_refused_and_the_card_stands() {
     );
     let before = file(&served);
     let endorsement = serde_json::json!({
-        "key": suzatary_core::cast::keys::root().as_str(),
+        "key": suzatary_connect::cast::keys::root().as_str(),
         "signature": "00".repeat(64),
     });
     for body in [
@@ -996,12 +996,12 @@ fn serving_pushing(tag: &str, origin: Option<&'static str>) -> Box {
                 .expect("a git configuration");
             }
             server.effects(|effects| effects).settings_names(
-                suzatary_core::settings::Settables::of_deployment(
+                suzatary_connect::settings::Settables::of_deployment(
                     suzatary_io::model::TOKEN,
                     std::iter::empty(),
                     None,
                     (&[], &[]),
-                    &suzatary_core::repos::Declared::default(),
+                    &suzatary_services::repos::Declared::default(),
                 ),
             )
         },
@@ -1010,7 +1010,8 @@ fn serving_pushing(tag: &str, origin: Option<&'static str>) -> Box {
 
 /// The setup conversation's card asking for the data repository's push token, if one stands.
 fn push_token_card(served: &Box) -> Option<serde_json::Value> {
-    let label = suzatary_core::settings::Help::label(suzatary_core::settings::DATA_PUSH_TOKEN);
+    let label =
+        suzatary_connect::settings::Help::label(suzatary_connect::settings::DATA_PUSH_TOKEN);
     common::reading(&served.base, SETUP.as_str(), &[])["proposals"]
         .as_array()
         .expect("proposals")

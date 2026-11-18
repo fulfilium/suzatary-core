@@ -6,12 +6,13 @@ use std::path::{Path, PathBuf};
 use anyhow::bail;
 
 use super::DataRoot;
+use suzatary_services::plugin::Manifest;
 
 /// `[[plugins]]` and the cache tier they write to.
 #[derive(Debug, Clone)]
 pub struct Plugins {
     /// Every manifest, each name once.
-    pub manifests: Vec<suzatary_core::plugin::Manifest>,
+    pub manifests: Vec<Manifest>,
     /// The cache tier's root: box-local, never pushed, never staged by `safe-push.sh`.
     pub cache: PathBuf,
 }
@@ -39,7 +40,7 @@ impl Plugins {
     }
 
     #[must_use]
-    pub fn named(&self, name: &str) -> Option<&suzatary_core::plugin::Manifest> {
+    pub fn named(&self, name: &str) -> Option<&Manifest> {
         self.manifests
             .iter()
             .find(|manifest| manifest.name().as_str() == name)
@@ -52,7 +53,7 @@ pub(super) fn plugins_of(
     path: &Path,
     data: &DataRoot,
     cache: Option<&Path>,
-    manifests: Vec<suzatary_core::plugin::Manifest>,
+    manifests: Vec<Manifest>,
 ) -> anyhow::Result<Plugins> {
     let mut seen = BTreeSet::new();
     for manifest in &manifests {

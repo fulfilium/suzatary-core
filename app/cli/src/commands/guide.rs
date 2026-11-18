@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use suzatary_base::escape::escape_string;
-use suzatary_core::cast::CAST;
+use suzatary_connect::cast::CAST;
 
 use super::init;
 
@@ -77,7 +77,7 @@ pub fn source(world: World, guide: &str) -> anyhow::Result<String> {
         )
     };
     let steps: Vec<String> = onboarding
-        .steps(&suzatary_core::connect::Reach::Script(SCRIPT.to_owned()))
+        .steps(&suzatary_connect::connect::Reach::Script(SCRIPT.to_owned()))
         .iter()
         .map(ToString::to_string)
         .collect();
@@ -90,7 +90,7 @@ pub fn source(world: World, guide: &str) -> anyhow::Result<String> {
         raw("console", &command),
         raw(
             "toml",
-            &onboarding.printed(&suzatary_core::cast::keys::root())?
+            &onboarding.printed(&suzatary_connect::cast::keys::root())?
         ),
         raw(
             "console",

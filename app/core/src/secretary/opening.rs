@@ -1,7 +1,6 @@
 //! The one reading of a file the box names by its source: what a proposal records, what the tap
 //! sends and what a reveal answers all come from [`open`].
 
-use crate::drive::Port as _;
 use crate::secretary::Secretary;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::{drive_refusal, mail_refusal, refused_by};
@@ -10,6 +9,7 @@ use suzatary_held::enclosed::Enclosure;
 use suzatary_held::held_value::{Files, HeldFile, Opened};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_held::upload::Upload;
+use suzatary_services::drive::Port as _;
 
 /// The file `file` names, as its source holds it now. A Drive file is read through the fence
 /// while its folder is allowed, and otherwise only when a file reader of this conversation
@@ -41,7 +41,7 @@ pub fn open(
             })
         }
         AttachmentSource::Drive { path } => {
-            let bytes = if crate::drive::allowed(&caps.drive.allowed_folders(), path) {
+            let bytes = if suzatary_services::drive::allowed(&caps.drive.allowed_folders(), path) {
                 caps.drive.fenced().fetch(path)
             } else if read.reads_file(&HeldFile::Drive { path: path.clone() }) {
                 caps.drive.port().fetch(path)

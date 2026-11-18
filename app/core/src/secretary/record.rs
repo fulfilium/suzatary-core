@@ -1,17 +1,17 @@
 use crate::agent::Agent;
-use crate::calendar::effect::Calendar;
-use crate::drive::Drive;
-use crate::repositories::Repositories;
-use crate::repository::Repository;
 use crate::secretary::briefings::Briefings;
 use crate::secretary::model::Model;
-use crate::secrets::Secrets;
-use crate::weather::Weather;
-use crate::web::Web;
 use suzatary_base::capability::{Clock, Manuals};
+use suzatary_connect::secrets::Secrets;
+use suzatary_google::calendar::effect::Calendar;
 use suzatary_mail::mail::mail_sync::MailSync;
 use suzatary_mail::mail::mailbox::Mailbox;
 use suzatary_record::record::TodoEvent;
+use suzatary_services::drive::Drive;
+use suzatary_services::repositories::Repositories;
+use suzatary_services::repository::Repository;
+use suzatary_services::weather::Weather;
+use suzatary_services::web::Web;
 use suzatary_store::store::Prodrome;
 use suzatary_todo::render::Render;
 use suzatary_triage::mail::corpus::Corpus;
@@ -33,19 +33,19 @@ use suzatary_triage::mail::older_mail::OlderMail;
 /// `drive::WritePort`, held by the vault alone.
 ///
 /// ```compile_fail,E0599
-/// use suzatary_core::drive::WritePort as _;
+/// use suzatary_services::drive::WritePort as _;
 /// fn upload(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().upload(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
-/// use suzatary_core::drive::WritePort as _;
+/// use suzatary_services::drive::WritePort as _;
 /// fn keep(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().keep(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
-/// use suzatary_core::drive::WritePort as _;
+/// use suzatary_services::drive::WritePort as _;
 /// fn behind(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.fenced().create_folder(at, "x");
 /// }
@@ -117,7 +117,7 @@ pub struct Secretary<'a> {
         suzatary_held::secretary::attached::Attached,
     >,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
-    pub configuration: &'a dyn crate::settings::Configuration,
+    pub configuration: &'a dyn suzatary_connect::settings::Configuration,
     /// The watches on mail the owner expects; a watch's only act is the sync's push.
     pub watches: &'a suzatary_triage::mail::watch::Watches,
 }

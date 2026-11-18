@@ -1,8 +1,8 @@
 //! A lack's fix: the box's card that gives what a tapped card lacked, performed by its tap.
 
-use crate::google::{Held, RedirectUri, Scope, Scopes};
 use crate::secretary::acts::Act;
 use crate::secretary::inbox::ProposalId;
+use suzatary_google::google::{Held, RedirectUri, Scope, Scopes};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::lacking::{Grant, Lacking};
 
@@ -103,7 +103,7 @@ pub fn then(lacking: &Lacking, card: &ProposalId) -> crate::wire::inbox::FixThen
             grant: Grant::GoogleCalendar | Grant::GoogleSend,
             ..
         } => FixThen::Leave {
-            href: format!("{}{}", crate::google::CONSENT, card.as_str()),
+            href: format!("{}{}", suzatary_google::google::CONSENT, card.as_str()),
         },
         Lacking::Grant {
             grant: Grant::MicrosoftSend,

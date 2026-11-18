@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 use suzatary_cli::commands::coding::Firing;
-use suzatary_core::cast::CAST;
+use suzatary_connect::cast::CAST;
 
 const TOKEN: &str = "sk-ant-routine-fake";
 /// What the fake routine answers, in the `cse_` spelling the live one answers.
@@ -22,9 +22,9 @@ fn owner() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
-    suzatary_core::deployment::Deployment {
-        coding: Some(suzatary_core::connect::Coding {
+fn deployment() -> suzatary_connect::deployment::Deployment {
+    suzatary_connect::deployment::Deployment {
+        coding: Some(suzatary_connect::connect::Coding {
             routine: "trig_01fake".parse().expect("a routine id"),
             repo: "bmabsout/cv".parse().expect("a repository"),
         }),
@@ -41,7 +41,7 @@ impl suzatary_io::secrets::Resolves for Holding {
         name: &str,
         _reason: &str,
     ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
-        Ok((name == suzatary_core::connect::ROUTINE_TOKEN)
+        Ok((name == suzatary_connect::connect::ROUTINE_TOKEN)
             .then(|| suzatary_base::capability::Secret::new(TOKEN)))
     }
 }
@@ -602,8 +602,8 @@ fn a_fired_session_is_dropped_with_a_reason() {
 const PLANNED: &str = "roadmap";
 
 /// A deployment whose one chain is the plan store, and which declares the routine.
-fn building() -> suzatary_core::deployment::Deployment {
-    suzatary_core::deployment::Deployment {
+fn building() -> suzatary_connect::deployment::Deployment {
+    suzatary_connect::deployment::Deployment {
         chains: suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
             name: suzatary_base::chains::ChainName::new(PLANNED).expect("a chain"),
             ..common::chain()
@@ -632,7 +632,7 @@ fn build(base: &str, todo: &str) -> (u16, serde_json::Value) {
 }
 
 /// The task a build of `todo` carries on its `attempt`.
-fn task_of(chain: &str, todo: &suzatary_core::cast::Todo, attempt: usize) -> String {
+fn task_of(chain: &str, todo: &suzatary_connect::cast::Todo, attempt: usize) -> String {
     let id = todo.id;
     let detail = if todo.detail.is_empty() {
         String::new()

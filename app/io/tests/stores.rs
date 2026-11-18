@@ -13,7 +13,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::drive_path::DrivePath;
-use suzatary_core::cast::CAST;
+use suzatary_connect::cast::CAST;
 use suzatary_core::secretary::digests::Digests;
 use suzatary_core::secretary::inbox;
 use suzatary_core::secretary::line_event::LineEvent;
@@ -480,7 +480,9 @@ fn memories(root: &Path) {
 
 /// The calendar plugin's store: one occurrence learned, learned again unchanged, then cancelled.
 fn calendar(root: &Path) {
-    use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
+    use suzatary_google::calendar::{
+        CalendarName, Content, Occurrence, OccurrenceId, Status, When,
+    };
     use suzatary_store::store::learn;
 
     let begun = PluginStore::at(root.join(CALENDAR))
@@ -903,7 +905,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     let file = AttachmentId::of(b"%PDF-1.7 a kept file");
     assert!(database.kept.get(&file).expect("reads").is_some());
     let calendar =
-        suzatary_core::calendar::Calendar::of(&database.plugins[&ics()].nodes().expect("reads"));
+        suzatary_google::calendar::Calendar::of(&database.plugins[&ics()].nodes().expect("reads"));
     assert_eq!(calendar.len(), 1);
 
     let after = tree(root);

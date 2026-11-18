@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::conformance::drive::{Case, check};
+use suzatary_connect::conformance::drive::{Case, check};
 use suzatary_io::drive::ProtonDrive;
 
 /// The Drive CLI's grammar over `tree`: `list -j` prints the sections at `/` and the SDK's node
@@ -93,7 +93,7 @@ fn the_proton_drive_adapter_keeps_every_law_behind_a_fake_cli() {
 #[test]
 fn the_private_folder_is_fenced_whatever_its_case() {
     use suzatary_base::drive_path::DrivePath;
-    use suzatary_core::drive::{Fenced, Port as _};
+    use suzatary_services::drive::{Fenced, Port as _};
 
     let dir = tempfile::tempdir().expect("a scratch dir");
     let drive = ProtonDrive::new(

@@ -135,7 +135,7 @@ fn fold_breakdown() {
         name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
         untrusted: untrusted.clone(),
         roster: std::collections::BTreeSet::new(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     };
     let chain: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent> =

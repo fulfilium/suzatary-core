@@ -246,7 +246,7 @@ fn recorded(
 ) -> Result<Attached, Refusal> {
     let unrecorded = |failed: attached::Unattachable| Refusal::bad_request(failed.to_string());
     if let AttachmentSource::Drive { path } = &source
-        && !crate::drive::allowed(&caps.drive.allowed_folders(), path)
+        && !suzatary_services::drive::allowed(&caps.drive.allowed_folders(), path)
     {
         let file = HeldFile::Drive { path: path.clone() };
         return match caps.tapped.get(&file)? {

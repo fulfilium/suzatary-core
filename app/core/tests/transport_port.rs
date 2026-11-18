@@ -2,7 +2,7 @@
 //! suite catching a transport that adds a recipient.
 
 use proptest::prelude::*;
-use suzatary_core::conformance::transport::{Case, Law, check};
+use suzatary_connect::conformance::transport::{Case, Law, check};
 use suzatary_mail::mail::outbox::Outbox;
 use suzatary_mail::mail::send::{Composed, Outgoing, SendError, Sent};
 use suzatary_mail::mail::transport::Transport;

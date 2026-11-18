@@ -19,8 +19,8 @@ use suzatary_store::store::Reads as _;
 /// The review run to its end; a scripted model is under no limit, so it always starts.
 fn review(
     caps: &suzatary_core::secretary::Secretary<'_>,
-    deployment: &suzatary_core::deployment::Deployment,
-    settables: &suzatary_core::settings::Settables,
+    deployment: &suzatary_connect::deployment::Deployment,
+    settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Reviewed, suzatary_base::refusal::Refusal> {
@@ -80,7 +80,7 @@ fn an_add(id: &str) -> Act {
 }
 
 /// The fixture deployment, which `context` and the chain lookup read.
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment(
         [common::login("ada@example.com")],
         [(common::login("ada@example.com"), common::actor("ada"))],
@@ -130,7 +130,7 @@ fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
     let done = review(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -180,7 +180,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     review(
         &caps.secretary(),
         &deployment(),
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -254,7 +254,7 @@ fn a_review_round_holds_no_write_verb() {
     let done = review(
         &caps.secretary(),
         &deployment(),
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -309,7 +309,7 @@ fn a_quiet_pass_asks_no_model_and_opens_no_conversation() {
     let done = review(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -345,7 +345,7 @@ fn holding_the_same_card_again_is_not_a_second_line() {
         review(
             &caps.secretary(),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             "a brief",
         )
@@ -464,7 +464,7 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
     let reviewed = suzatary_core::secretary::review::review(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -473,7 +473,7 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
     let swept = suzatary_core::secretary::sweep::sweep(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -501,7 +501,7 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
     let refused = review(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     );
@@ -569,7 +569,7 @@ fn a_hold_s_reason_is_the_answer_s_words_not_its_markup() {
     let done = review(
         &holding.secretary(),
         &deployment(),
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )
@@ -602,7 +602,7 @@ fn the_reviews_round_is_pinned() {
     let done = review(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
     )

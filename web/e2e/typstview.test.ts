@@ -32,7 +32,7 @@ const ID = TITLE.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
 const LONG =
   "Call the registry about the permit renewal before Friday. They said the form changed in March and the old one will be refused at the counter. Ask whether the fee can be paid online, and if not, which office still takes cheques. Bring the approval notice and a second copy of the deed.";
 const LONG_ID = LONG.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
-// The owner wrote the first in markup, the agent the second (`suzatary_core::cast`).
+// The owner wrote the first in markup, the agent the second (`suzatary_connect::cast`).
 const OWNERS = { id: "file-permit", body: "File the *permit* renewal", strong: "permit" };
 const AGENTS = { id: "email-harrow", body: "Email *Harrow* about the deed" };
 

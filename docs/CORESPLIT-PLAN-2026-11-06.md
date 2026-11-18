@@ -388,6 +388,46 @@ The pages' module, `views_bg.wasm` on x86_64-linux by `nix build`, grew by 227 b
 `wasm-opt` (3,602,822 to 3,603,049) and by 815 bytes brotli (644,785 to 645,600). No line of
 `web/wasm-budget` rises.
 
+**Rows 21 to 23 (services, google, connect), one pull request.** Each module keeps its path
+under the crate's name: `suzatary_services::{drive, plugin, repos, repositories, repository,
+usage, weather, web}`, `suzatary_google::{calendar, google, url}` and `suzatary_connect::{cast,
+conformance, connect, deployment, secrets, settings}`.
+- **services** moves whole; USE 14.1k. `repos::MAX_SHOWN_BYTES` becomes `pub`, because
+  `secretary::verbs::propose_patch` reads it.
+- **google** takes `url` from base's table; USE 14.7k. The calendar reading's two store laws hold
+  an `InMemory`, so they moved to `core/tests/calendar_reading.rs`.
+- **connect** takes `cast` from base's table; USE 24.3k.
+  - `release` stays in core and takes the api cut. With it the crate's USE was 30.8k, and every
+    `//!` of the crate comes to 1.4k, so no trim could pay for it. Its one reader in the cut was
+    `Deployment::builder`, which since #534 takes the chain that holds the release plan from its
+    callers instead of reading the plan.
+  - `settings::overview` is the cards cut's, so core keeps it as an inline module,
+    `suzatary_core::settings::overview`.
+  - `conformance::hold` becomes `pub` (the model's laws read it), and `parsed!` is exported, at
+    `suzatary_connect::parsed` (`coding` declares its ids with it).
+- **Nothing narrows.** Each unnamed `pub` item is in a public signature or linked from a public
+  doc (`MAX_TEXT_BYTES`, `CALENDARS`).
+- **The flake names the library's crates once**, and each fileset names the parts it reads, so a
+  crate cut adds one word to `flake.nix`.
+
+Measured with `cargo check --workspace --all-targets` on four cores, one line edited, the second
+run of each, master and branch interleaved on one target directory:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `connect` (`check.rs`) | 29.6, 34.0 s | 34.7, 30.7, 34.6 s |
+| `secretary` (`review.rs`) | 30.5, 34.5 s | 33.5, 37.5, 33.8 s |
+| `routes.rs` | 23.1, 28.1 s | 23.7, 22.7, 23.1 s |
+
+The spread between runs is larger than the change. Cargo's per-unit timings show it: core's
+library and test checks take 18.7 s after a `secretary` edit (21.1 s on master) and 19.5 s after
+a `connect` edit (22.4 s), while the CLI's test binary takes 16.7 s on both. Core's USE fell from
+250.3k to 197.7k.
+
+The pages' module, `views_bg.wasm` on x86_64-linux by `nix build`, grew by 452 bytes after
+`wasm-opt` (3,603,049 to 3,603,501) and shrank by 1,137 bytes brotli (645,600 to 644,463). No line
+of `web/wasm-budget` rises.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

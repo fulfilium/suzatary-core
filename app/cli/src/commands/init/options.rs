@@ -5,7 +5,7 @@
 use std::fmt::Write as _;
 
 use clap::{CommandFactory as _, ValueEnum};
-use suzatary_core::cast::CAST;
+use suzatary_connect::cast::CAST;
 
 use super::{FirstAccount, Flags, Provider, Reach};
 

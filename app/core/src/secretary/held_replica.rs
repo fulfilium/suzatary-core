@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::connect::TemplateId;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
@@ -22,6 +21,7 @@ use prodrome_core::event::{Actor, Envelope};
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_connect::connect::TemplateId;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::words::Words;

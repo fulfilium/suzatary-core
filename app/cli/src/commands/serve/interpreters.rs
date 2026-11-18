@@ -5,16 +5,20 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use suzatary_base::capability::{Whois, WhoisError};
-use suzatary_core::drive::WritePort as _;
 use suzatary_core::secretary::compact::Compact;
 use suzatary_core::secretary::model::{
     Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
 };
-use suzatary_core::weather::{Weather, WeatherError};
 use suzatary_io::secrets::Secretspec;
 use suzatary_io::whois::Tailscaled;
+use suzatary_services::drive::WritePort as _;
+use suzatary_services::weather::{Weather, WeatherError};
 
 use crate::instance::{Instance, Reserve};
+use suzatary_connect::secrets::MailGrants;
+use suzatary_connect::settings::Settable;
+use suzatary_google::google::Held;
+use suzatary_services::usage::Allowance;
 
 /// Who names a peer.
 ///
@@ -107,34 +111,22 @@ pub struct Declared {
     pub asking: &'static str,
 }
 
-impl suzatary_core::secrets::Secrets for Declared {
+impl suzatary_connect::secrets::Secrets for Declared {
     // The value is discarded in the expression that reads it: only presence crosses.
-    fn secret_state(
-        &self,
-        settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::secrets::SecretState {
+    fn secret_state(&self, settable: &Settable) -> suzatary_connect::secrets::SecretState {
         suzatary_io::secrets::state(&self.secrets.get(settable.name(), self.asking))
     }
 
-    fn snapshot(
-        &self,
-        names: &[suzatary_core::settings::Settable],
-    ) -> suzatary_core::secrets::Snapshot {
+    fn snapshot(&self, names: &[Settable]) -> suzatary_connect::secrets::Snapshot {
         self.secrets.snapshot(names, self.asking)
     }
 
-    fn mail_grants(
-        &self,
-        account: &suzatary_mail::mail::account::MailAccount,
-    ) -> suzatary_core::secrets::MailGrants {
+    fn mail_grants(&self, account: &suzatary_mail::mail::account::MailAccount) -> MailGrants {
         use suzatary_mail::mail::account::Sync;
         match account.sync {
             // A Google account's reading grant is its sign-in with Google, in the secret store.
-            Sync::Google => suzatary_core::secrets::MailGrants {
-                imap: matches!(
-                    self.google_grant(account.email.address()),
-                    suzatary_core::google::Held::Signed(_)
-                ),
+            Sync::Google => MailGrants {
+                imap: matches!(self.google_grant(account.email.address()), Held::Signed(_)),
                 smtp: false,
             },
             Sync::MsImap(_) | Sync::Gmail | Sync::Proton(_) => {
@@ -143,7 +135,7 @@ impl suzatary_core::secrets::Secrets for Declared {
                     .granted(account)
                     .inspect_err(|failed| tracing::warn!("grants of {}: {failed}", account.email))
                     .unwrap_or_default();
-                suzatary_core::secrets::MailGrants {
+                MailGrants {
                     imap: held.contains(&"imap"),
                     smtp: held.contains(&"smtp"),
                 }
@@ -152,19 +144,14 @@ impl suzatary_core::secrets::Secrets for Declared {
     }
 
     // The grant is read and parsed here, and only its parts leave.
-    fn google_grant(
-        &self,
-        account: &suzatary_mail::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
+    fn google_grant(&self, account: &suzatary_mail::mail::address::EmailAddress) -> Held {
         match self
             .secrets
-            .get(&suzatary_core::google::grant_name(account), self.asking)
+            .get(&suzatary_google::google::grant_name(account), self.asking)
         {
-            Ok(Some(kept)) => suzatary_core::google::KeptGrant::parse(kept.expose())
-                .map_or(suzatary_core::google::Held::NotSignedIn, |kept| {
-                    suzatary_core::google::Held::Signed(kept.parts)
-                }),
-            Ok(None) | Err(_) => suzatary_core::google::Held::NotSignedIn,
+            Ok(Some(kept)) => suzatary_google::google::KeptGrant::parse(kept.expose())
+                .map_or(Held::NotSignedIn, |kept| Held::Signed(kept.parts)),
+            Ok(None) | Err(_) => Held::NotSignedIn,
         }
     }
 }
@@ -286,10 +273,10 @@ impl Door {
     }
 }
 
-impl suzatary_core::settings::Verify for Verifying {
+impl suzatary_connect::settings::Verify for Verifying {
     fn verify(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &Settable,
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         if name.name() != suzatary_io::model::TOKEN {
@@ -322,22 +309,20 @@ impl suzatary_core::settings::Verify for Verifying {
 
 /// Whether the subscription has room above the reserve. `RateLimited` and `Refused` are the
 /// endpoint refusing, not the subscription full: either with no remembered reading is room.
-fn subscription_has_room(allowance: &suzatary_core::usage::Allowance, reserve: Reserve) -> bool {
+fn subscription_has_room(allowance: &Allowance, reserve: Reserve) -> bool {
     let reserve = reserve.get();
     match allowance {
-        suzatary_core::usage::Allowance::Reported(reported) => {
-            reported.utilization <= 1.0 - reserve
-        }
-        suzatary_core::usage::Allowance::RateLimited {
+        Allowance::Reported(reported)
+        | Allowance::RateLimited {
             last_reported: Some(reported),
             ..
         } => reported.utilization <= 1.0 - reserve,
-        suzatary_core::usage::Allowance::RateLimited {
+        Allowance::RateLimited {
             last_reported: None,
             ..
         }
-        | suzatary_core::usage::Allowance::Refused { .. }
-        | suzatary_core::usage::Allowance::Unknown => true,
+        | Allowance::Refused { .. }
+        | Allowance::Unknown => true,
     }
 }
 
@@ -385,8 +370,8 @@ impl WebAccess {
     }
 }
 
-impl suzatary_core::web::Web for WebAccess {
-    fn allow_rules(&self) -> Vec<suzatary_core::web::AllowRule> {
+impl suzatary_services::web::Web for WebAccess {
+    fn allow_rules(&self) -> Vec<suzatary_services::web::AllowRule> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.web_allow)
             .unwrap_or_default()
@@ -394,8 +379,8 @@ impl suzatary_core::web::Web for WebAccess {
 
     fn perform(
         &self,
-        request: &suzatary_core::web::WebRequest,
-    ) -> Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure> {
+        request: &suzatary_services::web::WebRequest,
+    ) -> Result<suzatary_services::web::WebAnswer, suzatary_services::web::WebFailure> {
         self.fetcher.perform(request)
     }
 }
@@ -429,14 +414,14 @@ pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
     )
 }
 
-impl suzatary_core::drive::Drive for DriveAccess {
+impl suzatary_services::drive::Drive for DriveAccess {
     fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.drive_allow)
             .unwrap_or_default()
     }
 
-    fn port(&self) -> &dyn suzatary_core::drive::Port {
+    fn port(&self) -> &dyn suzatary_services::drive::Port {
         &self.drive
     }
 
@@ -611,12 +596,14 @@ impl SessionModel for Recorded {
     }
 }
 
-fn five_hour(allowance: &suzatary_io::usage::Allowance) -> suzatary_core::usage::Allowance {
+fn five_hour(allowance: &suzatary_io::usage::Allowance) -> Allowance {
     allowance
         .allowance()
         .into_iter()
-        .find_map(|(window, sum)| (window == suzatary_core::usage::Window::FiveHour).then_some(sum))
-        .unwrap_or(suzatary_core::usage::Allowance::Unknown)
+        .find_map(|(window, sum)| {
+            (window == suzatary_services::usage::Window::FiveHour).then_some(sum)
+        })
+        .unwrap_or(Allowance::Unknown)
 }
 
 /// One model of `[secretary] compactors` on the `claude` CLI's plain path (no tools),
@@ -717,19 +704,19 @@ mod subscription_tests {
 
     use super::*;
 
-    fn reported(utilization: f64) -> suzatary_core::usage::Allowance {
-        suzatary_core::usage::Allowance::Reported(suzatary_core::usage::Reported {
+    fn reported(utilization: f64) -> suzatary_services::usage::Allowance {
+        suzatary_services::usage::Allowance::Reported(suzatary_services::usage::Reported {
             utilization,
             resets_at: None,
             as_of: Utc::now(),
         })
     }
 
-    fn rate_limited(last: Option<f64>) -> suzatary_core::usage::Allowance {
-        suzatary_core::usage::Allowance::RateLimited {
+    fn rate_limited(last: Option<f64>) -> suzatary_services::usage::Allowance {
+        suzatary_services::usage::Allowance::RateLimited {
             since: Utc::now(),
             retry_after_seconds: 30,
-            last_reported: last.map(|utilization| suzatary_core::usage::Reported {
+            last_reported: last.map(|utilization| suzatary_services::usage::Reported {
                 utilization,
                 resets_at: None,
                 as_of: Utc::now(),
@@ -746,7 +733,7 @@ mod subscription_tests {
             (rate_limited(None), true),
             (rate_limited(Some(0.2)), true),
             (rate_limited(Some(0.9)), false),
-            (suzatary_core::usage::Allowance::Unknown, true),
+            (suzatary_services::usage::Allowance::Unknown, true),
         ] {
             assert_eq!(
                 subscription_has_room(&allowance, reserve),

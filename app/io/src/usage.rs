@@ -9,7 +9,7 @@ use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use suzatary_core::usage::{Allowance as AllowanceSum, Reported, Window};
+use suzatary_services::usage::{Allowance as AllowanceSum, Reported, Window};
 
 use crate::http::{Http, Req, Ureq};
 use crate::secrets::{Resolves, Secretspec};

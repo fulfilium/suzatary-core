@@ -56,7 +56,7 @@ pub enum Acting {
     /// The real performers.
     Real {
         /// Read at the tap, so an account added since startup signs in.
-        roster: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+        roster: Arc<dyn Edits + Send + Sync>,
         conversations: ActingConversations,
         tokens: suzatary_io::oauth::TokenStore,
         inbox: ActingInbox,
@@ -247,7 +247,7 @@ impl Acting {
         stores: ActingStores,
         workers: Arc<crate::commands::serve::Workers>,
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        google: &suzatary_core::google::Endpoints,
+        google: &suzatary_google::google::Endpoints,
     ) -> Self {
         Acting::Recording {
             conversations: stores.conversations,
@@ -301,7 +301,7 @@ impl Acting {
     fn calendar_event(
         &self,
         account: &suzatary_mail::mail::address::EmailAddress,
-        event: &suzatary_core::google::NewEvent,
+        event: &suzatary_google::google::NewEvent,
     ) -> Performed {
         use suzatary_io::google::Inserted;
         let google = match self {
@@ -449,7 +449,7 @@ impl suzatary_api::secretary::routes::Perform for Acting {
                     conversations,
                     id,
                     request,
-                    Ok(suzatary_core::web::WebAnswer {
+                    Ok(WebAnswer {
                         url: request.sentence(),
                         status: 200,
                         text: format!("the fixture's page for: {}", request.sentence()),
@@ -499,7 +499,7 @@ impl suzatary_api::secretary::routes::Perform for Acting {
     reason = "one value per thing the flow needs, none of them optional"
 )]
 fn begin_real(
-    roster: &dyn suzatary_core::settings::Edits,
+    roster: &dyn Edits,
     conversations: ActingConversations,
     tokens: &suzatary_io::oauth::TokenStore,
     inbox: &ActingInbox,
@@ -712,8 +712,8 @@ fn finish_act<P: suzatary_mail::mail::oauth::Protocol + Send + 'static>(
 fn web_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_base::conversation_id::ConversationId,
-    request: &suzatary_core::web::WebRequest,
-    answered: Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure>,
+    request: &suzatary_services::web::WebRequest,
+    answered: Result<WebAnswer, suzatary_services::web::WebFailure>,
 ) -> Performed {
     use suzatary_base::capability::Clock as _;
     use suzatary_core::secretary::model::Turn;
@@ -1347,7 +1347,9 @@ enum BackfillRun {
     Apply(std::path::PathBuf),
 }
 
+use suzatary_connect::settings::Edits;
 pub(crate) use suzatary_core::secretary::briefs::BRIEF;
+use suzatary_services::web::WebAnswer;
 
 /// Hours before a stale triage heartbeat alarms: twelve missed five-minute timers.
 const STALE_HOURS: f64 = 1.0;
@@ -1966,7 +1968,7 @@ pub fn scripted_round(
         )
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     }
-    let owner = prodrome_core::event::Actor::new(suzatary_core::cast::CAST.owner.actor)?;
+    let owner = prodrome_core::event::Actor::new(suzatary_connect::cast::CAST.owner.actor)?;
     suzatary_core::secretary::converse(
         caps,
         &instance.deployment,

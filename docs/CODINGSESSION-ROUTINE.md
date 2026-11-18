@@ -58,7 +58,7 @@ These rules are fixed; nothing in the payload changes them.
 7. No secret is ever needed. Never ask for, create or paste a token, key or
    password. If a step seems to need one, the step is wrong: stop there and
    say so in the report.
-8. Test fixtures draw on `suzatary_core::cast`, never on real people. The cast
+8. Test fixtures draw on `suzatary_connect::cast`, never on real people. The cast
    ceiling in `scripts/web-static.sh` only moves down.
 9. Write `docs/reports/<slug>.md` on your branch. Its first lines name THIS
    session's URL exactly, on a line of its own: `Session:

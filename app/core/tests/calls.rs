@@ -17,10 +17,8 @@ use suzatary_base::capability::{Datetime, Nothing};
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::Agent;
-use suzatary_core::deployment::Deployment;
-use suzatary_core::repos::{Patch, RepoRow, Visibility};
-use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
@@ -30,6 +28,8 @@ use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_mail::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{Envelope, EventStore, TodoEvent};
+use suzatary_services::repos::{Patch, RepoRow, Visibility};
+use suzatary_services::repositories::{RepoFailure, Repositories};
 use suzatary_store::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 use suzatary_triage::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
 use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
@@ -40,7 +40,7 @@ fn chain() -> ChainPolicy {
         name: ChainName::new("life").expect("a slug"),
         untrusted: Untrusted::of([actor("triage")]),
         roster: [actor("owner"), actor("triage")].into_iter().collect(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     }
 }
@@ -329,7 +329,7 @@ impl Repositories for Fixed {
         &self,
         _repo: &RepoName,
         _patch: &Patch,
-    ) -> Result<Option<suzatary_core::repositories::InBranch>, RepoFailure> {
+    ) -> Result<Option<suzatary_services::repositories::InBranch>, RepoFailure> {
         Ok(None)
     }
     fn pushable(&self, _repo: &RepoName, _visibility: Visibility) -> Result<(), RepoFailure> {
@@ -551,7 +551,7 @@ fn secretary(
     }];
     suzatary_core::secretary::call(
         deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,

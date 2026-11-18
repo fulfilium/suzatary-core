@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::repository::{Repository, RepositoryError};
+use suzatary_services::repository::{Repository, RepositoryError};
 
 use crate::run::{Cmd, run};
 

@@ -14,7 +14,7 @@ fn id() -> ConversationId {
     ConversationId::new("2026-09-14-1").expect("a slug")
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment(
         [common::login("ada@example.com")],
         [(common::login("ada@example.com"), common::actor("ada"))],
@@ -94,7 +94,7 @@ fn no_session_opens_once() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -170,7 +170,7 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -254,7 +254,7 @@ fn a_retraction_reopens_a_stored_session() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -311,7 +311,7 @@ fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -397,7 +397,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -437,7 +437,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         &caps.secretary(),
         || Pick::Held(&caps.model),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -489,7 +489,7 @@ fn the_memory_heads_a_batch_once() {
             &caps.secretary(),
             || Pick::Held(&caps.model),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -600,7 +600,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
             &caps.secretary(),
             || Pick::Held(&caps.model),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -688,7 +688,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
 /// A round with nothing waiting asks no model after an answer, a failure or a stop.
 #[test]
 fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
-    let counsel = suzatary_core::cast::CAST.counsel.name;
+    let counsel = suzatary_connect::cast::CAST.counsel.name;
     // One reply only, so every later round finds the script run out and fails.
     let caps =
         Fakes::new("session-nothing-waits").model(FakeModel::saying(["{\"say\": \"hi back\"}"]));
@@ -705,7 +705,7 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
             &caps.secretary(),
             || Pick::Held(&caps.model),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -791,7 +791,7 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
             &caps.secretary(),
             || Pick::Turn(Box::new(&caps.model)),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -872,7 +872,7 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
                 Pick::Turn(Box::new(Named(order.lock().expect("unpoisoned").clone())))
             },
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -965,7 +965,7 @@ fn chat(caps: &Fakes, n: usize) {
 /// One round of `answer` over the conversation, as the worker runs it.
 fn answered_once(
     caps: &Fakes,
-    deployment: &suzatary_core::deployment::Deployment,
+    deployment: &suzatary_connect::deployment::Deployment,
     policy: &suzatary_base::chains::ChainPolicy,
 ) -> suzatary_core::secretary::Answered {
     let chains = [Bound {
@@ -977,7 +977,7 @@ fn answered_once(
         &caps.secretary(),
         || Pick::Held(&caps.model),
         deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         "you are the secretary",
@@ -1111,7 +1111,7 @@ fn a_round_another_model_answered_ends_the_session() {
             &caps.secretary(),
             || pick,
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -1188,7 +1188,7 @@ fn a_round_the_box_ended_ends_the_session() {
             &caps.secretary(),
             || Pick::Held(&caps.model),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",
@@ -1476,7 +1476,7 @@ proptest::proptest! {
                     Round::Held | Round::Lost | Round::Bound => Pick::Held(&held),
                 },
                 &deployment,
-                &suzatary_core::settings::Settables::default(),
+                &suzatary_connect::settings::Settables::default(),
                 &chains,
                 &id(),
                 "you are the secretary",
@@ -1545,7 +1545,7 @@ fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
             &caps.secretary(),
             || Pick::Held(&held),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",

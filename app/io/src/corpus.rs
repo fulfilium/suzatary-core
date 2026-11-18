@@ -287,7 +287,7 @@ mod tests {
             (
                 crate::oauth::TokenStore::new(root.join("oauth")),
                 crate::google::Grants::new(
-                    crate::google::Google::new(suzatary_core::google::Endpoints::google()),
+                    crate::google::Google::new(suzatary_google::google::Endpoints::google()),
                     std::sync::Arc::new(crate::secrets::Secretspec::new(
                         root.join("secretspec.toml"),
                     )),

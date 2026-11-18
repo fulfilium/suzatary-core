@@ -14,6 +14,8 @@ use crate::secretary::{conversations, transcript};
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_connect::secrets::SecretState;
+use suzatary_connect::settings::Settable;
 use suzatary_store::store::Prodrome;
 
 /// Why a stale card is withdrawn.
@@ -280,9 +282,9 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
 #[derive(Clone, Copy)]
 pub struct Seen<'a> {
     /// Every declared secret name.
-    pub settables: &'a crate::settings::Settables,
+    pub settables: &'a suzatary_connect::settings::Settables,
     /// Where each stands.
-    pub secrets: &'a dyn crate::secrets::Secrets,
+    pub secrets: &'a dyn suzatary_connect::secrets::Secrets,
     /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
@@ -290,17 +292,17 @@ pub struct Seen<'a> {
     /// The sign-ins the box holds open.
     pub open: &'a [super::sign_in::SignInUrl],
     /// The connection tables now; `None` (unreadable) holds every card.
-    pub declared: Option<&'a crate::connect::Declared>,
+    pub declared: Option<&'a suzatary_connect::connect::Declared>,
     /// Every source's results; `None` (unreadable) holds every card.
     pub health: Option<&'a suzatary_health::health::Healths<suzatary_health::health::SourceKey>>,
     /// The calendars with an occurrence within [`super::failing::quiet`] of now.
-    pub heard: Option<&'a std::collections::BTreeSet<crate::calendar::CalendarName>>,
+    pub heard: Option<&'a std::collections::BTreeSet<suzatary_google::calendar::CalendarName>>,
     /// Where the data repository pushes: its token is asked for only on GitHub.
-    pub pushed: &'a crate::settings::remote::Pushed,
+    pub pushed: &'a suzatary_connect::settings::remote::Pushed,
     /// Now, UTC.
     pub now: suzatary_health::health::Instant,
     /// The Google sign-in callback, if the app's URL has an origin Google can return to.
-    pub redirect: Option<&'a crate::google::RedirectUri>,
+    pub redirect: Option<&'a suzatary_google::google::RedirectUri>,
 }
 
 /// Everything the rules owe at `seen`, as one set so no rule withdraws another's cards.
@@ -309,15 +311,14 @@ pub struct Seen<'a> {
 /// owes only the unlock card; it also holds while any name failed.
 #[must_use]
 pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
-    use crate::secrets::Answer;
+    use suzatary_connect::secrets::Answer;
     let snapshot = crate::parts::part("secrets", || {
-        crate::secrets::Snapshot::read(seen.secrets, seen.settables.iter())
+        suzatary_connect::secrets::Snapshot::read(seen.secrets, seen.settables.iter())
     });
     let Ok(answers) = snapshot.answers() else {
         return super::fixes::unlock(inbox).holding();
     };
-    let answered =
-        |wanted: Answer| move |name: &crate::settings::Settable| answers.get(name) == Some(&wanted);
+    let answered = |wanted: Answer| move |name: &Settable| answers.get(name) == Some(&wanted);
     let resolves = answered(Answer::Set);
     let answering = super::bootstrap::Answering {
         model: seen.model,
@@ -336,18 +337,17 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
                         declared,
                         seen.secrets,
                         super::connections::Google {
-                            client: crate::secrets::SecretState::all(
-                                [crate::google::CLIENT_ID, crate::google::CLIENT_SECRET].map(
-                                    |name| {
-                                        crate::settings::Settable::mint(seen.settables, name)
-                                            .ok()
-                                            .and_then(|name| answers.get(&name).copied())
-                                            .map_or(
-                                                crate::secrets::SecretState::Missing,
-                                                crate::secrets::SecretState::from,
-                                            )
-                                    },
-                                ),
+                            client: SecretState::all(
+                                [
+                                    suzatary_google::google::CLIENT_ID,
+                                    suzatary_google::google::CLIENT_SECRET,
+                                ]
+                                .map(|name| {
+                                    Settable::mint(seen.settables, name)
+                                        .ok()
+                                        .and_then(|name| answers.get(&name).copied())
+                                        .map_or(SecretState::Missing, SecretState::from)
+                                }),
                             ),
                             redirect: seen.redirect,
                         },
@@ -695,40 +695,40 @@ mod tests {
         set: Vec<String>,
         asked: std::sync::atomic::AtomicUsize,
         /// The parts every Google account's grant holds, or `None` for no grant.
-        granted: Option<crate::google::Scopes>,
+        granted: Option<suzatary_google::google::Scopes>,
     }
 
-    impl crate::secrets::Secrets for Store {
+    impl suzatary_connect::secrets::Secrets for Store {
         fn secret_state(
             &self,
-            settable: &crate::settings::Settable,
-        ) -> crate::secrets::SecretState {
+            settable: &suzatary_connect::settings::Settable,
+        ) -> suzatary_connect::secrets::SecretState {
             self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if self.locked.contains(&settable.name()) {
-                crate::secrets::SecretState::Locked
+                suzatary_connect::secrets::SecretState::Locked
             } else if self.failed.contains(&settable.name()) {
-                crate::secrets::SecretState::Failed
+                suzatary_connect::secrets::SecretState::Failed
             } else if self.set.iter().any(|name| name == settable.name()) {
-                crate::secrets::SecretState::Set
+                suzatary_connect::secrets::SecretState::Set
             } else {
-                crate::secrets::SecretState::Missing
+                suzatary_connect::secrets::SecretState::Missing
             }
         }
 
         fn mail_grants(
             &self,
             _account: &suzatary_mail::mail::account::MailAccount,
-        ) -> crate::secrets::MailGrants {
-            crate::secrets::MailGrants::default()
+        ) -> suzatary_connect::secrets::MailGrants {
+            suzatary_connect::secrets::MailGrants::default()
         }
 
         fn google_grant(
             &self,
             _: &suzatary_mail::mail::address::EmailAddress,
-        ) -> crate::google::Held {
+        ) -> suzatary_google::google::Held {
             self.granted.clone().map_or(
-                crate::google::Held::NotSignedIn,
-                crate::google::Held::Signed,
+                suzatary_google::google::Held::NotSignedIn,
+                suzatary_google::google::Held::Signed,
             )
         }
     }
@@ -752,9 +752,9 @@ mod tests {
         inbox_store: &InMemory<InboxEvent>,
         minute: u32,
     ) -> Filed {
-        let settables = crate::settings::Settables::derive(
-            crate::settings::MODEL_TOKEN,
-            crate::connect::Channel::ALL,
+        let settables = suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
+            suzatary_connect::connect::Channel::ALL,
             None,
             &[],
         );
@@ -764,10 +764,10 @@ mod tests {
             model: "a-cli/large",
             answered: &suzatary_health::health::Healths::default(),
             open: &[],
-            declared: Some(&crate::connect::Declared::default()),
+            declared: Some(&suzatary_connect::connect::Declared::default()),
             health: Some(&suzatary_health::health::Healths::default()),
             heard: Some(&std::collections::BTreeSet::new()),
-            pushed: &crate::settings::remote::Pushed::Nowhere,
+            pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
             now: prodrome_core::fpl::instant_of(at(minute)),
             redirect: None,
         };
@@ -784,9 +784,9 @@ mod tests {
     /// its cards: a missing secret is still asked for.
     #[test]
     fn an_unreadable_health_register_holds_and_asks_the_rest() {
-        let settables = crate::settings::Settables::derive(
-            crate::settings::MODEL_TOKEN,
-            [crate::connect::Channel::Ntfy],
+        let settables = suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
+            [suzatary_connect::connect::Channel::Ntfy],
             None,
             &[],
         );
@@ -796,10 +796,10 @@ mod tests {
             model: "a-cli/large",
             answered: &suzatary_health::health::Healths::default(),
             open: &[],
-            declared: Some(&crate::connect::Declared::default()),
+            declared: Some(&suzatary_connect::connect::Declared::default()),
             health: None,
             heard: Some(&std::collections::BTreeSet::new()),
-            pushed: &crate::settings::remote::Pushed::Nowhere,
+            pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
             now: prodrome_core::fpl::instant_of(at(0)),
             redirect: None,
         };
@@ -833,7 +833,7 @@ mod tests {
         );
 
         let locked = Store {
-            locked: vec!["NTFY_TOPIC", crate::settings::MODEL_TOKEN],
+            locked: vec!["NTFY_TOPIC", suzatary_connect::settings::MODEL_TOKEN],
             failed: Vec::new(),
             ..Store::default()
         };
@@ -914,13 +914,13 @@ mod tests {
     /// one card for the link stands.
     #[test]
     fn a_failing_link_whose_secret_is_lost_is_asked_for_once() {
-        let work =
-            crate::connect::Connection::parse("ics", &["Work".to_owned()]).expect("a calendar");
-        let declared = crate::connect::Declared::default()
+        let work = suzatary_connect::connect::Connection::parse("ics", &["Work".to_owned()])
+            .expect("a calendar");
+        let declared = suzatary_connect::connect::Declared::default()
             .with(&work)
             .expect("declared");
-        let settables = crate::settings::Settables::derive(
-            crate::settings::MODEL_TOKEN,
+        let settables = suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
             [],
             None,
             &declared.plugins,
@@ -946,7 +946,7 @@ mod tests {
                 declared: Some(&declared),
                 health: Some(&health),
                 heard: Some(&std::collections::BTreeSet::new()),
-                pushed: &crate::settings::remote::Pushed::Nowhere,
+                pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
                 now: prodrome_core::fpl::instant_of(at(minute)),
                 redirect: None,
             };
@@ -999,20 +999,24 @@ mod tests {
     fn a_link_pasted_as_a_google_calendar_is_retired_once_the_account_reads_its_calendars() {
         use crate::secretary::acts::Act;
         let calendar = |label: &str| {
-            crate::connect::Connection::parse("ics", &[label.to_owned()]).expect("a calendar")
+            suzatary_connect::connect::Connection::parse("ics", &[label.to_owned()])
+                .expect("a calendar")
         };
         let (work, home) = (calendar("Work"), calendar("Home"));
-        let ada = crate::connect::Connection::parse("google", &["ada@example.test".to_owned()])
-            .expect("a Google account");
+        let ada = suzatary_connect::connect::Connection::parse(
+            "google",
+            &["ada@example.test".to_owned()],
+        )
+        .expect("a Google account");
         let declared = [&work, &home, &ada]
             .into_iter()
             .try_fold(
-                crate::connect::Declared::default(),
+                suzatary_connect::connect::Declared::default(),
                 |declared, connection| declared.with(connection),
             )
             .expect("declared");
-        let settables = crate::settings::Settables::derive(
-            crate::settings::MODEL_TOKEN,
+        let settables = suzatary_connect::settings::Settables::derive(
+            suzatary_connect::settings::MODEL_TOKEN,
             [],
             None,
             &declared.plugins,
@@ -1029,7 +1033,7 @@ mod tests {
                 declared: Some(&declared),
                 health: Some(&suzatary_health::health::Healths::default()),
                 heard: Some(&std::collections::BTreeSet::new()),
-                pushed: &crate::settings::remote::Pushed::Nowhere,
+                pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
                 now: prodrome_core::fpl::instant_of(at(minute)),
                 redirect: None,
             };
@@ -1041,13 +1045,14 @@ mod tests {
             )
             .expect("filed")
         };
-        let link = |connection: &crate::connect::Connection| connection.secrets().remove(0);
+        let link =
+            |connection: &suzatary_connect::connect::Connection| connection.secrets().remove(0);
         let asks = |wanted: &str| {
             open(&inbox_store)
                 .iter()
                 .any(|act| matches!(act, Act::Secret { name, .. } if name == wanted))
         };
-        let removes = |link: &crate::connect::Connection| {
+        let removes = |link: &suzatary_connect::connect::Connection| {
             open(&inbox_store)
                 .iter()
                 .any(|act| matches!(act, Act::Disconnect { connection } if connection == link))
@@ -1078,7 +1083,7 @@ mod tests {
         assert!(!removes(&work));
 
         let signed = Store {
-            granted: Some(crate::google::Scopes::all()),
+            granted: Some(suzatary_google::google::Scopes::all()),
             ..Store::default()
         };
         notice_at(&signed, 3);
@@ -1101,7 +1106,7 @@ mod tests {
         let conversations = crate::secretary::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let every = [
-            crate::settings::MODEL_TOKEN,
+            suzatary_connect::settings::MODEL_TOKEN,
             "FCM_SERVICE_ACCOUNT_B64",
             "NTFY_TOPIC",
         ];

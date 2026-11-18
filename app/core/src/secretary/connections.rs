@@ -1,8 +1,6 @@
 //! The rule over the connections: what each one's standing owes, filed by the box with no model
 //! asked.
 
-use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
-use crate::google::{Held, Scope, Scopes};
 use crate::secretary::acts::Act;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::inbox;
@@ -11,11 +9,13 @@ use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
-use crate::secrets::{SecretState, Secrets};
 use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_connect::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
+use suzatary_connect::secrets::{SecretState, Secrets};
+use suzatary_google::google::{Held, Scope, Scopes};
 use suzatary_health::health::plugin::{Origin, PluginName};
 use suzatary_mail::mail::account::Sync;
 use suzatary_mail::mail::address::EmailAddress;
@@ -27,7 +27,7 @@ pub struct Google<'a> {
     /// Whether the box's Google Cloud client is stored, its id and its secret both.
     pub client: SecretState,
     /// The box's callback, if the app's URL allows one.
-    pub redirect: Option<&'a crate::google::RedirectUri>,
+    pub redirect: Option<&'a suzatary_google::google::RedirectUri>,
 }
 
 /// The cards the connections owe.
@@ -39,7 +39,9 @@ pub fn owed(
     inbox: &inbox::Fold,
 ) -> Owed {
     let secret = |name: &str| match name {
-        crate::google::CLIENT_ID | crate::google::CLIENT_SECRET => google.client,
+        suzatary_google::google::CLIENT_ID | suzatary_google::google::CLIENT_SECRET => {
+            google.client
+        }
         _ => SecretState::Set,
     };
     let signed_in = |email: &EmailAddress| {
@@ -74,7 +76,7 @@ pub fn owed(
                 signed_in: &signed_in,
                 may_send: &may_send,
                 checked: Checked::Never,
-                reach: &crate::connect::PLAIN,
+                reach: &suzatary_connect::connect::PLAIN,
             });
             // One sign-in card at a time; a sign-in with Google needs the client first.
             let reads = !unmet
@@ -233,7 +235,7 @@ fn reads_calendars(declared: &Declared, secrets: &dyn Secrets, account: &EmailAd
     let held = secrets.google_grant(account);
     declared.accounts.iter().any(|declared| {
         declared.email.as_str() == account.as_str()
-            && crate::google::reads_calendars(&declared.sync, &held)
+            && suzatary_google::google::reads_calendars(&declared.sync, &held)
     }) && matches!(held, Held::Signed(parts) if parts.contains(Scope::Calendar))
 }
 
@@ -397,11 +399,11 @@ fn outside(declared: &Declared, plugin: &PluginName, origin: &Origin) -> bool {
 fn asking(plugin: &PluginName, origin: &Origin) -> String {
     format!(
         "The link is served from {origin}, which {} may not reach yet.",
-        crate::connect::plugin_called(plugin.as_str())
+        suzatary_connect::connect::plugin_called(plugin.as_str())
     )
 }
 
-fn connecting(connection: &crate::connect::Connection) -> String {
+fn connecting(connection: &suzatary_connect::connect::Connection) -> String {
     format!(
         "A link to a calendar of {} was pasted, and the box reads a Google account's calendars \
          through its sign-in with Google, never by a link.",

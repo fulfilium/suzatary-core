@@ -42,7 +42,7 @@ impl Verb for DriveRead {
     fn run(call: &Call<'_>, args: DriveReadArgs) -> Result<VerbAnswer, Refusal> {
         let reasons = args.reasoned.reasons()?;
         let path = drive_path(&args.path)?;
-        if crate::drive::allowed(&call.caps.drive.allowed_folders(), &path) {
+        if suzatary_services::drive::allowed(&call.caps.drive.allowed_folders(), &path) {
             let read = call
                 .caps
                 .drive

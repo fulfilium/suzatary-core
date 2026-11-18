@@ -10,8 +10,8 @@ use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
 use suzatary_base::capability::Secret;
-use suzatary_core::secrets::{Answer, SecretState, Snapshot};
-use suzatary_core::settings::{Settable, Settables};
+use suzatary_connect::secrets::{Answer, SecretState, Snapshot};
+use suzatary_connect::settings::{Settable, Settables};
 
 use crate::run::{Cmd, RunError, run, succeed, zero};
 
@@ -475,10 +475,10 @@ impl SecretError {
     }
 }
 
-impl suzatary_core::settings::Writes for Secretspec {
+impl suzatary_connect::settings::Writes for Secretspec {
     fn write_secret(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &suzatary_connect::settings::Settable,
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.set(
@@ -489,7 +489,7 @@ impl suzatary_core::settings::Writes for Secretspec {
         .map_err(|failed| failed.to_string())
     }
 
-    fn clear_secret(&self, name: &suzatary_core::settings::Settable) -> Result<(), String> {
+    fn clear_secret(&self, name: &suzatary_connect::settings::Settable) -> Result<(), String> {
         self.delete(name.name(), "a connection the owner removed")
             .map_err(|failed| failed.to_string())
     }
@@ -602,7 +602,7 @@ impl Own {
             .map(|(settable, by)| {
                 let described: Vec<String> = by
                     .iter()
-                    .map(suzatary_core::settings::Declaration::sentence)
+                    .map(suzatary_connect::settings::Declaration::sentence)
                     .collect();
                 let entry = toml::Table::from_iter([
                     (
@@ -716,7 +716,7 @@ impl Declarations {
     }
 }
 
-impl suzatary_core::settings::Declares for Declarations {
+impl suzatary_connect::settings::Declares for Declarations {
     fn declare(&self, names: &Settables) -> Result<(), String> {
         self.opened()
             .and_then(|declared| declared.declare(names))
@@ -885,21 +885,21 @@ mod tests {
     /// The store asked name by name, as every reading was before [`Secretspec::snapshot`].
     struct EachName<'a>(&'a Secretspec);
 
-    impl suzatary_core::secrets::Secrets for EachName<'_> {
+    impl suzatary_connect::secrets::Secrets for EachName<'_> {
         fn secret_state(&self, settable: &Settable) -> SecretState {
             state(&self.0.get(settable.name(), "test"))
         }
         fn mail_grants(
             &self,
             _: &suzatary_mail::mail::account::MailAccount,
-        ) -> suzatary_core::secrets::MailGrants {
-            suzatary_core::secrets::MailGrants::default()
+        ) -> suzatary_connect::secrets::MailGrants {
+            suzatary_connect::secrets::MailGrants::default()
         }
         fn google_grant(
             &self,
             _: &suzatary_mail::mail::address::EmailAddress,
-        ) -> suzatary_core::google::Held {
-            suzatary_core::google::Held::NotSignedIn
+        ) -> suzatary_google::google::Held {
+            suzatary_google::google::Held::NotSignedIn
         }
     }
 
@@ -950,13 +950,13 @@ mod tests {
                 std::fs::read_to_string(dir.path().join("runs"))
                     .map_or(0, |runs| runs.lines().count())
             };
-            let each = suzatary_core::secrets::Snapshot::each(&EachName(&spec), &names);
+            let each = suzatary_connect::secrets::Snapshot::each(&EachName(&spec), &names);
             let before = runs();
             assert_eq!(spec.snapshot(&names, "test"), each, "{store}");
             assert_eq!(runs() - before, 1, "{store}: one run of the store");
             assert_eq!(
                 spec.snapshot(&[], "test"),
-                suzatary_core::secrets::Snapshot::of(Ok(std::collections::BTreeMap::new()))
+                suzatary_connect::secrets::Snapshot::of(Ok(std::collections::BTreeMap::new()))
             );
             assert_eq!(runs() - before, 1, "{store}: no run for no name");
         }
@@ -1113,7 +1113,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
 
     /// What a deployment with a calendar of `credentials` and an ntfy channel derives.
     fn derived(credentials: &[&str]) -> Settables {
-        let manifest: suzatary_core::plugin::Manifest = toml::from_str(&format!(
+        let manifest: suzatary_services::plugin::Manifest = toml::from_str(&format!(
             "name = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\
              credentials = [{}]\n",
             credentials
@@ -1125,10 +1125,10 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
         .expect("a manifest");
         Settables::of_deployment(
             crate::model::TOKEN,
-            [suzatary_core::connect::Channel::Ntfy],
+            [suzatary_connect::connect::Channel::Ntfy],
             None,
             (&[manifest], &[]),
-            &suzatary_core::repos::Declared::default(),
+            &suzatary_services::repos::Declared::default(),
         )
     }
 
@@ -1202,7 +1202,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
 
     #[test]
     fn declaring_again_is_the_same_file_and_every_store_follows_the_last() {
-        use suzatary_core::settings::Declares as _;
+        use suzatary_connect::settings::Declares as _;
         let (_dir, base, state) = rooted();
         let declarations = Declarations::new(base, state.clone(), derived(&["PLUGIN_ICS_WORK"]));
         let store = declarations.store();

@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use suzatary_connect::settings::Settables;
 use suzatary_core::secretary::acts::Act;
-use suzatary_core::settings::Settables;
 
 /// How many proposals the Inbox holds, as the live one did when the overview was measured.
 const PROPOSALS: usize = 760;
@@ -86,23 +86,23 @@ impl Decrypting {
     }
 }
 
-impl suzatary_core::secrets::Secrets for Decrypting {
+impl suzatary_connect::secrets::Secrets for Decrypting {
     fn secret_state(
         &self,
-        _: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::secrets::SecretState {
+        _: &suzatary_connect::settings::Settable,
+    ) -> suzatary_connect::secrets::SecretState {
         if self.decrypt() {
-            suzatary_core::secrets::SecretState::Set
+            suzatary_connect::secrets::SecretState::Set
         } else {
-            suzatary_core::secrets::SecretState::Failed
+            suzatary_connect::secrets::SecretState::Failed
         }
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_mail::mail::account::MailAccount,
-    ) -> suzatary_core::secrets::MailGrants {
-        suzatary_core::secrets::MailGrants {
+    ) -> suzatary_connect::secrets::MailGrants {
+        suzatary_connect::secrets::MailGrants {
             imap: self.decrypt(),
             smtp: false,
         }
@@ -111,9 +111,9 @@ impl suzatary_core::secrets::Secrets for Decrypting {
     fn google_grant(
         &self,
         _: &suzatary_mail::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
+    ) -> suzatary_google::google::Held {
         self.decrypt();
-        suzatary_core::google::Held::NotSignedIn
+        suzatary_google::google::Held::NotSignedIn
     }
 }
 
@@ -234,14 +234,14 @@ fn measure_the_overview_over_the_disk_stores_at_the_live_size() {
 fn declared() -> Settables {
     Settables::derive(
         suzatary_io::model::TOKEN,
-        suzatary_core::connect::Channel::ALL,
+        suzatary_connect::connect::Channel::ALL,
         None,
         &[calendar()],
     )
 }
 
 /// A calendar plugin reading two links.
-fn calendar() -> suzatary_core::plugin::Manifest {
+fn calendar() -> suzatary_services::plugin::Manifest {
     toml::from_str(
         "name = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\
          credentials = [\"PLUGIN_ICS_HOME\", \"PLUGIN_ICS_WORK\"]\n",
@@ -253,29 +253,29 @@ fn calendar() -> suzatary_core::plugin::Manifest {
 #[derive(Default)]
 struct Counting(AtomicUsize);
 
-impl suzatary_core::secrets::Secrets for Counting {
+impl suzatary_connect::secrets::Secrets for Counting {
     fn secret_state(
         &self,
-        _: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::secrets::SecretState {
+        _: &suzatary_connect::settings::Settable,
+    ) -> suzatary_connect::secrets::SecretState {
         self.0.fetch_add(1, Ordering::SeqCst);
-        suzatary_core::secrets::SecretState::Set
+        suzatary_connect::secrets::SecretState::Set
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_mail::mail::account::MailAccount,
-    ) -> suzatary_core::secrets::MailGrants {
+    ) -> suzatary_connect::secrets::MailGrants {
         self.0.fetch_add(1, Ordering::SeqCst);
-        suzatary_core::secrets::MailGrants::default()
+        suzatary_connect::secrets::MailGrants::default()
     }
 
     fn google_grant(
         &self,
         _: &suzatary_mail::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
+    ) -> suzatary_google::google::Held {
         self.0.fetch_add(1, Ordering::SeqCst);
-        suzatary_core::google::Held::NotSignedIn
+        suzatary_google::google::Held::NotSignedIn
     }
 }
 

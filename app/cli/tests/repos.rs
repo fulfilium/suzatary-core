@@ -12,7 +12,7 @@ fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment([ada()], [(ada(), common::actor("ada"))])
 }
 
@@ -229,7 +229,7 @@ fn a_public_repository_whose_entry_does_not_say_so_takes_no_patch() {
         .whois(common::FakeWhois::new().naming(common::v4(), ada()))
         .repos(Arc::new(common::local_mirrors_declaring(
             &root,
-            suzatary_core::repos::RepoTarget::default(),
+            suzatary_services::repos::RepoTarget::default(),
         )))
         .model(FakeModel::saying([
             propose(RETITLE).leak(),

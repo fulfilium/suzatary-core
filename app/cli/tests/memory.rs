@@ -465,7 +465,7 @@ fn a_round_the_box_opened_remembers_nothing() {
     let answered = suzatary_core::secretary::converse(
         &fakes.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id,
         suzatary_core::secretary::Saying {

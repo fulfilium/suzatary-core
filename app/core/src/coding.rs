@@ -9,8 +9,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::connect::parsed;
 use suzatary_base::repo_ids::{CommitId, RepoPath};
+use suzatary_connect::parsed;
 use suzatary_memory::coding_report::{FileStat, Report};
 use suzatary_memory::secretary::words;
 

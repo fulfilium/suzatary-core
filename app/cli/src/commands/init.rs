@@ -21,7 +21,7 @@ use crate::instance::Instance;
 pub use onboarding::{
     BoxName, Door, FirstAccount, Onboarding, Person, Provider, Step, model_steps,
 };
-use suzatary_core::connect::Reach;
+use suzatary_connect::connect::Reach;
 
 /// What `suzatary init` was told.
 #[derive(Debug, clap::Args)]
@@ -525,7 +525,7 @@ mod tests {
         #[test]
         fn the_written_file_reads_back_to_the_same_value(onboarding in onboarding()) {
             let printed = onboarding
-                .printed(&suzatary_core::cast::keys::root())
+                .printed(&suzatary_connect::cast::keys::root())
                 .expect("prints");
             let read: crate::instance::File = toml::from_str(&printed).expect("parses");
             prop_assert_eq!(onboarding::of(&read), Some(onboarding));
@@ -547,11 +547,11 @@ mod tests {
         let read = written(
             &path,
             &onboarding,
-            &suzatary_core::cast::keys::root(),
+            &suzatary_connect::cast::keys::root(),
             &scratch_env(&dir),
         )
         .expect("what init wrote, init can read");
-        assert_eq!(read.root(), &suzatary_core::cast::keys::root());
+        assert_eq!(read.root(), &suzatary_connect::cast::keys::root());
         assert_eq!(read.deployment.chains.names(), vec!["life", "suzatary"]);
         for chain in &read.chains {
             let begun = suzatary_record::record::EventStore::new(
@@ -572,7 +572,7 @@ mod tests {
     fn the_owner_is_named_by_their_first_name_and_never_as_an_agent() {
         let ada = gather(parse(ADA), false).expect("gathered");
         let file = ada
-            .file(&suzatary_core::cast::keys::root())
+            .file(&suzatary_connect::cast::keys::root())
             .expect("a file");
         let owner: Vec<&str> = file.web.act_as.values().map(Actor::as_str).collect();
         assert_eq!(owner, vec!["ada"]);
@@ -591,7 +591,7 @@ mod tests {
         written(
             &path,
             &onboarding,
-            &suzatary_core::cast::keys::root(),
+            &suzatary_connect::cast::keys::root(),
             &scratch_env(&dir),
         )
         .expect("the first init");

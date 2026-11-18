@@ -11,9 +11,9 @@ use rmcp::model::{
 };
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, ServiceExt};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent;
 use suzatary_core::agent::Agent;
-use suzatary_core::deployment::Deployment;
 use suzatary_core::secretary::filed::TriageCards;
 use suzatary_held::for_model::ForModel;
 

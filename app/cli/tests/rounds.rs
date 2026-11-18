@@ -17,7 +17,7 @@ fn id() -> ConversationId {
     ConversationId::new("2026-09-02-1").expect("a slug")
 }
 
-fn deployment() -> suzatary_core::deployment::Deployment {
+fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment(
         [common::login("ada@example.com")],
         [(common::login("ada@example.com"), common::actor("ada"))],
@@ -48,7 +48,7 @@ fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
     suzatary_core::secretary::converse(
         &caps.secretary(),
         &deployment,
-        &suzatary_core::settings::Settables::default(),
+        &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
         suzatary_core::secretary::Saying {
@@ -143,7 +143,7 @@ fn a_round_over_a_session() {
             &caps.secretary(),
             || suzatary_core::secretary::model::Pick::Held(&caps.model),
             &deployment,
-            &suzatary_core::settings::Settables::default(),
+            &suzatary_connect::settings::Settables::default(),
             &chains,
             &id(),
             "you are the secretary",

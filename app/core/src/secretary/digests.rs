@@ -46,7 +46,7 @@ pub struct Digests<'a> {
     /// The conversations, every line a leaf.
     pub lines: Conversations<'a>,
     /// Whose retraction or erasure is believed: the deployment's writers
-    /// ([`crate::deployment::Deployment::writers`]).
+    /// ([`suzatary_connect::deployment::Deployment::writers`]).
     pub owners: &'a std::collections::BTreeSet<Actor>,
     /// Whether the compactor runs and within what, so a reading can say what holds it back.
     pub compacting: &'a crate::secretary::compacting::Compacting,

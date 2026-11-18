@@ -19,10 +19,9 @@ use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 use suzatary_base::escape::Escaped;
 use suzatary_cli::serve::{self, Chained, State};
-pub use suzatary_core::cast::{self, CAST};
-use suzatary_core::deployment::Deployment;
+pub use suzatary_connect::cast::{self, CAST};
+use suzatary_connect::deployment::Deployment;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::model::{
     Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
@@ -37,6 +36,7 @@ use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::SyncReport;
 use suzatary_mail::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_services::repository::{Repository, RepositoryError};
 use suzatary_todo::render::{Html, Render};
 use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 use suzatary_triage::mail::junk;
@@ -84,7 +84,7 @@ pub fn chain() -> suzatary_base::chains::ChainPolicy {
         roster: [actor(CAST.owner.actor), actor("triage")]
             .into_iter()
             .collect(),
-        root: suzatary_core::cast::keys::root(),
+        root: suzatary_connect::cast::keys::root(),
         naming: suzatary_base::chains::Naming::AsActs,
     }
 }
@@ -1540,7 +1540,7 @@ impl CheckRecorder {
     }
 }
 
-impl suzatary_core::settings::Checks for CheckRecorder {
+impl suzatary_connect::settings::Checks for CheckRecorder {
     fn check(&self, source: &suzatary_health::health::SourceKey) {
         self.0.lock().expect("not poisoned").push(match source {
             suzatary_health::health::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
@@ -1600,32 +1600,32 @@ impl suzatary_io::secrets::Resolves for SecretRecorder {
 
 /// Where a name stands in a recorder: set while it holds a value; a Google account holds its
 /// reading grant while its sign-in with Google is held.
-impl suzatary_core::secrets::Secrets for SecretRecorder {
+impl suzatary_connect::secrets::Secrets for SecretRecorder {
     fn secret_state(
         &self,
-        settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::secrets::SecretState {
+        settable: &suzatary_connect::settings::Settable,
+    ) -> suzatary_connect::secrets::SecretState {
         use suzatary_io::secrets::Resolves as _;
         match self.get(settable.name(), "a scene") {
-            Ok(Some(_)) => suzatary_core::secrets::SecretState::Set,
-            Ok(None) | Err(_) => suzatary_core::secrets::SecretState::Missing,
+            Ok(Some(_)) => suzatary_connect::secrets::SecretState::Set,
+            Ok(None) | Err(_) => suzatary_connect::secrets::SecretState::Missing,
         }
     }
 
     fn mail_grants(
         &self,
         account: &suzatary_mail::mail::account::MailAccount,
-    ) -> suzatary_core::secrets::MailGrants {
+    ) -> suzatary_connect::secrets::MailGrants {
         let held = suzatary_mail::mail::address::EmailAddress::new(account.email.as_str())
             .ok()
             .filter(|_| matches!(account.sync, suzatary_mail::mail::account::Sync::Google))
             .is_some_and(|email| {
                 matches!(
                     self.google_grant(&email),
-                    suzatary_core::google::Held::Signed(_)
+                    suzatary_google::google::Held::Signed(_)
                 )
             });
-        suzatary_core::secrets::MailGrants {
+        suzatary_connect::secrets::MailGrants {
             imap: held,
             smtp: false,
         }
@@ -1634,22 +1634,22 @@ impl suzatary_core::secrets::Secrets for SecretRecorder {
     fn google_grant(
         &self,
         account: &suzatary_mail::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
+    ) -> suzatary_google::google::Held {
         use suzatary_io::secrets::Resolves as _;
-        match self.get(&suzatary_core::google::grant_name(account), "a scene") {
-            Ok(Some(kept)) => suzatary_core::google::KeptGrant::parse(kept.expose())
-                .map_or(suzatary_core::google::Held::NotSignedIn, |kept| {
-                    suzatary_core::google::Held::Signed(kept.parts)
+        match self.get(&suzatary_google::google::grant_name(account), "a scene") {
+            Ok(Some(kept)) => suzatary_google::google::KeptGrant::parse(kept.expose())
+                .map_or(suzatary_google::google::Held::NotSignedIn, |kept| {
+                    suzatary_google::google::Held::Signed(kept.parts)
                 }),
-            Ok(None) | Err(_) => suzatary_core::google::Held::NotSignedIn,
+            Ok(None) | Err(_) => suzatary_google::google::Held::NotSignedIn,
         }
     }
 }
 
-impl suzatary_core::settings::Writes for SecretRecorder {
+impl suzatary_connect::settings::Writes for SecretRecorder {
     fn write_secret(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &suzatary_connect::settings::Settable,
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.calls
@@ -1659,7 +1659,7 @@ impl suzatary_core::settings::Writes for SecretRecorder {
         Ok(())
     }
 
-    fn clear_secret(&self, name: &suzatary_core::settings::Settable) -> Result<(), String> {
+    fn clear_secret(&self, name: &suzatary_connect::settings::Settable) -> Result<(), String> {
         self.cleared
             .lock()
             .expect("not poisoned")
@@ -1671,8 +1671,8 @@ impl suzatary_core::settings::Writes for SecretRecorder {
 /// A store that keeps no declarations of its own, so every name it is told of is declared.
 pub struct Undeclared;
 
-impl suzatary_core::settings::Declares for Undeclared {
-    fn declare(&self, _: &suzatary_core::settings::Settables) -> Result<(), String> {
+impl suzatary_connect::settings::Declares for Undeclared {
+    fn declare(&self, _: &suzatary_connect::settings::Settables) -> Result<(), String> {
         Ok(())
     }
 }
@@ -1703,7 +1703,7 @@ impl DeclaredStore {
         let declarations = suzatary_io::secrets::Declarations::new(
             base,
             dir.path().join("state"),
-            suzatary_core::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
+            suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
         );
         Self {
             declarations,
@@ -1723,7 +1723,7 @@ impl DeclaredStore {
             .is_some_and(|default| default.contains_key(name))
     }
 
-    fn refused(&self, name: &suzatary_core::settings::Settable) -> Result<(), String> {
+    fn refused(&self, name: &suzatary_connect::settings::Settable) -> Result<(), String> {
         if self.declares(name.name()) {
             Ok(())
         } else {
@@ -1735,17 +1735,17 @@ impl DeclaredStore {
     }
 }
 
-impl suzatary_core::settings::Writes for DeclaredStore {
+impl suzatary_connect::settings::Writes for DeclaredStore {
     fn write_secret(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &suzatary_connect::settings::Settable,
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.refused(name)?;
         self.recorded.write_secret(name, value)
     }
 
-    fn clear_secret(&self, name: &suzatary_core::settings::Settable) -> Result<(), String> {
+    fn clear_secret(&self, name: &suzatary_connect::settings::Settable) -> Result<(), String> {
         self.refused(name)?;
         self.recorded.clear_secret(name)
     }
@@ -1754,8 +1754,8 @@ impl suzatary_core::settings::Writes for DeclaredStore {
 /// A store that will not take any name it is told of, as one whose state directory is full.
 pub struct DeclaresAlwaysFail;
 
-impl suzatary_core::settings::Declares for DeclaresAlwaysFail {
-    fn declare(&self, _: &suzatary_core::settings::Settables) -> Result<(), String> {
+impl suzatary_connect::settings::Declares for DeclaresAlwaysFail {
+    fn declare(&self, _: &suzatary_connect::settings::Settables) -> Result<(), String> {
         Err("the declared file was not written (fake)".to_owned())
     }
 }
@@ -1764,16 +1764,16 @@ impl suzatary_core::settings::Declares for DeclaresAlwaysFail {
 #[derive(Default)]
 pub struct SecretsAlwaysFail;
 
-impl suzatary_core::settings::Writes for SecretsAlwaysFail {
+impl suzatary_connect::settings::Writes for SecretsAlwaysFail {
     fn write_secret(
         &self,
-        _name: &suzatary_core::settings::Settable,
+        _name: &suzatary_connect::settings::Settable,
         _value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         Err("the store refused (fake)".to_owned())
     }
 
-    fn clear_secret(&self, _name: &suzatary_core::settings::Settable) -> Result<(), String> {
+    fn clear_secret(&self, _name: &suzatary_connect::settings::Settable) -> Result<(), String> {
         Err("the store refused (fake)".to_owned())
     }
 }
@@ -1782,8 +1782,8 @@ impl suzatary_core::settings::Writes for SecretsAlwaysFail {
 /// algebra's, over the tables it holds.
 #[derive(Default)]
 pub struct EditsRecorder {
-    declared: std::sync::Mutex<suzatary_core::connect::Declared>,
-    allowed: std::sync::Mutex<Vec<suzatary_core::web::AllowRule>>,
+    declared: std::sync::Mutex<suzatary_connect::connect::Declared>,
+    allowed: std::sync::Mutex<Vec<suzatary_services::web::AllowRule>>,
     folders: std::sync::Mutex<Vec<suzatary_base::drive_path::DrivePath>>,
 }
 
@@ -1796,7 +1796,7 @@ impl EditsRecorder {
 
     /// A recorder whose instance declares `declared`.
     #[must_use]
-    pub fn declaring(declared: suzatary_core::connect::Declared) -> Self {
+    pub fn declaring(declared: suzatary_connect::connect::Declared) -> Self {
         Self {
             declared: std::sync::Mutex::new(declared),
             ..Self::default()
@@ -1805,7 +1805,7 @@ impl EditsRecorder {
 
     /// Every web allow rule written, oldest first.
     #[must_use]
-    pub fn allowed(&self) -> Vec<suzatary_core::web::AllowRule> {
+    pub fn allowed(&self) -> Vec<suzatary_services::web::AllowRule> {
         self.allowed.lock().expect("not poisoned").clone()
     }
 
@@ -1816,11 +1816,11 @@ impl EditsRecorder {
     }
 }
 
-impl suzatary_core::settings::Edits for EditsRecorder {
+impl suzatary_connect::settings::Edits for EditsRecorder {
     fn allow_web(
         &self,
-        rule: &suzatary_core::web::AllowRule,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        rule: &suzatary_services::web::AllowRule,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.allowed
             .lock()
             .expect("not poisoned")
@@ -1831,7 +1831,7 @@ impl suzatary_core::settings::Edits for EditsRecorder {
     fn allow_drive(
         &self,
         folder: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         self.folders
             .lock()
             .expect("not poisoned")
@@ -1841,8 +1841,8 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn add_connection(
         &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        connection: &suzatary_connect::connect::Connection,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         let mut declared = self.declared.lock().expect("not poisoned");
         *declared = declared.with(connection)?;
         Ok(())
@@ -1850,8 +1850,8 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn remove_connection(
         &self,
-        connection: &suzatary_core::connect::Connection,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+        connection: &suzatary_connect::connect::Connection,
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         let mut declared = self.declared.lock().expect("not poisoned");
         *declared = declared.without(connection)?;
         Ok(())
@@ -1861,17 +1861,17 @@ impl suzatary_core::settings::Edits for EditsRecorder {
         &self,
         plugin: &suzatary_health::health::plugin::PluginName,
         origin: &suzatary_health::health::plugin::Origin,
-    ) -> Result<(), suzatary_core::settings::EditError> {
+    ) -> Result<(), suzatary_connect::settings::EditError> {
         let mut declared = self.declared.lock().expect("not poisoned");
         *declared = declared.with_origin(plugin, origin)?;
         Ok(())
     }
 }
 
-impl suzatary_core::settings::Configuration for EditsRecorder {
+impl suzatary_connect::settings::Configuration for EditsRecorder {
     fn declared(
         &self,
-    ) -> Result<suzatary_core::connect::Declared, suzatary_core::settings::EditError> {
+    ) -> Result<suzatary_connect::connect::Declared, suzatary_connect::settings::EditError> {
         Ok(self.declared.lock().expect("not poisoned").clone())
     }
 }
@@ -1883,11 +1883,11 @@ pub struct SettingsFixture {
     /// The Claude models the server runs.
     pub models: Arc<serve::models::Models>,
     /// Where a secret write goes.
-    pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
+    pub secrets: Arc<dyn suzatary_connect::settings::Writes + Send + Sync>,
     /// What declares the settable names to the store a secret write goes to.
-    pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
+    pub declares: Arc<dyn suzatary_connect::settings::Declares + Send + Sync>,
     /// Where an instance-file edit goes.
-    pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+    pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     /// Where a removed account's sign-ins are kept, `None` for none.
     pub grants: Option<suzatary_io::oauth::TokenStore>,
 }
@@ -1910,7 +1910,7 @@ impl SettingsFixture {
     pub fn empty() -> Self {
         Self {
             live: serve::Live {
-                settables: suzatary_core::settings::Settables::derive(
+                settables: suzatary_connect::settings::Settables::derive(
                     suzatary_io::model::TOKEN,
                     std::iter::empty(),
                     None,
@@ -1936,7 +1936,7 @@ impl SettingsFixture {
 
     /// Like `empty`, with `secrets` overridden.
     #[must_use]
-    pub fn with_writer(secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>) -> Self {
+    pub fn with_writer(secrets: Arc<dyn suzatary_connect::settings::Writes + Send + Sync>) -> Self {
         Self {
             secrets,
             ..Self::empty()
@@ -1945,7 +1945,7 @@ impl SettingsFixture {
 
     /// Like `empty`, with `edits` overridden.
     #[must_use]
-    pub fn with_edits(edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>) -> Self {
+    pub fn with_edits(edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>) -> Self {
         Self {
             edits,
             ..Self::empty()
@@ -2385,9 +2385,9 @@ pub struct Fakes {
     /// The calendar, a cache-tier store under the root; empty unless a test learns into it.
     pub calendar: suzatary_io::calendar::Clocked,
     /// The tables a Connect card is checked against; none declared.
-    pub configuration: Arc<dyn suzatary_core::settings::Configuration>,
+    pub configuration: Arc<dyn suzatary_connect::settings::Configuration>,
     /// Where each declared secret stands: nothing set, unless a scene reads its own store.
-    pub secrets: Arc<dyn suzatary_core::secrets::Secrets + Send + Sync>,
+    pub secrets: Arc<dyn suzatary_connect::secrets::Secrets + Send + Sync>,
 }
 
 impl Fakes {
@@ -2463,7 +2463,7 @@ impl Fakes {
                 suzatary_io::repos::Source::Local {
                     base: root.join("remotes"),
                 },
-                suzatary_core::repos::Declared::default(),
+                suzatary_services::repos::Declared::default(),
                 Box::new(NoSecrets),
             )),
             drive: FakeDriveAccess::default(),
@@ -2500,7 +2500,7 @@ impl Fakes {
     #[must_use]
     pub fn configuration(
         self,
-        configuration: Arc<dyn suzatary_core::settings::Configuration>,
+        configuration: Arc<dyn suzatary_connect::settings::Configuration>,
     ) -> Self {
         Self {
             configuration,
@@ -2519,7 +2519,7 @@ impl Fakes {
     #[must_use]
     pub fn secrets(
         mut self,
-        secrets: Arc<dyn suzatary_core::secrets::Secrets + Send + Sync>,
+        secrets: Arc<dyn suzatary_connect::secrets::Secrets + Send + Sync>,
     ) -> Self {
         self.secrets = secrets;
         self
@@ -2666,8 +2666,8 @@ impl Fakes {
 /// A fixed forecast, never a socket: no test here is about the weather.
 pub struct FakeWeather;
 
-impl suzatary_core::weather::Weather for FakeWeather {
-    fn today(&self) -> Result<String, suzatary_core::weather::WeatherError> {
+impl suzatary_services::weather::Weather for FakeWeather {
+    fn today(&self) -> Result<String, suzatary_services::weather::WeatherError> {
         Ok("62-71°F, clear, rain chance peaks at 5% — no umbrella needed.".to_owned())
     }
 }
@@ -2677,25 +2677,25 @@ impl suzatary_core::weather::Weather for FakeWeather {
 #[derive(Default)]
 pub struct FakeWeb {
     /// Hosts the `web` verb reads without asking.
-    pub allow: Vec<suzatary_core::web::AllowRule>,
+    pub allow: Vec<suzatary_services::web::AllowRule>,
     /// Every web request performed, oldest first.
-    pub done: std::sync::Mutex<Vec<suzatary_core::web::WebRequest>>,
+    pub done: std::sync::Mutex<Vec<suzatary_services::web::WebRequest>>,
 }
 
-impl suzatary_core::web::Web for FakeWeb {
-    fn allow_rules(&self) -> Vec<suzatary_core::web::AllowRule> {
+impl suzatary_services::web::Web for FakeWeb {
+    fn allow_rules(&self) -> Vec<suzatary_services::web::AllowRule> {
         self.allow.clone()
     }
 
     fn perform(
         &self,
-        request: &suzatary_core::web::WebRequest,
-    ) -> Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure> {
+        request: &suzatary_services::web::WebRequest,
+    ) -> Result<suzatary_services::web::WebAnswer, suzatary_services::web::WebFailure> {
         self.done
             .lock()
             .expect("the web log lock")
             .push(request.clone());
-        Ok(suzatary_core::web::WebAnswer {
+        Ok(suzatary_services::web::WebAnswer {
             url: request.sentence(),
             status: 200,
             text: format!("the page for: {}", request.sentence()),
@@ -2713,12 +2713,12 @@ pub struct FakeDriveAccess {
     pub drive: Option<suzatary_io::drive::ProtonDrive>,
 }
 
-impl suzatary_core::drive::Drive for FakeDriveAccess {
+impl suzatary_services::drive::Drive for FakeDriveAccess {
     fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         self.allow.clone()
     }
 
-    fn port(&self) -> &dyn suzatary_core::drive::Port {
+    fn port(&self) -> &dyn suzatary_services::drive::Port {
         match &self.drive {
             Some(drive) => drive,
             None => &NoDrive,
@@ -2739,11 +2739,11 @@ impl suzatary_core::drive::Drive for FakeDriveAccess {
 /// A scene with no Drive: every operation says so.
 struct NoDrive;
 
-impl suzatary_core::drive::Port for NoDrive {
+impl suzatary_services::drive::Port for NoDrive {
     fn list(
         &self,
         _: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_base::drive_path::DriveFailure>
+    ) -> Result<Vec<suzatary_services::drive::DriveEntry>, suzatary_base::drive_path::DriveFailure>
     {
         Err(no_drive())
     }
@@ -2890,7 +2890,7 @@ pub struct Server {
 /// a store holding nothing, so nothing is ever asked, unless a scene gives it a fake.
 pub struct Googled {
     /// The endpoints.
-    pub endpoints: suzatary_core::google::Endpoints,
+    pub endpoints: suzatary_google::google::Endpoints,
     /// The store a client and a grant are read from.
     pub store: Arc<dyn suzatary_io::secrets::Resolves + Send + Sync>,
 }
@@ -2898,7 +2898,7 @@ pub struct Googled {
 impl Default for Googled {
     fn default() -> Self {
         Self {
-            endpoints: suzatary_core::google::Endpoints::google(),
+            endpoints: suzatary_google::google::Endpoints::google(),
             store: Arc::new(serve::Unresolved),
         }
     }
@@ -2964,10 +2964,10 @@ pub struct VerifyRecorder {
     pub refuses: Option<String>,
 }
 
-impl suzatary_core::settings::Verify for VerifyRecorder {
+impl suzatary_connect::settings::Verify for VerifyRecorder {
     fn verify(
         &self,
-        name: &suzatary_core::settings::Settable,
+        name: &suzatary_connect::settings::Settable,
         _: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.asked
@@ -3093,7 +3093,7 @@ impl Server {
     /// Asking Google at `endpoints`, reading a client and a grant from `store`.
     pub fn google(
         self,
-        endpoints: suzatary_core::google::Endpoints,
+        endpoints: suzatary_google::google::Endpoints,
         store: Arc<dyn suzatary_io::secrets::Resolves + Send + Sync>,
     ) -> Self {
         Self {
@@ -3272,7 +3272,7 @@ impl Server {
     }
 
     /// The same server starting with `names` settable.
-    pub fn settings_names(mut self, names: suzatary_core::settings::Settables) -> Self {
+    pub fn settings_names(mut self, names: suzatary_connect::settings::Settables) -> Self {
         self.settings.live.settables = names;
         self
     }
@@ -3398,7 +3398,7 @@ fn publishing(
                 suzatary_io::repos::Source::Local {
                     base: std::env::temp_dir().join("suzatary-test-no-remotes"),
                 },
-                suzatary_core::repos::Declared::default(),
+                suzatary_services::repos::Declared::default(),
                 Box::new(NoSecrets),
             ))
         }),
@@ -3479,7 +3479,7 @@ fn performer(
         Arc<suzatary_cli::commands::secretary::Publishing>,
         Arc<suzatary_io::drive::ReadOnly>,
         Arc<serve::sign_ins::SignIns>,
-        Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
+        Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     ),
     firing: suzatary_cli::commands::coding::Firing,
     google: Arc<suzatary_io::google::Grants>,
@@ -3517,9 +3517,9 @@ fn performer(
             oauth,
         } => {
             use suzatary_mail::mail::account::{Authority, MailAccount, MsImap, Sync as MailSync};
-            let roster: Arc<dyn suzatary_core::settings::Edits + Send + Sync> = match account {
-                Some(account) => {
-                    Arc::new(EditsRecorder::declaring(suzatary_core::connect::Declared {
+            let roster: Arc<dyn suzatary_connect::settings::Edits + Send + Sync> = match account {
+                Some(account) => Arc::new(EditsRecorder::declaring(
+                    suzatary_connect::connect::Declared {
                         accounts: vec![MailAccount {
                             email: suzatary_mail::mail::account_email::AccountEmail::new(&account)
                                 .expect("a lower-case address"),
@@ -3530,9 +3530,9 @@ fn performer(
                                 sent_folder: "Sent Items".to_owned(),
                             }),
                         }],
-                        ..suzatary_core::connect::Declared::default()
-                    }))
-                }
+                        ..suzatary_connect::connect::Declared::default()
+                    },
+                )),
                 None => edits,
             };
             let root = scratch(&format!("{tag}-acting-real"));
@@ -3641,7 +3641,7 @@ pub fn act_unsigned(url: &str, body: &serde_json::Value) -> ureq::http::Response
 /// The cast's deployment keys: its root, and the agent's.
 #[must_use]
 pub fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
-    use suzatary_core::cast::keys;
+    use suzatary_connect::cast::keys;
     suzatary_signatures::signatures::BoxKeys::of(
         &keys::root(),
         &suzatary_base::capability::Secret::new(keys::ROOT),
@@ -3654,7 +3654,7 @@ pub fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
 /// starts.
 #[must_use]
 pub fn phone() -> prodrome_core::sign::Secret {
-    suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE)
+    suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE)
 }
 
 /// The box's operator at the test server at `base`: the cast's root key, the owner's actor, and
@@ -4083,9 +4083,9 @@ pub fn local_repos(root: &Path) -> Arc<suzatary_io::repos::Mirrors> {
 pub fn local_mirrors(root: &Path) -> suzatary_io::repos::Mirrors {
     local_mirrors_declaring(
         root,
-        suzatary_core::repos::RepoTarget {
+        suzatary_services::repos::RepoTarget {
             public: true,
-            ..suzatary_core::repos::RepoTarget::default()
+            ..suzatary_services::repos::RepoTarget::default()
         },
     )
 }
@@ -4094,14 +4094,14 @@ pub fn local_mirrors(root: &Path) -> suzatary_io::repos::Mirrors {
 #[must_use]
 pub fn local_mirrors_declaring(
     root: &Path,
-    target: suzatary_core::repos::RepoTarget,
+    target: suzatary_services::repos::RepoTarget,
 ) -> suzatary_io::repos::Mirrors {
     suzatary_io::repos::Mirrors::new(
         root.join("mirrors"),
         suzatary_io::repos::Source::Local {
             base: root.join("remotes"),
         },
-        suzatary_core::repos::Declared::new([("bmabsout/cv".parse().expect("a name"), target)])
+        suzatary_services::repos::Declared::new([("bmabsout/cv".parse().expect("a name"), target)])
             .expect("one repository"),
         Box::new(NoSecrets),
     )

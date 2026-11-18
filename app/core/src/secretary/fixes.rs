@@ -10,8 +10,8 @@ use crate::secretary::proposal::Proposal;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
 use crate::secretary::store::Need;
-use crate::settings::{Declaration, Settable, Settables};
 use suzatary_base::capability::Datetime;
+use suzatary_connect::settings::{Declaration, Settable, Settables};
 
 const MISSING: &str = "Nothing is stored for it yet, so what needs it cannot work.";
 
@@ -184,11 +184,11 @@ mod tests {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")
     }
 
-    use crate::connect::Channel;
+    use suzatary_connect::connect::Channel;
 
     fn declared(channels: &[Channel]) -> Settables {
         Settables::derive(
-            crate::settings::MODEL_TOKEN,
+            suzatary_connect::settings::MODEL_TOKEN,
             channels.iter().copied(),
             None,
             &[],
