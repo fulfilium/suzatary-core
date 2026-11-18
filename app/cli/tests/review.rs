@@ -7,11 +7,12 @@ mod common;
 use common::{FakeModel, Fakes};
 use suzatary_base::capability::Clock as _;
 use suzatary_base::reference::ProposalRef;
+use suzatary_cards::notify::Push;
 use suzatary_conversations::secretary::model;
 use suzatary_conversations::secretary::store::{Outcome, Settle};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::review::{Reviewed, reviews};
+use suzatary_core::secretary::review::{Noticed, Pass, Reviewed, pass, reviews};
 use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::Reasons;
@@ -19,7 +20,8 @@ use suzatary_lines::secretary::conversations;
 use suzatary_store::store::Reads as _;
 use suzatary_topics::secretary::filed::TriageCards;
 
-/// The review run to its end; a scripted model is under no limit, so it always starts.
+/// The review of the cards standing run to its end; a scripted model is under no limit, so it
+/// always starts.
 fn review(
     caps: &suzatary_core::secretary::Secretary<'_>,
     deployment: &suzatary_connect::deployment::Deployment,
@@ -27,12 +29,13 @@ fn review(
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Reviewed, suzatary_base::refusal::Refusal> {
-    suzatary_core::secretary::review::review(caps, deployment, settables, chains, system).map(
-        |run| match run {
+    match pass(caps, deployment, settables, chains, system)? {
+        Pass::Cards(noticed) => noticed.run.map(|run| match run {
             Run::Done(reviewed) => reviewed,
             Run::Paused(limited) => panic!("a scripted model is never limited: {limited}"),
-        },
-    )
+        }),
+        Pass::Nothing => panic!("every review here has a card standing"),
+    }
 }
 
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
@@ -301,34 +304,90 @@ fn a_review_round_holds_no_write_verb() {
     );
 }
 
-/// Nothing open opens no conversation and never asks the model.
+/// THE BOUND ON THE NOTICE: with no card standing, the review pass reads no object of the lines
+/// (a write would read their heads) and asks no model, so it names no conversation that stopped
+/// reading; the day's sweep names it in its one run, and pages for that set once.
 #[test]
-fn a_quiet_pass_asks_no_model_and_opens_no_conversation() {
+fn with_no_card_standing_the_review_reads_no_line_and_the_sweep_names_the_unreadable() {
     let caps = Fakes::new("review-quiet");
+    let bad = unreadable(&caps);
     let policy = common::chain();
-    let deployment = deployment();
+    let (deployment, settables) = (
+        deployment(),
+        suzatary_connect::settings::Settables::default(),
+    );
+    let secretary = caps.secretary();
+    let counted = suzatary_store::store::Counted::new(secretary.conversations.lines);
+    let mut counting = secretary;
+    counting.conversations.lines = &counted;
     let chains = [Bound {
         name: "life",
-        caps: caps.secretary(),
+        caps: counting,
         policy: &policy,
     }];
-    let done = review(
-        &caps.secretary(),
-        &deployment,
-        &suzatary_connect::settings::Settables::default(),
-        &chains,
-        "a brief",
-    )
-    .expect("the review runs");
-    assert_eq!(done.rounds, 0);
-    assert_eq!(done.standing, 0, "nothing was open");
-    assert!(done.decided.is_empty());
+
+    let done = pass(&counting, &deployment, &settables, &chains, "a brief");
+    assert_eq!(done, Ok(Pass::Nothing));
+    assert_eq!(counted.reads(), 0, "no object of the lines was read");
+    assert!(caps.model.asked().is_empty(), "the model was asked nothing");
+
+    let sweep =
+        || suzatary_core::secretary::sweep::pass(&secretary, &deployment, &settables, &chains, "a");
+    let swept = sweep();
     assert!(
-        suzatary_lines::secretary::transcript::keys(caps.conversations.conversations())
-            .expect("the store reads")
-            .is_empty(),
-        "no conversation was opened for nothing"
+        matches!(&swept.unreadable, Ok(Some(Push::Unreadable { conversations, .. }))
+            if conversations.get() == 1),
+        "{:?}",
+        swept.unreadable
     );
+    assert!(matches!(swept.run, Ok(Run::Done(_))), "{:?}", swept.run);
+    assert_eq!(sweep().unreadable, Ok(None), "the same set pages once");
+    assert_eq!(named(&caps, &bad), 1, "named once in today's review");
+}
+
+/// A conversation that does not read: a rewind to a turn never said.
+fn unreadable(caps: &Fakes) -> suzatary_base::conversation_id::ConversationId {
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_lines::secretary::transcript;
+    let bad = suzatary_base::conversation_id::ConversationId::new("2026-01-02-1").expect("a slug");
+    let at = caps.clock.now();
+    let lines = caps.conversations.conversations();
+    transcript::start(
+        lines,
+        &bad,
+        &Entry::Opened {
+            at,
+            title: suzatary_memory::secretary::words::Words::kept("Topic".to_owned()),
+            model: "m".to_owned(),
+            kind: Kind::Topic,
+        },
+    )
+    .expect("opened");
+    transcript::push(
+        lines,
+        &bad,
+        &Entry::Rewound {
+            to: 9,
+            at,
+            by: "ada".to_owned(),
+        },
+    )
+    .expect("written");
+    bad
+}
+
+/// How many notes in today's review name `id`.
+fn named(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> usize {
+    let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
+    let round = conversations::read(caps.conversations.conversations(), &today_of(today))
+        .expect("today's review reads");
+    round
+        .turns
+        .iter()
+        .filter(|said| {
+            matches!(&said.turn, model::Turn::Act { text, .. } if text.contains(id.as_str()))
+        })
+        .count()
 }
 
 /// A second review of cards still held asks no model and writes no second line, so a pass with
@@ -376,69 +435,6 @@ fn holding_the_same_card_again_is_not_a_second_line() {
     );
 }
 
-/// A conversation that does not read is named in today's review and paged once for that set;
-/// the review of the readable rest goes on.
-#[test]
-fn an_unreadable_conversation_is_named_and_paged_once() {
-    use suzatary_base::conversation_id::ConversationId;
-    use suzatary_conversations::secretary::store::{Entry, Kind};
-    use suzatary_core::secretary::review::note_unreadable;
-    use suzatary_lines::secretary::transcript;
-    let caps = Fakes::new("review-unreadable");
-    let zone = suzatary_base::zone::Zone::UTC;
-    assert_eq!(
-        note_unreadable(&caps.secretary(), zone).map(|page| page.is_some()),
-        Ok(false),
-        "every conversation reads"
-    );
-    let bad = ConversationId::new("2026-01-02-1").expect("a slug");
-    let at = caps.clock.now();
-    let lines = caps.conversations.conversations();
-    transcript::start(
-        lines,
-        &bad,
-        &Entry::Opened {
-            at,
-            title: suzatary_memory::secretary::words::Words::kept("Topic".to_owned()),
-            model: "m".to_owned(),
-            kind: Kind::Topic,
-        },
-    )
-    .expect("opened");
-    transcript::push(
-        lines,
-        &bad,
-        &Entry::Rewound {
-            to: 9,
-            at,
-            by: "ada".to_owned(),
-        },
-    )
-    .expect("written");
-    let page = note_unreadable(&caps.secretary(), zone).expect("lists");
-    assert!(
-        matches!(
-            page,
-            Some(suzatary_cards::notify::Push::Unreadable { conversations, .. })
-                if conversations.get() == 1
-        ),
-        "{page:?}"
-    );
-    assert_eq!(
-        note_unreadable(&caps.secretary(), zone).map(|page| page.is_some()),
-        Ok(false),
-        "the same set pages once"
-    );
-    let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
-    let round = conversations::read(lines, &today_of(today)).expect("reads");
-    let named = round
-        .turns
-        .iter()
-        .filter(|said| matches!(&said.turn, model::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
-        .count();
-    assert_eq!(named, 1, "named once in today's review");
-}
-
 /// While the model is under a limit, the review and the sweep do not start: they ask the model
 /// nothing and write no line, so a limit fills no conversation with failed rounds.
 #[test]
@@ -466,24 +462,28 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
             .len()
     };
     let before = lines();
-    let reviewed = suzatary_core::secretary::review::review(
+    let reviewed = pass(
         &caps.secretary(),
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
-    )
-    .expect("a pause is no refusal");
-    assert_eq!(reviewed, Run::Paused(limited));
-    let swept = suzatary_core::secretary::sweep::sweep(
+    );
+    assert_eq!(
+        reviewed,
+        Ok(Pass::Cards(Box::new(Noticed {
+            unreadable: Ok(None),
+            run: Ok(Run::Paused(limited)),
+        })))
+    );
+    let swept = suzatary_core::secretary::sweep::pass(
         &caps.secretary(),
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,
         "a brief",
-    )
-    .expect("a pause is no refusal");
-    assert!(matches!(swept, Run::Paused(paused) if paused == limited));
+    );
+    assert!(matches!(swept.run, Ok(Run::Paused(paused)) if paused == limited));
     assert_eq!(lines(), before, "no line was written");
     assert!(caps.model.asked().is_empty(), "the model was asked nothing");
 }
@@ -512,7 +512,6 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
     );
     assert!(refused.is_err(), "an unreachable model refuses the review");
 
-    // The record names what nobody answered for.
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
     let stored = conversations::read(caps.conversations.conversations(), &today_of(today))
         .expect("the conversation was opened before the model was asked");
@@ -538,7 +537,6 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
         "nothing was decided, so nothing is a decision"
     );
 
-    // It reads back through the sibling of `reviews`.
     let seen =
         suzatary_core::secretary::review::failures(caps.conversations.conversations(), today)
             .expect("the store reads")

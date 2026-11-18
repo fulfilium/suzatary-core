@@ -1,4 +1,4 @@
-//! The open-list sweep end to end over `secretary::sweep::sweep`: a real chain, handler,
+//! The open-list sweep end to end over `secretary::sweep::pass`: a real chain, handler,
 //! conversation file and candidate search, with only the model scripted.
 //!
 //! A sweep is started by the box, so no server or gate is involved, except in the last test,
@@ -31,12 +31,12 @@ fn sweep(
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Swept, suzatary_base::refusal::Refusal> {
-    suzatary_core::secretary::sweep::sweep(caps, deployment, settables, chains, system).map(|run| {
-        match run {
+    suzatary_core::secretary::sweep::pass(caps, deployment, settables, chains, system)
+        .run
+        .map(|run| match run {
             Run::Done(swept) => swept,
             Run::Paused(limited) => panic!("a scripted model is never limited: {limited}"),
-        }
-    })
+        })
 }
 
 /// The instant every todo below is authored, well before [`common::now`], so a candidate between

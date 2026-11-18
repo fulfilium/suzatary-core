@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 use suzatary_lines::secretary::conversations;
 
 use super::daily::{Run, begin};
+use super::review::{Noticed, noticed};
 use super::surface::{SecretaryCall, SecretaryVerb, Subset};
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
@@ -120,12 +121,24 @@ pub struct Swept {
     pub proposed: Vec<(usize, suzatary_conversations::secretary::store::Standing)>,
 }
 
+/// One sweep pass: the conversations that do not read are named in today's review first, so a
+/// set that stops reading on a day with no card standing is still named by that day's sweep.
+#[must_use]
+pub fn pass(
+    caps: &Secretary<'_>,
+    deployment: &Deployment,
+    settables: &Settables,
+    chains: &[Bound<'_>],
+    system: &str,
+) -> Noticed<Result<Run<Swept>, Refusal>> {
+    noticed(caps, deployment.zone, || {
+        sweep(caps, deployment, settables, chains, system)
+    })
+}
+
 /// Sweeps the first chain's open list in one round; a todo with no later mail proposes nothing,
 /// and nothing runs while the model is under a limit.
-///
-/// # Errors
-/// The stores' failures and the model's.
-pub fn sweep(
+fn sweep(
     caps: &Secretary<'_>,
     deployment: &Deployment,
     settables: &Settables,
@@ -223,7 +236,7 @@ pub struct DryRun {
     pub turn_chars: usize,
 }
 
-/// Gathers and bounds exactly as [`sweep`] does, opening no conversation and calling no model.
+/// Gathers and bounds exactly as [`pass`] does, opening no conversation and calling no model.
 ///
 /// # Errors
 /// The chain's read failures.

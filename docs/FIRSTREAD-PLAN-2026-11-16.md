@@ -76,8 +76,8 @@ the files itself.
 | `verify --husked` | the push after a sweep husked lines | the husked lines and the committed wholes | husked lines | (c) |
 | `mcp` | `claude -p` on every busy pass | the digest (`context`, `recall`), and the `triage` conversation when it files a card | digest, or conversations | (b) for the digest; (c) to file a card |
 | `ran` | every busy pass | nothing | none | (a) |
-| `secretary review` | every busy pass | every conversation (`note_unreadable`), today's review round, the standing cards | conversations | (a) when no card stands; else (b), with (c) as fallback |
-| `secretary sweep` | once a UTC day | today's sweep round, the open list | conversations | (b), with (c) as fallback |
+| `secretary review` | every busy pass | the standing cards; with one standing, every conversation (`note_unreadable`) and today's review round | conversations, only when a card stands | (a) when no card stands (done); else (b), with (c) as fallback |
+| `secretary sweep` | once a UTC day | every conversation (`note_unreadable`), today's sweep round, the open list | conversations | (b), with (c) as fallback |
 | `serve` | always on | the whole reading, held from its start (3.7 s) | conversations | the holder |
 | `mail idle` | always on | nothing | none | (a) |
 | `plugin sync` | every 15 minutes | nothing | none | (a) |
@@ -103,7 +103,8 @@ On the deployment's figures (each first read about 4.6 s), a day costs:
 
 - one `verify` per commit, at about 13 s on a store of this shape (about 3.2 s since the pin
   799cffb, recommendation 1);
-- two first reads per busy pass (`mcp` and `review`), about 9 s;
+- two first reads per busy pass (`mcp` and `review`), about 9 s; since item 2, the review's
+  read happens only when a card stands;
 - one per sweep, about 4.6 s;
 - one per server start, 3.7 s;
 - one per person's command.
@@ -217,6 +218,38 @@ The deployment's next start says what the order gives against the store call: `w
 5. **A person's read-only verbs ask the server** (`secretary list`, `show`, `readings`,
    `digest census`, `reviews`), each falling back to its own read. This saves seconds of a
    person's wait, not of the box's day.
+
+### Decided, 2026-11-18
+
+The owner decided both open items.
+
+- **Item 2 is built**, with a bound on the notice. `review::pass` reads the inbox first and
+  answers `Pass::Nothing` before any read of the lines when no card stands. With a card
+  standing it names the unreadable conversations and then reviews, as before. The notice
+  also runs on the daily sweep (`sweep::pass`), through the same `note_unreadable`. The sweep
+  already reads the lines once, and the notice adds no second read of them: it folds every
+  conversation over the reading the sweep holds. On a day when no card stands, a conversation
+  that stops reading is named by the next sweep. The sweep runs on the first busy pass of each
+  UTC day, so the notice is at most one sweep late: the time until the next UTC day's first
+  busy pass. The law is
+  `review::with_no_card_standing_the_review_reads_no_line_and_the_sweep_names_the_unreadable`
+  (`app/cli/tests/review.rs`). It counts the reads through the store's counting double.
+  Measured on the scratch store above, three runs each, as new processes:
+
+  | process | before | after |
+  | --- | --- | --- |
+  | `secretary review --json`, no card standing | 2.86–3.01 s (conversations, 2,620–2,811 ms) | 6–7 ms, no read |
+  | `secretary review --json`, a card standing, held today | 2.48–3.15 s | 2.71–2.92 s, the same work |
+  | `secretary sweep --json`, up to its mail search | 1.66–1.73 s (conversations, 1,532–1,604 ms) | 2.72–2.82 s (conversations, 2,545–2,622 ms) |
+
+  The sweep's runs stop at the mail search, because the scratch store has no mail index. The
+  sweep's lines are all read before that point. The sweep's extra second is the fold of
+  every conversation (`nodes`, `words`, `close`, `fold`). Each review pass with no card
+  standing used to pay that fold. Now the sweep pays it once a day. On the deployment, that is
+  about 1.8 s a day for the notice, against about 4.6 s saved on each busy pass with nothing
+  standing.
+- **Item 3 is declined.** It would widen the triage agent's fence, a new field in its record,
+  to save seconds that nobody waits for.
 
 ## The law for a caller that asks
 

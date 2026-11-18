@@ -10,24 +10,60 @@ use super::surface::{SecretaryVerb, Subset};
 use super::verbs::{answered, listed, standing};
 use crate::secretary::Secretary;
 use suzatary_base::conversation_id::{ConversationId, Daily};
+use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_cards::notify::Push;
 use suzatary_connect::deployment::Deployment;
+use suzatary_conversations::nonempty::NonEmpty;
 use suzatary_conversations::secretary::found::{Found, Unreadable};
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Decision, Entry, Outcome, Review, Stored};
 use suzatary_conversations::secretary::verb_name::Effect;
+use suzatary_inbox::secretary::changes::Changeset;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
+
+/// What one review pass came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pass {
+    /// No card stood, so no conversation was read.
+    Nothing,
+    /// A card stood: the unreadable conversations were named, then the cards reviewed.
+    Cards(Box<Noticed<Result<Run<Reviewed>, Refusal>>>),
+}
+
+/// A daily pass's round, after the notice of the conversations that do not read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Noticed<T> {
+    /// The push to page with when the set of conversations that do not read is new today, or
+    /// why they could not be listed.
+    pub unreadable: Result<Option<Push>, Refusal>,
+    /// The round.
+    pub run: T,
+}
+
+/// `run`, after naming in today's review every conversation that does not read
+/// ([`note_unreadable`]), so the name is said before the round can fail.
+pub(crate) fn noticed<T>(
+    caps: &Secretary<'_>,
+    zone: suzatary_base::zone::Zone,
+    run: impl FnOnce() -> T,
+) -> Noticed<T> {
+    let unreadable = note_unreadable(caps, zone);
+    Noticed {
+        unreadable,
+        run: run(),
+    }
+}
 
 /// What one review did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reviewed {
     /// The conversation it happened in, as it now stands.
     pub stored: Stored,
-    /// How many times the model was asked; zero when nothing was standing.
+    /// How many times the model was asked.
     pub rounds: usize,
     /// The lines this review wrote, in order: withdrawn and held, with the reason.
     pub decided: Vec<Review>,
@@ -71,16 +107,33 @@ pub(crate) const SURFACE: Subset = Subset {
     },
 };
 
-/// Review every open triage card in one round, then write a `held` line for each card still
-/// open; nothing while the model is under a limit, and nothing when today's round already holds
-/// every open card.
-///
-/// The seed is `triage_cards`' own answer as a `Turn::Tool`, and spends no rounds.
+/// One review pass. It reads the inbox first; when no card stands, it reads no conversation and
+/// asks no model.
 ///
 /// # Errors
-/// The stores' own failures, the model's, and an unreadable conversation.
-pub fn review(
+/// The inbox's own failure to read.
+pub fn pass(
     caps: &Secretary<'_>,
+    deployment: &Deployment,
+    settables: &suzatary_connect::settings::Settables,
+    chains: &[Bound<'_>],
+    system: &str,
+) -> Result<Pass, Refusal> {
+    Ok(match NonEmpty::of(standing(caps.inbox)?) {
+        None => Pass::Nothing,
+        Some(cards) => Pass::Cards(Box::new(noticed(caps, deployment.zone, || {
+            review(caps, &cards, deployment, settables, chains, system)
+        }))),
+    })
+}
+
+/// Review `cards` in one round, then write a `held` line for each card still open; nothing
+/// while the model is under a limit, and nothing when today's round already holds every card.
+///
+/// The seed is `triage_cards`' own answer as a `Turn::Tool`, and spends no rounds.
+fn review(
+    caps: &Secretary<'_>,
+    cards: &NonEmpty<(ProposalRef, Changeset)>,
     deployment: &Deployment,
     settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
@@ -91,19 +144,10 @@ pub fn review(
         Run::Paused(limited) => return Ok(Run::Paused(limited)),
     };
     let id = round.id.clone();
-    let cards = standing(caps.inbox)?;
-    if cards.is_empty() {
-        // Nothing standing opens no conversation and spawns no model.
-        return Ok(Run::Done(Reviewed {
-            stored: round.idle(caps),
-            rounds: 0,
-            decided: Vec::new(),
-            standing: 0,
-        }));
-    }
     let opened = round.open(caps)?;
     let known = held(&opened);
     if cards
+        .as_slice()
         .iter()
         .all(|(card, _)| known.contains(&card.to_string()))
     {
@@ -112,7 +156,7 @@ pub fn review(
             stored: opened,
             rounds: 0,
             decided: Vec::new(),
-            standing: cards.len(),
+            standing: cards.as_slice().len(),
         }));
     }
     let already = opened.reviews.len();
@@ -200,10 +244,7 @@ pub fn review(
 /// each set of them: the push to page with when this pass is the first TODAY to see that set,
 /// else none. The note is kept in the day's round, so a set that stays unreadable is named and
 /// paged again each day, as a finding still standing should be.
-///
-/// # Errors
-/// The store's own.
-pub fn note_unreadable(
+fn note_unreadable(
     caps: &Secretary<'_>,
     zone: suzatary_base::zone::Zone,
 ) -> Result<Option<Push>, Refusal> {

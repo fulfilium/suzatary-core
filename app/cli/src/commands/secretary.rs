@@ -23,6 +23,7 @@ use suzatary_core::secretary::Asker;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::Saying;
 use suzatary_core::secretary::daily::Run;
+use suzatary_core::secretary::review::{Noticed, Pass};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::HeldFile;
@@ -2089,7 +2090,7 @@ pub fn scripted_review(
     wired.brain = Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
-    match suzatary_core::secretary::review::review(
+    let run = match suzatary_core::secretary::review::pass(
         caps,
         &instance.deployment,
         &instance.settables,
@@ -2098,6 +2099,10 @@ pub fn scripted_review(
     )
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
     {
+        Pass::Nothing => return Ok(()),
+        Pass::Cards(noticed) => noticed.run,
+    };
+    match run.map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))? {
         Run::Done(_) => Ok(()),
         Run::Paused(limited) => {
             anyhow::bail!("the fixture's review did not start: {limited}")
@@ -2292,17 +2297,21 @@ fn ask_brief(
     Ok(None)
 }
 
-/// Name each unreadable conversation in today's review, paging on a new set.
-fn name_unreadable(instance: &Instance, caps: &Secretary<'_>, page_after: usize) {
-    match suzatary_core::secretary::review::note_unreadable(caps, instance.persona.zone) {
-        Ok(Some(page)) if page_after > 0 => {
+/// Page the unreadable conversations' notice when it is new today, and say why when it could not
+/// be said.
+fn page_unreadable(
+    instance: &Instance,
+    unreadable: Result<Option<suzatary_cards::notify::Push>, suzatary_base::refusal::Refusal>,
+) {
+    match unreadable {
+        Ok(Some(page)) => {
             if let Err(failed) = super::notify::deliver(instance, &page) {
                 eprintln!(
                     "secretary: the unreadable conversations' page was not delivered: {failed:#}"
                 );
             }
         }
-        Ok(_) => {}
+        Ok(None) => {}
         Err(failed) => eprintln!(
             "secretary: the conversations do not list, so none is named: {}",
             failed.message()
@@ -2320,14 +2329,32 @@ fn review(
     let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
-    name_unreadable(instance, caps, page_after);
-    let reviewed = match suzatary_core::secretary::review::review(
+    let run = match suzatary_core::secretary::review::pass(
         caps,
         &instance.deployment,
         &instance.settables,
         &chains,
         &system_prompt(caps.manuals),
     ) {
+        Ok(Pass::Nothing) => {
+            if json {
+                println!("{}", reviewed_json(0, 0));
+            } else {
+                println!("secretary: no triage card is open, nothing to review");
+            }
+            return Ok(());
+        }
+        Ok(Pass::Cards(noticed)) => {
+            let Noticed { unreadable, run } = *noticed;
+            page_unreadable(
+                instance,
+                unreadable.map(|page| page.filter(|_| page_after > 0)),
+            );
+            run
+        }
+        Err(refusal) => Err(refusal),
+    };
+    let reviewed = match run {
         Ok(Run::Done(reviewed)) => reviewed,
         Ok(Run::Paused(limited)) => {
             paused("review", &limited, json, serde_json::json!({"reviewed": 0}))
@@ -2378,19 +2405,19 @@ fn review(
     if json {
         println!(
             "{}",
-            serde_json::json!({
-                "reviewed": reviewed.decided.len(),
-                "failed": false,
-                "reason": "",
-                "standing": reviewed.standing,
-                "consecutive": 0,
-            })
+            reviewed_json(reviewed.decided.len(), reviewed.standing)
         );
-        return Ok(());
+    } else {
+        print_reviewed(&reviewed);
     }
+    Ok(())
+}
+
+/// A review that ran, as a person reads it.
+fn print_reviewed(reviewed: &suzatary_core::secretary::review::Reviewed) {
     if reviewed.rounds == 0 {
         println!("secretary: no triage card is open, nothing to review");
-        return Ok(());
+        return;
     }
     println!(
         "secretary: reviewed in {} round(s) — {}",
@@ -2417,7 +2444,17 @@ fn review(
     {
         println!("\nSECRETARY: {text}");
     }
-    Ok(())
+}
+
+/// The counts of a review that ran, as the triage pass reads them.
+fn reviewed_json(reviewed: usize, standing: usize) -> serde_json::Value {
+    serde_json::json!({
+        "reviewed": reviewed,
+        "failed": false,
+        "reason": "",
+        "standing": standing,
+        "consecutive": 0,
+    })
 }
 
 /// Exit status of a round paused by a model limit: neither a stamped sweep nor a failed pass.
@@ -2502,16 +2539,15 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
     let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
-    let swept = swept_or_failed(
-        suzatary_core::secretary::sweep::sweep(
-            caps,
-            &instance.deployment,
-            &instance.settables,
-            &chains,
-            &system_prompt(caps.manuals),
-        ),
-        json,
-    )?;
+    let Noticed { unreadable, run } = suzatary_core::secretary::sweep::pass(
+        caps,
+        &instance.deployment,
+        &instance.settables,
+        &chains,
+        &system_prompt(caps.manuals),
+    );
+    page_unreadable(instance, unreadable);
+    let swept = swept_or_failed(run, json)?;
     let swept = match swept {
         Run::Done(swept) => swept,
         Run::Paused(limited) => paused("sweep", &limited, json, serde_json::json!({"proposed": 0})),

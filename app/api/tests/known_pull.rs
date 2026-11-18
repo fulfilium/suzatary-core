@@ -6,10 +6,9 @@
 //! sent alone, with its own key, from one read of the store.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
+use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::store::{MemoryStore, Replica as _};
 
@@ -24,7 +23,7 @@ use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::words::Words;
-use suzatary_store::store::{Doc as _, Prodrome, Reads, StoreError, WriteLock};
+use suzatary_store::store::{Counted, Doc as _, Prodrome as _, Reads as _};
 
 const CONVERSATIONS: usize = 100;
 const LINES: usize = 7_000;
@@ -140,79 +139,10 @@ pub(crate) fn store() -> InMemory {
     lines
 }
 
-/// The lines, counting every read of the whole store and every read of objects by name.
-struct Counted<'a> {
-    lines: &'a dyn Prodrome<LineEvent>,
-    reads: AtomicUsize,
-    graph: std::sync::Mutex<Option<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>>>,
-}
-
-impl Counted<'_> {
-    fn reads(&self) -> usize {
-        self.reads.swap(0, Ordering::SeqCst)
-    }
-}
-
-impl Reads<LineEvent> for Counted<'_> {
-    /// A graph the store built again, rather than the one it kept, is a read of the whole store.
-    fn graph(&self) -> Result<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>, StoreError> {
-        let graph = self.lines.graph()?;
-        let mut last = self
-            .graph
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !last
-            .as_ref()
-            .is_some_and(|kept| std::sync::Arc::ptr_eq(kept, &graph))
-        {
-            self.reads.fetch_add(1, Ordering::SeqCst);
-        }
-        *last = Some(std::sync::Arc::clone(&graph));
-        Ok(graph)
-    }
-    fn objects(&self) -> Result<Vec<(Hash, Envelope<LineEvent>)>, StoreError> {
-        self.reads.fetch_add(1, Ordering::SeqCst);
-        self.lines.objects()
-    }
-    fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
-        self.reads.fetch_add(1, Ordering::SeqCst);
-        self.lines.literals(names)
-    }
-    fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
-        self.reads.fetch_add(1, Ordering::SeqCst);
-        self.lines.sizes(names)
-    }
-    fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
-        self.lines.excluded()
-    }
-    fn tips(&self) -> Result<Vec<Hash>, StoreError> {
-        self.lines.tips()
-    }
-    fn verify(&self) -> Vec<String> {
-        self.lines.verify()
-    }
-}
-
-impl Prodrome<LineEvent> for Counted<'_> {
-    fn append(&self, event: LineEvent) -> Result<Hash, StoreError> {
-        self.lines.append(event)
-    }
-    fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
-        self.lines.accept(objects)
-    }
-    fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
-        self.lines.locked()
-    }
-}
-
 #[test]
 fn a_pull_that_lacks_nothing_sends_nothing_and_reads_no_object() {
     let lines = store();
-    let counted = Counted {
-        lines: &lines.lines,
-        reads: AtomicUsize::new(0),
-        graph: std::sync::Mutex::default(),
-    };
+    let counted = Counted::new(&lines.lines);
     let conversations = Conversations {
         lines: &counted,
         ..lines.conversations()

@@ -3,6 +3,9 @@
 //! [`Gets`] are the read halves of the first and the last. `suzatary-io` interprets them over
 //! files; what a store holds means what its schema says.
 
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/counted.rs"]
+mod counted;
 mod doc;
 mod error;
 mod graph;
@@ -24,6 +27,8 @@ mod recording;
 mod reentrant;
 mod signing;
 
+#[cfg(any(test, feature = "nothing"))]
+pub use counted::Counted;
 pub use doc::{Doc, Gets, Lists};
 pub use error::{Rule, Shut, StoreError};
 pub use graph::Graph;
