@@ -2,24 +2,27 @@
 //! resting on the lines its writer held. A slot whose key an erasure names reads as erased, and one
 //! whose key is not held reads as missing.
 //!
-//! [`Transcript`] is one conversation's lines in that order, ties broken by the instant and then
-//! the name. [`Transcript::stored`], [`Transcript::owed`] and [`Stored::lines`] are reads of it.
+//! [`Transcript`] is one conversation's lines in that order, the box's lines its spine
+//! ([`sequence::sequenced`]). [`Transcript::stored`], [`Transcript::owed`] and [`Stored::lines`]
+//! are reads of it.
 //!
 //! Every line is written through [`push`] or [`start`], which take its words through the
 //! redaction door and lock each slot under a fresh key before the store sees it: nothing enters
 //! the lines with its words in the clear.
 
-use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
+use prodrome_core::schema::Schema as _;
 
 use crate::secretary::conversations::Conversations;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::sequence;
+use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{SessionId, Turn};
 use suzatary_conversations::secretary::store::{Entry, NotAConversation, Said, Stored};
@@ -99,10 +102,15 @@ impl Transcript {
         id: &ConversationId,
         writes: &[(Write<'_>, Entry)],
     ) -> Result<Self, NotAConversation> {
-        let order = causal(
+        let order = sequenced(
             &writes
                 .iter()
-                .map(|(write, _)| (write.name, write.line.at(), write.parents))
+                .map(|(write, _)| sequence::Node {
+                    name: write.name,
+                    at: write.line.at(),
+                    parents: write.parents,
+                    writer: LineWriter::of(write.line.actor()),
+                })
                 .collect::<Vec<_>>(),
         );
         let lines: Vec<Written> = order
@@ -751,59 +759,18 @@ pub fn erased_lines<'l>(
         .collect()
 }
 
-/// Kahn's order over one conversation's writes, each `(name, at, parents)`, the least `(at, name)`
-/// among those ready first, each with the positions in the order of the writes it rests on.
-///
-/// A write is ready once every parent that is a write of the conversation is placed, so the cost
-/// is the writes and their edges: a parent that is no write here (the genesis) orders nothing.
-/// The order is a function of the writes, whatever order they are given in.
-pub fn causal(writes: &[(&Hash, Datetime, &[Hash])]) -> Vec<(usize, Vec<usize>)> {
-    let index: BTreeMap<&Hash, usize> = writes
-        .iter()
-        .enumerate()
-        .map(|(at, (name, _, _))| (*name, at))
-        .collect();
-    let parents: Vec<Vec<usize>> = writes
-        .iter()
-        .map(|(_, _, parents)| {
-            parents
-                .iter()
-                .filter_map(|p| index.get(p).copied())
-                .collect()
-        })
-        .collect();
-    let mut waiting: Vec<usize> = parents.iter().map(Vec::len).collect();
-    let mut children: Vec<Vec<usize>> = vec![Vec::new(); writes.len()];
-    for (later, earlier) in parents.iter().enumerate() {
-        for &one in earlier {
-            children[one].push(later);
-        }
-    }
-    let key = |at: usize| Reverse((writes[at].1, writes[at].0.clone(), at));
-    let mut ready: BinaryHeap<Reverse<(Datetime, Hash, usize)>> = (0..writes.len())
-        .filter(|&at| waiting[at] == 0)
-        .map(key)
-        .collect();
-    let mut placed = vec![usize::MAX; writes.len()];
-    let mut order = Vec::with_capacity(writes.len());
-    while let Some(Reverse((_, _, at))) = ready.pop() {
-        for &next in &children[at] {
-            waiting[next] -= 1;
-            if waiting[next] == 0 {
-                ready.push(key(next));
-            }
-        }
-        placed[at] = order.len();
-        order.push(at);
-    }
-    order
-        .into_iter()
-        .map(|at| {
-            let mut rests_on: Vec<usize> = parents[at].iter().map(|&p| placed[p]).collect();
-            rests_on.sort_unstable();
-            (at, rests_on)
-        })
-        .collect()
+/// One conversation's lines in the order every reading takes ([`sequence::sequenced`]), the box's
+/// lines its spine: each with the positions in that order of the lines it rests on. A parent that
+/// is no line here (the genesis) orders nothing.
+#[must_use]
+pub fn sequenced(lines: &[sequence::Node<'_, Hash, Datetime, LineWriter>]) -> sequence::Order {
+    sequence::sequenced(lines, LineWriter::spine)
+}
+
+/// Whether `actor` is the box's: the writer of the spine of every conversation's order.
+#[must_use]
+pub fn by_the_box(actor: &Actor) -> bool {
+    actor.as_str() == suzatary_base::writer::Writer::Assistant.actor()
 }
 
 /// The nodes' lines, by conversation, each with the objects it rests on.

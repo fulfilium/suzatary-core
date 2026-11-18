@@ -74,7 +74,38 @@ pub enum NodeHeader {
         /// In slot order.
         keys: Vec<String>,
         step: crate::secretary::step::Step,
+        /// Whose line it is: the box's lines are the spine of a conversation's order.
+        writer: LineWriter,
     },
+}
+
+/// Who wrote a line, as a conversation's order reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum LineWriter {
+    Box,
+    Other,
+}
+
+impl LineWriter {
+    /// The writer of a line written as `actor`.
+    #[must_use]
+    pub fn of(actor: &prodrome_core::event::Actor) -> Self {
+        if crate::secretary::transcript::by_the_box(actor) {
+            LineWriter::Box
+        } else {
+            LineWriter::Other
+        }
+    }
+
+    /// Whether a line `writer` wrote is on the spine of its conversation's order.
+    #[must_use]
+    pub fn spine(writer: &Self) -> bool {
+        match writer {
+            LineWriter::Box => true,
+            LineWriter::Other => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

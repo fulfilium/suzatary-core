@@ -229,7 +229,8 @@
           ],
           "step": {
             "step": "opened"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -249,7 +250,8 @@
           ],
           "step": {
             "step": "asks"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -269,7 +271,8 @@
           ],
           "step": {
             "step": "answers"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -289,7 +292,8 @@
           ],
           "step": {
             "step": "answers"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -307,7 +311,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -325,7 +330,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -343,7 +349,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -363,7 +370,8 @@
           ],
           "step": {
             "step": "asks"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -383,7 +391,8 @@
           ],
           "step": {
             "step": "asks"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -402,7 +411,8 @@
           ],
           "step": {
             "step": "opened"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -422,7 +432,8 @@
           ],
           "step": {
             "step": "asks"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -442,7 +453,8 @@
           ],
           "step": {
             "step": "answers"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -460,7 +472,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -480,7 +493,8 @@
           ],
           "step": {
             "step": "asks"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -500,7 +514,8 @@
           ],
           "step": {
             "step": "answers"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -521,7 +536,8 @@
             "keys": [
               "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
             ]
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -540,7 +556,8 @@
           ],
           "step": {
             "step": "opened"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -558,7 +575,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -576,7 +594,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       },
       {
@@ -594,7 +613,8 @@
           "keys": [],
           "step": {
             "step": "proposed"
-          }
+          },
+          "writer": "box"
         }
       }
     ],

@@ -302,10 +302,17 @@ impl Folds for Replica {
     const NAME: &'static str = "a conversation to its fold";
 
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
-        let order = transcript::causal(
+        let order = transcript::sequenced(
             &lines
                 .iter()
-                .map(|line| (&line.object, line.line.at(), line.parents.as_slice()))
+                .map(|line| crate::secretary::sequence::Node {
+                    name: &line.object,
+                    at: line.line.at(),
+                    parents: &line.parents,
+                    writer: crate::wire::lines::LineWriter::of(
+                        prodrome_core::schema::Schema::actor(&*line.line),
+                    ),
+                })
                 .collect::<Vec<_>>(),
         );
         Stored::of_lines(id, order.iter().map(|(at, _)| &lines[*at].entry)).map(Arc::new)

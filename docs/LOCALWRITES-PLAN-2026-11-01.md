@@ -826,6 +826,16 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
      decode the skeleton, and 15 where the say and stop routes go.
    - **Three pull requests:** the box's order and reads (with the shipped rule's missing
      `carried` check and the compare command); the claim; then the tab.
+   *Measured at (a), the box's order and reads (2.1.162, release build, 14,111 lines, 5 posts a
+   run):* the box's acceptance of one posted line, before and after the receipt answers from the
+   store read under the lock: 137 and 153 ms median before, 89, 108 and 125 after; run again
+   under another load, 216, 225 and 233 before, 128, 135 and 147 after. Its steps before, each a
+   median of two runs: the store's read 13 to 15 ms, the rule's held reading 5 to 6, the take 19
+   to 25, the receipt's second read 35 to 45, its DAG 6.5, the frontier's answer 19 to 21; the
+   trust read, the rule, the signatures and `head_set` under 0.3 ms each. After it the second read
+   and `head_set` are gone and the DAG is built once. A conversation's first read on the same
+   store, `causal` then `sequenced` as the transcript's order: 288 and 292 ms, then 324 and 290
+   ms; the order alone over all 100 conversations, 6.1 ms by `causal` and 6.6 ms by `sequenced`.
 4. **Taps as inbox objects, claimed per proposal.** `Tapped`, `Dismissed`,
    `Checked`, `Dropped`; the performer's claim (§4.5); the sending rule at
    admission; secret values sealed to the card's key (§4.6). The four

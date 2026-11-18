@@ -23,6 +23,7 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
+use suzatary_lines::parts::part;
 use suzatary_lines::secretary::husks::{husked, husks, keys_of, retired};
 use suzatary_lines::secretary::step::Step;
 use suzatary_lines::wire::lines::{
@@ -1170,6 +1171,7 @@ fn weight(node: &SkeletonNode) -> usize {
             kind,
             keys,
             step,
+            writer: _,
         } => {
             conversation.len()
                 + at.len()
@@ -1413,7 +1415,14 @@ pub fn receive_objects(
         render.warm(&fresh);
     }
     let key = format!("chain/{}", chain.name.as_str());
-    Ok((receipt(store, &outcome, (&key, since, frontiers))?, heard))
+    Ok((
+        receipt(
+            &left(objects, &outcome.taken),
+            &outcome,
+            (&key, since, frontiers),
+        )?,
+        heard,
+    ))
 }
 
 /// What a post carries.
@@ -1481,15 +1490,19 @@ where
             posted.len()
         )));
     }
-    let received = {
+    let (received, objects) = {
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.
-        let trusting = suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)?;
-        let objects = store.objects()?;
-        let ruled = <E::Rule as suzatary_store::admission::Admission>::held(
-            objects.iter().filter_map(|(_, object)| object.event()),
-        );
-        let names = objects.into_iter().map(|(name, _)| name).collect();
+        let trusting = part("trust", || {
+            suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)
+        })?;
+        let objects = part("read", || store.objects())?;
+        let ruled = part("held", || {
+            <E::Rule as suzatary_store::admission::Admission>::held(
+                objects.iter().filter_map(|(_, object)| object.event()),
+            )
+        });
+        let names = objects.iter().map(|(name, _)| name.clone()).collect();
         let held = suzatary_core::sync::Holding::<E::Rule> {
             names: &names,
             held: &ruled,
@@ -1507,13 +1520,40 @@ where
             .iter()
             .map(|(name, _)| name.clone())
             .collect();
-        (beside.keep)(&taken)?;
-        store.accept(&received.outcome.taken)?;
-        received
+        part("keep", || (beside.keep)(&taken))?;
+        part("take", || store.accept(&received.outcome.taken))?;
+        (received, objects)
     };
-    record(&received.recorded, E::KIND, recording)?;
+    part("record", || record(&received.recorded, E::KIND, recording))?;
     let key = format!("store/{}", E::KIND.name());
-    receipt(store, &received.outcome, (&key, since, frontiers))
+    receipt(
+        &left(objects, &received.outcome.taken),
+        &received.outcome,
+        (&key, since, frontiers),
+    )
+}
+
+/// The store as a post left it: `held`, the objects read under the store's lock, and `taken`,
+/// the prints the post took while it held the lock. So a receipt answers what this post's
+/// write made of the store, read once. A taken print was parsed as this schema to be taken.
+fn left<E: prodrome_core::schema::Schema>(
+    held: Vec<(
+        prodrome_core::event::Hash,
+        prodrome_core::event::Envelope<E>,
+    )>,
+    taken: &[(prodrome_core::event::Hash, String)],
+) -> prodrome_core::dag::Dag<E>
+where
+    E::Vocabulary: Default,
+{
+    let vocabulary = E::Vocabulary::default();
+    let mut dag: prodrome_core::dag::Dag<E> =
+        suzatary_lines::parts::part("dag", || held.into_iter().collect());
+    dag.extend(taken.iter().filter_map(|(name, print)| {
+        let object = prodrome_core::event::parse_envelope(&vocabulary, print).ok()?;
+        Some((name.clone(), object))
+    }));
+    dag
 }
 
 /// Each of `refused` recorded once in the asks.
@@ -1552,9 +1592,9 @@ fn record(
     Ok(())
 }
 
-/// A post's receipt.
+/// A post's receipt, from `dag`, the store as the post left it ([`left`]).
 fn receipt<E: prodrome_core::schema::Schema>(
-    store: &dyn Prodrome<E>,
+    dag: &prodrome_core::dag::Dag<E>,
     outcome: &suzatary_core::sync::Outcome,
     (key, since, frontiers): (
         &str,
@@ -1562,10 +1602,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
         &prodrome_core::store::frontier::Frontiers,
     ),
 ) -> Answered<ReceiptPayload> {
-    let objects = store.objects()?;
-    let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
-    let lacking = frontiers
-        .answer(key, since, &dag)
+    let lacking = part("frontier", || frontiers.answer(key, since, dag))
         .map_err(suzatary_store::store::StoreError::from)?;
     let read = since_read(lacking.reached());
     let posted = outcome
@@ -1575,14 +1612,13 @@ fn receipt<E: prodrome_core::schema::Schema>(
         .chain(&outcome.already)
         .cloned();
     let frontier = frontier_of(
-        &lacking
-            .record_with(posted)
+        &part("frontier", || lacking.record_with(posted))
             .map_err(suzatary_store::store::StoreError::from)?,
     );
     Ok(ReceiptPayload {
         since: read,
         frontier,
-        heads: head_set(store)?,
+        heads: dag.tips().iter().map(|h| h.as_str().to_owned()).collect(),
         adopted: outcome
             .taken
             .iter()

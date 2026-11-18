@@ -17,7 +17,7 @@ use suzatary_lines::secretary::line_form::{
 use suzatary_lines::secretary::outlines::Parsed;
 use suzatary_lines::secretary::step::Step;
 use suzatary_lines::wire::lines as wire;
-use suzatary_lines::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
+use suzatary_lines::wire::lines::{Heads, LineWriter, NodeHeader, SkeletonNode, SkeletonPayload};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::frontier::Frontier;
@@ -85,6 +85,7 @@ fn universe() -> Vec<Parsed> {
                         .to_owned(),
                 ],
                 step: Step::Asks,
+                writer: LineWriter::Box,
             },
         });
     }

@@ -216,6 +216,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
         suzatary_core::stores::InMemory::default();
     let frontiers = Frontiers::remembered(KEPT);
     let mut took = Vec::new();
+    let mut steps: Vec<suzatary_lines::parts::Parts> = Vec::new();
     for n in 0..5u8 {
         let (owned, name, _) = tab
             .seal(
@@ -245,29 +246,32 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
             Ok(())
         };
         let started = std::time::Instant::now();
-        let receipt = routes::receive_changes(
-            &lines.lines,
-            &routes::Posted {
-                objects: &objects,
-                since: &Since::Nothing,
-            },
-            &routes::Beside {
-                posted: &slot_keys,
-                keep: &keep,
-            },
-            &frontiers,
-            routes::Writer {
-                actor: &ada,
-                chains: &[&chain],
-                root: &suzatary_connect::cast::keys::root(),
-            },
-            routes::Recording {
-                asks: &asks,
-                at: at(59),
-            },
-        )
-        .expect("answered");
+        let (receipt, parts) = suzatary_lines::parts::scoped(|| {
+            routes::receive_changes(
+                &lines.lines,
+                &routes::Posted {
+                    objects: &objects,
+                    since: &Since::Nothing,
+                },
+                &routes::Beside {
+                    posted: &slot_keys,
+                    keep: &keep,
+                },
+                &frontiers,
+                routes::Writer {
+                    actor: &ada,
+                    chains: &[&chain],
+                    root: &suzatary_connect::cast::keys::root(),
+                },
+                routes::Recording {
+                    asks: &asks,
+                    at: at(59),
+                },
+            )
+        });
+        let receipt = receipt.expect("answered");
         took.push(started.elapsed());
+        steps.push(parts);
         assert!(receipt.adopted.contains(&name.as_str().to_owned()), "taken");
     }
     took.sort();
@@ -296,6 +300,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
         took[took.len() / 2],
         took[took.len() - 1],
     );
+    println!("its steps, each a median: {}", medians(&steps));
 }
 
 /// The same bytes every time, given.
@@ -406,4 +411,22 @@ fn a_posted_key_never_opens_erased_words() {
     );
     let read = conversations::read(lines.conversations(), &DEFAULT).expect("read");
     assert_eq!(read.title.get(), None, "the erased title stays closed");
+}
+
+/// Each step's median over the posts, in the order the steps ran.
+fn medians(steps: &[suzatary_lines::parts::Parts]) -> String {
+    steps[0]
+        .each()
+        .iter()
+        .map(|(name, _, _)| {
+            let mut spent: Vec<std::time::Duration> = steps
+                .iter()
+                .filter_map(|parts| parts.each().iter().find(|(n, _, _)| n == name))
+                .map(|(_, spent, _)| *spent)
+                .collect();
+            spent.sort();
+            format!("{name} {:?}", spent[spent.len() / 2])
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }

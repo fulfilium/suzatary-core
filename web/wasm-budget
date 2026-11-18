@@ -17,5 +17,5 @@ views_bg.wasm x86_64-linux 3610000
 prodrome_bg.wasm x86_64-linux 4870000
 typst_bg.wasm x86_64-linux 22020000
 views_bg.wasm aarch64-linux 3610000
-prodrome_bg.wasm aarch64-linux 4870000
+prodrome_bg.wasm aarch64-linux 4880000
 typst_bg.wasm aarch64-linux 22090000

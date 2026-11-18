@@ -438,7 +438,8 @@ where
                     held: held.held,
                     changes: &changes,
                 };
-                A::refuses(change, &post).map(Reason::Inadmissible)
+                suzatary_lines::parts::part("rule", || A::refuses(change, &post))
+                    .map(Reason::Inadmissible)
             }
             E::Signed(_) => None,
             E::Change(change) => Some(Reason::ForeignActor {
@@ -465,7 +466,9 @@ where
     } = settled(candidates, &|name| held.names.contains(name));
     let unplaced = waiting(&parsed, &refused, &unplaced);
     refused.extend(unplaced);
-    let (taken, unproven) = signed_by_their_writers(taken, &taking, writer, trusting);
+    let (taken, unproven) = suzatary_lines::parts::part("signatures", || {
+        signed_by_their_writers(taken, &taking, writer, trusting)
+    });
     refused.extend(unproven);
     let recorded = recorded(&parsed, &refused, trusting);
     Received {

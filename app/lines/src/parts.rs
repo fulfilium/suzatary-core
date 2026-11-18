@@ -26,6 +26,12 @@ impl Parts {
         }
     }
 
+    /// Each part: its name, its time summed and how many times it ran.
+    #[must_use]
+    pub fn each(&self) -> &[(&'static str, Duration, usize)] {
+        &self.0
+    }
+
     #[must_use]
     pub fn sum(&self) -> Duration {
         self.0.iter().map(|(_, spent, _)| *spent).sum()

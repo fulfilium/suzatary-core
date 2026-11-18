@@ -497,8 +497,8 @@ fn leaves_of<'l>(
     (carries, leaves)
 }
 
-/// Every line's taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), each conversation's
-/// lines in its causal order, the order its transcript reads in ([`transcript::causal`]), so the
+/// Every line's taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), each
+/// conversation's lines in the order its transcript reads in ([`transcript::sequenced`]), so the
 /// taints are a function of the set of lines, whatever order they are given in. A line whose
 /// words are erased still counts: a mail read whose words went still taints the answer after it.
 fn taints<'l>(
@@ -517,10 +517,19 @@ fn taints<'l>(
     conversations
         .into_iter()
         .flat_map(|(id, said)| {
-            let order = transcript::causal(
+            let order = transcript::sequenced(
                 &said
                     .iter()
-                    .map(|&((name, line, parents), _)| (name, line.at(), parents))
+                    .map(
+                        |&((name, line, parents), _)| suzatary_lines::secretary::sequence::Node {
+                            name,
+                            at: line.at(),
+                            parents,
+                            writer: suzatary_lines::wire::lines::LineWriter::of(
+                                prodrome_core::schema::Schema::actor(line),
+                            ),
+                        },
+                    )
                     .collect::<Vec<_>>(),
             );
             let taints = suzatary_conversations::secretary::taint::rounds(

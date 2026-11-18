@@ -8,6 +8,7 @@
 //! - an opening under any conversation but its own id, or of one the store holds;
 //! - a rename of a conversation neither held nor begun in the post, so no tab names an id the
 //!   box mints first;
+//! - a line carried from another store;
 //! - any shape the box alone writes.
 //!
 //! The same object posted again is answered `already` and changes nothing.
@@ -508,5 +509,43 @@ impl Entropy for Given {
     fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
         bytes.copy_from_slice(&self.0[..bytes.len()]);
         Ok(())
+    }
+}
+
+/// A line a tab writes is written here: each shape a tab posts (an opening, a setup, a rename) is
+/// refused for good when it says it was carried from another store, whose object the digest would
+/// read as its leaf.
+#[test]
+fn a_tab_s_line_carried_from_elsewhere_is_refused() {
+    use suzatary_connect::connect::TemplateId;
+    let door = Door::new();
+    let elsewhere = Hash::new("a".repeat(64)).expect("a name");
+    let carried = |entry: &Entry, conversation: Option<&str>| {
+        let (line, keys) = match conversation {
+            Some(id) => LineEvent::write(
+                ConversationId::new(id).expect("a slug"),
+                ada(),
+                0,
+                entry,
+                &door.entropy,
+            ),
+            None => LineEvent::begin(ada(), entry, &door.entropy),
+        }
+        .expect("a line");
+        door.change(line.carried_from(elsewhere.clone()), keys)
+    };
+    let setup = Entry::SetUp {
+        at: at(21),
+        title: Words::kept(TemplateId::Gmail.template().called()),
+        template: TemplateId::Gmail,
+    };
+    for posted in [
+        carried(&opened(20), None),
+        carried(&setup, None),
+        carried(&titled(22, "device0", "Garden"), Some("default")),
+    ] {
+        assert!(
+            refused_finally(&door.post(&[&posted]), &posted).contains("carried from another store")
+        );
     }
 }

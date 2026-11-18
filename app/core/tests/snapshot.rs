@@ -11,7 +11,7 @@ use prodrome_core::event::Hash;
 use suzatary_lines::secretary::line_form::{LinePulling, LineReplica};
 use suzatary_lines::secretary::outlines::Parsed;
 use suzatary_lines::secretary::step::Step;
-use suzatary_lines::wire::lines::{NodeHeader, SkeletonNode};
+use suzatary_lines::wire::lines::{LineWriter, NodeHeader, SkeletonNode};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::held::Said;
@@ -40,6 +40,11 @@ fn line(seed: u8, parents: &[String], keys: &[&KeyName], step: Step) -> Skeleton
             kind: "Said".to_owned(),
             keys: keys.iter().map(|k| k.as_str().to_owned()).collect(),
             step,
+            // Both writers, so the form keeps each.
+            writer: match seed % 2 {
+                0 => LineWriter::Box,
+                _ => LineWriter::Other,
+            },
         },
     }
 }

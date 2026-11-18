@@ -78,6 +78,8 @@ mod operator_tap;
 mod puller_port;
 #[path = "release.rs"]
 mod release;
+#[path = "sequence.rs"]
+mod sequence;
 #[path = "signatures.rs"]
 mod signatures;
 #[path = "snapshot.rs"]

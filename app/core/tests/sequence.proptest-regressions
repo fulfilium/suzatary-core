@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a057c4038407366192f25b0ce15fbe7b6df4cf974a2f6063bd83dd1d82e218fb # shrinks to nodes = [Generated { name: 0, at: 0, parents: [], writer: Spine }, Generated { name: 1, at: 0, parents: [], writer: Spine }, Generated { name: 2, at: 2, parents: [], writer: Spine }], at = 0, parents = [], writer = Spine

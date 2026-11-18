@@ -1233,3 +1233,91 @@ fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
     let done = done.expect("a run");
     assert_eq!((done.resealed, done.destroyed), (0, 0));
 }
+
+/// `secretary owed --compare` over a lines directory with no instance and no key: it prints each
+/// conversation's owed turns, the turns a restart would answer, and that the turns keep their
+/// order, then the counts; and it leaves every file of the store as it was.
+#[test]
+fn owed_compare_reads_a_copy_and_changes_nothing() {
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_lines::secretary::transcript;
+    use suzatary_memory::secretary::words::Words;
+    let dir = temp_dir("owed-compare");
+    let at = |minute: u32| {
+        suzatary_base::capability::Datetime::new(2026, 11, 18, 9, minute, 0, 0).expect("an instant")
+    };
+    {
+        let stores = suzatary_io::conversations::ConversationStores::open(
+            dir.join("lines"),
+            dir.join("keys"),
+            Arc::new(suzatary_base::capability::Nothing),
+            Arc::new(suzatary_base::capability::Nothing),
+        );
+        let id = ConversationId::new("2026-11-18-1").expect("an id");
+        transcript::start(
+            stores.conversations(),
+            &id,
+            &Entry::Opened {
+                at: at(0),
+                title: Words::kept("Permits".to_owned()),
+                model: "a-cli/small".to_owned(),
+                kind: Kind::Topic,
+            },
+        )
+        .expect("opened");
+        transcript::push(
+            stores.conversations(),
+            &id,
+            &Entry::Said {
+                at: at(10),
+                turn: Turn::Person {
+                    text: "Which permit comes first?".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: None,
+            },
+        )
+        .expect("said");
+    }
+    let files = |root: &std::path::Path| -> Vec<(std::path::PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(at) = pending.pop() {
+            for entry in std::fs::read_dir(&at).expect("a directory") {
+                let path = entry.expect("an entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else {
+                    files.push((path.clone(), std::fs::read(&path).expect("reads")));
+                }
+            }
+        }
+        files.sort();
+        files
+    };
+    let before = files(&dir.join("lines"));
+    let mut out = Vec::new();
+    suzatary_cli::commands::secretary::owed_compare(&dir.join("lines"), at(30), &mut out)
+        .expect("compared");
+    let printed = String::from_utf8(out).expect("text");
+    assert!(
+        printed
+            .contains("2026-11-18-1: owed [0]; a restart answers [0]; the turns keep their order"),
+        "{printed}"
+    );
+    assert!(
+        printed.ends_with(
+            "1 conversations: 1 turns owed, 1 a restart answers, 0 reordered, 0 that do not fold\n"
+        ),
+        "{printed}"
+    );
+    assert_eq!(files(&dir.join("lines")), before, "the store is as it was");
+    assert!(
+        suzatary_cli::commands::secretary::owed_compare(&dir.join("none"), at(30), &mut Vec::new())
+            .is_err(),
+        "no store is refused, not created"
+    );
+    assert!(!dir.join("none").exists());
+}

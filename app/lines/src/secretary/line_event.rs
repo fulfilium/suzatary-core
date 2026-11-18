@@ -342,6 +342,15 @@ impl LineEvent {
         line.sealed(words, entropy)
     }
 
+    /// The line as if carried from `object` of an earlier store, its words as they were: what no
+    /// tab may post, for the tests of the lines' rule.
+    #[cfg(any(test, feature = "nothing", feature = "fixture"))]
+    #[must_use]
+    pub fn carried_from(mut self, object: Hash) -> Self {
+        self.carried = Carried::From(object);
+        self
+    }
+
     /// An erasure of `keys` in `conversation`, at `at`, written by `actor` holding `held` lines.
     #[must_use]
     pub fn erasure(

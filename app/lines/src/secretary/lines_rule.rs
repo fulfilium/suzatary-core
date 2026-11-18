@@ -2,7 +2,8 @@
 //! opening and a setup, each sealed as the box seals it, under the current redaction rules, by
 //! the actor its signer proves, and each opening under its own conversation's id.
 //!
-//! What it checks is what the post proves, never what a line claims: each slot is opened with
+//! What it checks is what the post proves, never what a line claims: a line is written here,
+//! never carried from an earlier store; each slot is opened with
 //! the key posted beside it and scrubbed again, so no unscrubbed word is taken; a rename's
 //! namer is the poster, whom the shared rule has already proven the signer; an opening's id is
 //! computed again from its clear fields ([`LineEvent::begun_id`]).
@@ -19,6 +20,7 @@ use suzatary_store::receipt::Grounds;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use suzatary_conversations::secretary::store::{Kind, Namer, Title};
+use suzatary_memory::secretary::carried::Carried;
 use suzatary_memory::secretary::line_words::LineWords;
 
 /// The lines' rule.
@@ -79,11 +81,23 @@ impl Admission for LinesRule {
 
     fn refuses(change: &Change<LineEvent>, post: &Post<'_, Self>) -> Option<Inadmissible> {
         let line = &change.event;
-        begins(line, post)
+        written(line)
             .err()
+            .or_else(|| begins(line, post).err())
             .or_else(|| stamped(line, change).err())
             .or_else(|| fresh(line, &post.held.keys).err())
             .or_else(|| sealed(line, post.beside.of(post.name)).err())
+    }
+}
+
+/// Whether `line` was written here: a line carried from an earlier store is the box's migration,
+/// and the digest reads the object it names as the line's leaf.
+fn written(line: &LineEvent) -> Result<(), Inadmissible> {
+    match line.carried() {
+        Carried::Written => Ok(()),
+        Carried::From(_) => Err(Inadmissible::finally(
+            "a tab's line is written here, and this one says it was carried from another store",
+        )),
     }
 }
 

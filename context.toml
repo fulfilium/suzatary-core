@@ -33,7 +33,8 @@ allowance = 2000
 # 2026-11-17: raised by hand to the figure of the tree merged with 2.1.157 for door 1's reading of what a markup field draws (#531, +6,276: `Site`, `Reading` and `drawing` at the door, `prodrome texts` for door 2, `Remembered`, and the pages setting each field's drawing in place); accepted at the review of #531.
 # 2026-11-17: raised by hand to the figure of the tree merged with #534 for stage 2c, the tab's lines (#492, +21,265: the lines' admission rule, the worker's seal and its own lines, the device's row of own lines, the `Opening` rule, and their laws); accepted at the review of #492, on the plan's promise that stage 8 deletes `intents.ts`, `intentsync.ts` and `asks.ts`.
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.162 for the inbox, conversations and lines crates (#538, +6,511: three manifests and roots, `Derived`, and paths that name a crate where they named a module); accepted at the review of #538.
-reading = 3040779
+# 2026-11-18: raised by hand to the figure of the tree merged with 2.1.163 for the box's order and reads (#539, +6,512: `sequence.rs`, `compare.rs` and its verb, the skeleton's `LineWriter`, the receipt's `left` and the `carried` check, less `causal`'s old body); accepted at the review of #539.
+reading = 3047291
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

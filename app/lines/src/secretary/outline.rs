@@ -11,7 +11,7 @@ use prodrome_core::literal::Datetime;
 
 use crate::secretary::step::Step;
 use crate::secretary::targets::rounds;
-use crate::secretary::transcript;
+use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::{NotAConversation, Stored};
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -40,6 +40,8 @@ pub struct Line<'a> {
     pub keys: &'a [KeyName],
     /// What it does to the conversation's reading.
     pub step: &'a Step,
+    /// Whose line it is.
+    pub writer: &'a LineWriter,
 }
 
 /// A conversation's live rounds, and where the words each reads are.
@@ -156,15 +158,21 @@ impl Rounds {
 }
 
 /// The outline of conversation `id` from its lines, in any order: put in the order the
-/// conversation's own reading puts them, then folded as `Stored::fold` folds their turns and title.
+/// conversation's own reading puts them ([`crate::secretary::sequence::sequenced`], the box's lines
+/// its spine), then folded as `Stored::fold` folds their turns and title.
 ///
 /// # Errors
 /// [`NotAConversation`], as the conversation's own fold refuses its lines.
 pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
-    let order = transcript::causal(
+    let order = crate::secretary::transcript::sequenced(
         &lines
             .iter()
-            .map(|line| (line.name, line.at, line.parents))
+            .map(|line| crate::secretary::sequence::Node {
+                name: line.name,
+                at: line.at,
+                parents: line.parents,
+                writer: *line.writer,
+            })
             .collect::<Vec<_>>(),
     );
     let mut ordered = order.iter().map(|(at, _)| &lines[*at]);

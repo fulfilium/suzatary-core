@@ -14,6 +14,8 @@ mod known_pull;
 mod own_lines;
 #[path = "pieces.rs"]
 mod pieces;
+#[path = "sequenced.rs"]
+mod sequenced;
 #[path = "transcript.rs"]
 mod transcript;
 #[path = "web_vectors.rs"]

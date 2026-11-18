@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
-use crate::wire::lines::{NodeHeader, SkeletonNode};
+use crate::wire::lines::{LineWriter, NodeHeader, SkeletonNode};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::{KEY_BYTES, KeyName};
 use suzatary_store::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
@@ -106,7 +106,14 @@ enum HeaderForm {
         kind: String,
         keys: Vec<Name>,
         step: StepForm,
+        writer: WriterForm,
     },
+}
+
+#[derive(Serialize, Deserialize)]
+enum WriterForm {
+    Box,
+    Other,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -126,9 +133,10 @@ enum StepForm {
 
 impl snapshot::Held for LineReplica {
     type Given = Given;
-    /// 3: the landed row and the pending pieces, each with its nodes, keys, words and frontier,
-    /// every name as its 32 bytes, and the husks, each line's print with its words dropped.
-    const FORM: u32 = 3;
+    /// 4: the landed row and the pending pieces, each with its nodes (each line's writer among
+    /// them), keys, words and frontier, every name as its 32 bytes, and the husks, each line's
+    /// print with its words dropped.
+    const FORM: u32 = 4;
 
     fn given(&self) -> Given {
         Given {
@@ -243,12 +251,17 @@ fn node_form(node: &SkeletonNode) -> NodeForm {
                 kind,
                 keys,
                 step,
+                writer,
             } => HeaderForm::Line {
                 conversation: conversation.clone(),
                 at: at.clone(),
                 kind: kind.clone(),
                 keys: keys.iter().map(|k| bytes(k)).collect(),
                 step: step_form(step),
+                writer: match writer {
+                    LineWriter::Box => WriterForm::Box,
+                    LineWriter::Other => WriterForm::Other,
+                },
             },
         },
     }
@@ -267,12 +280,17 @@ fn node_of(form: NodeForm) -> Result<SkeletonNode, String> {
                 kind,
                 keys,
                 step,
+                writer,
             } => NodeHeader::Line {
                 conversation,
                 at,
                 kind,
                 keys: keys.iter().map(hex::encode).collect(),
                 step: step_of(step)?,
+                writer: match writer {
+                    WriterForm::Box => LineWriter::Box,
+                    WriterForm::Other => LineWriter::Other,
+                },
             },
         },
     })
@@ -336,6 +354,7 @@ pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader
         kind: line.shape().name().to_owned(),
         keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
         step: Step::of(line.shape()),
+        writer: LineWriter::of(prodrome_core::schema::Schema::actor(line)),
     }
 }
 

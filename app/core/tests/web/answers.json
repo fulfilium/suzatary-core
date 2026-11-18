@@ -4675,7 +4675,8 @@
               "node": "line",
               "step": {
                 "step": "opened"
-              }
+              },
+              "writer": "box"
             },
             "parents": [
               "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"

@@ -65,6 +65,7 @@ pub struct Node {
     parents: Vec<Hash>,
     keys: Vec<KeyName>,
     step: Step,
+    writer: wire::LineWriter,
 }
 
 /// A skeleton node that does not read.
@@ -92,6 +93,7 @@ impl Parsed {
                 at,
                 keys,
                 step,
+                writer,
                 ..
             } => Read::Line(Node {
                 name: name(&node.hash)?,
@@ -110,6 +112,7 @@ impl Parsed {
                     .map(|key| KeyName::new(key.clone()).map_err(|e| NotANode(e.to_string())))
                     .collect::<Result<_, _>>()?,
                 step: step.clone(),
+                writer: *writer,
             }),
         };
         Ok(Parsed { given: node, read })
@@ -383,6 +386,7 @@ impl Outlines {
                         parents: &node.parents,
                         keys: &node.keys,
                         step: &node.step,
+                        writer: &node.writer,
                     })
                     .collect();
                 outline::of_steps(id, &lines)

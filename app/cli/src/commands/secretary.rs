@@ -1163,7 +1163,25 @@ fn record(
 pub struct Args {
     /// What to do.
     #[command(subcommand)]
-    action: Action,
+    command: Command,
+}
+
+/// A verb over a store named on the command line, or one over the instance's stores.
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// Print, per conversation of a copy of the lines, the turns owed, the turns a restart would
+    /// answer now (with the model answering) and whether the next deploy moves a turn; then the
+    /// counts. Writes nothing; needs no server and no key.
+    Owed {
+        /// Compare today's readings with the next deploy's.
+        #[arg(long, required = true)]
+        compare: bool,
+        /// The lines' directory, a scratch copy of the box's.
+        #[arg(long)]
+        store: std::path::PathBuf,
+    },
+    #[command(flatten)]
+    Instance(Action),
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -1359,12 +1377,71 @@ const STALE_HOURS: f64 = 1.0;
 
 /// `suzatary secretary`.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
-    let instance = Instance::open(path)?;
-    match &args.action {
+    match &args.command {
+        Command::Owed { compare: _, store } => {
+            use suzatary_base::capability::Clock as _;
+            owed_compare(
+                store,
+                suzatary_io::clock::SystemClock.now(),
+                &mut std::io::stdout(),
+            )
+        }
+        Command::Instance(action) => act(&Instance::open(path)?, action),
+    }
+}
+
+/// `suzatary secretary owed --compare --store <lines>`: the lines at `store`, read and never
+/// written, compared at `now` ([`suzatary_lines::secretary::compare`]).
+///
+/// # Errors
+/// No store at `store`, or one that does not read.
+pub fn owed_compare(
+    store: &Path,
+    now: suzatary_base::capability::Datetime,
+    out: &mut dyn std::io::Write,
+) -> anyhow::Result<()> {
+    use suzatary_lines::secretary::compare::{Order, compare};
+    anyhow::ensure!(store.is_dir(), "no lines at {}", store.display());
+    let lines: suzatary_io::objects::Objects<_, suzatary_io::husked::Husked<_>> =
+        suzatary_io::objects::Objects::husked(store);
+    let compared = compare(&lines, now)?;
+    let (mut owed, mut resumed, mut reordered, mut unread) = (0, 0, 0, 0);
+    for (id, read) in &compared {
+        match read {
+            Ok(read) => {
+                owed += read.owed.len();
+                resumed += read.resumed.len();
+                let order = match read.order {
+                    Order::Kept => "the turns keep their order".to_owned(),
+                    Order::Moves { from } => {
+                        reordered += 1;
+                        format!("the turns' order moves from turn {from}")
+                    }
+                };
+                let (o, r) = (&read.owed, &read.resumed);
+                writeln!(out, "{id}: owed {o:?}; a restart answers {r:?}; {order}")?;
+            }
+            Err(refused) => {
+                unread += 1;
+                writeln!(out, "{id}: does not fold: {refused}")?;
+            }
+        }
+    }
+    let all = compared.len();
+    writeln!(
+        out,
+        "{all} conversations: {owed} turns owed, {resumed} a restart answers, {reordered} reordered, {unread} that do not fold"
+    )?;
+    Ok(())
+}
+
+/// `suzatary secretary`'s verbs over the instance's stores.
+fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
+    match action {
         Action::Ask { conversation, text } => {
-            let operator = crate::commands::call::Operator::of(&instance)?;
+            let operator = crate::commands::call::Operator::of(instance)?;
             let id = match conversation {
-                crate::commands::ask::Conversation::New => begun_topic(&instance)?,
+                crate::commands::ask::Conversation::New => begun_topic(instance)?,
                 crate::commands::ask::Conversation::Named(id) => id.clone(),
             };
             let asked = crate::commands::ask::ask(&operator, &id, text)?;
@@ -1378,41 +1455,41 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             new,
             chain,
             json,
-        } => brief(&instance, title, *new, chain.as_deref(), *json),
+        } => brief(instance, title, *new, chain.as_deref(), *json),
         Action::Review {
             chain,
             json,
             page_after,
-        } => review(&instance, chain.as_deref(), *json, page_after.unwrap_or(0)),
+        } => review(instance, chain.as_deref(), *json, page_after.unwrap_or(0)),
         Action::Sweep {
             chain,
             json,
             dry_run,
         } => {
             if *dry_run {
-                sweep_dry_run(&instance, chain.as_deref(), *json)
+                sweep_dry_run(instance, chain.as_deref(), *json)
             } else {
-                sweep(&instance, chain.as_deref(), *json)
+                sweep(instance, chain.as_deref(), *json)
             }
         }
-        Action::Reviews { since } => reviews(&instance, since.as_deref()),
-        Action::List => list(&instance),
-        Action::Show { id } => show(&instance, id),
+        Action::Reviews { since } => reviews(instance, since.as_deref()),
+        Action::List => list(instance),
+        Action::Show { id } => show(instance, id),
         Action::Dismiss {
             conversation,
             n,
             reason,
             actor,
-        } => dismiss(&instance, conversation, *n, reason, actor.as_deref()),
+        } => dismiss(instance, conversation, *n, reason, actor.as_deref()),
         Action::Digest {
             action: DigestAction::Census,
-        } => census(&instance, &mut std::io::stdout()),
-        Action::Readings => readings(&instance, &mut std::io::stdout()),
+        } => census(instance, &mut std::io::stdout()),
+        Action::Readings => readings(instance, &mut std::io::stdout()),
         Action::PruneLines { large, apply } => {
-            prune_lines(&instance, *large, *apply, &mut std::io::stdout())
+            prune_lines(instance, *large, *apply, &mut std::io::stdout())
         }
         Action::MigrateScrub { apply } => {
-            migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
+            migrate_scrub(instance, *apply, &mut std::io::stdout()).map(|_| ())
         }
         Action::Topics {
             action: TopicsAction::Carry { map, dry_run },
@@ -1422,7 +1499,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 (Some(map), true) => CarryRun::Show(map.clone()),
                 (Some(map), false) => CarryRun::Write(map.clone()),
             };
-            carry(&instance, &run, &mut std::io::stdout()).map(|_| ())
+            carry(instance, &run, &mut std::io::stdout()).map(|_| ())
         }
         Action::Topics {
             action: TopicsAction::Backfill { apply, plan, .. },
@@ -1433,10 +1510,10 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 (None, plan) => BackfillRun::Plan(plan.clone()),
             };
             match run {
-                BackfillRun::Apply(file) => backfill_apply(&instance, &file, out),
+                BackfillRun::Apply(file) => backfill_apply(instance, &file, out),
                 BackfillRun::Plan(plan) => {
                     let model = crate::commands::serve::interpreters::CompactorModel::new(
-                        &instance,
+                        instance,
                         instance.secretary.compactors.first().clone(),
                     );
                     let mut asked =
@@ -1444,7 +1521,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                          text: suzatary_held::for_model::ForModel| {
                             model.ask(system, text)
                         };
-                    backfill_plan(&instance, plan.as_deref(), &mut asked, out)
+                    backfill_plan(instance, plan.as_deref(), &mut asked, out)
                 }
             }
             .map(|_| ())
