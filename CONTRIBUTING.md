@@ -12,8 +12,8 @@ each rule. Reviewers judge a contribution first by whether it keeps this princip
 - If you change `web/`, also read [`docs/TS-STYLE.md`](docs/TS-STYLE.md) and
   [`docs/WEB-SPEC.md`](docs/WEB-SPEC.md).
 - If your change is larger than a fix, open an issue first. Say what you want to change and
-  why. A design for it often exists already in a dated plan. Or the project rejected the idea
-  before, and the reason is in `ROADMAP.md`.
+  why. A design for it often exists already in a dated plan, or as a task on
+  [the roadmap](https://fulfilium.github.io/suzatary-core-roadmap/).
 - Do not report a security problem in an issue. Follow [`SECURITY.md`](SECURITY.md) instead.
 
 ## Setting up

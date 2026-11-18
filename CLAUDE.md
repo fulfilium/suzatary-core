@@ -500,8 +500,6 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   the release cut folds and deletes; the merge gate's `changelog` step refuses
   an `app/` or `web/` change that adds no fragment, and any edit to
   `CHANGELOG.md` outside a release (→ `train`).
-- `ROADMAP.md` — recorded direction, NOT built, plus a Rejected section with
-  reasons (a deleted idea gets re-proposed; a rejected one does not).
 - **A release is a `v<version>` tag**, made by `train.sh land` alone. CI's
   `quick.yml` runs on every push to master, `tests.yml` on a `v*.*.0` tag, and
   `release-apk.yml` only when the Android shell changed or a MAJOR starts (→
