@@ -36,9 +36,9 @@ pub(crate) const DARK: &str = "roadmap-dark.svg";
 /// The page that shows the pictures, beside the store.
 pub(crate) const README: &str = "README.md";
 
-/// The rows a picture draws; the rest are counted beneath them. The README is a preview of the
-/// page it links to, and a picture of every row of a long list would outgrow what GitHub inlines.
-const ROWS: usize = 30;
+/// The rows a picture draws, the most urgent; the rest are counted beneath them. The README is a
+/// preview of the page it links to, which holds the whole list.
+const ROWS: usize = 5;
 
 /// What `prodrome draw` takes.
 #[derive(Debug, clap::Args)]
