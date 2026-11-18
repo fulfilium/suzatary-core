@@ -1,7 +1,7 @@
 //! An act's note lands on the event and, when non-empty, appends one `Turn::Act` and wakes the
 //! secretary once the box adopts it through `POST /api/objects`; `/api/author` appends nothing.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

@@ -3,7 +3,7 @@
 //! box throughout; who may read mail is `gate.rs`'s. The query string that reaches notmuch is the
 //! interpreter's, tested in `suzatary_io::mailbox`, not here.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use suzatary_held::message_part::MailHeader;

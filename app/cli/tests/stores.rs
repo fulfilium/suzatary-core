@@ -1,7 +1,7 @@
 //! The secretary's stores as replicas a tab pulls: what a replica lacks, by heads, and the
 //! decorations only the box can give, by content; and the topic stores, which a tab also writes.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

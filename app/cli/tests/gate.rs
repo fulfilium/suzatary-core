@@ -6,7 +6,7 @@
 //! to [`PEER`], and [`common::v6`] is kept for a dead daemon, an `Err` the cache never stores.
 //! Another login and an unresolved peer refuse with the same body, so one test stands for both.
 
-mod common;
+use crate::common;
 
 use std::net::IpAddr;
 

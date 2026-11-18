@@ -1,7 +1,7 @@
 //! The operator's `suzatary secretary` verbs over a real `Instance` (`suzatary init`'s own
 //! output), answering proposals made by a round of the scripted model over the served app.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

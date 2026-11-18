@@ -2,7 +2,7 @@
 //! `common`'s header on peer identities). Two scenes hold `common::Gate` across the model call,
 //! since a fast fake could finish a round before the second `say` arrives.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

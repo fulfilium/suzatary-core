@@ -4,7 +4,7 @@
 //! A sweep is started by the box, so no server or gate is involved, except in the last test,
 //! where performing its proposal must cross a real `Tap`.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

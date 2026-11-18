@@ -2,7 +2,7 @@
 //! startup, since a page reads it from its replica and no read writes); opening it again reads the
 //! same conversation, and a tab's replica lists it as the default.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

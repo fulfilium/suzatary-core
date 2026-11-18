@@ -1,7 +1,7 @@
 //! `/api/calendar/{date}` over the real cache-tier store: a week from a day, its cancellations
 //! read as cancelled and its titles shown as text.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use prodrome_core::declared::Declaration;

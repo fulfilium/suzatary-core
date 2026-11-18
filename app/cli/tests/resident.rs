@@ -11,7 +11,7 @@
 //! shape is `SUZATARY_RESIDENT_LINES=14400 SUZATARY_RESIDENT_CONVERSATIONS=100` (each count
 //! below has its variable), which a release build measured at 0.86 to 0.92 GB over 24 rounds.
 
-mod common;
+use crate::common;
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

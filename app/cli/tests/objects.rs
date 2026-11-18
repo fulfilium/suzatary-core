@@ -2,7 +2,7 @@
 //!
 //! `v4` is the writer `ada@example.com` and `v6` a viewer; unresolved peers are `gate.rs`'s.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

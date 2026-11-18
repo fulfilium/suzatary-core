@@ -2,7 +2,7 @@
 //! (see `common`'s header on peer identities): a round that answers with no subscriber to
 //! `GET …/stream` pushes exactly once, and with a subscriber connected it pushes nothing.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

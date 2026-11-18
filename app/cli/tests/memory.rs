@@ -1,7 +1,7 @@
 //! The secretary's memory over a real server: the owner's clean round remembers, a round that read
 //! mail stores a card his tap writes, and a round the box opened remembers nothing.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

@@ -2266,6 +2266,10 @@ fn merge_gate_live_reads_cover_what_the_live_tests_compile() {
     }
     need("app/cli/tests/live.rs".to_owned());
     need("app/cli/tests/all.rs".to_owned());
+    let all = std::fs::read_to_string(repo().join("app/cli/tests/all.rs")).unwrap_or_default();
+    if all.lines().any(|line| line.trim() == "mod common;") {
+        need("app/cli/tests/common".to_owned());
+    }
     for target in [
         "live.rs",
         "accounts.rs",

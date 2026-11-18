@@ -1,6 +1,6 @@
 //! The small routes: chain segments, `/api/tip`, device tokens and a read's tag.
 
-mod common;
+use crate::common;
 
 use common::{Fakes, actor, deployment, login, v4};
 use suzatary_store::store::Reads as _;

@@ -2,7 +2,7 @@
 //! upkeep chain, and a scratch checkout: the reading, the cut that writes the release file and the
 //! changelog, the check a land asks before it tags, and the completions it writes.
 
-mod common;
+use crate::common;
 
 use std::path::{Path, PathBuf};
 

@@ -4,7 +4,7 @@
 //! The sweep's and the review's rounds are pinned beside their own fixtures, in `sweep.rs` and
 //! `review.rs`.
 
-mod common;
+use crate::common;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;

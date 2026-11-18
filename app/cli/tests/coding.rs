@@ -3,7 +3,7 @@
 //! local repository's `claude/` branches and merges nothing; "Build it" files the card for a
 //! todo, at most two at once.
 
-mod common;
+use crate::common;
 
 use std::io::{BufRead, BufReader, Read as _, Write as _};
 use std::sync::Arc;

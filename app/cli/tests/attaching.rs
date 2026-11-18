@@ -3,7 +3,7 @@
 //! records its name, type, size and SHA-256, and refuses a source that is
 //! missing, outside the allowed Drive folders, or over the cap.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

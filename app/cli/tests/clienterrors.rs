@@ -2,7 +2,7 @@
 //! is 204, an oversized one is refused, and a login past its budget is 429
 //! before its body is read.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

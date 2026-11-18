@@ -549,7 +549,8 @@ The CLI's test binary `all` is about 21.8 s of every case. 48 of its 71 modules 
 `mod common;`, so the shared test support (about 5,000 lines) is checked 48 times, about 0.5 s
 each; leaving out any one of the six largest test modules moves the figure by no more than the
 spread between runs. Declared once in `all.rs`, with each file naming `crate::common`, the check
-measured 4.0 s.
+measured 4.0 s. Done in the next pull request: after a one-line edit in a CLI test module, the
+workspace check fell from 21.1 s to 4.7 s and the binary's build from 35.6 s to 11.0 s.
 
 The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, shrank by 582 bytes after
 `wasm-opt` (4,863,675 to 4,863,093), and the pages' module grew by 46 (3,602,802 to 3,602,848). No

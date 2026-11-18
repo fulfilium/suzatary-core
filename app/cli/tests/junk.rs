@@ -1,7 +1,7 @@
 //! The junk sweep's verbs, called as the secretary calls them, over a fake Junk folder: a digest
 //! asks nothing of an account or a window it refuses, and both verbs taint the round.
 
-mod common;
+use crate::common;
 
 use common::{FakeJunk, Fakes, JunkFolder};
 use serde_json::{Value, json};

@@ -2,7 +2,7 @@
 //! words alone may make a topic, and a round that has read mail may only use one in use, so mail
 //! never names a topic.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use serde_json::{Value, json};

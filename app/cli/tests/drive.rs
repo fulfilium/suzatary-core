@@ -3,7 +3,7 @@
 //! on any command but the two reads: a file in an allowed folder is read at once, any other
 //! becomes a card naming the file, and every SSN or EIN arrives as a placeholder naming the file.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

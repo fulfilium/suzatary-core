@@ -4,7 +4,7 @@
 //! in and keeps the token the CLI printed as the subscription's, after its test call. No answer
 //! carries the code or the token. Never a real login.
 
-mod common;
+use crate::common;
 
 use std::sync::{Arc, Mutex};
 

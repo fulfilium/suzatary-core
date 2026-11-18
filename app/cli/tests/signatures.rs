@@ -2,7 +2,7 @@
 //! trusted device's tap trusts its key, a revoked key's after, and what it signed before still
 //! reads. Both "devices" post from one login, which is why a login cannot be what trusts a key.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

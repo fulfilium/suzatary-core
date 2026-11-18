@@ -1,7 +1,7 @@
 //! Asking again over a real server: `POST …/regenerate` and `POST …/edit` set the last round
 //! aside and the worker answers in a fresh session; a round that wrote anything is refused.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

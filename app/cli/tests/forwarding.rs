@@ -2,7 +2,7 @@
 //! store see the original's held value only as its placeholder, and the owner's tap sends the
 //! original as the message holds it, or nothing when its file changed.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

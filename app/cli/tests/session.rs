@@ -1,7 +1,7 @@
 //! `answer`'s session paths end to end over `Fakes`: open, resume with the delta, and a lost
 //! resume followed by one cold open.
 
-mod common;
+use crate::common;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;

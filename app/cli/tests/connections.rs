@@ -3,7 +3,7 @@
 //! stored nowhere and asked for as a Grant, and Disconnect takes out what Connect wrote, a
 //! plugin's manifest aside.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

@@ -3,7 +3,7 @@
 //! keeps the value in no request record or kept answer. A proposed email names it by its
 //! placeholder, and only the owner's tap writes the value into the message on the wire.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

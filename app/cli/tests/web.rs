@@ -1,7 +1,7 @@
 //! The secretary on the web, by permission: a host an allow rule covers is read at once, any
 //! other becomes a card with the URL and a drafted rule, and the tap reads it.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

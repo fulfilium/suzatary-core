@@ -1,7 +1,7 @@
 //! `/api/briefings/{date}` over the real `BriefingFiles` in a temp directory, which pins the
 //! on-disk shape.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 

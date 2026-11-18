@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-mod common;
+use crate::common;
 
 use std::io::Write;
 use std::path::PathBuf;

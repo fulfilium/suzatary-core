@@ -2,7 +2,7 @@
 //! local repository: a read of a repository the token does not reach is refused, and a patch or
 //! a file leaves the box only on the owner's tap, as its card showed it.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

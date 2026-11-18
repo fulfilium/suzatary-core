@@ -4,7 +4,7 @@
 //! without the CSRF triple, and lets a writer with it through; a read refuses none of
 //! them. A path's unlisted method is axum's own 405, so a route gained is a route listed.
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

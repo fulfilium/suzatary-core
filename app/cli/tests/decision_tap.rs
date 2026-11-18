@@ -1,7 +1,7 @@
 //! A recorded decision over a real server: the secretary proposes one, nothing is recorded
 //! until the owner's tap, and the tap records it as his, which `decisions` then reads.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

@@ -2,7 +2,7 @@
 //! round's halt; the round ends its model process and writes the act, which closes the question
 //! in that one write, and the stop answers once it is written.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

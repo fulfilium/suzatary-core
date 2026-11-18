@@ -1,7 +1,7 @@
 //! The owner erases a conversation's words over a real server: a turn, or the whole of it, read
 //! back as erased with every line's shape standing, and gone from every file the box keeps.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

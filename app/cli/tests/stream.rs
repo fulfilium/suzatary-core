@@ -3,7 +3,7 @@
 //! `resume` streams deltas (`SessionModel::open` carries no `on_delta`), so the delta scenes
 //! read an established session's second round.
 
-mod common;
+use crate::common;
 
 use std::io::BufRead;
 use std::sync::Arc;

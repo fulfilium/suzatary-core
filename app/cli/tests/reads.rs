@@ -1,7 +1,7 @@
 //! What a reader sees: every test is a GET as this box's own node over the shared six-todo chain
 //! unless its own header says otherwise; who may act is `writes.rs`'s and `objects.rs`'s.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use prodrome_core::event::{mk_completed, mk_created, seal_hash};

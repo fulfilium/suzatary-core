@@ -12,7 +12,7 @@
 //! `cargo test --release -p suzatary --features fixture --test all overview_cost -- --ignored
 //! --nocapture`
 
-mod common;
+use crate::common;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

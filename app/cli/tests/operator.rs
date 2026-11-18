@@ -2,7 +2,7 @@
 //! question asked at the terminal is the owner's words stamped as the operator's, and a card that
 //! sends mail is refused to the operator's tap with nothing sent.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

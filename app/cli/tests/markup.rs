@@ -4,7 +4,7 @@
 //! `common::FakeRender` wraps the markup in `<p>…</p>`, so a test sees which fragment reached it
 //! without typst on `PATH`.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use suzatary_todo::render::Render as _;

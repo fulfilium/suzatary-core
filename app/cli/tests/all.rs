@@ -1,13 +1,12 @@
 //! Every integration test of this crate as one binary: one link of the whole
-//! application instead of one per file. Each file stays where it was and reads
-//! as it did on its own; a file under `tests/` that is not a module here, or a
-//! target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
-//! cli's tests fails when one is missing.
+//! application instead of one per file. Each file stays where it was; a file
+//! under `tests/` that is not a module here, or a target of its own in
+//! `Cargo.toml`, does not run, and `suites.rs` in the cli's tests fails when
+//! one is missing.
 
-#![allow(
-    clippy::duplicate_mod,
-    reason = "each file keeps its own `mod common;`, as it had when it was a crate of its own"
-)]
+/// The shared support, which each module names as `crate::common`: a `mod common;` in each
+/// file would type-check it once per file.
+mod common;
 
 #[path = "accounts.rs"]
 mod accounts;

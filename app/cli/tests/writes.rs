@@ -3,7 +3,7 @@
 //! Checked as this box's own node, which reads and never writes, since these are claims about the
 //! router, not identity.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 

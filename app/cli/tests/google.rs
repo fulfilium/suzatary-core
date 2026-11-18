@@ -5,7 +5,7 @@
 //! never drew, or one already read, exchanges nothing; a code Google already redeemed keeps
 //! nothing. The calendars are read bounded, and an event is written only by a tapped card.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

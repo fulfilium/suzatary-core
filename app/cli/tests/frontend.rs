@@ -1,7 +1,7 @@
 //! The frontend mount: `web/dist/` is the one directory served as files. Read as this box
 //! throughout: this is about what is served, not who may see it.
 
-mod common;
+use crate::common;
 
 use common::Fakes;
 use suzatary_cli::stamp::build as built;

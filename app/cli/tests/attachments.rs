@@ -1,7 +1,7 @@
 //! The secretary reads attachments over a real server with a scripted model and a fake mailbox:
 //! the `attachments` verb answers what it asked for, with no tap needed for a read.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

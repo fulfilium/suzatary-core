@@ -2,7 +2,7 @@
 //!
 //! `v4` resolves to the writer `ada@example.com` and `v6` to the viewer `guest@example.com`.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

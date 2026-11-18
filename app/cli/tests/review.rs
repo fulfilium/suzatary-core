@@ -2,7 +2,7 @@
 //!
 //! No server or peer: the box starts a review, so no request, gate or `Tap` is involved.
 
-mod common;
+use crate::common;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::capability::Clock as _;
