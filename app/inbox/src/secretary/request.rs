@@ -1,7 +1,7 @@
 //! The request an act makes of the owner: everything it would write except its pricing, the price
 //! and the rationale that explains it. A writer re-reads a price off the date on every pass (a
 //! deadline nearing moves 62% to 61%), so two acts that differ only in their pricing are the same
-//! request, and a triage card is known by its acts' requests (`suzatary_core::secretary::filed`).
+//! request, and a triage card is known by its acts' requests (`suzatary_topics::secretary::filed`).
 
 use chrono::NaiveDate;
 

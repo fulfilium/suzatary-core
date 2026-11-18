@@ -4,6 +4,7 @@
 //! `--settings` [`Fence`] keep the account's own servers (a mail sender among them) and the
 //! box's files out of reach of a prompt that carries other people's mail. All three are needed.
 
+use crate::prompt::Reads;
 pub mod failure;
 pub mod sessions;
 pub mod stream;
@@ -292,7 +293,7 @@ impl Model for ClaudeCli {
         conversation: &Conversation,
         tools: &serde_json::Value,
     ) -> Result<Reply, ModelError> {
-        let prompt = prompt_of(conversation, tools, crate::prompt::Reads::Files);
+        let prompt = prompt_of(conversation, tools, Reads::Files);
         let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
         let ended = self.ended(&self.command(
             Mode::Stateless {
@@ -377,7 +378,7 @@ impl SessionModel for ClaudeCli {
         tools: &serde_json::Value,
         halt: &Halt,
     ) -> Result<Sessioned, ModelError> {
-        let prompt = prompt_of(conversation, tools, crate::prompt::Reads::Files);
+        let prompt = prompt_of(conversation, tools, Reads::Files);
         let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
         let created = stamp(SystemClock.now());
         let cmd = self.command(
@@ -401,10 +402,7 @@ impl SessionModel for ClaudeCli {
         on_delta: &dyn Fn(&str),
         halt: &Halt,
     ) -> Result<Sessioned, ModelError> {
-        let (stdin, token) = self.feed(
-            delta_prompt(delta, crate::prompt::Reads::Files),
-            delta.turns(),
-        )?;
+        let (stdin, token) = self.feed(delta_prompt(delta, Reads::Files), delta.turns())?;
         let system = ForModel::of(system);
         let cmd = self.command(
             Mode::Resume {
@@ -1092,7 +1090,7 @@ mod tests {
     /// session, the fence kept, from the directory it was given.
     #[test]
     fn a_plain_call_sends_the_prompt_and_the_text_and_nothing_else() {
-        use suzatary_core::secretary::compact_ask::{Ask, PROMPT};
+        use suzatary_digest::secretary::compact_ask::{Ask, PROMPT};
         let settings = Path::new("/repo/.claude/secretary-settings.json");
         let cli = ClaudeCli::new("claude-sonnet-5-5", Fence::at(settings))
             .in_directory(PathBuf::from("/cache/suzatary/compactor"))

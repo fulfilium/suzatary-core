@@ -1,8 +1,9 @@
 //! The Inbox: what waits on the owner, ascending in urgency, then what was settled today. A row
 //! this app cannot resolve is plain text with no control.
 
+use crate::waiting::Standing;
 use serde::{Deserialize, Serialize};
-use suzatary_core::wire::topics::UnplacedProposal;
+use suzatary_topics::wire::topics::UnplacedProposal;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Open};
 use viewtree::kit::{Reading, para};
@@ -216,7 +217,7 @@ impl Program for Inbox {
         let unreadable: Vec<Waiting<'_>> = all
             .iter()
             .copied()
-            .filter(|w| matches!(w.standing(), crate::waiting::Standing::Unreadable(_)))
+            .filter(|w| matches!(w.standing(), Standing::Unreadable(_)))
             .collect();
         let nothing = (problem.is_none() && answered).then(|| chrome::empty("Nothing is waiting on you. Changes the triage agent and the secretary propose appear here."));
         let listed: Vec<Node<Msg>> = if owed == 0 {
@@ -244,7 +245,7 @@ impl Program for Inbox {
 fn row_of<'a>(
     rows: &[Row<'a>],
     key: &card::Key,
-) -> Option<&'a suzatary_core::wire::topics::ProposalRow> {
+) -> Option<&'a suzatary_topics::wire::topics::ProposalRow> {
     rows.iter().find_map(|r| match r {
         Row::Card(_, c, row) if card::Key::of(c.id, row) == *key => Some(*row),
         Row::Card(..) | Row::Unresolved(_) => None,
@@ -413,8 +414,8 @@ fn unreadable_section(ws: &[Waiting<'_>]) -> Option<Node<Msg>> {
     (!ws.is_empty()).then(|| {
         view! { Div "unreadable" [ws.iter().map(|w| {
             let why = match w.standing() {
-                crate::waiting::Standing::Unreadable(why) => why,
-                crate::waiting::Standing::Open | crate::waiting::Standing::Settled(..) => "",
+                Standing::Unreadable(why) => why,
+                Standing::Open | Standing::Settled(..) => "",
             };
             view! { Div "problem" {Data("unreadable") => w.key()} [
                 para("", format!("Cannot be read, so nothing acts on it: {why}.")),

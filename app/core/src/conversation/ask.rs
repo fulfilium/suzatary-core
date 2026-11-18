@@ -1,31 +1,32 @@
 //! How a round asks its model.
 
 use serde_json::Value;
+use suzatary_digest::secretary::memories::Memories;
 
 use crate::conversation::round::Sink;
-use crate::secretary::compaction::Reading;
-use crate::secretary::digest_view::VIEW_BYTES;
-use crate::secretary::told::{Asking, context_of};
-use crate::secretary::topics::stores::TopicStores;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{
     Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
 };
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{Kept, Scope, Stored};
+use suzatary_digest::secretary::compaction::Reading;
+use suzatary_digest::secretary::digest_view::VIEW_BYTES;
+use suzatary_digest::secretary::told::{Asking, context_of};
 use suzatary_memory::secretary::memory;
+use suzatary_topics::secretary::topics::stores::TopicStores;
 
 /// How a round asks its model: the one difference between a model that remembers and one that
 /// does not.
 #[derive(Clone, Copy)]
 pub enum Ask<'a> {
     /// A model with no session, sent this conversation's window of live turns under what it
-    /// remembers ([`crate::secretary::told::context_of`]) each time.
+    /// remembers ([`suzatary_digest::secretary::told::context_of`]) each time.
     Window {
         /// The model.
         model: &'a dyn Model,
         /// The memory it is told.
-        memories: crate::secretary::memories::Memories<'a>,
+        memories: Memories<'a>,
         /// The topics it is told are in use.
         topics: TopicStores<'a>,
     },
@@ -37,7 +38,7 @@ pub enum Ask<'a> {
         /// Asked when a session will not open.
         fallback: &'a dyn Model,
         /// The memory it is told.
-        memories: crate::secretary::memories::Memories<'a>,
+        memories: Memories<'a>,
         /// The topics it is told are in use when it opens.
         topics: TopicStores<'a>,
     },
@@ -175,7 +176,7 @@ impl Ask<'_> {
 /// the first turn it sent.
 fn opening(
     system: &str,
-    memories: crate::secretary::memories::Memories<'_>,
+    memories: Memories<'_>,
     topics: TopicStores<'_>,
     stored: &Stored,
 ) -> (Conversation, Option<u64>, usize) {
@@ -202,7 +203,7 @@ fn opening(
 fn sessioned(
     model: &dyn SessionModel,
     fallback: &dyn Model,
-    memories: crate::secretary::memories::Memories<'_>,
+    memories: Memories<'_>,
     topics: TopicStores<'_>,
     id: &ConversationId,
     system: &str,
@@ -324,7 +325,7 @@ enum Telling<'a> {
 /// What `telling` tells: the facts whole, then the record of every conversation, to a model
 /// opening; the facts added and forgotten since a resumed session was last told. A memory that
 /// will not read is said, never skipped.
-fn heading(memories: crate::secretary::memories::Memories<'_>, telling: Telling<'_>) -> Heading {
+fn heading(memories: Memories<'_>, telling: Telling<'_>) -> Heading {
     let memory = match memories.reads().read() {
         Ok(memory) => memory,
         Err(refusal) => {

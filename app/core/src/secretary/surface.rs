@@ -18,15 +18,15 @@ use super::verbs::{
 use super::verbs::{IfCarded, check, propose};
 use crate::agent::Agent;
 use crate::agent::{Holds, Says};
-use crate::secretary::compaction::Reading;
 use crate::secretary::gate::Gate;
-use crate::secretary::shown_record::{Everything, ShownRecord};
 use crate::verb::{Surface, verbs};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::writer::Writer;
 use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_conversations::secretary::verb_name::{Binding, VerbName};
+use suzatary_digest::secretary::compaction::Reading;
+use suzatary_digest::secretary::shown_record::{Everything, ShownRecord};
 use suzatary_inbox::secretary::changes::{Act, Changeset, Unapplied};
 use suzatary_inbox::secretary::proposal::Proposal;
 

@@ -1,0 +1,40 @@
+[package]
+name = "suzatary-digest"
+description = "Suzatary's digest: a conversation compacted within its budget, and the memories it recalls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_digest"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-triage.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-triage/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
+
+[dev-dependencies]
+suzatary-digest = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

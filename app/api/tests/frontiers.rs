@@ -27,14 +27,14 @@ use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
 use suzatary_api::routes::{self, Books, Cut, Posted};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
-use suzatary_core::secretary::topics::reading::MembershipEvent;
-use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::stores::InMemory;
 use suzatary_lines::wire::lines::Frontier;
 use suzatary_signatures::epoch::Epochs;
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
 use suzatary_store::wire::store::SinceRead;
+use suzatary_topics::secretary::topics::reading::MembershipEvent;
+use suzatary_topics::secretary::topics::topic::Topic;
 
 const KEY: &str = "store/topics";
 
@@ -94,13 +94,13 @@ impl Device {
             turn: n,
         };
         let topic = Topic::new(["travel", "work"][n % 2]).expect("a topic");
-        if let Some(event) = suzatary_core::secretary::topics::reading::of(&nodes, &[])
+        if let Some(event) = suzatary_topics::secretary::topics::reading::of(&nodes, &[])
             .expect("one genesis")
             .add(
                 &target,
                 &topic,
                 at(self.clock),
-                &suzatary_core::secretary::topics::provenance::Owner::new(self.actor.clone())
+                &suzatary_topics::secretary::topics::provenance::Owner::new(self.actor.clone())
                     .expect("a device"),
             )
         {

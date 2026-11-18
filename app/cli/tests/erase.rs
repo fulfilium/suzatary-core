@@ -143,7 +143,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
     // Written as the compactor writes it, over the root, whichever node is pending: which is,
     // is a function of the lines' names, and every key is fresh.
     let text = suzatary_memory::secretary::salted_text::Text::new(
-        suzatary_core::secretary::digest_line::Line::new(&summary).expect("a line"),
+        suzatary_digest::secretary::digest_line::Line::new(&summary).expect("a line"),
         [7; suzatary_base::capability::SALT_BYTES],
     );
     memories
@@ -155,21 +155,21 @@ fn an_erasure_takes_the_summaries_that_read_it() {
         .digests
         .history
         .append(
-            suzatary_core::secretary::digest_event::summarized(
+            suzatary_digest::secretary::digest_event::summarized(
                 root.name().clone(),
                 prodrome_core::literal::Datetime::new(2026, 10, 9, 9, 0, 0, 0).expect("an instant"),
-                suzatary_core::secretary::digests::compactor(),
+                suzatary_digest::secretary::digests::compactor(),
                 &text,
-                suzatary_core::secretary::digest_event::Attempt {
+                suzatary_digest::secretary::digest_event::Attempt {
                     over: root
                         .children()
                         .iter()
                         .map(|child| child.name().clone())
                         .collect(),
-                    model: suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5")
+                    model: suzatary_digest::model_name::ModelName::parse("claude-sonnet-5-5")
                         .expect("a model"),
                     taint: root.measure().taint,
-                    beside: suzatary_core::secretary::compact_ask::Beside::of(root.measure()),
+                    beside: suzatary_digest::secretary::compact_ask::Beside::of(root.measure()),
                 },
             )
             .expect("a summary"),

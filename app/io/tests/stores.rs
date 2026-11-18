@@ -16,8 +16,8 @@ use suzatary_base::drive_path::DrivePath;
 use suzatary_connect::cast::CAST;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_core::secretary::digests::Digests;
-use suzatary_core::secretary::memories::Memories;
+use suzatary_digest::secretary::digests::Digests;
+use suzatary_digest::secretary::memories::Memories;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
@@ -428,7 +428,7 @@ fn memories(root: &Path) {
                 opened: Box::leak(Box::default()),
             },
             owners: &std::collections::BTreeSet::new(),
-            compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+            compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
         },
     };
     let said = Origin::Turn {
@@ -582,7 +582,7 @@ fn uploads(root: &Path) {
 /// The digest: one node's summary retracted by the owner.
 fn digests(root: &Path) {
     use prodrome_core::event::parse_event;
-    use suzatary_core::secretary::digest_event::{DigestEvent, DigestVocabulary};
+    use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
     let store = Objects::digests(root.join(DIGESTS), owners());
     rooted(&store, "digests");
     let retracted = parse_event::<DigestEvent>(
@@ -634,8 +634,8 @@ fn decisions(root: &Path) {
 
 /// The topics: a round put on a topic and taken off another, and the first topic renamed.
 fn topics(root: &Path) {
-    use suzatary_core::secretary::topics::reading::Topics;
-    use suzatary_core::secretary::topics::topic::Topic;
+    use suzatary_topics::secretary::topics::reading::Topics;
+    use suzatary_topics::secretary::topics::topic::Topic;
     let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
     rooted(&topics.memberships, "topics");
     rooted(&topics.aliases, "topic-aliases");
@@ -886,7 +886,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
             texts: database.digest_texts,
             lines: conversations,
             owners: &std::collections::BTreeSet::new(),
-            compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+            compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
         },
     }
     .reads()
@@ -922,7 +922,7 @@ fn decisions_and_topics_read(database: &suzatary_core::stores::Database<'_>) {
     .ledger()
     .expect("reads");
     assert_eq!(ledger.len(), 2);
-    let reading = suzatary_core::secretary::topics::stores::TopicStores {
+    let reading = suzatary_topics::secretary::topics::stores::TopicStores {
         memberships: database.topics,
         aliases: database.topic_aliases,
     }
@@ -1053,7 +1053,7 @@ fn digest_at_scale() {
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
     let (history, texts) = (
-        Objects::<suzatary_core::secretary::digest_event::DigestEvent>::open(
+        Objects::<suzatary_digest::secretary::digest_event::DigestEvent>::open(
             dir.path().join("digests"),
         ),
         suzatary_io::texts::Texts::open(dir.path().join("digest-texts")),
@@ -1074,7 +1074,7 @@ fn digest_at_scale() {
         texts: &texts,
         lines: stores(opened),
         owners: &owners,
-        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+        compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
     };
     let (ids, slots) = conversations_at_scale(&lines, &keys, 20, 500);
     println!("{slots} slots");
@@ -1254,12 +1254,12 @@ fn lines_written_before_kinds_were_stored_read_whole() {
 #[ignore = "a measurement, run by name"]
 #[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]
 fn digest_nodes_at_scale() {
-    use suzatary_core::secretary::compact_ask::Beside;
-    use suzatary_core::secretary::compaction::Reading;
-    use suzatary_core::secretary::digest::Standing;
-    use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
-    use suzatary_core::secretary::digest_line::Line;
-    use suzatary_core::secretary::shown_record::OwnersRecord;
+    use suzatary_digest::secretary::compact_ask::Beside;
+    use suzatary_digest::secretary::compaction::Reading;
+    use suzatary_digest::secretary::digest::Standing;
+    use suzatary_digest::secretary::digest_event::{Attempt, DigestEvent, summarized};
+    use suzatary_digest::secretary::digest_line::Line;
+    use suzatary_digest::secretary::shown_record::OwnersRecord;
     use suzatary_lines::secretary::opened::Opened;
     use suzatary_memory::secretary::salted_text::Text;
     let dir = tempfile::tempdir().expect("a scratch dir");
@@ -1281,14 +1281,14 @@ fn digest_nodes_at_scale() {
             opened,
         },
         owners: &owners,
-        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+        compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
     };
     conversations_at_scale(&lines, &keys, 20, 300);
-    let model = suzatary_core::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
-    let compactor = suzatary_core::secretary::digests::compactor();
+    let model = suzatary_digest::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
+    let compactor = suzatary_digest::secretary::digests::compactor();
     let mut count = 0u32;
     // Summarise `nodes` as `reading` reads them, each in a few words of its own.
-    let mut summarise = |nodes: &[Hash], reading: &suzatary_core::secretary::digest::Digest| {
+    let mut summarise = |nodes: &[Hash], reading: &suzatary_digest::secretary::digest::Digest| {
         let mut nodes = nodes.iter();
         history
             .append_each(&mut || {
@@ -1380,8 +1380,8 @@ fn digest_nodes_at_scale() {
 
 /// The name of every inner node of `reading`'s tree that `keep` keeps.
 fn inner(
-    reading: &suzatary_core::secretary::digest::Digest,
-    keep: impl Fn(&prodrome_core::digest::Node<suzatary_core::secretary::digest_label::Label>) -> bool,
+    reading: &suzatary_digest::secretary::digest::Digest,
+    keep: impl Fn(&prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>) -> bool,
 ) -> Vec<Hash> {
     let mut kept = Vec::new();
     let mut stack: Vec<_> = reading
@@ -1407,9 +1407,9 @@ fn inner(
 #[ignore = "a measurement, run by name"]
 #[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]
 fn a_rules_change_over_a_stored_digest() {
-    use suzatary_core::secretary::compact_ask::Beside;
-    use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
-    use suzatary_core::secretary::digest_line::Line;
+    use suzatary_digest::secretary::compact_ask::Beside;
+    use suzatary_digest::secretary::digest_event::{Attempt, DigestEvent, summarized};
+    use suzatary_digest::secretary::digest_line::Line;
     use suzatary_lines::secretary::opened::Opened;
     use suzatary_memory::secretary::salted_text::Text;
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
@@ -1434,10 +1434,10 @@ fn a_rules_change_over_a_stored_digest() {
         texts: &texts,
         lines: stores(opened),
         owners: &owners,
-        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+        compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
     };
-    let model = suzatary_core::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
-    let rule = suzatary_core::secretary::compaction::Compaction {
+    let model = suzatary_digest::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
+    let rule = suzatary_digest::secretary::compaction::Compaction {
         ladder: suzatary_conversations::nonempty::NonEmpty::new(model.clone(), Vec::new()),
     };
     let codes = ConversationId::new("2026-10-09-codes").expect("a slug");
@@ -1464,7 +1464,7 @@ fn a_rules_change_over_a_stored_digest() {
             };
             transcript::push(stores(opened), &codes, &entry).expect("said");
         }
-        let compactor = suzatary_core::secretary::digests::compactor();
+        let compactor = suzatary_digest::secretary::digests::compactor();
         let mut count = 0u32;
         loop {
             let reading = digests(opened).reads().read().expect("reads");
@@ -1562,7 +1562,7 @@ fn a_rules_change_over_a_stored_digest() {
     let reading = digests(warm).reads().read().expect("reads");
     print!(
         "{}",
-        suzatary_core::secretary::digest_census::Census::of(&reading, &rule)
+        suzatary_digest::secretary::digest_census::Census::of(&reading, &rule)
     );
 }
 

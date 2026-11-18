@@ -2,13 +2,15 @@
 //! and on a wide screen the selected todo in a pane. The last tree drawn stays while the next is
 //! asked.
 
+use crate::part::Mark;
 use std::collections::{BTreeMap, BTreeSet};
+use suzatary_todo::wire::todo::EntryState;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use suzatary_api::wire::{Authoring, BriefingsPayload, NewTodo};
 use suzatary_base::tree::Tree;
-use suzatary_core::wire::cards::Overview;
+use suzatary_cards::wire::cards::Overview;
 use suzatary_record::todo::{Price, TodoFields};
 use suzatary_todo::wire::todo::{Entry, Fulfillment};
 use ts_rs::TS;
@@ -1927,15 +1929,9 @@ impl Model {
         match (u, e.map(|e| e.state)) {
             (Unsent::Refused, _) => "refused: open it",
             (Unsent::AwaitingTrust, _) => "waits for this device to be trusted",
-            (Unsent::Sending, Some(suzatary_todo::wire::todo::EntryState::Completed)) => {
-                "done · sending"
-            }
-            (Unsent::Sending, Some(suzatary_todo::wire::todo::EntryState::Cancelled)) => {
-                "cancelled · sending"
-            }
-            (Unsent::Sending, Some(suzatary_todo::wire::todo::EntryState::Open) | None) => {
-                "sending"
-            }
+            (Unsent::Sending, Some(EntryState::Completed)) => "done · sending",
+            (Unsent::Sending, Some(EntryState::Cancelled)) => "cancelled · sending",
+            (Unsent::Sending, Some(EntryState::Open) | None) => "sending",
         }
     }
 
@@ -1967,7 +1963,7 @@ impl Model {
         .join(" ");
         let fold = if l.below {
             let todo = fk.clone();
-            view! { Button "rowfold" {Type => "button", AriaExpanded => if open { "true" } else { "false" }, AriaLabel => format!("{} {id}", if open { "fold" } else { "unfold" })} @click(Msg::Fold(todo, !open)) [mark(crate::part::Mark::Chevron)] }
+            view! { Button "rowfold" {Type => "button", AriaExpanded => if open { "true" } else { "false" }, AriaLabel => format!("{} {id}", if open { "fold" } else { "unfold" })} @click(Msg::Fold(todo, !open)) [mark(Mark::Chevron)] }
         } else {
             view! { Span "rowgap" }
         };
@@ -2023,7 +2019,7 @@ impl Model {
         let n = &c.tree.node;
         let count = todos_in(c.tree).len();
         let head = view! { Button "grouphead" {Type => "button", Data("key") => c.key.clone(), Data("field") => c.key.clone(), AriaExpanded => if c.open { "true" } else { "false" }} @click(Msg::Fold(c.key.clone(), !c.open)) [
-            mark(crate::part::Mark::Chevron),
+            mark(Mark::Chevron),
             view! { Span "grouplabel" [label(&n.place)] },
             worth_mark(&n.worth),
             view! { Span "groupcount" [format!("{count} open")] },
@@ -2041,7 +2037,7 @@ impl Model {
         };
         view! { Section {Class => if c.open { "group open" } else { "group" }, Data("group") => c.key.clone(), Data("worth") => n.worth.number().map_or_else(|| "null".to_owned(), |v| v.to_string())} [
             view! { Div "grouptop" [head] },
-            mark(crate::part::Mark::Rule),
+            mark(Mark::Rule),
             view! { Div "grouprows" => rows },
         ] }
     }
@@ -2148,7 +2144,7 @@ impl Model {
                 } else {
                     format!("{n} {} attention", if n == 1 { "needs" } else { "need" })
                 }),
-                mark(crate::part::Mark::Diamond),
+                mark(Mark::Diamond),
                 view! { A "inboxlink" {Href => To::Inbox("").href()} [if m == 0 { "nothing waits on you".to_owned() } else { format!("{m} {} on you", if m == 1 { "waits" } else { "wait" }) }] },
             ]
         });
@@ -2156,7 +2152,7 @@ impl Model {
             view! { Div "titlerow" [
                 view! { H1 "pagetitle destination" [self.title.clone()] },
                 view! { Button "findbtn" {Type => "button", AriaControls => "finder", AriaExpanded => if self.find == Find::Open { "true" } else { "false" }, AriaLabel => if said.is_empty() { "search, filter and group".to_owned() } else { format!("search, filter and group: {said}") }} @click(Msg::Find) [
-                    mark(crate::part::Mark::Search),
+                    mark(Mark::Search),
                     view! { Span "findsaid" [said.clone()] },
                 ] },
             ] },
@@ -2189,14 +2185,14 @@ impl Model {
             form::refusal(by(About::Price)),
             form::line("draftfield", "why this priority", "why this number (optional)", &s.rationale, |r| Msg::Sheet(SheetMsg::Rationale(r))),
             form::refusal(by(About::Whole)),
-            view! { Button "addbtn" {Type => "button", Disabled => self.adding != Adding::Typing} @click(Msg::Sheet(SheetMsg::Add)) [mark(crate::part::Mark::Plus), "Add todo"] },
+            view! { Button "addbtn" {Type => "button", Disabled => self.adding != Adding::Typing} @click(Msg::Sheet(SheetMsg::Add)) [mark(Mark::Plus), "Add todo"] },
         ] };
         vec![
             view! { Div {Class => if self.up { "picker addsheet open" } else { "picker addsheet" }, Id => "addsheet"} [
                 view! { Button "pickerhandle" {Type => "button", AriaControls => "addsheet", AriaExpanded => if self.up { "true" } else { "false" }} @click(Msg::Sheet(SheetMsg::Handle)) [
-                    view! { Span "addicon" [mark(crate::part::Mark::Plus)] },
+                    view! { Span "addicon" [mark(Mark::Plus)] },
                     view! { Strong ["Add a todo"] },
-                    mark(crate::part::Mark::Chevron),
+                    mark(Mark::Chevron),
                 ] },
                 view! { Div "pickerbody" [head] },
             ] },
@@ -2249,11 +2245,11 @@ impl Model {
         // list, which would be drawn anew with its focused cursor.
         let notes: Vec<Node<Msg>> = [
             match &self.setup {
-                Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark(crate::part::Mark::Chevron)] }] }),
+                Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark(Mark::Chevron)] }] }),
                 Setup::Unknown | Setup::Finished => None,
             },
             match &self.today {
-                Today::Briefed(day) => Some(view! { P "todaybriefing" [view! { A {Href => To::Briefing(day).href()} ["Today's briefing", mark(crate::part::Mark::Chevron)] }] }),
+                Today::Briefed(day) => Some(view! { P "todaybriefing" [view! { A {Href => To::Briefing(day).href()} ["Today's briefing", mark(Mark::Chevron)] }] }),
                 Today::Unknown | Today::None => None,
             },
             self.problem.as_ref().filter(|_| !waiting).map(|p| para("problem", p.as_str())),

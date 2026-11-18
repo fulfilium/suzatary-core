@@ -3,11 +3,16 @@
 //! `send` alone bypasses the corpus operator, which holds no send path, so sending stays
 //! human-only on both sides of the seam; `--dry-run` prints exactly what would go on the wire.
 
+use crate::wiring::Ground;
 use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use suzatary_io::google::Grants;
+use suzatary_io::state::Ledger;
+use suzatary_mail::mail::lacking::Grant;
+use suzatary_triage::mail::verbs::NoiseAdded;
 
 use anyhow::{Context as _, bail};
 use clap::Subcommand;
@@ -46,8 +51,8 @@ pub fn tokens(instance: &Instance) -> TokenStore {
 /// The triage's bookkeeping: `state.json`, pushed, and the box-local rest, joined by the key
 /// secretspec holds.
 #[must_use]
-pub fn ledger(instance: &Instance) -> suzatary_io::state::Ledger {
-    suzatary_io::state::Ledger::resolving(
+pub fn ledger(instance: &Instance) -> Ledger {
+    Ledger::resolving(
         instance.mail.state.clone(),
         instance.local.mail(),
         instance.secrets(),
@@ -57,19 +62,19 @@ pub fn ledger(instance: &Instance) -> suzatary_io::state::Ledger {
 /// The corpus, read-only.
 #[must_use]
 pub fn notmuch(instance: &Instance) -> Notmuch {
-    crate::wiring::Ground::of(instance).notmuch(instance.code())
+    Ground::of(instance).notmuch(instance.code())
 }
 
 /// The pull.
 #[must_use]
 pub fn syncer(instance: &Instance) -> Syncer {
-    crate::wiring::Ground::of(instance).syncer()
+    Ground::of(instance).syncer()
 }
 
 /// The grants a sign-in with Google keeps, against Google's own endpoints.
 #[must_use]
-pub fn google_grants(instance: &Instance) -> suzatary_io::google::Grants {
-    suzatary_io::google::Grants::new(
+pub fn google_grants(instance: &Instance) -> Grants {
+    Grants::new(
         suzatary_io::google::Google::new(suzatary_google::google::Endpoints::google()),
         std::sync::Arc::new(instance.secrets()),
     )
@@ -79,7 +84,7 @@ pub fn google_grants(instance: &Instance) -> suzatary_io::google::Grants {
 /// agent and the operator run against one corpus, dedup authority and syncer.
 #[must_use]
 pub fn operator(instance: &Instance) -> Operator {
-    crate::wiring::Ground::of(instance).operator(instance.code(), instance.persona.zone)
+    Ground::of(instance).operator(instance.code(), instance.persona.zone)
 }
 
 /// `suzatary sync`: pull every account, reindex, re-tag (which rings each matched watch), then
@@ -103,7 +108,7 @@ fn deliver_rings(instance: &Instance) {
         Err(failed) => return eprintln!("sync: the watches did not read: {}", failed.message()),
     };
     for (id, message) in owed {
-        let push = suzatary_core::notify::Push::Expected { message };
+        let push = suzatary_cards::notify::Push::Expected { message };
         let recorded = super::notify::deliver(instance, &push)
             .map_err(|failed| failed.to_string())
             .and_then(|_| {
@@ -250,10 +255,7 @@ pub fn noise(path: &Path, args: &NoiseArgs) -> anyhow::Result<()> {
 }
 
 /// Leave `sender` out of triage; the agent's record holds no way here.
-pub(crate) fn silence(
-    ledger: &suzatary_io::state::Ledger,
-    sender: &str,
-) -> anyhow::Result<suzatary_triage::mail::verbs::NoiseAdded> {
+pub(crate) fn silence(ledger: &Ledger, sender: &str) -> anyhow::Result<NoiseAdded> {
     let known = ledger.read().map_err(anyhow::Error::msg)?;
     ledger
         .write(&suzatary_triage::mail::known::Known {
@@ -261,7 +263,7 @@ pub(crate) fn silence(
             ..known
         })
         .map_err(anyhow::Error::msg)?;
-    Ok(suzatary_triage::mail::verbs::NoiseAdded {
+    Ok(NoiseAdded {
         noise_added: sender.to_lowercase(),
     })
 }
@@ -458,7 +460,7 @@ pub fn deliver(
                 .map_err(|_| {
                     SendError::Ungranted(suzatary_mail::mail::lacking::Lacking::Grant {
                         account: account.email.address().clone(),
-                        grant: suzatary_mail::mail::lacking::Grant::MicrosoftSend,
+                        grant: Grant::MicrosoftSend,
                     })
                 })?;
             suzatary_io::smtp::Microsoft {
@@ -487,8 +489,7 @@ pub fn deliver(
                 .map_err(|refused| auth(refused.message().to_owned()))?;
             let token =
                 google_grants(instance).token(&account).map_err(|refused| {
-                    match refused.lacking(&account, suzatary_mail::mail::lacking::Grant::GoogleSend)
-                    {
+                    match refused.lacking(&account, Grant::GoogleSend) {
                         Ok(lacking) => SendError::Ungranted(lacking),
                         Err(words) => auth(words),
                     }

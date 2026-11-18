@@ -1,15 +1,17 @@
 //! A proposal card, drawn the same in a conversation, the Inbox and Settings. Its text is set as
 //! text, a yes is confirmed by a second press, and a tap carries an index, never a body.
 
+use crate::part::Tag;
 use std::collections::{BTreeMap, BTreeSet};
+use suzatary_base::topic_target::Target;
 
 use serde::{Deserialize, Serialize};
 use suzatary_base::reference::Reference;
-use suzatary_core::wire::topics::{ProposalRow, ProposalState};
 use suzatary_inbox::wire::inbox::{
     Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, FixThen,
     ProposedAct, ProposedObject,
 };
+use suzatary_topics::wire::topics::{ProposalRow, ProposalState};
 use ts_rs::TS;
 use viewtree::Attr::{Autocomplete, Class, Data, Disabled, Href, Open, Placeholder, Title, Type};
 use viewtree::kit::para;
@@ -289,10 +291,8 @@ pub(crate) fn spoken(r: &Reference, titles: &Titles) -> String {
         Reference::Briefing { date } => format!("the briefing of {}", date.format("%Y-%m-%d")),
         Reference::Proposal(_) => "an earlier card".to_owned(),
         Reference::Batch { .. } => "a held batch".to_owned(),
-        Reference::Target(suzatary_base::topic_target::Target::Round { .. }) => {
-            "a round".to_owned()
-        }
-        Reference::Target(suzatary_base::topic_target::Target::Note { .. }) => "a note".to_owned(),
+        Reference::Target(Target::Round { .. }) => "a round".to_owned(),
+        Reference::Target(Target::Note { .. }) => "a note".to_owned(),
     }
 }
 
@@ -974,7 +974,7 @@ fn details(d: Drawn<'_>, ui: &Ui, carried: usize) -> Node<Ev> {
             view! { Span "proposallabel" [f.label.as_str()] },
             view! { Span "proposalvalue" [f.value.as_str()] },
         ] }).collect::<Vec<_>>(),
-        (!card.body.is_empty()).then(|| prose(crate::part::Tag::Pre, "proposalbody", &card.body, None, Chips::Conversation(d.conversation))),
+        (!card.body.is_empty()).then(|| prose(Tag::Pre, "proposalbody", &card.body, None, Chips::Conversation(d.conversation))),
         (!card.files.is_empty()).then(|| view! { Ul "proposalfiles" [card.files.iter().map(file_row).collect::<Vec<_>>()] }),
         (!card.rows.is_empty()).then(|| view! { Div "proposedchangeset" [card.rows.iter().map(|o| object_row(o, row.revises.is_some() && o.position > carried)).collect::<Vec<_>>()] }),
     ] }
@@ -1054,7 +1054,7 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
         revises,
         row.announced
             .as_deref()
-            .map(|a| prose(crate::part::Tag::P, "proposalannounced", a, Some(crate::part::Who::Box), Chips::None)),
+            .map(|a| prose(Tag::P, "proposalannounced", a, Some(crate::part::Who::Box), Chips::None)),
         (!card.sentence.is_empty()).then(|| para("proposalbody", card.sentence.as_str())),
         overview,
         card.link.as_ref().and_then(|l| match l {

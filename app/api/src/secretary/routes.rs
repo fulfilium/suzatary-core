@@ -4,10 +4,21 @@
 //! never a body.
 
 use crate::server::Server;
+use crate::wire::DrawnPayload;
+use crate::wire::RecordPayload;
+use crate::wire::SayPayload;
+use crate::wire::Yes;
+use prodrome_core::event::Actor;
+use prodrome_core::event::Hash;
+use prodrome_core::sign::PublicKey;
+use prodrome_core::sign::Signed;
+use suzatary_base::capability::Datetime;
+use suzatary_base::capability::Typeset;
 use suzatary_base::capability::{Clock, Secret};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
+use suzatary_base::zone::Moment;
 use suzatary_connect::connect::Connection;
 use suzatary_connect::connect::Reach;
 use suzatary_connect::connect::RoutineId;
@@ -18,14 +29,15 @@ use suzatary_connect::settings::Help;
 use suzatary_connect::settings::Verify;
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Lines;
 use suzatary_conversations::secretary::store::{Entry, Kind, Stored};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::opening::Opening;
 use suzatary_core::secretary::read_holders::ReadHolders;
-use suzatary_core::secretary::readings::{self, Draw, Dress, Window};
-use suzatary_core::wire::topics as wire;
+use suzatary_digest::secretary::memories::Memories;
 use suzatary_google::google::RedirectUri;
 use suzatary_health::health::plugin::{Origin, PluginName};
+use suzatary_held::attachment::Attachment;
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
@@ -37,18 +49,32 @@ use suzatary_inbox::secretary::fix::Fix;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::{ProposalId, Response};
 use suzatary_inbox::secretary::proposal::{Draft, Proposal};
+use suzatary_inbox::secretary::proposer::Proposer;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
+use suzatary_inbox::secretary::sign_in::Sessions;
+use suzatary_inbox::secretary::sign_in::SignInUrl;
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_inbox::secretary::tapped::Tapped;
 use suzatary_lines::secretary::act_lines::ActLine;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::lacking::Lacking;
 use suzatary_mail::mail::oauth::Consent;
+use suzatary_mail::mail::removal::Removal;
 use suzatary_memory::secretary::erasure;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::salted_text;
 use suzatary_services::plugin::Manifest;
 use suzatary_signatures::believed::Preview;
+use suzatary_signatures::signatures::Endorsement;
+use suzatary_signatures::signatures::Enrolling;
+use suzatary_signatures::signatures::Enrolment;
 use suzatary_signatures::signatures::Tap;
+use suzatary_store::store::Prodrome;
+use suzatary_topics::secretary::readings::{self, Draw, Dress, Window};
+use suzatary_topics::wire::topics as wire;
 
 /// Sending a proposed message; in no capability bundle, so no verb can send.
 pub trait Post {
@@ -64,7 +90,7 @@ pub trait Perform {
         id: &ConversationId,
         index: usize,
         object: &ProposalId,
-        proposer: &suzatary_inbox::secretary::proposer::Proposer,
+        proposer: &Proposer,
         act: &Act,
         consent: Consent,
     ) -> Performed;
@@ -88,8 +114,8 @@ pub struct Cards<'a> {
 /// The chains a standing changeset names, each folded once.
 struct Drawn<'a> {
     nodes: std::collections::BTreeMap<String, (Preview, prodrome_core::policy::Untrusted)>,
-    typeset: &'a dyn suzatary_base::capability::Typeset,
-    now: suzatary_base::zone::Moment,
+    typeset: &'a dyn Typeset,
+    now: Moment,
     categories: Vec<String>,
     routine: Option<RoutineId>,
     model: Option<Settable>,
@@ -99,12 +125,7 @@ struct Drawn<'a> {
 }
 
 impl<'a> Drawn<'a> {
-    fn of(
-        lines: &suzatary_conversations::secretary::store::Lines,
-        cards: &Cards<'_>,
-        at: suzatary_base::capability::Datetime,
-        typeset: &'a dyn suzatary_base::capability::Typeset,
-    ) -> Self {
+    fn of(lines: &Lines, cards: &Cards<'_>, at: Datetime, typeset: &'a dyn Typeset) -> Self {
         let wanted: std::collections::BTreeSet<&str> = lines
             .standings()
             .filter_map(|standing| match &standing.object.asked.proposal {
@@ -138,7 +159,7 @@ impl<'a> Drawn<'a> {
         Self {
             nodes: read,
             typeset,
-            now: suzatary_base::zone::Moment {
+            now: Moment {
                 at,
                 zone: cards.deployment.zone,
             },
@@ -157,10 +178,7 @@ impl<'a> Drawn<'a> {
 }
 
 /// The message of every held value a standing email carries.
-fn sources(
-    lines: &suzatary_conversations::secretary::store::Lines,
-    cards: &Cards<'_>,
-) -> std::collections::BTreeMap<String, String> {
+fn sources(lines: &Lines, cards: &Cards<'_>) -> std::collections::BTreeMap<String, String> {
     let Some(mail) = cards.chains.first().map(|bound| bound.caps.mail) else {
         return std::collections::BTreeMap::new();
     };
@@ -224,7 +242,7 @@ impl Draw for Drawn<'_> {
             held_value::Handle::Value(place) => match place.holder() {
                 held_value::Holder::Message(message) => {
                     return self.sources.get(message).cloned().unwrap_or_else(|| {
-                        suzatary_core::secretary::readings::UNREAD_SOURCE.to_owned()
+                        suzatary_topics::secretary::readings::UNREAD_SOURCE.to_owned()
                     });
                 }
                 held_value::Holder::File(file) => file,
@@ -311,7 +329,7 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
             ))
         })?;
     let at = caps.secretary.clock.now();
-    suzatary_core::secretary::fixes::replace(&name, at)
+    suzatary_cards::secretary::fixes::replace(&name, at)
         .holding()
         .file(caps.secretary.conversations, caps.secretary.inbox, at)?;
     Ok(())
@@ -324,7 +342,7 @@ pub enum Erasing {
     /// These turns' words, by index.
     Turns(#[ts(as = "Vec<u32>")] suzatary_conversations::nonempty::NonEmpty<usize>),
     /// Every line's words, the name included.
-    Whole(crate::wire::Yes),
+    Whole(Yes),
 }
 
 /// `POST …/<id>/erase`: erase turns, or all of it, behind the same [`Tap`] as a send.
@@ -340,7 +358,7 @@ pub fn erase(
 ) -> Answered<wire::ConversationPayload> {
     let read = transcript::read(caps.secretary.conversations, id)?;
     let lines: Vec<usize> = match erasing {
-        Erasing::Whole(crate::wire::Yes) => (0..read.lines().len()).collect(),
+        Erasing::Whole(Yes) => (0..read.lines().len()).collect(),
         Erasing::Turns(turns) => turns
             .as_slice()
             .iter()
@@ -402,7 +420,7 @@ pub fn drawn(
     cards: &Cards<'_>,
     id: &ConversationId,
     indices: &[usize],
-) -> Answered<crate::wire::DrawnPayload> {
+) -> Answered<DrawnPayload> {
     let stored = conversations::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
     let drawn = Drawn::of(
@@ -425,7 +443,7 @@ pub fn drawn(
             ))
         })
         .collect::<Result<_, Refusal>>()?;
-    Ok(crate::wire::DrawnPayload {
+    Ok(DrawnPayload {
         title: stored.heading().into_owned(),
         proposals,
     })
@@ -450,14 +468,14 @@ pub fn say(
     id: &ConversationId,
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_held::attachment::Attachment],
-    by: suzatary_inbox::secretary::stamp::Stamp,
+    attachments: &[Attachment],
+    by: Stamp,
     after: Option<usize>,
-) -> Answered<crate::wire::SayPayload> {
+) -> Answered<SayPayload> {
     let turn = question(said, references, attachments)?;
     let before = conversations::read(caps.secretary.conversations, id)?;
     if after.is_some_and(|after| asked(&before, after, &turn, &by)) {
-        return Ok(crate::wire::SayPayload {
+        return Ok(SayPayload {
             conversation: payload(&before, caps, cards)?,
         });
     }
@@ -478,31 +496,23 @@ pub fn say(
         },
     )?;
     let stored = conversations::read(caps.secretary.conversations, id)?;
-    Ok(crate::wire::SayPayload {
+    Ok(SayPayload {
         conversation: payload(&stored, caps, cards)?,
     })
 }
 
-fn asked(
-    stored: &Stored,
-    after: usize,
-    turn: &Turn,
-    by: &suzatary_inbox::secretary::stamp::Stamp,
-) -> bool {
-    stored.turns.iter().skip(after).any(|said| {
-        &said.turn == turn
-            && said
-                .by
-                .as_ref()
-                .and_then(suzatary_inbox::secretary::stamp::Stamp::actor)
-                == by.actor()
-    })
+fn asked(stored: &Stored, after: usize, turn: &Turn, by: &Stamp) -> bool {
+    stored
+        .turns
+        .iter()
+        .skip(after)
+        .any(|said| &said.turn == turn && said.by.as_ref().and_then(Stamp::actor) == by.actor())
 }
 
 fn question(
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_held::attachment::Attachment],
+    attachments: &[Attachment],
 ) -> Result<Turn, Refusal> {
     if said.trim().is_empty() && attachments.is_empty() {
         return Err(Refusal::bad_request("say something"));
@@ -527,7 +537,7 @@ pub fn regenerate(
     caps: &Server<'_>,
     cards: &Cards<'_>,
     id: &ConversationId,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
 ) -> Answered<wire::ConversationPayload> {
     let stored = suzatary_core::secretary::regenerate(
         caps.secretary.conversations,
@@ -552,9 +562,9 @@ pub fn edit(
     id: &ConversationId,
     said: &str,
     references: &[Reference],
-    attachments: &[suzatary_held::attachment::Attachment],
-    by: &prodrome_core::event::Actor,
-    stamped: suzatary_inbox::secretary::stamp::Stamp,
+    attachments: &[Attachment],
+    by: &Actor,
+    stamped: Stamp,
 ) -> Answered<wire::ConversationPayload> {
     let turn = question(said, references, attachments)?;
     let stored = suzatary_core::secretary::edit(
@@ -584,15 +594,15 @@ pub struct Effectors<'a> {
     /// Syncs a plugin once its link is stored.
     pub checks: &'a dyn suzatary_connect::settings::Checks,
     /// The sign-ins the box holds open.
-    pub signing: &'a dyn suzatary_inbox::secretary::sign_in::Sessions,
+    pub signing: &'a dyn Sessions,
     /// Edits the instance file.
     pub edits: &'a dyn Edits,
     /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn suzatary_mail::mail::cache::Forget,
     /// Registers a device's key on every chain; `None` without a root.
-    pub enrolling: Option<suzatary_signatures::signatures::Enrolling<'a>>,
+    pub enrolling: Option<Enrolling<'a>>,
     /// Opens a sign-in with Google.
-    pub consents: &'a dyn suzatary_core::secretary::google_sign_in::Consents,
+    pub consents: &'a dyn suzatary_cards::secretary::google_sign_in::Consents,
 }
 
 /// What a tap's body carries beside its note: nothing, or exactly one of these.
@@ -605,7 +615,7 @@ pub enum TapAnswer {
     /// The card's wider yes.
     Always,
     /// The tapping device's signature of a device card's registration.
-    Endorsed(suzatary_signatures::signatures::Endorsement),
+    Endorsed(Endorsement),
 }
 
 const VALUE_BELONGS: &str =
@@ -648,7 +658,7 @@ impl TapAnswer {
         }
     }
 
-    fn endorsement(&self) -> Result<&suzatary_signatures::signatures::Endorsement, Refusal> {
+    fn endorsement(&self) -> Result<&Endorsement, Refusal> {
         match self {
             TapAnswer::Endorsed(endorsement) => Ok(endorsement),
             TapAnswer::Plain => Err(Refusal::forbidden(
@@ -686,7 +696,7 @@ enum Prepared<'p, 'c> {
         value: &'p Secret,
     },
     Code {
-        url: &'p suzatary_inbox::secretary::sign_in::SignInUrl,
+        url: &'p SignInUrl,
         code: &'p Secret,
         name: Settable,
     },
@@ -706,9 +716,9 @@ enum Prepared<'p, 'c> {
         turn: usize,
     },
     Device {
-        enrolling: suzatary_signatures::signatures::Enrolling<'c>,
-        enrolment: &'p suzatary_signatures::signatures::Enrolment,
-        endorsed: prodrome_core::sign::Signed,
+        enrolling: Enrolling<'c>,
+        enrolment: &'p Enrolment,
+        endorsed: Signed,
     },
     Begin {
         act: &'p Act,
@@ -716,15 +726,15 @@ enum Prepared<'p, 'c> {
     },
     /// Remember a card's words under the memory's hold, taken before the inbox's.
     Remember {
-        held: suzatary_core::secretary::memories::Held<'c>,
+        held: suzatary_digest::secretary::memories::Held<'c>,
         text: &'p salted_text::TextName,
         kind: memory::Kind,
         replaces: &'p memory::Replaces,
     },
     /// Retract a summary under the memory's hold, whose sweep deletes its words.
     Retract {
-        held: suzatary_core::secretary::memories::Held<'c>,
-        node: &'p prodrome_core::event::Hash,
+        held: suzatary_digest::secretary::memories::Held<'c>,
+        node: &'p Hash,
     },
     Decide(&'p suzatary_todo::decisions::Draft),
     GoogleClient {
@@ -732,20 +742,20 @@ enum Prepared<'p, 'c> {
         file: &'p Secret,
     },
     GoogleSignIn {
-        account: &'p suzatary_mail::mail::address::EmailAddress,
+        account: &'p EmailAddress,
         scopes: &'p suzatary_google::google::Scopes,
     },
     CalendarEvent {
         act: &'p Act,
-        account: &'p suzatary_mail::mail::address::EmailAddress,
+        account: &'p EmailAddress,
     },
 }
 
 struct Preparing<'r, 'c> {
     settables: &'r Settables,
-    enrolling: Option<suzatary_signatures::signatures::Enrolling<'c>>,
+    enrolling: Option<Enrolling<'c>>,
     tap: &'r Tap,
-    hold: &'r dyn Fn() -> Result<suzatary_core::secretary::memories::Held<'c>, Refusal>,
+    hold: &'r dyn Fn() -> Result<suzatary_digest::secretary::memories::Held<'c>, Refusal>,
     /// The changes of the triage card a [`Act::Restore`] names.
     withdrawn: &'r dyn Fn(&ProposalRef) -> Result<Changeset, Refusal>,
 }
@@ -949,7 +959,7 @@ pub fn tap(
     suzatary_inbox::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
     let withdrawn =
-        |card: &ProposalRef| suzatary_core::secretary::undo::withdrawn(caps.secretary.inbox, card);
+        |card: &ProposalRef| suzatary_cards::secretary::undo::withdrawn(caps.secretary.inbox, card);
     let prepared = Prepared::of(
         &standing.object.asked.proposal,
         answer,
@@ -962,7 +972,7 @@ pub fn tap(
         },
     )?;
     let mut then = None;
-    let response = suzatary_inbox::secretary::tapped::Tapped {
+    let response = Tapped {
         now: caps.secretary.clock.now(),
     }
     // The proposal read under the hold is the one prepared: its id names its content.
@@ -993,9 +1003,10 @@ pub fn tap(
                 note: note.to_owned(),
             },
             // A proposal's index is the box's; nothing it points at was chosen by mail.
-            suzatary_inbox::secretary::stamp::Stamp::Actor(
-                suzatary_inbox::secretary::stamp::Speaker::at(tap.who().as_str(), tap.seat()),
-            ),
+            Stamp::Actor(suzatary_inbox::secretary::stamp::Speaker::at(
+                tap.who().as_str(),
+                tap.seat(),
+            )),
         )?;
     }
     Ok(AfterTap {
@@ -1118,7 +1129,7 @@ fn performed(
             scopes,
             tap.who(),
             caps.secretary.clock.now(),
-            suzatary_core::secretary::google_sign_in::Then::Ended,
+            suzatary_cards::secretary::google_sign_in::Then::Ended,
         ),
         Prepared::CalendarEvent { act, account } => calendar_event(
             (
@@ -1136,13 +1147,8 @@ fn performed(
 /// A calendar event's try, or the lack that stops it.
 fn calendar_event(
     (edits, secrets, performer): (&dyn Edits, (&dyn Secrets, &Settables), &dyn Perform),
-    (id, index, object, proposer): (
-        &ConversationId,
-        usize,
-        &ProposalId,
-        &suzatary_inbox::secretary::proposer::Proposer,
-    ),
-    (act, account): (&Act, &suzatary_mail::mail::address::EmailAddress),
+    (id, index, object, proposer): (&ConversationId, usize, &ProposalId, &Proposer),
+    (act, account): (&Act, &EmailAddress),
     consent: Consent,
 ) -> Performed {
     match google_account(edits, secrets, account) {
@@ -1175,17 +1181,13 @@ pub fn fix(
         .and_then(|answer| answer.response.lacking())
         .ok_or_else(|| Refusal::conflict("this card lacks nothing a tap connects now"))?;
     let held = match lacking {
-        suzatary_mail::mail::lacking::Lacking::Grant { account, .. } => {
-            caps.secretary.secrets.google_grant(account)
-        }
-        suzatary_mail::mail::lacking::Lacking::GoogleClient => {
-            suzatary_google::google::Held::NotSignedIn
-        }
+        Lacking::Grant { account, .. } => caps.secretary.secrets.google_grant(account),
+        Lacking::GoogleClient => suzatary_google::google::Held::NotSignedIn,
     };
     let fix = suzatary_inbox::secretary::fix::of(lacking, &held, effectors.consents.redirect())
         .map_err(|unfixable| Refusal::conflict(unfixable.to_string()))?;
     let now = caps.secretary.clock.now();
-    let filed = suzatary_core::secretary::noticed::Owed::one(Proposal::Act(fix.act()), FIXING)
+    let filed = suzatary_cards::secretary::noticed::Owed::one(Proposal::Act(fix.act()), FIXING)
         .about(&[card.clone().into()])
         .since(now)
         .holding()
@@ -1212,26 +1214,21 @@ pub fn fix(
             }
         }
         Fix::GoogleSignIn { .. } | Fix::MicrosoftSend { .. } => {
-            let answered = suzatary_inbox::secretary::tapped::Tapped { now }.fire(
-                caps.secretary.inbox,
-                fixing,
-                tap,
-                |_| {
-                    Ok(match &fix {
-                        Fix::GoogleSignIn { account, scopes } => begin(account, scopes),
-                        Fix::MicrosoftSend { .. } | Fix::GoogleClient { .. } => {
-                            effectors.performer.begin(
-                                &at.asked.asked.conversation,
-                                at.asked.asked.index,
-                                fixing,
-                                &at.asked.proposer,
-                                &fix.act(),
-                                Consent::given_by_tap(tap),
-                            )
-                        }
-                    })
-                },
-            )?;
+            let answered = Tapped { now }.fire(caps.secretary.inbox, fixing, tap, |_| {
+                Ok(match &fix {
+                    Fix::GoogleSignIn { account, scopes } => begin(account, scopes),
+                    Fix::MicrosoftSend { .. } | Fix::GoogleClient { .. } => {
+                        effectors.performer.begin(
+                            &at.asked.asked.conversation,
+                            at.asked.asked.index,
+                            fixing,
+                            &at.asked.proposer,
+                            &fix.act(),
+                            Consent::given_by_tap(tap),
+                        )
+                    }
+                })
+            })?;
             match answered {
                 Response::Ran(suzatary_inbox::secretary::responded::Responded::Tried {
                     tried,
@@ -1257,8 +1254,8 @@ pub fn fix(
 const FIXING: &str = "You tapped Connect on a card that needs it.";
 
 /// Only a calendar event is performed again: a send waits for its own Send tap.
-fn retried(lacked: &inbox::Object, tap: &Tap) -> suzatary_core::secretary::google_sign_in::Then {
-    use suzatary_core::secretary::google_sign_in::Then;
+fn retried(lacked: &inbox::Object, tap: &Tap) -> suzatary_cards::secretary::google_sign_in::Then {
+    use suzatary_cards::secretary::google_sign_in::Then;
     match &lacked.asked.proposal {
         Proposal::Act(Act::CalendarEvent { .. }) => Then::Retry {
             card: lacked.id.clone(),
@@ -1280,7 +1277,7 @@ fn retried(lacked: &inbox::Object, tap: &Tap) -> suzatary_core::secretary::googl
 pub fn retry(
     caps: &suzatary_core::secretary::Secretary<'_>,
     (edits, settables, performer): (&dyn Edits, &Settables, &dyn Perform),
-    (card, by, consent): (&ProposalId, &prodrome_core::event::Actor, Consent),
+    (card, by, consent): (&ProposalId, &Actor, Consent),
     signed: &Performed,
 ) -> Result<Option<ConversationId>, Refusal> {
     let fold = inbox::fold(caps.inbox)?;
@@ -1344,10 +1341,7 @@ enum Then {
     Retire(Connection),
     Check(PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold.
-    Forget(
-        suzatary_mail::mail::account::MailAccount,
-        suzatary_mail::mail::removal::Removal,
-    ),
+    Forget(suzatary_mail::mail::account::MailAccount, Removal),
     Opened(ConversationId),
 }
 
@@ -1368,18 +1362,18 @@ fn afterwards(
             ended,
         )
         .map(|_| ()),
-        Some(Then::Grant(plugin, origin)) => suzatary_core::secretary::connections::grant(
+        Some(Then::Grant(plugin, origin)) => suzatary_cards::secretary::connections::grant(
             caps.secretary.files_into(),
             &plugin,
             &origin,
         ),
-        Some(Then::Connect(connection)) => suzatary_core::secretary::connections::connect(
+        Some(Then::Connect(connection)) => suzatary_cards::secretary::connections::connect(
             caps.secretary.files_into(),
             connection,
             card,
         ),
         Some(Then::Retire(link)) => {
-            suzatary_core::secretary::connections::retire(caps.secretary.files_into(), link, card)
+            suzatary_cards::secretary::connections::retire(caps.secretary.files_into(), link, card)
         }
         Some(Then::Check(plugin)) => {
             effectors
@@ -1659,8 +1653,7 @@ fn disconnected(
     let what = match (account, mail) {
         (Some(account), mail) => {
             let deleted = mail == KeptMail::Deleted;
-            match suzatary_mail::mail::removal::Removal::of(account.microsoft().is_some(), deleted)
-            {
+            match Removal::of(account.microsoft().is_some(), deleted) {
                 Some(removal) => {
                     *then = Some(Then::Forget(account, removal));
                     format!("{removed}; {}", removal.next())
@@ -1707,11 +1700,7 @@ pub const WAITING_DEVICES: usize = 3;
 ///
 /// # Errors
 /// [`WAITING_DEVICES`] cards already waiting for other keys, and the stores' own failures.
-pub fn ask_trust(
-    caps: &Server<'_>,
-    actor: &prodrome_core::event::Actor,
-    key: &prodrome_core::sign::PublicKey,
-) -> Answered<usize> {
+pub fn ask_trust(caps: &Server<'_>, actor: &Actor, key: &PublicKey) -> Answered<usize> {
     let secretary = caps.secretary;
     let stored = conversations::read_or_open_default(
         caps.secretary.conversations,
@@ -1722,7 +1711,7 @@ pub fn ask_trust(
     // Bounded, since a key nobody trusts can ask: a stray key cannot flood the Inbox.
     // An unplaced line holds no act this box can read, so it is no device this box could trust.
     let lines = stored.lines(&inbox::fold(caps.secretary.inbox)?);
-    let waiting: Vec<&suzatary_signatures::signatures::Enrolment> = lines
+    let waiting: Vec<&Enrolment> = lines
         .standings()
         .filter(|standing| standing.object.reading.open())
         .filter_map(|standing| match &standing.object.asked.proposal {
@@ -1778,7 +1767,7 @@ pub fn ask_trust(
         &secretary,
         &[],
         &stored.id,
-        Proposal::Act(Act::Device(suzatary_signatures::signatures::Enrolment {
+        Proposal::Act(Act::Device(Enrolment {
             actor: actor.clone(),
             key: key.clone(),
         })),
@@ -1797,13 +1786,13 @@ pub const ALREADY_TRUSTED: &str =
 /// # Errors
 /// The stores' own.
 pub fn withdraw_trusted(
-    inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
-    history: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
-    root: &prodrome_core::sign::PublicKey,
-    at: suzatary_base::capability::Datetime,
+    inbox: &dyn Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
+    history: &dyn Prodrome<suzatary_record::record::TodoEvent>,
+    root: &PublicKey,
+    at: Datetime,
 ) -> Result<Vec<ProposalId>, Refusal> {
-    let swept = suzatary_core::secretary::done_elsewhere::sweep(inbox, at, |proposal| {
-        use suzatary_core::secretary::done_elsewhere::Seen;
+    let swept = suzatary_cards::secretary::done_elsewhere::sweep(inbox, at, |proposal| {
+        use suzatary_cards::secretary::done_elsewhere::Seen;
         let Proposal::Act(Act::Device(enrolment)) = proposal else {
             return Ok(Seen::Waits);
         };
@@ -1824,11 +1813,11 @@ pub fn withdraw_trusted(
 /// A device card's endorsement checked first: only a device the chain already trusts for the
 /// same person vouches (SPEC law 42), so a new phone cannot tap its own card.
 fn vouched(
-    enrolling: suzatary_signatures::signatures::Enrolling<'_>,
+    enrolling: Enrolling<'_>,
     tap: &Tap,
-    enrolment: &suzatary_signatures::signatures::Enrolment,
-    endorsement: &suzatary_signatures::signatures::Endorsement,
-) -> Result<prodrome_core::sign::Signed, Refusal> {
+    enrolment: &Enrolment,
+    endorsement: &Endorsement,
+) -> Result<Signed, Refusal> {
     if enrolment.actor != *tap.who() {
         return Err(Refusal::forbidden(format!(
             "a device is trusted by the person it writes as, {}",
@@ -1842,11 +1831,7 @@ fn vouched(
 }
 
 /// Register a vouched device's key on every chain.
-fn trusted(
-    enrolling: suzatary_signatures::signatures::Enrolling<'_>,
-    enrolment: &suzatary_signatures::signatures::Enrolment,
-    endorsed: &prodrome_core::sign::Signed,
-) -> Performed {
+fn trusted(enrolling: Enrolling<'_>, enrolment: &Enrolment, endorsed: &Signed) -> Performed {
     match enrolling.enrol(enrolment, endorsed) {
         Ok(()) => Performed::Done(Done::Acted {
             what: format!("the device key {} trusted", enrolment.key.as_str()),
@@ -1983,7 +1968,7 @@ fn forwarded(
 fn google_account(
     edits: &dyn Edits,
     (secrets, settables): (&dyn Secrets, &Settables),
-    account: &suzatary_mail::mail::address::EmailAddress,
+    account: &EmailAddress,
 ) -> Result<(), Tried> {
     let declared = edits.declared().map_err(|failed| Tried::NotSent {
         reason: format!("nothing was written: the instance file does not read ({failed})"),
@@ -2001,15 +1986,13 @@ fn google_account(
     };
     if suzatary_google::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
         Ok(())
-    } else if suzatary_core::secretary::set_up::client_kept(secrets, settables).is_set() {
-        Err(Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
+    } else if suzatary_topics::secretary::set_up::client_kept(secrets, settables).is_set() {
+        Err(Tried::Lacks(Lacking::Grant {
             account: account.clone(),
             grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
         }))
     } else {
-        Err(Tried::Lacks(
-            suzatary_mail::mail::lacking::Lacking::GoogleClient,
-        ))
+        Err(Tried::Lacks(Lacking::GoogleClient))
     }
 }
 
@@ -2088,7 +2071,7 @@ fn afresh(
     conversation: &ConversationId,
     turn: usize,
 ) -> Result<(ConversationId, Performed), Refusal> {
-    let request = suzatary_core::secretary::afresh::Request::at_tap(
+    let request = suzatary_cards::secretary::afresh::Request::at_tap(
         &conversations::read(caps.secretary.conversations, conversation)?,
         turn,
     )?;
@@ -2143,14 +2126,14 @@ fn verified(
 }
 
 struct SignedIn<'a> {
-    signing: &'a dyn suzatary_inbox::secretary::sign_in::Sessions,
+    signing: &'a dyn Sessions,
     verify: &'a dyn Verify,
     writer: &'a dyn Writes,
 }
 
 fn coded(
     effectors: &Effectors<'_>,
-    url: &suzatary_inbox::secretary::sign_in::SignInUrl,
+    url: &SignInUrl,
     code: &Secret,
     name: &Settable,
     then: &mut Option<Then>,
@@ -2173,7 +2156,7 @@ fn coded(
 /// test call and the store alone.
 fn signed_in(
     reach: &SignedIn<'_>,
-    url: &suzatary_inbox::secretary::sign_in::SignInUrl,
+    url: &SignInUrl,
     code: &Secret,
     name: &Settable,
 ) -> (Performed, Option<(ProposalId, Performed)>) {
@@ -2208,7 +2191,7 @@ fn signed_in(
 
 /// Remember a tapped card's words on its authority.
 fn remembered(
-    held: &suzatary_core::secretary::memories::Held<'_>,
+    held: &suzatary_digest::secretary::memories::Held<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
     index: usize,
@@ -2339,24 +2322,34 @@ pub fn build(
         &bound.policy.untrusted,
     )
     .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let record = suzatary_core::secretary::build::record(&believed, todo)?;
+    let record = suzatary_topics::secretary::build::record(&believed, todo)?;
     let (conversations, inbox) = (caps.secretary.conversations, caps.secretary.inbox);
     // One hold, so two builds asked at once are not the same attempt.
     let _held = inbox.locked()?;
-    let task = suzatary_core::secretary::build::task(
+    let task = suzatary_topics::secretary::build::task(
         todo,
         record,
-        suzatary_core::secretary::build::attempt(&inbox::fold(inbox)?, todo),
+        suzatary_topics::secretary::build::attempt(&inbox::fold(inbox)?, todo),
     )?;
-    let conversation = &*suzatary_core::secretary::build::CONVERSATION;
-    let proposer = suzatary_inbox::secretary::proposer::Proposer::Box;
-    suzatary_core::secretary::filed::opened(conversations, conversation, "Builds", &proposer, at)?;
-    suzatary_core::secretary::filed::file_held(
+    let conversation = &*suzatary_topics::secretary::build::CONVERSATION;
+    let proposer = Proposer::Box;
+    suzatary_topics::secretary::filed::opened(
+        conversations,
+        conversation,
+        "Builds",
+        &proposer,
+        at,
+    )?;
+    suzatary_topics::secretary::filed::file_held(
         conversations,
         inbox,
-        cards.chains,
+        &cards
+            .chains
+            .iter()
+            .map(suzatary_core::secretary::Bound::chain)
+            .collect::<Vec<_>>(),
         at,
-        suzatary_core::secretary::filed::Filing {
+        suzatary_topics::secretary::filed::Filing {
             conversation,
             proposer,
             proposal: Proposal::Act(Act::CodingSession { task }),
@@ -2379,7 +2372,7 @@ pub fn build(
 /// `POST …/proposals/<n>/drop`: let a session go, with a reason.
 ///
 /// # Errors
-/// As [`suzatary_core::secretary::coding::dropped`].
+/// As [`suzatary_topics::secretary::coding::dropped`].
 pub fn drop_session(
     caps: &Server<'_>,
     by: &Tap,
@@ -2388,7 +2381,7 @@ pub fn drop_session(
     reason: &str,
 ) -> Answered<wire::ConversationPayload> {
     let (id, index) = (&card.conversation, card.index);
-    suzatary_core::secretary::coding::dropped(
+    suzatary_topics::secretary::coding::dropped(
         caps.secretary.conversations,
         id,
         index,
@@ -2433,18 +2426,14 @@ fn payload(
 ///
 /// # Errors
 /// The stores' own.
-pub fn memory(
-    memories: suzatary_core::secretary::memories::Memories<'_>,
-) -> Answered<wire::MemoryPayload> {
+pub fn memory(memories: Memories<'_>) -> Answered<wire::MemoryPayload> {
     Ok(wire::MemoryPayload {
         cards: card_words(memories)?,
         ..memory_payload(&memories.reads().read()?)
     })
 }
 
-fn card_words(
-    memories: suzatary_core::secretary::memories::Memories<'_>,
-) -> Result<Vec<wire::CardWords>, Refusal> {
+fn card_words(memories: Memories<'_>) -> Result<Vec<wire::CardWords>, Refusal> {
     let mut named = std::collections::BTreeSet::new();
     let mut words = Vec::new();
     for object in inbox::fold(memories.cards)?.objects() {
@@ -2466,9 +2455,9 @@ fn card_words(
 /// # Errors
 /// [`Refusal::not_found`] for a number no standing fact carries, and the store's own.
 pub fn forget(
-    memories: suzatary_core::secretary::memories::Memories<'_>,
+    memories: Memories<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     id: memory::FactId,
 ) -> Answered<wire::MemoryPayload> {
     memories.forget(id, clock.now(), by)?;
@@ -2480,14 +2469,14 @@ pub fn forget(
 /// # Errors
 /// The stores' own.
 pub fn record(
-    digests: &suzatary_core::secretary::digests::Digests<'_>,
-) -> Answered<crate::wire::RecordPayload> {
-    let record = suzatary_core::secretary::shown_record::OwnersRecord::of(
-        suzatary_core::secretary::compaction::Reading::of(&digests.reads())?,
+    digests: &suzatary_digest::secretary::digests::Digests<'_>,
+) -> Answered<RecordPayload> {
+    let record = suzatary_digest::secretary::shown_record::OwnersRecord::of(
+        suzatary_digest::secretary::compaction::Reading::of(&digests.reads())?,
     );
-    Ok(crate::wire::RecordPayload {
+    Ok(RecordPayload {
         summaries: record
-            .summaries(suzatary_core::secretary::digest_view::VIEW_BYTES)
+            .summaries(suzatary_digest::secretary::digest_view::VIEW_BYTES)
             .into_iter()
             .map(|(part, line)| crate::wire::RecordSummary {
                 node: part.node.as_str().to_owned(),
@@ -2504,11 +2493,11 @@ pub fn record(
 /// # Errors
 /// [`Refusal::not_found`] for a node that shows no summary, and the stores' own.
 pub fn retract(
-    memories: suzatary_core::secretary::memories::Memories<'_>,
+    memories: Memories<'_>,
     clock: &dyn Clock,
     tap: &suzatary_signatures::signatures::Tap,
-    node: &prodrome_core::event::Hash,
-) -> Answered<crate::wire::RecordPayload> {
+    node: &Hash,
+) -> Answered<RecordPayload> {
     memories.hold()?.retract(node, clock.now(), tap)?;
     record(&memories.digests)
 }
@@ -2574,10 +2563,10 @@ mod tests {
     use suzatary_conversations::secretary::store::Asking;
     use suzatary_conversations::secretary::store::Said;
     use suzatary_conversations::secretary::store::Standing;
-    use suzatary_core::secretary::answers::Answers;
-    use suzatary_core::secretary::readings::{Place, proposal, turn};
     use suzatary_inbox::secretary::proposal::Reasons;
     use suzatary_inbox::secretary::responded::Responded;
+    use suzatary_topics::secretary::answers::Answers;
+    use suzatary_topics::secretary::readings::{Place, proposal, turn};
 
     /// `proposal`, the conversation's first, answered `responses` as the inbox reads them.
     fn standing_of(proposal: Proposal, responses: &[Responded]) -> Standing {
@@ -2704,7 +2693,7 @@ mod tests {
         fn block(
             &self,
             _block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_topics::secretary::answers::AnswerError>
         {
             panic!("a turn that is not the model's was rendered");
         }
@@ -2891,7 +2880,7 @@ mod tests {
         fn block(
             &self,
             block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_topics::secretary::answers::AnswerError>
         {
             Ok(suzatary_todo::render::Html::from_render(format!(
                 "<p>{}</p>",
@@ -2905,9 +2894,9 @@ mod tests {
         fn block(
             &self,
             _block: &suzatary_base::answer::Renderable,
-        ) -> Result<suzatary_todo::render::Html, suzatary_core::secretary::answers::AnswerError>
+        ) -> Result<suzatary_todo::render::Html, suzatary_topics::secretary::answers::AnswerError>
         {
-            Err(suzatary_core::secretary::answers::AnswerError(
+            Err(suzatary_topics::secretary::answers::AnswerError(
                 "typst refused".to_owned(),
             ))
         }

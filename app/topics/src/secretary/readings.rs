@@ -1,0 +1,1162 @@
+//! Pure readings of the inbox and the conversations, shared by the box's routes and the tab's
+//! module; anything beyond the two stores comes in as a [`Dress`].
+
+use suzatary_held::held_value::Handle;
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_signatures::chain_set::ChainSet;
+
+use crate::secretary::answers::{AnswerError, Answers};
+use crate::wire::topics as wire;
+use suzatary_base::answer::Renderable;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::{Answered, Refusal};
+use suzatary_connect::connect::AccountKind;
+use suzatary_connect::connect::Connection;
+use suzatary_connect::connect::RoutineId;
+use suzatary_connect::connect::Table;
+use suzatary_conversations::secretary::about;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Said, Standing, Stored};
+use suzatary_conversations::secretary::turn_shape::TurnShape;
+use suzatary_held::secretary::attached;
+use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::card;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox_reading::{Reading, Words};
+use suzatary_inbox::secretary::proposal::{Forward, Proposal, Style};
+use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_inbox::wire::inbox::{
+    Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
+    ProposedObject, RememberWords, ReplacedFact,
+};
+use suzatary_memory::secretary::memory;
+use suzatary_memory::secretary::memory::Fact;
+use suzatary_memory::secretary::salted_text::TextName;
+use suzatary_memory::secretary::words;
+use suzatary_services::web::WebRequest;
+use suzatary_todo::render::Html;
+use suzatary_todo::wire::todo::Fulfillment;
+
+/// At most `limit` turns before `before` (newest when `None`), narrowed to rounds touching `about`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Window {
+    /// An absolute turn index, clamped to the transcript.
+    pub before: Option<usize>,
+    /// Already capped.
+    pub limit: usize,
+    /// The reference the rounds must touch.
+    pub about: Option<Reference>,
+}
+
+impl Window {
+    /// The newest full-size window.
+    #[must_use]
+    pub fn newest() -> Self {
+        Self {
+            before: None,
+            limit: DEFAULT_TURN_WINDOW,
+            about: None,
+        }
+    }
+}
+
+/// The default window size, in turns.
+pub const DEFAULT_TURN_WINDOW: usize = 60;
+
+/// How many hits one search answers.
+pub(crate) const SEARCH_LIMIT: usize = 50;
+
+/// What a reading takes from beyond the two stores.
+#[derive(Clone, Copy)]
+pub struct Dress<'a> {
+    /// Renders a model's blocks.
+    pub answers: &'a dyn Answers,
+    /// For a receipt's words; `None` reads every receipt as unread.
+    pub memory: Option<&'a wire::MemoryPayload>,
+    /// Draws a changeset against its chain.
+    pub draws: &'a dyn Draw,
+}
+
+impl Dress<'static> {
+    /// Every block as its source, every receipt unread, no changeset drawn.
+    pub const BARE: Self = Self {
+        answers: &Unrendered,
+        memory: None,
+        draws: &Undrawn,
+    };
+}
+
+/// Readings of the todo chains and the instance file, which only the box holds.
+pub trait Draw {
+    /// The rows, and the box's own refusal when an act would no longer build.
+    fn shown(&self, changeset: &Changeset) -> (Vec<ProposedObject>, String);
+    /// The routine `[coding]` declares.
+    fn routine(&self) -> Option<&RoutineId>;
+    /// The secret name of the model's credential.
+    fn model(&self) -> Option<&str>;
+    /// The origins `plugin` may fetch from now.
+    fn origins(&self, plugin: &str) -> Option<Vec<String>>;
+    /// How the person reaches the app at a terminal.
+    fn reach(&self) -> &suzatary_connect::connect::Reach;
+    /// In the box's words: a message by sender, subject and date, a file by its source.
+    fn source(&self, handle: &Handle) -> String;
+}
+
+struct Unrendered;
+
+impl Answers for Unrendered {
+    fn block(&self, _: &Renderable) -> Result<Html, AnswerError> {
+        Err(AnswerError("not rendered here".to_owned()))
+    }
+}
+
+struct Undrawn;
+
+impl Draw for Undrawn {
+    fn shown(&self, _: &Changeset) -> (Vec<ProposedObject>, String) {
+        (Vec::new(), String::new())
+    }
+
+    fn routine(&self) -> Option<&RoutineId> {
+        None
+    }
+
+    fn model(&self) -> Option<&str> {
+        None
+    }
+
+    fn origins(&self, _: &str) -> Option<Vec<String>> {
+        None
+    }
+
+    fn reach(&self) -> &suzatary_connect::connect::Reach {
+        &suzatary_connect::connect::PLAIN
+    }
+
+    fn source(&self, _: &Handle) -> String {
+        UNREAD_SOURCE.to_owned()
+    }
+}
+
+/// What a card says of a held value's message where the reading reads no mail.
+pub const UNREAD_SOURCE: &str = "from a message this reading does not look up";
+
+fn held_in(body: &str, draws: &dyn Draw) -> HeldIn {
+    use suzatary_held::held_value::{Reach, Written};
+    match Written::parse(body) {
+        Ok(written) => HeldIn::Read {
+            values: written
+                .held()
+                .map(|placeholder| HeldFrom {
+                    named: placeholder.described(),
+                    from: match placeholder.reach() {
+                        Reach::Revealable(handle) => draws.source(&handle),
+                        Reach::Withheld => {
+                            "withheld, from nothing the box can read again".to_owned()
+                        }
+                    },
+                })
+                .collect(),
+        },
+        Err(malformed) => HeldIn::Unreadable {
+            why: malformed.to_string(),
+        },
+    }
+}
+
+/// The block named `sha`, earlier attempts included; the page asks by name, never by text.
+#[must_use]
+pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
+    stored.turns.iter().find_map(|said| {
+        let text = match &said.turn {
+            Turn::Model { text, .. } => text,
+            Turn::Erased { words, .. } => match words.first() {
+                Some(words::Words::Kept {
+                    kept: suzatary_memory::secretary::line_words::LineWords::Model { text },
+                }) => text,
+                _ => return None,
+            },
+            Turn::Person { .. } | Turn::Tool { .. } | Turn::Act { .. } => return None,
+        };
+        suzatary_base::answer::blocks(text)
+            .into_iter()
+            .find(|block| suzatary_base::answer::sha(&block.source) == sha)
+            .map(|block| block.source)
+    })
+}
+
+/// Every conversation, newest first.
+#[must_use]
+pub fn conversations<S: std::borrow::Borrow<Stored>>(
+    stored: &[S],
+    inbox: &inbox::Fold,
+) -> wire::ConversationsPayload {
+    wire::ConversationsPayload {
+        conversations: stored.iter().map(|one| row(one.borrow(), inbox)).collect(),
+    }
+}
+
+/// A remember card's words, looked up by name in `memory`.
+#[must_use]
+pub fn words(text: &TextName, memory: Option<&wire::MemoryPayload>) -> Words {
+    match memory {
+        None => Words::Unread,
+        Some(memory) => Words::of(
+            memory
+                .cards
+                .iter()
+                .find(|kept| kept.text == text.as_str())
+                .and_then(|kept| Fact::new(kept.fact.as_str()).ok()),
+        ),
+    }
+}
+
+/// Every proposal, oldest first, priced through `set` at its instant.
+#[must_use]
+pub fn inbox(
+    fold: &inbox::Fold,
+    set: &ChainSet<'_>,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::InboxProposalsPayload {
+    let now = set.at();
+    let mut proposals: Vec<(Datetime, wire::InboxProposal)> = fold
+        .objects()
+        .map(|object| {
+            let state = match (&object.reading, object.reading.shown()) {
+                (Reading::Unreadable(why), _) => wire::InboxState::Unreadable {
+                    reason: why.to_string(),
+                },
+                (_, None) => wire::InboxState::Open {},
+                (reading, Some(_)) if reading.open() => wire::InboxState::Open {},
+                (_, Some(answer)) => match &answer.response {
+                    Responded::Dismissed { .. } | Responded::Withdrawn(_) => {
+                        wire::InboxState::Cancelled {
+                            at: stamp(answer.at),
+                        }
+                    }
+                    Responded::Tried { .. } | Responded::Done(_) | Responded::Checked(_) => {
+                        wire::InboxState::Completed {
+                            at: stamp(answer.at),
+                        }
+                    }
+                },
+            };
+            (
+                object.at,
+                wire::InboxProposal {
+                    id: object.id.to_string(),
+                    asked: object.asked.asked.clone(),
+                    serves: object.asked.price.serves().cloned(),
+                    headline: object.asked.proposal.headline(|text| words(text, memory)),
+                    by: object
+                        .asked
+                        .proposer
+                        .on_wire(&object.asked.proposal, &object.asked.asked),
+                    why: object.asked.reasons.why().to_owned(),
+                    state,
+                    value: inbox::value(object, set),
+                    at: stamp(object.at),
+                },
+            )
+        })
+        .collect();
+    proposals.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.id.cmp(&b.1.id)));
+    wire::InboxProposalsPayload {
+        at: stamp(now),
+        proposals: proposals.into_iter().map(|(_, row)| row).collect(),
+        failed: set.failed(),
+    }
+}
+
+/// Open proposals in `web/src/inbox/waiting.ts`'s order: ascending value, unpriced last, ties by id.
+#[must_use]
+pub fn waiting(fold: &inbox::Fold, set: &ChainSet<'_>) -> Vec<wire::InboxProposal> {
+    let mut open: Vec<wire::InboxProposal> = inbox(fold, set, None)
+        .proposals
+        .into_iter()
+        .filter(|row| row.state == wire::InboxState::Open {})
+        .collect();
+    let urgency = |row: &wire::InboxProposal| {
+        row.value
+            .and_then(Fulfillment::number)
+            .unwrap_or(f64::INFINITY)
+    };
+    open.sort_by(|a, b| {
+        urgency(a)
+            .total_cmp(&urgency(b))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    open
+}
+
+/// Every conversation's turns holding `q`, newest first.
+///
+/// # Errors
+/// A blank or over-long `q`.
+pub fn search<S: std::borrow::Borrow<Stored>>(
+    stored: &[S],
+    q: &str,
+) -> Answered<wire::SearchPayload> {
+    let needle = suzatary_conversations::secretary::search::Needle::new(q)
+        .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
+    let hits = suzatary_conversations::secretary::search::search(
+        stored,
+        &needle,
+        suzatary_conversations::secretary::search::LIST_CONTEXT,
+        SEARCH_LIMIT,
+    );
+    Ok(wire::SearchPayload {
+        query: q.trim().to_owned(),
+        hits,
+    })
+}
+
+/// One window of a conversation; a line the inbox cannot place goes in `unplaced`, never dropped.
+#[must_use]
+pub fn conversation(
+    stored: &Stored,
+    inbox: &inbox::Fold,
+    window: &Window,
+    dress: &Dress<'_>,
+) -> wire::ConversationPayload {
+    let lines = stored.lines(inbox);
+    let total_turns = stored.turns.len();
+    // Not a suffix of `stored.turns`, since a rewind can set a turn aside.
+    let queued: std::collections::BTreeSet<usize> =
+        suzatary_conversations::secretary::queue::delta(stored)
+            .into_iter()
+            .map(|(index, _)| index)
+            .collect();
+    let spans = about::round_spans(&stored.turns);
+    let touched: Vec<bool> = window.about.as_ref().map_or_else(
+        || vec![true; spans.len()],
+        |reference| {
+            spans
+                .iter()
+                .map(|&span| about::round_touches(&stored.turns, span, reference))
+                .collect()
+        },
+    );
+    let before = window.before.unwrap_or(total_turns).min(total_turns);
+    let (selected, first, total) =
+        about_window(&spans, &touched, total_turns, before, window.limit);
+    wire::ConversationPayload {
+        id: stored.id.as_str().to_owned(),
+        title: stored.heading().into_owned(),
+        model: stored.model.clone(),
+        opened: stamp(stored.opened),
+        turns: selected
+            .iter()
+            .map(|&index| {
+                turn(
+                    dress.answers,
+                    &stored.turns[index],
+                    Place {
+                        index,
+                        queued: queued.contains(&index),
+                        attempt: if stored.is_live(index) {
+                            wire::Attempt::Current
+                        } else {
+                            wire::Attempt::Earlier
+                        },
+                    },
+                    dress.memory,
+                )
+            })
+            .collect(),
+        proposals: lines
+            .standings()
+            // Mirrors `web/src/chat/rounds.ts`'s placement.
+            .filter(|standing| {
+                spans.is_empty()
+                    || touched
+                        [about::owning_span(&spans, standing.asking.after_turn.saturating_sub(1))]
+            })
+            .map(|standing| {
+                drawn(
+                    stored,
+                    standing.asking.index,
+                    standing,
+                    dress.draws,
+                    dress.memory,
+                )
+            })
+            .collect(),
+        unplaced: unplaced(&lines),
+        state: suzatary_conversations::secretary::store::state(stored),
+        first,
+        total,
+        again: stored
+            .rewind(suzatary_conversations::secretary::store::Rewind::Edit)
+            .ok(),
+    }
+}
+
+#[must_use]
+pub fn unplaced(
+    lines: &suzatary_conversations::secretary::store::Lines,
+) -> Vec<wire::UnplacedProposal> {
+    lines
+        .unplaced()
+        .map(|unplaced| wire::UnplacedProposal {
+            index: unplaced.asking.index,
+            why: unplaced.why,
+        })
+        .collect()
+}
+
+fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
+    let lines = stored.lines(fold);
+    wire::ConversationRow {
+        id: stored.id.as_str().to_owned(),
+        title: stored.heading().into_owned(),
+        kind: stored.kind,
+        opened: stamp(stored.opened),
+        last: last_line(stored),
+        last_at: stamp(stored.turns.last().map_or(stored.opened, |said| said.at)),
+        turns: u32::try_from(stored.turns.len()).unwrap_or(u32::MAX),
+        standing: lines
+            .standings()
+            .filter(|standing| standing.object.reading.performs())
+            .count(),
+        unplaced: unplaced(&lines),
+    }
+}
+
+/// Proposal `index`, with the session its tap started.
+pub fn drawn(
+    stored: &Stored,
+    index: usize,
+    standing: &Standing,
+    draws: &dyn Draw,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::ProposalRow {
+    wire::ProposalRow {
+        coding: stored.coding.get(&index).map(session_on_wire),
+        announced: announced(stored, index, standing),
+        ..proposal(index, standing, draws, memory)
+    }
+}
+
+/// While the act runs, the box's last line pointing at it.
+fn announced(stored: &Stored, index: usize, standing: &Standing) -> Option<String> {
+    if !standing.object.reading.running() {
+        return None;
+    }
+    let card = Reference::Proposal(ProposalRef {
+        conversation: stored.id.clone(),
+        index,
+    });
+    stored
+        .live()
+        .into_iter()
+        .rev()
+        .find_map(|(_, said)| match &said.turn {
+            Turn::Act { text, references } if references.contains(&card) => Some(text.clone()),
+            Turn::Act { .. }
+            | Turn::Person { .. }
+            | Turn::Model { .. }
+            | Turn::Tool { .. }
+            | Turn::Erased { .. } => None,
+        })
+}
+
+fn last_line(stored: &Stored) -> String {
+    let line = stored
+        .live()
+        .into_iter()
+        .rev()
+        .find_map(|(_, said)| match &said.turn {
+            Turn::Person { text, .. } => text.lines().map(str::trim).find(|line| !line.is_empty()),
+            Turn::Model { text, calls } if calls.is_empty() => {
+                crate::secretary::title::typst_prose_line(text)
+                    .or_else(|| text.lines().map(str::trim).find(|line| !line.is_empty()))
+            }
+            Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => None,
+        })
+        .unwrap_or("");
+    line.chars().take(120).collect()
+}
+
+/// `[max(0, before - limit), before)` of a sequence of length `total`.
+pub(crate) fn window(total: usize, before: usize, limit: usize) -> (usize, usize) {
+    let end = before.min(total);
+    let start = end.saturating_sub(limit);
+    (start, end)
+}
+
+/// Returns `(selected, first or total_turns, paged length)`.
+fn about_window(
+    spans: &[(usize, usize)],
+    touched: &[bool],
+    total_turns: usize,
+    before: usize,
+    limit: usize,
+) -> (Vec<usize>, usize, usize) {
+    let sequence: Vec<usize> = spans
+        .iter()
+        .zip(touched.iter())
+        .filter(|&(_, &kept)| kept)
+        .flat_map(|(&(start, end), _)| start..=end)
+        .collect();
+    let before_pos = sequence.partition_point(|&index| index < before.min(total_turns));
+    let (start_pos, end_pos) = window(sequence.len(), before_pos, limit);
+    let selected = sequence[start_pos..end_pos].to_vec();
+    let first = selected.first().copied().unwrap_or(total_turns);
+    (selected, first, sequence.len())
+}
+
+#[derive(Clone, Copy)]
+pub struct Place {
+    pub(crate) index: usize,
+    pub(crate) queued: bool,
+    pub(crate) attempt: wire::Attempt,
+}
+
+impl Place {
+    #[cfg(any(test, feature = "nothing"))]
+    #[must_use]
+    pub fn at(index: usize) -> Self {
+        Self {
+            index,
+            queued: false,
+            attempt: wire::Attempt::Current,
+        }
+    }
+}
+
+pub fn turn<A: Answers + ?Sized>(
+    answers: &A,
+    said: &Said,
+    place: Place,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::TurnRow {
+    let Place {
+        index,
+        queued,
+        attempt,
+    } = place;
+    let row = |text: &str, who: wire::Speaker| wire::TurnRow {
+        index,
+        text: text.to_owned(),
+        at: stamp(said.at),
+        attempt,
+        gone: None,
+        who,
+    };
+    match &said.turn {
+        // Only a person's words can be queued.
+        Turn::Person {
+            text,
+            references,
+            attachments,
+        } => row(
+            text,
+            wire::Speaker::Person {
+                references: references.clone(),
+                attachments: attachments.iter().map(wire::AttachmentRow::from).collect(),
+                queued,
+            },
+        ),
+        // The box's own note is drawn as the box's, never as the owner's.
+        Turn::Act { text, references } => row(text, acted_by(said.by.as_ref(), references.clone())),
+        Turn::Model { text, .. } => row(
+            text,
+            wire::Speaker::Model {
+                blocks: blocks_of(answers, text),
+            },
+        ),
+        Turn::Tool {
+            verb,
+            answer,
+            outcome,
+            files: _,
+        } => row(answer, verb_turn(verb, *outcome, memory)),
+        Turn::Erased { shape, words } => wire::TurnRow {
+            text: suzatary_conversations::secretary::turn_shape::prose(words),
+            gone: words
+                .first()
+                .and_then(words::Words::gone)
+                .map(wire::TurnGone::from),
+            ..row("", erased(shape, said.by.as_ref(), memory))
+        },
+    }
+}
+
+fn verb_turn(
+    verb: &suzatary_conversations::secretary::tool_name::ToolName,
+    outcome: suzatary_conversations::secretary::outcome::Outcome,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::Speaker {
+    use suzatary_conversations::secretary::outcome::Outcome;
+    wire::Speaker::Verb {
+        verb: verb.to_string(),
+        outcome: match outcome {
+            Outcome::Answered => wire::VerbOutcome::Answered,
+            Outcome::Refused => wire::VerbOutcome::Refused,
+            Outcome::Remembered { fact } => wire::VerbOutcome::Remembered {
+                receipt: receipt(fact, memory),
+            },
+        },
+    }
+}
+
+/// The owner's act only when the gate stamped it so; the box's otherwise.
+fn acted_by(
+    by: Option<&Stamp>,
+    references: Vec<suzatary_base::reference::Reference>,
+) -> wire::Speaker {
+    if Stamp::owners(by) {
+        wire::Speaker::Act { references }
+    } else {
+        wire::Speaker::Box { references }
+    }
+}
+
+fn erased(
+    shape: &TurnShape,
+    by: Option<&Stamp>,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::Speaker {
+    match shape {
+        TurnShape::Person { references, .. } => wire::Speaker::Person {
+            references: references.clone(),
+            attachments: Vec::new(),
+            queued: false,
+        },
+        TurnShape::Model { .. } => wire::Speaker::Model { blocks: Vec::new() },
+        // A remember answer whose words are erased still names its fact.
+        TurnShape::Tool { verb, outcome, .. } => verb_turn(verb, *outcome, memory),
+        TurnShape::Act { references } => acted_by(by, references.clone()),
+    }
+}
+
+/// A block the closed world refuses stays its text.
+pub fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
+    suzatary_base::answer::blocks(text)
+        .into_iter()
+        .map(|block| wire::BlockRow {
+            html: answers
+                .block(&suzatary_base::answer::Renderable::of(&block.source))
+                .ok()
+                .map(|html| html.as_str().to_owned()),
+            source: block.source,
+            plain: block.plain,
+            kind: block.kind,
+        })
+        .collect()
+}
+
+/// A forgotten fact's receipt says it was forgotten, never what it said.
+fn receipt(fact: memory::FactId, memory: Option<&wire::MemoryPayload>) -> wire::Receipt {
+    let Some(memory) = memory else {
+        return wire::Receipt::Unread { fact };
+    };
+    match memory.facts.iter().find(|standing| standing.id == fact) {
+        Some(standing) => wire::Receipt::Standing {
+            fact,
+            text: standing.fact.clone(),
+        },
+        None if memory.forgotten.contains(&fact) => wire::Receipt::Forgotten { fact },
+        None => match memory.merged.iter().find(|merge| merge.fact == fact) {
+            Some(merge) => wire::Receipt::Merged {
+                fact,
+                into: merge.into,
+            },
+            None => wire::Receipt::Unread { fact },
+        },
+    }
+}
+
+fn connect_on_wire(connection: &Connection, draws: &dyn Draw, sentence: String) -> ProposedAct {
+    ProposedAct::Connect {
+        connection: connection.called(),
+        writes: connection.writes(),
+        steps: connection
+            .steps()
+            .iter()
+            .map(|step| step.sentence(draws.reach()))
+            .collect(),
+        // The plugin's origins as declared now, or its template's for a first link.
+        reach: match connection.template().table {
+            Table::Link(fragment) => draws.origins(fragment.plugin.as_str()).unwrap_or_else(|| {
+                fragment
+                    .origins
+                    .iter()
+                    .map(|origin| (*origin).to_owned())
+                    .collect()
+            }),
+            _ => Vec::new(),
+        },
+        sentence,
+    }
+}
+
+fn disconnect_on_wire(connection: &Connection, sentence: String) -> ProposedAct {
+    ProposedAct::Disconnect {
+        connection: connection.called(),
+        writes: connection.writes(),
+        forgets: connection
+            .secrets()
+            .iter()
+            .map(|name| suzatary_connect::settings::Help::label(name))
+            .chain(match connection.template().table {
+                Table::Account(AccountKind::Microsoft) => {
+                    Some("its sign-in to read and send mail".to_owned())
+                }
+                Table::Account(AccountKind::Google) => Some("its sign-in with Google".to_owned()),
+                _ => None,
+            })
+            .collect(),
+        cached: match connection.template().table {
+            Table::Account(_) => Cached::Mail,
+            _ => Cached::Nothing,
+        },
+        sentence,
+    }
+}
+
+/// A remember card on the wire, with each fact a consolidation replaces.
+fn remember_on_wire(
+    words: &Words,
+    about: memory::Kind,
+    replaces: &memory::Replaces,
+    memory: Option<&wire::MemoryPayload>,
+) -> ProposedAct {
+    use suzatary_memory::secretary::memory::Replaces;
+    let into = match replaces {
+        Replaces::Nothing => String::new(),
+        Replaces::Facts(sources) => format!(" in place of {sources}"),
+    };
+    let (words, sentence) = match words {
+        Words::Kept(fact) => (
+            RememberWords::Kept {
+                fact: fact.as_str().to_owned(),
+            },
+            format!("Remember{into}, in every conversation from now on: {fact}"),
+        ),
+        Words::Gone => (
+            RememberWords::Gone {},
+            "Proposed remembering something since forgotten or dismissed; its words are deleted."
+                .to_owned(),
+        ),
+        Words::Unread => (
+            RememberWords::Unread {},
+            "Proposed remembering something; its words are not read here.".to_owned(),
+        ),
+    };
+    match replaces {
+        Replaces::Nothing => ProposedAct::Remember {
+            words,
+            about,
+            sentence,
+        },
+        Replaces::Facts(sources) => ProposedAct::Consolidate {
+            words,
+            about,
+            replaces: sources
+                .ids()
+                .iter()
+                .map(|&id| ReplacedFact {
+                    id,
+                    words: match memory {
+                        None => RememberWords::Unread {},
+                        Some(memory) => memory.facts.iter().find(|row| row.id == id).map_or(
+                            RememberWords::Gone {},
+                            |row| RememberWords::Kept {
+                                fact: row.fact.clone(),
+                            },
+                        ),
+                    },
+                })
+                .collect(),
+            sentence,
+        },
+    }
+}
+
+/// `consent` is the box's path to the consent a running sign-in opened.
+#[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
+fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> ProposedAct {
+    let routine = draws.routine();
+    match act {
+        Act::Auth { account } => ProposedAct::Auth {
+            account: account.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::AuthSend { account } => ProposedAct::AuthSend {
+            account: account.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::Secret { name, .. } => card::secret_act(name, routine, draws.model()),
+        Act::Web { request, rule } => ProposedAct::Web {
+            request: request.kind(),
+            target: match request {
+                WebRequest::Search { query } => query.as_str().to_owned(),
+                WebRequest::Fetch { url } => url.as_str().to_owned(),
+            },
+            host: request.host().to_string(),
+            always: rule
+                .as_ref()
+                .map(suzatary_services::web::AllowRule::sentence)
+                .unwrap_or_default(),
+            sentence: act.sentence(),
+        },
+        Act::Patch {
+            repo,
+            visibility,
+            base,
+            patch,
+            message,
+        } => ProposedAct::Patch {
+            repo: repo.to_string(),
+            visibility: *visibility,
+            base: base.as_str().to_owned(),
+            message: message.clone(),
+            files: patch.files(),
+            patch: patch.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::DriveRead { path, size } => ProposedAct::Drive {
+            path: path.to_string(),
+            name: path.name().unwrap_or("/").to_owned(),
+            folder: suzatary_inbox::secretary::acts::folder_of(path).to_string(),
+            size: size.map(suzatary_base::spelling::bytes).unwrap_or_default(),
+            sentence: act.sentence(),
+        },
+        Act::CodingSession { task } => ProposedAct::CodingSession {
+            task: task.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::Device(enrolment) => ProposedAct::Device {
+            actor: enrolment.actor.as_str().to_owned(),
+            key: enrolment.key.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::SignIn { .. } => ProposedAct::SignIn {
+            sentence: act.sentence(),
+        },
+        Act::SignInCode { url } => ProposedAct::SignInCode {
+            url: url.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
+        Act::Noise { sender, message } => ProposedAct::Noise {
+            sender: sender.clone(),
+            message: message.clone(),
+            sentence: act.sentence(),
+        },
+        Act::UnlockStore { .. } => ProposedAct::UnlockStore {
+            sentence: act.sentence(),
+        },
+        Act::Connect { connection } => connect_on_wire(connection, draws, act.sentence()),
+        Act::Disconnect { connection } => disconnect_on_wire(connection, act.sentence()),
+        Act::Grant { plugin, origin } => ProposedAct::Grant {
+            plugin: plugin.to_string(),
+            origin: origin.to_string(),
+            sentence: act.sentence(),
+        },
+        Act::GoogleClient { redirect } => ProposedAct::GoogleClient {
+            redirect: redirect.to_string(),
+            steps: suzatary_google::google::CLIENT_STEPS
+                .iter()
+                .map(|&step| step.to_owned())
+                .collect(),
+            sentence: act.sentence(),
+        },
+        Act::GoogleSignIn { account, scopes } => ProposedAct::GoogleSignIn {
+            account: account.to_string(),
+            parts: scopes
+                .iter()
+                .map(|part| part.sentence().to_owned())
+                .collect(),
+            consent,
+            sentence: act.sentence(),
+        },
+        Act::CalendarEvent { account, event } => ProposedAct::CalendarEvent {
+            account: account.to_string(),
+            event: event.sentence(),
+            sentence: act.sentence(),
+        },
+        Act::Erase { .. } => ProposedAct::Erase {
+            sentence: act.sentence(),
+        },
+        Act::Retract { .. } => ProposedAct::Retract {
+            sentence: act.sentence(),
+        },
+        Act::Afresh { .. } => ProposedAct::Afresh {
+            sentence: act.sentence(),
+        },
+        Act::Restore { card } => ProposedAct::Restore {
+            card: card.to_string(),
+            sentence: act.sentence(),
+        },
+    }
+}
+
+fn card_file(attached: &attached::Attached) -> CardFile {
+    CardFile {
+        name: attached.name.clone(),
+        media: attached.media.clone(),
+        size: suzatary_base::spelling::bytes(attached.size),
+        sha256: attached.sha256.to_string(),
+        from: match &attached.source {
+            AttachmentSource::Mail { message, .. } => FileFrom::Mail {
+                message: message.clone(),
+            },
+            AttachmentSource::Drive { path } => FileFrom::Drive {
+                path: path.to_string(),
+            },
+            AttachmentSource::Upload { id } => FileFrom::Upload { id: id.to_string() },
+            AttachmentSource::Kept { .. } => FileFrom::Kept {},
+            AttachmentSource::Repo { repo, path, at } => FileFrom::Repo {
+                repo: repo.to_string(),
+                path: path.as_str().to_owned(),
+                at: at.as_str().to_owned(),
+            },
+        },
+    }
+}
+
+/// A proposal's state and the words beside it.
+#[must_use]
+pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
+    if let Reading::Unreadable(why) = reading {
+        return (wire::ProposalState::Unreadable, why.to_string());
+    }
+    match reading.shown().map(|answer| &answer.response) {
+        None => (wire::ProposalState::Standing, String::new()),
+        Some(Responded::Tried {
+            tried: Tried::NotSent { reason },
+            ..
+        }) => (wire::ProposalState::Failed, reason.clone()),
+        Some(Responded::Tried {
+            tried: Tried::Lacks(lacking),
+            ..
+        }) => (wire::ProposalState::Failed, lacking.sentence()),
+        Some(Responded::Tried {
+            tried: Tried::Refused { reason },
+            ..
+        }) => (wire::ProposalState::Refused, reason.clone()),
+        Some(Responded::Tried {
+            tried: Tried::Unfinished { reason, .. },
+            ..
+        }) => (wire::ProposalState::Unfinished, reason.clone()),
+        Some(Responded::Tried {
+            tried: Tried::Running { began, expires_at },
+            ..
+        }) => (
+            wire::ProposalState::Started,
+            format!("started at {began}, open until {expires_at}"),
+        ),
+        Some(Responded::Done(Done::Sent { recipients, .. })) => {
+            (wire::ProposalState::Sent, recipients.join(", "))
+        }
+        // A chain id is no word of the owner's, so the line counts.
+        Some(Responded::Done(Done::Applied { objects, .. })) => (
+            wire::ProposalState::Applied,
+            if objects.len() == 1 {
+                "1 change".to_owned()
+            } else {
+                format!("{} changes", objects.len())
+            },
+        ),
+        Some(Responded::Done(Done::Acted { what })) => (wire::ProposalState::Acted, what.clone()),
+        Some(Responded::Done(Done::MayHaveGone { reason })) => {
+            (wire::ProposalState::Unknown, reason.clone())
+        }
+        Some(Responded::Checked(check)) => {
+            (wire::ProposalState::Checked, check.reason().to_owned())
+        }
+        Some(Responded::Dismissed { reason }) => (wire::ProposalState::Dismissed, reason.clone()),
+        // The secretary's housekeeping, never the owner's words.
+        Some(Responded::Withdrawn(Withdrawal::Superseded)) => {
+            (wire::ProposalState::Superseded, String::new())
+        }
+        Some(Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })) => {
+            (wire::ProposalState::Withdrawn, why.clone())
+        }
+        Some(Responded::Withdrawn(Withdrawal::DoneElsewhere { what })) => {
+            (wire::ProposalState::DoneElsewhere, what.clone())
+        }
+    }
+}
+
+/// The original is named in one line; each file it sends opens the original.
+fn forward_on_wire(forward: &Forward) -> ProposedAct {
+    let original = &forward.message;
+    let file = &original.file;
+    let opening = || FileFrom::Mail {
+        message: file.id.clone(),
+    };
+    let attachments = match original.style {
+        Style::Inline => file
+            .parts
+            .iter()
+            .map(|part| CardFile {
+                name: part.name.clone(),
+                media: part.media.clone(),
+                size: suzatary_base::spelling::bytes(part.size),
+                sha256: part.sha256.to_string(),
+                from: opening(),
+            })
+            .collect(),
+        Style::Attached => vec![CardFile {
+            name: suzatary_inbox::secretary::proposal::EML.to_owned(),
+            media: "message/rfc822".to_owned(),
+            size: suzatary_base::spelling::bytes(file.size),
+            sha256: file.sha256.to_string(),
+            from: opening(),
+        }],
+    };
+    ProposedAct::Forward {
+        account: forward.account.clone(),
+        to: forward.to.clone(),
+        cc: forward.cc.clone(),
+        subject: forward.subject.clone(),
+        note: forward.note.clone(),
+        attachments,
+        original: [
+            Some(original.subject.clone()),
+            Some(format!("from {}", original.from)),
+            original.date.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(", "),
+        style: original.style,
+        held: file
+            .held
+            .iter()
+            .map(suzatary_held::held_value::Held::said)
+            .collect(),
+    }
+}
+
+pub fn proposal(
+    index: usize,
+    standing: &Standing,
+    draws: &dyn Draw,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::ProposalRow {
+    let act = match &standing.object.asked.proposal {
+        Proposal::Email(draft) => ProposedAct::Email {
+            account: draft.account.clone(),
+            to: draft.to.clone(),
+            cc: draft.cc.clone(),
+            subject: draft.subject.clone(),
+            body: draft.body.clone(),
+            attachments: draft.attachments.iter().map(card_file).collect(),
+            held: held_in(&draft.body, draws),
+        },
+        Proposal::Forward(forward) => forward_on_wire(forward),
+        // Drawn against the chain now, and only while the proposal stands.
+        Proposal::Changes(changeset) => {
+            let (changes, problem) = if standing.object.reading.performs() {
+                draws.shown(changeset)
+            } else {
+                (Vec::new(), String::new())
+            };
+            ProposedAct::Changes {
+                chain: changeset.chain().to_owned(),
+                changes,
+                problem,
+            }
+        }
+        Proposal::Act(act) => act_on_wire(
+            act,
+            standing.object.reading.running().then(|| {
+                format!(
+                    "{}{}",
+                    suzatary_google::google::CONSENT,
+                    standing.object.id.as_str()
+                )
+            }),
+            draws,
+        ),
+        Proposal::Remember {
+            text,
+            kind,
+            replaces,
+        } => remember_on_wire(&words(text, memory), *kind, replaces, memory),
+        Proposal::Decide(draft) => suzatary_inbox::secretary::decide::on_wire(draft),
+    };
+    let reading = &standing.object.reading;
+    let (state, outcome) = state(reading);
+    let card = Card {
+        by: standing.object.asked.proposer.on_wire(
+            &standing.object.asked.proposal,
+            &standing.object.asked.asked,
+        ),
+        ..card::at(card::of(&act), reading, &standing.object.id)
+    };
+    wire::ProposalRow {
+        index,
+        card,
+        act,
+        why: standing.object.asked.reasons.why().to_owned(),
+        sources: standing.object.asked.reasons.sources().to_vec(),
+        at: stamp(standing.asking.at),
+        state,
+        outcome,
+        tries: u32::try_from(standing.object.tries()).unwrap_or(u32::MAX),
+        turn: standing.asking.after_turn,
+        coding: None,
+        announced: None,
+        revises: standing.revises.map(|revised| wire::Revises {
+            card: revised.card,
+            carried: revised.carried,
+        }),
+    }
+}
+
+fn session_on_wire(session: &suzatary_inbox::coding::Session) -> CodingSession {
+    use suzatary_inbox::coding::Session;
+    use suzatary_memory::coding_report::Lines;
+    match session {
+        Session::Fired { id, url, at } => CodingSession::Fired {
+            id: id.to_string(),
+            url: url.to_string(),
+            at: at.clone(),
+        },
+        Session::Reported { id, branch, report } => CodingSession::Reported {
+            id: id.to_string(),
+            branch: branch.to_string(),
+            path: report
+                .get()
+                .map(|report| report.path.as_str().to_owned())
+                .unwrap_or_default(),
+            report: report.as_ref().map(|report| &report.text).to_string(),
+            stat: report
+                .get()
+                .map(|report| report.stat.as_slice())
+                .unwrap_or_default()
+                .iter()
+                .map(|file| {
+                    let (added, removed) = match file.lines {
+                        Lines::Text { added, removed } => (Some(added), Some(removed)),
+                        Lines::Binary => (None, None),
+                    };
+                    CodingFile {
+                        path: file.path.as_str().to_owned(),
+                        added,
+                        removed,
+                    }
+                })
+                .collect(),
+        },
+        Session::Merged { id, sha } => CodingSession::Merged {
+            id: id.to_string(),
+            sha: sha.as_str().to_owned(),
+        },
+        Session::Dropped { id, reason } => CodingSession::Dropped {
+            id: id.to_string(),
+            reason: reason.to_string(),
+        },
+    }
+}

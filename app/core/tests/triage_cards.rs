@@ -9,7 +9,6 @@ use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent::Agent;
 use suzatary_core::secretary::Secretary;
-use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::stores::InMemory;
 use suzatary_inbox::secretary::changes::Act;
 use suzatary_inbox::secretary::inbox;
@@ -20,6 +19,7 @@ use suzatary_mail::mail::mailbox::Query;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
+use suzatary_topics::secretary::filed::TriageCards;
 use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 
 fn deployment() -> Deployment {

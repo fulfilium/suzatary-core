@@ -3,8 +3,8 @@
 //! alone (`shown_record::told`), as much of it as fits beside them. The answer always leaves it
 //! room for [`TOO_BIG`], so it never goes silent.
 
-use crate::secretary::shown_record::{OwnersRecord, told};
 use suzatary_base::refusal::Refusal;
+use suzatary_digest::secretary::shown_record::{OwnersRecord, told};
 use suzatary_memory::secretary::memory::Memory;
 
 use super::reads::wire_len;
@@ -36,7 +36,7 @@ pub(crate) fn remembered(
             return if fits(&why) { why } else { UNREAD.to_owned() };
         }
     };
-    let views = crate::secretary::digest::views();
+    let views = suzatary_digest::secretary::digest::views();
     // The view is built once, within all the room there is; each probe below fits its lines.
     let lines = record.map(|record| record.lines(room));
     let mut newest = memory.facts.clone();
@@ -75,7 +75,7 @@ pub(crate) fn remembered(
     timings::counted(
         timings::Phase::Remembered,
         "views",
-        crate::secretary::digest::views() - views,
+        suzatary_digest::secretary::digest::views() - views,
     );
     answer
 }
@@ -135,9 +135,9 @@ mod tests {
             let memory = stores.recollection(room);
             let (facts, record) = (memory.facts(), memory.record());
             let record = record.expect("the record reads");
-            let before = crate::secretary::digest::views();
+            let before = suzatary_digest::secretary::digest::views();
             let answer = remembered(facts.as_ref(), Ok(&record), room);
-            prop_assert_eq!(crate::secretary::digest::views() - before, 1, "one view");
+            prop_assert_eq!(suzatary_digest::secretary::digest::views() - before, 1, "one view");
             prop_assert!(wire_len(&answer) <= room, "{} bytes in {room}", wire_len(&answer));
 
             let all = record.lines(room);

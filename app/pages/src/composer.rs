@@ -1,12 +1,13 @@
 //! The composer. Its words are the tab's draft for the conversation (`Local::Draft`); the box
 //! empties when the draft leaves.
 
+use crate::part::Mark;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::{Uploaded, Uploading};
 use suzatary_base::reference::Reference;
-use suzatary_core::wire::topics::{AttachmentRow, TurnRow};
+use suzatary_topics::wire::topics::{AttachmentRow, TurnRow};
 use ts_rs::TS;
 use viewtree::Attr::{
     Accept, AriaLabel, Class, Data, Disabled, Hidden, Multiple, Placeholder, Rows, Title, Type,
@@ -243,7 +244,7 @@ impl Composer {
     }
 
     pub(crate) fn edit(&mut self, question: &TurnRow) -> Vec<Out> {
-        let suzatary_core::wire::topics::Speaker::Person {
+        let suzatary_topics::wire::topics::Speaker::Person {
             references,
             attachments,
             ..
@@ -425,7 +426,7 @@ const fn focus() -> Out {
 /// A photo as itself, a PDF by its name, a private file by its name and where it is kept.
 #[must_use]
 pub(crate) fn attachment<M>(f: &AttachmentRow) -> Node<M> {
-    let chip = |icon: crate::part::Mark, name: &str, title: String| {
+    let chip = |icon: Mark, name: &str, title: String| {
         view! { Span "filechip" {Title => title} [mark(icon), view! { Span "filename" [name] }] }
     };
     if !f.private.is_empty() {
@@ -435,13 +436,13 @@ pub(crate) fn attachment<M>(f: &AttachmentRow) -> Node<M> {
             &f.name
         };
         chip(
-            crate::part::Mark::Lock,
+            Mark::Lock,
             name,
             format!("Kept private in your Drive at {}", f.private),
         )
     } else if f.media_type == "application/pdf" {
         let name = if f.name.is_empty() { "PDF" } else { &f.name };
-        chip(crate::part::Mark::Doc, name, name.to_owned())
+        chip(Mark::Doc, name, name.to_owned())
     } else {
         view! { Img "turnphoto" {viewtree::Attr::Src => Place::Attachment(&f.id).href(), viewtree::Attr::Alt => "photo", viewtree::Attr::Loading => "lazy"} }
     }
@@ -540,11 +541,11 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
         view! { Div "composethumbs" [held, thumbs, (!c.uploading.is_empty()).then(|| view! { Span "composethumb pending" ["…"] })] },
         view! { Div {Class => if quiet { "composefield unsaid" } else { "composefield" }} [
             view! { Label "composeattach" {Title => "Attach a photo or PDF", AriaLabel => "Attach a photo or PDF"} [
-                mark(crate::part::Mark::Clip),
+                mark(Mark::Clip),
                 view! { Input {Type => "file", Accept => "image/*,application/pdf", Multiple => true, Hidden => true} @files(Ev::Picked) },
             ] },
             textbox,
-            view! { Button "composesend" {Type => "button", Title => "Send", AriaLabel => "Send"} @click(Ev::Send) [mark(crate::part::Mark::Send)] },
+            view! { Button "composesend" {Type => "button", Title => "Send", AriaLabel => "Send"} @click(Ev::Send) [mark(Mark::Send)] },
         ] },
     ] }
 }

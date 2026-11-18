@@ -12,8 +12,8 @@ use prodrome_core::schema::Schema;
 use proptest::prelude::*;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::memories::{Kept, Memories};
 use suzatary_core::stores::InMemory;
+use suzatary_digest::secretary::memories::{Kept, Memories};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::{Fold, ProposalId};
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
@@ -45,8 +45,8 @@ struct Box {
     entropy: Counting,
     lines: suzatary_core::stores::conversations::InMemory,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
-    digests: InMemory<suzatary_core::secretary::digest_event::DigestEvent>,
-    digest_texts: InMemoryDoc<TextName, Text<suzatary_core::secretary::digest_line::Line>>,
+    digests: InMemory<suzatary_digest::secretary::digest_event::DigestEvent>,
+    digest_texts: InMemoryDoc<TextName, Text<suzatary_digest::secretary::digest_line::Line>>,
 }
 
 impl Box {
@@ -56,12 +56,12 @@ impl Box {
             texts: &self.texts,
             cards: &self.cards,
             entropy: &self.entropy,
-            digests: suzatary_core::secretary::digests::Digests {
+            digests: suzatary_digest::secretary::digests::Digests {
                 history: &self.digests,
                 texts: &self.digest_texts,
                 lines: self.lines.conversations(),
                 owners: &self.owners,
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         }
     }

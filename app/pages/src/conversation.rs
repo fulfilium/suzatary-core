@@ -1,16 +1,17 @@
 //! One conversation, on its page or in the panel beside another page.
 
+use crate::part::Mark;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::Frame;
 use suzatary_base::reference::Reference;
 use suzatary_conversations::secretary::store::ConversationState;
-use suzatary_core::wire::topics::{
+use suzatary_memory::secretary::erasure::Erasure;
+use suzatary_topics::wire::topics::{
     ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Speaker, TurnGone, TurnRow,
     VerbOutcome,
 };
-use suzatary_memory::secretary::erasure::Erasure;
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
 use viewtree::kit::{Reading, para};
@@ -1324,16 +1325,18 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
             Chips::Conversation(&m.id),
         ),
     };
-    let (files, references): (&[suzatary_core::wire::topics::AttachmentRow], &[Reference]) =
-        match &t.who {
-            Speaker::Person {
-                references,
-                attachments,
-                ..
-            } => (attachments, references),
-            Speaker::Act { references } | Speaker::Box { references } => (&[], references),
-            Speaker::Model { .. } | Speaker::Verb { .. } => (&[], &[]),
-        };
+    let (files, references): (
+        &[suzatary_topics::wire::topics::AttachmentRow],
+        &[Reference],
+    ) = match &t.who {
+        Speaker::Person {
+            references,
+            attachments,
+            ..
+        } => (attachments, references),
+        Speaker::Act { references } | Speaker::Box { references } => (&[], references),
+        Speaker::Model { .. } | Speaker::Verb { .. } => (&[], &[]),
+    };
     let photos = (!files.is_empty()).then(|| {
         view! { Div "turnphotos" [files.iter().map(|f| {
             let a = composer::attachment(f);
@@ -1448,15 +1451,15 @@ fn receipt(m: &Model, r: &Receipt) -> Node<Msg> {
     };
     let tail = match r {
         Receipt::Forgotten { .. } => Some(vec![
-            mark(crate::part::Mark::Diamond),
+            mark(Mark::Diamond),
             view! { Span "receiptstate" ["forgotten"] },
         ]),
         Receipt::Merged { into, .. } => Some(vec![
-            mark(crate::part::Mark::Diamond),
+            mark(Mark::Diamond),
             view! { Span "receiptstate" [format!("merged into fact {}", into.0)] },
         ]),
         Receipt::Standing { .. } | Receipt::Unread { .. } if writes(m) => Some(vec![
-            mark(crate::part::Mark::Diamond),
+            mark(Mark::Diamond),
             view! { Button "act forget" {Type => "button"} @click(Msg::Forget(fact)) ["Forget"] },
         ]),
         Receipt::Standing { .. } | Receipt::Unread { .. } => None,

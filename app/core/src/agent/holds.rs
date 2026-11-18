@@ -5,11 +5,11 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::agent::Agent;
-use crate::secretary::shown_record::{ShownRecord, Shows};
 use crate::verb::Surface;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::writer::Writer;
+use suzatary_digest::secretary::shown_record::{ShownRecord, Shows};
 use suzatary_inbox::secretary::changes::Act;
 
 use super::Says;

@@ -9,11 +9,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use prodrome_core::event::{Hash, canonical_envelope};
-use suzatary_core::secretary::compacting::Compacting;
-use suzatary_core::secretary::digests::ReadDigests;
 use suzatary_core::secretary::live_shape::{self, Shape, Summaries};
-use suzatary_core::secretary::memories::ReadMemories;
-use suzatary_core::secretary::recollection::Recollection;
+use suzatary_digest::secretary::compacting::Compacting;
+use suzatary_digest::secretary::digests::ReadDigests;
+use suzatary_digest::secretary::memories::ReadMemories;
+use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
@@ -33,8 +33,8 @@ fn handed<E: suzatary_core::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrom
 /// The disk stores under `root`, opened as a fresh process opens them: nothing read yet.
 struct Disk {
     lines: ConversationStores,
-    digests: Objects<suzatary_core::secretary::digest_event::DigestEvent>,
-    summaries: Texts<suzatary_core::secretary::digest_line::Line>,
+    digests: Objects<suzatary_digest::secretary::digest_event::DigestEvent>,
+    summaries: Texts<suzatary_digest::secretary::digest_line::Line>,
     facts: Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
     words: Texts<suzatary_memory::secretary::memory::Fact>,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,

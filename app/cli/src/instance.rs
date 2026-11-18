@@ -1,6 +1,12 @@
 //! `instance.toml`, parsed: the one place this binary learns about a box, so
 //! `suzatary-core` and `suzatary-io` never see a path. It holds nothing secret.
 
+use suzatary_api::portal::Portal;
+use suzatary_base::persona::Persona;
+use suzatary_io::objects::Objects;
+use suzatary_io::secrets::Declarations;
+use suzatary_record::record::TodoEvent;
+use suzatary_store::store::Signing;
 mod chain_dir;
 pub(crate) mod charter;
 mod connections;
@@ -93,17 +99,17 @@ pub struct Instance {
     /// The secret names a secret card's [`suzatary_connect::settings::Settable`] is minted against.
     pub settables: Settables,
     /// Those names: reading the instance writes nothing; the first store call writes the file.
-    pub declarations: suzatary_io::secrets::Declarations,
+    pub declarations: Declarations,
     /// The user repository's script the environment named.
     run: Option<String>,
     pub mail: Mail,
-    pub persona: suzatary_base::persona::Persona,
+    pub persona: Persona,
     /// The box-local tier: never pushed, carried by the vault.
     pub local: Local,
     /// `[notify]`'s channels; `None` resolves no push secret.
     pub notify: Option<NonEmpty<Channel>>,
     /// What the box answers the Android portal at pairing.
-    pub portal: suzatary_api::portal::Portal,
+    pub portal: Portal,
     pub plugins: Plugins,
 }
 
@@ -354,9 +360,8 @@ impl Instance {
             .collect();
         if let Some(keys) = signers.held() {
             let stores: Vec<_> = self.chains.iter().map(crate::commands::store_of).collect();
-            let stores: Vec<
-                &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
-            > = stores.iter().map(|store| store as _).collect();
+            let stores: Vec<&dyn suzatary_store::store::Prodrome<TodoEvent>> =
+                stores.iter().map(|store| store as _).collect();
             if let Err(why) =
                 suzatary_signatures::signatures::complete_revocations(&stores, keys.root())
             {
@@ -417,10 +422,8 @@ impl Instance {
         signers: &suzatary_signatures::signatures::Signers,
         actor: &prodrome_core::event::Actor,
         opened: crate::commands::door::Opened,
-    ) -> suzatary_store::store::Signing<
-        suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
-    > {
-        suzatary_store::store::Signing::new(
+    ) -> Signing<Objects<TodoEvent>> {
+        Signing::new(
             crate::commands::opened(chain, opened),
             match chain.charter {
                 Charted::Private => signers.for_actor(actor, &chain.policy.untrusted),
@@ -431,29 +434,20 @@ impl Instance {
 
     /// The inbox's one opener.
     #[must_use]
-    pub fn inbox_store(
-        &self,
-    ) -> suzatary_io::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent> {
-        suzatary_io::objects::Objects::open(self.secretary.inbox.clone())
+    pub fn inbox_store(&self) -> Objects<suzatary_inbox::secretary::inbox_event::InboxEvent> {
+        Objects::open(self.secretary.inbox.clone())
     }
 
     /// The memory's one opener.
     #[must_use]
-    pub fn memory_store(
-        &self,
-    ) -> suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent> {
-        suzatary_io::objects::Objects::open(self.secretary.memory.clone())
+    pub fn memory_store(&self) -> Objects<suzatary_memory::secretary::memory_event::MemoryEvent> {
+        Objects::open(self.secretary.memory.clone())
     }
 
     /// The digests' one opener.
     #[must_use]
-    pub fn digest_store(
-        &self,
-    ) -> suzatary_io::objects::Objects<suzatary_core::secretary::digest_event::DigestEvent> {
-        suzatary_io::objects::Objects::digests(
-            self.secretary.digests.clone(),
-            self.deployment.writers(),
-        )
+    pub fn digest_store(&self) -> Objects<suzatary_digest::secretary::digest_event::DigestEvent> {
+        Objects::digests(self.secretary.digests.clone(), self.deployment.writers())
     }
 
     /// The instance file at `path`, read in this process's environment.
@@ -500,7 +494,7 @@ impl Instance {
         let (notify, sender) = file.notify.map_or((None, None), |section| {
             (NonEmpty::of(section.channels), section.fcm_sender)
         });
-        let portal = suzatary_api::portal::Portal::of(notify.as_ref(), sender);
+        let portal = Portal::of(notify.as_ref(), sender);
         let plugins = plugins_of(path, &data, file.cache.as_deref(), file.plugins)?;
         let secretary = file.secretary.rooted(&code, &data);
         let repos = match &coding {
@@ -511,7 +505,7 @@ impl Instance {
                 .map_err(|e| anyhow::anyhow!("{}: [coding] repo: {e}", path.display()))?,
             None => secretary.repos.clone(),
         };
-        let persona = suzatary_base::persona::Persona {
+        let persona = Persona {
             prose: local.prose()?,
             ..file.persona
         };
@@ -536,7 +530,7 @@ impl Instance {
         writers_checked(path, &deployment)?;
         let paths = Paths::of(&data, secretary.drive_cli.as_deref(), env);
         // Declared on a store's first call, never here: the code root may be read-only.
-        let declarations = suzatary_io::secrets::Declarations::new(
+        let declarations = Declarations::new(
             code.as_path().join("secretspec.toml"),
             paths.secretspec.clone(),
             settables.clone(),

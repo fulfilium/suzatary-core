@@ -4,7 +4,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::zone::Zone;
-use suzatary_core::secretary::lapsed::sweep;
+use suzatary_cards::secretary::lapsed::sweep;
 use suzatary_core::stores::InMemory;
 use suzatary_google::calendar::When;
 use suzatary_inbox::secretary::acts::Act;

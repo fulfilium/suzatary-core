@@ -4,6 +4,8 @@
 //! deployed.
 
 use std::path::Path;
+use suzatary_digest::secretary::compacting::Compacting;
+use suzatary_io::model::TOKEN;
 
 use suzatary_base::capability::Clock;
 use suzatary_io::clock::SystemClock;
@@ -269,10 +271,10 @@ fn print_models(read: &instance::Instance) {
         suzatary_io::model::name_of(read.secretary.model.as_str())
     );
     match read.secretary.compacting() {
-        suzatary_core::secretary::compacting::Compacting::Off => {
+        Compacting::Off => {
             println!("  compactor                 off");
         }
-        suzatary_core::secretary::compacting::Compacting::On { ladder, .. } => println!(
+        Compacting::On { ladder, .. } => println!(
             "  compactor                 {}, leaving {:.0}% of the subscription",
             ladder
                 .map(|model| suzatary_io::model::name_of(model.as_str()))
@@ -282,13 +284,12 @@ fn print_models(read: &instance::Instance) {
         ),
     }
     let secrets = read.secrets();
-    match suzatary_io::secrets::state(&secrets.get(
-        suzatary_io::model::TOKEN,
-        "doctor: checking whether the model's token resolves",
-    )) {
+    match suzatary_io::secrets::state(
+        &secrets.get(TOKEN, "doctor: checking whether the model's token resolves"),
+    ) {
         SecretState::Missing => println!(
             "  the model's token is not set: run {}, or connect the model from the app",
-            read.reach().secret(suzatary_io::model::TOKEN)
+            read.reach().secret(TOKEN)
         ),
         state => println!("  token     {}", said(state)),
     }

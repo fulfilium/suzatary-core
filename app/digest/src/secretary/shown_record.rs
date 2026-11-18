@@ -1,0 +1,168 @@
+//! The record of the conversations as one reader may read it: the digest's reading behind a
+//! private field, reached only through what shows the parts its [`Shows`] reads, every other
+//! part by its kinds. The triage agent reads mail anyone can send, and the secretary's answers
+//! and review rounds can quote mail or a batch the agent once wrote, so its record is an
+//! [`OwnersRecord`], which shows the owner's own lines and the summaries of nothing but those
+//! ([`Label::is_owners`]), and never a [`Reading`], whose lines a new verb could reach. A
+//! reader's [`Shows`] is a type, so no value the agent holds can open more.
+//!
+//! ```compile_fail,E0599
+//! fn lines(record: &suzatary_digest::secretary::shown_record::OwnersRecord) {
+//!     let _ = record.entries();
+//! }
+//! ```
+
+use std::marker::PhantomData;
+
+use prodrome_core::digest::{Node, Part, Tree};
+use serde_json::{Value, json};
+
+use crate::secretary::compaction::Reading;
+use crate::secretary::digest_label::Label;
+use crate::secretary::digest_view;
+use crate::secretary::told::{self, Told};
+use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::search;
+use suzatary_conversations::secretary::search::Needle;
+use suzatary_memory::secretary::memory::Memory;
+use suzatary_topics::secretary::topics::reading::Reading as Topics;
+
+/// The record, shown as `S` reads it.
+pub struct ShownRecord<S: Shows> {
+    reading: Reading,
+    shows: PhantomData<S>,
+}
+
+/// Which parts of the record a reader reads in words; it reads every other part by its kinds.
+pub trait Shows {
+    /// Whether a part of `label` is read in words.
+    fn shows(label: &Label) -> bool;
+}
+
+/// The owner's own words, and the summaries of nothing but those: what the triage agent reads.
+pub enum OwnersWords {}
+
+impl Shows for OwnersWords {
+    fn shows(label: &Label) -> bool {
+        label.is_owners()
+    }
+}
+
+/// Every clean part: what the compactor is shown beside a node not of the owner's words alone.
+pub(crate) enum CleanWords {}
+
+impl Shows for CleanWords {
+    fn shows(label: &Label) -> bool {
+        label.is_clean()
+    }
+}
+
+/// Every part: what the secretary opens, each answer carrying the taint of what it shows.
+pub enum Everything {}
+
+impl Shows for Everything {
+    fn shows(_: &Label) -> bool {
+        true
+    }
+}
+
+/// The record in the owner's words alone.
+pub type OwnersRecord = ShownRecord<OwnersWords>;
+
+impl<S: Shows> ShownRecord<S> {
+    /// `reading`, from now on shown as `S` reads it.
+    #[must_use]
+    pub fn of(reading: Reading) -> Self {
+        Self {
+            reading,
+            shows: PhantomData,
+        }
+    }
+
+    /// Opening `handle`, as [`told::zoom`] answers it to this reader.
+    ///
+    /// # Errors
+    /// [`told::zoom`]'s.
+    pub fn zoom(&self, handle: &str) -> Result<Value, Refusal> {
+        told::zoom(&self.reading, handle, S::shows)
+    }
+
+    /// The view within `budget` bytes, one line per part as a session opening is told it, oldest
+    /// first, before it is fitted ([`told()`]).
+    #[must_use]
+    pub fn lines(&self, budget: usize) -> Vec<String> {
+        told::record_lines(&self.reading, budget, None)
+    }
+
+    /// The summaries this reader reads in words in the view a session opening is told, within
+    /// `budget` bytes, in the record's order, each with its part.
+    #[must_use]
+    pub fn summaries(&self, budget: usize) -> Vec<(Part, crate::secretary::digest_line::Line)> {
+        digest_view::view(
+            self.reading.digest(),
+            &self.reading.entries(),
+            budget,
+            S::shows,
+        )
+        .into_iter()
+        .filter_map(|shown| match shown.body {
+            digest_view::Body::Derived(line) => Some((shown.part, line)),
+            digest_view::Body::Said(_)
+            | digest_view::Body::Hidden(_)
+            | digest_view::Body::Unsummarised(_) => None,
+        })
+        .collect()
+    }
+
+    /// The lines and summaries this reader reads in words that hold `needle`, the newest `limit`
+    /// of them, each by its handle and with its words around the match.
+    #[must_use]
+    pub fn find(&self, needle: &Needle, limit: usize) -> Vec<Value> {
+        let digest = self.reading.digest();
+        let entries = self.reading.entries();
+        let mut found: Vec<(usize, Value)> = Vec::new();
+        let mut stack: Vec<&Node<Label>> = digest.tree().map(Tree::root).into_iter().collect();
+        while let Some(node) = stack.pop() {
+            stack.extend(node.children());
+            if !S::shows(node.measure()) {
+                continue;
+            }
+            let (kind, text) = if node.is_leaf() {
+                let Some(entry) = entries.get(digest.line(node.name())) else {
+                    continue;
+                };
+                ("said", digest_view::whole(entry))
+            } else {
+                let Some(summary) = digest.summary(node.name()) else {
+                    continue;
+                };
+                ("derived", summary.as_str().to_owned())
+            };
+            if let Some(excerpt) = needle.excerpt(&text, search::RECALL_CONTEXT) {
+                let part = Part {
+                    node: node.name().clone(),
+                    span: node.span(),
+                };
+                found.push((
+                    node.span().start,
+                    json!({ "handle": part.handle(), kind: excerpt }),
+                ));
+            }
+        }
+        found.sort_by_key(|(first, _)| std::cmp::Reverse(*first));
+        found.into_iter().take(limit).map(|(_, hit)| hit).collect()
+    }
+}
+
+/// What a session opening over `memory` is told, with the newest of `lines` (the record's, as
+/// [`ShownRecord::lines`] reads them, or why it was not read) that fit `budget` bytes, as
+/// [`told::context_of`] tells it and with no topic, since a topic is the secretary's own word for
+/// a conversation.
+#[must_use]
+pub fn told(memory: &Memory, lines: Result<&[String], &Refusal>, budget: usize) -> Told {
+    told::of(
+        memory,
+        Ok(&Topics::default()),
+        lines.map(|lines| digest_view::fit(lines.to_vec(), budget, digest_view::Keep::Latest)),
+    )
+}

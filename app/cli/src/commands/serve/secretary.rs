@@ -4,18 +4,25 @@ use axum::Json;
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Actor;
+use prodrome_core::event::Hash;
 use suzatary_api::secretary::routes as secretary_routes;
+use suzatary_api::wire::BlockRender;
+use suzatary_api::wire::RecordPayload;
+use suzatary_api::wire::Saying;
+use suzatary_api::wire::Uploaded;
+use suzatary_api::wire::Uploading;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_core::secretary::readings;
-use suzatary_core::wire::topics as wire;
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::file_read::Withheld;
 use suzatary_inbox::secretary::stamp;
 use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_io::attachments::{Stored, UploadError};
 use suzatary_signatures::signatures::Seat;
+use suzatary_signatures::signatures::Tap;
+use suzatary_topics::secretary::readings;
+use suzatary_topics::wire::topics as wire;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -90,10 +97,10 @@ impl Params for FactId {
     }
 }
 
-impl Params for prodrome_core::event::Hash {
+impl Params for Hash {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         let node = asked.segment("node")?;
-        prodrome_core::event::Hash::new(node).map_err(|_| {
+        Hash::new(node).map_err(|_| {
             Refusal::bad_request(format!(
                 "a summary is named by its node's 64-hex name, not {}",
                 shown(node)
@@ -125,11 +132,11 @@ impl Body for secretary_routes::Erasing {
 impl Body for Said {
     const CAP: usize = MAX_SAY_BYTES;
 
-    type Wire = suzatary_api::wire::Saying;
+    type Wire = Saying;
 
     /// Each photo's type is reread from the store.
-    fn parse(saying: suzatary_api::wire::Saying, state: &State) -> Result<Self, Refusal> {
-        let suzatary_api::wire::Saying {
+    fn parse(saying: Saying, state: &State) -> Result<Self, Refusal> {
+        let Saying {
             say,
             references,
             attachments,
@@ -171,9 +178,9 @@ impl Body for Said {
 impl Body for Upload {
     const CAP: usize = MAX_UPLOAD_BYTES;
 
-    type Wire = suzatary_api::wire::Uploading;
+    type Wire = Uploading;
 
-    fn parse(uploading: suzatary_api::wire::Uploading, _: &State) -> Result<Self, Refusal> {
+    fn parse(uploading: Uploading, _: &State) -> Result<Self, Refusal> {
         if uploading.file.is_empty() {
             return Err(Refusal::bad_request("file: base64 text is required"));
         }
@@ -239,16 +246,12 @@ pub fn forget(call: &Call<Actor, FactId, ()>) -> Result<Json<wire::MemoryPayload
 }
 
 /// `GET …/record`.
-pub fn record(
-    call: &Call<Reader, (), ()>,
-) -> Result<Json<suzatary_api::wire::RecordPayload>, Refusal> {
+pub fn record(call: &Call<Reader, (), ()>) -> Result<Json<RecordPayload>, Refusal> {
     secretary_routes::record(&call.chain.caps.secretary.memories.digests).map(Json)
 }
 
 /// `POST …/record/<node>/retract`, by tap.
-pub fn retract(
-    call: &Call<suzatary_signatures::signatures::Tap, prodrome_core::event::Hash, ()>,
-) -> Result<Json<suzatary_api::wire::RecordPayload>, Refusal> {
+pub fn retract(call: &Call<Tap, Hash, ()>) -> Result<Json<RecordPayload>, Refusal> {
     let caps = call.chain.caps;
     secretary_routes::retract(
         caps.secretary.memories,
@@ -278,7 +281,7 @@ pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value
 
 /// `POST …/<id>/erase`, by tap, after any running round stops.
 pub fn erase(
-    call: &Call<suzatary_signatures::signatures::Tap, ConversationId, secretary_routes::Erasing>,
+    call: &Call<Tap, ConversationId, secretary_routes::Erasing>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .workers
@@ -303,9 +306,7 @@ pub fn erase(
 }
 
 /// `GET …/blocks/<sha>`: the box renders only blocks a model wrote.
-pub fn block(
-    call: &Call<Reader, Block, ()>,
-) -> Result<Json<suzatary_api::wire::BlockRender>, Refusal> {
+pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<BlockRender>, Refusal> {
     let Block { id, sha } = &call.params;
     let source = match call.state.workers.closed(id, sha) {
         Some(source) => Some(source),
@@ -332,7 +333,7 @@ pub fn block(
         .answers
         .block(&block)
         .map(|html| {
-            Json(suzatary_api::wire::BlockRender {
+            Json(BlockRender {
                 html: html.as_str().to_owned(),
                 key,
             })
@@ -431,9 +432,7 @@ pub fn stop(
 }
 
 /// `POST …/attachments`.
-pub fn upload(
-    call: &Call<Writer, (), Upload>,
-) -> Result<Json<suzatary_api::wire::Uploaded>, Refusal> {
+pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<Uploaded>, Refusal> {
     let uploads = uploads(&call.state)?;
     let Upload { bytes, name, keep } = &call.body;
     let kept = match keep {
@@ -443,12 +442,12 @@ pub fn upload(
         Keep::OnTheBox => uploads.store.put(bytes),
     };
     match kept {
-        Ok(file) => Ok(Json(suzatary_api::wire::Uploaded::Kept {
+        Ok(file) => Ok(Json(Uploaded::Kept {
             file: wire::AttachmentRow::from(&file),
         })),
         // Held back; the owner may keep it in his Drive.
         Err(UploadError::Withheld(why @ (Withheld::HeldNumber | Withheld::Form))) => {
-            Ok(Json(suzatary_api::wire::Uploaded::Sensitive {
+            Ok(Json(Uploaded::Sensitive {
                 why: why.to_string(),
                 folder: suzatary_held::vault::FOLDER.to_owned(),
             }))

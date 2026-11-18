@@ -1,8 +1,8 @@
 //! The Claude models this deployment runs.
 
-use suzatary_core::model_name::ModelName;
-use suzatary_core::secretary::compacting::Compacting;
-use suzatary_core::settings::overview::{Calls, ModelJob};
+use suzatary_cards::settings::overview::{Calls, ModelJob};
+use suzatary_digest::model_name::ModelName;
+use suzatary_digest::secretary::compacting::Compacting;
 
 use crate::instance::{Instance, Reserve};
 

@@ -207,7 +207,7 @@ pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, 
 /// coding-session card that serves it; only his tap on that card fires a session.
 pub fn build(
     call: &Call<Tap, TodoRef, ()>,
-) -> Result<Json<suzatary_core::wire::topics::ConversationPayload>, Refusal> {
+) -> Result<Json<suzatary_topics::wire::topics::ConversationPayload>, Refusal> {
     let project = call.state.project()?;
     let plan_store = project.as_ref().map(|project| &project.chain);
     call.state

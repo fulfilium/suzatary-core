@@ -488,6 +488,73 @@ The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, grew by
 grew by about 640 bytes, so the rest is code. Its line moves from 4,860,000 to 4,870,000. The
 pages' module grew by 400 bytes (3,602,402 to 3,602,802).
 
+**Rows 27 to 29 (topics, digest, cards), one pull request.** Each module keeps its path under the
+crate's name, the secretary's under `secretary`: `suzatary_topics::{secretary::*, wire::topics}`,
+`suzatary_digest::{model_name, secretary::*}` and `suzatary_cards::{notify, secretary::*,
+settings::overview, wire::cards}`. `[layers] allowed` is empty: no edge below the secretary cut
+points up.
+- **The six upward edges went first,** each by moving what was owned by the wrong cut or by
+  passing a narrower value in:
+  - `build`, `filed` and `undo` named the secretary's `Bound` only for the coding session's
+    admission, which reads each chain's name, untrusted actors and todos. They take
+    `build::Chain`, the `(&ChainPolicy, &dyn Prodrome<TodoEvent>)` pair that
+    `chain_set::Read::of_stores` already read, and the secretary passes `Bound::chain`.
+  - `mail_health` takes the secretary cut: `propose_persistent` proposes through the secretary's
+    own `verbs::propose`, as `WRITES_AS`, over the whole `Secretary` record, and the CLI's brief
+    is its one caller.
+  - `filed`, `build` and `coding` take the topics cut: `readings` reads back the cards the door
+    files, and the door names `readings::state`. So `memories -> filed` points down.
+- **Two edges no guard saw:** `notify`'s law over every push read `secretary::answer_push` from a
+  test module, so `answer_push` moved to `notify`, beside `decide` and `needs_you`. And the inert
+  `Memories::nothing` is an inherent impl, so it moved to the digest crate's test support.
+- **Nothing widens.** PR 12's `undo::withdrawn` and `done_elsewhere::{Seen, sweep}` stay `pub`,
+  since `api` reads them; `readings::{drawn, proposal, turn, Place, blocks_of}` too.
+- **The laws that hold `stores::InMemory`** are core's integration tests: `filed`, `rules`,
+  `set_up`, `title`, `memories`, `failing`, `fixes`, `undo`, most of `noticed`, and the
+  overview's draft law. Five laws read private state and hold no store, so they stay beside their
+  code; what both halves build is test support under `nothing` (`overview::world`,
+  `noticed::owing`). `InMemory` cannot move below the cuts that test with it: it takes each
+  schema's hold from `stores::Store`, whose table names every schema up to the api cut's
+  `AskEvent`, and the orphan rule refuses a lower trait's impl for the five schemas that are
+  aliases of the Prodrome's `Event`. At row 31 `stores` moves to `api`, and these laws become
+  `api`'s integration tests.
+- **USE:** topics 20.5k, digest 28.4k, cards 13.3k; core falls from 106.8k to 44.4k. The digest
+  is over the line, and a further cut would take the memory's reading (`memories`,
+  `recollection`, `told`, `shown_record`, about 6.6k) above the summary tree; three names point up
+  across it and move first: `memories::Held` (read by `compaction`, `compact`, `digests`),
+  `memories::Memories` (`compaction`) and `memories::whole` (`digests`).
+
+Measured with `cargo check --workspace --all-targets` on four cores, one line edited, the second
+run of each, master and branch on one target directory:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `lines` (`transcript.rs`) | 38.5 s | 33.3 s |
+| `secretary` (`review.rs`) | 35.6 s | 31.7 s |
+| `routes.rs` | 28.0 s | 28.1 s |
+
+Core's library check fell from 4.8 to 1.9 s and its unit tests' from 6.2 to 2.1 s. What a session
+that works in one crate waits for, `cargo check -p <crate> --all-targets` after one line there (on
+master the three cuts were core's, so their edit checked core):
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `lines` (`transcript.rs`) | 3.5 s | 3.7 s |
+| `topics` (`readings.rs`) | 9.9 s | 3.3 s |
+| `digest` (`digest.rs`) | ≈ 10 s, as core | 1.6 s |
+| `cards` (`noticed.rs`) | ≈ 10 s, as core | 1.8 s |
+| core (`review.rs`) | 10.6 s | 4.7 s |
+
+The CLI's test binary `all` is about 21.8 s of every case. 48 of its 71 modules each declare
+`mod common;`, so the shared test support (about 5,000 lines) is checked 48 times, about 0.5 s
+each; leaving out any one of the six largest test modules moves the figure by no more than the
+spread between runs. Declared once in `all.rs`, with each file naming `crate::common`, the check
+measured 4.0 s.
+
+The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, shrank by 582 bytes after
+`wasm-opt` (4,863,675 to 4,863,093), and the pages' module grew by 46 (3,602,802 to 3,602,848). No
+line of `web/wasm-budget` moves.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

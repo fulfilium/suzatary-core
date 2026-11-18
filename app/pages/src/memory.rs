@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::{RecordPayload, RecordSummary};
-use suzatary_core::wire::topics::{FactRow, FactSaid, MemoryPayload, SaidOn};
 use suzatary_memory::secretary::memory::{FactId, Kind};
+use suzatary_topics::wire::topics::{FactRow, FactSaid, MemoryPayload, SaidOn};
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Disabled, Type};
 use viewtree::kit::{Reading, para};

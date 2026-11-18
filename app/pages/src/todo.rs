@@ -1,5 +1,6 @@
 //! One todo as a page: pushed on a phone, a pane beside the list on a wide screen.
 
+use crate::part::Mark;
 use std::collections::BTreeSet;
 
 use chrono::NaiveDate;
@@ -7,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use suzatary_api::wire::{Authoring, TodoPayload, UpdateTodo};
 use suzatary_base::escape::{Escaped, unescape_markup};
 use suzatary_base::reference::TodoRef;
-use suzatary_core::wire::topics::{ConversationPayload, InboxState};
 use suzatary_record::todo::{Cycle, Patch, TodoPatch};
 use suzatary_record::wire::record::SubTodo;
 use suzatary_todo::wire::todo::{
     Authored, AuthoredSource, Entry, FieldChange, Holds, Link, Neighbour, Reverses,
 };
+use suzatary_topics::wire::topics::{ConversationPayload, InboxState};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Checked, Class, Data, Disabled, For, Href, Id, Open, Role, Title, Type,
@@ -852,7 +853,7 @@ impl Model {
         };
         let open = matches!(self.edit, Editing::Open(_));
         let editbox = view! { Details "why editbox" {Open => open} @toggle(|o| Msg::Edit(EditMsg::Toggle(o))) [
-            view! { Summary ["Edit", mark(crate::part::Mark::Chevron)] },
+            view! { Summary ["Edit", mark(Mark::Chevron)] },
             edit,
         ] };
         let defer = is_open(e).then(|| {
@@ -869,7 +870,7 @@ impl Model {
                 form::refusal(said),
             ];
             view! { Details "why editbox deferbox" {Open => open} @toggle(|o| Msg::Defer(DeferMsg::Toggle(o))) [
-                view! { Summary ["Defer to…", mark(crate::part::Mark::Chevron)] },
+                view! { Summary ["Defer to…", mark(Mark::Chevron)] },
                 view! { Div "pickerhead draftform" [inner] },
             ] }
         });
@@ -884,7 +885,7 @@ impl Model {
             .map(|a| {
                 let key = a.rich.keys.detail.as_deref().filter(|_| self.trusted(e));
                 view! { Details "why" {Open => true} [
-                    view! { Summary ["Detail", mark(crate::part::Mark::Chevron)] },
+                    view! { Summary ["Detail", mark(Mark::Chevron)] },
                     markup("todobody", key, &a.detail),
                 ] }
             });
@@ -964,7 +965,7 @@ impl Model {
         };
         Some(
             view! { Details {Class => class, Open => self.provenance == Fold::Open} @toggle(Msg::Provenance) [
-                view! { Summary [format!("Written by {who}{on}"), mark(crate::part::Mark::Chevron)] },
+                view! { Summary [format!("Written by {who}{on}"), mark(Mark::Chevron)] },
                 view! { P [if e.unconfirmed {
                     "Not confirmed yet, so the number above does not use it. Confirm it to make it count."
                 } else {
@@ -1038,7 +1039,7 @@ impl Model {
         let say = |s: &str| para("legend", s);
         let inside = match &self.thirty {
             Thirty::Sampling => {
-                view! { Div "placeholder ph-lines" {Role => "status", AriaLabel => "Loading"} [mark(crate::part::Mark::Loadmark)] }
+                view! { Div "placeholder ph-lines" {Role => "status", AriaLabel => "Loading"} [mark(Mark::Loadmark)] }
             }
             Thirty::Unheld => say(
                 "No curve yet: this browser does not hold this todo's events. It draws once they sync.",
@@ -1062,7 +1063,7 @@ impl Model {
         view! { Div "historyparts" [
             links(p),
             view! { Details "history" {Open => self.history == Fold::Open} @toggle(Msg::History) [
-                view! { Summary [view! { H2 [format!("History ({n} {})", if n == 1 { "event" } else { "events" })] }, mark(crate::part::Mark::Chevron)] },
+                view! { Summary [view! { H2 [format!("History ({n} {})", if n == 1 { "event" } else { "events" })] }, mark(Mark::Chevron)] },
                 para("legend", "Oldest first."),
                 view! { Ol "timeline" [p.stream.iter().map(|l| event(&self.context.offsets, l, p.diffs.get(&l.hash), &p.stream)).collect::<Vec<_>>()] },
             ] },
@@ -1123,7 +1124,7 @@ fn source_block(s: &AuthoredSource) -> Node<Msg> {
             view! { Span "sourcewho" [s.sender.as_str()] },
             view! { Span "sourcesubject" [if s.subject.is_empty() { "(no subject)" } else { s.subject.as_str() }] },
             view! { Span "meta" [s.date.as_str()] },
-            mark(crate::part::Mark::Chevron),
+            mark(Mark::Chevron),
         ] },
         facts,
     ] }
@@ -1202,7 +1203,7 @@ fn neighbour(n: &Neighbour) -> Node<Msg> {
         view! { Code "linkid" [n.todo.as_str()] },
         chip(&serde_json::to_value(n.state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default(), if n.state == suzatary_todo::wire::todo::EntryState::Open { "" } else { "done" }),
         n.unconfirmed.then(|| chip("unconfirmed", "prov")),
-        mark(crate::part::Mark::Chevron),
+        mark(Mark::Chevron),
     ] }
 }
 

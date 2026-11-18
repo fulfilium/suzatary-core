@@ -6,6 +6,8 @@
 
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
+use suzatary_base::drive_path::DrivePath;
+use suzatary_signatures::signatures::Enrolment;
 
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::conversation_id::ConversationId;
@@ -62,7 +64,7 @@ pub enum Act {
     /// Read one of the owner's documents in a folder no `drive_allow` entry covers, redacted.
     #[serde(rename = "drive_read")]
     DriveRead {
-        path: suzatary_base::drive_path::DrivePath,
+        path: DrivePath,
         /// Its size in bytes as listed when asked, for the card.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
@@ -74,7 +76,7 @@ pub enum Act {
         task: crate::coding::Task,
     },
     /// Trust a new device's key (SPEC law 42), on a tap a trusted device endorses.
-    Device(suzatary_signatures::signatures::Enrolment),
+    Device(Enrolment),
     /// Sign the model in: the tap runs the sign-in on the box, which files the code's card.
     #[serde(rename = "sign_in")]
     SignIn {
@@ -141,7 +143,7 @@ pub enum Act {
         node: prodrome_core::event::Hash,
     },
     /// Ask the owner's request again in a fresh topic, copying turn `turn` only while it is his
-    /// own clean words (`suzatary_core::secretary::afresh::Request::at_tap`).
+    /// own clean words (`suzatary_cards::secretary::afresh::Request::at_tap`).
     Afresh {
         /// Where the request was said and the card is drawn.
         conversation: ConversationId,
@@ -316,11 +318,8 @@ fn retracting(node: &prodrome_core::event::Hash) -> String {
 
 /// The folder a document is in: the one "Always allow this folder" names.
 #[must_use]
-pub fn folder_of(
-    path: &suzatary_base::drive_path::DrivePath,
-) -> suzatary_base::drive_path::DrivePath {
-    path.parent()
-        .unwrap_or_else(suzatary_base::drive_path::DrivePath::root)
+pub fn folder_of(path: &DrivePath) -> DrivePath {
+    path.parent().unwrap_or_else(DrivePath::root)
 }
 
 /// `Auth(account)`.
@@ -488,7 +487,7 @@ impl Literal for Act {
             },
             "Device" => {
                 let fields = Fields::of(value, DEVICE)?;
-                Act::Device(suzatary_signatures::signatures::Enrolment {
+                Act::Device(Enrolment {
                     actor: prodrome_core::event::Actor::new(fields.get::<String>("actor")?)?,
                     key: prodrome_core::sign::PublicKey::new(fields.get::<String>("key")?)?,
                 })

@@ -26,12 +26,20 @@ mod connect;
 mod context_cost;
 #[path = "conversation_id.rs"]
 mod conversation_id;
+#[path = "conversational_rules.rs"]
+mod conversational_rules;
 #[path = "decisions_schema.rs"]
 mod decisions_schema;
 #[path = "digest.rs"]
 mod digest;
 #[path = "drive_port.rs"]
 mod drive_port;
+#[path = "failing.rs"]
+mod failing;
+#[path = "filed.rs"]
+mod filed;
+#[path = "fixes.rs"]
+mod fixes;
 #[path = "fragment.rs"]
 mod fragment;
 #[path = "held.rs"]
@@ -60,12 +68,16 @@ mod line_replica;
 mod line_words;
 #[path = "lines_rule.rs"]
 mod lines_rule;
+#[path = "memories.rs"]
+mod memories;
 #[path = "memory.rs"]
 mod memory;
 #[path = "memory_schema.rs"]
 mod memory_schema;
 #[path = "model_port.rs"]
 mod model_port;
+#[path = "noticed.rs"]
+mod noticed;
 #[path = "oauth_tap.rs"]
 mod oauth_tap;
 #[path = "object_replica.rs"]
@@ -80,6 +92,10 @@ mod puller_port;
 mod release;
 #[path = "sequence.rs"]
 mod sequence;
+#[path = "set_up.rs"]
+mod set_up;
+#[path = "settings_overview.rs"]
+mod settings_overview;
 #[path = "signatures.rs"]
 mod signatures;
 #[path = "snapshot.rs"]
@@ -94,6 +110,8 @@ mod store_signing;
 mod surface;
 #[path = "tap.rs"]
 mod tap;
+#[path = "title.rs"]
+mod title;
 #[path = "topics.rs"]
 mod topics;
 #[path = "transcript_store.rs"]
@@ -106,5 +124,7 @@ mod tree;
 mod triage_cards;
 #[path = "triage_memory.rs"]
 mod triage_memory;
+#[path = "undo.rs"]
+mod undo;
 #[path = "vault.rs"]
 mod vault;

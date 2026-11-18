@@ -17,9 +17,7 @@ use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
 
 use crate::asks::AskEvent;
-use crate::secretary::digest_event::DigestEvent;
-use crate::secretary::topics::reading::AliasEvent;
-use crate::secretary::topics::reading::MembershipEvent;
+use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::lines_rule::LinesRule;
@@ -28,6 +26,8 @@ use suzatary_record::record::TodoEvent;
 use suzatary_store::admission::{Admission, Shared};
 use suzatary_store::store::Hold;
 use suzatary_todo::decisions::DecisionEvent;
+use suzatary_topics::secretary::topics::reading::AliasEvent;
+use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
 pub use database::Database;
 #[cfg(any(test, feature = "nothing"))]

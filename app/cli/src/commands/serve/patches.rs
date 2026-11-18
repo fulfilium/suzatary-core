@@ -4,13 +4,14 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use suzatary_io::repos::Mirrors;
 
 use super::State;
 
 const EVERY: Duration = Duration::from_hours(1);
 
 /// The sweep, forever.
-pub async fn sweeping(state: State, mirrors: Arc<suzatary_io::repos::Mirrors>) {
+pub async fn sweeping(state: State, mirrors: Arc<Mirrors>) {
     let mut every = tokio::time::interval(EVERY);
     loop {
         every.tick().await;
@@ -19,10 +20,10 @@ pub async fn sweeping(state: State, mirrors: Arc<suzatary_io::repos::Mirrors>) {
 }
 
 /// A failure is a log line; the next tick goes on.
-async fn once(state: &State, mirrors: &Arc<suzatary_io::repos::Mirrors>) {
+async fn once(state: &State, mirrors: &Arc<Mirrors>) {
     let (caps, mirrors) = (state.first.caps, Arc::clone(mirrors));
     let swept = tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::merged_patches::sweep(
+        suzatary_cards::secretary::merged_patches::sweep(
             caps.secretary.inbox,
             mirrors.as_ref(),
             caps.secretary.clock.now(),
@@ -46,7 +47,7 @@ async fn once(state: &State, mirrors: &Arc<suzatary_io::repos::Mirrors>) {
         Err(panicked) => tracing::warn!("repository cards: {panicked}"),
     }
     let caps = state.first.caps;
-    match suzatary_core::secretary::lapsed::sweep(
+    match suzatary_cards::secretary::lapsed::sweep(
         caps.secretary.inbox,
         state.deployment.zone,
         caps.secretary.clock.now(),

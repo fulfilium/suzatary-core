@@ -4,6 +4,7 @@ use suzatary_base::capability::{Clock, Manuals};
 use suzatary_connect::secrets::Secrets;
 use suzatary_conversations::secretary::model::Model;
 use suzatary_google::calendar::effect::Calendar;
+use suzatary_held::attachment::AttachmentId;
 use suzatary_mail::mail::mail_sync::MailSync;
 use suzatary_mail::mail::mailbox::Mailbox;
 use suzatary_record::record::TodoEvent;
@@ -12,7 +13,9 @@ use suzatary_services::repositories::Repositories;
 use suzatary_services::repository::Repository;
 use suzatary_services::weather::Weather;
 use suzatary_services::web::Web;
+use suzatary_store::store::Gets;
 use suzatary_store::store::Prodrome;
+use suzatary_todo::decisions::Decisions;
 use suzatary_todo::render::Render;
 use suzatary_triage::mail::corpus::Corpus;
 use suzatary_triage::mail::junk_folder::Junk;
@@ -73,11 +76,11 @@ pub struct Secretary<'a> {
     pub inbox: &'a dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     /// Its memory, shared by every conversation; the agent has none, so an injection
     /// cannot become durable.
-    pub memories: crate::secretary::memories::Memories<'a>,
+    pub memories: suzatary_digest::secretary::memories::Memories<'a>,
     /// The recorded decisions: a verb reads them; only the owner's tap on a proposal writes.
-    pub decisions: suzatary_todo::decisions::Decisions<'a>,
+    pub decisions: Decisions<'a>,
     /// The topics on its rounds and notes, box-local: the topic verbs write its suggestions.
-    pub topics: crate::secretary::topics::stores::TopicStores<'a>,
+    pub topics: suzatary_topics::secretary::topics::stores::TopicStores<'a>,
     pub briefings: &'a dyn Briefings,
     pub weather: &'a dyn Weather,
     /// The owner's calendars, read-only, in the box's clock: what a plugin learned, whose
@@ -101,21 +104,15 @@ pub struct Secretary<'a> {
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
-    pub uploads: &'a dyn suzatary_store::store::Gets<
-        suzatary_held::attachment::AttachmentId,
-        suzatary_held::upload::Upload,
-    >,
+    pub uploads: &'a dyn Gets<AttachmentId, suzatary_held::upload::Upload>,
     /// The words of the uploads, for its search.
     pub upload_index: &'a dyn suzatary_held::upload_index::UploadIndex,
     /// The files a verb keeps for the model.
-    pub kept: &'a dyn suzatary_store::store::Doc<suzatary_held::attachment::AttachmentId, Vec<u8>>,
+    pub kept: &'a dyn suzatary_store::store::Doc<AttachmentId, Vec<u8>>,
     /// A PDF's text layer, which a held file's numbers are read back from.
     pub pdf: &'a dyn suzatary_held::pdf_text::PdfText,
     /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
-    pub tapped: &'a dyn suzatary_store::store::Gets<
-        suzatary_held::held_value::HeldFile,
-        suzatary_held::secretary::attached::Attached,
-    >,
+    pub tapped: &'a dyn Gets<suzatary_held::held_value::HeldFile, suzatary_held::secretary::attached::Attached>,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
     pub configuration: &'a dyn suzatary_connect::settings::Configuration,
     /// The watches on mail the owner expects; a watch's only act is the sync's push.
@@ -134,9 +131,9 @@ impl<'a> Secretary<'a> {
             manuals: self.manuals,
             render: self.render,
             clock: self.clock,
-            memory: crate::secretary::recollection::Recollection::of(
+            memory: suzatary_digest::secretary::recollection::Recollection::of(
                 self.memories.reads(),
-                crate::secretary::digest_view::VIEW_BYTES,
+                suzatary_digest::secretary::digest_view::VIEW_BYTES,
             ),
         }
     }
@@ -145,19 +142,13 @@ impl<'a> Secretary<'a> {
 impl<'a> Secretary<'a> {
     /// What recording a tapped decision reads and writes: the decisions, the clock, the renderer.
     #[must_use]
-    pub fn decides(
-        &self,
-    ) -> (
-        &suzatary_todo::decisions::Decisions<'a>,
-        &'a dyn Clock,
-        &'a dyn Render,
-    ) {
+    pub fn decides(&self) -> (&Decisions<'a>, &'a dyn Clock, &'a dyn Render) {
         (&self.decisions, self.clock, self.render)
     }
 
     /// Where a card a tap asks for is filed.
     #[must_use]
-    pub fn files_into(&self) -> crate::secretary::connections::Filer<'a> {
+    pub fn files_into(&self) -> suzatary_cards::secretary::connections::Filer<'a> {
         (self.conversations, self.inbox, self.clock)
     }
 }

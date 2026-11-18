@@ -33,11 +33,8 @@ use suzatary_conversations::secretary::about;
 use suzatary_conversations::secretary::model::{Model, ModelError, Turn};
 use suzatary_conversations::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::Secretary;
-use suzatary_core::secretary::answers::{AnswerError, Answers};
-use suzatary_core::secretary::memories::Memories;
-use suzatary_core::secretary::readings;
 use suzatary_core::stores::InMemory;
-use suzatary_core::wire::topics as wire;
+use suzatary_digest::secretary::memories::Memories;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
@@ -56,6 +53,9 @@ use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
 use suzatary_todo::render::{Html, Render};
+use suzatary_topics::secretary::answers::{AnswerError, Answers};
+use suzatary_topics::secretary::readings;
+use suzatary_topics::wire::topics as wire;
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -308,8 +308,8 @@ struct Bundle {
     inbox: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     memory: InMemory<suzatary_memory::secretary::memory_event::MemoryEvent>,
     texts: InMemoryDoc<TextName, Text<Fact>>,
-    digests: InMemory<suzatary_core::secretary::digest_event::DigestEvent>,
-    digest_texts: InMemoryDoc<TextName, Text<suzatary_core::secretary::digest_line::Line>>,
+    digests: InMemory<suzatary_digest::secretary::digest_event::DigestEvent>,
+    digest_texts: InMemoryDoc<TextName, Text<suzatary_digest::secretary::digest_line::Line>>,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     entropy: Counting,
     at: Datetime,
@@ -349,12 +349,12 @@ impl Bundle {
             texts: &self.texts,
             cards: &self.inbox,
             entropy: &self.entropy,
-            digests: suzatary_core::secretary::digests::Digests {
+            digests: suzatary_digest::secretary::digests::Digests {
                 history: &self.digests,
                 texts: &self.digest_texts,
                 lines: self.conversations.conversations(),
                 owners: &self.owners,
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         }
     }
@@ -917,16 +917,16 @@ fn the_standings_vector_is_every_standing_a_line_can_take() {
     .chain(Failure::ALL.map(failed))
     .collect();
     write_or_check(
-        &suzatary_core::wire::cards::Overview {
+        &suzatary_cards::wire::cards::Overview {
             groups: Group::ALL
                 .into_iter()
-                .map(|group| suzatary_core::wire::cards::OverviewGroup {
+                .map(|group| suzatary_cards::wire::cards::OverviewGroup {
                     group,
                     lines: if group == Group::Plugins {
                         standings
                             .iter()
                             .enumerate()
-                            .map(|(n, standing)| suzatary_core::wire::cards::OverviewLine {
+                            .map(|(n, standing)| suzatary_cards::wire::cards::OverviewLine {
                                 key: format!("plugin:p{n}"),
                                 label: format!("p{n}"),
                                 detail: None,
@@ -1688,13 +1688,15 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
 /// A digest history whose read left an object out: every sweep over it refuses.
 struct LeftOut;
 
-impl suzatary_store::store::Reads<suzatary_core::secretary::digest_event::DigestEvent> for LeftOut {
+impl suzatary_store::store::Reads<suzatary_digest::secretary::digest_event::DigestEvent>
+    for LeftOut
+{
     fn objects(
         &self,
     ) -> Result<
         Vec<(
             Hash,
-            prodrome_core::event::Envelope<suzatary_core::secretary::digest_event::DigestEvent>,
+            prodrome_core::event::Envelope<suzatary_digest::secretary::digest_event::DigestEvent>,
         )>,
         suzatary_store::store::StoreError,
     > {
@@ -1713,12 +1715,12 @@ impl suzatary_store::store::Reads<suzatary_core::secretary::digest_event::Digest
     }
 }
 
-impl suzatary_store::store::Prodrome<suzatary_core::secretary::digest_event::DigestEvent>
+impl suzatary_store::store::Prodrome<suzatary_digest::secretary::digest_event::DigestEvent>
     for LeftOut
 {
     fn append(
         &self,
-        _: suzatary_core::secretary::digest_event::DigestEvent,
+        _: suzatary_digest::secretary::digest_event::DigestEvent,
     ) -> Result<Hash, suzatary_store::store::StoreError> {
         Err(suzatary_store::store::StoreError::not_appended(
             "left out",
@@ -1748,7 +1750,7 @@ fn a_dismissal_stands_with_its_line_whatever_its_sweep() {
     let trains = ConversationId::new("trains").expect("a slug");
     bundle.seed(&trains, &remembering(&bundle, &trains));
     let memories = Memories {
-        digests: suzatary_core::secretary::digests::Digests {
+        digests: suzatary_digest::secretary::digests::Digests {
             history: &LeftOut,
             ..bundle.memories().digests
         },
@@ -2184,7 +2186,7 @@ fn the_answers_vector_holds_every_answer() {
         zone: "America/New_York".to_owned(),
     }]);
     let held = |todo: &str, title: &str, state, value: Option<f64>| {
-        Some(suzatary_core::wire::cards::HeldTodo {
+        Some(suzatary_cards::wire::cards::HeldTodo {
             row: suzatary_todo::wire::todo::Neighbour {
                 todo: todo.to_owned(),
                 state,
@@ -2196,11 +2198,11 @@ fn the_answers_vector_holds_every_answer() {
     };
     // A fixed version, so a release does not move the vector; the route's own is the build's.
     // A release file names ids alone, so a todo the box's chain does not hold has no title.
-    samples.add([suzatary_core::wire::cards::AboutPayload {
+    samples.add([suzatary_cards::wire::cards::AboutPayload {
         version: "1.15.0".to_owned(),
         build: "dev".to_owned(),
         completes: vec![
-            suzatary_core::wire::cards::Shipped {
+            suzatary_cards::wire::cards::Shipped {
                 todo: "calendarlinks".to_owned(),
                 held: held(
                     "calendarlinks",
@@ -2209,7 +2211,7 @@ fn the_answers_vector_holds_every_answer() {
                     Some(1.0),
                 ),
             },
-            suzatary_core::wire::cards::Shipped {
+            suzatary_cards::wire::cards::Shipped {
                 todo: "elsewhere".to_owned(),
                 held: None,
             },
@@ -2445,10 +2447,10 @@ fn the_answers_vector_holds_every_answer() {
             .collect(),
         &[],
     );
-    let stream = suzatary_core::secretary::stream::stream(
+    let stream = suzatary_topics::secretary::stream::stream(
         skeleton.outlines(),
-        suzatary_core::secretary::stream::every(&opened),
-        &suzatary_core::secretary::topics::reading::Reading::default(),
+        suzatary_topics::secretary::stream::every(&opened),
+        &suzatary_topics::secretary::topics::reading::Reading::default(),
         &std::collections::BTreeSet::new(),
         1,
         &readings::Dress::BARE,
@@ -2743,7 +2745,7 @@ fn the_answers_vector_holds_every_answer() {
     {
         use suzatary_connect::connect::{Group, Standing};
         let line = |key: &str, label: &str, standing: Standing, cards: &[&str]| {
-            suzatary_core::wire::cards::OverviewLine {
+            suzatary_cards::wire::cards::OverviewLine {
                 key: key.to_owned(),
                 label: label.to_owned(),
                 detail: Some(format!("{label}, in a sentence.")),
@@ -2804,16 +2806,16 @@ fn the_answers_vector_holds_every_answer() {
             ],
             Group::Drive | Group::Coding | Group::Box => Vec::new(),
         };
-        samples.add([suzatary_core::wire::cards::Overview {
+        samples.add([suzatary_cards::wire::cards::Overview {
             groups: Group::ALL
                 .into_iter()
-                .map(|group| suzatary_core::wire::cards::OverviewGroup {
+                .map(|group| suzatary_cards::wire::cards::OverviewGroup {
                     group,
                     lines: lines(group),
                 })
                 .collect(),
             ask: "setup".to_owned(),
-            offers: vec![suzatary_core::wire::cards::Offer {
+            offers: vec![suzatary_cards::wire::cards::Offer {
                 template: "google".to_owned(),
                 group: Group::Mail,
                 title: "a Google account (its mail and calendars)".to_owned(),

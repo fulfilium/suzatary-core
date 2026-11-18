@@ -1,66 +1,29 @@
 //! The secretary: a trusted assistant in a conversation the owner is reading, which appends
 //! as itself and proposes, but cannot send, anything outward.
 
-pub mod afresh;
+use prodrome_core::event::Actor;
+use suzatary_base::writer::Writer;
+use suzatary_conversations::secretary::model::Pick;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_signatures::chain_set::Read;
 pub mod answering;
-pub mod answers;
-pub mod bootstrap;
 pub mod briefings;
 pub mod briefs;
-pub mod build;
 mod call;
-pub mod caused;
-pub mod coding;
-pub mod compact;
-pub mod compact_ask;
-pub mod compact_budget;
-pub mod compacting;
-pub mod compaction;
-pub mod compactor;
-pub mod connections;
 pub mod daily;
-pub mod digest;
-pub mod digest_census;
-pub mod digest_event;
-pub mod digest_label;
-pub mod digest_line;
-pub mod digest_policy;
-pub mod digest_spent;
-pub mod digest_view;
-pub mod digests;
-pub mod done_elsewhere;
-pub mod failing;
 pub(crate) mod file_query;
 pub mod file_search;
-pub mod filed;
-pub mod fixes;
 pub mod gate;
-pub mod google_sign_in;
-pub mod indexed_tree;
-pub mod lapsed;
 #[cfg(any(test, feature = "nothing"))]
 pub mod live_shape;
 pub mod mail_health;
-pub mod memories;
-pub mod merged_patches;
-pub mod noticed;
 pub mod opening;
 pub mod read_holders;
-pub mod readings;
-pub mod recollection;
 mod record;
 pub mod review;
-pub mod rules;
-pub mod set_up;
-pub mod shown_record;
-pub mod stream;
 pub mod surface;
 pub mod sweep;
-pub mod title;
 pub mod token_expiry;
-pub mod told;
-pub mod topics;
-pub mod undo;
 pub mod verb_answer;
 pub mod verbs;
 
@@ -84,14 +47,16 @@ use suzatary_connect::settings::Settables;
 use suzatary_conversations::secretary::model::{Halt, Turn};
 use suzatary_conversations::secretary::store::{Entry, Stored};
 use suzatary_conversations::secretary::{queue, store, tool_name};
+use suzatary_digest::secretary::memories;
 use suzatary_inbox::secretary::proposal;
 use suzatary_inbox::secretary::{inbox, own_round, stamp};
 use suzatary_lines::secretary::conversations::{append, read};
 use suzatary_lines::secretary::transcript;
+use suzatary_topics::secretary::{build, readings};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
-pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writer::Assistant;
+pub const WRITES_AS: Writer = Writer::Assistant;
 
 /// How many rounds one `say` may take.
 pub const MAX_ROUNDS: usize = 8;
@@ -105,18 +70,6 @@ pub struct Answered {
     pub rounds: usize,
     /// Whether the model answered, or the box ended the round and said why.
     pub ending: crate::conversation::round::Ending,
-}
-
-/// The push a finished round earns: only for an answer, never naming its words.
-#[must_use]
-pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::notify::Push> {
-    let Some(Turn::Model { text, calls }) = stored.turns.last().map(|said| &said.turn) else {
-        return None;
-    };
-    (calls.is_empty() && !text.trim().is_empty()).then(|| crate::notify::Push::Answered {
-        conversation: stored.id.clone(),
-        brief,
-    })
 }
 
 /// A question as [`converse`] takes it.
@@ -138,13 +91,13 @@ pub enum Asker<'a> {
 
 /// Whose own words a [`Saying`] is; the gate's to claim.
 #[derive(Debug, Clone, Copy)]
-pub struct Speaker<'a>(&'a prodrome_core::event::Actor);
+pub struct Speaker<'a>(&'a Actor);
 
 impl Speaker<'_> {
     /// The fixture's scripted person.
     #[cfg(feature = "fixture")]
     #[must_use]
-    pub fn scripted(actor: &prodrome_core::event::Actor) -> Speaker<'_> {
+    pub fn scripted(actor: &Actor) -> Speaker<'_> {
         Speaker(actor)
     }
 }
@@ -184,7 +137,7 @@ pub fn converse(
     )?;
     answer(
         caps,
-        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(caps.model)),
+        || Pick::Turn(Box::new(caps.model)),
         deployment,
         settables,
         chains,
@@ -205,7 +158,7 @@ pub fn converse(
 )]
 pub fn answer<'p>(
     caps: &Secretary<'_>,
-    pick: impl FnOnce() -> suzatary_conversations::secretary::model::Pick<'p>,
+    pick: impl FnOnce() -> Pick<'p>,
     deployment: &Deployment,
     settables: &Settables,
     chains: &[Bound<'_>],
@@ -223,13 +176,13 @@ pub fn answer<'p>(
         |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
     // A lost session is asked statelessly of the same model, never of a second pick.
     let ask = match &pick {
-        suzatary_conversations::secretary::model::Pick::Held(model) => Ask::Session {
+        Pick::Held(model) => Ask::Session {
             model: *model,
             fallback: *model,
             memories: caps.memories,
             topics: caps.topics,
         },
-        suzatary_conversations::secretary::model::Pick::Turn(model) => Ask::Window {
+        Pick::Turn(model) => Ask::Window {
             model: model.as_ref(),
             memories: caps.memories,
             topics: caps.topics,
@@ -255,10 +208,10 @@ pub fn answer<'p>(
 /// # Errors
 /// [`Refusal::conflict`] when nothing waits; the store's failures.
 pub fn stop_waiting(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
 ) -> Result<(), Refusal> {
     if queue::Pending::of(&read(conversations, id)?).is_none() {
         return Err(Refusal::conflict(format!(
@@ -463,7 +416,7 @@ fn load(
             head.as_str()
         ))),
         // A round or a note is shown by its topics; its words are the conversation's.
-        Reference::Target(target) => Ok(crate::secretary::topics::revision::held(
+        Reference::Target(target) => Ok(suzatary_topics::secretary::topics::revision::held(
             &caps.topics.reading()?,
             target,
         )),
@@ -482,6 +435,14 @@ pub struct Bound<'a> {
     pub caps: Secretary<'a>,
     /// Whose events bind here.
     pub policy: &'a ChainPolicy,
+}
+
+impl<'a> Bound<'a> {
+    /// This chain as a reading of every chain's todos takes it: its policy and its store.
+    #[must_use]
+    pub fn chain(&self) -> build::Chain<'a> {
+        (self.policy, self.caps.chain)
+    }
 }
 
 /// The chain among `chains` that the box files its own todos on: `[upkeep]`'s, or `None` when
@@ -505,12 +466,10 @@ pub fn upkeep<'c, 'a>(
         .transpose()
 }
 
-/// The chains a call may read, each read once ([`suzatary_signatures::chain_set::Read`]).
+/// The chains a call may read, each read once ([`Read`]).
 #[must_use]
-pub(crate) fn chains_read(chains: &[Bound<'_>]) -> suzatary_signatures::chain_set::Read {
-    suzatary_signatures::chain_set::Read::of_stores(
-        chains.iter().map(|bound| (bound.policy, bound.caps.chain)),
-    )
+pub(crate) fn chains_read(chains: &[Bound<'_>]) -> Read {
+    Read::of_stores(chains.iter().map(Bound::chain))
 }
 
 /// Call the verb `verb` names with `args`, read whole first.
@@ -595,10 +554,10 @@ pub(crate) fn bound_named<'a>(chains: &'a [Bound<'a>], name: &str) -> Option<&'a
 /// # Errors
 /// An empty reason, an index nothing proposed, one performed or running, or the stores'.
 pub fn dismiss(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     memories: memories::Memories<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     card: &ProposalRef,
     reason: &str,
 ) -> Result<Stored, Refusal> {
@@ -631,10 +590,10 @@ pub fn dismiss(
 /// # Errors
 /// [`inbox::acknowledge`]'s refusals and the stores' own.
 pub fn acknowledge(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     card: &ProposalRef,
 ) -> Result<Stored, Refusal> {
     let standing =
@@ -650,9 +609,9 @@ pub fn acknowledge(
 
 /// Say in `card`'s conversation what `by` did to it; answers whether it did.
 fn heard(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     card: &ProposalRef,
     (verb, words): (&str, &str),
     answered: &inbox::Response,
@@ -684,9 +643,9 @@ fn heard(
 /// # Errors
 /// [`Stored::rewind`]'s refusals and the store's own.
 pub fn regenerate(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     id: &ConversationId,
 ) -> Result<Stored, Refusal> {
     let to = read(conversations, id)?.rewind(store::Rewind::Regenerate)?;
@@ -699,9 +658,9 @@ pub fn regenerate(
 /// # Errors
 /// [`Stored::rewind`]'s refusals, a last round no question opened, and the store's own.
 pub fn edit(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     stamped: stamp::Stamp,
     id: &ConversationId,
     said: Turn,
@@ -721,9 +680,9 @@ pub fn edit(
 }
 
 fn rewound(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     clock: &dyn Clock,
-    by: &prodrome_core::event::Actor,
+    by: &Actor,
     id: &ConversationId,
     to: usize,
 ) -> Result<(), Refusal> {

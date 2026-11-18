@@ -1,0 +1,45 @@
+[package]
+name = "suzatary-topics"
+description = "Suzatary's readings of a conversation the browser shares: topics, cards and the stream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_topics"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-triage.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+toml.workspace = true
+# A topic's text is NFC (`secretary::topics::topic`).
+unicode-normalization = "0.1"
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing"]
+
+[dev-dependencies]
+suzatary-topics = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

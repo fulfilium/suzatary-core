@@ -563,7 +563,7 @@ lane=live
 # holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record
   app/store app/signatures app/todo app/held app/memory app/mail app/health app/triage
-  app/services app/google app/connect app/inbox app/conversations app/lines app/core app/api app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
+  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/core app/api app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
   app/testkit app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css

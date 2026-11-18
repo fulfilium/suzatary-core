@@ -8,10 +8,10 @@ use serde::Deserialize;
 use suzatary_api::wire::{DrawnPayload, FoldPayload, WaitingPayload};
 use suzatary_base::reference::Reference;
 use suzatary_conversations::secretary::store::Unheld;
-use suzatary_core::wire::topics::{
+use suzatary_todo::wire::todo::{Block, Entry, EntryState};
+use suzatary_topics::wire::topics::{
     InboxProposal, InboxProposalsPayload, InboxState, ProposalRow, UnplacedProposal,
 };
-use suzatary_todo::wire::todo::{Block, Entry, EntryState};
 use ts_rs::TS;
 use viewtree::kit::Reading;
 

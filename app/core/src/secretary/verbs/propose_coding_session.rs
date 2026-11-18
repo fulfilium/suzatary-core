@@ -3,19 +3,19 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::secretary;
-use crate::secretary::afresh::Request;
-use crate::secretary::filed::Filing;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_cards::secretary::afresh::Request;
 use suzatary_conversations::secretary::store::Stored;
 use suzatary_conversations::secretary::taint;
 use suzatary_inbox::coding::Task;
 use suzatary_inbox::secretary::acts::Act;
 use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
 use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_topics::secretary::filed::Filing;
 
 /// Why a coding session is refused in a round that read anything but the owner's own words.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \
@@ -118,10 +118,14 @@ fn filed(call: &Call<'_>, stored: &Stored, request: &Request) -> Result<usize, R
         vec![Reference::Proposal(card)],
     )
     .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let (filed, _) = crate::secretary::filed::file(
+    let (filed, _) = suzatary_topics::secretary::filed::file(
         call.caps.conversations,
         call.caps.inbox,
-        call.chains,
+        &call
+            .chains
+            .iter()
+            .map(crate::secretary::Bound::chain)
+            .collect::<Vec<_>>(),
         call.caps.clock.now(),
         Filing {
             conversation: call.conversation,

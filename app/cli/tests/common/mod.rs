@@ -18,6 +18,7 @@ use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 use suzatary_base::escape::Escaped;
+use suzatary_cards::notify::{Delivered, Notify, NotifyError, Push};
 use suzatary_cli::serve::{self, Chained, State};
 pub use suzatary_connect::cast::{self, CAST};
 use suzatary_connect::deployment::Deployment;
@@ -25,8 +26,6 @@ use suzatary_conversations::secretary::model::{
     Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
     Sessions, Turn,
 };
-use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_held::file_read::FileRead;
 use suzatary_held::mail_error::MailError;
 use suzatary_inbox::secretary::acts;
@@ -42,6 +41,7 @@ use suzatary_mail::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_services::repository::{Repository, RepositoryError};
 use suzatary_todo::render::{Html, Render};
+use suzatary_topics::secretary::answers::{AnswerError, Answers};
 use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 use suzatary_triage::mail::junk;
 use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
@@ -1925,9 +1925,9 @@ impl SettingsFixture {
                 plugins: Vec::new(),
             },
             models: Arc::new(serve::models::Models {
-                chat: suzatary_core::model_name::ModelName::parse("claude-opus-5-5")
+                chat: suzatary_digest::model_name::ModelName::parse("claude-opus-5-5")
                     .expect("a model name"),
-                compacting: suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: suzatary_digest::secretary::compacting::Compacting::Off,
                 reserve: suzatary_cli::instance::Reserve::default(),
             }),
             secrets: Arc::new(SecretRecorder::new()),
@@ -2374,9 +2374,10 @@ pub struct Fakes {
     /// The memory's texts, beside its history.
     pub memory_texts: suzatary_io::texts::Texts<suzatary_memory::secretary::memory::Fact>,
     /// The digest's history, beside the memory.
-    pub digests: suzatary_io::objects::Objects<suzatary_core::secretary::digest_event::DigestEvent>,
+    pub digests:
+        suzatary_io::objects::Objects<suzatary_digest::secretary::digest_event::DigestEvent>,
     /// The digest's summaries' words, beside its history.
-    pub digest_texts: suzatary_io::texts::Texts<suzatary_core::secretary::digest_line::Line>,
+    pub digest_texts: suzatary_io::texts::Texts<suzatary_digest::secretary::digest_line::Line>,
     /// Whose retraction or erasure the digest believes: none here.
     pub owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     /// The topic stores, begun, as a box's server begins them.
@@ -2598,18 +2599,18 @@ impl Fakes {
     /// The server's record over these fakes.
     #[must_use]
     /// The memory, both halves and the system's salt.
-    pub fn memories(&self) -> suzatary_core::secretary::memories::Memories<'_> {
-        suzatary_core::secretary::memories::Memories {
+    pub fn memories(&self) -> suzatary_digest::secretary::memories::Memories<'_> {
+        suzatary_digest::secretary::memories::Memories {
             history: &self.memory,
             texts: &self.memory_texts,
             cards: &self.inbox,
             entropy: &suzatary_io::texts::SystemEntropy,
-            digests: suzatary_core::secretary::digests::Digests {
+            digests: suzatary_digest::secretary::digests::Digests {
                 history: &self.digests,
                 texts: &self.digest_texts,
                 lines: self.conversations.conversations(),
                 owners: &self.owners,
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         }
     }
@@ -4211,11 +4212,11 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
             .iter()
             .find_map(|(name, value)| (*name == key).then_some(*value))
     };
-    let window = suzatary_core::secretary::readings::Window {
+    let window = suzatary_topics::secretary::readings::Window {
         before: suzatary_api::query::turn_before(asked("before")).expect("a before"),
         limit: suzatary_api::query::turn_limit(
             asked("limit"),
-            suzatary_core::secretary::readings::DEFAULT_TURN_WINDOW,
+            suzatary_topics::secretary::readings::DEFAULT_TURN_WINDOW,
         )
         .expect("a limit"),
         about: suzatary_api::query::about(asked("about")).expect("an about"),
@@ -4226,15 +4227,15 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
         .find(|stored| stored.id.as_str() == id)
         .unwrap_or_else(|| panic!("no conversation named {id}"));
     let mut memory = get(&format!("{base}/api/secretary/memory"));
-    let memory: Option<suzatary_core::wire::topics::MemoryPayload> =
+    let memory: Option<suzatary_topics::wire::topics::MemoryPayload> =
         (status(&memory) == 200).then(|| memory.body_mut().read_json().expect("a memory"));
-    let read = suzatary_core::secretary::readings::conversation(
+    let read = suzatary_topics::secretary::readings::conversation(
         stored,
         &inbox,
         &window,
-        &suzatary_core::secretary::readings::Dress {
+        &suzatary_topics::secretary::readings::Dress {
             memory: memory.as_ref(),
-            ..suzatary_core::secretary::readings::Dress::BARE
+            ..suzatary_topics::secretary::readings::Dress::BARE
         },
     );
     let mut read = serde_json::to_value(read).expect("a payload prints");
@@ -4283,7 +4284,7 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
 /// Every conversation, newest first, as a tab's replicas read them.
 pub fn listing(base: &str) -> serde_json::Value {
     let (inbox, conversations) = replicas(base);
-    serde_json::to_value(suzatary_core::secretary::readings::conversations(
+    serde_json::to_value(suzatary_topics::secretary::readings::conversations(
         &conversations,
         &inbox,
     ))
@@ -4363,9 +4364,9 @@ pub fn inbox_listing(base: &str, at: &str) -> Vec<serde_json::Value> {
     let set = read.set(at);
     // As the tab asks it: the memory by its route, for a remember card's words.
     let mut memory = get(&format!("{base}/api/secretary/memory"));
-    let memory: Option<suzatary_core::wire::topics::MemoryPayload> =
+    let memory: Option<suzatary_topics::wire::topics::MemoryPayload> =
         (status(&memory) == 200).then(|| memory.body_mut().read_json().expect("a memory"));
-    serde_json::to_value(suzatary_core::secretary::readings::inbox(
+    serde_json::to_value(suzatary_topics::secretary::readings::inbox(
         &inbox,
         &set,
         memory.as_ref(),
@@ -4467,12 +4468,12 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: acts::Act) {
     };
     // Opened by the first card, as a conversation is.
     let _ = transcript::start(fakes.conversations.conversations(), &id, &opened);
-    suzatary_core::secretary::filed::file(
+    suzatary_topics::secretary::filed::file(
         fakes.conversations.conversations(),
         &fakes.inbox,
         &[],
         fakes.clock.now(),
-        suzatary_core::secretary::filed::Filing {
+        suzatary_topics::secretary::filed::Filing {
             conversation: &id,
             proposer: proposer::Proposer::Secretary,
             proposal: suzatary_inbox::secretary::proposal::Proposal::Act(act),

@@ -1,6 +1,6 @@
 //! The secretary's memory: facts about the owner kept between conversations, one memory for all.
 //!
-//! A store of its own in two halves (`suzatary_core::secretary::memories::Memories`): a HISTORY, a
+//! A store of its own in two halves (`suzatary_digest::secretary::memories::Memories`): a HISTORY, a
 //! prodrome at the [`crate::secretary::memory_event::MemoryEvent`] schema saying which facts were
 //! remembered and forgotten, by id, pushed; and the TEXTS, each fact's words in a salted
 //! box-local file, which forgetting deletes. So the history stays verifiable while the words go.

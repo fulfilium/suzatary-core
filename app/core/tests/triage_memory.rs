@@ -28,18 +28,17 @@ use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::verb_name::{Binding, Effect};
 use suzatary_core::agent::Agent;
 use suzatary_core::agent::TriageVerb;
-use suzatary_core::model_name::ModelName;
-use suzatary_core::secretary::compaction::Reading;
-use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::secretary::digest_label::Label;
-use suzatary_core::secretary::digest_line::Line;
-use suzatary_core::secretary::digests::{Digests, ReadDigests};
-use suzatary_core::secretary::filed::{TriageCards, triage_conversation};
-use suzatary_core::secretary::memories::{Memories, ReadMemories};
-use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::surface::SecretaryVerb;
 use suzatary_core::stores::InMemory;
 use suzatary_core::stores::conversations::InMemory as Lines;
+use suzatary_digest::model_name::ModelName;
+use suzatary_digest::secretary::compaction::Reading;
+use suzatary_digest::secretary::digest_event::DigestEvent;
+use suzatary_digest::secretary::digest_label::Label;
+use suzatary_digest::secretary::digest_line::Line;
+use suzatary_digest::secretary::digests::{Digests, ReadDigests};
+use suzatary_digest::secretary::memories::{Memories, ReadMemories};
+use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_lines::secretary::conversations::ReadConversations;
 use suzatary_lines::secretary::line_event::LineEvent;
@@ -47,6 +46,7 @@ use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_store::store::{Doc as _, InMemoryDoc, Only, Prodrome, Reads as _};
+use suzatary_topics::secretary::filed::{TriageCards, triage_conversation};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -101,7 +101,7 @@ impl Reader<'_> {
                             opened: &self.stores.lines.opened,
                         },
                         owners: &self.stores.owners,
-                        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                        compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
                     },
                 },
                 16 * 1024,
@@ -149,7 +149,7 @@ impl Stores {
                 texts: &self.summaries,
                 lines: self.lines.conversations(),
                 owners: &self.owners,
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         }
     }
@@ -570,9 +570,9 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
         assert!(!answer.contains("BOXNOTE"), "{answer}");
     }
     let reading = Reading::of(&stores.memories().digests.reads()).expect("the record reads");
-    let opening = suzatary_core::secretary::told::context_of(
+    let opening = suzatary_digest::secretary::told::context_of(
         &stores.memories().reads().read().expect("the memory reads"),
-        Ok(&suzatary_core::secretary::topics::reading::Reading::default()),
+        Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
         Ok(&reading),
         1024 * 1024,
         None,

@@ -1,15 +1,17 @@
 //! Every secretary verb, one type each, and what several of them share.
 
 use super::SecretarySurface;
-use super::filed::{Filed, Filing};
 use super::gate::Gate;
 use crate::agent::verbs;
 use crate::secretary::Secretary;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_base::repo_ids::RepoName;
+use suzatary_base::repo_ids::RepoPath;
 use suzatary_conversations::secretary::store;
 use suzatary_conversations::secretary::verb_name::Binding;
+use suzatary_held::attachment::AttachmentId;
 use suzatary_held::mail_error::MailError;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
@@ -17,6 +19,7 @@ use suzatary_inbox::secretary::proposer::Proposer;
 use suzatary_inbox::secretary::responded::Withdrawal;
 use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_memory::secretary::memory;
+use suzatary_topics::secretary::filed::{Filed, Filing};
 
 mod add_topics;
 mod attachments;
@@ -119,11 +122,8 @@ pub use web::Web;
 pub(crate) use withdraw_proposal::WithdrawProposal;
 
 /// Keep a file for the model, in the box's words when it cannot be.
-fn kept(
-    caps: &Secretary<'_>,
-    bytes: &[u8],
-) -> Result<suzatary_held::attachment::AttachmentId, String> {
-    let id = suzatary_held::attachment::AttachmentId::of(bytes);
+fn kept(caps: &Secretary<'_>, bytes: &[u8]) -> Result<AttachmentId, String> {
+    let id = AttachmentId::of(bytes);
     caps.kept
         .set(&id, &bytes.to_vec())
         .map_err(|failed| failed.to_string())?;
@@ -163,10 +163,10 @@ pub fn propose(
         Some(round) => reasons.clone().citing(Reference::Target(round)),
         None => reasons.clone(),
     };
-    let (filed, _) = super::filed::file(
+    let (filed, _) = suzatary_topics::secretary::filed::file(
         caps.conversations,
         caps.inbox,
-        chains,
+        &chains.iter().map(super::Bound::chain).collect::<Vec<_>>(),
         caps.clock.now(),
         Filing {
             conversation: id,
@@ -322,16 +322,10 @@ fn located(
     caps: &Secretary<'_>,
     repo: &str,
     at: Option<&str>,
-) -> Result<
-    (
-        suzatary_base::repo_ids::RepoName,
-        suzatary_base::repo_ids::CommitId,
-    ),
-    Refusal,
-> {
+) -> Result<(RepoName, suzatary_base::repo_ids::CommitId), Refusal> {
     let bad =
         |failed: suzatary_base::repo_ids::RepoNameError| Refusal::bad_request(failed.to_string());
-    let repo: suzatary_base::repo_ids::RepoName = repo.parse().map_err(bad)?;
+    let repo: RepoName = repo.parse().map_err(bad)?;
     let at = at
         .map(str::trim)
         .filter(|at| !at.is_empty())
@@ -345,7 +339,7 @@ fn located(
 }
 
 /// A repository path; absent is the top.
-fn path_of(path: Option<String>) -> Result<suzatary_base::repo_ids::RepoPath, Refusal> {
-    suzatary_base::repo_ids::RepoPath::try_from(path.unwrap_or_default())
+fn path_of(path: Option<String>) -> Result<RepoPath, Refusal> {
+    RepoPath::try_from(path.unwrap_or_default())
         .map_err(|failed| Refusal::bad_request(failed.to_string()))
 }

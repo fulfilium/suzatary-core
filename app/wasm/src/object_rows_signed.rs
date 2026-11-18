@@ -9,9 +9,9 @@
 use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::sign::Secret;
-use suzatary_core::secretary::topics::provenance::Owner;
-use suzatary_core::secretary::topics::reading::{self, AliasEvent, MembershipEvent};
-use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_topics::secretary::topics::provenance::Owner;
+use suzatary_topics::secretary::topics::reading::{self, AliasEvent, MembershipEvent};
+use suzatary_topics::secretary::topics::topic::Topic;
 
 use super::*;
 

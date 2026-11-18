@@ -1,5 +1,5 @@
-use crate::secretary::recollection::Recollection;
 use suzatary_base::capability::{Clock, Manuals};
+use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_mail::mail::mailbox::Mailbox;
 use suzatary_record::record::TodoEvent;
 use suzatary_services::repository::Repository;
@@ -9,7 +9,7 @@ use suzatary_triage::mail::corpus::Corpus;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
 /// sends, notifies, names a peer or performs a card, and its `chain` is only read.
-/// Its writes are cards, filed through the call's [`crate::secretary::filed::TriageCards`].
+/// Its writes are cards, filed through the call's [`suzatary_topics::secretary::filed::TriageCards`].
 ///
 /// ```
 /// fn write(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.chain; }
@@ -56,18 +56,18 @@ use suzatary_triage::mail::corpus::Corpus;
 /// [`Recollection`] can append a fact or a summary, or keep or delete their words:
 ///
 /// ```compile_fail,E0599
-/// use suzatary_core::secretary::memories::ReadMemories;
+/// use suzatary_digest::secretary::memories::ReadMemories;
 /// use suzatary_memory::secretary::memory_event::MemoryEvent;
 /// fn remember(memory: ReadMemories<'_>, event: MemoryEvent) { let _ = memory.history.append(event); }
 /// ```
 /// ```compile_fail,E0599
-/// use suzatary_core::secretary::memories::ReadMemories;
+/// use suzatary_digest::secretary::memories::ReadMemories;
 /// use suzatary_memory::secretary::salted_text::TextName;
 /// fn forget(memory: ReadMemories<'_>, name: &TextName) { let _ = memory.texts.remove(name); }
 /// ```
 /// ```compile_fail,E0599
-/// use suzatary_core::secretary::memories::ReadMemories;
-/// use suzatary_core::secretary::digest_event::DigestEvent;
+/// use suzatary_digest::secretary::memories::ReadMemories;
+/// use suzatary_digest::secretary::digest_event::DigestEvent;
 /// fn summarize(memory: ReadMemories<'_>, event: DigestEvent) {
 ///     let _ = memory.digests.history.append(event);
 /// }
@@ -96,7 +96,7 @@ use suzatary_triage::mail::corpus::Corpus;
 /// ```
 /// ```compile_fail,E0560
 /// use suzatary_core::agent::Agent;
-/// use suzatary_core::notify::Notify;
+/// use suzatary_cards::notify::Notify;
 /// fn widen<'a>(agent: Agent<'a>, push: &'a dyn Notify) -> Agent<'a> {
 ///     Agent { notify: push, ..agent }
 /// }

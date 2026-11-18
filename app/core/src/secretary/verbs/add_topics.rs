@@ -4,8 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::topics::revision::{Revision, held, listing, plan};
-use crate::secretary::topics::topic::Topic;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
@@ -15,6 +13,8 @@ use suzatary_conversations::secretary::turn_shape::{TurnShape, shape};
 use suzatary_conversations::secretary::{queue, taint};
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_lines::secretary::targets::{MAX_TOPICS, notes_in};
+use suzatary_topics::secretary::topics::revision::{Revision, held, listing, plan};
+use suzatary_topics::secretary::topics::topic::Topic;
 
 /// Put topics on the round being answered, or on the note it drafted last.
 pub struct AddTopics;

@@ -6,9 +6,9 @@ use std::path::Path;
 
 use anyhow::bail;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_cards::notify::{Notify as _, Push};
 use suzatary_connect::connect::Channel;
 use suzatary_conversations::nonempty::NonEmpty;
-use suzatary_core::notify::{Notify as _, Push};
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::{Channels, Configured, Waiting};
 use suzatary_io::secrets::Resolves;

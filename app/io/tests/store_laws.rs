@@ -16,10 +16,8 @@ use prodrome_core::declared::Declared;
 use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::store::{EventStore, Replica as _};
-use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::secretary::topics::reading::AliasEvent;
-use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::stores::{Files, Kind, Store};
+use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_io::objects::Objects;
 use suzatary_lines::secretary::line_event::LineEvent;
@@ -28,6 +26,8 @@ use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Hold, Prodrome};
 use suzatary_todo::decisions::DecisionEvent;
+use suzatary_topics::secretary::topics::reading::AliasEvent;
+use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
 fn pins(store: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

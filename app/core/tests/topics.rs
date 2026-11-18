@@ -27,13 +27,13 @@ use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
-use suzatary_core::secretary::topics::provenance::Owner;
-use suzatary_core::secretary::topics::reading::{
+use suzatary_signatures::wire::signatures::RefusalKind;
+use suzatary_topics::secretary::topics::provenance::Owner;
+use suzatary_topics::secretary::topics::reading::{
     AliasEvent, AliasVocabulary, MembershipEvent, MembershipVocabulary, Reading, Topics,
 };
-use suzatary_core::secretary::topics::standing::Standing;
-use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_signatures::wire::signatures::RefusalKind;
+use suzatary_topics::secretary::topics::standing::Standing;
+use suzatary_topics::secretary::topics::topic::Topic;
 
 const NAMES: [&str; 4] = ["travel", "trips", "work", "job"];
 
@@ -116,7 +116,8 @@ impl Device {
             .dag
             .nodes()
             .expect("nodes");
-        suzatary_core::secretary::topics::reading::of(&memberships, &aliases).expect("one genesis")
+        suzatary_topics::secretary::topics::reading::of(&memberships, &aliases)
+            .expect("one genesis")
     }
 
     fn objects(&self) -> (BTreeSet<String>, BTreeSet<String>) {

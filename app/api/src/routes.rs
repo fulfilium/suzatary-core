@@ -1,8 +1,26 @@
 //! The routes as functions of the capabilities they need, with nothing known about HTTP: a route
 //! that cannot name a capability cannot use it.
 
+use prodrome_core::dag::Dag;
+use prodrome_core::event::Actor;
+use prodrome_core::event::Hash;
+use prodrome_core::event::TodoId;
+use prodrome_core::schema::Schema;
+use prodrome_core::store::frontier::Frontiers;
+use prodrome_core::store::frontier::Reached;
+use prodrome_core::store::frontier::Since;
 use std::collections::BTreeMap;
+use suzatary_base::escape::Escaped;
+use suzatary_base::zone::Moment;
+use suzatary_core::stores::Store;
+use suzatary_held::mail_error::MailError;
 use suzatary_lines::secretary::conversations;
+use suzatary_signatures::chain_set::NotAMember;
+use suzatary_signatures::epoch::Epochs;
+use suzatary_store::admission::Admission;
+use suzatary_store::store::Graph;
+use suzatary_store::store::StoreError;
+use suzatary_triage::mail::gone::SAID;
 
 use chrono::NaiveDate;
 use prodrome_core::fpl;
@@ -19,10 +37,9 @@ use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
+use suzatary_cards::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use suzatary_connect::deployment::Deployment;
-use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
-use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use suzatary_lines::parts::part;
 use suzatary_lines::secretary::husks::{husked, husks, keys_of, retired};
 use suzatary_lines::secretary::step::Step;
@@ -38,11 +55,10 @@ use suzatary_todo::reading;
 use suzatary_todo::render::Render;
 use suzatary_todo::view;
 use suzatary_todo::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
+use suzatary_topics::secretary::answers::Answers;
 
 /// Every head, sorted, with none of them picked.
-pub(crate) fn head_set<E: prodrome_core::schema::Schema>(
-    store: &dyn Prodrome<E>,
-) -> Result<Vec<String>, Refusal> {
+pub(crate) fn head_set<E: Schema>(store: &dyn Prodrome<E>) -> Result<Vec<String>, Refusal> {
     Ok(store
         .tips()?
         .iter()
@@ -51,7 +67,7 @@ pub(crate) fn head_set<E: prodrome_core::schema::Schema>(
 }
 
 /// Names as the wire spells them, in the set's order.
-fn names(set: &std::collections::BTreeSet<prodrome_core::event::Hash>) -> Vec<String> {
+fn names(set: &std::collections::BTreeSet<Hash>) -> Vec<String> {
     set.iter().map(|h| h.as_str().to_owned()).collect()
 }
 
@@ -117,7 +133,7 @@ fn rows<'s>(
     set: &'s ChainSet<'_>,
     name: &ChainName,
 ) -> Answered<(
-    std::collections::BTreeMap<prodrome_core::event::Hash, &'s suzatary_record::record::Envelope>,
+    std::collections::BTreeMap<Hash, &'s suzatary_record::record::Envelope>,
     &'s [suzatary_record::record::Node],
     Vec<suzatary_record::record::Entry>,
 )> {
@@ -133,11 +149,9 @@ fn rows<'s>(
 }
 
 /// A chain the set could not read, as a refusal: one it does not hold is not found.
-fn not_a_member(failure: suzatary_signatures::chain_set::NotAMember) -> Refusal {
+fn not_a_member(failure: NotAMember) -> Refusal {
     match failure {
-        suzatary_signatures::chain_set::NotAMember::Absent(_) => {
-            Refusal::not_found(failure.to_string())
-        }
+        NotAMember::Absent(_) => Refusal::not_found(failure.to_string()),
         other => Refusal::internal(other.to_string()),
     }
 }
@@ -314,7 +328,7 @@ pub fn briefing(
             day: wire::BriefingDay::Brief {
                 conversation: brief.conversation.as_str().to_owned(),
                 turn: u32::try_from(brief.turn).unwrap_or(u32::MAX),
-                blocks: suzatary_core::secretary::readings::blocks_of(answers, &brief.text),
+                blocks: suzatary_topics::secretary::readings::blocks_of(answers, &brief.text),
                 text: brief.text,
             },
         });
@@ -322,7 +336,7 @@ pub fn briefing(
     let source = briefings
         .read(day)
         .map_err(|_| Refusal::not_found(format!("no briefing for {day}")))?;
-    let markup = suzatary_base::escape::Escaped::from_chain(source.clone());
+    let markup = Escaped::from_chain(source.clone());
     Ok(wire::BriefingPayload {
         date: day.to_string(),
         day: wire::BriefingDay::Saved {
@@ -431,7 +445,7 @@ pub fn message(
     let id = check_mail_id(id)?;
     let found = match mail.message(id) {
         Ok(found) => found,
-        Err(suzatary_held::mail_error::MailError::Absent { .. }) => {
+        Err(MailError::Absent { .. }) => {
             return Err(Refusal::not_found(gone(chain, set, id)?));
         }
         Err(other) => return Err(Refusal::internal(other.to_string())),
@@ -472,17 +486,15 @@ pub fn thread(
 ) -> Answered<wire::ThreadPayload> {
     let id = check_thread_id(id)?;
     let found = mail.thread(id, limit).map_err(|e| match e {
-        suzatary_held::mail_error::MailError::Absent { .. } => Refusal::not_found(format!(
-            "{}: conversation {}",
-            suzatary_triage::mail::gone::SAID,
-            shown(id)
-        )),
+        MailError::Absent { .. } => {
+            Refusal::not_found(format!("{}: conversation {}", SAID, shown(id)))
+        }
         other => Refusal::internal(other.to_string()),
     })?;
     if found.is_empty() {
         return Err(Refusal::not_found(format!(
             "{}: conversation {}",
-            suzatary_triage::mail::gone::SAID,
+            SAID,
             shown(id)
         )));
     }
@@ -522,7 +534,7 @@ pub fn warmable(
     store: &dyn Prodrome<TodoEvent>,
     untrusted: &Untrusted,
     now: Datetime,
-) -> Answered<Vec<suzatary_base::escape::Escaped>> {
+) -> Answered<Vec<Escaped>> {
     let records = records(&store.nodes()?, now);
     Ok(view::renderable(records.values().flatten(), untrusted))
 }
@@ -536,9 +548,9 @@ pub fn now(clock: &dyn Clock) -> Datetime {
 #[derive(Clone, Copy)]
 pub struct Books<'a> {
     /// Each store's epoch.
-    pub epochs: &'a suzatary_signatures::epoch::Epochs,
+    pub epochs: &'a Epochs,
     /// Each store's recorded frontiers.
-    pub frontiers: &'a prodrome_core::store::frontier::Frontiers,
+    pub frontiers: &'a Frontiers,
 }
 
 /// `GET /api/objects?since=<frontier>`: the objects the frontier does not reach.
@@ -548,7 +560,7 @@ pub struct Books<'a> {
 pub fn objects_since(
     store: &dyn Prodrome<TodoEvent>,
     chain: &ChainPolicy,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     books: Books<'_>,
     now: Datetime,
 ) -> Answered<ObjectsPayload> {
@@ -590,9 +602,9 @@ impl Cut {
 ///
 /// # Errors
 /// The store's own, and the books'.
-pub fn store_objects_since<E: suzatary_core::stores::Store>(
+pub fn store_objects_since<E: Store>(
     store: &dyn Prodrome<E>,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -601,17 +613,13 @@ pub fn store_objects_since<E: suzatary_core::stores::Store>(
 }
 
 /// [`store_objects_since`], with its names and graph.
-fn store_answer<E: suzatary_core::stores::Store>(
+fn store_answer<E: Store>(
     store: &dyn Prodrome<E>,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
-) -> Answered<(
-    wire::StorePayload,
-    Vec<prodrome_core::event::Hash>,
-    std::sync::Arc<suzatary_store::store::Graph<E>>,
-)> {
+) -> Answered<(wire::StorePayload, Vec<Hash>, std::sync::Arc<Graph<E>>)> {
     let Pulled {
         snapshot,
         piece,
@@ -642,8 +650,8 @@ fn store_answer<E: suzatary_core::stores::Store>(
 }
 
 /// One object, weighed by its literal's bytes.
-fn stored<E: prodrome_core::schema::Schema>(
-    name: &prodrome_core::event::Hash,
+fn stored<E: Schema>(
+    name: &Hash,
     envelope: &prodrome_core::event::Envelope<E>,
 ) -> (StoredObject, usize) {
     let literal = prodrome_core::event::canonical_envelope(envelope);
@@ -684,7 +692,7 @@ impl Snapshot {
 
 /// What one answer of a pull sends and leaves out.
 struct Piece<T> {
-    sent: Vec<(prodrome_core::event::Hash, T)>,
+    sent: Vec<(Hash, T)>,
     rest: usize,
     weight: usize,
     size: usize,
@@ -708,7 +716,7 @@ impl<T> Piece<T> {
 }
 
 /// What a pull sends of each object.
-trait Sends<E: prodrome_core::schema::Schema> {
+trait Sends<E: Schema> {
     /// One object as sent.
     type Item;
     /// The key of the weights, read once per head set.
@@ -716,25 +724,18 @@ trait Sends<E: prodrome_core::schema::Schema> {
     /// The item and its weight.
     fn emit(
         &self,
-        name: &prodrome_core::event::Hash,
+        name: &Hash,
         envelope: &prodrome_core::event::Envelope<E>,
     ) -> (Self::Item, usize);
     /// Its weight alone.
-    fn weigh(
-        &self,
-        name: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<E>,
-    ) -> usize;
+    fn weigh(&self, name: &Hash, envelope: &prodrome_core::event::Envelope<E>) -> usize;
     /// The order to send `lacking` in, as its indices: a linear extension of the causal order,
     /// so each prefix joined to what the asker holds is closed under parents. The store's linear
     /// order unless a store says which objects a reader wants first.
     fn order(
         &self,
-        _graph: &suzatary_store::store::Graph<E>,
-        lacking: &[(
-            &prodrome_core::event::Hash,
-            &prodrome_core::event::Envelope<E>,
-        )],
+        _graph: &Graph<E>,
+        lacking: &[(&Hash, &prodrome_core::event::Envelope<E>)],
     ) -> Vec<usize> {
         (0..lacking.len()).collect()
     }
@@ -743,23 +744,19 @@ trait Sends<E: prodrome_core::schema::Schema> {
 /// Each object with its literal.
 struct Literals;
 
-impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
+impl<E: Schema> Sends<E> for Literals {
     type Item = StoredObject;
     const WEIGHTS: &'static str = "weights of literals";
 
     fn emit(
         &self,
-        name: &prodrome_core::event::Hash,
+        name: &Hash,
         envelope: &prodrome_core::event::Envelope<E>,
     ) -> (StoredObject, usize) {
         stored(name, envelope)
     }
 
-    fn weigh(
-        &self,
-        _: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<E>,
-    ) -> usize {
+    fn weigh(&self, _: &Hash, envelope: &prodrome_core::event::Envelope<E>) -> usize {
         prodrome_core::event::canonical_envelope(envelope).len()
     }
 }
@@ -773,7 +770,7 @@ impl Sends<line_event::LineEvent> for Nodes {
 
     fn emit(
         &self,
-        name: &prodrome_core::event::Hash,
+        name: &Hash,
         envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
     ) -> (SkeletonNode, usize) {
         // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
@@ -784,7 +781,7 @@ impl Sends<line_event::LineEvent> for Nodes {
 
     fn weigh(
         &self,
-        name: &prodrome_core::event::Hash,
+        name: &Hash,
         envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
     ) -> usize {
         weight(&node_of(name, envelope, 0))
@@ -801,9 +798,9 @@ impl Sends<line_event::LineEvent> for Nodes {
     /// `law_a_piece_is_sent_in_the_whole_order_less_what_is_held`).
     fn order(
         &self,
-        graph: &suzatary_store::store::Graph<line_event::LineEvent>,
+        graph: &Graph<line_event::LineEvent>,
         lacking: &[(
-            &prodrome_core::event::Hash,
+            &Hash,
             &prodrome_core::event::Envelope<line_event::LineEvent>,
         )],
     ) -> Vec<usize> {
@@ -834,7 +831,7 @@ impl Sends<line_event::LineEvent> for Nodes {
 /// [`Nodes::order`] over `every` object of one head set, as their indices.
 fn newest_first(
     every: &[(
-        &prodrome_core::event::Hash,
+        &Hash,
         &prodrome_core::event::Envelope<line_event::LineEvent>,
     )],
 ) -> Vec<usize> {
@@ -868,13 +865,10 @@ fn newest_first(
 /// made a linear extension: each object is sent after every ancestor of it `lacking` holds, those
 /// in `lacking`'s own order, which is one.
 fn closed_order<E>(
-    lacking: &[(
-        &prodrome_core::event::Hash,
-        &prodrome_core::event::Envelope<E>,
-    )],
+    lacking: &[(&Hash, &prodrome_core::event::Envelope<E>)],
     wanted: impl Iterator<Item = usize>,
 ) -> Vec<usize> {
-    let at: std::collections::HashMap<&prodrome_core::event::Hash, usize> = lacking
+    let at: std::collections::HashMap<&Hash, usize> = lacking
         .iter()
         .enumerate()
         .map(|(at, (name, _))| (*name, at))
@@ -917,13 +911,13 @@ fn answered<E, S>(
     store: &dyn Prodrome<E>,
     key: &str,
     books: Books<'_>,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     now: Datetime,
     cut: Cut,
     sends: &S,
 ) -> Answered<Pulled<E, S::Item>>
 where
-    E: prodrome_core::schema::Schema + Send + Sync + 'static,
+    E: Schema + Send + Sync + 'static,
     S: Sends<E>,
 {
     // The epoch's lock is waited for before the read and its record written after: `lock` and
@@ -941,7 +935,7 @@ where
         let lacking = parts::part("lacking", || {
             books.frontiers.answer(key, since, graph.dag())
         })
-        .map_err(suzatary_store::store::StoreError::from)?;
+        .map_err(StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         // Weighed once per head set, so a pull of many pieces weighs each object once.
@@ -983,8 +977,7 @@ where
         // what the asker held joined to the closure of what it was sent.
         let sent: Vec<_> = piece.sent.iter().map(|(name, _)| name.clone()).collect();
         let frontier = frontier_of(
-            &parts::part("record", || lacking.record_with(sent))
-                .map_err(suzatary_store::store::StoreError::from)?,
+            &parts::part("record", || lacking.record_with(sent)).map_err(StoreError::from)?,
         );
         read_at.set(Some(std::time::Instant::now()));
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
@@ -1006,18 +999,17 @@ where
 }
 
 /// One answer, and its graph.
-struct Pulled<E: prodrome_core::schema::Schema, T> {
+struct Pulled<E: Schema, T> {
     snapshot: Snapshot,
     piece: Piece<T>,
-    graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
+    graph: std::sync::Arc<Graph<E>>,
 }
 
 /// Whether the box knew the frontier a pull named.
-fn since_read(reached: prodrome_core::store::frontier::Reached<'_>) -> SinceRead {
+fn since_read(reached: Reached<'_>) -> SinceRead {
     match reached {
-        prodrome_core::store::frontier::Reached::Everything
-        | prodrome_core::store::frontier::Reached::Known(_) => SinceRead::Known,
-        prodrome_core::store::frontier::Reached::Unknown => SinceRead::Unknown,
+        Reached::Everything | Reached::Known(_) => SinceRead::Known,
+        Reached::Unknown => SinceRead::Unknown,
     }
 }
 
@@ -1035,7 +1027,7 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier 
 /// The stores' own.
 pub fn lines_skeleton(
     conversations: conversations::Conversations<'_>,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -1064,7 +1056,7 @@ pub fn lines_skeleton(
 /// The skeleton piece [`lines_skeleton`] answers, each part timed.
 fn skeleton(
     conversations: conversations::Conversations<'_>,
-    since: &prodrome_core::store::frontier::Since,
+    since: &Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -1132,7 +1124,7 @@ fn skeleton(
 /// literal's place has to answer this case again.
 fn held_sizes(
     lines: &dyn Prodrome<line_event::LineEvent>,
-    names: &[prodrome_core::event::Hash],
+    names: &[Hash],
     nodes: Vec<SkeletonNode>,
 ) -> Answered<Vec<SkeletonNode>> {
     if names.is_empty() {
@@ -1229,7 +1221,7 @@ pub fn asks<'n>(nodes: impl IntoIterator<Item = (&'n str, usize)>) -> Vec<Vec<&'
 /// # Errors
 /// [`Refusal::not_found`] for a hash the store does not hold; [`Refusal::bad_request`] past the
 /// bound; the store's own.
-pub fn content<E: prodrome_core::schema::Schema>(
+pub fn content<E: Schema>(
     store: &dyn Prodrome<E>,
     hashes: &query::Hashes,
 ) -> Answered<wire::ContentPayload> {
@@ -1242,19 +1234,19 @@ pub fn lines_content(
     hashes: &query::Hashes,
 ) -> Answered<wire::ContentPayload> {
     let graph = conversations.lines.graph()?;
-    let names: Vec<prodrome_core::event::Hash> = hashes.iter().cloned().collect();
+    let names: Vec<Hash> = hashes.iter().cloned().collect();
     let printed = husks(conversations, &graph, &names)?;
     answer(conversations.lines, &graph, hashes, &printed)
 }
 
 /// Each object `hashes` names: its husk where `husks` holds one, else its literal.
-fn answer<E: prodrome_core::schema::Schema>(
+fn answer<E: Schema>(
     store: &dyn Prodrome<E>,
-    graph: &suzatary_store::store::Graph<E>,
+    graph: &Graph<E>,
     hashes: &query::Hashes,
-    husks: &BTreeMap<prodrome_core::event::Hash, String>,
+    husks: &BTreeMap<Hash, String>,
 ) -> Answered<wire::ContentPayload> {
-    let read: Vec<prodrome_core::event::Hash> = hashes
+    let read: Vec<Hash> = hashes
         .iter()
         .filter(|name| !husks.contains_key(*name) && graph.dag().get(name).is_some())
         .cloned()
@@ -1309,7 +1301,7 @@ pub fn waiting(
     set: &ChainSet<'_>,
     chains: &[ChainName],
 ) -> Answered<wire::WaitingPayload> {
-    let proposals = suzatary_core::secretary::readings::waiting(inbox, set).len();
+    let proposals = suzatary_topics::secretary::readings::waiting(inbox, set).len();
     let mut decisions = 0usize;
     for chain in chains {
         let (by_hash, _, rows) = rows(set, chain)?;
@@ -1330,7 +1322,7 @@ pub fn waiting(
         conversations.fold(suzatary_lines::secretary::held_lines::HeldLines::transcripts)?
     {
         let read = read.map_err(|refused| Refusal::internal(refused.to_string()))?;
-        let lines = suzatary_core::secretary::readings::unplaced(&read.stored().lines(inbox));
+        let lines = suzatary_topics::secretary::readings::unplaced(&read.stored().lines(inbox));
         if !lines.is_empty() {
             unplaced.insert(id.as_str().to_owned(), lines);
         }
@@ -1350,8 +1342,8 @@ pub fn receive_objects(
     render: &dyn Render,
     chain: &ChainPolicy,
     posted: &Posted<'_>,
-    frontiers: &prodrome_core::store::frontier::Frontiers,
-    actor: &prodrome_core::event::Actor,
+    frontiers: &Frontiers,
+    actor: &Actor,
 ) -> Answered<(ReceiptPayload, Vec<act_lines::ActLine>)> {
     let Posted {
         objects: posted,
@@ -1397,7 +1389,7 @@ pub fn receive_objects(
     });
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
-    let fresh: Vec<suzatary_base::escape::Escaped> = taken
+    let fresh: Vec<Escaped> = taken
         .iter()
         .filter_map(|event| match event {
             TodoEvent::Authored(record) => Some(record.clone()),
@@ -1431,14 +1423,14 @@ pub struct Posted<'a> {
     /// Canonical prints.
     pub objects: &'a [String],
     /// The poster's frontier.
-    pub since: &'a prodrome_core::store::frontier::Since,
+    pub since: &'a Since,
 }
 
 /// Who posts to a store a tab writes, and the chains it is trusted on.
 #[derive(Clone, Copy)]
 pub struct Writer<'a> {
     /// The gate's actor.
-    pub actor: &'a prodrome_core::event::Actor,
+    pub actor: &'a Actor,
     /// Every chain.
     pub chains: &'a [&'a dyn Prodrome<suzatary_record::record::TodoEvent>],
     /// The deployment's root.
@@ -1460,7 +1452,7 @@ pub struct Beside<'a, B> {
     /// What travels beside the objects.
     pub posted: &'a B,
     /// Keeps it for the names taken; a failure takes nothing.
-    pub keep: &'a dyn Fn(&[prodrome_core::event::Hash]) -> Result<(), Refusal>,
+    pub keep: &'a dyn Fn(&[Hash]) -> Result<(), Refusal>,
 }
 
 /// `POST /api/stores/<store>/objects`: decided under the store's lock by the shared rule and the
@@ -1472,8 +1464,8 @@ pub struct Beside<'a, B> {
 pub fn receive_changes<E: suzatary_core::stores::Written>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
-    beside: &Beside<'_, <E::Rule as suzatary_store::admission::Admission>::Beside>,
-    frontiers: &prodrome_core::store::frontier::Frontiers,
+    beside: &Beside<'_, <E::Rule as Admission>::Beside>,
+    frontiers: &Frontiers,
     writer: Writer<'_>,
     recording: Recording<'_>,
 ) -> Answered<ReceiptPayload>
@@ -1498,9 +1490,7 @@ where
         })?;
         let objects = part("read", || store.objects())?;
         let ruled = part("held", || {
-            <E::Rule as suzatary_store::admission::Admission>::held(
-                objects.iter().filter_map(|(_, object)| object.event()),
-            )
+            <E::Rule as Admission>::held(objects.iter().filter_map(|(_, object)| object.event()))
         });
         let names = objects.iter().map(|(name, _)| name.clone()).collect();
         let held = suzatary_core::sync::Holding::<E::Rule> {
@@ -1536,19 +1526,15 @@ where
 /// The store as a post left it: `held`, the objects read under the store's lock, and `taken`,
 /// the prints the post took while it held the lock. So a receipt answers what this post's
 /// write made of the store, read once. A taken print was parsed as this schema to be taken.
-fn left<E: prodrome_core::schema::Schema>(
-    held: Vec<(
-        prodrome_core::event::Hash,
-        prodrome_core::event::Envelope<E>,
-    )>,
-    taken: &[(prodrome_core::event::Hash, String)],
-) -> prodrome_core::dag::Dag<E>
+fn left<E: Schema>(
+    held: Vec<(Hash, prodrome_core::event::Envelope<E>)>,
+    taken: &[(Hash, String)],
+) -> Dag<E>
 where
     E::Vocabulary: Default,
 {
     let vocabulary = E::Vocabulary::default();
-    let mut dag: prodrome_core::dag::Dag<E> =
-        suzatary_lines::parts::part("dag", || held.into_iter().collect());
+    let mut dag: Dag<E> = suzatary_lines::parts::part("dag", || held.into_iter().collect());
     dag.extend(taken.iter().filter_map(|(name, print)| {
         let object = prodrome_core::event::parse_envelope(&vocabulary, print).ok()?;
         Some((name.clone(), object))
@@ -1559,7 +1545,7 @@ where
 /// Each of `refused` recorded once in the asks.
 fn record(
     refused: &[(
-        prodrome_core::event::Hash,
+        Hash,
         suzatary_store::receipt::Grounds,
         suzatary_core::sync::Reason,
     )],
@@ -1593,17 +1579,13 @@ fn record(
 }
 
 /// A post's receipt, from `dag`, the store as the post left it ([`left`]).
-fn receipt<E: prodrome_core::schema::Schema>(
-    dag: &prodrome_core::dag::Dag<E>,
+fn receipt<E: Schema>(
+    dag: &Dag<E>,
     outcome: &suzatary_core::sync::Outcome,
-    (key, since, frontiers): (
-        &str,
-        &prodrome_core::store::frontier::Since,
-        &prodrome_core::store::frontier::Frontiers,
-    ),
+    (key, since, frontiers): (&str, &Since, &Frontiers),
 ) -> Answered<ReceiptPayload> {
-    let lacking = part("frontier", || frontiers.answer(key, since, dag))
-        .map_err(suzatary_store::store::StoreError::from)?;
+    let lacking =
+        part("frontier", || frontiers.answer(key, since, dag)).map_err(StoreError::from)?;
     let read = since_read(lacking.reached());
     let posted = outcome
         .taken
@@ -1611,10 +1593,8 @@ fn receipt<E: prodrome_core::schema::Schema>(
         .map(|(name, _)| name)
         .chain(&outcome.already)
         .cloned();
-    let frontier = frontier_of(
-        &part("frontier", || lacking.record_with(posted))
-            .map_err(suzatary_store::store::StoreError::from)?,
-    );
+    let frontier =
+        frontier_of(&part("frontier", || lacking.record_with(posted)).map_err(StoreError::from)?);
     Ok(ReceiptPayload {
         since: read,
         frontier,
@@ -1676,18 +1656,15 @@ pub fn about(
 fn held_todos(
     name: &suzatary_base::chains::ChainName,
     set: &ChainSet<'_>,
-    todos: &[prodrome_core::event::TodoId],
+    todos: &[TodoId],
 ) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
     match set.held(name) {
         Ok(_) => {}
-        Err(suzatary_signatures::chain_set::NotAMember::Absent(_)) => return Ok(None),
+        Err(NotAMember::Absent(_)) => return Ok(None),
         Err(failure) => return Err(not_a_member(failure)),
     }
     let (by_hash, _, rows) = rows(set, name)?;
-    let wanted: std::collections::BTreeSet<&str> = todos
-        .iter()
-        .map(prodrome_core::event::TodoId::as_str)
-        .collect();
+    let wanted: std::collections::BTreeSet<&str> = todos.iter().map(TodoId::as_str).collect();
     Ok(Some(
         rows.iter()
             .filter(|entry| wanted.contains(entry.key.as_str()))
@@ -1727,7 +1704,7 @@ pub fn releases(
         set.at(),
         &current,
     );
-    let todos: Vec<prodrome_core::event::TodoId> = reading
+    let todos: Vec<TodoId> = reading
         .releases
         .iter()
         .flat_map(|release| {
@@ -1736,7 +1713,7 @@ pub fn releases(
         })
         .collect();
     let by_id = held_todos(name, set, &todos)?.unwrap_or_default();
-    let held_todo = |todo: &prodrome_core::event::TodoId| by_id.get(todo.as_str()).cloned();
+    let held_todo = |todo: &TodoId| by_id.get(todo.as_str()).cloned();
     Ok(wire::ReleasesPayload {
         chain: name.as_str().to_owned(),
         reads: reading.counted.to_string(),
@@ -1797,7 +1774,7 @@ pub fn author(
     deployment: &Deployment,
     chain: &ChainPolicy,
     request: &wire::Authoring,
-    actor: &prodrome_core::event::Actor,
+    actor: &Actor,
 ) -> Answered<wire::AuthoredPayload> {
     let nodes = caps.secretary.chain.nodes()?;
     let at = caps.secretary.clock.now();
@@ -1825,7 +1802,7 @@ pub fn author(
             let event = suzatary_todo::authoring::update_todo(
                 &before,
                 patch,
-                suzatary_base::zone::Moment {
+                Moment {
                     at,
                     zone: deployment.zone,
                 },
@@ -1882,7 +1859,7 @@ fn add(
     nodes: &[Node],
     new: &wire::NewTodo,
     at: Datetime,
-    actor: &prodrome_core::event::Actor,
+    actor: &Actor,
     typeset: &dyn suzatary_base::capability::Typeset,
 ) -> Result<(String, TodoEvent, Option<TodoEvent>), Refusal> {
     let mut fields = new.fields.clone();
@@ -1931,7 +1908,7 @@ fn add(
         subtodos: Vec::new(),
     };
     let Some(parent) = &new.parent else {
-        let now = suzatary_base::zone::Moment {
+        let now = Moment {
             at,
             zone: deployment.zone,
         };
@@ -1951,7 +1928,7 @@ fn add(
         &new_todo,
         &record,
         &believed.linkable(),
-        suzatary_base::zone::Moment {
+        Moment {
             at,
             zone: deployment.zone,
         },
@@ -2030,12 +2007,12 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
 /// `GET /api/overview`: what is connected, by group, and what the box's registers say of it.
 #[must_use]
 pub fn overview(
-    declared: &suzatary_core::settings::overview::Declared<'_>,
-    asked: &suzatary_core::settings::overview::Asked,
-    registers: suzatary_core::settings::overview::Registers<'_>,
-    asking: &[suzatary_core::settings::overview::Asking],
+    declared: &suzatary_cards::settings::overview::Declared<'_>,
+    asked: &suzatary_cards::settings::overview::Asked,
+    registers: suzatary_cards::settings::overview::Registers<'_>,
+    asking: &[suzatary_cards::settings::overview::Asking],
 ) -> Overview {
-    suzatary_core::settings::overview::overview(declared, &asked.observed(registers)).wire(
+    suzatary_cards::settings::overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
         suzatary_base::conversation_id::SETUP.as_str().to_owned(),
@@ -2081,12 +2058,12 @@ pub fn lines_readings(
 ) -> Answered<[(&'static str, String); 3]> {
     let lines = conversations::list(conversations)?;
     let (epochs, frontiers) = (
-        suzatary_signatures::epoch::Epochs::remembered(),
-        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Epochs::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let skeleton = lines_skeleton(
         conversations,
-        &prodrome_core::store::frontier::Since::Nothing,
+        &Since::Nothing,
         Books {
             epochs: &epochs,
             frontiers: &frontiers,
@@ -2222,15 +2199,15 @@ mod tests {
         settables: suzatary_connect::settings::Settables,
         channels: Vec<suzatary_connect::connect::Channel>,
         accounts: suzatary_mail::mail::account::Roster,
-        jobs: Vec<suzatary_core::settings::overview::ModelJob>,
+        jobs: Vec<suzatary_cards::settings::overview::ModelJob>,
         plugins: Vec<suzatary_services::plugin::Manifest>,
-        build: suzatary_core::settings::overview::Build,
+        build: suzatary_cards::settings::overview::Build,
     }
 
     impl Instance {
         fn new() -> Self {
             let channels = suzatary_connect::connect::Channel::ALL.to_vec();
-            let plugins = vec![suzatary_core::settings::overview::calendar()];
+            let plugins = vec![suzatary_cards::settings::overview::calendar()];
             let account = |email: &str, sync| suzatary_mail::mail::account::MailAccount {
                 email: suzatary_mail::mail::account_email::AccountEmail::new(email)
                     .expect("a lower-case address"),
@@ -2280,17 +2257,17 @@ mod tests {
                     account("ada@university.example", ms),
                 ])
                 .expect("a roster"),
-                jobs: vec![suzatary_core::settings::overview::ModelJob {
+                jobs: vec![suzatary_cards::settings::overview::ModelJob {
                     label: "Chat".to_owned(),
                     detail: "Chat, reviews and titles run a-model.".to_owned(),
-                    calls: suzatary_core::settings::overview::Calls::Recorded {
+                    calls: suzatary_cards::settings::overview::Calls::Recorded {
                         key: "a-cli/a-model".to_owned(),
                         credential: suzatary_connect::settings::MODEL_TOKEN.to_owned(),
                     },
                 }],
                 channels,
                 plugins,
-                build: suzatary_core::settings::overview::Build {
+                build: suzatary_cards::settings::overview::Build {
                     version: "dev".to_owned(),
                     revision: "dev".to_owned(),
                     completed: Vec::new(),
@@ -2299,7 +2276,7 @@ mod tests {
         }
 
         fn overview(&self, secrets: &dyn suzatary_connect::secrets::Secrets) -> Overview {
-            let declared = suzatary_core::settings::overview::Declared {
+            let declared = suzatary_cards::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,
                 channels: &self.channels,
@@ -2307,7 +2284,7 @@ mod tests {
                 jobs: &self.jobs,
                 plugins: &self.plugins,
                 drive: &[],
-                storage: &suzatary_core::settings::overview::Storage {
+                storage: &suzatary_cards::settings::overview::Storage {
                     root: "/srv/data".to_owned(),
                     pushed: suzatary_connect::settings::remote::Remote::parse(
                         "git@example.test:ada/data.git",
@@ -2322,16 +2299,16 @@ mod tests {
             };
             let calendar = BTreeMap::from([(
                 suzatary_health::health::plugin::PluginName::parse("ics").expect("a name"),
-                suzatary_core::settings::overview::Store::Calendar,
+                suzatary_cards::settings::overview::Store::Calendar,
             )]);
             overview(
                 &declared,
-                &suzatary_core::settings::overview::Asked::of(
+                &suzatary_cards::settings::overview::Asked::of(
                     secrets,
                     &self.settables,
                     self.accounts.accounts(),
                 ),
-                suzatary_core::settings::overview::Registers {
+                suzatary_cards::settings::overview::Registers {
                     health: &suzatary_health::health::Healths::default(),
                     answered: &suzatary_health::health::Healths::default(),
                     plugins: &calendar,
@@ -2355,7 +2332,7 @@ mod tests {
     fn group(
         page: &Overview,
         which: suzatary_connect::connect::Group,
-    ) -> &[suzatary_core::wire::cards::OverviewLine] {
+    ) -> &[suzatary_cards::wire::cards::OverviewLine] {
         &page
             .groups
             .iter()

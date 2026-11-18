@@ -11,13 +11,13 @@ use suzatary_conversations::secretary::model;
 use suzatary_conversations::secretary::store::{Outcome, Settle};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::secretary::review::{Reviewed, reviews};
 use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::Reasons;
 use suzatary_lines::secretary::conversations;
 use suzatary_store::store::Reads as _;
+use suzatary_topics::secretary::filed::TriageCards;
 
 /// The review run to its end; a scripted model is under no limit, so it always starts.
 fn review(
@@ -198,10 +198,13 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     )
     .expect("the brief's conversation opens");
     let offer = |at| {
-        suzatary_core::secretary::undo::offer_withdrawn(
+        suzatary_cards::secretary::undo::offer_withdrawn(
             secretary.conversations,
             &caps.inbox,
-            &chains,
+            &chains
+                .iter()
+                .map(suzatary_core::secretary::Bound::chain)
+                .collect::<Vec<_>>(),
             &brief,
             at,
         )
@@ -416,7 +419,7 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
     assert!(
         matches!(
             page,
-            Some(suzatary_core::notify::Push::Unreadable { conversations, .. })
+            Some(suzatary_cards::notify::Push::Unreadable { conversations, .. })
                 if conversations.get() == 1
         ),
         "{page:?}"

@@ -518,7 +518,7 @@ fn agent(
     let conversations = suzatary_core::stores::conversations::InMemory::default();
     let inbox = suzatary_core::stores::InMemory::<suzatary_inbox::secretary::inbox_event::InboxEvent>::default();
     let cards =
-        suzatary_core::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
+        suzatary_topics::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
     suzatary_core::agent::call(&records, &cards, deployment, verb, args)
 }
 

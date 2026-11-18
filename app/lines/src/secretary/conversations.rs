@@ -88,7 +88,7 @@ impl ReadConversations<'_> {
     }
 }
 
-/// Open a conversation with its first line; an empty `title` leaves it for `suzatary_core::secretary::title::owed`.
+/// Open a conversation with its first line; an empty `title` leaves it for `suzatary_topics::secretary::title::owed`.
 ///
 /// # Errors
 /// The store's, and a name already taken.
@@ -133,7 +133,7 @@ pub fn open_default(
 
 /// Begin a new conversation with its first line, its id that line's
 /// ([`LineEvent::begun_id`](crate::secretary::line_event::LineEvent::begun_id)); an empty `title`
-/// leaves it for `suzatary_core::secretary::title::owed`.
+/// leaves it for `suzatary_topics::secretary::title::owed`.
 ///
 /// # Errors
 /// The store's, and an id already taken.

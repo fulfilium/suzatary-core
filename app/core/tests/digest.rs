@@ -15,13 +15,13 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_core::model_name::ModelName;
-use suzatary_core::secretary::digest::Digest;
-use suzatary_core::secretary::digest_event::{self, DigestEvent};
-use suzatary_core::secretary::digest_line::Line;
-use suzatary_core::secretary::digests::Digests;
-use suzatary_core::secretary::memories::Memories;
 use suzatary_core::stores::InMemory;
+use suzatary_digest::model_name::ModelName;
+use suzatary_digest::secretary::digest::Digest;
+use suzatary_digest::secretary::digest_event::{self, DigestEvent};
+use suzatary_digest::secretary::digest_line::Line;
+use suzatary_digest::secretary::digests::Digests;
+use suzatary_digest::secretary::memories::Memories;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
@@ -70,7 +70,7 @@ impl Box {
             texts: &self.texts,
             lines: self.lines.conversations(),
             owners: &self.owners.0,
-            compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+            compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
         }
     }
 
@@ -266,7 +266,7 @@ impl Box {
             &|name: &suzatary_memory::secretary::locked_text::KeyName| reads.key(name),
         );
         let history = self.history.nodes().expect("the history");
-        suzatary_core::secretary::digest::digest(
+        suzatary_digest::secretary::digest::digest(
             &named,
             &opened,
             &history,
@@ -357,13 +357,13 @@ proptest! {
             .iter()
             .map(|(_, object)| prodrome_core::event::parents_of(object))
             .collect();
-        let mut placed: Vec<suzatary_core::secretary::digest::Placed<'_>> = objects
+        let mut placed: Vec<suzatary_digest::secretary::digest::Placed<'_>> = objects
             .iter()
             .zip(&parents)
             .filter_map(|((name, object), parents)| Some((name, object.event()?, parents.as_slice())))
             .collect();
-        let shape = |placed: &[suzatary_core::secretary::digest::Placed<'_>]| {
-            suzatary_core::secretary::digest::Shape::of(placed, &opened).expect("no cycle")
+        let shape = |placed: &[suzatary_digest::secretary::digest::Placed<'_>]| {
+            suzatary_digest::secretary::digest::Shape::of(placed, &opened).expect("no cycle")
         };
         let stored = shape(&placed);
         let mut seed = order;
@@ -536,7 +536,7 @@ fn above(read: &Digest, line: &Hash) -> Vec<Hash> {
 }
 
 fn holds(
-    node: &prodrome_core::digest::Node<suzatary_core::secretary::digest_label::Label>,
+    node: &prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>,
     line: &Hash,
 ) -> bool {
     node.name() == line || node.children().iter().any(|child| holds(child, line))
@@ -574,7 +574,7 @@ fn texts_of(read: &Digest, nodes: &[Hash]) -> BTreeSet<TextName> {
         .iter()
         .flat_map(|node| read.candidates(node))
         .filter_map(|candidate| match &candidate.said {
-            suzatary_core::secretary::digest::Written::Summary(summary) => {
+            suzatary_digest::secretary::digest::Written::Summary(summary) => {
                 Some(summary.text.clone())
             }
             _ => None,
@@ -663,7 +663,7 @@ fn only_an_owner_retracts() {
     let kept = the.kept();
     for actor in ["assistant", "triage", "plugin", "compactor"] {
         let forged = prodrome_core::event::parse_event::<DigestEvent>(
-            &suzatary_core::secretary::digest_event::DigestVocabulary::default(),
+            &suzatary_digest::secretary::digest_event::DigestVocabulary::default(),
             &format!(
                 "Retracted(node='{}', at=datetime(2026, 10, 6, 12, 0, 0), actor='{actor}')",
                 node.as_str()
@@ -708,7 +708,7 @@ proptest! {
         answers in proptest::collection::vec(any::<bool>(), 120),
         pick in any::<usize>(),
     ) {
-        use suzatary_core::secretary::digest::Standing;
+        use suzatary_digest::secretary::digest::Standing;
         let the = Box::default();
         // The owner's turns and the secretary's answers mixed, so most nodes are more than the
         // owner's words, the nodes whose stale summaries are otherwise shown.
@@ -799,7 +799,7 @@ fn a_call_never_answered_keeps_the_summary() {
             digest_event::asked(
                 node.clone(),
                 at(600),
-                suzatary_core::secretary::digests::compactor(),
+                suzatary_digest::secretary::digests::compactor(),
                 9,
             )
             .expect("a call"),
@@ -857,8 +857,8 @@ fn an_answer_after_a_mail_read_is_tainted() {
 
 /// Every node of `tree`.
 fn summarised_or_not(
-    tree: &prodrome_core::digest::Tree<suzatary_core::secretary::digest_label::Label>,
-) -> Vec<&prodrome_core::digest::Node<suzatary_core::secretary::digest_label::Label>> {
+    tree: &prodrome_core::digest::Tree<suzatary_digest::secretary::digest_label::Label>,
+) -> Vec<&prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>> {
     let mut found = Vec::new();
     let mut stack = vec![tree.root()];
     while let Some(node) = stack.pop() {
@@ -871,41 +871,41 @@ fn summarised_or_not(
 /// A compactor that keeps every question it is asked, around the fake every test uses, or one
 /// that answers `long` bytes every time.
 struct Recording {
-    joining: suzatary_core::joining::Joining,
+    joining: suzatary_digest::joining::Joining,
     long: Option<usize>,
     fails: bool,
-    asked: std::sync::Mutex<Vec<suzatary_core::secretary::compact_ask::Ask>>,
+    asked: std::sync::Mutex<Vec<suzatary_digest::secretary::compact_ask::Ask>>,
 }
 
 impl Recording {
     fn joining() -> Self {
         Self {
-            joining: suzatary_core::joining::Joining::default(),
+            joining: suzatary_digest::joining::Joining::default(),
             long: None,
             fails: false,
             asked: std::sync::Mutex::default(),
         }
     }
 
-    fn asked(&self) -> Vec<suzatary_core::secretary::compact_ask::Ask> {
+    fn asked(&self) -> Vec<suzatary_digest::secretary::compact_ask::Ask> {
         self.asked.lock().expect("not poisoned").clone()
     }
 }
 
 use suzatary_conversations::nonempty;
 use suzatary_conversations::secretary::outcome;
-use suzatary_core::secretary::compact::Compact as _;
+use suzatary_digest::secretary::compact::Compact as _;
 use suzatary_inbox::secretary::stamp;
 use suzatary_lines::secretary::transcript;
 
-impl suzatary_core::secretary::compact::Compact for Recording {
+impl suzatary_digest::secretary::compact::Compact for Recording {
     fn model(&self) -> &ModelName {
         self.joining.model()
     }
 
     fn compact(
         &self,
-        ask: &suzatary_core::secretary::compact_ask::Ask,
+        ask: &suzatary_digest::secretary::compact_ask::Ask,
     ) -> Result<String, suzatary_conversations::secretary::model::ModelError> {
         self.asked.lock().expect("not poisoned").push(ask.clone());
         if self.fails {
@@ -923,19 +923,19 @@ impl suzatary_core::secretary::compact::Compact for Recording {
 }
 
 /// A budget nothing in a test reaches.
-const ROOMY: suzatary_core::secretary::compact_budget::Budget =
-    suzatary_core::secretary::compact_budget::Budget {
+const ROOMY: suzatary_digest::secretary::compact_budget::Budget =
+    suzatary_digest::secretary::compact_budget::Budget {
         calls_per_hour: u32::MAX,
         bytes_per_day: u64::MAX,
     };
 
 /// The ladder of `rungs`, in order.
 fn ladder<'c>(
-    rungs: &[&'c dyn suzatary_core::secretary::compact::Compact],
-) -> suzatary_core::secretary::compaction::Compaction<
-    &'c dyn suzatary_core::secretary::compact::Compact,
+    rungs: &[&'c dyn suzatary_digest::secretary::compact::Compact],
+) -> suzatary_digest::secretary::compaction::Compaction<
+    &'c dyn suzatary_digest::secretary::compact::Compact,
 > {
-    suzatary_core::secretary::compaction::Compaction {
+    suzatary_digest::secretary::compaction::Compaction {
         ladder: nonempty::NonEmpty::of(rungs.to_vec()).expect("a rung"),
     }
 }
@@ -949,9 +949,9 @@ impl Box {
     /// Run the compaction rule through an engine until nothing is owed; every firing's outcome.
     fn compact_all(
         &self,
-        compactor: &dyn suzatary_core::secretary::compact::Compact,
-    ) -> Vec<suzatary_core::secretary::compaction::Compacted> {
-        use suzatary_core::secretary::compaction::{Reading, TheDigest, perform};
+        compactor: &dyn suzatary_digest::secretary::compact::Compact,
+    ) -> Vec<suzatary_digest::secretary::compaction::Compacted> {
+        use suzatary_digest::secretary::compaction::{Reading, TheDigest, perform};
         use suzatary_triage::rule::Engine;
         let rule = ladder(&[compactor]);
         let mut engine = Engine::new(vec![rule.clone()]);
@@ -1085,7 +1085,7 @@ proptest! {
             let Some(summary) = read.summary(node.name()) else { continue };
             let label = node.measure().taint;
             let recorded = match &read.candidates(node.name())[0].said {
-                suzatary_core::secretary::digest::Written::Summary(summary) => summary.taint,
+                suzatary_digest::secretary::digest::Written::Summary(summary) => summary.taint,
                 other => panic!("{other:?}"),
             };
             prop_assert_eq!(recorded, label);
@@ -1110,7 +1110,7 @@ proptest! {
 /// says why, and the rule takes the next node.
 #[test]
 fn an_unfit_node_stays_pending_and_says_why() {
-    use suzatary_core::secretary::compaction::Compacted;
+    use suzatary_digest::secretary::compaction::Compacted;
     let the = Box::default();
     the.say("a", 40);
     let long = Recording {
@@ -1127,19 +1127,19 @@ fn an_unfit_node_stays_pending_and_says_why() {
         assert!(read.pending().contains(node), "an unfit node stays pending");
         assert!(matches!(
             read.candidates(node)[0].said,
-            suzatary_core::secretary::digest::Written::Unfit { shortest: 900, .. }
+            suzatary_digest::secretary::digest::Written::Unfit { shortest: 900, .. }
         ));
     }
     assert!(
         the.kept().is_empty(),
         "no words were kept for a line that did not fit"
     );
-    let on = suzatary_core::secretary::compacting::Compacting::On {
+    let on = suzatary_digest::secretary::compacting::Compacting::On {
         ladder: named(long.model().clone()),
         budget: ROOMY,
         workers: std::num::NonZeroUsize::MIN,
     };
-    let said = suzatary_core::secretary::compaction::waiting(
+    let said = suzatary_digest::secretary::compaction::waiting(
         &Digests {
             compacting: &on,
             ..the.digests()
@@ -1157,24 +1157,24 @@ fn an_unfit_node_stays_pending_and_says_why() {
     let spent: u32 = read.attempts().map(|(_, spent)| spent.calls).sum();
     assert_eq!(
         spent,
-        u32::try_from(done.len()).expect("few") * suzatary_core::secretary::compactor::TRIES
+        u32::try_from(done.len()).expect("few") * suzatary_digest::secretary::compactor::TRIES
     );
 }
 
 /// `inner` under another model's name.
 struct Renamed<'c>(
-    &'c dyn suzatary_core::secretary::compact::Compact,
+    &'c dyn suzatary_digest::secretary::compact::Compact,
     ModelName,
 );
 
-impl suzatary_core::secretary::compact::Compact for Renamed<'_> {
+impl suzatary_digest::secretary::compact::Compact for Renamed<'_> {
     fn model(&self) -> &ModelName {
         &self.1
     }
 
     fn compact(
         &self,
-        ask: &suzatary_core::secretary::compact_ask::Ask,
+        ask: &suzatary_digest::secretary::compact_ask::Ask,
     ) -> Result<String, suzatary_conversations::secretary::model::ModelError> {
         self.0.compact(ask)
     }
@@ -1185,10 +1185,10 @@ impl suzatary_core::secretary::compact::Compact for Renamed<'_> {
 /// leaves the tree unsummarised and names the node in the brief's line and the census.
 #[test]
 fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
-    use suzatary_core::secretary::compacting::Compacting;
-    use suzatary_core::secretary::compaction::{Compacted, Reading, perform, waiting};
-    use suzatary_core::secretary::digest::Written;
-    use suzatary_core::secretary::digest_census::{Census, State};
+    use suzatary_digest::secretary::compacting::Compacting;
+    use suzatary_digest::secretary::compaction::{Compacted, Reading, perform, waiting};
+    use suzatary_digest::secretary::digest::Written;
+    use suzatary_digest::secretary::digest_census::{Census, State};
     let the = Box::default();
     // A count whose tree gives the unfit node a parent the first model finds unfit too; a change
     // to a line's stored print (its rules' name too) moves it.
@@ -1291,7 +1291,7 @@ impl suzatary_base::capability::Clock for Ticking {
 /// of a slow model are five instants, so a budget's windows see when each was made.
 #[test]
 fn each_call_is_stamped_at_its_own_instant() {
-    use suzatary_core::secretary::compaction::{Reading, perform};
+    use suzatary_digest::secretary::compaction::{Reading, perform};
     let the = Box::default();
     the.say("a", 40);
     let long = Recording {
@@ -1315,7 +1315,7 @@ fn each_call_is_stamped_at_its_own_instant() {
         .filter(|event| {
             matches!(
                 event.body(),
-                suzatary_core::secretary::digest_event::Said::Unfit { .. }
+                suzatary_digest::secretary::digest_event::Said::Unfit { .. }
             )
         })
         .map(prodrome_core::schema::Schema::at)
@@ -1326,17 +1326,17 @@ fn each_call_is_stamped_at_its_own_instant() {
 /// What one worker's step came to: a round of at most one claim, performed.
 #[derive(Debug, PartialEq, Eq)]
 enum Stepped {
-    Compacted(suzatary_core::secretary::compaction::Compacted),
-    Held(suzatary_core::secretary::compact_budget::Hold),
+    Compacted(suzatary_digest::secretary::compaction::Compacted),
+    Held(suzatary_digest::secretary::compact_budget::Hold),
     Idle,
 }
 
 fn step(
-    paced: &suzatary_core::secretary::compaction::Paced<'_>,
+    paced: &suzatary_digest::secretary::compaction::Paced<'_>,
     memories: &Memories<'_>,
     clock: &dyn suzatary_base::capability::Clock,
 ) -> Result<Stepped, suzatary_base::refusal::Refusal> {
-    use suzatary_core::secretary::compaction::{Performed, Round};
+    use suzatary_digest::secretary::compaction::{Performed, Round};
     let claims = match paced.take(memories, 1, clock)? {
         Round::Taken(claims) => claims,
         Round::Held(hold) => return Ok(Stepped::Held(hold)),
@@ -1360,12 +1360,12 @@ impl Box {
     /// stopped, so a hold never frees.
     fn compact_with_workers(
         &self,
-        paced: &suzatary_core::secretary::compaction::Paced<'_>,
-        compactor: &dyn suzatary_core::secretary::compact::Compact,
+        paced: &suzatary_digest::secretary::compaction::Paced<'_>,
+        compactor: &dyn suzatary_digest::secretary::compact::Compact,
         workers: usize,
         round: usize,
     ) {
-        use suzatary_core::secretary::compaction::{Reading, Round};
+        use suzatary_digest::secretary::compaction::{Reading, Round};
         use suzatary_triage::rule::Rule as _;
         let owes = ladder(&[compactor]);
         std::thread::scope(|scope| {
@@ -1408,13 +1408,13 @@ impl Box {
                     .candidates(node.name())
                     .iter()
                     .map(|candidate| match &candidate.said {
-                        suzatary_core::secretary::digest::Written::Summary(summary) => self
+                        suzatary_digest::secretary::digest::Written::Summary(summary) => self
                             .texts
                             .get(&summary.text)
                             .expect("reads")
                             .map(|text| text.words().as_str().to_owned()),
-                        suzatary_core::secretary::digest::Written::Unfit { .. }
-                        | suzatary_core::secretary::digest::Written::Retracted => None,
+                        suzatary_digest::secretary::digest::Written::Unfit { .. }
+                        | suzatary_digest::secretary::digest::Written::Retracted => None,
                     })
                     .collect();
                 (node.name().clone(), words)
@@ -1438,8 +1438,8 @@ proptest! {
         calls in 1u32..30,
         bytes in 2_000u64..40_000,
     ) {
-        use suzatary_core::secretary::compact_budget::Budget;
-        use suzatary_core::secretary::compaction::Paced;
+        use suzatary_digest::secretary::compact_budget::Budget;
+        use suzatary_digest::secretary::compaction::Paced;
         let one = Box::default();
         for (k, n) in lengths.iter().enumerate() {
             one.say(&format!("c{k}"), *n);
@@ -1460,7 +1460,7 @@ proptest! {
         tight.compact_with_workers(&Paced::new(ladder(&[&counted]), budget), &counted, workers, round);
         let spent: Vec<_> = tight.read().attempts().map(|(_, spent)| spent).collect();
         prop_assert_eq!(spent.len(), counted.asked().len(), "every call made was counted");
-        let total: suzatary_core::secretary::digest_spent::Spent = spent.into_iter().sum();
+        let total: suzatary_digest::secretary::digest_spent::Spent = spent.into_iter().sum();
         prop_assert!(total.calls <= calls, "{} calls past a cap of {}", total.calls, calls);
         prop_assert!(total.sent <= bytes, "{} bytes past a cap of {}", total.sent, bytes);
         prop_assert!(tight.written().values().all(|words| words.len() == 1));
@@ -1472,8 +1472,8 @@ proptest! {
 /// the rule runs until nothing is owed and then rests.
 #[test]
 fn the_budget_paces_the_rule_and_a_hold_consumes_no_firing() {
-    use suzatary_core::secretary::compact_budget::{Budget, Hold};
-    use suzatary_core::secretary::compaction::Paced;
+    use suzatary_digest::secretary::compact_budget::{Budget, Hold};
+    use suzatary_digest::secretary::compaction::Paced;
     let the = Box::default();
     the.say("a", 60);
     let compactor = Recording::joining();
@@ -1515,8 +1515,8 @@ fn the_budget_paces_the_rule_and_a_hold_consumes_no_firing() {
 /// spent.
 #[test]
 fn a_call_larger_than_what_is_left_of_the_day_is_held_and_never_made() {
-    use suzatary_core::secretary::compact_budget::{Budget, Hold};
-    use suzatary_core::secretary::compaction::Paced;
+    use suzatary_digest::secretary::compact_budget::{Budget, Hold};
+    use suzatary_digest::secretary::compaction::Paced;
     let the = Box::default();
     the.say("a", 40);
     let compactor = Recording::joining();
@@ -1557,9 +1557,9 @@ fn a_call_larger_than_what_is_left_of_the_day_is_held_and_never_made() {
 /// will fit.
 #[test]
 fn a_question_larger_than_the_days_cap_is_unfit_and_never_asked() {
-    use suzatary_core::secretary::compact_budget::Budget;
-    use suzatary_core::secretary::compacting::Compacting;
-    use suzatary_core::secretary::compaction::{Compacted, Paced, waiting};
+    use suzatary_digest::secretary::compact_budget::Budget;
+    use suzatary_digest::secretary::compacting::Compacting;
+    use suzatary_digest::secretary::compaction::{Compacted, Paced, waiting};
     let the = Box::default();
     the.say("a", 40);
     let compactor = Recording::joining();
@@ -1601,8 +1601,8 @@ fn a_question_larger_than_the_days_cap_is_unfit_and_never_asked() {
 /// restart) takes the node again, and every rolling hour holds at most the cap of calls.
 #[test]
 fn a_model_that_always_fails_spends_no_more_than_the_cap() {
-    use suzatary_core::secretary::compact_budget::Budget;
-    use suzatary_core::secretary::compaction::Paced;
+    use suzatary_digest::secretary::compact_budget::Budget;
+    use suzatary_digest::secretary::compaction::Paced;
     let the = Box::default();
     the.say("a", 60);
     let failing = Recording {
@@ -1663,7 +1663,7 @@ fn a_model_that_always_fails_spends_no_more_than_the_cap() {
 /// so the log is cut as it is on the box; the report quotes the number this prints.
 #[test]
 fn consecutive_questions_share_their_prefix() {
-    use suzatary_core::secretary::compact_ask::PROMPT;
+    use suzatary_digest::secretary::compact_ask::PROMPT;
     let the = Box::default();
     for conversation in ["a", "b", "c"] {
         the.write(
@@ -1707,12 +1707,12 @@ fn consecutive_questions_share_their_prefix() {
 impl Box {
     /// What a session opening now is told, its view within `budget` bytes.
     fn told(&self, budget: usize) -> String {
-        use suzatary_core::secretary::compaction::Reading;
+        use suzatary_digest::secretary::compaction::Reading;
         let memory = self.memories().reads().read().expect("the memory reads");
         let record = Reading::of(&self.digests().reads());
-        suzatary_core::secretary::told::context_of(
+        suzatary_digest::secretary::told::context_of(
             &memory,
-            Ok(&suzatary_core::secretary::topics::reading::Reading::default()),
+            Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
             record.as_ref(),
             budget,
             None,
@@ -1751,7 +1751,7 @@ impl Box {
 /// A budget from a handful of lines to the owner's 128 KB.
 fn budgets() -> impl Strategy<Value = usize> {
     prop_oneof![
-        Just(suzatary_core::secretary::digest_view::VIEW_BYTES),
+        Just(suzatary_digest::secretary::digest_view::VIEW_BYTES),
         200usize..4_000
     ]
 }
@@ -1773,7 +1773,7 @@ proptest! {
         the.compact_all(&Recording::joining());
         let told = the.told(budget);
         prop_assert!(!told.contains("INJECTED"), "{}", told);
-        let reading = suzatary_core::secretary::compaction::Reading::of(&the.digests().reads())
+        let reading = suzatary_digest::secretary::compaction::Reading::of(&the.digests().reads())
             .expect("reads whole");
         let record = &told[told.find("the record of every conversation").expect("told")..];
         let mut hidden_before = false;
@@ -1799,7 +1799,7 @@ proptest! {
             prop_assert!(!(hidden && hidden_before), "two runs not shown, unmerged: {}", record);
             hidden_before = hidden;
             prop_assert!(
-                suzatary_core::secretary::told::zoom(&reading, handle, |_| true).is_ok(),
+                suzatary_digest::secretary::told::zoom(&reading, handle, |_| true).is_ok(),
                 "every handle told opens: {}",
                 handle
             );
@@ -1978,7 +1978,7 @@ fn zoomed_round(answer: &str) -> suzatary_conversations::secretary::store::Store
 fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
     use suzatary_conversations::secretary::taint;
     use suzatary_conversations::secretary::taint::Taint;
-    use suzatary_core::secretary::compaction::Reading;
+    use suzatary_digest::secretary::compaction::Reading;
     let the = Box::default();
     the.write("a", turns(kinds));
     the.compact_all(&Recording::joining());
@@ -2005,7 +2005,7 @@ fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
             .expect("a handle the reading printed names lines");
         prop_assert_eq!(nodes.len(), 1, "a printed handle names one node");
         let answer =
-            suzatary_core::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
+            suzatary_digest::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
         let said = serde_json::to_string_pretty(&answer).expect("prints");
         let tainted = nodes[0].measure().taint == Taint::Tainted;
         let round = zoomed_round(&said);
@@ -2038,7 +2038,7 @@ fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
         .into_iter()
         .enumerate()
         .map(|(k, turn)| {
-            suzatary_core::secretary::digest_view::whole(&Entry::Said {
+            suzatary_digest::secretary::digest_view::whole(&Entry::Said {
                 at: at(k),
                 turn,
                 by: Some("ada".into()),
@@ -2066,8 +2066,8 @@ proptest! {
 /// reaches a summary labelled the owner's. A node over that answer is asked beside it.
 #[test]
 fn an_owners_node_is_asked_beside_the_owners_words_alone() {
-    use suzatary_core::secretary::compact_ask::Ask;
-    use suzatary_core::secretary::compaction::Reading;
+    use suzatary_digest::secretary::compact_ask::Ask;
+    use suzatary_digest::secretary::compaction::Reading;
     let the = Box::default();
     let person = |k: usize| Turn::Person {
         text: format!("a line of mine, {k}"),
@@ -2107,8 +2107,8 @@ fn an_owners_node_is_asked_beside_the_owners_words_alone() {
 /// lines out and keeps every line before them: each is read once.
 #[test]
 fn the_record_leaves_out_what_the_window_sends() {
-    use suzatary_core::secretary::compaction::Reading;
-    use suzatary_core::secretary::told::{Asking, context_of};
+    use suzatary_digest::secretary::compaction::Reading;
+    use suzatary_digest::secretary::told::{Asking, context_of};
     let the = Box::default();
     the.say("a", 10);
     the.say("b", 3);
@@ -2118,7 +2118,7 @@ fn the_record_leaves_out_what_the_window_sends() {
     let told = |asking| {
         context_of(
             &memory,
-            Ok(&suzatary_core::secretary::topics::reading::Reading::default()),
+            Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
             Ok(&reading),
             100_000,
             asking,
@@ -2229,8 +2229,10 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
         .map(|(name, object)| (name, object))
         .collect();
     let read =
-        suzatary_core::secretary::digest::digest(&named, &opened, &[], &BTreeSet::new(), |_| None)
-            .expect("reads");
+        suzatary_digest::secretary::digest::digest(&named, &opened, &[], &BTreeSet::new(), |_| {
+            None
+        })
+        .expect("reads");
     assert_eq!(order(&read), std::slice::from_ref(&old));
     assert_eq!(read.line(&old), name);
 }
@@ -2277,13 +2279,13 @@ mod recompacting {
 
     use prodrome_core::digest::Tree;
     use suzatary_base::rule_version::{Under, Versioned};
-    use suzatary_core::secretary::compact_ask::{Asking, Beside};
-    use suzatary_core::secretary::compaction::{Compacted, Compaction, Reading, perform};
-    use suzatary_core::secretary::digest::{Standing, Written};
-    use suzatary_core::secretary::digest_census::{Census, Group, State};
-    use suzatary_core::secretary::digest_event::Said;
-    use suzatary_core::secretary::digest_label::Label;
-    use suzatary_core::secretary::digests::compactor;
+    use suzatary_digest::secretary::compact_ask::{Asking, Beside};
+    use suzatary_digest::secretary::compaction::{Compacted, Compaction, Reading, perform};
+    use suzatary_digest::secretary::digest::{Standing, Written};
+    use suzatary_digest::secretary::digest_census::{Census, Group, State};
+    use suzatary_digest::secretary::digest_event::Said;
+    use suzatary_digest::secretary::digest_label::Label;
+    use suzatary_digest::secretary::digests::compactor;
 
     use super::*;
 
@@ -2360,7 +2362,7 @@ mod recompacting {
                 at(0),
                 compactor(),
                 &text,
-                suzatary_core::secretary::digest_event::Attempt {
+                suzatary_digest::secretary::digest_event::Attempt {
                     over: read.over(node).expect("children read"),
                     model: model(),
                     taint: label.taint,
@@ -2377,7 +2379,7 @@ mod recompacting {
                     .replace(&current, ""),
             };
             let event = prodrome_core::event::parse_event::<DigestEvent>(
-                &suzatary_core::secretary::digest_event::DigestVocabulary::default(),
+                &suzatary_digest::secretary::digest_event::DigestVocabulary::default(),
                 &print,
             )
             .expect("the print reads");
@@ -2725,7 +2727,7 @@ mod recompacting {
     /// hash of every question a whole compaction of a fixed record asks.
     #[test]
     fn the_asking_moves_when_the_questions_move() {
-        use suzatary_core::secretary::compact_ask::Ask;
+        use suzatary_digest::secretary::compact_ask::Ask;
         // One conversation, whose order is causal alone: runs of the owner's turns long enough
         // to make nodes of the owner's words, then every other kind of line.
         let mut kinds = vec![0; 12];
@@ -2759,7 +2761,7 @@ mod recompacting {
 /// sweep deletes their texts, the next reading keeps none of their words.
 #[test]
 fn kept_words_leave_with_their_node() {
-    use suzatary_core::secretary::digest::{Kept, under_kept};
+    use suzatary_digest::secretary::digest::{Kept, under_kept};
     use suzatary_lines::secretary::held_lines::HeldLines;
     let the = Box::default();
     the.say("2026-10-06-1", 40);
@@ -2772,7 +2774,7 @@ fn kept_words_leave_with_their_node() {
             .reads()
             .fold(HeldLines::gathered)
             .expect("reads");
-        let shape = suzatary_core::secretary::digest::Shape::over(&gathered).expect("no cycle");
+        let shape = suzatary_digest::secretary::digest::Shape::over(&gathered).expect("no cycle");
         under_kept(
             shape,
             &the.history.nodes().expect("the history"),

@@ -1,5 +1,5 @@
 //! The triage agent's chain: read as the box reads it, and never written. The agent's writes
-//! are cards in the Inbox (`suzatary_core::secretary::filed::TriageCards`), so the chain it holds
+//! are cards in the Inbox (`suzatary_topics::secretary::filed::TriageCards`), so the chain it holds
 //! is only a [`Reads`]: no append or accept exists on it.
 //!
 //! [`Reads`]: suzatary_store::store::Reads

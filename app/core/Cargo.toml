@@ -29,6 +29,9 @@ suzatary-connect.workspace = true
 suzatary-inbox.workspace = true
 suzatary-conversations.workspace = true
 suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+suzatary-digest.workspace = true
+suzatary-cards.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -57,7 +60,7 @@ postcard.workspace = true
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-digest/nothing", "suzatary-cards/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
 fixture = ["suzatary-conversations/fixture", "suzatary-lines/fixture"]
 

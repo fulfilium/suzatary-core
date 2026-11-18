@@ -1,9 +1,24 @@
 //! The box's interpreters, opened once from the instance: what every record borrows. Each
 //! effect's interpreter is built in one place.
 
+use crate::commands::serve::mail_cache::MailCache;
+use crate::instance::InstanceEdits;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use suzatary_io::briefings::BriefingFiles;
+use suzatary_io::calendar::Clocked;
+use suzatary_io::clock::SystemClock;
+use suzatary_io::corpus::Operator;
+use suzatary_io::mailbox::Notmuch;
+use suzatary_io::mailbox::located::Located;
+use suzatary_io::manuals::Handbook;
+use suzatary_io::pdftotext::Pdftotext;
+use suzatary_io::render::Typst;
+use suzatary_io::repository::Checkout;
+use suzatary_io::sync::Syncer;
+use suzatary_io::typeset::Closed;
+use suzatary_io::watches::Watches;
 
 use prodrome_core::event::Actor;
 use suzatary_base::chains::ChainPolicy;
@@ -12,12 +27,12 @@ use suzatary_base::zone::Zone;
 use suzatary_conversations::secretary::model::Model;
 use suzatary_core::agent::Agent;
 use suzatary_core::secretary::Secretary;
-use suzatary_core::secretary::compacting::Compacting;
-use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::secretary::digest_line::Line;
-use suzatary_core::secretary::digests::{Digests, ReadDigests};
-use suzatary_core::secretary::memories::{Memories, ReadMemories};
-use suzatary_core::secretary::recollection::Recollection;
+use suzatary_digest::secretary::compacting::Compacting;
+use suzatary_digest::secretary::digest_event::DigestEvent;
+use suzatary_digest::secretary::digest_line::Line;
+use suzatary_digest::secretary::digests::{Digests, ReadDigests};
+use suzatary_digest::secretary::memories::{Memories, ReadMemories};
+use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
@@ -86,8 +101,8 @@ impl Ground {
 
     /// The mail this ground keeps, held against its sync.
     #[must_use]
-    pub fn mail_cache(&self) -> crate::commands::serve::mail_cache::MailCache {
-        crate::commands::serve::mail_cache::MailCache::new(
+    pub fn mail_cache(&self) -> MailCache {
+        MailCache::new(
             self.mail_root.clone(),
             self.notmuch.clone(),
             self.notmuch_config.clone(),
@@ -98,14 +113,14 @@ impl Ground {
 
     /// Where each listed message lives, by canonical hash.
     #[must_use]
-    pub fn located(&self) -> suzatary_io::mailbox::located::Located {
-        suzatary_io::mailbox::located::Located::open(self.mail_hashes.clone())
+    pub fn located(&self) -> Located {
+        Located::open(self.mail_hashes.clone())
     }
 
     /// The corpus, read-only, `pdftotext` falling back through `code`.
     #[must_use]
-    pub fn notmuch(&self, code: &Path) -> suzatary_io::mailbox::Notmuch {
-        let notmuch = suzatary_io::mailbox::Notmuch::new(
+    pub fn notmuch(&self, code: &Path) -> Notmuch {
+        let notmuch = Notmuch::new(
             self.mail_root.clone(),
             self.ledger.clone(),
             self.located(),
@@ -120,8 +135,8 @@ impl Ground {
     }
 
     #[must_use]
-    pub fn syncer(&self) -> suzatary_io::sync::Syncer {
-        let syncer = suzatary_io::sync::Syncer::new(
+    pub fn syncer(&self) -> Syncer {
+        let syncer = Syncer::new(
             self.accounts.clone(),
             self.mail_root.clone(),
             self.notmuch.clone(),
@@ -137,27 +152,27 @@ impl Ground {
 
     /// The mechanical operations over this ground, the sync's window counted in `zone`.
     #[must_use]
-    pub fn operator(&self, code: &Path, zone: Zone) -> suzatary_io::corpus::Operator {
-        suzatary_io::corpus::Operator::new(
+    pub fn operator(&self, code: &Path, zone: Zone) -> Operator {
+        Operator::new(
             self.notmuch(code),
             self.ledger.clone(),
             self.syncer(),
             self.heartbeat.clone(),
             self.last_sync.clone(),
             zone,
-            suzatary_io::watches::Watches::open(self.watches.clone()),
+            Watches::open(self.watches.clone()),
         )
     }
 }
 
 /// What every record reads through, the triage agent's included: its six effects beside a chain.
 pub struct Grounds {
-    pub(crate) corpus: suzatary_io::corpus::Operator,
-    pub(crate) repository: suzatary_io::repository::Checkout,
-    pub(crate) manuals: suzatary_io::manuals::Handbook,
-    pub(crate) mail: suzatary_io::mailbox::Notmuch,
-    pub(crate) render: suzatary_io::render::Typst,
-    pub(crate) clock: suzatary_io::clock::SystemClock,
+    pub(crate) corpus: Operator,
+    pub(crate) repository: Checkout,
+    pub(crate) manuals: Handbook,
+    pub(crate) mail: Notmuch,
+    pub(crate) render: Typst,
+    pub(crate) clock: SystemClock,
 }
 
 impl Grounds {
@@ -167,25 +182,20 @@ impl Grounds {
             &Ground::of(instance),
             instance.code(),
             &instance.persona,
-            suzatary_io::typeset::Closed::this_binary(),
+            Closed::this_binary(),
         )
     }
 
     /// The six over `ground`, reading manuals and templates from the code root `code`.
     #[must_use]
-    pub fn over(
-        ground: &Ground,
-        code: &Path,
-        persona: &Persona,
-        typeset: suzatary_io::typeset::Closed,
-    ) -> Self {
+    pub fn over(ground: &Ground, code: &Path, persona: &Persona, typeset: Closed) -> Self {
         Self {
             corpus: ground.operator(code, persona.zone),
-            repository: suzatary_io::repository::Checkout::new(ground.data.clone()),
-            manuals: suzatary_io::manuals::Handbook::new(code.to_path_buf(), persona.clone()),
+            repository: Checkout::new(ground.data.clone()),
+            manuals: Handbook::new(code.to_path_buf(), persona.clone()),
             mail: ground.notmuch(code),
-            render: suzatary_io::render::Typst::new(ground.markup_cache.clone(), typeset),
-            clock: suzatary_io::clock::SystemClock,
+            render: Typst::new(ground.markup_cache.clone(), typeset),
+            clock: SystemClock,
         }
     }
 
@@ -329,14 +339,14 @@ pub struct Opened {
     pub(crate) grounds: Grounds,
     /// The answers' cache of typst blocks, opened once: the pages draw through the same cache
     /// an erasure empties.
-    pub(crate) answers: Arc<suzatary_io::render::Typst>,
+    pub(crate) answers: Arc<Typst>,
     pub(crate) remembering: Remembering,
     pub(crate) decisions: Objects<DecisionEvent>,
     /// The topics, box-local and never pushed.
     pub(crate) topics: suzatary_io::topics::Topics,
-    pub(crate) briefings: suzatary_io::briefings::BriefingFiles,
+    pub(crate) briefings: BriefingFiles,
     pub(crate) weather: Forecast,
-    pub(crate) calendar: suzatary_io::calendar::Clocked,
+    pub(crate) calendar: Clocked,
     pub(crate) secrets: Declared,
     pub(crate) web: WebAccess,
     pub(crate) drive: DriveAccess,
@@ -347,13 +357,13 @@ pub struct Opened {
     pub(crate) uploads: suzatary_io::attachments::AttachmentStore,
     pub(crate) upload_index: suzatary_io::upload_index::UploadIndexFiles,
     pub(crate) kept: suzatary_io::blobs::Blobs,
-    pub(crate) pdf: suzatary_io::pdftotext::Pdftotext,
+    pub(crate) pdf: Pdftotext,
     pub(crate) tapped: suzatary_io::docs::Docs<
         suzatary_held::held_value::HeldFile,
         suzatary_held::secretary::attached::Attached,
     >,
-    pub(crate) configuration: crate::instance::InstanceEdits,
-    pub(crate) watches: suzatary_io::watches::Watches,
+    pub(crate) configuration: InstanceEdits,
+    pub(crate) watches: Watches,
     pub(crate) repos: Arc<suzatary_io::repos::Mirrors>,
 }
 
@@ -369,14 +379,9 @@ impl Opened {
             answers,
             decisions: Objects::open(instance.decisions()),
             topics: instance.secretary.topics.open(),
-            briefings: suzatary_io::briefings::BriefingFiles::new(
-                instance.serving.briefings.clone(),
-            ),
+            briefings: BriefingFiles::new(instance.serving.briefings.clone()),
             weather: Forecast(instance.persona.clone()),
-            calendar: suzatary_io::calendar::Clocked::new(
-                instance.calendar_stores(),
-                instance.persona.zone,
-            ),
+            calendar: Clocked::new(instance.calendar_stores(), instance.persona.zone),
             secrets: Declared {
                 secrets: instance.secrets(),
                 tokens: crate::commands::mail::tokens(instance),
@@ -391,10 +396,10 @@ impl Opened {
             uploads: chosen::upload_store(instance),
             upload_index: chosen::upload_index(instance),
             kept: chosen::file_store(instance),
-            pdf: suzatary_io::pdftotext::Pdftotext::new(instance.code()),
+            pdf: Pdftotext::new(instance.code()),
             tapped: suzatary_io::tapped::beside(&chosen::file_store(instance)),
-            configuration: crate::instance::InstanceEdits::new(instance.path.clone()),
-            watches: suzatary_io::watches::Watches::open(instance.local.watches()),
+            configuration: InstanceEdits::new(instance.path.clone()),
+            watches: Watches::open(instance.local.watches()),
             repos: chosen::mirrors(instance),
         }
     }

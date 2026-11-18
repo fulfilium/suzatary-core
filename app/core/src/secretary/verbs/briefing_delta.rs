@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use suzatary_base::capability::Datetime;
 
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
@@ -39,13 +40,13 @@ fn life_row(todo: &str, life: &prodrome_core::event::Lifecycle) -> Value {
 
 /// The proposals waiting, in one tagged shape: the Inbox's list and every chain that prices
 /// nothing referring into it, or why the inbox did not read, while the rest of the delta stands.
-fn waiting(call: &Call<'_>, at: suzatary_base::capability::Datetime) -> Value {
+fn waiting(call: &Call<'_>, at: Datetime) -> Value {
     match inbox::fold(call.caps.inbox) {
         Ok(fold) => {
             let read = crate::secretary::chains_read(call.chains);
             let set = read.set(at);
             json!({
-                "ok": crate::secretary::readings::waiting(&fold, &set),
+                "ok": suzatary_topics::secretary::readings::waiting(&fold, &set),
                 "unpriced_chains": set.failures().map(ToString::to_string).collect::<Vec<_>>(),
                 "cannot_be_read": fold.findings(),
             })
@@ -103,8 +104,8 @@ fn silenced(call: &Call<'_>, since: chrono::NaiveDate) -> Value {
 }
 
 /// What holds the digest's summaries back now, in a sentence; null when nothing does.
-fn compactor_held(call: &Call<'_>, at: suzatary_base::capability::Datetime) -> Value {
-    match crate::secretary::compaction::waiting(&call.caps.memories.digests, at) {
+fn compactor_held(call: &Call<'_>, at: Datetime) -> Value {
+    match suzatary_digest::secretary::compaction::waiting(&call.caps.memories.digests, at) {
         Ok(held) => held.map_or(Value::Null, |held| json!(held.to_string())),
         Err(refused) => json!({ "unreadable": refused.message() }),
     }

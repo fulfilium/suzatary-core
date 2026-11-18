@@ -5,10 +5,14 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
 use prodrome_core::event::Actor;
+use prodrome_core::sign::PublicKey;
 use suzatary_api::clienterror::{MAX_BODY_BYTES, Report, Sent};
 use suzatary_api::{routes, wire};
+use suzatary_base::conversation_id::DEFAULT;
 use suzatary_base::refusal::Refusal;
 use suzatary_signatures::devices;
+use suzatary_signatures::signatures::Code;
+use suzatary_signatures::wire::signatures::Registering;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -34,7 +38,7 @@ impl Params for Day {
     }
 }
 
-impl Body for suzatary_signatures::wire::signatures::Registering {
+impl Body for Registering {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -93,7 +97,7 @@ pub fn presence(call: &Call<Mapped, (), ()>) -> StatusCode {
 /// `GET /api/about`: the version and build this process is.
 pub fn about(
     call: &Call<Reader, (), ()>,
-) -> Result<Json<suzatary_core::wire::cards::AboutPayload>, Refusal> {
+) -> Result<Json<suzatary_cards::wire::cards::AboutPayload>, Refusal> {
     let now = call.chain.caps.secretary.clock.now();
     call.state
         .stamp
@@ -129,14 +133,14 @@ pub fn client_errors(call: &Call<Reporter, (), Report>) -> StatusCode {
 
 /// `POST /api/act/device`: the phone saying "wake me here"; nothing on the chain.
 pub fn device(
-    call: &Call<Actor, (), suzatary_signatures::wire::signatures::Registering>,
+    call: &Call<Actor, (), Registering>,
 ) -> Result<Json<suzatary_signatures::wire::signatures::DevicePayload>, Refusal> {
     let caps = call.chain.caps;
     devices::register_device(caps.devices, caps.secretary.clock, &call.body, &call.guard).map(Json)
 }
 
 /// A device's public key, as `POST /api/act/key` carries it.
-pub struct DeviceKey(prodrome_core::sign::PublicKey);
+pub struct DeviceKey(PublicKey);
 
 impl Body for DeviceKey {
     const CAP: usize = MAX_ACT_BYTES;
@@ -144,7 +148,7 @@ impl Body for DeviceKey {
     type Wire = wire::KeyAsked;
 
     fn parse(asked: wire::KeyAsked, _: &State) -> Result<Self, Refusal> {
-        prodrome_core::sign::PublicKey::new(&asked.key)
+        PublicKey::new(&asked.key)
             .map(Self)
             .map_err(|e| Refusal::bad_request(format!("key: {e}")))
     }
@@ -162,12 +166,12 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
     }
     let caps = call.state.first.caps;
     let index = suzatary_api::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
-    call.state.heard(&suzatary_base::conversation_id::DEFAULT);
+    call.state.heard(&DEFAULT);
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
 
 /// A pairing code, as `POST /api/act/pair` carries it.
-pub struct PairingCode(suzatary_signatures::signatures::Code);
+pub struct PairingCode(Code);
 
 impl Body for PairingCode {
     const CAP: usize = MAX_ACT_BYTES;
@@ -175,7 +179,7 @@ impl Body for PairingCode {
     type Wire = wire::Pairing;
 
     fn parse(pairing: wire::Pairing, _: &State) -> Result<Self, Refusal> {
-        suzatary_signatures::signatures::Code::typed(&pairing.code)
+        Code::typed(&pairing.code)
             .map_err(|refused| Refusal::bad_request(refused.to_string()))
             .map(Self)
     }
@@ -228,7 +232,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
                 caps.secretary.clock.now(),
             ) {
                 Ok(withdrawn) if !withdrawn.is_empty() => {
-                    state.heard(&suzatary_base::conversation_id::DEFAULT);
+                    state.heard(&DEFAULT);
                 }
                 Ok(_) => {}
                 Err(failed) => tracing::warn!("paired: its card: {}", failed.message()),

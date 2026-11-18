@@ -1,6 +1,5 @@
 use serde_json::{Value, json};
 
-use crate::secretary::filed::triage_card;
 use crate::secretary::{Bound, Call, SecretarySurface, bound_named};
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
@@ -8,6 +7,7 @@ use suzatary_inbox::secretary::changes;
 use suzatary_inbox::secretary::changes::{Building, Changeset};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::Object;
+use suzatary_topics::secretary::filed::triage_card;
 
 /// Every card the triage agent filed that still waits for the owner.
 pub struct TriageCards;

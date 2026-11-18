@@ -20,7 +20,7 @@ use suzatary_store::store::{append_to, linearised};
 
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
-use suzatary_core::model_name::ModelName;
+use suzatary_digest::model_name::ModelName;
 use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
 use suzatary_mail::mail::account_email::AccountEmail;
 
@@ -498,12 +498,12 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
             kind: Kind::Topic,
         },
     )?;
-    suzatary_core::secretary::filed::file(
+    suzatary_topics::secretary::filed::file(
         conversations,
         &inbox,
         &[],
         now,
-        suzatary_core::secretary::filed::Filing {
+        suzatary_topics::secretary::filed::Filing {
             conversation: &id,
             proposer: proposer::Proposer::Secretary,
             proposal: Proposal::Act(suzatary_inbox::secretary::acts::Act::Disconnect {
@@ -698,9 +698,9 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
         id: "cse_01fixture".parse()?,
         url: url.parse()?,
     };
-    suzatary_core::secretary::coding::fired(store.conversations(), &id, 0, fired, now)?;
+    suzatary_topics::secretary::coding::fired(store.conversations(), &id, 0, fired, now)?;
     let seen = the_branch_back("https://claude.ai/code/session_01fixture")?;
-    suzatary_core::secretary::coding::advance(store.conversations(), &[seen], now)?;
+    suzatary_topics::secretary::coding::advance(store.conversations(), &[seen], now)?;
     Ok(())
 }
 
@@ -810,7 +810,7 @@ fn filed(
     let conversations = read.conversation_stores();
     let inbox = read.inbox_store();
     let cards =
-        suzatary_core::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
+        suzatary_topics::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
     for (verb, args) in [("todo_add", adding), ("record", recording)] {
         let args = args
             .as_object()
@@ -1626,12 +1626,12 @@ fn bulk_proposals(
     )?;
     let owner = Actor::new(WRITER_ACTOR)?;
     for n in 0..count {
-        let (_, object) = suzatary_core::secretary::filed::file(
+        let (_, object) = suzatary_topics::secretary::filed::file(
             conversations,
             &inbox,
             &[],
             now,
-            suzatary_core::secretary::filed::Filing {
+            suzatary_topics::secretary::filed::Filing {
                 conversation: &id,
                 proposer: proposer::Proposer::Secretary,
                 proposal: Proposal::Email(Draft {
@@ -1667,8 +1667,8 @@ fn bulk_proposals(
 /// names in turn, as a store whose rounds were filed under topics carries them.
 fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_lines::secretary::targets::rounds;
+    use suzatary_topics::secretary::topics::topic::Topic;
     const NAMES: [&str; 8] = [
         "permits", "travel", "taxes", "garden", "health", "family", "school", "car",
     ];
@@ -1691,7 +1691,7 @@ fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result
     for round in generated {
         let topic = names[events.len() % NAMES.len()].clone()?;
         events.push(prodrome_core::tags::membership::added::<
-            suzatary_core::secretary::topics::reading::Topics,
+            suzatary_topics::secretary::topics::reading::Topics,
         >(round.target(), topic, at, actor.clone()));
     }
     appended(&topics.memberships, events)

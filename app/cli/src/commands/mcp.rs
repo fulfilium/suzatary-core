@@ -1,6 +1,8 @@
 //! `suzatary mcp`: the agent's verbs over stdio, each handed an [`Agent`] record with no field
 //! that reaches outward.
 
+use crate::instance::Instance;
+use crate::wiring::Grounds;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -14,8 +16,8 @@ use rmcp::{RoleServer, ServerHandler, ServiceExt};
 use suzatary_connect::deployment::Deployment;
 use suzatary_core::agent;
 use suzatary_core::agent::Agent;
-use suzatary_core::secretary::filed::TriageCards;
 use suzatary_held::for_model::ForModel;
+use suzatary_topics::secretary::filed::TriageCards;
 
 /// The server's name, which the tool guard matches as `mcp__suzatary__*`.
 pub const NAME: &str = "suzatary";
@@ -138,7 +140,7 @@ pub async fn serve(
 /// The agent's interpreters over the chain it reads, read-only for the triage agent.
 pub struct Interpreters {
     pub(crate) chain: suzatary_io::reading::Reading,
-    pub(crate) grounds: crate::wiring::Grounds,
+    pub(crate) grounds: Grounds,
     pub(crate) remembering: crate::wiring::Recalling,
     /// `[agent] memory_bytes`.
     pub(crate) view: usize,
@@ -152,13 +154,10 @@ impl Interpreters {
 
     /// The triage agent's interpreters for one chain, which it reads and never writes.
     #[must_use]
-    pub fn assemble(
-        instance: &crate::instance::Instance,
-        chain: &crate::instance::ChainDir,
-    ) -> Self {
+    pub fn assemble(instance: &Instance, chain: &crate::instance::ChainDir) -> Self {
         Self {
             chain: crate::commands::reading_of(chain),
-            grounds: crate::wiring::Grounds::of(instance),
+            grounds: Grounds::of(instance),
             remembering: crate::wiring::Recalling::of(instance),
             view: instance.agent.memory_bytes,
         }
@@ -178,10 +177,9 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
         )
         .try_init();
-    let instance = crate::instance::Instance::open(path)?;
+    let instance = Instance::open(path)?;
     // Leaked for the life of the process, so every record borrows them for 'static.
-    let grounds: &'static crate::wiring::Grounds =
-        Box::leak(Box::new(crate::wiring::Grounds::of(&instance)));
+    let grounds: &'static Grounds = Box::leak(Box::new(Grounds::of(&instance)));
     let remembering: &'static crate::wiring::Recalling =
         Box::leak(Box::new(crate::wiring::Recalling::of(&instance)));
     let memory = remembering.memory(instance.agent.memory_bytes);

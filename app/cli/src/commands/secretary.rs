@@ -1,7 +1,46 @@
 //! `suzatary secretary`. Only the tap route reaches [`Postman`]; no CLI verb here sends.
 
+use crate::commands::ask::Conversation;
+use crate::commands::coding::Coder;
+use crate::commands::coding::Firing;
+use crate::commands::serve::Brain;
+use crate::commands::serve::Workers;
+use crate::commands::serve::sign_ins::SignIns;
+use crate::wiring::Opened;
+use crate::wiring::Stores;
+use prodrome_core::event::Actor;
 use std::path::Path;
 use std::sync::Arc;
+use suzatary_base::capability::Clock;
+use suzatary_base::drive_path::DrivePath;
+use suzatary_base::reference::ProposalRef;
+use suzatary_base::reference::Reference;
+use suzatary_conversations::secretary::store::Kind;
+use suzatary_conversations::secretary::store::Line;
+use suzatary_conversations::secretary::store::Lines;
+use suzatary_core::secretary::Answered;
+use suzatary_core::secretary::Asker;
+use suzatary_core::secretary::Bound;
+use suzatary_core::secretary::Saying;
+use suzatary_core::secretary::daily::Run;
+use suzatary_health::health::Limited;
+use suzatary_held::for_model::ForModel;
+use suzatary_held::held_value::HeldFile;
+use suzatary_io::blobs::Blobs;
+use suzatary_io::clock::SystemClock;
+use suzatary_io::conversations::ConversationStores;
+use suzatary_io::drive::ReadOnly;
+use suzatary_io::google::Grants;
+use suzatary_io::oauth::Pending;
+use suzatary_io::oauth::TokenStore;
+use suzatary_io::objects::Objects;
+use suzatary_io::repos::Author;
+use suzatary_io::repos::Mirrors;
+use suzatary_io::repos::Stopped;
+use suzatary_io::state::Ledger;
+use suzatary_mail::mail::address::EmailAddress;
+use suzatary_mail::mail::oauth::Consent;
+use suzatary_mail::mail::oauth::Protocol;
 
 use anyhow::Context as _;
 use suzatary_api::secretary::routes::Post;
@@ -58,37 +97,37 @@ pub enum Acting {
         /// Read at the tap, so an account added since startup signs in.
         roster: Arc<dyn Edits + Send + Sync>,
         conversations: ActingConversations,
-        tokens: suzatary_io::oauth::TokenStore,
+        tokens: TokenStore,
         inbox: ActingInbox,
         /// For announcing only: the worker would claim Thinking.
-        workers: Arc<crate::commands::serve::Workers>,
+        workers: Arc<Workers>,
         publishing: Arc<Publishing>,
-        drive: Arc<suzatary_io::drive::ReadOnly>,
-        kept: suzatary_io::blobs::Blobs,
-        coder: Arc<crate::commands::coding::Coder>,
-        signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        google: Arc<suzatary_io::google::Grants>,
+        drive: Arc<ReadOnly>,
+        kept: Blobs,
+        coder: Arc<Coder>,
+        signing: Arc<SignIns>,
+        google: Arc<Grants>,
         /// Rung when a device flow ends, so the box files again.
         ended: Arc<dyn Fn() + Send + Sync>,
-        ledger: Arc<suzatary_io::state::Ledger>,
+        ledger: Arc<Ledger>,
     },
     /// The fixture's performer: no network and no thread.
     #[cfg(feature = "fixture")]
     Recording {
         conversations: ActingConversations,
-        workers: Arc<crate::commands::serve::Workers>,
+        workers: Arc<Workers>,
         publishing: Arc<Publishing>,
-        drive: Arc<suzatary_io::drive::ReadOnly>,
-        kept: suzatary_io::blobs::Blobs,
-        coder: Arc<crate::commands::coding::Coder>,
-        signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        google: Arc<suzatary_io::google::Grants>,
-        ledger: Arc<suzatary_io::state::Ledger>,
+        drive: Arc<ReadOnly>,
+        kept: Blobs,
+        coder: Arc<Coder>,
+        signing: Arc<SignIns>,
+        google: Arc<Grants>,
+        ledger: Arc<Ledger>,
     },
 }
 
 /// The conversations store, `'static` because a flow's own thread writes its end.
-pub type ActingConversations = &'static suzatary_io::conversations::ConversationStores;
+pub type ActingConversations = &'static ConversationStores;
 
 /// The inbox an act ends in.
 pub type ActingInbox = &'static dyn suzatary_store::store::Prodrome<inbox_event::InboxEvent>;
@@ -103,8 +142,8 @@ pub struct ActingStores {
 /// The fixture's local repositories under `fixture-repos/`, never GitHub.
 #[cfg(feature = "fixture")]
 #[must_use]
-pub fn fixture_mirrors(instance: &Instance) -> Arc<suzatary_io::repos::Mirrors> {
-    Arc::new(suzatary_io::repos::Mirrors::new(
+pub fn fixture_mirrors(instance: &Instance) -> Arc<Mirrors> {
+    Arc::new(Mirrors::new(
         instance.data().join("fixture-mirrors"),
         suzatary_io::repos::Source::Local {
             base: instance.data().join("fixture-repos"),
@@ -131,9 +170,9 @@ impl suzatary_io::secrets::Resolves for NoToken {
 
 /// What opens a tapped patch as a pull request.
 pub struct Publishing {
-    pub mirrors: Arc<suzatary_io::repos::Mirrors>,
+    pub mirrors: Arc<Mirrors>,
     /// Who commits; `None` refuses the push.
-    pub author: Option<suzatary_io::repos::Author>,
+    pub author: Option<Author>,
 }
 
 impl Publishing {
@@ -181,13 +220,9 @@ impl Publishing {
                     published.pull.url
                 ),
             }),
-            Err(suzatary_io::repos::Stopped::Refused(why)) => {
-                Performed::Tried(Tried::Refused { reason: why })
-            }
-            Err(suzatary_io::repos::Stopped::Failed(why)) => {
-                Performed::Tried(Tried::NotSent { reason: why })
-            }
-            Err(suzatary_io::repos::Stopped::Pushed {
+            Err(Stopped::Refused(why)) => Performed::Tried(Tried::Refused { reason: why }),
+            Err(Stopped::Failed(why)) => Performed::Tried(Tried::NotSent { reason: why }),
+            Err(Stopped::Pushed {
                 branch,
                 commit,
                 failure,
@@ -209,8 +244,8 @@ impl Acting {
     pub fn real(
         instance: &Instance,
         stores: ActingStores,
-        workers: Arc<crate::commands::serve::Workers>,
-        signing: Arc<crate::commands::serve::sign_ins::SignIns>,
+        workers: Arc<Workers>,
+        signing: Arc<SignIns>,
         ended: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
         Acting::Real {
@@ -220,14 +255,14 @@ impl Acting {
             inbox: stores.inbox,
             publishing: Arc::new(Publishing {
                 mirrors: crate::commands::serve::interpreters::mirrors(instance),
-                author: suzatary_io::repos::Author::of_this_box(),
+                author: Author::of_this_box(),
             }),
             drive: Arc::new(
                 crate::commands::serve::interpreters::proton_drive(instance).read_only(),
             ),
             kept: crate::commands::serve::interpreters::file_store(instance),
-            coder: Arc::new(crate::commands::coding::Coder {
-                firing: crate::commands::coding::Firing::of(instance),
+            coder: Arc::new(Coder {
+                firing: Firing::of(instance),
                 conversations: stores.conversations,
             }),
             workers,
@@ -244,8 +279,8 @@ impl Acting {
     pub fn recording(
         instance: &Instance,
         stores: ActingStores,
-        workers: Arc<crate::commands::serve::Workers>,
-        signing: Arc<crate::commands::serve::sign_ins::SignIns>,
+        workers: Arc<Workers>,
+        signing: Arc<SignIns>,
         google: &suzatary_google::google::Endpoints,
     ) -> Self {
         Acting::Recording {
@@ -253,7 +288,7 @@ impl Acting {
             workers,
             publishing: Arc::new(Publishing {
                 mirrors: fixture_mirrors(instance),
-                author: Some(suzatary_io::repos::Author {
+                author: Some(Author {
                     name: "Suzatary fixture".to_owned(),
                     email: "fixture@example.invalid".to_owned(),
                 }),
@@ -262,12 +297,12 @@ impl Acting {
                 crate::commands::serve::interpreters::proton_drive(instance).read_only(),
             ),
             kept: crate::commands::serve::interpreters::file_store(instance),
-            coder: Arc::new(crate::commands::coding::Coder {
-                firing: crate::commands::coding::Firing::Undeclared,
+            coder: Arc::new(Coder {
+                firing: Firing::Undeclared,
                 conversations: stores.conversations,
             }),
             signing,
-            google: Arc::new(suzatary_io::google::Grants::new(
+            google: Arc::new(Grants::new(
                 suzatary_io::google::Google::new(google.clone()),
                 Arc::new(instance.secrets()),
             )),
@@ -299,7 +334,7 @@ impl Acting {
 
     fn calendar_event(
         &self,
-        account: &suzatary_mail::mail::address::EmailAddress,
+        account: &EmailAddress,
         event: &suzatary_google::google::NewEvent,
     ) -> Performed {
         use suzatary_io::google::Inserted;
@@ -339,8 +374,8 @@ impl Acting {
     }
 
     fn sign_in(&self, object: &suzatary_inbox::secretary::inbox::ProposalId) -> Performed {
-        use suzatary_base::capability::Clock as _;
-        let now = suzatary_io::clock::SystemClock.now();
+        use Clock as _;
+        let now = SystemClock.now();
         match self {
             Acting::NotYet => Performed::Tried(Tried::NotSent {
                 reason: format!(
@@ -357,7 +392,7 @@ impl Acting {
     fn read_document(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
-        path: &suzatary_base::drive_path::DrivePath,
+        path: &DrivePath,
         act: &suzatary_inbox::secretary::acts::Act,
     ) -> Performed {
         match self {
@@ -389,7 +424,7 @@ impl suzatary_api::secretary::routes::Perform for Acting {
         object: &suzatary_inbox::secretary::inbox::ProposalId,
         proposer: &proposer::Proposer,
         act: &suzatary_inbox::secretary::acts::Act,
-        consent: suzatary_mail::mail::oauth::Consent,
+        consent: Consent,
     ) -> Performed {
         if let suzatary_inbox::secretary::acts::Act::SignIn { .. } = act {
             return self.sign_in(object);
@@ -500,16 +535,13 @@ impl suzatary_api::secretary::routes::Perform for Acting {
 fn begin_real(
     roster: &dyn Edits,
     conversations: ActingConversations,
-    tokens: &suzatary_io::oauth::TokenStore,
+    tokens: &TokenStore,
     inbox: &ActingInbox,
-    (workers, ended): (
-        &Arc<crate::commands::serve::Workers>,
-        &Arc<dyn Fn() + Send + Sync>,
-    ),
+    (workers, ended): (&Arc<Workers>, &Arc<dyn Fn() + Send + Sync>),
     (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     object: &suzatary_inbox::secretary::inbox::ProposalId,
     act: &suzatary_inbox::secretary::acts::Act,
-    consent: suzatary_mail::mail::oauth::Consent,
+    consent: Consent,
 ) -> Performed {
     use suzatary_inbox::secretary::acts::Act;
     use suzatary_mail::mail::oauth::{Imap, Smtp};
@@ -584,7 +616,7 @@ fn begin_real(
 struct Flow<'a> {
     conversations: ActingConversations,
     inbox: &'a ActingInbox,
-    workers: &'a Arc<crate::commands::serve::Workers>,
+    workers: &'a Arc<Workers>,
     ended: &'a Arc<dyn Fn() + Send + Sync>,
     at: (&'a suzatary_base::conversation_id::ConversationId, usize),
     object: &'a suzatary_inbox::secretary::inbox::ProposalId,
@@ -594,17 +626,17 @@ impl Flow<'_> {
     /// Request the code, announce it, and poll on an OS thread.
     fn begin<P>(
         self,
-        tokens: &suzatary_io::oauth::TokenStore,
-        consent: suzatary_mail::mail::oauth::Consent,
+        tokens: &TokenStore,
+        consent: Consent,
         mail_account: &suzatary_mail::mail::account::MailAccount,
-        account: &suzatary_mail::mail::address::EmailAddress,
+        account: &EmailAddress,
         named: String,
     ) -> Performed
     where
-        P: suzatary_mail::mail::oauth::Protocol + Send + 'static,
-        suzatary_io::oauth::Pending<P>: Send,
+        P: Protocol + Send + 'static,
+        Pending<P>: Send,
     {
-        use suzatary_base::capability::Clock as _;
+        use Clock as _;
         use suzatary_inbox::secretary::stamp::stamp;
         let Flow {
             conversations,
@@ -627,7 +659,7 @@ impl Flow<'_> {
             }
         };
 
-        let started = suzatary_io::clock::SystemClock.now();
+        let started = SystemClock.now();
         let at = started;
         // Bounds an endpoint that keeps answering pending; clamped against absurd answers.
         let deadline_seconds = code
@@ -681,18 +713,18 @@ impl Flow<'_> {
     clippy::too_many_arguments,
     reason = "one value per thing the flow's own end needs, none of them optional"
 )]
-fn finish_act<P: suzatary_mail::mail::oauth::Protocol + Send + 'static>(
-    pending: suzatary_io::oauth::Pending<P>,
+fn finish_act<P: Protocol + Send + 'static>(
+    pending: Pending<P>,
     deadline_seconds: u64,
     object: &suzatary_inbox::secretary::inbox::ProposalId,
-    account: &suzatary_mail::mail::address::EmailAddress,
+    account: &EmailAddress,
     named: &str,
-    conversations: &suzatary_io::conversations::ConversationStores,
+    conversations: &ConversationStores,
     inbox: &ActingInbox,
     id: &suzatary_base::conversation_id::ConversationId,
-    workers: &Arc<crate::commands::serve::Workers>,
+    workers: &Arc<Workers>,
 ) {
-    use suzatary_base::capability::Clock as _;
+    use Clock as _;
 
     let (sent, received) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -702,19 +734,19 @@ fn finish_act<P: suzatary_mail::mail::oauth::Protocol + Send + 'static>(
     let finished = received
         .recv_timeout(std::time::Duration::from_secs(deadline_seconds))
         .map_err(|_| ());
-    let now = suzatary_io::clock::SystemClock.now();
+    let now = SystemClock.now();
     let (outcome, line) = completion(account, named, P::SLOT, finished, now);
     append_completion(conversations, inbox, id, object, now, outcome, &line);
     workers.announce(id);
 }
 
 fn web_turn(
-    conversations: &suzatary_io::conversations::ConversationStores,
+    conversations: &ConversationStores,
     id: &suzatary_base::conversation_id::ConversationId,
     request: &suzatary_services::web::WebRequest,
     answered: Result<WebAnswer, suzatary_services::web::WebFailure>,
 ) -> Performed {
-    use suzatary_base::capability::Clock as _;
+    use Clock as _;
     use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::outcome::Outcome;
     use suzatary_conversations::secretary::store::Entry;
@@ -738,7 +770,7 @@ fn web_turn(
             }),
         ),
     };
-    let at = suzatary_io::clock::SystemClock.now();
+    let at = SystemClock.now();
     if let Err(failed) = suzatary_lines::secretary::transcript::push(
         conversations.conversations(),
         id,
@@ -760,13 +792,13 @@ fn web_turn(
 
 /// Keep a withheld document's record so a proposal can send it unread.
 fn keep_tapped(
-    kept: &suzatary_io::blobs::Blobs,
-    path: &suzatary_base::drive_path::DrivePath,
+    kept: &Blobs,
+    path: &DrivePath,
     size: u64,
     digest: &suzatary_held::attachment::AttachmentId,
 ) {
     use suzatary_store::store::Doc as _;
-    let file = suzatary_held::held_value::HeldFile::Drive { path: path.clone() };
+    let file = HeldFile::Drive { path: path.clone() };
     let kept_it = suzatary_held::secretary::attached::Attached::known(
         file.source(),
         path.name().unwrap_or_default(),
@@ -783,20 +815,20 @@ fn keep_tapped(
     if let Err(failed) = kept_it {
         tracing::warn!(
             "secretary: could not keep what the tap read of {}: {}",
-            suzatary_held::for_model::ForModel::file_name(&path.to_string()).as_str(),
+            ForModel::file_name(&path.to_string()).as_str(),
             Excerpt::of(&failed)
         );
     }
 }
 
 fn drive_turn(
-    conversations: &suzatary_io::conversations::ConversationStores,
-    kept: &suzatary_io::blobs::Blobs,
+    conversations: &ConversationStores,
+    kept: &Blobs,
     id: &suzatary_base::conversation_id::ConversationId,
-    path: &suzatary_base::drive_path::DrivePath,
+    path: &DrivePath,
     read: Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
 ) -> Performed {
-    use suzatary_base::capability::Clock as _;
+    use Clock as _;
     use suzatary_base::refusal::Refusal;
     use suzatary_conversations::secretary::store::Entry;
     use suzatary_core::secretary::verb_answer::VerbAnswer;
@@ -818,7 +850,7 @@ fn drive_turn(
             head.insert("path".to_owned(), serde_json::Value::from(path.to_string()));
             let answered = VerbAnswer::reading(
                 head,
-                &suzatary_held::held_value::HeldFile::Drive { path: path.clone() },
+                &HeldFile::Drive { path: path.clone() },
                 path.name().unwrap_or_default(),
                 read,
                 |bytes| kept.put(bytes).map_err(|failed| failed.to_string()),
@@ -840,7 +872,7 @@ fn drive_turn(
             }),
         ),
     };
-    let at = suzatary_io::clock::SystemClock.now();
+    let at = SystemClock.now();
     if let Err(failed) = suzatary_lines::secretary::transcript::push(
         conversations.conversations(),
         id,
@@ -857,7 +889,7 @@ fn drive_turn(
 
 /// Append an act line relaying outside words, unstamped so taint reads them as foreign.
 fn append_act_turn(
-    conversations: &suzatary_io::conversations::ConversationStores,
+    conversations: &ConversationStores,
     (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     at: suzatary_base::capability::Datetime,
     text: String,
@@ -872,12 +904,10 @@ fn append_act_turn(
             at,
             turn: Turn::Act {
                 text,
-                references: vec![suzatary_base::reference::Reference::Proposal(
-                    suzatary_base::reference::ProposalRef {
-                        conversation: id.clone(),
-                        index,
-                    },
-                )],
+                references: vec![Reference::Proposal(ProposalRef {
+                    conversation: id.clone(),
+                    index,
+                })],
             },
             by: None,
         },
@@ -888,7 +918,7 @@ fn append_act_turn(
 
 /// Append the box's own line, which taint reads clean.
 fn append_note(
-    conversations: &suzatary_io::conversations::ConversationStores,
+    conversations: &ConversationStores,
     id: &suzatary_base::conversation_id::ConversationId,
     at: suzatary_base::capability::Datetime,
     text: String,
@@ -907,8 +937,8 @@ fn append_note(
 /// Append the triage heartbeat's alarm, if any; no model is needed.
 fn maybe_append_triage_alarm(
     corpus: &dyn suzatary_triage::mail::corpus::Corpus,
-    clock: &dyn suzatary_base::capability::Clock,
-    conversations: &suzatary_io::conversations::ConversationStores,
+    clock: &dyn Clock,
+    conversations: &ConversationStores,
     id: &suzatary_base::conversation_id::ConversationId,
 ) {
     let now = clock.now();
@@ -971,7 +1001,7 @@ fn completion<E: std::fmt::Display>(
 
 /// End the act as the secretary, not the tapper, and append its line; failures are logged.
 fn append_completion(
-    conversations: &suzatary_io::conversations::ConversationStores,
+    conversations: &ConversationStores,
     inbox: &ActingInbox,
     id: &suzatary_base::conversation_id::ConversationId,
     object: &suzatary_inbox::secretary::inbox::ProposalId,
@@ -979,8 +1009,8 @@ fn append_completion(
     performed: Performed,
     line: &suzatary_conversations::secretary::store::Entry,
 ) {
-    let by = prodrome_core::event::Actor::new(suzatary_core::secretary::WRITES_AS.actor())
-        .expect("assistant is an actor");
+    let by =
+        Actor::new(suzatary_core::secretary::WRITES_AS.actor()).expect("assistant is an actor");
     if let Err(failed) = suzatary_inbox::secretary::inbox::end(*inbox, object, &by, at, performed) {
         tracing::warn!(
             "secretary: could not end proposal {object} of conversation {id}: {}",
@@ -997,8 +1027,8 @@ fn append_completion(
 /// The fixture's device flow: a real flow's two turns, then `Acted`, since nothing is pending.
 #[cfg(feature = "fixture")]
 fn begin_recording(
-    conversations: &suzatary_io::conversations::ConversationStores,
-    workers: &Arc<crate::commands::serve::Workers>,
+    conversations: &ConversationStores,
+    workers: &Arc<Workers>,
     (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     act: &suzatary_inbox::secretary::acts::Act,
 ) -> Performed {
@@ -1190,7 +1220,7 @@ enum Action {
     /// print the round's answer: for testing the live box, never for mail.
     Ask {
         /// The conversation's id, or `new` for a topic of its own.
-        conversation: crate::commands::ask::Conversation,
+        conversation: Conversation,
         /// The question.
         text: String,
     },
@@ -1379,12 +1409,8 @@ const STALE_HOURS: f64 = 1.0;
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.command {
         Command::Owed { compare: _, store } => {
-            use suzatary_base::capability::Clock as _;
-            owed_compare(
-                store,
-                suzatary_io::clock::SystemClock.now(),
-                &mut std::io::stdout(),
-            )
+            use Clock as _;
+            owed_compare(store, SystemClock.now(), &mut std::io::stdout())
         }
         Command::Instance(action) => act(&Instance::open(path)?, action),
     }
@@ -1402,8 +1428,7 @@ pub fn owed_compare(
 ) -> anyhow::Result<()> {
     use suzatary_lines::secretary::compare::{Order, compare};
     anyhow::ensure!(store.is_dir(), "no lines at {}", store.display());
-    let lines: suzatary_io::objects::Objects<_, suzatary_io::husked::Husked<_>> =
-        suzatary_io::objects::Objects::husked(store);
+    let lines: Objects<_, suzatary_io::husked::Husked<_>> = Objects::husked(store);
     let compared = compare(&lines, now)?;
     let (mut owed, mut resumed, mut reordered, mut unread) = (0, 0, 0, 0);
     for (id, read) in &compared {
@@ -1441,8 +1466,8 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
         Action::Ask { conversation, text } => {
             let operator = crate::commands::call::Operator::of(instance)?;
             let id = match conversation {
-                crate::commands::ask::Conversation::New => begun_topic(instance)?,
-                crate::commands::ask::Conversation::Named(id) => id.clone(),
+                Conversation::New => begun_topic(instance)?,
+                Conversation::Named(id) => id.clone(),
             };
             let asked = crate::commands::ask::ask(&operator, &id, text)?;
             println!("{}", asked.answer);
@@ -1516,11 +1541,7 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
                         instance,
                         instance.secretary.compactors.first().clone(),
                     );
-                    let mut asked =
-                        |system: &suzatary_held::for_model::ForModel,
-                         text: suzatary_held::for_model::ForModel| {
-                            model.ask(system, text)
-                        };
+                    let mut asked = |system: &ForModel, text: ForModel| model.ask(system, text);
                     backfill_plan(instance, plan.as_deref(), &mut asked, out)
                 }
             }
@@ -1533,13 +1554,13 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
 pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     let remembering = crate::wiring::Remembering::reader(instance);
     let digest = remembering.memories().digests.reads().read()?;
-    let rule = suzatary_core::secretary::compaction::Compaction {
+    let rule = suzatary_digest::secretary::compaction::Compaction {
         ladder: instance.secretary.compactors.clone(),
     };
     write!(
         out,
         "{}",
-        suzatary_core::secretary::digest_census::Census::of(&digest, &rule)
+        suzatary_digest::secretary::digest_census::Census::of(&digest, &rule)
     )?;
     Ok(())
 }
@@ -1550,14 +1571,14 @@ pub fn backfill_plan(
     instance: &Instance,
     file: Option<&std::path::Path>,
     model: &mut dyn FnMut(
-        &suzatary_held::for_model::ForModel,
-        suzatary_held::for_model::ForModel,
+        &ForModel,
+        ForModel,
     )
         -> Result<String, suzatary_conversations::secretary::model::ModelError>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_core::secretary::topics::backfill;
+    use suzatary_topics::secretary::topics::backfill;
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
@@ -1625,8 +1646,8 @@ pub fn backfill_apply(
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_core::secretary::topics::plan::Plan;
     use suzatary_store::store::Prodrome as _;
+    use suzatary_topics::secretary::topics::plan::Plan;
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let text = std::fs::read_to_string(file)
@@ -1642,7 +1663,7 @@ pub fn backfill_apply(
     let events = plan.apply(
         &conversations,
         &topics.stores().reading()?,
-        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        Clock::now(&SystemClock),
     )?;
     let count = events.len();
     for event in events {
@@ -1659,8 +1680,8 @@ pub fn carry(
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_core::secretary::topics::carry::{self, Carrying, Map};
     use suzatary_store::store::Prodrome as _;
+    use suzatary_topics::secretary::topics::carry::{self, Carrying, Map};
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
@@ -1705,7 +1726,7 @@ pub fn carry(
         &conversations,
         &map,
         &topics.stores().reading()?,
-        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        Clock::now(&SystemClock),
     );
     for carrying in &planned.conversations {
         match carrying {
@@ -1789,7 +1810,7 @@ pub fn prune_lines(
 
 /// Each line of `dead` kept as its husk, and what that let go said.
 fn husk_dead(
-    stores: &suzatary_io::conversations::ConversationStores,
+    stores: &ConversationStores,
     dead: &std::collections::BTreeSet<prodrome_core::event::Hash>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
@@ -1895,10 +1916,7 @@ pub fn migrate_scrub(
         )?;
         return Ok(None);
     }
-    let done = rescrub::run(
-        stores.conversations(),
-        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
-    )?;
+    let done = rescrub::run(stores.conversations(), Clock::now(&SystemClock))?;
     writeln!(
         out,
         "{}\nsealed {} slot(s) again; the sweep destroyed {} key(s)",
@@ -1911,11 +1929,11 @@ pub fn migrate_scrub(
     Ok(Some(done))
 }
 
-fn conversations(instance: &Instance) -> suzatary_io::conversations::ConversationStores {
+fn conversations(instance: &Instance) -> ConversationStores {
     instance.conversation_stores()
 }
 
-fn inbox(instance: &Instance) -> suzatary_io::objects::Objects<inbox_event::InboxEvent> {
+fn inbox(instance: &Instance) -> Objects<inbox_event::InboxEvent> {
     instance.inbox_store()
 }
 
@@ -1930,12 +1948,11 @@ pub fn dismiss(
     // Roster-checked, so a typo is refused rather than a new actor.
     let chain = instance.chain(None)?;
     let actor = actor.unwrap_or(chain.owner.as_str());
-    let who =
-        prodrome_core::event::Actor::new(actor).map_err(|failed| anyhow::anyhow!("{failed}"))?;
+    let who = Actor::new(actor).map_err(|failed| anyhow::anyhow!("{failed}"))?;
     if !chain.policy.roster.contains(&who) {
         anyhow::bail!("{actor} is not on {}'s roster", chain.policy.name.as_str());
     }
-    let opened = crate::wiring::Opened::of(instance, DECLARED);
+    let opened = Opened::of(instance, DECLARED);
     let held = suzatary_lines::secretary::transcript::keys(
         opened.remembering.conversations.conversations(),
     )?;
@@ -1943,9 +1960,9 @@ pub fn dismiss(
     let stored = suzatary_core::secretary::dismiss(
         opened.remembering.conversations.conversations(),
         opened.memories(),
-        &suzatary_io::clock::SystemClock,
+        &SystemClock,
         &who,
-        &suzatary_base::reference::ProposalRef {
+        &ProposalRef {
             conversation: id.clone(),
             index,
         },
@@ -1976,10 +1993,10 @@ fn words_of(instance: &Instance) -> impl Fn(&salted_text::TextName) -> inbox_rea
 const DECLARED: &str = "the secretary: checking whether a declared secret resolves";
 
 struct Wired {
-    opened: crate::wiring::Opened,
-    first: crate::wiring::Stores,
-    rest: Vec<crate::wiring::Stores>,
-    brain: crate::commands::serve::Brain,
+    opened: Opened,
+    first: Stores,
+    rest: Vec<Stores>,
+    brain: Brain,
 }
 
 /// [`Wired`] over the model `suzatary serve` runs.
@@ -1990,11 +2007,11 @@ fn wired(instance: &Instance, first: Option<&str>) -> anyhow::Result<Wired> {
         .chains
         .iter()
         .filter(|chain| chain.policy.name != named.policy.name)
-        .map(|chain| crate::wiring::Stores::of(chain, &signers))
+        .map(|chain| Stores::of(chain, &signers))
         .collect();
     Ok(Wired {
-        opened: crate::wiring::Opened::of(instance, DECLARED),
-        first: crate::wiring::Stores::of(named, &signers),
+        opened: Opened::of(instance, DECLARED),
+        first: Stores::of(named, &signers),
         rest,
         brain: crate::commands::serve::interpreters::brain(
             instance,
@@ -2008,10 +2025,10 @@ impl Wired {
         self.opened.secretary(&self.first, &self.brain)
     }
 
-    fn bound(&self) -> Vec<suzatary_core::secretary::Bound<'_>> {
+    fn bound(&self) -> Vec<Bound<'_>> {
         std::iter::once(&self.first)
             .chain(&self.rest)
-            .map(|stores| suzatary_core::secretary::Bound {
+            .map(|stores| Bound {
                 name: stores.policy.name.as_str(),
                 caps: self.opened.secretary(stores, &self.brain),
                 policy: &stores.policy,
@@ -2030,7 +2047,7 @@ pub fn scripted_round(
     script: crate::commands::fixture::Scripted,
 ) -> anyhow::Result<()> {
     let mut wired = wired(instance, None)?;
-    wired.brain = crate::commands::serve::Brain::Scripted(script);
+    wired.brain = Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
     if suzatary_lines::secretary::conversations::read(caps.conversations, id).is_err() {
@@ -2039,24 +2056,22 @@ pub fn scripted_round(
             caps.model,
             id,
             title,
-            suzatary_conversations::secretary::store::Kind::Topic,
+            Kind::Topic,
             caps.clock.now(),
         )
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     }
-    let owner = prodrome_core::event::Actor::new(suzatary_connect::cast::CAST.owner.actor)?;
+    let owner = Actor::new(suzatary_connect::cast::CAST.owner.actor)?;
     suzatary_core::secretary::converse(
         caps,
         &instance.deployment,
         &instance.settables,
         &chains,
         id,
-        suzatary_core::secretary::Saying {
+        Saying {
             text: said,
             references: &[],
-            by: suzatary_core::secretary::Asker::Person(
-                suzatary_core::secretary::Speaker::scripted(&owner),
-            ),
+            by: Asker::Person(suzatary_core::secretary::Speaker::scripted(&owner)),
         },
         "the fixture's scripted round",
     )
@@ -2071,7 +2086,7 @@ pub fn scripted_review(
     script: crate::commands::fixture::Scripted,
 ) -> anyhow::Result<()> {
     let mut wired = wired(instance, None)?;
-    wired.brain = crate::commands::serve::Brain::Scripted(script);
+    wired.brain = Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
     match suzatary_core::secretary::review::review(
@@ -2083,8 +2098,8 @@ pub fn scripted_review(
     )
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
     {
-        suzatary_core::secretary::daily::Run::Done(_) => Ok(()),
-        suzatary_core::secretary::daily::Run::Paused(limited) => {
+        Run::Done(_) => Ok(()),
+        Run::Paused(limited) => {
             anyhow::bail!("the fixture's review did not start: {limited}")
         }
     }
@@ -2098,15 +2113,11 @@ pub fn scripted_brief(
     script: crate::commands::fixture::Scripted,
 ) -> anyhow::Result<()> {
     let mut wired = wired(instance, None)?;
-    wired.brain = crate::commands::serve::Brain::Scripted(script);
+    wired.brain = Brain::Scripted(script);
     run_brief(instance, &wired, title, true).map(|_| ())
 }
 
-fn unasked(
-    instance: &Instance,
-    chains: &[suzatary_core::secretary::Bound<'_>],
-    id: &ConversationId,
-) {
+fn unasked(instance: &Instance, chains: &[Bound<'_>], id: &ConversationId) {
     if let Err(refusal) =
         suzatary_core::secretary::mail_health::propose_persistent(chains, &instance.deployment, id)
     {
@@ -2182,7 +2193,7 @@ fn begun_topic(instance: &Instance) -> anyhow::Result<ConversationId> {
         caps.conversations,
         caps.model,
         "",
-        suzatary_conversations::secretary::store::Kind::Topic,
+        Kind::Topic,
         caps.clock.now(),
     )
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
@@ -2194,7 +2205,7 @@ fn run_brief(
     wired: &Wired,
     title: &str,
     new: bool,
-) -> anyhow::Result<(ConversationId, Option<suzatary_core::secretary::Answered>)> {
+) -> anyhow::Result<(ConversationId, Option<Answered>)> {
     let chains = wired.bound();
     let caps = &wired.secretary();
     let id = if new {
@@ -2202,7 +2213,7 @@ fn run_brief(
             caps.conversations,
             caps.model,
             title,
-            suzatary_conversations::secretary::store::Kind::Topic,
+            Kind::Topic,
             caps.clock.now(),
         )
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
@@ -2230,10 +2241,10 @@ fn run_brief(
     unasked(instance, &chains, &id);
 
     // The day's withdrawals of triage cards, each offered back for the owner to undo.
-    if let Err(failed) = suzatary_core::secretary::undo::offer_withdrawn(
+    if let Err(failed) = suzatary_cards::secretary::undo::offer_withdrawn(
         caps.conversations,
         caps.inbox,
-        &chains,
+        &chains.iter().map(Bound::chain).collect::<Vec<_>>(),
         &id,
         caps.clock.now(),
     ) {
@@ -2250,10 +2261,10 @@ fn run_brief(
 fn ask_brief(
     instance: &Instance,
     wired: &Wired,
-    chains: &[suzatary_core::secretary::Bound<'_>],
+    chains: &[Bound<'_>],
     id: &ConversationId,
-    limited: Option<suzatary_health::health::Limited>,
-) -> anyhow::Result<Option<suzatary_core::secretary::Answered>> {
+    limited: Option<Limited>,
+) -> anyhow::Result<Option<Answered>> {
     let caps = &wired.secretary();
     let Some(limited) = limited else {
         return suzatary_core::secretary::converse(
@@ -2262,12 +2273,10 @@ fn ask_brief(
             &instance.settables,
             chains,
             id,
-            suzatary_core::secretary::Saying {
+            Saying {
                 text: BRIEF,
                 references: &[],
-                by: suzatary_core::secretary::Asker::Box(
-                    suzatary_inbox::secretary::own_round::OwnRound::Brief,
-                ),
+                by: Asker::Box(suzatary_inbox::secretary::own_round::OwnRound::Brief),
             },
             &system_prompt(caps.manuals),
         )
@@ -2319,8 +2328,8 @@ fn review(
         &chains,
         &system_prompt(caps.manuals),
     ) {
-        Ok(suzatary_core::secretary::daily::Run::Done(reviewed)) => reviewed,
-        Ok(suzatary_core::secretary::daily::Run::Paused(limited)) => {
+        Ok(Run::Done(reviewed)) => reviewed,
+        Ok(Run::Paused(limited)) => {
             paused("review", &limited, json, serde_json::json!({"reviewed": 0}))
         }
         Err(refusal) => {
@@ -2415,12 +2424,7 @@ fn review(
 pub const PAUSED: i32 = 3;
 
 /// Say the round did not start, and exit [`PAUSED`].
-fn paused(
-    what: &str,
-    limited: &suzatary_health::health::Limited,
-    json: bool,
-    mut counts: serde_json::Value,
-) -> ! {
+fn paused(what: &str, limited: &Limited, json: bool, mut counts: serde_json::Value) -> ! {
     if json {
         counts["failed"] = false.into();
         counts["paused"] = true.into();
@@ -2509,10 +2513,8 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
         json,
     )?;
     let swept = match swept {
-        suzatary_core::secretary::daily::Run::Done(swept) => swept,
-        suzatary_core::secretary::daily::Run::Paused(limited) => {
-            paused("sweep", &limited, json, serde_json::json!({"proposed": 0}))
-        }
+        Run::Done(swept) => swept,
+        Run::Paused(limited) => paused("sweep", &limited, json, serde_json::json!({"proposed": 0})),
     };
     if json {
         println!(
@@ -2554,9 +2556,10 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
 /// `suzatary secretary reviews`, in the store's own words.
 fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
     let day = match since {
-        None => instance.persona.zone.day(prodrome_core::fpl::instant_of(
-            suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
-        )),
+        None => instance
+            .persona
+            .zone
+            .day(prodrome_core::fpl::instant_of(Clock::now(&SystemClock))),
         Some(text) => chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
             .map_err(|failed| anyhow::anyhow!("--since must be YYYY-MM-DD: {failed}"))?,
     };
@@ -2655,7 +2658,7 @@ fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
 fn lines_of(
     instance: &Instance,
     stored: &suzatary_conversations::secretary::store::Stored,
-) -> anyhow::Result<suzatary_conversations::secretary::store::Lines> {
+) -> anyhow::Result<Lines> {
     suzatary_inbox::secretary::inbox::fold(&inbox(instance))
         .map(|fold| stored.lines(&fold))
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))
@@ -2664,7 +2667,7 @@ fn lines_of(
 /// Print a conversation as plain text; the model's prose is the least trusted string here.
 fn transcript(
     stored: &suzatary_conversations::secretary::store::Stored,
-    lines: &suzatary_conversations::secretary::store::Lines,
+    lines: &Lines,
     words: &impl Fn(&salted_text::TextName) -> inbox_reading::Words,
 ) {
     for said in &stored.turns {
@@ -2701,8 +2704,8 @@ fn transcript(
     }
     for line in lines.iter() {
         let standing = match line {
-            suzatary_conversations::secretary::store::Line::Placed(standing) => standing,
-            suzatary_conversations::secretary::store::Line::Unplaced(unplaced) => {
+            Line::Placed(standing) => standing,
+            Line::Unplaced(unplaced) => {
                 println!(
                     "\nPROPOSAL {} [UNPLACED — {}]",
                     unplaced.asking.index, unplaced.why
@@ -2711,7 +2714,7 @@ fn transcript(
             }
         };
         let index = standing.asking.index;
-        let (state, said) = suzatary_core::secretary::readings::state(&standing.object.reading);
+        let (state, said) = suzatary_topics::secretary::readings::state(&standing.object.reading);
         let state = serde_json::to_value(state)
             .ok()
             .and_then(|state| state.as_str().map(str::to_uppercase))
@@ -2731,7 +2734,7 @@ fn transcript(
     }
 }
 
-fn pointing(references: &[suzatary_base::reference::Reference]) -> String {
+fn pointing(references: &[Reference]) -> String {
     if references.is_empty() {
         String::new()
     } else {
@@ -2739,7 +2742,7 @@ fn pointing(references: &[suzatary_base::reference::Reference]) -> String {
     }
 }
 
-fn pointed(references: &[suzatary_base::reference::Reference]) -> String {
+fn pointed(references: &[Reference]) -> String {
     references
         .iter()
         .map(ToString::to_string)

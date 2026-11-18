@@ -10,9 +10,9 @@ use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_base::topic_target::Target;
 use suzatary_conversations::secretary::model::{ToolCall, Turn};
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
+use suzatary_topics::secretary::topics::topic::Topic;
 
 fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_base::refusal::Refusal> {
     call_in(fakes, &DEFAULT, "add_topics", args)
@@ -241,16 +241,17 @@ fn the_secretary_revises_its_suggestions_and_never_the_owners_topics() {
     call(&fakes, json!({"topics": ["garden", "bulbs"]})).expect("suggested");
     let round: Target = "round:default/0".parse().expect("a target");
     let topics = fakes.secretary().topics;
-    let owner = suzatary_core::secretary::topics::provenance::Owner::new(
+    let owner = suzatary_topics::secretary::topics::provenance::Owner::new(
         prodrome_core::event::Actor::new("ada").expect("an actor"),
     )
     .expect("the owner");
     let now = prodrome_core::literal::Datetime::new(2026, 10, 24, 10, 0, 0, 0).expect("an instant");
-    let owners = |write: &dyn Fn(&suzatary_core::secretary::topics::reading::Reading) -> Vec<_>| {
-        for event in write(&topics.reading().expect("reads")) {
-            topics.memberships.append(event).expect("appended");
-        }
-    };
+    let owners =
+        |write: &dyn Fn(&suzatary_topics::secretary::topics::reading::Reading) -> Vec<_>| {
+            for event in write(&topics.reading().expect("reads")) {
+                topics.memberships.append(event).expect("appended");
+            }
+        };
     owners(&|r| {
         r.add(&round, &Topic::new("roses").expect("a topic"), now, &owner)
             .into_iter()

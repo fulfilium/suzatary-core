@@ -21,13 +21,13 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
-use suzatary_core::secretary::compaction::Reading;
-use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::secretary::digest_view::LINE_BYTES;
-use suzatary_core::secretary::digests::ReadDigests;
-use suzatary_core::secretary::shown_record::OwnersRecord;
 use suzatary_core::stores::InMemory;
 use suzatary_core::stores::conversations::InMemory as Lines;
+use suzatary_digest::secretary::compaction::Reading;
+use suzatary_digest::secretary::digest_event::DigestEvent;
+use suzatary_digest::secretary::digest_view::LINE_BYTES;
+use suzatary_digest::secretary::digests::ReadDigests;
+use suzatary_digest::secretary::shown_record::OwnersRecord;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
@@ -150,7 +150,7 @@ fn full_record(lines: &Lines) -> Reading {
         texts: &texts,
         lines: lines.conversations().reads(),
         owners: &owners,
-        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+        compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
     })
     .expect("the record reads")
 }

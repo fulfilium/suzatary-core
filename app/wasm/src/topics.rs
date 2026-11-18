@@ -1,5 +1,5 @@
 //! The topics as a page reads and writes them: the two stores' replicas, the
-//! `suzatary_core::secretary::topics::Reading` over what they hold, and its planners, which answer
+//! `suzatary_topics::secretary::topics::Reading` over what they hold, and its planners, which answer
 //! events for the replicas' `append`. The box plans with the same functions, so a tab writing
 //! offline writes what the box would write holding the same objects.
 //!
@@ -11,11 +11,11 @@ use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_base::topic_target::Target;
-use suzatary_core::secretary::topics::provenance::Owner;
-use suzatary_core::secretary::topics::reading::AliasEvent;
-use suzatary_core::secretary::topics::reading::MembershipEvent;
-use suzatary_core::secretary::topics::reading::Reading;
-use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_topics::secretary::topics::provenance::Owner;
+use suzatary_topics::secretary::topics::reading::AliasEvent;
+use suzatary_topics::secretary::topics::reading::MembershipEvent;
+use suzatary_topics::secretary::topics::reading::Reading;
+use suzatary_topics::secretary::topics::topic::Topic;
 use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
@@ -34,14 +34,14 @@ impl TopicReading {
     pub fn new(memberships: &Memberships, aliases: &TopicAliases) -> Result<TopicReading, JsError> {
         let memberships = memberships.0.reading()?.read().map_err(refused)?;
         let aliases = aliases.0.reading()?.read().map_err(refused)?;
-        suzatary_core::secretary::topics::reading::of(memberships.nodes, aliases.nodes)
+        suzatary_topics::secretary::topics::reading::of(memberships.nodes, aliases.nodes)
             .map(Self)
             .map_err(|several| refused(several.to_string()))
     }
 
     /// The topics in use, the most rounds first, each with the names in dispute for it.
     pub fn bar(&self) -> Result<String, JsError> {
-        json(&suzatary_core::secretary::topics::reading::bar(&self.0))
+        json(&suzatary_topics::secretary::topics::reading::bar(&self.0))
     }
 
     /// The owner's `Added` event that puts `topic` on `target` or keeps the secretary's

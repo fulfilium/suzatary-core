@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use suzatary_io::conversations::ConversationStores;
 
 use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
@@ -13,7 +14,7 @@ use suzatary_base::chains::ChainName;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_base::persona::Persona;
 use suzatary_connect::connect::Coding;
-use suzatary_core::model_name::ModelName;
+use suzatary_digest::model_name::ModelName;
 use suzatary_mail::mail::account::Roster;
 use suzatary_services::plugin::Manifest;
 use suzatary_services::repos::Declared;
@@ -319,14 +320,14 @@ impl Default for Secretary {
 impl Secretary {
     /// The compactor as these keys set it: off, or its models within a budget.
     #[must_use]
-    pub fn compacting(&self) -> suzatary_core::secretary::compacting::Compacting {
-        use suzatary_core::secretary::compacting::Compacting;
+    pub fn compacting(&self) -> suzatary_digest::secretary::compacting::Compacting {
+        use suzatary_digest::secretary::compacting::Compacting;
         if !self.compact {
             return Compacting::Off;
         }
         Compacting::On {
             ladder: self.compactors.clone(),
-            budget: suzatary_core::secretary::compact_budget::Budget {
+            budget: suzatary_digest::secretary::compact_budget::Budget {
                 calls_per_hour: self.compact_calls_per_hour,
                 bytes_per_day: self.compact_bytes_per_day,
             },
@@ -354,13 +355,8 @@ impl Secretary {
         sessions: std::sync::Arc<
             dyn suzatary_conversations::secretary::model_sessions::ModelSessions + Send + Sync,
         >,
-    ) -> suzatary_io::conversations::ConversationStores {
-        suzatary_io::conversations::ConversationStores::open(
-            self.line_store(),
-            self.line_keys(),
-            renders,
-            sessions,
-        )
+    ) -> ConversationStores {
+        ConversationStores::open(self.line_store(), self.line_keys(), renders, sessions)
     }
 
     /// The memory's texts, box-local and never pushed.

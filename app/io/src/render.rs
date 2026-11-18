@@ -16,10 +16,10 @@ use suzatary_base::capability::{Rejected, Typeset};
 use suzatary_base::escape::Escaped;
 use suzatary_base::narrowing::narrowed;
 use suzatary_base::tripwire::suspicious;
-use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_todo::render::{Html, Remembered, Render};
 use suzatary_todo::rendering::{self, ANSWER, MARKUP, Markup};
 use suzatary_todo::template::{Called, Job, Kept, Output, Unprintable};
+use suzatary_topics::secretary::answers::{AnswerError, Answers};
 
 use crate::rendered::Rendered;
 use crate::typeset::Compiler;

@@ -1,5 +1,8 @@
 //! One act the secretary wants performed and will not perform itself, with its reasons.
 
+use crate::secretary::changes::Changeset;
+use prodrome_core::literal::Value;
+use prodrome_core::literal::codec::Constructor;
 mod draft;
 mod forward;
 mod reasons;
@@ -31,7 +34,7 @@ pub enum Proposal {
     ///
     /// The acts are stored and the events are not, since an `Authored` built at proposal time would
     /// undo whatever moved in between ([`crate::secretary::changes`]).
-    Changes(crate::secretary::changes::Changeset),
+    Changes(Changeset),
     /// An act for the box to perform, on the same tap.
     Act(crate::secretary::acts::Act),
     /// A fact to remember, asked for in a round that had read something not the owner's own: a
@@ -39,7 +42,7 @@ pub enum Proposal {
     /// consolidation asked for in such a round is one too, replacing the facts it names.
     ///
     /// It names the fact's words and never holds them: they are kept in the memory's text store
-    /// (`suzatary_core::secretary::memories`), so dismissing the card, or forgetting the fact it became,
+    /// (`suzatary_digest::secretary::memories`), so dismissing the card, or forgetting the fact it became,
     /// deletes them while this record stays.
     Remember {
         /// The words, by the name the memory's text store keeps them under.
@@ -171,16 +174,15 @@ impl Proposal {
 }
 
 /// `Remember(text, kind)`.
-pub const REMEMBER: prodrome_core::literal::codec::Constructor = ("Remember", &["text", "kind"]);
+pub const REMEMBER: Constructor = ("Remember", &["text", "kind"]);
 /// `Consolidate(text, kind, from)`: a remember card that replaces the facts `from`.
-pub const CONSOLIDATE: prodrome_core::literal::codec::Constructor =
-    ("Consolidate", &["text", "kind", "from"]);
+pub const CONSOLIDATE: Constructor = ("Consolidate", &["text", "kind", "from"]);
 
 /// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Consolidate`,
 /// `Decide`, or
 /// one of the acts the box performs.
 impl prodrome_core::literal::codec::Literal for Proposal {
-    fn to_value(&self) -> prodrome_core::literal::Value {
+    fn to_value(&self) -> Value {
         use prodrome_core::literal::codec::record;
         match self {
             Proposal::Email(draft) => draft.to_value(),
@@ -204,16 +206,12 @@ impl prodrome_core::literal::codec::Literal for Proposal {
         }
     }
 
-    fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
+    fn from_value(value: &Value) -> Result<Self, prodrome_core::literal::ProdromeError> {
         use prodrome_core::literal::codec::{Fields, arm};
         Ok(match arm(value)? {
             "Email" => Proposal::Email(Draft::from_value(value)?),
             "Forward" => Proposal::Forward(Forward::from_value(value)?),
-            "Changes" => {
-                Proposal::Changes(crate::secretary::changes::Changeset::from_value(value)?)
-            }
+            "Changes" => Proposal::Changes(Changeset::from_value(value)?),
             "Remember" => {
                 let fields = Fields::of(value, REMEMBER)?;
                 Proposal::Remember {

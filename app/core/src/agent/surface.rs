@@ -11,8 +11,6 @@ use super::verbs::{
 };
 use super::{Call, Holds, Says};
 use crate::agent::Agent;
-use crate::secretary::filed::Carding;
-use crate::secretary::shown_record::{OwnersRecord, OwnersWords};
 use crate::secretary::verbs::Reasoned;
 use crate::verb::{Chained, Surface, verbs};
 use prodrome_core::event::TodoId;
@@ -22,8 +20,10 @@ use suzatary_base::reference::TodoRef;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::Moment;
+use suzatary_digest::secretary::shown_record::{OwnersRecord, OwnersWords};
 use suzatary_inbox::secretary::changes;
 use suzatary_inbox::secretary::changes::{Act, Building, Changeset};
+use suzatary_topics::secretary::filed::Carding;
 
 /// The triage agent's verbs: each runs against a [`Call`] and answers JSON.
 pub enum TriageSurface {}

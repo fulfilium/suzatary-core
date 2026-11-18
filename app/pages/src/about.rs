@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::ReleasesPayload;
-use suzatary_core::wire::cards::AboutPayload;
+use suzatary_cards::wire::cards::AboutPayload;
 use ts_rs::TS;
 use viewtree::kit::{Reading, para};
 use viewtree::node::text;

@@ -8,11 +8,11 @@ use suzatary_signatures::believed::Believed;
 
 use super::events_of;
 use crate::agent::Agent;
-use crate::secretary::shown_record::OwnersRecord;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
+use suzatary_digest::secretary::shown_record::OwnersRecord;
 use suzatary_lines::timings;
 use suzatary_memory::secretary::memory::Memory;
 use suzatary_store::store::Reads;

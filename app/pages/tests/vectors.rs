@@ -1,8 +1,8 @@
 //! The box's proposals (`app/core/tests/web/proposals.json`) read by the card: an open one has
 //! something to press, a closed one nothing.
 
-use suzatary_core::wire::topics::{ProposalRow, ProposalState};
 use suzatary_pages::card::answerable;
+use suzatary_topics::wire::topics::{ProposalRow, ProposalState};
 
 #[derive(serde::Deserialize)]
 struct Open {

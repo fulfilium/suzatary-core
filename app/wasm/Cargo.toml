@@ -28,6 +28,7 @@ suzatary-memory.workspace = true
 suzatary-connect.workspace = true
 suzatary-conversations.workspace = true
 suzatary-lines = { workspace = true, features = ["wasm"] }
+suzatary-topics.workspace = true
 suzatary-inbox = { workspace = true, features = ["wasm"] }
 suzatary-core.workspace = true
 suzatary-api.workspace = true

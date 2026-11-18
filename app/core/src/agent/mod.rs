@@ -5,6 +5,7 @@
 //! secretary's verbs of the same names share; a shared writing verb builds its act once and hands
 //! it to its surface's [`Holds::write`]: the triage agent files a card, and the secretary writes.
 
+use suzatary_base::writer::Writer;
 mod call;
 mod holds;
 pub(crate) mod reads;
@@ -36,7 +37,7 @@ use suzatary_store::store::Reads;
 
 /// Who this surface is: a constant, never an argument. Its writes are cards, which the owner's
 /// tap performs.
-pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writer::Triage;
+pub const WRITES_AS: Writer = Writer::Triage;
 
 /// One call as the agent sent it: read whole once, then run against the record of the chain it
 /// names, absent meaning the first.
@@ -45,7 +46,7 @@ pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writ
 /// An unknown verb or chain, a missing or ill-typed argument, or an effect's own failure.
 pub fn call(
     records: &BTreeMap<String, Agent<'_>>,
-    cards: &crate::secretary::filed::TriageCards<'_>,
+    cards: &suzatary_topics::secretary::filed::TriageCards<'_>,
     deployment: &Deployment,
     verb: &str,
     args: &Map<String, Value>,

@@ -134,7 +134,7 @@ mod tests {
     use prodrome_core::event::{Envelope, seal_hash};
     use prodrome_core::genesis::mk_genesis;
     use prodrome_core::store::frontier::{Reached, Since};
-    use suzatary_core::secretary::topics::reading::MembershipEvent;
+    use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
     /// A token is the sha256 of the tips, one per line: the stored file names depend on it.
     #[test]

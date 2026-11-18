@@ -4,11 +4,13 @@
 //! §10.12) and the gate's actor, which must be the actor who tapped.
 
 use std::sync::{Arc, Mutex};
+use suzatary_base::capability::Datetime;
+use suzatary_io::google::Grant;
 
 use axum::response::Redirect;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
+use suzatary_cards::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
 use suzatary_google::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
@@ -87,7 +89,7 @@ impl google_sign_in::Consents for Consenting {
         account: &EmailAddress,
         scopes: &Scopes,
         by: &prodrome_core::event::Actor,
-        now: suzatary_base::capability::Datetime,
+        now: Datetime,
         then: Then,
     ) -> Performed {
         let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
@@ -105,7 +107,7 @@ impl google_sign_in::Consents for Consenting {
                 "the app's URL is not https, so Google cannot send you back to it".to_owned(),
             );
         };
-        let client = match suzatary_io::google::Grant::client(self.store.as_ref()) {
+        let client = match Grant::client(self.store.as_ref()) {
             Ok(Some(client)) => client,
             Ok(None) => {
                 return not_sent(
@@ -321,7 +323,7 @@ fn exchanged(
         }
     };
     if moving {
-        let grant = suzatary_io::google::Grant {
+        let grant = Grant {
             account: begun.account.clone(),
             client: begun.client.clone(),
             refresh: kept.refresh.clone(),
@@ -379,7 +381,7 @@ fn exchanged(
 fn ended(
     state: &State,
     card: &ProposalId,
-    now: suzatary_base::capability::Datetime,
+    now: Datetime,
     performed: Performed,
 ) -> Result<(), Refusal> {
     let caps = state.first.caps;

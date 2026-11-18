@@ -6,14 +6,15 @@
 
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
+use suzatary_store::store::Graph;
 
 use prodrome_core::declared::{Declaration, Declared};
 use prodrome_core::event::{Envelope, Hash, TodoEvent};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
-use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::stores::{Kind, Store};
+use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_record::record::Record;
 use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreError, WriteLock};
 
@@ -47,7 +48,7 @@ enum Door<E> {
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
     heads: prodrome_core::dag::Heads,
-    graph: std::sync::Arc<suzatary_store::store::Graph<E>>,
+    graph: std::sync::Arc<Graph<E>>,
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
     verified: Option<Vec<String>>,
@@ -92,7 +93,7 @@ impl Objects<DigestEvent> {
     ) -> Self {
         let mut store = Self::new(EventStore::new(root, Untrusted::none()));
         store.door = Door::Events(Box::new(move |event| {
-            suzatary_core::secretary::digest_policy::Owners(&owners)
+            suzatary_digest::secretary::digest_policy::Owners(&owners)
                 .admits(event)
                 .map_err(|refused| Shut::Refused(refused.to_string()))
         }));
@@ -253,9 +254,7 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
         let excluded = parts::part("excluded", || suzatary_store::store::left_out(&dag));
         Ok(look(slot.insert(Remembered {
             heads,
-            graph: std::sync::Arc::new(parts::part("graph", || {
-                suzatary_store::store::Graph::over(dag)
-            })?),
+            graph: std::sync::Arc::new(parts::part("graph", || Graph::over(dag))?),
             excluded,
             verified: None,
         })))
@@ -280,7 +279,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
         })
     }
 
-    fn graph(&self) -> Result<std::sync::Arc<suzatary_store::store::Graph<E>>, StoreError> {
+    fn graph(&self) -> Result<std::sync::Arc<Graph<E>>, StoreError> {
         self.with(|held| std::sync::Arc::clone(&held.graph))
     }
 
@@ -445,7 +444,7 @@ impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
 mod tests {
     use prodrome_core::event::{Actor, mk_completed, mk_created};
     use prodrome_core::literal::Datetime;
-    use suzatary_core::model_name::ModelName;
+    use suzatary_digest::model_name::ModelName;
 
     use super::*;
     use suzatary_inbox::secretary::inbox;
@@ -474,7 +473,7 @@ mod tests {
     #[test]
     fn the_digest_takes_a_retraction_only_from_an_owner() {
         use prodrome_core::event::{canonical_envelope, parse_event};
-        use suzatary_core::secretary::digest_event::{DigestEvent, DigestVocabulary};
+        use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let guarded = Objects::digests(dir.path().join("digests"), owners());
@@ -742,7 +741,7 @@ mod tests {
     #[test]
     fn words_that_cannot_be_read_fail_the_reading() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::memories::Memories;
+        use suzatary_digest::secretary::memories::Memories;
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
@@ -759,12 +758,12 @@ mod tests {
             texts: &texts,
             cards: &cards,
             entropy: &crate::texts::SystemEntropy,
-            digests: suzatary_core::secretary::digests::Digests {
+            digests: suzatary_digest::secretary::digests::Digests {
                 history: &digests,
                 texts: &digest_texts,
                 lines: lines.conversations(),
                 owners: &std::collections::BTreeSet::new(),
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         };
         let said = Origin::Turn {
@@ -796,8 +795,8 @@ mod tests {
     /// take twice: it returns.
     #[test]
     fn a_triage_card_joins_under_the_inbox_file_lock() {
-        use suzatary_core::secretary::filed::{Carding, TriageCards};
         use suzatary_inbox::secretary::changes::{Act, Changeset};
+        use suzatary_topics::secretary::filed::{Carding, TriageCards};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let root = dir.path().to_path_buf();
@@ -844,7 +843,7 @@ mod tests {
     #[test]
     fn the_memory_keeps_its_words_apart_and_forgetting_deletes_them() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::memories::Memories;
+        use suzatary_digest::secretary::memories::Memories;
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
@@ -861,12 +860,12 @@ mod tests {
             texts: &texts,
             cards: &cards,
             entropy: &crate::texts::SystemEntropy,
-            digests: suzatary_core::secretary::digests::Digests {
+            digests: suzatary_digest::secretary::digests::Digests {
                 history: &digests,
                 texts: &digest_texts,
                 lines: lines.conversations(),
                 owners: &std::collections::BTreeSet::new(),
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         };
         let said = Origin::Turn {
@@ -1002,7 +1001,7 @@ mod tests {
     #[test]
     fn nothing_is_deleted_or_summarised_over_a_damaged_line() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::{digest_line::Line, digests::Digests, memories::Memories};
+        use suzatary_digest::secretary::{digest_line::Line, digests::Digests, memories::Memories};
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
@@ -1026,7 +1025,7 @@ mod tests {
                 texts: &digest_texts,
                 lines: lines.conversations(),
                 owners: &std::collections::BTreeSet::new(),
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         };
         let said = Origin::Turn {
@@ -1108,9 +1107,9 @@ mod tests {
     #[test]
     fn nothing_is_deleted_over_a_damaged_retraction() {
         use prodrome_core::event::parse_event;
-        use suzatary_core::secretary::digest_event::{DigestEvent, DigestVocabulary};
-        use suzatary_core::secretary::digests::Digests;
-        use suzatary_core::secretary::memories::Memories;
+        use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
+        use suzatary_digest::secretary::digests::Digests;
+        use suzatary_digest::secretary::memories::Memories;
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let lines = spoken(dir.path());
@@ -1152,7 +1151,7 @@ mod tests {
                 texts: &digest_texts,
                 lines: lines.conversations(),
                 owners: &std::collections::BTreeSet::new(),
-                compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                compacting: &suzatary_digest::secretary::compacting::Compacting::Off,
             },
         };
         let refused = memories

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use suzatary_base::reference::mentions;
-use suzatary_core::wire::topics::{BlockRow, ProposalRow, Speaker, TurnRow};
+use suzatary_topics::wire::topics::{BlockRow, ProposalRow, Speaker, TurnRow};
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Href, Open, Title, Type};
 use viewtree::{Node, view};

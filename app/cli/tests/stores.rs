@@ -548,14 +548,14 @@ fn added(
     genesis: &prodrome_core::event::Hash,
     deps: Vec<prodrome_core::event::Hash>,
     actor: &str,
-) -> prodrome_core::event::Envelope<suzatary_core::secretary::topics::reading::MembershipEvent> {
+) -> prodrome_core::event::Envelope<suzatary_topics::secretary::topics::reading::MembershipEvent> {
     let event = prodrome_core::tags::membership::added::<
-        suzatary_core::secretary::topics::reading::Topics,
+        suzatary_topics::secretary::topics::reading::Topics,
     >(
         "round:default/0"
             .parse::<suzatary_base::topic_target::Target>()
             .expect("a target"),
-        suzatary_core::secretary::topics::topic::Topic::new("travel").expect("a topic"),
+        suzatary_topics::secretary::topics::topic::Topic::new("travel").expect("a topic"),
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         common::actor(actor),
     );
@@ -567,12 +567,12 @@ fn added(
 /// The change's print and the print of `key`'s signature of it, as a tab posts them.
 fn signed_by(
     change: &prodrome_core::event::Envelope<
-        suzatary_core::secretary::topics::reading::MembershipEvent,
+        suzatary_topics::secretary::topics::reading::MembershipEvent,
     >,
     key: &prodrome_core::sign::Secret,
 ) -> Vec<String> {
     let signature: prodrome_core::event::Envelope<
-        suzatary_core::secretary::topics::reading::MembershipEvent,
+        suzatary_topics::secretary::topics::reading::MembershipEvent,
     > = prodrome_core::event::Envelope::Signed(key.sign(&prodrome_core::event::seal_hash(change)));
     vec![
         prodrome_core::event::canonical_envelope(change),

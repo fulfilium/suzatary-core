@@ -20,11 +20,7 @@ use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{
     Entry, Kind, Namer, NotAConversation, Stored, Title,
 };
-use suzatary_core::secretary::readings::Dress;
-use suzatary_core::secretary::stream;
-use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::stores::conversations::InMemory;
-use suzatary_core::wire::topics as wire;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::stamp;
 use suzatary_lines::secretary::conversations::Conversations;
@@ -49,6 +45,10 @@ use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc as _, Gets as _};
 use suzatary_store::store::{Husk, HuskObject};
 use suzatary_todo::rendering::ANSWER;
+use suzatary_topics::secretary::readings::Dress;
+use suzatary_topics::secretary::stream;
+use suzatary_topics::secretary::topics::reading::Reading;
+use suzatary_topics::wire::topics as wire;
 
 /// One step of a script: a turn said in a conversation, an erasure of some of its lines, a
 /// rename, a stop, a rewind of the last `back` turns, or a proposal. A turn that `echoes` draws its

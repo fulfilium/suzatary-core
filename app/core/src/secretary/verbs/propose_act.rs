@@ -243,9 +243,10 @@ fn retract(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
         .read()?
         .clone()
         .ok_or_else(|| Refusal::bad_request("handle is required for act=\"retract\""))?;
-    let reading = crate::secretary::compaction::Reading::of(&call.caps.memories.digests.reads())?;
-    let node =
-        crate::secretary::digest_view::summarized(reading.digest(), &handle).ok_or_else(|| {
+    let reading =
+        suzatary_digest::secretary::compaction::Reading::of(&call.caps.memories.digests.reads())?;
+    let node = suzatary_digest::secretary::digest_view::summarized(reading.digest(), &handle)
+        .ok_or_else(|| {
             Refusal::not_found(format!(
                 "no summary is shown at {}: a handle is `first+lines`, as the record or zoom \
                  printed it",

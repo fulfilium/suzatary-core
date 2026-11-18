@@ -5,9 +5,8 @@ pub(crate) use suzatary_api::wire::{
     RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload,
 };
 pub(crate) use suzatary_base::answer::Kind as BlockKind;
+pub(crate) use suzatary_cards::wire::cards::{AboutPayload, HeldTodo};
 pub(crate) use suzatary_core::release::{Lot, Named, Place};
-pub(crate) use suzatary_core::wire::cards::{AboutPayload, HeldTodo};
-pub(crate) use suzatary_core::wire::topics::{BlockRow, FactRow, FactSaid, MemoryPayload, SaidOn};
 pub(crate) use suzatary_memory::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_pages::reading::{Nothing, One, Opened};
 pub(crate) use suzatary_pages::runtime::{
@@ -21,6 +20,9 @@ pub(crate) use suzatary_pages::{
     memory, message, needsyou, reading as one, secretary, settings, thread, todo, todos, typstlist,
 };
 pub(crate) use suzatary_todo::wire::todo::{EntryState, Fulfillment, Neighbour};
+pub(crate) use suzatary_topics::wire::topics::{
+    BlockRow, FactRow, FactSaid, MemoryPayload, SaidOn,
+};
 pub(crate) use viewtree::Runtime;
 pub(crate) use viewtree::dom::page_laws;
 pub(crate) use viewtree::kit::Reading;

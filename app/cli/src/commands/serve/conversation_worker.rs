@@ -1,11 +1,12 @@
 //! The engine over the conversations: one task per conversation, nudged whenever a write
-//! moves its heads, running the conversation's rules (`secretary::rules`) on each new reading.
+//! moves its heads, running the conversation's rules (`suzatary_topics::secretary::rules`) on each new reading.
 //!
 //! One task per conversation keeps two rounds from answering the same question; the engine's
 //! memo fires each rule once per reading. The lock is held only for a lookup, insert or removal,
 //! never across a firing, and a task leaves only under the lock [`Workers::nudge`] takes, so no
 //! nudge is lost.
 
+use prodrome_core::event::Actor;
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
@@ -17,8 +18,8 @@ use suzatary_conversations::secretary::model::{Halt, Sessions, Turn};
 use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_core::conversation::round::Ending;
 use suzatary_core::secretary;
-use suzatary_core::secretary::rules::{Conversational, RULES};
 use suzatary_lines::secretary::transcript;
+use suzatary_topics::secretary::rules::{Conversational, RULES};
 use suzatary_triage::rule::{Engine, Firing};
 use tokio::sync::{broadcast, mpsc};
 
@@ -266,7 +267,7 @@ impl Workers {
         &self,
         caps: &suzatary_api::server::Server<'_>,
         id: &ConversationId,
-        by: prodrome_core::event::Actor,
+        by: Actor,
     ) -> Result<(), Refusal> {
         let halts = super::locks::held(&self.halts);
         if halts.contains_key(id) {
@@ -281,7 +282,7 @@ impl Workers {
 
     /// [`Workers::stop`] of a running round alone, so its CLI writes no more to a session an
     /// erasure then deletes.
-    pub(crate) fn halt_round(&self, id: &ConversationId, by: prodrome_core::event::Actor) {
+    pub(crate) fn halt_round(&self, id: &ConversationId, by: Actor) {
         self.wait_out(super::locks::held(&self.halts), id, by);
     }
 
@@ -289,7 +290,7 @@ impl Workers {
         &self,
         halts: std::sync::MutexGuard<'_, HashMap<ConversationId, Halt>>,
         id: &ConversationId,
-        by: prodrome_core::event::Actor,
+        by: Actor,
     ) {
         let Some(halt) = halts.get(id) else {
             return;
@@ -494,8 +495,8 @@ async fn noted(id: &ConversationId, state: &Arc<State>) -> bool {
     let asked = id.clone();
     let noted = tokio::task::spawn_blocking(move || {
         let client =
-            suzatary_core::secretary::set_up::client_kept(caps.secretary.secrets, &settables);
-        secretary::set_up::open(
+            suzatary_topics::secretary::set_up::client_kept(caps.secretary.secrets, &settables);
+        suzatary_topics::secretary::set_up::open(
             caps.secretary.conversations,
             &asked,
             caps.secretary.clock.now(),
@@ -526,7 +527,7 @@ async fn titled(id: &ConversationId, state: &Arc<State>) -> bool {
         let pick = titler
             .as_deref()
             .map_or_else(|| caps.sessions.pick(), Sessions::pick);
-        secretary::title::run(
+        suzatary_topics::secretary::title::run(
             caps.secretary.conversations,
             caps.secretary.clock,
             pick.model(),
@@ -567,7 +568,7 @@ fn maybe_push(
             Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => None,
         })
         .unwrap_or(false);
-    let Some(push) = secretary::answer_push(stored, is_brief) else {
+    let Some(push) = suzatary_cards::notify::answer_push(stored, is_brief) else {
         return;
     };
     let caps = state.first.caps;

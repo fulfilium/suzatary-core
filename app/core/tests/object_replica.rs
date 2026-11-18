@@ -14,10 +14,6 @@ use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
-use suzatary_core::secretary::topics::reading::{
-    AliasEvent, MembershipEvent, MembershipVocabulary,
-};
-use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_lines::secretary::line_form;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::{Node, Said};
@@ -25,6 +21,10 @@ use suzatary_store::replica::objects::{Move, Object, Objects, frame, unframe};
 use suzatary_store::replica::writes::{Answer, Refusal};
 use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::wire::store::SinceRead;
+use suzatary_topics::secretary::topics::reading::{
+    AliasEvent, MembershipEvent, MembershipVocabulary,
+};
+use suzatary_topics::secretary::topics::topic::Topic;
 
 /// The box's store: one genesis, then `n` memberships, each written over the one before.
 fn universe(n: u32) -> Vec<Object> {
@@ -69,7 +69,7 @@ fn begin<E: prodrome_core::schema::Schema>(store: &MemoryStore<E>) {
 fn read(
     memberships: &MemoryStore<MembershipEvent>,
     aliases: &MemoryStore<AliasEvent>,
-) -> suzatary_core::secretary::topics::reading::Reading {
+) -> suzatary_topics::secretary::topics::reading::Reading {
     let m = memberships
         .held()
         .expect("held")
@@ -77,7 +77,7 @@ fn read(
         .nodes()
         .expect("nodes");
     let a = aliases.held().expect("held").dag.nodes().expect("nodes");
-    suzatary_core::secretary::topics::reading::of(&m, &a).expect("one genesis")
+    suzatary_topics::secretary::topics::reading::of(&m, &a).expect("one genesis")
 }
 
 /// The box's answer holding the first `held` objects of `all`.
@@ -404,7 +404,7 @@ fn written(n: usize) -> Vec<Object> {
     let aliases: MemoryStore<AliasEvent> = MemoryStore::default();
     begin(&memberships);
     begin(&aliases);
-    let owner = suzatary_core::secretary::topics::provenance::Owner::new(
+    let owner = suzatary_topics::secretary::topics::provenance::Owner::new(
         prodrome_core::event::Actor::new("ada").expect("an actor"),
     )
     .expect("not the secretary");

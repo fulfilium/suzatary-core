@@ -11,12 +11,14 @@ use super::verbs::{answered, listed, standing};
 use crate::secretary::Secretary;
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_cards::notify::Push;
 use suzatary_connect::deployment::Deployment;
 use suzatary_conversations::secretary::found::{Found, Unreadable};
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Decision, Entry, Outcome, Review, Stored};
 use suzatary_conversations::secretary::verb_name::Effect;
 use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
 
@@ -204,7 +206,7 @@ pub fn review(
 pub fn note_unreadable(
     caps: &Secretary<'_>,
     zone: suzatary_base::zone::Zone,
-) -> Result<Option<crate::notify::Push>, Refusal> {
+) -> Result<Option<Push>, Refusal> {
     let unreadable = every(caps.conversations)?.unreadable;
     let Some(count) = std::num::NonZeroUsize::new(unreadable.len()) else {
         return Ok(None);
@@ -237,7 +239,7 @@ pub fn note_unreadable(
         &id,
         &Entry::noted(caps.clock.now(), text, Vec::new()),
     )?;
-    Ok(Some(crate::notify::Push::Unreadable {
+    Ok(Some(Push::Unreadable {
         conversations: count,
         round: id,
     }))
@@ -306,9 +308,7 @@ fn said(stored: &Stored) -> String {
 ///
 /// # Errors
 /// The store's own failure to list them.
-pub fn every(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
-) -> Result<Found<Stored>, Refusal> {
+pub fn every(conversations: Conversations<'_>) -> Result<Found<Stored>, Refusal> {
     let mut found = Found {
         items: Vec::new(),
         unreadable: Vec::new(),
@@ -331,7 +331,7 @@ pub fn every(
 /// # Errors
 /// The store's own failure to list them.
 pub fn reviews(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     since: chrono::NaiveDate,
 ) -> Result<Found<(ConversationId, Review)>, Refusal> {
     let mut found = every(conversations)?.flat_map(|stored| {
@@ -352,7 +352,7 @@ pub fn reviews(
 /// # Errors
 /// As [`reviews`].
 pub fn failures(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     since: chrono::NaiveDate,
 ) -> Result<
     Found<(
@@ -385,9 +385,9 @@ pub struct Outage {
 impl Outage {
     /// The push to send exactly when this outage reaches `after` passes, so one outage pages once.
     #[must_use]
-    pub fn page(self, after: usize) -> Option<crate::notify::Push> {
+    pub fn page(self, after: usize) -> Option<Push> {
         let passes = std::num::NonZeroUsize::new(after)?;
-        (self.consecutive == after).then_some(crate::notify::Push::ReviewDown {
+        (self.consecutive == after).then_some(Push::ReviewDown {
             standing: self.standing,
             passes,
         })
@@ -399,7 +399,7 @@ impl Outage {
 /// # Errors
 /// As [`reviews`]: a store that does not list says so, and is never an outage of none.
 pub fn outage(
-    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    conversations: Conversations<'_>,
     today: chrono::NaiveDate,
 ) -> Result<Outage, Refusal> {
     let failed = failures(conversations, today)?.items;

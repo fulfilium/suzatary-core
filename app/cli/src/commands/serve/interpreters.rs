@@ -1,14 +1,41 @@
 //! The one place that chooses an interpreter for every capability, so a fixture is a
 //! substitution the routes cannot tell apart.
 
+use crate::instance::File;
 use std::net::IpAddr;
 use std::sync::Arc;
+use suzatary_base::capability::Peer;
+use suzatary_base::drive_path::DriveFailure;
+use suzatary_base::drive_path::DrivePath;
+use suzatary_conversations::secretary::model::Halt;
+use suzatary_conversations::secretary::model::Sessioned;
+use suzatary_digest::model_name::ModelName;
+use suzatary_health::health::Failure;
+use suzatary_health::health::Limited;
+use suzatary_held::for_model::ForModel;
+use suzatary_io::attachments::AttachmentStore;
+use suzatary_io::blobs::Blobs;
+use suzatary_io::clock::SystemClock;
+use suzatary_io::drive::ProtonDrive;
+use suzatary_io::http::Ureq;
+use suzatary_io::junk::OutlookJunk;
+use suzatary_io::junk::SignedIn;
+use suzatary_io::mail_sync::Timer;
+use suzatary_io::model::ClaudeCli;
+use suzatary_io::model::Fence;
+use suzatary_io::model::TokenSource;
+use suzatary_io::model_health::Answered;
+use suzatary_io::older::Notmuched;
+use suzatary_io::older::Servers;
+use suzatary_io::repos::Mirrors;
+use suzatary_io::upload_index::UploadIndexFiles;
+use suzatary_io::web::Fetcher;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
     Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
 };
-use suzatary_core::secretary::compact::Compact;
+use suzatary_digest::secretary::compact::Compact;
 use suzatary_io::secrets::Secretspec;
 use suzatary_io::whois::Tailscaled;
 use suzatary_services::drive::WritePort as _;
@@ -32,12 +59,12 @@ pub enum Peers {
 }
 
 impl Whois for Peers {
-    fn peer(&self, address: IpAddr) -> Result<suzatary_base::capability::Peer, WhoisError> {
+    fn peer(&self, address: IpAddr) -> Result<Peer, WhoisError> {
         match self {
             Peers::Daemon(daemon) => daemon.peer(address),
             // Every peer is the fixture's writer, so none is this box.
             #[cfg(feature = "fixture")]
-            Peers::Fixture(login) => Ok(suzatary_base::capability::Peer::Known(login.clone())),
+            Peers::Fixture(login) => Ok(Peer::Known(login.clone())),
         }
     }
 }
@@ -74,7 +101,7 @@ impl Model for Brain {
         }
     }
 
-    fn limited(&self) -> Option<suzatary_health::health::Limited> {
+    fn limited(&self) -> Option<Limited> {
         match self {
             Brain::Cli(cli) => cli.limited(),
             #[cfg(feature = "fixture")]
@@ -161,17 +188,17 @@ impl suzatary_connect::secrets::Secrets for Declared {
 pub enum Verifying {
     Real {
         instance: Arc<Instance>,
-        answered: suzatary_io::model_health::Answered,
+        answered: Answered,
     },
     /// No call leaves: the fixture's model is scripted.
     #[cfg(feature = "fixture")]
     Fixture {
         instance: Arc<Instance>,
-        answered: suzatary_io::model_health::Answered,
+        answered: Answered,
     },
 }
 
-fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
+fn probe(cli: &ClaudeCli) -> Result<(), ModelError> {
     let asked = Conversation {
         system: "This is a test that the model answers. Answer with the one word: ok.".to_owned(),
         turns: vec![suzatary_conversations::secretary::model::Turn::Person {
@@ -186,22 +213,15 @@ fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
 /// Join one call of `model` into `answered`. Only a refused credential and a limit (under the
 /// shared [`suzatary_health::health::SUBSCRIPTION`]) are joined as failures; a register that
 /// cannot be written is only logged.
-pub fn answered_by(
-    answered: &suzatary_io::model_health::Answered,
-    model: &str,
-    failed: Option<&ModelError>,
-) {
+pub fn answered_by(answered: &Answered, model: &str, failed: Option<&ModelError>) {
     use suzatary_base::capability::Clock as _;
     use suzatary_health::health::Outcome;
     let (entry, outcome) = match failed {
         None => (model, Outcome::Succeeded),
-        Some(ModelError::Refused(_)) => (
-            model,
-            Outcome::Failed(suzatary_health::health::Failure::KeyRefused),
-        ),
+        Some(ModelError::Refused(_)) => (model, Outcome::Failed(Failure::KeyRefused)),
         Some(ModelError::Limited(limited)) => (
             suzatary_health::health::SUBSCRIPTION,
-            Outcome::Failed(suzatary_health::health::Failure::Limited(*limited)),
+            Outcome::Failed(Failure::Limited(*limited)),
         ),
         Some(
             ModelError::Unreachable(_)
@@ -213,7 +233,7 @@ pub fn answered_by(
             | ModelError::Halted,
         ) => return,
     };
-    let at = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    let at = prodrome_core::fpl::instant_of(SystemClock.now());
     let words = failed.map(ToString::to_string).unwrap_or_default();
     if let Err(failed) = answered.record(entry, at, outcome, &words) {
         tracing::warn!("model health: {failed}");
@@ -222,40 +242,38 @@ pub fn answered_by(
 
 /// The limit standing now in `instance`'s model health, for callers outside a [`Door`].
 #[must_use]
-pub fn limited_now(instance: &Instance) -> Option<suzatary_health::health::Limited> {
+pub fn limited_now(instance: &Instance) -> Option<Limited> {
     limited_in(&suzatary_io::model_health::beside(&instance.mail.heartbeat))
 }
 
 /// `None` also when the register does not read.
-fn limited_in(
-    answered: &suzatary_io::model_health::Answered,
-) -> Option<suzatary_health::health::Limited> {
+fn limited_in(answered: &Answered) -> Option<Limited> {
     use suzatary_base::capability::Clock as _;
     use suzatary_health::health::Register as _;
-    let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    let now = prodrome_core::fpl::instant_of(SystemClock.now());
     answered
         .healths()
         .inspect_err(|failed| tracing::warn!("model health: {failed}"))
         .ok()
-        .and_then(|calls| suzatary_health::health::Limited::standing(&calls, now))
+        .and_then(|calls| Limited::standing(&calls, now))
 }
 
 /// The one way the box asks a model it records: nothing while a limit stands in the model health
-/// ([`suzatary_health::health::Limited::standing`]), and each call joined into it under `entry`.
+/// ([`Limited::standing`]), and each call joined into it under `entry`.
 #[derive(Clone)]
 pub struct Door {
-    answered: suzatary_io::model_health::Answered,
+    answered: Answered,
     entry: String,
 }
 
 impl Door {
     #[must_use]
-    pub fn new(answered: suzatary_io::model_health::Answered, entry: String) -> Self {
+    pub fn new(answered: Answered, entry: String) -> Self {
         Self { answered, entry }
     }
 
     #[must_use]
-    pub fn limited(&self) -> Option<suzatary_health::health::Limited> {
+    pub fn limited(&self) -> Option<Limited> {
         limited_in(&self.answered)
     }
 
@@ -289,7 +307,7 @@ impl suzatary_connect::settings::Verify for Verifying {
                     instance.secretary.model.as_str(),
                     &instance.secrets(),
                 )
-                .with_token(suzatary_io::model::TokenSource::fixed(value.clone()));
+                .with_token(TokenSource::fixed(value.clone()));
                 let called = probe(&cli);
                 answered_by(answered, &cli.name(), called.as_ref().err());
                 called.map_err(|failed| format!("{}: {failed}", cli.name()))
@@ -328,8 +346,8 @@ fn subscription_has_room(allowance: &Allowance, reserve: Reserve) -> bool {
 
 /// The deny-all every call to the model's CLI is fenced by.
 #[must_use]
-pub fn fence(instance: &Instance) -> suzatary_io::model::Fence {
-    suzatary_io::model::Fence::at(instance.secretary.settings.clone())
+pub fn fence(instance: &Instance) -> Fence {
+    Fence::at(instance.secretary.settings.clone())
 }
 
 /// The `claude` CLI at `model`, fenced: the one spawner every caller shares.
@@ -338,25 +356,24 @@ pub fn cli_of(
     instance: &Instance,
     model: &str,
     secrets: &suzatary_io::secrets::Secretspec,
-) -> suzatary_io::model::ClaudeCli {
+) -> ClaudeCli {
     spawner(instance, model)
-        .with_token(suzatary_io::model::TokenSource::from_store(secrets.clone()))
+        .with_token(TokenSource::from_store(secrets.clone()))
         .with_uploads(upload_store(instance))
         .with_files(file_store(instance))
 }
 
 /// The CLI as the secretary runs it, before its token: where its sessions are.
 #[must_use]
-pub(crate) fn spawner(instance: &Instance, model: &str) -> suzatary_io::model::ClaudeCli {
-    suzatary_io::model::ClaudeCli::new(model.to_owned(), fence(instance))
-        .in_directory(instance.code().to_path_buf())
+pub(crate) fn spawner(instance: &Instance, model: &str) -> ClaudeCli {
+    ClaudeCli::new(model.to_owned(), fence(instance)).in_directory(instance.code().to_path_buf())
 }
 
 /// The web as the secretary may read it, by allow rules reread on every ask (none while the
 /// instance file does not read).
 #[derive(Debug, Clone)]
 pub struct WebAccess {
-    fetcher: suzatary_io::web::Fetcher,
+    fetcher: Fetcher,
     instance: std::path::PathBuf,
 }
 
@@ -364,7 +381,7 @@ impl WebAccess {
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
-            fetcher: suzatary_io::web::Fetcher::new(std::time::Duration::from_secs(10)),
+            fetcher: Fetcher::new(std::time::Duration::from_secs(10)),
             instance: instance.path.clone(),
         }
     }
@@ -372,7 +389,7 @@ impl WebAccess {
 
 impl suzatary_services::web::Web for WebAccess {
     fn allow_rules(&self) -> Vec<suzatary_services::web::AllowRule> {
-        crate::instance::File::read(&self.instance)
+        File::read(&self.instance)
             .map(|file| file.secretary.web_allow)
             .unwrap_or_default()
     }
@@ -406,8 +423,8 @@ impl DriveAccess {
 /// The Drive CLI, downloading into the user's runtime directory (memory, private to the
 /// user) when there is one.
 #[must_use]
-pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
-    suzatary_io::drive::ProtonDrive::new(
+pub fn proton_drive(instance: &Instance) -> ProtonDrive {
+    ProtonDrive::new(
         instance.paths.drive_cli.clone(),
         instance.paths.drive_scratch.clone(),
         instance.code().to_path_buf(),
@@ -415,8 +432,8 @@ pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
 }
 
 impl suzatary_services::drive::Drive for DriveAccess {
-    fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
-        crate::instance::File::read(&self.instance)
+    fn allowed_folders(&self) -> Vec<DrivePath> {
+        File::read(&self.instance)
             .map(|file| file.secretary.drive_allow)
             .unwrap_or_default()
     }
@@ -425,23 +442,16 @@ impl suzatary_services::drive::Drive for DriveAccess {
         &self.drive
     }
 
-    fn read(
-        &self,
-        file: &suzatary_base::drive_path::DrivePath,
-    ) -> Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure> {
+    fn read(&self, file: &DrivePath) -> Result<suzatary_held::file_read::FileRead, DriveFailure> {
         self.drive.read(file)
     }
 }
 
 /// The owner's Drive as the vault a private upload goes to.
-pub struct DriveVault(suzatary_io::drive::ProtonDrive);
+pub struct DriveVault(ProtonDrive);
 
 impl suzatary_held::vault::Vault for DriveVault {
-    fn keep(
-        &self,
-        name: &str,
-        bytes: &[u8],
-    ) -> Result<suzatary_base::drive_path::DrivePath, suzatary_base::drive_path::DriveFailure> {
+    fn keep(&self, name: &str, bytes: &[u8]) -> Result<DrivePath, DriveFailure> {
         self.0.keep(&suzatary_held::vault::folder(), name, bytes)
     }
 }
@@ -451,7 +461,7 @@ pub fn drive_vault(instance: &Instance) -> DriveVault {
     DriveVault(proton_drive(instance))
 }
 
-pub type Junk = suzatary_io::junk::OutlookJunk<suzatary_io::junk::SignedIn>;
+pub type Junk = OutlookJunk<SignedIn>;
 
 /// The roster's Microsoft accounts' Junk, with `[mail.junk]`'s churn.
 ///
@@ -459,34 +469,30 @@ pub type Junk = suzatary_io::junk::OutlookJunk<suzatary_io::junk::SignedIn>;
 /// minted silently from the box's grant store or not at all.
 #[must_use]
 pub fn junk(instance: &Instance) -> Junk {
-    suzatary_io::junk::OutlookJunk::new(
+    OutlookJunk::new(
         &instance.mail.accounts,
         instance.mail.junk.clone(),
         std::env::var_os("SUZATARY_JUNK_SEED").map(std::path::PathBuf::from),
-        suzatary_io::junk::SignedIn::new(crate::commands::mail::tokens(instance)),
+        SignedIn::new(crate::commands::mail::tokens(instance)),
     )
 }
 
 /// Every account's mail server, searched for mail older than the routine sync's window.
-pub type Older = suzatary_io::older::Servers<
-    suzatary_io::junk::SignedIn,
-    suzatary_io::http::Ureq,
-    suzatary_io::older::Notmuched,
->;
+pub type Older = Servers<SignedIn, Ureq, Notmuched>;
 
 /// The mail servers an older search reaches: Microsoft IMAP signed in silently, Gmail's API on
 /// lieer's grant or a Google account's own; leaves under the mail root, indexed as a sync does.
 #[must_use]
 pub fn older(instance: &Instance) -> Older {
-    suzatary_io::older::Servers::new(
+    Servers::new(
         instance.mail.accounts.clone(),
         (
             instance.mail.root.clone(),
             instance.paths.imap_state.clone(),
         ),
-        suzatary_io::junk::SignedIn::new(crate::commands::mail::tokens(instance)),
-        suzatary_io::http::Ureq::new(),
-        suzatary_io::older::Notmuched::new(
+        SignedIn::new(crate::commands::mail::tokens(instance)),
+        Ureq::new(),
+        Notmuched::new(
             crate::commands::mail::syncer(instance),
             crate::commands::mail::notmuch(instance),
         ),
@@ -496,14 +502,14 @@ pub fn older(instance: &Instance) -> Older {
 
 /// The timer's own mail sync, whose report is the state directory's `last-sync.json`.
 #[must_use]
-pub fn mail_sync(instance: &Instance) -> suzatary_io::mail_sync::Timer {
-    suzatary_io::mail_sync::Timer::new(instance.paths.last_sync.clone())
+pub fn mail_sync(instance: &Instance) -> Timer {
+    Timer::new(instance.paths.last_sync.clone())
 }
 
 /// The owner's uploads, skipped by the conversations' listing.
 #[must_use]
-pub fn upload_store(instance: &Instance) -> suzatary_io::attachments::AttachmentStore {
-    suzatary_io::attachments::AttachmentStore::new(
+pub fn upload_store(instance: &Instance) -> AttachmentStore {
+    AttachmentStore::new(
         instance.secretary.uploads(),
         suzatary_io::pdftotext::Pdftotext::new(instance.code()),
     )
@@ -512,8 +518,8 @@ pub fn upload_store(instance: &Instance) -> suzatary_io::attachments::Attachment
 /// The upload index, `upload-index/` inside the conversations directory: box-local,
 /// git-ignored with the uploads, never pushed.
 #[must_use]
-pub fn upload_index(instance: &Instance) -> suzatary_io::upload_index::UploadIndexFiles {
-    suzatary_io::upload_index::UploadIndexFiles::new(
+pub fn upload_index(instance: &Instance) -> UploadIndexFiles {
+    UploadIndexFiles::new(
         instance.secretary.conversations.join("upload-index"),
         upload_store(instance),
     )
@@ -521,13 +527,13 @@ pub fn upload_index(instance: &Instance) -> suzatary_io::upload_index::UploadInd
 
 /// The files verbs hand the model.
 #[must_use]
-pub fn file_store(instance: &Instance) -> suzatary_io::blobs::Blobs {
-    suzatary_io::blobs::Blobs::open(instance.secretary.kept())
+pub fn file_store(instance: &Instance) -> Blobs {
+    Blobs::open(instance.secretary.kept())
 }
 
 /// The `claude` CLI at `[secretary] model`, each call joined into `answered`.
 #[must_use]
-pub fn brain(instance: &Instance, answered: suzatary_io::model_health::Answered) -> Brain {
+pub fn brain(instance: &Instance, answered: Answered) -> Brain {
     if !fence(instance).stands() {
         tracing::warn!(
             "the model's tool fence {} is not there — every call to the model's CLI is refused \
@@ -546,7 +552,7 @@ pub fn brain(instance: &Instance, answered: suzatary_io::model_health::Answered)
 
 /// The `claude` subprocess behind its [`Door`].
 pub struct Recorded {
-    cli: suzatary_io::model::ClaudeCli,
+    cli: ClaudeCli,
     door: Door,
 }
 
@@ -563,7 +569,7 @@ impl Model for Recorded {
         self.door.ask(|| self.cli.turn(conversation, tools))
     }
 
-    fn limited(&self) -> Option<suzatary_health::health::Limited> {
+    fn limited(&self) -> Option<Limited> {
         self.door.limited()
     }
 }
@@ -574,8 +580,8 @@ impl SessionModel for Recorded {
         id: &suzatary_conversations::secretary::model::SessionId,
         conversation: &Conversation,
         tools: &serde_json::Value,
-        halt: &suzatary_conversations::secretary::model::Halt,
-    ) -> Result<suzatary_conversations::secretary::model::Sessioned, ModelError> {
+        halt: &Halt,
+    ) -> Result<Sessioned, ModelError> {
         self.door
             .ask(|| self.cli.open(id, conversation, tools, halt))
     }
@@ -587,8 +593,8 @@ impl SessionModel for Recorded {
         delta: &suzatary_conversations::secretary::model::Delta,
         tools: &serde_json::Value,
         on_delta: &dyn Fn(&str),
-        halt: &suzatary_conversations::secretary::model::Halt,
-    ) -> Result<suzatary_conversations::secretary::model::Sessioned, ModelError> {
+        halt: &Halt,
+    ) -> Result<Sessioned, ModelError> {
         self.door.ask(|| {
             self.cli
                 .resume(system, session, delta, tools, on_delta, halt)
@@ -610,16 +616,16 @@ fn five_hour(allowance: &suzatary_io::usage::Allowance) -> Allowance {
 /// from an empty directory and configuration, only while the subscription has room above the
 /// reserve.
 pub struct CompactorModel {
-    asked: suzatary_io::model::ClaudeCli,
+    asked: ClaudeCli,
     door: Door,
-    name: suzatary_core::model_name::ModelName,
+    name: ModelName,
     allowance: suzatary_io::usage::Allowance,
     reserve: Reserve,
 }
 
 impl CompactorModel {
     #[must_use]
-    pub fn new(instance: &Instance, name: suzatary_core::model_name::ModelName) -> Self {
+    pub fn new(instance: &Instance, name: ModelName) -> Self {
         let (empty, config) = (&instance.paths.compactor, &instance.paths.compactor_config);
         for directory in [empty, config] {
             if let Err(failed) = std::fs::create_dir_all(directory) {
@@ -630,10 +636,10 @@ impl CompactorModel {
             }
         }
         let secrets = instance.secrets();
-        let asked = suzatary_io::model::ClaudeCli::new(name.as_str(), fence(instance))
+        let asked = ClaudeCli::new(name.as_str(), fence(instance))
             .in_directory(empty.clone())
             .with_config_dir(config.clone())
-            .with_token(suzatary_io::model::TokenSource::from_store(secrets));
+            .with_token(TokenSource::from_store(secrets));
         Self {
             door: Door::new(
                 suzatary_io::model_health::beside(&instance.mail.heartbeat),
@@ -658,11 +664,7 @@ impl CompactorModel {
     /// # Errors
     /// [`ModelError::Unreachable`] at the reserve, [`ModelError::Limited`] while a limit stands,
     /// or the CLI's own failure.
-    pub fn ask(
-        &self,
-        system: &suzatary_held::for_model::ForModel,
-        text: suzatary_held::for_model::ForModel,
-    ) -> Result<String, ModelError> {
+    pub fn ask(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
         if !subscription_has_room(&five_hour(&self.allowance), self.reserve) {
             return Err(ModelError::Unreachable(
                 "the subscription is down to the reserve automated jobs never take".to_owned(),
@@ -673,24 +675,24 @@ impl CompactorModel {
 }
 
 impl Compact for CompactorModel {
-    fn model(&self) -> &suzatary_core::model_name::ModelName {
+    fn model(&self) -> &ModelName {
         &self.name
     }
 
     fn compact(
         &self,
-        ask: &suzatary_core::secretary::compact_ask::Ask,
+        ask: &suzatary_digest::secretary::compact_ask::Ask,
     ) -> Result<String, ModelError> {
         self.ask(
-            &suzatary_held::for_model::ForModel::of(suzatary_core::secretary::compact_ask::PROMPT),
-            suzatary_held::for_model::ForModel::of(&ask.text()),
+            &ForModel::of(suzatary_digest::secretary::compact_ask::PROMPT),
+            ForModel::of(&ask.text()),
         )
     }
 }
 
 #[must_use]
-pub fn mirrors(instance: &Instance) -> std::sync::Arc<suzatary_io::repos::Mirrors> {
-    std::sync::Arc::new(suzatary_io::repos::Mirrors::new(
+pub fn mirrors(instance: &Instance) -> std::sync::Arc<Mirrors> {
+    std::sync::Arc::new(Mirrors::new(
         instance.paths.repos.clone(),
         suzatary_io::repos::Source::GitHub,
         instance.repos.clone(),

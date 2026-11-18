@@ -1,12 +1,13 @@
-//! The watcher: scheduling and markup warming around the pure `suzatary_core::notify::decide`.
+//! The watcher: scheduling and markup warming around the pure `suzatary_cards::notify::decide`.
 
 use std::collections::BTreeSet;
+use suzatary_store::store::StoreError;
 
 use suzatary_api::routes;
 use suzatary_api::server::Server;
 use suzatary_base::chains::ChainPolicy;
+use suzatary_cards::notify;
 use suzatary_connect::deployment::Deployment;
-use suzatary_core::notify;
 use suzatary_todo::view;
 
 use super::watched::{Pace, Watched};
@@ -109,14 +110,14 @@ pub async fn watcher(
 }
 
 /// A read's answer, or nothing this round and a warning: an unreadable store is not an empty one.
-fn read<T>(what: &str, answer: Result<T, suzatary_store::store::StoreError>) -> Option<T> {
+fn read<T>(what: &str, answer: Result<T, StoreError>) -> Option<T> {
     answer
         .inspect_err(|failed| tracing::warn!("watch: {what} could not be read: {failed}"))
         .ok()
 }
 
 /// One push on the blocking pool; a failure is a log line, never fatal.
-fn send(caps: &'static Server<'static>, push: suzatary_core::notify::Push) {
+fn send(caps: &'static Server<'static>, push: suzatary_cards::notify::Push) {
     tokio::task::spawn_blocking(move || match caps.notify.push(&push) {
         Ok(delivered) => tracing::info!("notify: {push:?} ({} device(s))", delivered.devices()),
         Err(error) => tracing::warn!("notify: nothing delivered: {error}"),
@@ -126,11 +127,11 @@ fn send(caps: &'static Server<'static>, push: suzatary_core::notify::Push) {
 /// The chain's events, in the order the notifier counts them.
 fn events(
     caps: &'static Server<'static>,
-) -> Result<Vec<suzatary_record::record::TodoEvent>, suzatary_store::store::StoreError> {
+) -> Result<Vec<suzatary_record::record::TodoEvent>, StoreError> {
     Ok(view::events_of(&caps.secretary.chain.nodes()?))
 }
 
-fn heads(caps: &'static Server<'static>) -> Result<Vec<String>, suzatary_store::store::StoreError> {
+fn heads(caps: &'static Server<'static>) -> Result<Vec<String>, StoreError> {
     Ok(caps
         .secretary
         .chain

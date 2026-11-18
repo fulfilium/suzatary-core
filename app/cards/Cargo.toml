@@ -1,0 +1,46 @@
+[package]
+name = "suzatary-cards"
+description = "Suzatary's cards the box files on its own: setup, failures, coding sessions and notifications"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_cards"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-mail.workspace = true
+suzatary-health.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+# The overview's test calendar is read as the instance file spells a plugin.
+toml = { workspace = true, optional = true }
+
+[features]
+nothing = ["dep:toml", "suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
+
+[dev-dependencies]
+suzatary-cards = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

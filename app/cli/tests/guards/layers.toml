@@ -1,23 +1,16 @@
 [layers]
-# The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
-# modules, never a higher one's. A file is in the cut of the longest module path below that
-# holds it. A cut that is its own crate (`app/base`, `app/record`, `app/store`, `app/signatures`,
-# `app/todo`, `app/held`, `app/memory`, `app/mail`, `app/health`, `app/triage`, `app/services`,
-# `app/google`, `app/connect`, `app/inbox`, `app/conversations`, `app/lines`, `app/api`) is held
-# by the compiler. The guard layers.rs beside this file reads it; the core split's plan
-# (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
-order = ["topics", "digest", "cards", "secretary", "api"]
+# The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts' modules,
+# never a higher one's. A file is in the cut of the longest module path below that holds it. A cut
+# that is its own crate (`app/base`, `app/record`, `app/store`, `app/signatures`, `app/todo`,
+# `app/held`, `app/memory`, `app/mail`, `app/health`, `app/triage`, `app/services`, `app/google`,
+# `app/connect`, `app/inbox`, `app/conversations`, `app/lines`, `app/topics`, `app/digest`,
+# `app/cards`, `app/api`) is held by the compiler. The guard layers.rs beside this file reads it;
+# the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
+order = ["secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
-allowed = [
-  { from = "secretary/build", to = "secretary" },
-  { from = "secretary/filed", to = "secretary" },
-  { from = "secretary/mail_health", to = "secretary" },
-  { from = "secretary/mail_health", to = "secretary/verbs" },
-  { from = "secretary/memories", to = "secretary/filed" },
-  { from = "secretary/undo", to = "secretary" },
-]
+allowed = []
 
 # The sources `rendering.rs` hashes into every kept render's name, by SHA-256. A change to one
 # renames every kept render: say so in the pull request, then set its digest here.
@@ -38,20 +31,5 @@ rendering = [
 ]
 
 [layers.modules]
-topics = ["secretary/answers", "secretary/readings", "secretary/rules", "secretary/set_up",
-  "secretary/stream",
-  "secretary/title", "secretary/topics", "wire/topics"]
-digest = ["model_name", "secretary/caused", "secretary/compact", "secretary/compact_ask",
-  "secretary/compact_budget", "secretary/compacting", "secretary/compaction", "secretary/compactor",
-  "secretary/digest", "secretary/digest_census", "secretary/digest_event", "secretary/digest_label",
-  "secretary/digest_line", "secretary/digest_policy", "secretary/digest_spent",
-  "secretary/digest_view", "secretary/digests", "secretary/indexed_tree", "secretary/memories",
-  "secretary/recollection", "secretary/shown_record", "secretary/told"]
-cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build", "secretary/coding",
-  "secretary/connections", "secretary/done_elsewhere", "secretary/failing", "secretary/filed",
-  "secretary/lapsed",
-  "secretary/fixes", "secretary/google_sign_in", "secretary/mail_health",
-  "secretary/merged_patches", "secretary/noticed", "secretary/undo",
-  "settings/overview", "wire/cards"]
 secretary = ["agent", "conversation", "secretary", "verb"]
 api = ["asks", "receipt", "release", "secretary/live_shape", "stores", "sync", "wire"]

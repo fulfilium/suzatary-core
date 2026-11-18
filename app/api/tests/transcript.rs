@@ -795,8 +795,8 @@ proptest! {
             .expect("reads by shape");
         let by_shape = shaped.get(&id()).expect("the conversation").stored();
         prop_assert_eq!(
-            suzatary_core::secretary::readings::unplaced(&by_shape.lines(&inbox)),
-            suzatary_core::secretary::readings::unplaced(&whole.lines(&inbox))
+            suzatary_topics::secretary::readings::unplaced(&by_shape.lines(&inbox)),
+            suzatary_topics::secretary::readings::unplaced(&whole.lines(&inbox))
         );
     }
 

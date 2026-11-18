@@ -1,6 +1,34 @@
 //! `suzatary serve`; `table` lists every route. It sends no CORS header, `gate` refuses any peer
 //! whois cannot name, and the only HTML it serves is `dist`'s files and typst's rendering.
 
+use crate::commands::secretary::Acting;
+use crate::commands::secretary::ActingStores;
+use crate::commands::secretary::Postman;
+use crate::instance::InstanceEdits;
+use crate::instance::Mounts;
+use crate::instance::Plugins;
+use crate::stamp::Release;
+use prodrome_core::memo::Cache;
+use prodrome_core::memo::Lru;
+use prodrome_core::store::frontier::Frontiers;
+use suzatary_api::clienterror::Limiter;
+use suzatary_api::gate::Door;
+use suzatary_api::portal::Portal;
+use suzatary_api::routes::Books;
+use suzatary_api::secretary::routes::Cards;
+use suzatary_api::secretary::routes::Perform;
+use suzatary_api::secretary::routes::Post;
+use suzatary_core::asks::AskEvent;
+use suzatary_core::secretary::Bound;
+use suzatary_health::health::Register;
+use suzatary_held::held_value::Reveal;
+use suzatary_held::vault::Vault;
+use suzatary_io::attachments::AttachmentStore;
+use suzatary_io::model_health::Answered;
+use suzatary_io::objects::Objects;
+use suzatary_io::requests::Requests;
+use suzatary_signatures::epoch::Epochs;
+use suzatary_signatures::signatures::BoxKeys;
 pub(crate) mod asked;
 mod body;
 mod call;
@@ -53,8 +81,8 @@ use axum::http::{HeaderValue, header};
 use suzatary_api::server::Server;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
-use suzatary_core::secretary::compacting::Compacting;
-use suzatary_core::secretary::memories::Texts;
+use suzatary_digest::secretary::compacting::Compacting;
+use suzatary_digest::secretary::memories::Texts;
 use suzatary_google::google::Endpoints;
 use suzatary_lines::parts::Parts;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
@@ -79,8 +107,8 @@ pub use world::World;
 
 /// The owner's uploads; only his confirm reaches the vault.
 pub struct Uploads {
-    pub store: suzatary_io::attachments::AttachmentStore,
-    pub vault: Arc<dyn suzatary_held::vault::Vault>,
+    pub store: AttachmentStore,
+    pub vault: Arc<dyn Vault>,
 }
 
 #[derive(Clone)]
@@ -106,14 +134,14 @@ pub struct Settings {
 
 /// What a tap reaches, outside every record.
 pub struct Performers {
-    pub postman: Arc<dyn suzatary_api::secretary::routes::Post + Send + Sync>,
-    pub acting: Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync>,
+    pub postman: Arc<dyn Post + Send + Sync>,
+    pub acting: Arc<dyn Perform + Send + Sync>,
 }
 
 /// The signed requests kept, the box's refusals of signed objects, and the pairing codes.
 pub struct Signed {
-    pub requests: Arc<suzatary_io::requests::Requests>,
-    pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
+    pub requests: Arc<Requests>,
+    pub asks: Arc<Objects<AskEvent>>,
     pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
 }
 
@@ -124,11 +152,11 @@ pub struct Inner {
     pub first: Chained,
     pub chains: Arc<BTreeMap<String, Chained>>,
     pub deployment: Arc<Deployment>,
-    pub door: Arc<suzatary_api::gate::Door>,
+    pub door: Arc<Door>,
     /// Reached only with a `Tap`.
-    pub postman: Arc<dyn suzatary_api::secretary::routes::Post + Send + Sync>,
+    pub postman: Arc<dyn Post + Send + Sync>,
     /// Reached only with a `Tap`.
-    pub acting: Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync>,
+    pub acting: Arc<dyn Perform + Send + Sync>,
     pub known: Arc<Mutex<gate::Remembering>>,
     pub workers: Arc<Workers>,
     /// Only [`State::reconnected`] writes it.
@@ -143,7 +171,7 @@ pub struct Inner {
     /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_mail::mail::cache::Forget + Send + Sync>,
     /// Reads a held value back for a tap; outside every record, so no agent verb can.
-    pub reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
+    pub reveal: Arc<dyn Reveal + Send + Sync>,
     /// Syncs a plugin after a tap.
     pub checks: checks::Checks,
     pub reach: Arc<Reach>,
@@ -154,42 +182,28 @@ pub struct Inner {
     /// `None` while the compactor is off.
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
-    pub reports: Arc<Mutex<suzatary_api::clienterror::Limiter>>,
+    pub reports: Arc<Mutex<Limiter>>,
     pub stamp: Stamp,
     /// `None` declares no plugin.
-    pub plugins: Option<Arc<crate::instance::Plugins>>,
+    pub plugins: Option<Arc<Plugins>>,
     pub repos: Arc<suzatary_services::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
     pub read: Arc<Mutex<suzatary_signatures::chain_set::Read>>,
     /// Open connection cards, memoised.
-    pub asking: Arc<
-        Mutex<
-            prodrome_core::memo::Cache<
-                Vec<suzatary_core::settings::overview::Asking>,
-                prodrome_core::memo::Lru,
-            >,
-        >,
-    >,
-    pub built: Arc<
-        Mutex<
-            prodrome_core::memo::Cache<
-                suzatary_core::settings::overview::Build,
-                prodrome_core::memo::Lru,
-            >,
-        >,
-    >,
+    pub asking: Arc<Mutex<Cache<Vec<suzatary_cards::settings::overview::Asking>, Lru>>>,
+    pub built: Arc<Mutex<Cache<suzatary_cards::settings::overview::Build, Lru>>>,
     /// Reached only by a tapped device card.
-    pub keys: Option<Arc<suzatary_signatures::signatures::BoxKeys>>,
-    pub requests: Arc<suzatary_io::requests::Requests>,
+    pub keys: Option<Arc<BoxKeys>>,
+    pub requests: Arc<Requests>,
     /// Written only by the acceptance of a tab's objects.
-    pub asks: Arc<suzatary_io::objects::Objects<suzatary_core::asks::AskEvent>>,
+    pub asks: Arc<Objects<AskEvent>>,
     pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
-    pub answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
+    pub answered: Arc<dyn Register<String> + Send + Sync>,
     /// Reached only with a `Tap`.
     pub signing: Arc<dyn sign_in::Sessions + Send + Sync>,
     pub verify: Arc<dyn Verify + Send + Sync>,
@@ -199,11 +213,11 @@ pub struct Inner {
     pub noticing: Arc<Mutex<Option<Heard>>>,
     /// Secret store answers since the last filing.
     pub secrets_answered: Arc<Mutex<suzatary_connect::secrets::SecretAnswers>>,
-    pub epochs: Arc<suzatary_signatures::epoch::Epochs>,
-    pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
-    pub portal: Arc<suzatary_api::portal::Portal>,
+    pub epochs: Arc<Epochs>,
+    pub frontiers: Arc<Frontiers>,
+    pub portal: Arc<Portal>,
     /// Where each chain's store is, so the plan store is found per request.
-    pub mounts: Arc<crate::instance::Mounts>,
+    pub mounts: Arc<Mounts>,
 }
 
 /// A store that holds no secret.
@@ -281,13 +295,13 @@ impl Stamp {
     /// What `GET /api/about` answers.
     pub fn about(
         &self,
-        mounts: &crate::instance::Mounts,
+        mounts: &Mounts,
         set: &suzatary_signatures::chain_set::ChainSet<'_>,
-    ) -> Result<suzatary_core::wire::cards::AboutPayload, Refusal> {
+    ) -> Result<suzatary_cards::wire::cards::AboutPayload, Refusal> {
         let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
         let released = match crate::stamp::release().map_err(|e| internal(&e))? {
-            crate::stamp::Release::Released(released) => Some(released),
-            crate::stamp::Release::Dev => None,
+            Release::Released(released) => Some(released),
+            Release::Dev => None,
         };
         let project = mounts.project().map_err(|e| internal(&e))?;
         suzatary_api::routes::about(
@@ -332,7 +346,7 @@ impl State {
         first: Chained,
         rest: impl IntoIterator<Item = Chained>,
         deployment: Arc<Deployment>,
-        door: suzatary_api::gate::Door,
+        door: Door,
         Signed {
             requests,
             asks,
@@ -387,20 +401,14 @@ impl State {
             titler: None,
             compactor: None,
             presence: Presence::default(),
-            reports: Arc::new(Mutex::new(suzatary_api::clienterror::Limiter::new(
-                suzatary_api::clienterror::BUDGET,
-            ))),
+            reports: Arc::new(Mutex::new(Limiter::new(suzatary_api::clienterror::BUDGET))),
             stamp: Stamp::Compiled,
             plugins: None,
             repos: Arc::new(suzatary_services::repos::Declared::default()),
             data,
             read: Arc::default(),
-            asking: Arc::new(Mutex::new(prodrome_core::memo::Cache::new(
-                prodrome_core::memo::Lru::new(4),
-            ))),
-            built: Arc::new(Mutex::new(prodrome_core::memo::Cache::new(
-                prodrome_core::memo::Lru::new(4),
-            ))),
+            asking: Arc::new(Mutex::new(Cache::new(Lru::new(4)))),
+            built: Arc::new(Mutex::new(Cache::new(Lru::new(4)))),
             keys: None,
             requests,
             asks,
@@ -413,11 +421,9 @@ impl State {
             consenting,
             noticing: Arc::default(),
             secrets_answered: Arc::default(),
-            epochs: Arc::new(suzatary_signatures::epoch::Epochs::remembered()),
-            frontiers: Arc::new(prodrome_core::store::frontier::Frontiers::remembered(
-                prodrome_core::store::frontier::KEPT,
-            )),
-            portal: Arc::new(suzatary_api::portal::Portal::Quiet),
+            epochs: Arc::new(Epochs::remembered()),
+            frontiers: Arc::new(Frontiers::remembered(prodrome_core::store::frontier::KEPT)),
+            portal: Arc::new(Portal::Quiet),
             mounts: Arc::default(),
             models,
         }))
@@ -429,11 +435,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_books(
-        mut self,
-        epochs: Arc<suzatary_signatures::epoch::Epochs>,
-        frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
-    ) -> Self {
+    pub fn with_books(mut self, epochs: Arc<Epochs>, frontiers: Arc<Frontiers>) -> Self {
         let inner = self.building();
         inner.epochs = epochs;
         inner.frontiers = frontiers;
@@ -441,18 +443,15 @@ impl State {
     }
 
     #[must_use]
-    pub fn books(&self) -> suzatary_api::routes::Books<'_> {
-        suzatary_api::routes::Books {
+    pub fn books(&self) -> Books<'_> {
+        Books {
             epochs: &self.epochs,
             frontiers: &self.frontiers,
         }
     }
 
     #[must_use]
-    pub fn with_answered(
-        mut self,
-        answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
-    ) -> Self {
+    pub fn with_answered(mut self, answered: Arc<dyn Register<String> + Send + Sync>) -> Self {
         self.building().answered = answered;
         self
     }
@@ -483,7 +482,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_portal(mut self, portal: suzatary_api::portal::Portal) -> Self {
+    pub fn with_portal(mut self, portal: Portal) -> Self {
         self.building().portal = Arc::new(portal);
         self
     }
@@ -495,7 +494,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_keys(mut self, keys: Option<suzatary_signatures::signatures::BoxKeys>) -> Self {
+    pub fn with_keys(mut self, keys: Option<BoxKeys>) -> Self {
         self.building().keys = keys.map(Arc::new);
         self
     }
@@ -522,7 +521,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_plugins(mut self, plugins: crate::instance::Plugins) -> Self {
+    pub fn with_plugins(mut self, plugins: Plugins) -> Self {
         locks::write(&self.live)
             .plugins
             .clone_from(&plugins.manifests);
@@ -537,7 +536,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_mounts(mut self, mounts: crate::instance::Mounts) -> Self {
+    pub fn with_mounts(mut self, mounts: Mounts) -> Self {
         self.building().mounts = Arc::new(mounts);
         self
     }
@@ -566,10 +565,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_reveal(
-        mut self,
-        reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>,
-    ) -> Self {
+    pub fn with_reveal(mut self, reveal: Arc<dyn Reveal + Send + Sync>) -> Self {
         self.building().reveal = reveal;
         self
     }
@@ -653,11 +649,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_uploads(
-        mut self,
-        store: suzatary_io::attachments::AttachmentStore,
-        vault: Arc<dyn suzatary_held::vault::Vault>,
-    ) -> Self {
+    pub fn with_uploads(mut self, store: AttachmentStore, vault: Arc<dyn Vault>) -> Self {
         self.building().uploads = Some(Arc::new(Uploads { store, vault }));
         self
     }
@@ -708,7 +700,7 @@ impl State {
         let model = part("model", || self.models.recorded());
         locks::held(&self.secrets_answered).forget();
         let secrets = self.secrets(caps);
-        let seen = suzatary_core::secretary::noticed::Seen {
+        let seen = suzatary_cards::secretary::noticed::Seen {
             settables: &settables,
             secrets: &secrets,
             model: &model,
@@ -719,11 +711,11 @@ impl State {
             heard: heard.as_ref(),
             pushed: &part("pushed", || settings::pushed(self)),
             now,
-            redirect: suzatary_core::secretary::google_sign_in::Consents::redirect(
+            redirect: suzatary_cards::secretary::google_sign_in::Consents::redirect(
                 self.consenting.as_ref(),
             ),
         };
-        match suzatary_core::secretary::noticed::notice(
+        match suzatary_cards::secretary::noticed::notice(
             &seen,
             caps.secretary.conversations,
             caps.secretary.inbox,
@@ -763,10 +755,10 @@ impl State {
     }
 
     #[must_use]
-    pub fn every_chain(&self) -> Vec<suzatary_core::secretary::Bound<'_>> {
+    pub fn every_chain(&self) -> Vec<Bound<'_>> {
         self.chains
             .iter()
-            .map(|(name, chained)| suzatary_core::secretary::Bound {
+            .map(|(name, chained)| Bound {
                 name,
                 caps: chained.caps.secretary,
                 policy: &chained.policy,
@@ -777,10 +769,7 @@ impl State {
     /// Runs secretary work with the cards built.
     pub fn with_cards<T>(
         &self,
-        work: impl FnOnce(
-            &Server<'_>,
-            &suzatary_api::secretary::routes::Cards<'_>,
-        ) -> Result<T, Refusal>,
+        work: impl FnOnce(&Server<'_>, &Cards<'_>) -> Result<T, Refusal>,
     ) -> Result<T, Refusal> {
         let chains = self.every_chain();
         let declared = self
@@ -789,7 +778,7 @@ impl State {
             .inspect_err(|failed| tracing::warn!("cards: the instance file: {failed}"))
             .ok();
         let settables = self.settables();
-        let cards = suzatary_api::secretary::routes::Cards {
+        let cards = Cards {
             deployment: &self.deployment,
             chains: &chains,
             plugins: declared
@@ -842,7 +831,7 @@ fn logged(from: &live::Live, to: &live::Live, who: &str) {
 pub struct Serving {
     pub listening: listening::Listening,
     /// `app_url`'s host at the `listening` port.
-    pub door: suzatary_api::gate::Door,
+    pub door: Door,
     pub dist: PathBuf,
     pub live: live::Shared,
     /// Names a peer, loopback included.
@@ -851,7 +840,7 @@ pub struct Serving {
     pub titler: Brain,
     /// Off under every fixture.
     pub compacting: Compacting,
-    pub postman: crate::commands::secretary::Postman,
+    pub postman: Postman,
     pub acting: Performing,
     /// Shared with the performer for a tap's announcements.
     pub workers: Arc<Workers>,
@@ -859,7 +848,7 @@ pub struct Serving {
     pub signing: Arc<sign_ins::SignIns>,
     pub verify: Arc<dyn Verify + Send + Sync>,
     /// Rings `moved` when a reading moves.
-    pub answered: suzatary_io::model_health::Answered,
+    pub answered: Answered,
     /// Rung when a model starts or stops answering.
     pub moved: Arc<tokio::sync::Notify>,
     /// Google's endpoints, or a fake.
@@ -939,13 +928,7 @@ pub const POLICY: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eva
     form-action 'none'; frame-ancestors 'none'";
 
 /// Performs a tapped act through the pages' handles.
-pub type Performing = Box<
-    dyn FnOnce(
-            crate::commands::secretary::ActingStores,
-            Arc<Workers>,
-        ) -> crate::commands::secretary::Acting
-        + Send,
->;
+pub type Performing = Box<dyn FnOnce(ActingStores, Arc<Workers>) -> Acting + Send>;
 
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
     use suzatary_io::{epochs, frontiers};
@@ -983,11 +966,11 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         Arc::new(instance.deployment.clone()),
         serving.door,
         Signed {
-            requests: Arc::new(suzatary_io::requests::Requests::open(
+            requests: Arc::new(Requests::open(
                 instance.requests(),
                 instance.paths.answers.clone(),
             )),
-            asks: Arc::new(suzatary_io::objects::Objects::open(instance.asks())),
+            asks: Arc::new(Objects::open(instance.asks())),
             pairings: Arc::new(suzatary_io::pairing::Pairings::at(
                 instance.paths.pairing.clone(),
             )),
@@ -1003,7 +986,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
             models: Arc::new(models::Models::of(instance)),
             secrets: Arc::new(instance.secrets()),
             declares: Arc::new(instance.declarations.clone()),
-            edits: Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
+            edits: Arc::new(InstanceEdits::new(instance.path.clone())),
             data: Arc::new(instance.data().to_path_buf()),
         },
     )
@@ -1031,7 +1014,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_google(google::Consenting::new(
         suzatary_io::google::Google::new(serving.google),
         Arc::new(instance.secrets()),
-        Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
+        Arc::new(InstanceEdits::new(instance.path.clone())),
         &instance.deployment.app_url,
     ));
     started_up(&first, &rest).await;
@@ -1366,7 +1349,7 @@ fn listening_of(
     host: Option<String>,
     port: Option<u16>,
     tls: Option<(PathBuf, PathBuf)>,
-) -> anyhow::Result<(listening::Listening, suzatary_api::gate::Door)> {
+) -> anyhow::Result<(listening::Listening, Door)> {
     let host = host.unwrap_or_else(|| instance.serving.host.clone());
     let at = SocketAddr::new(
         host.parse()
@@ -1395,10 +1378,10 @@ fn quiet(instance: &Instance, fixture: bool) -> Compacting {
 #[cfg(feature = "fixture")]
 fn fixture_talking(
     instance: &Instance,
-    answered: &suzatary_io::model_health::Answered,
+    answered: &Answered,
     (model_fixture, smtp_fixture): (Option<PathBuf>, Option<PathBuf>),
     certified: bool,
-) -> anyhow::Result<(Brain, crate::commands::secretary::Postman)> {
+) -> anyhow::Result<(Brain, Postman)> {
     Ok(match (model_fixture, smtp_fixture) {
         (None, None) => (real_brain(instance, answered), real_postman(instance)),
         (script, recording) => {
@@ -1423,7 +1406,7 @@ fn fixture_talking(
                             "serve: --smtp-fixture {} — nothing is sent",
                             path.display()
                         );
-                        crate::commands::secretary::Postman::Recording(path)
+                        Postman::Recording(path)
                     }
                 },
             )
@@ -1433,7 +1416,7 @@ fn fixture_talking(
 
 fn performers(
     instance: &Instance,
-    answered: &suzatary_io::model_health::Answered,
+    answered: &Answered,
     moved: &Arc<tokio::sync::Notify>,
     #[cfg(feature = "fixture")] (scripted, google): (bool, &Endpoints),
 ) -> (
@@ -1488,12 +1471,12 @@ fn daemon_peers(socket: &Path) -> Peers {
     Peers::Daemon(suzatary_io::whois::Tailscaled::new(socket))
 }
 
-fn real_brain(instance: &Instance, answered: &suzatary_io::model_health::Answered) -> Brain {
+fn real_brain(instance: &Instance, answered: &Answered) -> Brain {
     interpreters::brain(instance, answered.clone())
 }
 
-fn real_postman(instance: &Instance) -> crate::commands::secretary::Postman {
-    crate::commands::secretary::Postman::Real(Arc::new(instance.clone()))
+fn real_postman(instance: &Instance) -> Postman {
+    Postman::Real(Arc::new(instance.clone()))
 }
 
 /// Rings `moved` when a device flow ends.
@@ -1504,7 +1487,7 @@ fn real_acting(
 ) -> Performing {
     let (instance, signing, moved) = (instance.clone(), Arc::clone(signing), Arc::clone(moved));
     Box::new(move |stores, workers| {
-        crate::commands::secretary::Acting::real(
+        Acting::real(
             &instance,
             stores,
             workers,
@@ -1522,9 +1505,7 @@ fn recording_acting(
     google: &Endpoints,
 ) -> Performing {
     let (instance, signing, google) = (instance.clone(), Arc::clone(signing), google.clone());
-    Box::new(move |stores, workers| {
-        crate::commands::secretary::Acting::recording(&instance, stores, workers, signing, &google)
-    })
+    Box::new(move |stores, workers| Acting::recording(&instance, stores, workers, signing, &google))
 }
 
 /// Open the default conversation; no read writes it.
@@ -1541,7 +1522,7 @@ fn open_default(caps: &suzatary_api::server::Server<'_>) {
 /// Only the first chain pushes.
 fn watch_from_now_on(
     instance: &Instance,
-    stores: crate::commands::secretary::ActingStores,
+    stores: ActingStores,
     state: &State,
     first: &Chained,
     rest: Vec<Chained>,
@@ -1583,7 +1564,7 @@ fn heard(
     calendar: &dyn suzatary_google::calendar::effect::Calendar,
     now: suzatary_health::health::Instant,
 ) -> Option<Heard> {
-    use suzatary_core::secretary::failing::{QUIET, quiet};
+    use suzatary_cards::secretary::failing::{QUIET, quiet};
     calendar
         .days((now - quiet()).date(), 2 * QUIET + 1)
         .inspect_err(|failed| tracing::warn!("noticed: the calendars: {failed}"))
@@ -1674,7 +1655,7 @@ pub async fn instance_watched(state: State, path: PathBuf) {
 
 fn resume_waiting(state: &State) {
     let caps = state.first.caps;
-    match suzatary_core::secretary::set_up::owing(caps.secretary.conversations) {
+    match suzatary_topics::secretary::set_up::owing(caps.secretary.conversations) {
         Ok(owing) => {
             for id in &owing {
                 state.heard(id);

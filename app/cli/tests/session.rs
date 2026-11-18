@@ -236,7 +236,7 @@ fn a_retraction_reopens_a_stored_session() {
     let node = prodrome_core::event::Hash::new("ab".repeat(32)).expect("a name");
     suzatary_store::store::Prodrome::append(
         &caps.digests,
-        suzatary_core::secretary::digest_event::retracted(
+        suzatary_digest::secretary::digest_event::retracted(
             node,
             suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant"),
             &tap,

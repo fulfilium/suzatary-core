@@ -1,6 +1,10 @@
 //! The web's payloads; their TypeScript and decoders are generated ([`shape`]). A field name is
 //! the name on the wire, so renaming one is a contract change.
 
+use suzatary_base::refusal::Refusal;
+use suzatary_core::release::Lot;
+use suzatary_held::held_value::Revealed;
+use suzatary_mail::mail::MailRow;
 pub mod shape;
 
 use std::collections::BTreeMap;
@@ -9,14 +13,14 @@ use serde::{Deserialize, Serialize};
 use ts_rs::{Dependency, TS, TypeVisitor};
 
 use suzatary_base::wire::base::ErrorPayload;
-use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Overview};
-use suzatary_core::wire::topics::{
-    AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
-    MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
-};
+use suzatary_cards::wire::cards::{AboutPayload, HeldTodo, Overview};
 use suzatary_lines::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
 use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
+use suzatary_topics::wire::topics::{
+    AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
+    MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
+};
 use suzatary_triage::wire::triage::WatchesPayload;
 
 /// `GET /api/chain`: every object in the linearisation's order.
@@ -273,7 +277,7 @@ pub struct MailPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct InboxPayload {
     pub accounts: Vec<String>,
-    pub messages: Vec<suzatary_mail::mail::MailRow>,
+    pub messages: Vec<MailRow>,
 }
 
 /// `GET /api/mail/search`: a notmuch query, newest first.
@@ -281,7 +285,7 @@ pub struct InboxPayload {
 pub struct MailSearchPayload {
     pub q: String,
     pub accounts: Vec<String>,
-    pub messages: Vec<suzatary_mail::mail::MailRow>,
+    pub messages: Vec<MailRow>,
 }
 
 /// `GET /api/mail/thread/{id}`: oldest first.
@@ -520,30 +524,26 @@ pub enum RevealPayload {
 impl RevealPayload {
     /// # Errors
     /// A file over [`suzatary_held::held_value::MAX_OPENED`], which no answer carries.
-    pub fn of(
-        read: suzatary_held::held_value::Revealed,
-    ) -> Result<Self, suzatary_base::refusal::Refusal> {
+    pub fn of(read: Revealed) -> Result<Self, Refusal> {
         use base64::Engine as _;
         match read {
-            suzatary_held::held_value::Revealed::Value(shown) => Ok(Self::Shown {
+            Revealed::Value(shown) => Ok(Self::Shown {
                 value: shown.into_string(),
             }),
-            suzatary_held::held_value::Revealed::File(opened) => Ok(Self::File {
+            Revealed::File(opened) => Ok(Self::File {
                 name: opened.name,
                 media: opened.media,
                 bytes: base64::engine::general_purpose::STANDARD.encode(opened.bytes),
             }),
-            suzatary_held::held_value::Revealed::TooLarge(size) => {
-                Err(suzatary_base::refusal::Refusal::new(
-                    suzatary_base::refusal::Status::UnprocessableEntity,
-                    format!(
-                        "the file is {size} bytes; a tap opens at most {} here, so open it where \
+            Revealed::TooLarge(size) => Err(Refusal::new(
+                suzatary_base::refusal::Status::UnprocessableEntity,
+                format!(
+                    "the file is {size} bytes; a tap opens at most {} here, so open it where \
                      it is kept",
-                        suzatary_held::held_value::MAX_OPENED
-                    ),
-                ))
-            }
-            suzatary_held::held_value::Revealed::Gone => Ok(Self::Gone),
+                    suzatary_held::held_value::MAX_OPENED
+                ),
+            )),
+            Revealed::Gone => Ok(Self::Gone),
         }
     }
 }
@@ -618,7 +618,7 @@ pub struct ReleaseRow {
     /// `null` while the plan declares a todo the chain does not hold yet.
     pub held: Option<HeldTodo>,
     pub version: String,
-    pub lot: suzatary_core::release::Lot,
+    pub lot: Lot,
     pub place: suzatary_core::release::Place,
     /// Every todo its spec has named, in id order.
     pub items: Vec<ReleaseItem>,
@@ -629,7 +629,7 @@ pub struct ReleaseItem {
     pub todo: String,
     /// `null` where the spec names a todo the chain does not hold.
     pub held: Option<HeldTodo>,
-    pub lot: suzatary_core::release::Lot,
+    pub lot: Lot,
     pub named: suzatary_core::release::Named,
 }
 

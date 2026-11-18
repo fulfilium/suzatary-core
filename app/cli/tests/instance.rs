@@ -548,8 +548,8 @@ fn the_instance_file_reads_and_refuses_as_the_golden_file_says() {
 /// keys say.
 #[test]
 fn the_compactor_is_off_by_default_and_on_by_its_switch() {
-    use suzatary_core::secretary::compact_budget::Budget;
-    use suzatary_core::secretary::compacting::Compacting;
+    use suzatary_digest::secretary::compact_budget::Budget;
+    use suzatary_digest::secretary::compacting::Compacting;
     let dir = scratch("compacting");
     let file = dir.join("instance.toml");
     let read = |text: &str| {
@@ -566,9 +566,10 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
         read(&on),
         Compacting::On {
             ladder: nonempty::NonEmpty::new(
-                suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5").expect("a model"),
+                suzatary_digest::model_name::ModelName::parse("claude-sonnet-5-5")
+                    .expect("a model"),
                 vec![
-                    suzatary_core::model_name::ModelName::parse("claude-opus-5-5")
+                    suzatary_digest::model_name::ModelName::parse("claude-opus-5-5")
                         .expect("a model")
                 ],
             ),

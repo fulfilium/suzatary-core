@@ -8,7 +8,7 @@ mod ntfy;
 
 use std::sync::OnceLock;
 
-use suzatary_core::notify::{Delivered, Notify, NotifyError, Printed, Push};
+use suzatary_cards::notify::{Delivered, Notify, NotifyError, Printed, Push};
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::Log;
 

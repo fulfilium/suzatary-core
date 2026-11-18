@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Secret;
-use suzatary_core::notify::Printed;
+use suzatary_cards::notify::Printed;
 
 use crate::http::{Http, Req};
 use crate::secrets::{Resolves, SecretError};
@@ -209,7 +209,7 @@ pub(super) mod tests {
 
     #[test]
     fn the_fcm_body_is_a_data_message_with_no_notification_block() {
-        let push = suzatary_core::notify::Push::Agent {
+        let push = suzatary_cards::notify::Push::Agent {
             authored: 2,
             changes: 0,
         }

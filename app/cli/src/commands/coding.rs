@@ -3,19 +3,24 @@
 //! The fire is reached only by the owner's tap (`Coder` is in no effect record); the
 //! poll reads `claude/` branches for a report and never merges, builds or promotes one.
 
+use crate::commands::secretary::ActingConversations;
+use crate::commands::serve::Workers;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use suzatary_base::repo_ids::RepoName;
+use suzatary_io::clock::SystemClock;
+use suzatary_io::repos::Mirrors;
 
 use suzatary_base::capability::Clock as _;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::RoutineId;
-use suzatary_core::secretary::coding::Advanced;
 use suzatary_inbox::coding::{Fired, Task};
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::routine::{Endpoint, FireError};
 use suzatary_io::secrets::Resolves;
+use suzatary_topics::secretary::coding::Advanced;
 
 use crate::instance::Instance;
 
@@ -111,7 +116,7 @@ fn failed_fire(failed: &FireError) -> Performed {
 pub struct Coder {
     pub firing: Firing,
     /// The conversations a session's lines are written into: the server's own handle.
-    pub conversations: crate::commands::secretary::ActingConversations,
+    pub conversations: ActingConversations,
 }
 
 impl Coder {
@@ -124,12 +129,12 @@ impl Coder {
             Err(failed) => return failed,
         };
         let url = fired.url.to_string();
-        match suzatary_core::secretary::coding::fired(
+        match suzatary_topics::secretary::coding::fired(
             self.conversations.conversations(),
             id,
             index,
             fired,
-            suzatary_io::clock::SystemClock.now(),
+            SystemClock.now(),
         ) {
             Ok(_) => Performed::Done(Done::Acted {
                 what: format!("started a coding session: {url}"),
@@ -152,8 +157,8 @@ impl Coder {
 /// The mirror's or the store's own failures.
 pub fn poll(
     conversations: &ConversationStores,
-    mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_base::repo_ids::RepoName,
+    mirrors: &Mirrors,
+    repo: &RepoName,
 ) -> anyhow::Result<Vec<Advanced>> {
     let waiting = waiting(conversations)?;
     if waiting.is_empty() {
@@ -161,28 +166,25 @@ pub fn poll(
         return Ok(Vec::new());
     }
     let seen = seen(mirrors, repo)?;
-    for line in suzatary_core::secretary::coding::explained(&waiting, &seen) {
+    for line in suzatary_topics::secretary::coding::explained(&waiting, &seen) {
         tracing::debug!("coding poll: {line}");
     }
-    suzatary_core::secretary::coding::advance(
+    suzatary_topics::secretary::coding::advance(
         conversations.conversations(),
         &seen,
-        suzatary_io::clock::SystemClock.now(),
+        SystemClock.now(),
     )
     .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
 }
 
 /// Every session still waiting on a branch.
 fn waiting(conversations: &ConversationStores) -> anyhow::Result<Vec<Advanced>> {
-    suzatary_core::secretary::coding::waiting(conversations.conversations())
+    suzatary_topics::secretary::coding::waiting(conversations.conversations())
         .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
 }
 
 /// Every `claude/` branch of `repo`, as the mirror holds it after a fetch.
-fn seen(
-    mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_base::repo_ids::RepoName,
-) -> anyhow::Result<Vec<suzatary_inbox::coding::Seen>> {
+fn seen(mirrors: &Mirrors, repo: &RepoName) -> anyhow::Result<Vec<suzatary_inbox::coding::Seen>> {
     mirrors
         .seen(repo)
         .map_err(|failed| anyhow::anyhow!("reading {repo}: {failed}"))
@@ -195,10 +197,10 @@ fn seen(
 /// The mirror's or the store's own failures.
 pub fn explain(
     conversations: &ConversationStores,
-    mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_base::repo_ids::RepoName,
+    mirrors: &Mirrors,
+    repo: &RepoName,
 ) -> anyhow::Result<Vec<String>> {
-    Ok(suzatary_core::secretary::coding::explained(
+    Ok(suzatary_topics::secretary::coding::explained(
         &waiting(conversations)?,
         &seen(mirrors, repo)?,
     ))
@@ -206,10 +208,10 @@ pub fn explain(
 
 /// The server's poll, every [`EVERY`], one [`poll_once`] a tick.
 pub async fn polling(
-    conversations: crate::commands::secretary::ActingConversations,
-    mirrors: Arc<suzatary_io::repos::Mirrors>,
-    repo: suzatary_base::repo_ids::RepoName,
-    workers: Arc<crate::commands::serve::Workers>,
+    conversations: ActingConversations,
+    mirrors: Arc<Mirrors>,
+    repo: RepoName,
+    workers: Arc<Workers>,
 ) {
     let mut every = tokio::time::interval(EVERY);
     loop {
@@ -222,10 +224,10 @@ pub async fn polling(
 /// conversation's page, and a poll that fails or panics is logged and answers how many
 /// sessions moved (none), so the server and the next tick go on.
 pub async fn poll_once(
-    conversations: crate::commands::secretary::ActingConversations,
-    mirrors: &Arc<suzatary_io::repos::Mirrors>,
-    repo: &suzatary_base::repo_ids::RepoName,
-    workers: &crate::commands::serve::Workers,
+    conversations: ActingConversations,
+    mirrors: &Arc<Mirrors>,
+    repo: &RepoName,
+    workers: &Workers,
 ) -> usize {
     let (mirrors, repo) = (Arc::clone(mirrors), repo.clone());
     match tokio::task::spawn_blocking(move || poll(conversations, &mirrors, &repo)).await {
@@ -258,8 +260,8 @@ pub async fn poll_once(
 /// Spawn the server's poll when `[coding]` names a routine, reading the server's own `conversations`.
 pub fn spawn_polling(
     instance: &Instance,
-    conversations: crate::commands::secretary::ActingConversations,
-    workers: &Arc<crate::commands::serve::Workers>,
+    conversations: ActingConversations,
+    workers: &Arc<Workers>,
 ) {
     if let Some(coding) = &instance.deployment.coding {
         tokio::spawn(polling(

@@ -1,9 +1,10 @@
 //! The secretary's readings a page takes from its replicas of the inbox and the conversations:
-//! `suzatary_core::secretary::readings` applied to the objects the classes hold, so a page reads
+//! `suzatary_topics::secretary::readings` applied to the objects the classes hold, so a page reads
 //! what the box would answer for the same objects. A conversation's reading takes the inbox's
 //! class by reference: its objects are already in the module, and nothing crosses again. The lines
 //! are a [`Lines`], held by what changed and read by what moved.
 
+use crate::topics::TopicReading;
 use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::dag::Unread;
@@ -13,15 +14,15 @@ use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_api::query;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::Stored;
-use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
-use suzatary_core::secretary::stream;
-use suzatary_core::wire::topics::{MemoryPayload, Speaker};
 use suzatary_inbox::secretary::inbox::Fold;
 use suzatary_lines::secretary::held_lines::Admitted;
 use suzatary_lines::secretary::held_replica::HeldReplica;
 use suzatary_lines::secretary::outlines::Scope;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
+use suzatary_topics::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
+use suzatary_topics::secretary::stream;
+use suzatary_topics::wire::topics::{MemoryPayload, Speaker};
 use wasm_bindgen::prelude::*;
 
 use crate::{Chains, Proposals, Read, json, read, refused};
@@ -224,7 +225,7 @@ impl Lines {
     /// page holds before it reads the stream.
     pub fn chosen(
         &self,
-        topics: &crate::topics::TopicReading,
+        topics: &TopicReading,
         chosen: &str,
         pages: u32,
     ) -> Result<String, JsError> {
@@ -252,7 +253,7 @@ impl Lines {
     /// its HTML under.
     pub fn stream(
         &mut self,
-        topics: &crate::topics::TopicReading,
+        topics: &TopicReading,
         chosen: &str,
         pages: u32,
     ) -> Result<Read, JsError> {
