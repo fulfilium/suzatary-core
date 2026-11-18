@@ -12,16 +12,16 @@ use std::collections::BTreeSet;
 
 use chrono::Duration;
 
-use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
-use crate::secretary::proposal::Proposal;
 use suzatary_connect::connect::{Connection, Declared, Key, Step, Table};
 use suzatary_connect::settings::{Settable, Settables};
 use suzatary_google::calendar::CalendarName;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Failure, Remedy};
 use suzatary_health::health::{Health, Healths, Instant, Reading};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for
 /// removal.
@@ -312,11 +312,12 @@ fn quiet_calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::inbox::{self, Fold};
-    use crate::secretary::inbox_event::InboxEvent;
-    use crate::secretary::proposer::Proposer;
     use crate::stores::InMemory;
     use suzatary_health::health::Outcome;
+    use suzatary_inbox::secretary::inbox;
+    use suzatary_inbox::secretary::inbox::Fold;
+    use suzatary_inbox::secretary::inbox_event::InboxEvent;
+    use suzatary_inbox::secretary::proposer::Proposer;
 
     fn at(hour: u32) -> Instant {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
@@ -409,7 +410,7 @@ mod tests {
     fn file(
         owed: &Owed,
         inbox_store: &InMemory<InboxEvent>,
-        conversations: &crate::secretary::conversations::InMemory,
+        conversations: &crate::stores::conversations::InMemory,
         hour: u32,
     ) {
         owed.file(
@@ -461,7 +462,7 @@ mod tests {
         ) {
             let mut world = World::new();
             let inbox_store = InMemory::<InboxEvent>::default();
-            let conversations = crate::secretary::conversations::InMemory::default();
+            let conversations = crate::stores::conversations::InMemory::default();
             // How many episodes began.
             let mut episodes = 0usize;
             let mut open_episode = false;
@@ -504,7 +505,7 @@ mod tests {
             let withdrawn = fold.objects().filter(|object| {
                 matches!(&object.asked.proposal, Proposal::Act(Act::Secret { .. }))
                 && matches!(object.reading.shown().map(|answer| &answer.response),
-                    Some(crate::secretary::responded::Responded::Withdrawn(_)))
+                    Some(suzatary_inbox::secretary::responded::Responded::Withdrawn(_)))
             }).count();
             // Only an episode a success ended withdraws its card.
             proptest::prop_assert!(withdrawn <= episodes.saturating_sub(usize::from(open_episode)));
@@ -579,7 +580,7 @@ mod tests {
     fn a_missing_link_is_asked_for_by_one_card_however_often_the_box_files() {
         let mut world = World::new();
         let inbox_store = InMemory::<InboxEvent>::default();
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let missing = |name: &Settable| name.name().starts_with("PLUGIN_ICS");
         let failures = [
             Seen::Refused(401),

@@ -1,0 +1,39 @@
+[package]
+name = "suzatary-conversations"
+description = "Suzatary's conversations as entries, and the model's port"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_conversations"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-mail.workspace = true
+suzatary-health.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing"]
+# The e2e fixture's scripted model (`secretary::model::pulled`); core's `fixture` alone.
+fixture = []
+
+[dev-dependencies]
+suzatary-conversations = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

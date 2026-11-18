@@ -36,7 +36,7 @@ use suzatary_connect::connect::Channel;
 use suzatary_connect::connect::Reach;
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
-use suzatary_core::nonempty::NonEmpty;
+use suzatary_conversations::nonempty::NonEmpty;
 use suzatary_core::stores::Kind;
 
 /// The environment variable that names an instance file.
@@ -433,7 +433,7 @@ impl Instance {
     #[must_use]
     pub fn inbox_store(
         &self,
-    ) -> suzatary_io::objects::Objects<suzatary_core::secretary::inbox_event::InboxEvent> {
+    ) -> suzatary_io::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent> {
         suzatary_io::objects::Objects::open(self.secretary.inbox.clone())
     }
 

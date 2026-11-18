@@ -9,7 +9,11 @@ use clap::Parser;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_cli::commands::init;
 use suzatary_cli::instance::Instance;
-use suzatary_core::secretary::responded::Responded;
+use suzatary_conversations::secretary::outcome;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::responded::Responded;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 use suzatary_store::store::Reads as _;
 
 /// A thin wrapper so a test can build [`init::Args`] through `clap`'s own
@@ -128,9 +132,8 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     };
 
     dismiss();
-    let stored = suzatary_core::secretary::conversations::read(conversations.conversations(), &id)
-        .expect("it reads");
-    let fold = suzatary_core::secretary::inbox::fold(&inbox).expect("the inbox reads");
+    let stored = conversations::read(conversations.conversations(), &id).expect("it reads");
+    let fold = inbox::fold(&inbox).expect("the inbox reads");
     let standing = stored.standing(0, &fold).expect("proposal 0");
     assert!(
         matches!(
@@ -142,14 +145,13 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     let turns = stored.turns.len();
 
     dismiss();
-    let again = suzatary_core::secretary::conversations::read(conversations.conversations(), &id)
-        .expect("it reads");
+    let again = conversations::read(conversations.conversations(), &id).expect("it reads");
     assert_eq!(
         again.turns.len(),
         turns,
         "a second dismissal writes nothing"
     );
-    let fold = suzatary_core::secretary::inbox::fold(&inbox).expect("the inbox reads");
+    let fold = inbox::fold(&inbox).expect("the inbox reads");
     assert_eq!(
         again
             .standing(0, &fold)
@@ -336,10 +338,10 @@ fn conversation(
     instance: &Instance,
     id: &str,
     title: &str,
-    kind: suzatary_core::secretary::store::Kind,
-    turns: Vec<suzatary_core::secretary::model::Turn>,
+    kind: suzatary_conversations::secretary::store::Kind,
+    turns: Vec<suzatary_conversations::secretary::model::Turn>,
 ) {
-    use suzatary_core::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
     let stores = instance.conversation_stores();
     let id = ConversationId::new(id).expect("a slug");
     let at = |minute: u32| {
@@ -351,45 +353,46 @@ fn conversation(
         model: "scripted".to_owned(),
         kind,
     };
-    suzatary_core::secretary::transcript::start(stores.conversations(), &id, &opened)
-        .expect("opened");
+    transcript::start(stores.conversations(), &id, &opened).expect("opened");
     for (minute, turn) in (1..).zip(turns) {
         // A person's turn is the owner's, as the gate stamps it.
-        let by = matches!(turn, suzatary_core::secretary::model::Turn::Person { .. })
-            .then(|| "owner".into());
+        let by = matches!(
+            turn,
+            suzatary_conversations::secretary::model::Turn::Person { .. }
+        )
+        .then(|| "owner".into());
         let said = Entry::Said {
             at: at(minute),
             turn,
             by,
         };
-        suzatary_core::secretary::transcript::push(stores.conversations(), &id, &said)
-            .expect("said");
+        transcript::push(stores.conversations(), &id, &said).expect("said");
     }
 }
 
-fn asked(text: &str) -> suzatary_core::secretary::model::Turn {
-    suzatary_core::secretary::model::Turn::Person {
+fn asked(text: &str) -> suzatary_conversations::secretary::model::Turn {
+    suzatary_conversations::secretary::model::Turn::Person {
         text: text.to_owned(),
         references: Vec::new(),
         attachments: Vec::new(),
     }
 }
 
-fn answered(text: &str) -> suzatary_core::secretary::model::Turn {
-    suzatary_core::secretary::model::Turn::Model {
+fn answered(text: &str) -> suzatary_conversations::secretary::model::Turn {
+    suzatary_conversations::secretary::model::Turn::Model {
         text: text.to_owned(),
         calls: Vec::new(),
     }
 }
 
 /// A `draft_note` call as the store holds it: the model's call, the note, the verb's answer.
-fn drafted() -> [suzatary_core::secretary::model::Turn; 3] {
+fn drafted() -> [suzatary_conversations::secretary::model::Turn; 3] {
+    use suzatary_conversations::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::SecretaryVerb;
-    use suzatary_core::secretary::model::{ToolCall, Turn};
     let tool = |answer: &str| Turn::Tool {
         verb: SecretaryVerb::DraftNote.into(),
         answer: answer.to_owned(),
-        outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+        outcome: outcome::Outcome::Answered,
         files: Vec::new(),
     };
     [
@@ -408,7 +411,7 @@ fn drafted() -> [suzatary_core::secretary::model::Turn; 3] {
 /// Four conversations on a fresh instance: a topic with a note, a topic, a daily sweep and the
 /// default.
 fn carried(name: &str) -> Instance {
-    use suzatary_core::secretary::store::Kind;
+    use suzatary_conversations::secretary::store::Kind;
     let instance = fresh_instance(name);
     let [call, note, answer] = drafted();
     conversation(
@@ -599,8 +602,8 @@ fn the_carry_gives_the_conversations_a_map_names_their_topics_once() {
 }
 
 /// A search the model called, and its answer, which carries mail's words.
-fn searched(answer: &str) -> [suzatary_core::secretary::model::Turn; 2] {
-    use suzatary_core::secretary::model::{ToolCall, Turn};
+fn searched(answer: &str) -> [suzatary_conversations::secretary::model::Turn; 2] {
+    use suzatary_conversations::secretary::model::{ToolCall, Turn};
     [
         Turn::Model {
             text: String::new(),
@@ -612,7 +615,7 @@ fn searched(answer: &str) -> [suzatary_core::secretary::model::Turn; 2] {
         Turn::Tool {
             verb: "search".into(),
             answer: answer.to_owned(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+            outcome: outcome::Outcome::Answered,
             files: Vec::new(),
         },
     ]
@@ -623,7 +626,7 @@ fn searched(answer: &str) -> [suzatary_core::secretary::model::Turn; 2] {
 fn planning(
     instance: &Instance,
     file: &std::path::Path,
-    answer: &dyn Fn() -> Result<String, suzatary_core::secretary::model::ModelError>,
+    answer: &dyn Fn() -> Result<String, suzatary_conversations::secretary::model::ModelError>,
     sent: &mut Vec<String>,
 ) -> (usize, Vec<String>) {
     let mut said = Vec::new();
@@ -654,7 +657,7 @@ fn lines_of(said: Vec<u8>) -> Vec<String> {
 /// and one drafting a note.
 fn backfilled(name: &str) -> Instance {
     use suzatary_base::topic_target::Target;
-    use suzatary_core::secretary::store::Kind;
+    use suzatary_conversations::secretary::store::Kind;
     use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_store::store::Prodrome as _;
     let instance = fresh_instance(name);
@@ -710,9 +713,11 @@ fn a_batch_the_model_does_not_answer_is_left_out_of_the_plan() {
         &instance,
         &file,
         &|| {
-            Err(suzatary_core::secretary::model::ModelError::Unreachable(
-                "at the reserve".to_owned(),
-            ))
+            Err(
+                suzatary_conversations::secretary::model::ModelError::Unreachable(
+                    "at the reserve".to_owned(),
+                ),
+            )
         },
         &mut Vec::new(),
     );
@@ -845,8 +850,8 @@ fn the_backfill_applies_the_plan_it_showed_once() {
 /// and prints no word of a line or a summary.
 #[test]
 fn the_digest_census_prints_counts_and_no_word() {
+    use suzatary_conversations::secretary::store::Kind;
     use suzatary_core::secretary::digest_line::Line;
-    use suzatary_core::secretary::store::Kind;
     let instance = fresh_instance("census");
     let turns = (0..29)
         .flat_map(|k| {
@@ -897,9 +902,12 @@ fn the_digest_census_prints_counts_and_no_word() {
 }
 
 /// The conversation `id` as the box reads it: its fold, which a reseal leaves as it was.
-fn read_lines(instance: &Instance, id: &ConversationId) -> suzatary_core::secretary::store::Stored {
+fn read_lines(
+    instance: &Instance,
+    id: &ConversationId,
+) -> suzatary_conversations::secretary::store::Stored {
     let stores = instance.conversation_stores();
-    suzatary_core::secretary::transcript::read(stores.conversations(), id)
+    transcript::read(stores.conversations(), id)
         .expect("reads")
         .stored()
         .clone()
@@ -922,7 +930,7 @@ fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)
 fn migrated(
     instance: &Instance,
     apply: bool,
-) -> (Option<suzatary_core::secretary::rescrub::Done>, String) {
+) -> (Option<suzatary_lines::secretary::rescrub::Done>, String) {
     let mut said = Vec::new();
     let done = suzatary_cli::commands::secretary::migrate_scrub(instance, apply, &mut said)
         .expect("the migration runs");
@@ -934,8 +942,8 @@ fn migrated(
 /// under the current rules.
 fn written_before_the_rules(instance: &Instance) -> ConversationId {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
+    use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::erasure::Erasure;
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     use suzatary_store::store::{Doc as _, Prodrome as _};
@@ -951,7 +959,7 @@ fn written_before_the_rules(instance: &Instance) -> ConversationId {
             at: at(0),
             title: suzatary_memory::secretary::words::Words::kept("Café notes".to_owned()),
             model: "scripted".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         },
         Entry::Said {
             at: at(1),
@@ -970,7 +978,7 @@ fn written_before_the_rules(instance: &Instance) -> ConversationId {
         },
     ];
     let actor = Actor::new("assistant").expect("an actor");
-    let entropy = suzatary_core::secretary::conversations::Counting::default();
+    let entropy = suzatary_lines::nothing::Counting::default();
     let mut erasable = Vec::new();
     for (held, entry) in (0..).zip(&entries) {
         let (line, keys) = LineEvent::written_under(
@@ -997,7 +1005,7 @@ fn written_before_the_rules(instance: &Instance) -> ConversationId {
         Erasure::Asked { by: actor },
     );
     stores.lines.append(erasure).expect("erased");
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         stores.conversations(),
         &id,
         &Entry::Said {
@@ -1031,7 +1039,7 @@ fn kept_keys(instance: &Instance) -> std::collections::BTreeSet<String> {
 /// An erased slot stays erased, and a dry run writes nothing.
 #[test]
 fn migrate_scrub_reseals_every_stale_slot_once() {
-    use suzatary_core::secretary::rescrub::Census;
+    use suzatary_lines::secretary::rescrub::Census;
 
     let instance = fresh_instance("migrate-scrub");
     let id = written_before_the_rules(&instance);
@@ -1064,8 +1072,11 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
     for (name, print) in &objects {
         let now = kept.get(name).expect("no name is let go");
         let whole = prodrome_core::event::parse_envelope::<
-            suzatary_core::secretary::line_event::LineEvent,
-        >(&suzatary_core::secretary::line_event::LineVocabulary, print)
+            suzatary_lines::secretary::line_event::LineEvent,
+        >(
+            &suzatary_lines::secretary::line_event::LineVocabulary,
+            print,
+        )
         .expect("a line");
         let husk = match &whole {
             prodrome_core::event::Envelope::Change(change) => {
@@ -1084,7 +1095,7 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
         "the three replaced seals and the erased slot are kept as husks: {said}"
     );
     let stores = instance.conversation_stores();
-    let dead = suzatary_core::secretary::prune::census(stores.conversations(), usize::MAX)
+    let dead = suzatary_lines::secretary::prune::census(stores.conversations(), usize::MAX)
         .expect("a census")
         .dead;
     assert!(
@@ -1099,7 +1110,7 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
 
     let stores = instance.conversation_stores();
     assert_eq!(
-        suzatary_core::secretary::rescrub::census(stores.conversations()).expect("reads"),
+        suzatary_lines::secretary::rescrub::census(stores.conversations()).expect("reads"),
         Census {
             lines: 6,
             current: 4,
@@ -1142,7 +1153,7 @@ fn migrate_scrub_stopped_and_run_again_reads_the_same() {
     let stores = instance.conversation_stores();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
     let appended =
-        suzatary_core::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
+        suzatary_lines::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
     assert_eq!(appended, 3);
     assert_eq!(
         read_lines(&instance, &id),
@@ -1199,15 +1210,14 @@ fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
     let stores = instance.conversation_stores();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
     let appended =
-        suzatary_core::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
+        suzatary_lines::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
     assert_eq!(appended, 3);
     let keys_dir = instance.secretary.line_keys();
     for new in kept_keys(&instance).difference(&vaulted) {
         std::fs::remove_file(keys_dir.join(new)).expect("the reseal's key was never vaulted");
     }
 
-    let destroyed =
-        suzatary_core::secretary::transcript::sweep(stores.conversations()).expect("sweeps");
+    let destroyed = transcript::sweep(stores.conversations()).expect("sweeps");
     assert_eq!(destroyed, 1, "only the erased slot's key goes");
     assert_eq!(
         read_lines(&instance, &id),

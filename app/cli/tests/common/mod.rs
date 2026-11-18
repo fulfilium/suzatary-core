@@ -21,17 +21,21 @@ use suzatary_base::escape::Escaped;
 use suzatary_cli::serve::{self, Chained, State};
 pub use suzatary_connect::cast::{self, CAST};
 use suzatary_connect::deployment::Deployment;
-use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_core::secretary::answers::{AnswerError, Answers};
-use suzatary_core::secretary::model::{
+use suzatary_conversations::secretary::model::{
     Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
     Sessions, Turn,
 };
+use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
+use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_held::file_read::FileRead;
 use suzatary_held::mail_error::MailError;
+use suzatary_inbox::secretary::acts;
+use suzatary_inbox::secretary::proposer;
+use suzatary_inbox::secretary::responded;
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
+use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::SyncReport;
 use suzatary_mail::mail::{AttachmentMeta, MailMessage, MailRow};
@@ -210,12 +214,11 @@ pub fn pinned(name: &str, got: &str) {
 /// shown and sent.
 #[must_use]
 pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> String {
-    let lines: String =
-        suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), id)
-            .unwrap_or_default()
-            .iter()
-            .map(|entry| serde_json::to_string(entry).expect("an entry is plain data") + "\n")
-            .collect();
+    let lines: String = transcript::lines(caps.conversations.conversations(), id)
+        .unwrap_or_default()
+        .iter()
+        .map(|entry| serde_json::to_string(entry).expect("an entry is plain data") + "\n")
+        .collect();
     format!(
         "# lines\n{lines}# shown\n{}\n# asked\n{:#?}\n# opened\n{}\n# resumed with\n{:#?}\n",
         caps.model
@@ -1184,8 +1187,8 @@ impl Model for FakeModel {
 /// `open` and `resume` pop the same scripted queue `turn` reads.
 /// Always `Some`: the harness's model always holds a session.
 impl Sessions for FakeModel {
-    fn pick(&self) -> suzatary_core::secretary::model::Pick<'_> {
-        suzatary_core::secretary::model::Pick::Held(self)
+    fn pick(&self) -> suzatary_conversations::secretary::model::Pick<'_> {
+        suzatary_conversations::secretary::model::Pick::Held(self)
     }
 }
 
@@ -1227,7 +1230,7 @@ impl SessionModel for FakeModel {
         &self,
         _system: &str,
         session: &Session,
-        delta: &suzatary_core::secretary::model::Delta,
+        delta: &suzatary_conversations::secretary::model::Delta,
         tools: &serde_json::Value,
         on_delta: &dyn Fn(&str),
         halt: &Halt,
@@ -1436,7 +1439,7 @@ impl Manuals for FakeManuals {
 /// What a tap would have sent, kept in memory: every server here holds one, so no test reaches a transport.
 #[derive(Default)]
 pub struct Recorder {
-    sent: Mutex<Vec<suzatary_core::secretary::proposal::Draft>>,
+    sent: Mutex<Vec<suzatary_inbox::secretary::proposal::Draft>>,
     parts: Mutex<Vec<Vec<suzatary_held::message_part::Attachment>>>,
 }
 
@@ -1449,7 +1452,7 @@ impl Recorder {
 
     /// Everything a tap handed it, in order.
     #[must_use]
-    pub fn sent(&self) -> Vec<suzatary_core::secretary::proposal::Draft> {
+    pub fn sent(&self) -> Vec<suzatary_inbox::secretary::proposal::Draft> {
         self.sent.lock().expect("not poisoned").clone()
     }
 
@@ -1463,7 +1466,7 @@ impl Recorder {
 /// Records every act a tap began, performing nothing and answering `Started`.
 #[derive(Default)]
 pub struct ActRecorder {
-    begun: Mutex<Vec<(String, usize, suzatary_core::secretary::acts::Act)>>,
+    begun: Mutex<Vec<(String, usize, acts::Act)>>,
 }
 
 impl ActRecorder {
@@ -1475,7 +1478,7 @@ impl ActRecorder {
 
     /// Every `(conversation, index, act)` begun, in order.
     #[must_use]
-    pub fn begun(&self) -> Vec<(String, usize, suzatary_core::secretary::acts::Act)> {
+    pub fn begun(&self) -> Vec<(String, usize, acts::Act)> {
         self.begun.lock().expect("not poisoned").clone()
     }
 }
@@ -1485,16 +1488,16 @@ impl suzatary_api::secretary::routes::Perform for ActRecorder {
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
-        _object: &suzatary_core::secretary::inbox::ProposalId,
-        _proposer: &suzatary_core::secretary::proposer::Proposer,
-        act: &suzatary_core::secretary::acts::Act,
+        _object: &suzatary_inbox::secretary::inbox::ProposalId,
+        _proposer: &proposer::Proposer,
+        act: &acts::Act,
         _consent: suzatary_mail::mail::oauth::Consent,
-    ) -> suzatary_core::secretary::responded::Performed {
+    ) -> responded::Performed {
         self.begun
             .lock()
             .expect("not poisoned")
             .push((id.as_str().to_owned(), index, act.clone()));
-        suzatary_core::secretary::responded::Tried::Running {
+        responded::Tried::Running {
             began: "2026-09-14T09:00:00".to_owned(),
             expires_at: "2026-09-14T09:15:00".to_owned(),
         }
@@ -1514,13 +1517,13 @@ impl suzatary_api::secretary::routes::Perform for SignsIn {
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
-        object: &suzatary_core::secretary::inbox::ProposalId,
-        proposer: &suzatary_core::secretary::proposer::Proposer,
-        act: &suzatary_core::secretary::acts::Act,
+        object: &suzatary_inbox::secretary::inbox::ProposalId,
+        proposer: &proposer::Proposer,
+        act: &acts::Act,
         consent: suzatary_mail::mail::oauth::Consent,
-    ) -> suzatary_core::secretary::responded::Performed {
+    ) -> responded::Performed {
         match act {
-            suzatary_core::secretary::acts::Act::SignIn { .. } => self.signing.begin(object, now()),
+            acts::Act::SignIn { .. } => self.signing.begin(object, now()),
             _ => self
                 .recorded
                 .begin(id, index, object, proposer, act, consent),
@@ -1956,15 +1959,15 @@ impl SettingsFixture {
 impl suzatary_api::secretary::routes::Post for Recorder {
     fn send(
         &self,
-        draft: &suzatary_core::secretary::proposal::Draft,
+        draft: &suzatary_inbox::secretary::proposal::Draft,
         body: suzatary_held::held_value::Filled,
         attachments: suzatary_held::secretary::attached::Checked,
-    ) -> suzatary_core::secretary::responded::Performed {
+    ) -> responded::Performed {
         // What went on the wire: the body with its held values written in.
         self.sent
             .lock()
             .expect("not poisoned")
-            .push(suzatary_core::secretary::proposal::Draft {
+            .push(suzatary_inbox::secretary::proposal::Draft {
                 body: body.into_string(),
                 ..draft.clone()
             });
@@ -1972,7 +1975,7 @@ impl suzatary_api::secretary::routes::Post for Recorder {
             .lock()
             .expect("not poisoned")
             .push(attachments.into_parts());
-        suzatary_core::secretary::responded::Done::Sent {
+        responded::Done::Sent {
             recipients: draft.to.iter().chain(&draft.cc).cloned().collect(),
             message_id: "<recorded@test>".to_owned(),
         }
@@ -1983,17 +1986,17 @@ impl suzatary_api::secretary::routes::Post for Recorder {
 /// A transport that fails with each of `failures` in turn, then records like
 /// `Recorder`.
 pub struct FailsFirst {
-    failures: Mutex<std::collections::VecDeque<suzatary_core::secretary::responded::Performed>>,
+    failures: Mutex<std::collections::VecDeque<responded::Performed>>,
     sent: Arc<Recorder>,
 }
 
 impl suzatary_api::secretary::routes::Post for FailsFirst {
     fn send(
         &self,
-        draft: &suzatary_core::secretary::proposal::Draft,
+        draft: &suzatary_inbox::secretary::proposal::Draft,
         body: suzatary_held::held_value::Filled,
         attachments: suzatary_held::secretary::attached::Checked,
-    ) -> suzatary_core::secretary::responded::Performed {
+    ) -> responded::Performed {
         match self.failures.lock().expect("not poisoned").pop_front() {
             Some(failed) => failed,
             None => self.sent.send(draft, body, attachments),
@@ -2114,11 +2117,11 @@ pub fn settled(base: &str, id: &str) -> serde_json::Value {
 pub fn opened(base: &str, title: &str) -> String {
     opening(
         base,
-        &suzatary_core::secretary::store::Entry::Opened {
+        &suzatary_conversations::secretary::store::Entry::Opened {
             at: next_instant(),
             title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
             model: String::new(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         },
     )
 }
@@ -2129,15 +2132,15 @@ pub fn opened(base: &str, title: &str) -> String {
 /// If the store refuses it.
 #[must_use]
 pub fn topic(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
 ) -> suzatary_base::conversation_id::ConversationId {
-    suzatary_core::secretary::transcript::begin(
+    transcript::begin(
         conversations,
-        &suzatary_core::secretary::store::Entry::Opened {
+        &suzatary_conversations::secretary::store::Entry::Opened {
             at: next_instant(),
             title: suzatary_memory::secretary::words::Words::kept(String::new()),
             model: "a-cli/small".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         },
     )
     .expect("begun")
@@ -2148,8 +2151,8 @@ pub fn topic(
 /// # Panics
 /// As [`opened`].
 #[must_use]
-pub fn opening(base: &str, first: &suzatary_core::secretary::store::Entry) -> String {
-    use suzatary_core::secretary::line_event::LineEvent;
+pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Entry) -> String {
+    use suzatary_lines::secretary::line_event::LineEvent;
     let (line, keys) = LineEvent::begin(poster(base), first, &Drawing).expect("a line");
     let id = line.conversation().as_str().to_owned();
     handed(base, line, &keys, Vec::new());
@@ -2162,8 +2165,8 @@ pub fn opening(base: &str, first: &suzatary_core::secretary::store::Entry) -> St
 /// # Panics
 /// If the box serves no line of `id`, or does not take the rename.
 pub fn renamed(base: &str, id: &str, title: &str) {
-    use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::store::{Entry, Namer, Title};
+    use suzatary_conversations::secretary::store::{Entry, Namer, Title};
+    use suzatary_lines::secretary::line_event::LineEvent;
     let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
     let skeleton = body_json(&mut answer);
     let nodes: Vec<&serde_json::Value> = skeleton["nodes"]
@@ -2212,11 +2215,11 @@ fn poster(base: &str) -> prodrome_core::event::Actor {
 /// beside it.
 fn handed(
     base: &str,
-    line: suzatary_core::secretary::line_event::LineEvent,
+    line: suzatary_lines::secretary::line_event::LineEvent,
     keys: &[suzatary_memory::secretary::locked_text::TextKey],
     deps: Vec<prodrome_core::event::Hash>,
 ) {
-    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_lines::secretary::line_event::LineEvent;
     let genesis = lines_genesis(base);
     let change = prodrome_core::event::Envelope::Change(
         prodrome_core::change::mk_change(genesis, deps, line).expect("a change"),
@@ -2362,7 +2365,7 @@ pub struct Fakes {
     /// The secretary's conversation store.
     pub conversations: Conversations,
     /// Every answer block an erasure emptied from the render cache, by source.
-    pub forgot: Arc<suzatary_core::secretary::conversations::Forgot>,
+    pub forgot: Arc<suzatary_core::stores::conversations::Forgot>,
     /// The secretary's memory, its history beside the conversations.
     pub memory:
         suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
@@ -2379,7 +2382,7 @@ pub struct Fakes {
     /// The topic stores, begun, as a box's server begins them.
     pub topics: suzatary_io::topics::Topics,
     /// The inbox store, real so a submit holds the server's `flock`.
-    pub inbox: suzatary_io::objects::Objects<suzatary_core::secretary::inbox_event::InboxEvent>,
+    pub inbox: suzatary_io::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     /// The owner's repositories, none by default.
     pub repos: Arc<suzatary_io::repos::Mirrors>,
     /// The calendar, a cache-tier store under the root; empty unless a test learns into it.
@@ -2424,7 +2427,7 @@ impl Fakes {
             &phone().public(),
         )
         .expect("the phone is trusted at the terminal");
-        let forgot = Arc::new(suzatary_core::secretary::conversations::Forgot::default());
+        let forgot = Arc::new(suzatary_core::stores::conversations::Forgot::default());
         let topics = suzatary_io::topics::Topics::open(
             root.join("secretary-topics"),
             root.join("secretary-topic-aliases"),
@@ -2871,7 +2874,7 @@ pub struct Server {
     bind: IpAddr,
     dist: PathBuf,
     settings: SettingsFixture,
-    failures: Vec<suzatary_core::secretary::responded::Performed>,
+    failures: Vec<responded::Performed>,
     performer: Performer,
     idle: Option<std::time::Duration>,
     publishing: Option<Arc<suzatary_io::repos::Mirrors>>,
@@ -3135,10 +3138,7 @@ impl Server {
     }
 
     /// With the transport failing the next sends with `failures`, in order.
-    pub fn failing(
-        self,
-        failures: impl IntoIterator<Item = suzatary_core::secretary::responded::Performed>,
-    ) -> Self {
+    pub fn failing(self, failures: impl IntoIterator<Item = responded::Performed>) -> Self {
         Self {
             failures: failures.into_iter().collect(),
             ..self
@@ -4155,15 +4155,15 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
 
 /// The lines as a tab holds them: the skeleton pulled piece after piece and landed, then every
 /// node's content asked by hash, each literal held as its print and each husk taken in its place.
-pub fn held_lines(base: &str) -> suzatary_core::secretary::held_replica::HeldReplica {
-    use suzatary_core::secretary::held_replica::{HeldReplica, NotAnAnswer};
+pub fn held_lines(base: &str) -> suzatary_lines::secretary::held_replica::HeldReplica {
+    use suzatary_lines::secretary::held_replica::{HeldReplica, NotAnAnswer};
     let mut replica = HeldReplica::pulled(|since| -> Result<_, NotAnAnswer> {
         let mut answer = get(&format!("{base}/api/stores/lines/skeleton?since={since}"));
         assert_eq!(status(&answer), 200, "the lines' skeleton answers");
         Ok(serde_json::from_value(body_json(&mut answer)).expect("a skeleton"))
     })
     .expect("the skeleton reads");
-    let lacking = replica.lacking(&suzatary_core::secretary::outlines::Scope::Whole);
+    let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Whole);
     for ask in
         suzatary_api::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
     {
@@ -4185,13 +4185,13 @@ pub fn held_lines(base: &str) -> suzatary_core::secretary::held_replica::HeldRep
 pub fn replicas(
     base: &str,
 ) -> (
-    suzatary_core::secretary::inbox::Fold,
-    Vec<suzatary_core::secretary::store::Stored>,
+    suzatary_inbox::secretary::inbox::Fold,
+    Vec<suzatary_conversations::secretary::store::Stored>,
 ) {
     // The conversations first: the box files a proposal before the line that names it, so an inbox
     // pulled after them holds every proposal they name.
     let mut lines = held_lines(base);
-    let inbox = suzatary_core::secretary::inbox::Fold::of(&pulled(base, "inbox"));
+    let inbox = suzatary_inbox::secretary::inbox::Fold::of(&pulled(base, "inbox"));
     let conversations = lines
         .lines
         .read()
@@ -4454,10 +4454,10 @@ pub fn pdf_saying(text: &str) -> Vec<u8> {
 
 /// `act` filed as the secretary's in `conversation`, as the setup agent files it: the box files only what a
 /// reading owes, and withdraws any other card of its own.
-pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::acts::Act) {
+pub fn asked(fakes: &Fakes, conversation: &str, act: acts::Act) {
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_core::secretary::proposal::Reasons;
-    use suzatary_core::secretary::store::{Entry, Kind};
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_inbox::secretary::proposal::Reasons;
     let id = ConversationId::new(conversation).expect("a slug");
     let opened = Entry::Opened {
         at: suzatary_base::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
@@ -4466,11 +4466,7 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
         kind: Kind::Topic,
     };
     // Opened by the first card, as a conversation is.
-    let _ = suzatary_core::secretary::transcript::start(
-        fakes.conversations.conversations(),
-        &id,
-        &opened,
-    );
+    let _ = transcript::start(fakes.conversations.conversations(), &id, &opened);
     suzatary_core::secretary::filed::file(
         fakes.conversations.conversations(),
         &fakes.inbox,
@@ -4478,8 +4474,8 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
         fakes.clock.now(),
         suzatary_core::secretary::filed::Filing {
             conversation: &id,
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: suzatary_core::secretary::proposal::Proposal::Act(act),
+            proposer: proposer::Proposer::Secretary,
+            proposal: suzatary_inbox::secretary::proposal::Proposal::Act(act),
             reasons: Reasons::new(
                 "the test asks",
                 vec!["briefing:2026-09-02".parse().expect("a reference")],

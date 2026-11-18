@@ -5,18 +5,19 @@ use prodrome_core::event::Hash;
 use serde_json::{Map, Value};
 
 use crate::conversation::ask::{Answered, Ask, Asked, Sent};
-use crate::secretary::model::{Halt, ModelError, ToolCall, Turn};
-use crate::secretary::queue;
-use crate::secretary::store::{Entry, Scope, Stored};
 use crate::secretary::surface::{SecretaryCall, Subset};
-use crate::secretary::tool_name::ToolName;
-use crate::secretary::transcript;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::verb::Request;
 use suzatary_base::capability::Clock;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::escape_markup;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::{Halt, ModelError, ToolCall, Turn};
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::{Entry, Scope, Stored};
+use suzatary_conversations::secretary::tool_name::ToolName;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 
 /// Who says the turn that ends an exchange the model did not finish.
 const BOX: &str = "the box";
@@ -91,7 +92,7 @@ impl<'a> Sink<'a> {
 #[derive(Clone, Copy)]
 pub struct Transcript<'a> {
     /// The store.
-    pub conversations: crate::secretary::conversations::Conversations<'a>,
+    pub conversations: conversations::Conversations<'a>,
     /// Stamps each line.
     pub clock: &'a dyn Clock,
     /// The conversation.
@@ -291,7 +292,8 @@ impl Round {
             self.steps += 1;
             let after = self.calls.last().map(|called| called.verb.clone());
             #[cfg(feature = "fixture")]
-            let _asking = crate::secretary::model::pulled::Asking::of(rules.sink.halt);
+            let _asking =
+                suzatary_conversations::secretary::model::pulled::Asking::of(rules.sink.halt);
             let reply = rules
                 .ask
                 .ask(at.id, rules.system, &tools, &stored, &waiting, rules.sink)
@@ -485,7 +487,7 @@ impl Round {
 }
 
 fn read(at: &Transcript<'_>) -> Result<Stored, Refusal> {
-    crate::secretary::conversations::read(at.conversations, at.id)
+    conversations::read(at.conversations, at.id)
 }
 
 /// `Err` once the halt is pulled, naming who pulled it.

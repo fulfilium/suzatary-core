@@ -20,12 +20,12 @@ use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash}
 use prodrome_core::genesis::mk_genesis;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::lines_rule::{LinesRule, SlotKeys};
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::store::{Entry, Kind, Namer, Title};
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
 use suzatary_core::sync::{Holding, Received};
 use suzatary_held::redact::Rules;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_memory::secretary::words::Words;
@@ -189,7 +189,7 @@ impl Door {
         for (name, print) in &received.outcome.taken {
             self.names.insert(name.clone());
             let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
-                &suzatary_core::secretary::line_event::LineVocabulary,
+                &suzatary_lines::secretary::line_event::LineVocabulary,
                 print,
             )
             .expect("parses");
@@ -396,7 +396,7 @@ fn keys_are_parsed_at_the_door() {
 #[test]
 fn the_rule_takes_a_title_only_as_the_box_reads_one() {
     use suzatary_connect::connect::TemplateId;
-    use suzatary_core::secretary::line_shape::LineShape;
+    use suzatary_lines::secretary::line_shape::LineShape;
     use suzatary_memory::secretary::line_words::LineWords;
     let door = Door::new();
     let words = |title: &str| {

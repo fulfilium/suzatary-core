@@ -130,7 +130,7 @@ impl Daily {
 }
 
 /// The default conversation `#/secretary` lands on, opened lazily by
-/// `suzatary_core::secretary::conversations::read_or_open_default`.
+/// `suzatary_lines::secretary::conversations::read_or_open_default`.
 pub static DEFAULT: LazyLock<ConversationId> = LazyLock::new(|| {
     ConversationId::new("default").expect("\"default\" is a valid conversation id")
 });

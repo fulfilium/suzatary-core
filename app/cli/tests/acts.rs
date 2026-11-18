@@ -6,6 +6,8 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
+use suzatary_conversations::secretary::model;
+use suzatary_lines::secretary::conversations;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -232,7 +234,7 @@ fn remember_after_a_note_on(
 ) -> (
     serde_json::Value,
     Option<String>,
-    suzatary_core::secretary::taint::Taint,
+    suzatary_conversations::secretary::taint::Taint,
 ) {
     let (base, fakes) = writing(
         tag,
@@ -265,7 +267,7 @@ fn remember_after_a_note_on(
         .expect("remember answered");
     let answer: serde_json::Value =
         serde_json::from_str(receipt["text"].as_str().expect("text")).expect("json");
-    let stored = suzatary_core::secretary::conversations::read(
+    let stored = conversations::read(
         fakes.conversations.conversations(),
         &suzatary_base::conversation_id::DEFAULT,
     )
@@ -273,12 +275,12 @@ fn remember_after_a_note_on(
     let line = stored
         .turns
         .iter()
-        .find(|said| matches!(said.turn, suzatary_core::secretary::model::Turn::Act { .. }))
+        .find(|said| matches!(said.turn, model::Turn::Act { .. }))
         .expect("the act's line");
     (
         answer,
         line.by.clone().map(String::from),
-        suzatary_core::secretary::taint::turn(line),
+        suzatary_conversations::secretary::taint::turn(line),
     )
 }
 
@@ -289,7 +291,7 @@ fn remember_after_a_note_on(
 /// the todo it points at through `todo_show`, a read like any other.
 #[test]
 fn a_note_on_an_unconfirmed_agent_todo_makes_remember_a_card() {
-    use suzatary_core::secretary::taint::Taint;
+    use suzatary_conversations::secretary::taint::Taint;
     let agents = common::CAST.todos.agents.id;
     let (answer, stamp, taint) = remember_after_a_note_on("acts-note-unconfirmed", agents, &|_| {});
     assert_eq!(
@@ -320,7 +322,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
             &serde_json::json!({"say": "this one", "references": [format!("todo:life/{todo}")]}),
         );
         assert_eq!(common::status(&say), 202);
-        let stored = suzatary_core::secretary::conversations::read(
+        let stored = conversations::read(
             fakes.conversations.conversations(),
             &suzatary_base::conversation_id::ConversationId::new(id.clone()).expect("a slug"),
         )
@@ -329,12 +331,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
             .turns
             .iter()
             .rev()
-            .find(|said| {
-                matches!(
-                    said.turn,
-                    suzatary_core::secretary::model::Turn::Person { .. }
-                )
-            })
+            .find(|said| matches!(said.turn, model::Turn::Person { .. }))
             .and_then(|said| said.by.clone())
             .map(String::from)
     };
@@ -362,7 +359,10 @@ fn a_note_on_his_own_todo_the_agent_claimed_done_stays_clean() {
         .expect("the agent's claim appends");
     });
     assert_eq!(stamp.as_deref(), Some("ada"));
-    assert_eq!(taint, suzatary_core::secretary::taint::Taint::Clean);
+    assert_eq!(
+        taint,
+        suzatary_conversations::secretary::taint::Taint::Clean
+    );
 }
 
 /// An edited question is stamped by what it points at exactly as a said one is.
@@ -393,7 +393,7 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         }),
     );
     assert_eq!(common::status(&edited), 202);
-    let stored = suzatary_core::secretary::conversations::read(
+    let stored = conversations::read(
         fakes.conversations.conversations(),
         &suzatary_base::conversation_id::ConversationId::new(id).expect("a slug"),
     )
@@ -402,19 +402,14 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         .turns
         .iter()
         .rev()
-        .find(|said| {
-            matches!(
-                said.turn,
-                suzatary_core::secretary::model::Turn::Person { .. }
-            )
-        })
+        .find(|said| matches!(said.turn, model::Turn::Person { .. }))
         .expect("the edited question");
     assert_eq!(
         line.by.clone().map(String::from).as_deref(),
         Some("ada pointing at an unconfirmed todo")
     );
     assert_eq!(
-        suzatary_core::secretary::taint::turn(line),
-        suzatary_core::secretary::taint::Taint::Tainted
+        suzatary_conversations::secretary::taint::turn(line),
+        suzatary_conversations::secretary::taint::Taint::Tainted
     );
 }

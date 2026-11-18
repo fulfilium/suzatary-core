@@ -3,15 +3,15 @@
 //! A card's identity is (name, declaration, episode); an episode begins when the box's card for
 //! the name ends without the owner's no.
 
-use crate::secretary::acts::Act;
-use crate::secretary::inbox;
 use crate::secretary::noticed::Owed;
-use crate::secretary::proposal::Proposal;
-use crate::secretary::proposer::Proposer;
-use crate::secretary::responded::{Done, Responded};
-use crate::secretary::store::Need;
 use suzatary_base::capability::Datetime;
 use suzatary_connect::settings::{Declaration, Settable, Settables};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::need::Need;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::{Done, Responded};
 
 const MISSING: &str = "Nothing is stored for it yet, so what needs it cannot work.";
 
@@ -174,10 +174,10 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
-    use crate::secretary::inbox_event::InboxEvent;
-    use crate::secretary::responded::Performed;
     use crate::stores::InMemory;
     use suzatary_base::capability::Datetime;
+    use suzatary_inbox::secretary::inbox_event::InboxEvent;
+    use suzatary_inbox::secretary::responded::Performed;
     use suzatary_store::store::Reads as _;
 
     fn at(minute: u32) -> Datetime {
@@ -196,7 +196,7 @@ mod tests {
     }
 
     struct World {
-        conversations: crate::secretary::conversations::InMemory,
+        conversations: crate::stores::conversations::InMemory,
         inbox: InMemory<InboxEvent>,
         stored: BTreeSet<String>,
     }
@@ -204,7 +204,7 @@ mod tests {
     impl World {
         fn new() -> Self {
             Self {
-                conversations: crate::secretary::conversations::InMemory::default(),
+                conversations: crate::stores::conversations::InMemory::default(),
                 inbox: InMemory::default(),
                 stored: BTreeSet::new(),
             }

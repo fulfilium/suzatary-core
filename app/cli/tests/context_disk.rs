@@ -1,7 +1,7 @@
 //! THE AGENT'S `context` OVER THE DISK STORES, at the live shape in bytes as well as in count:
 //! lines of about 8.4 kB on average and a digest history of about 9,000 objects, the store the
 //! box's `suzatary mcp` opens cold for every session. It prints how long each phase took
-//! (`suzatary_core::timings`), a measurement and not a law:
+//! (`suzatary_lines::timings`), a measurement and not a law:
 //!
 //! `cargo test --release -p suzatary --test all context_disk -- --ignored --nocapture`
 

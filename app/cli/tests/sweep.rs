@@ -12,11 +12,13 @@ use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
 use prodrome_core::event::mk_completed;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Datetime;
+use suzatary_conversations::secretary::model;
 use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sweep::{Swept, dry_run};
+use suzatary_inbox::secretary::changes::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_lines::secretary::transcript;
 use suzatary_record::record::{EventStore, TodoEvent, mk_source};
 use suzatary_store::store::Reads as _;
 use suzatary_todo::authoring::{NewTodo, build_todo};
@@ -274,7 +276,7 @@ fn an_open_todo_with_no_later_mail_gets_no_proposal() {
     assert_eq!(swept.rounds, 0, "absence of evidence asks no model");
     assert!(swept.proposed.is_empty());
     assert!(
-        suzatary_core::secretary::transcript::keys(caps.conversations.conversations())
+        transcript::keys(caps.conversations.conversations())
             .expect("the store reads")
             .is_empty(),
         "no conversation was opened for nothing"
@@ -333,7 +335,7 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     let refused = swept.stored.turns.iter().any(|said| {
         matches!(
             &said.turn,
-            suzatary_core::secretary::model::Turn::Tool { verb, outcome, .. }
+            model::Turn::Tool { verb, outcome, .. }
                 if verb.as_str() == "propose_changes" && outcome.refused()
         )
     });
@@ -383,7 +385,7 @@ fn a_todo_add_call_is_refused_by_the_verb_set() {
 
     assert!(swept.proposed.is_empty());
     let refusal = swept.stored.turns.iter().find_map(|said| match &said.turn {
-        suzatary_core::secretary::model::Turn::Tool {
+        model::Turn::Tool {
             verb,
             answer,
             outcome,
@@ -451,7 +453,7 @@ fn completing_an_open_todo_with_no_candidates_is_refused_and_proposes_nothing() 
         swept.stored.proposals
     );
     let refusal = swept.stored.turns.iter().find_map(|said| match &said.turn {
-        suzatary_core::secretary::model::Turn::Tool {
+        model::Turn::Tool {
             verb,
             answer,
             outcome,
@@ -626,7 +628,7 @@ fn dry_run_over_the_fixture_opens_no_conversation_and_reports_counts() {
     assert!(report.turn_chars > 0, "a real user turn was built to count");
 
     assert!(
-        suzatary_core::secretary::transcript::keys(caps.conversations.conversations())
+        transcript::keys(caps.conversations.conversations())
             .expect("the store reads")
             .is_empty(),
         "a dry run must not open a conversation"

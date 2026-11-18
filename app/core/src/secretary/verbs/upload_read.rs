@@ -3,12 +3,12 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::secretary::file_search;
-use crate::secretary::model::Turn;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verbs::kept;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::held_value::HeldFile;
 use suzatary_held::secretary::upload_standing::UploadStanding;
@@ -40,7 +40,8 @@ impl Verb for UploadRead {
             .trim()
             .parse()
             .map_err(|_| Refusal::bad_request("file is a `files` row's id: 64 hex digits"))?;
-        let conversations = crate::secretary::conversations::list(call.caps.conversations)?;
+        let conversations =
+            suzatary_lines::secretary::conversations::list(call.caps.conversations)?;
         let named = file_search::named(&conversations);
         if !named.contains(&id) {
             return Err(Refusal::not_found(format!(

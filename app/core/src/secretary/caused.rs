@@ -11,13 +11,15 @@
 
 use std::collections::BTreeSet;
 
-use crate::secretary::line_shape::LineShape;
-use crate::secretary::model::Turn;
-use crate::secretary::outcome::Outcome;
-use crate::secretary::store::Entry;
-use crate::secretary::transcript::Transcript;
-use crate::secretary::turn_shape::TurnShape;
-use crate::secretary::verb_name::VerbName;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::outcome::Outcome;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::tool_name;
+use suzatary_conversations::secretary::turn_shape::TurnShape;
+use suzatary_conversations::secretary::verb_name::VerbName;
+use suzatary_lines::secretary::line_event;
+use suzatary_lines::secretary::line_shape::LineShape;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::memory::{FactId, Origin};
 
@@ -55,9 +57,7 @@ impl Caused {
                 .count();
             let calls = model_calls(&lines[model].line).unwrap_or_default();
             if matches!(
-                calls
-                    .get(call)
-                    .and_then(crate::secretary::tool_name::ToolName::verb),
+                calls.get(call).and_then(tool_name::ToolName::verb),
                 Some(VerbName::Remember | VerbName::Consolidate)
             ) {
                 caused
@@ -83,7 +83,7 @@ impl Caused {
                 .filter_map(|(_, written)| written.line.keys().next().cloned());
             caused.offered.extend(prose);
         }
-        let erased = crate::secretary::transcript::erasures(
+        let erased = suzatary_lines::secretary::transcript::erasures(
             lines.iter().map(|written| (&written.name, &written.line)),
         );
         caused.erased.retain(|key| !erased.contains_key(key));
@@ -125,7 +125,7 @@ fn receipt(entry: &Entry, fact: FactId, origin: &Origin) -> bool {
 }
 
 /// The turn a said line holds; `None` for any other line.
-fn said(line: &crate::secretary::line_event::LineEvent) -> Option<&TurnShape> {
+fn said(line: &line_event::LineEvent) -> Option<&TurnShape> {
     if let LineShape::Said { turn, .. } = line.shape() {
         Some(turn)
     } else {
@@ -134,9 +134,7 @@ fn said(line: &crate::secretary::line_event::LineEvent) -> Option<&TurnShape> {
 }
 
 /// A model turn's calls, by verb; `None` for any other line.
-fn model_calls(
-    line: &crate::secretary::line_event::LineEvent,
-) -> Option<&[crate::secretary::tool_name::ToolName]> {
+fn model_calls(line: &line_event::LineEvent) -> Option<&[tool_name::ToolName]> {
     if let Some(TurnShape::Model { calls }) = said(line) {
         Some(calls)
     } else {

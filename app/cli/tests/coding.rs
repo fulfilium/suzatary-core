@@ -11,6 +11,9 @@ use std::sync::Arc;
 use common::{FakeModel, Fakes};
 use suzatary_cli::commands::coding::Firing;
 use suzatary_connect::cast::CAST;
+use suzatary_conversations::secretary::store;
+use suzatary_inbox::secretary::inbox;
+use suzatary_lines::secretary::conversations;
 
 const TOKEN: &str = "sk-ant-routine-fake";
 /// What the fake routine answers, in the `cse_` spelling the live one answers.
@@ -695,7 +698,7 @@ fn a_todo_is_built_from_its_card_at_most_two_at_once() {
         task.as_str(),
         "the card shows the whole task"
     );
-    let fold = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("the inbox reads");
+    let fold = inbox::fold(&fakes.inbox).expect("the inbox reads");
     let [object] = fold.objects().collect::<Vec<_>>()[..] else {
         panic!("one card")
     };
@@ -766,7 +769,7 @@ fn a_todo_of_another_chain_is_not_built() {
         .base;
     let (status, refused) = build(&base, CAST.todos.flat.id);
     assert_eq!(status, 409, "{refused}");
-    let fold = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("the inbox reads");
+    let fold = inbox::fold(&fakes.inbox).expect("the inbox reads");
     assert_eq!(fold.objects().count(), 0, "nothing was filed");
 }
 
@@ -806,7 +809,7 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
     let tapped = tap::tap(&operator, &card(old.clone()), "", &plain).expect("the operator taps");
     assert_eq!(tapped.conversation["proposals"][0]["state"], "acted");
     let conversations = || fakes.conversations.conversations();
-    let fresh = suzatary_core::secretary::transcript::keys(conversations())
+    let fresh = suzatary_lines::secretary::transcript::keys(conversations())
         .expect("the conversations read")
         .into_iter()
         .find(|id| *id != old && id.as_str() != "default")
@@ -816,8 +819,8 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
         now["state"] == "idle" && !now["proposals"].as_array().is_none_or(Vec::is_empty)
     });
     only_the_request_crossed(
-        &suzatary_core::secretary::conversations::read(conversations(), &old).expect("reads"),
-        &suzatary_core::secretary::conversations::read(conversations(), &fresh).expect("reads"),
+        &conversations::read(conversations(), &old).expect("reads"),
+        &conversations::read(conversations(), &fresh).expect("reads"),
     );
     let proposal = &conversation(base, fresh.as_str())["proposals"][0];
     assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");
@@ -877,12 +880,10 @@ fn afresh_box(routine: String) -> (common::Running, Arc<Fakes>) {
 /// The law of a fresh conversation: its first line is the owner's request in `before`, byte for
 /// byte and under the same stamp, and clean; every later line is the fresh round's own, the
 /// model's calls and their answers, so no other line of `before` is in it.
-fn only_the_request_crossed(
-    before: &suzatary_core::secretary::store::Stored,
-    after: &suzatary_core::secretary::store::Stored,
-) {
-    use suzatary_core::secretary::model::Turn;
-    use suzatary_core::secretary::taint::{self, Taint};
+fn only_the_request_crossed(before: &store::Stored, after: &store::Stored) {
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::taint;
+    use suzatary_conversations::secretary::taint::Taint;
     let request = before
         .turns
         .iter()

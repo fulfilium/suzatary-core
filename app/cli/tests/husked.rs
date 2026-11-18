@@ -10,13 +10,14 @@ use proptest::prelude::*;
 
 use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::conversations::Conversations;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::line_shape::split;
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::store::Entry;
-use suzatary_core::secretary::transcript;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_io::conversations::ConversationStores;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::line_shape::split;
+use suzatary_lines::secretary::prune;
+use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
@@ -80,7 +81,7 @@ fn written(root: &Path) -> BTreeSet<Hash> {
             at: at(0),
             title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
             model: "scripted".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         };
         transcript::start(conversations, &id(n), &opened).expect("started");
         for k in 1..6 {
@@ -118,7 +119,7 @@ fn written(root: &Path) -> BTreeSet<Hash> {
         )
         .expect("erased");
     }
-    suzatary_core::secretary::prune::census(conversations, usize::MAX)
+    prune::census(conversations, usize::MAX)
         .expect("a census")
         .dead
 }
@@ -162,7 +163,7 @@ fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
     }
     assert_eq!(fresh.lines.verify(), Vec::<String>::new());
     assert_eq!(fresh.lines.husk(&dead).expect("pruned").objects, 0);
-    let none = suzatary_core::secretary::prune::stray(fresh.conversations()).expect("reads");
+    let none = prune::stray(fresh.conversations()).expect("reads");
     assert!(none.is_empty(), "{none:?}");
 
     // A husk the prune did not write, under a line a key still opens, is named.
@@ -188,7 +189,7 @@ fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
     )
     .expect("written");
     let put = stores_at(dir.path());
-    let named = suzatary_core::secretary::prune::stray(put.conversations()).expect("reads");
+    let named = prune::stray(put.conversations()).expect("reads");
     assert_eq!(named.len(), 1, "{named:?}");
 }
 
@@ -277,7 +278,7 @@ fn husked_chains(chains: &[(usize, usize)]) -> Result<(), TestCaseError> {
     let held = stores_at(dir.path());
     let conversations = held.conversations();
     transcript::sweep(conversations).expect("swept");
-    let dead = suzatary_core::secretary::prune::census(conversations, usize::MAX)
+    let dead = prune::census(conversations, usize::MAX)
         .expect("a census")
         .dead;
     let seals: usize = chains.iter().map(|(_, depth)| depth).sum();
@@ -340,7 +341,7 @@ fn chains_written(
                 at: second(written),
                 title: Words::kept("Chains".to_owned()),
                 model: "scripted".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             };
             transcript::start(conversations, &id, &opened).expect("started");
         }

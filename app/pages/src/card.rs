@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use suzatary_base::reference::Reference;
-use suzatary_core::wire::inbox::{
+use suzatary_core::wire::topics::{ProposalRow, ProposalState};
+use suzatary_inbox::wire::inbox::{
     Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, FixThen,
     ProposedAct, ProposedObject,
 };
-use suzatary_core::wire::topics::{ProposalRow, ProposalState};
 use ts_rs::TS;
 use viewtree::Attr::{Autocomplete, Class, Data, Disabled, Href, Open, Placeholder, Title, Type};
 use viewtree::kit::para;

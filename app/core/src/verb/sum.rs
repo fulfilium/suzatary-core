@@ -98,7 +98,7 @@ macro_rules! verbs {
                 args: &serde_json::Map<String, serde_json::Value>,
             ) -> Result<$Call, suzatary_base::refusal::Refusal> {
                 match self {
-                    $(Self::$Name => $crate::verb::parse(args).map($Call::$Name),)+
+                    $(Self::$Name => ::suzatary_inbox::verb::parse(args).map($Call::$Name),)+
                 }
             }
 

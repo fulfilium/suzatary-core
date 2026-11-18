@@ -18,6 +18,7 @@ use suzatary_core::secretary::topics::reading::{
     AliasEvent, MembershipEvent, MembershipVocabulary,
 };
 use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_lines::secretary::line_form;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::{Node, Said};
 use suzatary_store::replica::objects::{Move, Object, Objects, frame, unframe};
@@ -237,12 +238,10 @@ fn law_what_a_replica_wrote_stands_until_the_box_answers() {
 /// A frame of the lines' form is passed over, never misread as a move of objects.
 #[test]
 fn a_frame_of_another_form_is_passed_over() {
-    let lines = suzatary_core::secretary::line_form::frame(
-        &suzatary_core::secretary::line_form::LineFrame {
-            delta: suzatary_store::replica::pulling::Delta::StartedOver { generation: 1 },
-            husked: Vec::new(),
-        },
-    )
+    let lines = line_form::frame(&line_form::LineFrame {
+        delta: suzatary_store::replica::pulling::Delta::StartedOver { generation: 1 },
+        husked: Vec::new(),
+    })
     .expect("prints");
     assert!(unframe(&lines).expect("a form").is_none());
 }

@@ -8,7 +8,7 @@
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Ask;
-use crate::secretary::model::ModelError;
+use suzatary_conversations::secretary::model::ModelError;
 
 /// A model asked to stand one line for a span.
 pub trait Compact: Sync {

@@ -12,7 +12,7 @@ use std::path::Path;
 use prodrome_core::event::{Envelope, canonical_envelope, parse_envelope};
 use prodrome_core::literal::codec::Literal as _;
 use prodrome_core::literal::print_literal;
-use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
+use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 
 /// What reading `inbox` found: how many objects, and one line per object that does not reprint.
 fn round_trip(inbox: &Path) -> (usize, Vec<String>) {

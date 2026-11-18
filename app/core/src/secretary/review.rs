@@ -6,18 +6,18 @@
 
 use super::Bound;
 use super::daily::{Run, begin, daily_round};
-use super::found::{Found, Unreadable};
-use super::store::{Decision, Entry, Outcome, Review, Stored};
 use super::surface::{SecretaryVerb, Subset};
-use super::verb_name::Effect;
 use super::verbs::{answered, listed, standing};
 use crate::secretary::Secretary;
-use crate::secretary::conversations;
-use crate::secretary::model::Turn;
-use crate::secretary::transcript;
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
+use suzatary_conversations::secretary::found::{Found, Unreadable};
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Decision, Entry, Outcome, Review, Stored};
+use suzatary_conversations::secretary::verb_name::Effect;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
 
 /// What one review did.
@@ -134,7 +134,7 @@ pub fn review(
                 verb: SecretaryVerb::TriageCards.into(),
                 answer: serde_json::to_string_pretty(&answered(&listed(chains, deployment)?))
                     .unwrap_or_else(|failed| format!("(the cards did not serialise: {failed})")),
-                outcome: crate::secretary::outcome::Outcome::Answered,
+                outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                 files: Vec::new(),
             },
             by: None,
@@ -144,11 +144,11 @@ pub fn review(
 
     // A review that could not run is written down, so an unsettled Inbox is distinguishable from a
     // settled one.
-    let halt = crate::secretary::model::Halt::new();
+    let halt = suzatary_conversations::secretary::model::Halt::new();
     let quiet = crate::conversation::round::Sink::quiet(&halt);
     let answered = match super::answer(
         caps,
-        || crate::secretary::model::Pick::Turn(Box::new(caps.model)),
+        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(caps.model)),
         deployment,
         settables,
         chains,
@@ -307,7 +307,7 @@ fn said(stored: &Stored) -> String {
 /// # Errors
 /// The store's own failure to list them.
 pub fn every(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
 ) -> Result<Found<Stored>, Refusal> {
     let mut found = Found {
         items: Vec::new(),
@@ -331,7 +331,7 @@ pub fn every(
 /// # Errors
 /// The store's own failure to list them.
 pub fn reviews(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     since: chrono::NaiveDate,
 ) -> Result<Found<(ConversationId, Review)>, Refusal> {
     let mut found = every(conversations)?.flat_map(|stored| {
@@ -352,9 +352,15 @@ pub fn reviews(
 /// # Errors
 /// As [`reviews`].
 pub fn failures(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     since: chrono::NaiveDate,
-) -> Result<Found<(ConversationId, crate::secretary::store::ReviewFailure)>, Refusal> {
+) -> Result<
+    Found<(
+        ConversationId,
+        suzatary_conversations::secretary::store::ReviewFailure,
+    )>,
+    Refusal,
+> {
     let mut found = every(conversations)?.flat_map(|stored| {
         stored
             .failures
@@ -393,7 +399,7 @@ impl Outage {
 /// # Errors
 /// As [`reviews`]: a store that does not list says so, and is never an outage of none.
 pub fn outage(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     today: chrono::NaiveDate,
 ) -> Result<Outage, Refusal> {
     let failed = failures(conversations, today)?.items;
@@ -417,13 +423,13 @@ fn on_or_after(at: suzatary_base::capability::Datetime, since: chrono::NaiveDate
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::store::Kind;
+    use suzatary_conversations::secretary::store::Kind;
 
     /// A conversation that does not read is a finding that names it, and costs only itself:
     /// every other conversation's reviews, failures and outage read as they did without it.
     #[test]
     fn an_unreadable_conversation_is_named_and_costs_only_itself() {
-        let store = crate::secretary::conversations::InMemory::default();
+        let store = crate::stores::conversations::InMemory::default();
         let conversations = store.conversations();
         let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 11).expect("a day");
         let at =

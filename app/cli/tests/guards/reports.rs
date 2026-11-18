@@ -4,7 +4,7 @@
 
 use std::process::Command;
 
-use suzatary_core::coding::REPORTS_DIR;
+use suzatary_inbox::coding::REPORTS_DIR;
 
 use super::repo;
 

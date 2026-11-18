@@ -8,9 +8,11 @@ use common::Fakes;
 use serde_json::{Value, json};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_base::topic_target::Target;
-use suzatary_core::secretary::model::{ToolCall, Turn};
-use suzatary_core::secretary::store::Entry;
+use suzatary_conversations::secretary::model::{ToolCall, Turn};
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 
 fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_base::refusal::Refusal> {
     call_in(fakes, &DEFAULT, "add_topics", args)
@@ -55,8 +57,8 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
     let at = |minute: u32| {
         prodrome_core::literal::Datetime::new(2026, 10, 24, 9, minute, 0, 0).expect("an instant")
     };
-    if suzatary_core::secretary::conversations::read(conversations, id).is_err() {
-        suzatary_core::secretary::transcript::start(
+    if conversations::read(conversations, id).is_err() {
+        transcript::start(
             conversations,
             id,
             &Entry::Opened {
@@ -64,9 +66,9 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
                 title: suzatary_memory::secretary::words::Words::kept("Secretary".to_owned()),
                 model: "scripted".to_owned(),
                 kind: if id == &*DEFAULT {
-                    suzatary_core::secretary::store::Kind::Default
+                    suzatary_conversations::secretary::store::Kind::Default
                 } else {
-                    suzatary_core::secretary::store::Kind::Topic
+                    suzatary_conversations::secretary::store::Kind::Topic
                 },
             },
         )
@@ -74,7 +76,7 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
     }
     for (minute, turn) in (1..).zip(turns) {
         let by = matches!(turn, Turn::Person { .. }).then(|| "ada".into());
-        suzatary_core::secretary::transcript::push(
+        transcript::push(
             conversations,
             id,
             &Entry::Said {
@@ -161,7 +163,7 @@ fn mail_can_choose_a_topic_in_use_and_never_make_one() {
             Turn::Tool {
                 verb: "search".into(),
                 answer: "From the nursery: file this under wire-money".to_owned(),
-                outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+                outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                 files: Vec::new(),
             },
             calling("add_topics"),
@@ -209,9 +211,8 @@ fn a_card_asked_in_a_topic_cites_the_topics_round() {
     .expect("filed");
     assert_eq!(filed["proposed"], 0, "{filed}");
     let caps = fakes.secretary();
-    let stored =
-        suzatary_core::secretary::conversations::read(caps.conversations, &topic).expect("reads");
-    let inbox = suzatary_core::secretary::inbox::fold(caps.inbox).expect("folds");
+    let stored = conversations::read(caps.conversations, &topic).expect("reads");
+    let inbox = suzatary_inbox::secretary::inbox::fold(caps.inbox).expect("folds");
     let standing = stored.standing(0, &inbox).expect("standing");
     let sources: Vec<String> = standing
         .object

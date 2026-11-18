@@ -6,15 +6,16 @@
 //! The non-monotone questions (room under [`MAX_LIVE`], a duplicate, standing ids, the next
 //! number, a card keeping these words) are the writes', asked under the history's hold ([`Held`]).
 
-use crate::secretary::{conversations, transcript};
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
+use suzatary_lines::secretary::{conversations, transcript};
 
 use crate::secretary::digests::{Digests, ReadDigests};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::proposal::Proposal;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_memory::secretary::memory::{
     Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered, Replaces, Sources,
 };
@@ -184,7 +185,7 @@ impl<'a> Memories<'a> {
     /// # Errors
     /// As [`Held::sweep`].
     pub fn sweep(&self) -> Result<usize, Refusal> {
-        crate::parts::part("lock", || self.hold())?.sweep()
+        suzatary_lines::parts::part("lock", || self.hold())?.sweep()
     }
 
     /// [`Memories::sweep`] of `which` alone, refused as the whole sweep is.
@@ -192,7 +193,7 @@ impl<'a> Memories<'a> {
     /// # Errors
     /// As [`Held::sweep`].
     pub fn sweep_only(&self, which: Texts) -> Result<usize, Refusal> {
-        let held = crate::parts::part("lock", || self.hold())?;
+        let held = suzatary_lines::parts::part("lock", || self.hold())?;
         held.wholes()?;
         held.dead(which)
     }
@@ -364,7 +365,7 @@ impl Held<'_> {
     /// The salt's and the stores' own.
     pub fn keep_card(&self, fact: &Fact) -> Result<Kept, Refusal> {
         let memories = &self.memories;
-        let fold = crate::secretary::inbox::fold(memories.cards)?;
+        let fold = inbox::fold(memories.cards)?;
         for object in fold.objects() {
             if let Proposal::Remember { text, .. } = &object.asked.proposal
                 && memories.reads().words(text)?.as_ref() == Some(fact)
@@ -427,7 +428,7 @@ impl Held<'_> {
     }
 
     fn wholes(&self) -> Result<(), Refusal> {
-        use crate::parts::part;
+        use suzatary_lines::parts::part;
         let memories = &self.memories;
         part("whole.memory", || whole(memories.history, "memory"))?;
         part("whole.inbox", || whole(memories.cards, "inbox"))?;
@@ -442,13 +443,13 @@ impl Held<'_> {
     /// Delete the dead texts of `which` its store holds, every naming of them read first, and
     /// answer how many.
     fn dead(&self, which: Texts) -> Result<usize, Refusal> {
-        use crate::parts::part;
+        use suzatary_lines::parts::part;
         let memories = &self.memories;
         let gone = match which {
             Texts::Facts => held_dead(
                 [
                     part("facts", || memories.reads().history())?.naming(),
-                    part("cards", || crate::secretary::inbox::fold(memories.cards))?.naming(),
+                    part("cards", || inbox::fold(memories.cards))?.naming(),
                 ],
                 part("held", || memories.texts.held()),
             ),
@@ -480,13 +481,15 @@ impl Held<'_> {
         for (fact, gone) in history.forgotten() {
             for (written, round) in history.forgotten_with(*fact) {
                 let conversation = round.conversation();
-                let Ok(transcript) = crate::secretary::transcript::read(lines, conversation) else {
+                let Ok(transcript) =
+                    suzatary_lines::secretary::transcript::read(lines, conversation)
+                else {
                     continue;
                 };
                 let caused = crate::secretary::caused::Caused::of(&transcript, written, round);
                 if !caused.erased.is_empty() {
                     erased += caused.erased.len();
-                    crate::secretary::transcript::erase(
+                    suzatary_lines::secretary::transcript::erase(
                         lines,
                         conversation,
                         caused.erased,
@@ -517,7 +520,7 @@ impl Held<'_> {
                 conversation: conversation.clone(),
                 index: conversations::read(lines, conversation)?.proposals.len(),
             });
-        let reasons = crate::secretary::proposal::Reasons::new(
+        let reasons = suzatary_inbox::secretary::proposal::Reasons::new(
             format!(
                 "forgetting fact {fact} erased the call that wrote it down; what was said around \
                  it may say it in other words, and only you can tell"
@@ -532,8 +535,8 @@ impl Held<'_> {
             at,
             crate::secretary::filed::Filing {
                 conversation,
-                proposer: crate::secretary::proposer::Proposer::Box,
-                proposal: Proposal::Act(crate::secretary::acts::Act::Erase { fact, keys }),
+                proposer: suzatary_inbox::secretary::proposer::Proposer::Box,
+                proposal: Proposal::Act(suzatary_inbox::secretary::acts::Act::Erase { fact, keys }),
                 reasons,
                 serves: None,
                 revises: None,
@@ -694,9 +697,9 @@ mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};
 
     use super::*;
-    use crate::secretary::inbox_event::InboxEvent;
     use crate::stores::InMemory;
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_inbox::secretary::inbox_event::InboxEvent;
     use suzatary_store::store::{Doc as _, InMemoryDoc, Reads};
 
     /// Each salt one more than the last.
@@ -706,7 +709,7 @@ mod tests {
     /// A digest over no lines, in memory.
     #[derive(Default)]
     struct Digested {
-        lines: crate::secretary::conversations::InMemory,
+        lines: crate::stores::conversations::InMemory,
         history: InMemory<crate::secretary::digest_event::DigestEvent>,
         texts: InMemoryDoc<TextName, Text<crate::secretary::digest_line::Line>>,
         owners: std::collections::BTreeSet<Actor>,
@@ -930,7 +933,7 @@ mod tests {
         let (texts, entropy) = (InMemoryDoc::default(), Counting::default());
         let (summaries, lines) = (
             Failing::<crate::secretary::digest_event::DigestEvent>::new(),
-            Failing::<crate::secretary::line_event::LineEvent>::new(),
+            Failing::<suzatary_lines::secretary::line_event::LineEvent>::new(),
         );
         let digest_texts = InMemoryDoc::default();
         let memories = Memories {
@@ -941,13 +944,13 @@ mod tests {
             digests: Digests {
                 history: &summaries,
                 texts: &digest_texts,
-                lines: crate::secretary::conversations::Conversations {
+                lines: suzatary_lines::secretary::conversations::Conversations {
                     lines: &lines,
                     keys: &suzatary_memory::secretary::locked_text::InMemoryKeys::default(),
                     entropy: &entropy,
                     renders: &suzatary_base::capability::Nothing,
                     sessions: &suzatary_base::capability::Nothing,
-                    opened: &crate::secretary::opened::Opened::default(),
+                    opened: &suzatary_lines::secretary::opened::Opened::default(),
                 },
                 owners: &std::collections::BTreeSet::new(),
                 compacting: &crate::secretary::compacting::Compacting::Off,

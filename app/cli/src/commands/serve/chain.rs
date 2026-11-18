@@ -8,7 +8,8 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::DEFAULT;
 use suzatary_base::reference::TodoRef;
 use suzatary_base::refusal::{Refusal, Status};
-use suzatary_core::secretary::act_lines::{self, ActLine};
+use suzatary_lines::secretary::act_lines;
+use suzatary_lines::secretary::act_lines::ActLine;
 use suzatary_signatures::signatures::Seat;
 use suzatary_signatures::signatures::Tap;
 
@@ -18,6 +19,8 @@ use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
 use super::{Chained, State};
+use suzatary_inbox::secretary::stamp;
+use suzatary_lines::wire::lines;
 
 /// `?t=` and `?limit=` of a fold.
 pub struct Folding {
@@ -240,9 +243,7 @@ pub fn me(call: &Call<Reader, (), ()>) -> Json<wire::MePayload> {
 }
 
 /// `GET …/objects?since=<frontier>`: what this replica does not hold.
-pub fn objects(
-    call: &Call<Reader, Since, ()>,
-) -> Result<Json<suzatary_core::wire::lines::ObjectsPayload>, Refusal> {
+pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<lines::ObjectsPayload>, Refusal> {
     routes::objects_since(
         call.chain.caps.secretary.chain,
         &call.chain.policy,
@@ -256,7 +257,7 @@ pub fn objects(
 /// `POST …/objects`: a replica handing its objects over, sealed as the gate's actor.
 pub fn take_objects(
     call: &Call<Poster, (), Literals>,
-) -> Result<Json<suzatary_core::wire::lines::ReceiptPayload>, Refusal> {
+) -> Result<Json<lines::ReceiptPayload>, Refusal> {
     <() as suzatary_store::admission::Beside>::parse(&call.body.keys)
         .map_err(Refusal::bad_request)?;
     let caps = call.chain.caps;
@@ -319,7 +320,7 @@ fn noted(
     from: Seat,
 ) {
     let first = state.first.caps;
-    let noting = suzatary_core::secretary::conversations::read_or_open_default(
+    let noting = suzatary_lines::secretary::conversations::read_or_open_default(
         first.secretary.conversations,
         first.secretary.model,
         &DEFAULT,
@@ -328,8 +329,8 @@ fn noted(
     .and_then(|_| {
         let set = read.set(now);
         lines.iter().try_for_each(|line| {
-            let by = suzatary_core::secretary::stamp::pointing(
-                suzatary_core::secretary::stamp::Speaker::at(&line.actor, from),
+            let by = stamp::pointing(
+                stamp::Speaker::at(&line.actor, from),
                 std::slice::from_ref(&line.reference),
                 &set,
             );

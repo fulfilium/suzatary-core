@@ -2,18 +2,20 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::coding::Task;
-use crate::secretary::acts::Act;
+use crate::secretary;
 use crate::secretary::afresh::Request;
 use crate::secretary::filed::Filing;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::store::Stored;
 use crate::secretary::verbs::FilingArgs;
-use crate::secretary::{self, Call, SecretarySurface, taint};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::store::Stored;
+use suzatary_conversations::secretary::taint;
+use suzatary_inbox::coding::Task;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
 
 /// Why a coding session is refused in a round that read anything but the owner's own words.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \

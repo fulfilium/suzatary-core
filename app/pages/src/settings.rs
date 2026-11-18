@@ -520,7 +520,7 @@ enum Kind {
 }
 
 fn kind(row: &suzatary_core::wire::topics::ProposalRow) -> Kind {
-    use suzatary_core::wire::inbox::ProposedAct;
+    use suzatary_inbox::wire::inbox::ProposedAct;
     match &row.act {
         ProposedAct::SignIn { .. } | ProposedAct::SignInCode { .. } => Kind::SignIn,
         ProposedAct::Secret { .. } => Kind::Link,

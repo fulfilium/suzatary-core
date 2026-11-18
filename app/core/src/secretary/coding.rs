@@ -1,15 +1,15 @@
 //! A coding session's lines in its conversation: each change is an [`Entry::Coding`] line
 //! and a [`Turn::Act`], so the secretary reads what became of the session it proposed.
 
-use crate::coding::{Fired, Seen, Session, Step};
-use crate::secretary::conversations;
-use crate::secretary::model::Turn;
-use crate::secretary::stamp::stamp;
-use crate::secretary::store::Entry;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_inbox::coding::{Fired, Seen, Session, Step};
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_lines::secretary::conversations;
 
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,7 +26,7 @@ pub struct Advanced {
 /// # Errors
 /// The store's own failures.
 pub fn waiting(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
 ) -> Result<Vec<Advanced>, Refusal> {
     Ok(conversations::list(conversations)?
         .into_iter()
@@ -89,7 +89,7 @@ pub fn explained(waiting: &[Advanced], seen: &[Seen]) -> Vec<String> {
             "  {} proposal {}: {}",
             advanced.conversation,
             advanced.index,
-            crate::coding::read(&advanced.session, seen)
+            suzatary_inbox::coding::read(&advanced.session, seen)
         )
     }));
     lines
@@ -100,7 +100,7 @@ pub fn explained(waiting: &[Advanced], seen: &[Seen]) -> Vec<String> {
 /// # Errors
 /// The store's own failures.
 pub fn fired(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     id: &ConversationId,
     index: usize,
     fired: Fired,
@@ -124,7 +124,7 @@ pub fn fired(
 /// # Errors
 /// The store's own failures.
 pub fn advance(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     seen: &[Seen],
     now: Datetime,
 ) -> Result<Vec<Advanced>, Refusal> {
@@ -135,7 +135,7 @@ pub fn advance(
         session,
     } in waiting(conversations)?
     {
-        let Some(step) = crate::coding::next(&session, seen) else {
+        let Some(step) = suzatary_inbox::coding::next(&session, seen) else {
             continue;
         };
         let text = match &step {
@@ -169,7 +169,7 @@ pub fn advance(
 /// # Errors
 /// An empty reason, no session for that proposal, one already ended, or the store's failures.
 pub fn dropped(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     id: &ConversationId,
     index: usize,
     by: &prodrome_core::event::Actor,
@@ -206,7 +206,7 @@ pub fn dropped(
 /// # Errors
 /// [`Refusal::not_found`] when that proposal started none.
 pub fn started(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     id: &ConversationId,
     index: usize,
 ) -> Result<Session, Refusal> {
@@ -222,7 +222,7 @@ pub fn started(
 
 /// One session line and the act turn beside it.
 fn written(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     id: &ConversationId,
     index: usize,
     session: &Session,

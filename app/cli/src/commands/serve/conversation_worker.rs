@@ -13,11 +13,12 @@ use std::time::Duration;
 use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::{Halt, Sessions, Turn};
+use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_core::conversation::round::Ending;
-use suzatary_core::secretary::model::{Halt, Sessions, Turn};
+use suzatary_core::secretary;
 use suzatary_core::secretary::rules::{Conversational, RULES};
-use suzatary_core::secretary::store::ConversationState;
-use suzatary_core::secretary::{self, transcript};
+use suzatary_lines::secretary::transcript;
 use suzatary_triage::rule::{Engine, Firing};
 use tokio::sync::{broadcast, mpsc};
 
@@ -549,7 +550,11 @@ async fn titled(id: &ConversationId, state: &Arc<State>) -> bool {
 /// Push once, when nobody is watching: a live subscriber means the answer is on screen.
 ///
 /// `is_brief` is judged by what the round's opening turn asked, not by a flag.
-fn maybe_push(stream: &Stream, state: &Arc<State>, stored: &secretary::store::Stored) {
+fn maybe_push(
+    stream: &Stream,
+    state: &Arc<State>,
+    stored: &suzatary_conversations::secretary::store::Stored,
+) {
     if stream.frames.receiver_count() > 0 {
         return;
     }
@@ -580,8 +585,10 @@ async fn current_state(id: &ConversationId, state: &Arc<State>) -> ConversationS
     let caps = state.first.caps;
     let id = id.clone();
     tokio::task::spawn_blocking(move || {
-        secretary::conversations::read(caps.secretary.conversations, &id)
-            .map_or(ConversationState::Idle, |stored| secretary::state(&stored))
+        suzatary_lines::secretary::conversations::read(caps.secretary.conversations, &id)
+            .map_or(ConversationState::Idle, |stored| {
+                suzatary_conversations::secretary::store::state(&stored)
+            })
     })
     .await
     .unwrap_or(ConversationState::Idle)

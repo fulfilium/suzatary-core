@@ -11,9 +11,9 @@ use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::stores::InMemory;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_memory::secretary::memory::{self, Fact, FactId, Kind, MAX_LIVE, Origin};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -39,7 +39,7 @@ struct Held {
     texts: InMemoryDoc<TextName, Text<Fact>>,
     cards: InMemory<InboxEvent>,
     entropy: Counting,
-    lines: suzatary_core::secretary::conversations::InMemory,
+    lines: suzatary_core::stores::conversations::InMemory,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     digests: InMemory<suzatary_core::secretary::digest_event::DigestEvent>,
     digest_texts: InMemoryDoc<TextName, Text<suzatary_core::secretary::digest_line::Line>>,
@@ -371,13 +371,13 @@ proptest! {
     fn one_memory_every_conversation(script in moments()) {
         let held = Held::default();
         let memories = held.memories();
-        let opened = || vec![suzatary_core::secretary::store::Entry::Opened {
+        let opened = || vec![suzatary_conversations::secretary::store::Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
             title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         }];
-        let mut files: Vec<Vec<suzatary_core::secretary::store::Entry>> = vec![opened(), opened(), opened()];
+        let mut files: Vec<Vec<suzatary_conversations::secretary::store::Entry>> = vec![opened(), opened(), opened()];
         let mut knows: Vec<std::collections::BTreeSet<FactId>> = vec![std::collections::BTreeSet::default(); 3];
         for moment in script {
             match moment {
@@ -400,7 +400,7 @@ proptest! {
                 }
                 Moment::Round(c, fresh) => {
                     let id = ConversationId::new(format!("c{c}")).expect("a slug");
-                    let stored = suzatary_core::secretary::store::Stored::of(&id, &files[c]).expect("folds");
+                    let stored = suzatary_conversations::secretary::store::Stored::of(&id, &files[c]).expect("folds");
                     let now = memories.reads().read().expect("reads");
                     let change = memory::change(&now, if fresh { None } else { stored.memory_seen });
                     match &change {
@@ -423,7 +423,7 @@ proptest! {
                     let expected: std::collections::BTreeSet<FactId> = now.facts.iter().map(|r| r.id).collect();
                     prop_assert_eq!(&knows[c], &expected);
                     if stored.memory_seen != Some(change.version()) {
-                        files[c].push(suzatary_core::secretary::store::Entry::MemorySeen {
+                        files[c].push(suzatary_conversations::secretary::store::Entry::MemorySeen {
                             at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
                             version: change.version(),
                         });

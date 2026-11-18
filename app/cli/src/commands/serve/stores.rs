@@ -8,8 +8,8 @@ use suzatary_api::wire::{StoreName, WrittenName};
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
 use suzatary_core::asks::AskEvent;
-use suzatary_core::secretary::lines_rule::SlotKeys;
-use suzatary_core::wire::lines::ReceiptPayload;
+use suzatary_lines::secretary::lines_rule::SlotKeys;
+use suzatary_lines::wire::lines::ReceiptPayload;
 use suzatary_store::admission::Beside;
 use suzatary_store::store::{Prodrome, StoreError};
 
@@ -19,6 +19,7 @@ use super::chain::Literals;
 use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
+use suzatary_lines::secretary::line_event;
 
 /// # Errors
 /// [`Refusal::not_found`] for a name that is no store's.
@@ -202,14 +203,13 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
 /// Each conversation a line the box took is in told to its worker, so what the line starts (a
 /// setup's opening note) is written.
 fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
-    let vocabulary = suzatary_core::secretary::line_event::LineVocabulary;
+    let vocabulary = line_event::LineVocabulary;
     let conversations: std::collections::BTreeSet<_> = posted
         .iter()
         .filter_map(|literal| {
-            let envelope = prodrome_core::event::parse_envelope::<
-                suzatary_core::secretary::line_event::LineEvent,
-            >(&vocabulary, literal)
-            .ok()?;
+            let envelope =
+                prodrome_core::event::parse_envelope::<line_event::LineEvent>(&vocabulary, literal)
+                    .ok()?;
             let name = prodrome_core::event::seal_hash(&envelope);
             let taken = receipt.adopted.iter().any(|n| n == name.as_str());
             taken.then(|| envelope.event().map(|line| line.conversation().clone()))?
@@ -232,7 +232,7 @@ impl Params for LinesSince {
 /// `GET /api/stores/lines/skeleton?since=<frontier>`: what the replica lacks, without literals.
 pub fn skeleton(
     call: &Call<Reader, LinesSince, ()>,
-) -> Result<Json<suzatary_core::wire::lines::SkeletonPayload>, Refusal> {
+) -> Result<Json<suzatary_lines::wire::lines::SkeletonPayload>, Refusal> {
     let caps = call.state.first.caps;
     routes::lines_skeleton(
         caps.secretary.conversations,
@@ -278,7 +278,7 @@ pub fn content(call: &Call<Reader, Wanted, ()>) -> Result<Response, Refusal> {
 /// `GET /api/waiting`: the Inbox badge's count, without pulling the conversations.
 pub fn waiting(call: &Call<Reader, (), ()>) -> Result<Json<wire::WaitingPayload>, Refusal> {
     let caps = call.state.first.caps;
-    let inbox = suzatary_core::secretary::inbox::fold(caps.secretary.inbox)?;
+    let inbox = suzatary_inbox::secretary::inbox::fold(caps.secretary.inbox)?;
     let read = call.state.chains_read();
     let set = read.set(caps.secretary.clock.now());
     let chains: Vec<_> = call

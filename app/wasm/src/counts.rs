@@ -1,8 +1,9 @@
 //! How much the module's costly steps have run, for the browser scenes that show what a reading
 //! costs: the redaction door (`suzatary_held::redact::scrubs`), the lines' decoding of a print
-//! (`suzatary_core::secretary::held_lines::decodes`), the hashing of a print not admitted
+//! (`suzatary_lines::secretary::held_lines::decodes`), the hashing of a print not admitted
 //! (`hashes`) and the opening of a sealed slot (`suzatary_memory::secretary::locked_text::opens`).
 
+use suzatary_lines::secretary::held_lines;
 use wasm_bindgen::prelude::*;
 
 #[expect(clippy::cast_precision_loss, reason = "a count far below 2^53")]
@@ -21,14 +22,14 @@ pub fn scrubs() -> f64 {
 #[wasm_bindgen]
 #[must_use]
 pub fn decodes() -> f64 {
-    count(suzatary_core::secretary::held_lines::decodes())
+    count(held_lines::decodes())
 }
 
 /// How many of those prints were hashed against their names first.
 #[wasm_bindgen]
 #[must_use]
 pub fn hashes() -> f64 {
-    count(suzatary_core::secretary::held_lines::hashes())
+    count(held_lines::hashes())
 }
 
 /// How many sealed slots this module has decrypted since it was loaded.

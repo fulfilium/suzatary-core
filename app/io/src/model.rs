@@ -15,12 +15,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use suzatary_base::capability::{Clock, Secret};
-use suzatary_core::secretary::model::{
+use suzatary_conversations::secretary::model::{
     Conversation, Delta, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel,
     Sessioned, TokenUsage, Turn,
 };
-use suzatary_core::secretary::stamp::stamp;
 use suzatary_held::for_model::ForModel;
+use suzatary_inbox::secretary::stamp::stamp;
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;
@@ -634,7 +634,7 @@ mod tests {
     /// alike, and never as "exited 1" with no reason.
     #[test]
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
-        use suzatary_core::secretary::model::Halt;
+        use suzatary_conversations::secretary::model::Halt;
         use suzatary_health::health::{Limit, Limited};
         let dir = tempfile::tempdir().expect("scratch");
         let result = |text: &str| {
@@ -762,7 +762,7 @@ mod tests {
         let turn = Turn::Tool {
             verb: "attachments".into(),
             answer: "{}".to_owned(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+            outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
             files: vec![Enclosed {
                 id,
                 name: "notice.pdf".to_owned(),

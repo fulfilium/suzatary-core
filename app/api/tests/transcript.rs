@@ -17,27 +17,31 @@ use prodrome_core::store::EventStore;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::cast::CAST;
-use suzatary_core::secretary::conversations::Counting;
-use suzatary_core::secretary::inbox::{self, ProposalId};
-use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
-use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
-use suzatary_core::secretary::line_shape;
-use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
-use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_core::secretary::queue;
-use suzatary_core::secretary::responded::{Done, Responded, Tried};
-use suzatary_core::secretary::stamp::stamp;
-use suzatary_core::secretary::store::{
+use suzatary_conversations::secretary::model::{SessionId, ToolCall, Turn};
+use suzatary_conversations::secretary::outcome;
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::{
     Decision, Entry, Line, Namer, Rewind, Stored, Title, Unheld,
 };
-use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::stores::InMemory;
+use suzatary_inbox::coding;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
+use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
+use suzatary_inbox::secretary::responded::{Done, Responded, Tried};
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_lines::nothing::Counting;
+use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
+use suzatary_lines::secretary::line_shape;
+use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Prodrome, linearised};
 
-type Memory = suzatary_core::secretary::conversations::InMemory;
+type Memory = suzatary_core::stores::conversations::InMemory;
 type Disk = EventStore<LineEvent, Everything>;
 
 /// Every key the lines written straight to a store were locked under, and where they came from.
@@ -114,7 +118,7 @@ fn opened() -> Entry {
         at: at(0),
         title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
         model: "a-cli/small".to_owned(),
-        kind: suzatary_core::secretary::store::Kind::Topic,
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
     }
 }
 
@@ -251,9 +255,9 @@ fn conversation(script: &[(Step, u32)]) -> Vec<Entry> {
                         "the permit is due Friday".to_owned()
                     },
                     outcome: if *refused {
-                        suzatary_core::secretary::outcome::Outcome::Refused
+                        outcome::Outcome::Refused
                     } else {
-                        suzatary_core::secretary::outcome::Outcome::Answered
+                        outcome::Outcome::Answered
                     },
                     files: Vec::new(),
                 },
@@ -303,7 +307,7 @@ fn conversation(script: &[(Step, u32)]) -> Vec<Entry> {
                 Entry::Coding {
                     at,
                     proposal: proposals - 1,
-                    session: suzatary_core::coding::Session::Fired {
+                    session: coding::Session::Fired {
                         id: "session_1".parse().expect("a session id"),
                         url: "https://claude.ai/code/session_1".parse().expect("a url"),
                         at: stamp(at),
@@ -360,9 +364,9 @@ fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
                 Entry::Scoped {
                     at,
                     scope: if sessions.is_multiple_of(2) {
-                        suzatary_core::secretary::store::Scope::Window
+                        suzatary_conversations::secretary::store::Scope::Window
                     } else {
-                        suzatary_core::secretary::store::Scope::Transcript
+                        suzatary_conversations::secretary::store::Scope::Transcript
                     },
                 }
             } else if sessions.is_multiple_of(2) {
@@ -423,7 +427,7 @@ fn inbox_of(proposals: usize, answers: &[u8], dropped: &[bool]) -> inbox::Fold {
     let at = Datetime::new(2026, 9, 30, 9, 0, 0, 0).expect("an instant");
     let events = (0..proposals).flat_map(|n| {
         let asked = inbox::Asked {
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+            proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
             proposal: Proposal::Email(Draft {
                 account: CAST.owner.email.to_owned(),
                 to: vec![CAST.counsel.email.to_owned()],
@@ -534,7 +538,7 @@ fn a_conversation_that_does_not_fold_is_a_finding() {
     };
     // A said line with no opening line before it: every conversation this program writes opens.
     memory.lines.append(event(0, &said)).expect("appended");
-    let inbox = InMemory::<suzatary_core::secretary::inbox_event::InboxEvent>::default();
+    let inbox = InMemory::<suzatary_inbox::secretary::inbox_event::InboxEvent>::default();
     assert_eq!(
         transcript::findings(&memory.lines, &inbox),
         vec![format!(
@@ -550,7 +554,7 @@ proptest! {
     /// gives the line back, and a slot gone joins as words gone, never as the line.
     #[test]
     fn split_and_join_are_a_lawful_pair(script in steps(), gone in any::<prop::sample::Index>()) {
-        use suzatary_core::secretary::line_shape::{join, split};
+        use suzatary_lines::secretary::line_shape::{join, split};
         use suzatary_memory::secretary::words::{Gone, Words};
         for entry in through_the_door(&conversation(&script)) {
             let (shape, words) = split(&entry);
@@ -592,8 +596,8 @@ proptest! {
         erased in proptest::option::of(any::<prop::sample::Index>()),
         stale in any::<bool>(),
     ) {
-        use suzatary_core::secretary::outline;
-        use suzatary_core::secretary::outlines::{Outlines, Parsed};
+        use suzatary_lines::secretary::outline;
+        use suzatary_lines::secretary::outlines::{Outlines, Parsed};
         use suzatary_store::store::Doc as _;
         use suzatary_store::store::Prodrome as _;
         let lines = conversation(&script);
@@ -614,7 +618,7 @@ proptest! {
                 memory.keys.set(&key.name(), key).expect("kept");
             }
             memory.lines.append(line).expect("appended");
-            let resealed = suzatary_core::secretary::rescrub::reseal(memory.conversations(), at(3597)).expect("resealed");
+            let resealed = suzatary_lines::secretary::rescrub::reseal(memory.conversations(), at(3597)).expect("resealed");
             prop_assert!(resealed > 0, "the stale turn is sealed again");
         }
         // The words of one line erased, each slot named by its first key: never a reseal's.
@@ -624,7 +628,7 @@ proptest! {
                 .lines()
                 .iter()
                 .map(|written| &written.line)
-                .filter(|line| !matches!(line.shape(), suzatary_core::secretary::line_shape::LineShape::Resealed { .. }))
+                .filter(|line| !matches!(line.shape(), suzatary_lines::secretary::line_shape::LineShape::Resealed { .. }))
                 .collect();
             let keys: std::collections::BTreeSet<KeyName> = slots[which.index(slots.len())].keys().cloned().collect();
             if !keys.is_empty() {
@@ -639,7 +643,7 @@ proptest! {
             _ => Some(Entry::Coding {
                 at: at(3599),
                 proposal: file.proposals.len(),
-                session: suzatary_core::coding::Session::Fired {
+                session: coding::Session::Fired {
                     id: "session_1".parse().expect("a session id"),
                     url: "https://claude.ai/code/session_1".parse().expect("a url"),
                     at: stamp(at(3599)),
@@ -744,7 +748,7 @@ proptest! {
         for (n, (line, all)) in read.iter().zip(whole.iter()).enumerate() {
             let missing = dropped.get(n).copied().unwrap_or(false);
             // The whole inbox's names differ, since a missing asking moves every later seal.
-            let seen = |standing: &suzatary_core::secretary::store::Standing| {
+            let seen = |standing: &suzatary_conversations::secretary::store::Standing| {
                 (
                     standing.object.id.clone(),
                     standing.object.asked.clone(),
@@ -1084,7 +1088,7 @@ fn live_shaped(lines: usize) -> Vec<Entry> {
                 2 => Turn::Tool {
                     verb: "mail_search".into(),
                     answer: text,
-                    outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+                    outcome: outcome::Outcome::Answered,
                     files: Vec::new(),
                 },
                 _ => Turn::Model {

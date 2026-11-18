@@ -1,23 +1,11 @@
 //! The conversations held in memory, for tests: never a store anyone relies on.
 
-use super::{Conversations, LineEvent, Opened, RenderCache};
-use crate::secretary::model_sessions::ModelSessions;
-use suzatary_base::capability::Entropy;
-
-/// Each key drawn one count past the last, so no two are equal: for tests, never a source of
-/// keys anyone relies on.
-#[derive(Debug, Default)]
-pub struct Counting(std::sync::atomic::AtomicU64);
-
-impl Entropy for Counting {
-    fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
-        let count = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        for (at, byte) in bytes.iter_mut().enumerate() {
-            *byte = count.to_be_bytes()[at % 8] ^ u8::try_from(at % 251).unwrap_or(0);
-        }
-        Ok(())
-    }
-}
+use suzatary_conversations::secretary::model_sessions::ModelSessions;
+use suzatary_lines::nothing::Counting;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::opened::Opened;
+use suzatary_todo::render_cache::RenderCache;
 
 /// The conversations held in memory, for tests.
 #[derive(Default)]
@@ -61,7 +49,11 @@ impl RenderCache for Forgot {
 }
 
 impl ModelSessions for Forgot {
-    fn forget(&self, id: &crate::secretary::model::SessionId, cwd: &str) -> Result<(), String> {
+    fn forget(
+        &self,
+        id: &suzatary_conversations::secretary::model::SessionId,
+        cwd: &str,
+    ) -> Result<(), String> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

@@ -6,10 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::secretary::file_query::FileQuery;
-use crate::secretary::model::Turn;
-use crate::secretary::search::around;
-use crate::secretary::store::Stored;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::search::around;
+use suzatary_conversations::secretary::store::Stored;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::secretary::upload_standing::UploadStanding;
 
@@ -62,11 +62,11 @@ pub fn named(conversations: &[Stored]) -> BTreeSet<AttachmentId> {
 /// # Errors
 /// [`suzatary_base::refusal::Refusal::internal`] when the conversations or the index cannot be read.
 pub fn reindex(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     index: &dyn suzatary_held::upload_index::UploadIndex,
 ) -> Result<usize, suzatary_base::refusal::Refusal> {
     let standings = index
-        .refresh(&named(&crate::secretary::conversations::list(
+        .refresh(&named(&suzatary_lines::secretary::conversations::list(
             conversations,
         )?))
         .map_err(|failed| suzatary_base::refusal::Refusal::internal(failed.to_string()))?;
@@ -111,7 +111,7 @@ pub fn find(
                 conversation: stored.id.clone(),
                 title: stored.heading().into_owned(),
                 turn: index,
-                at: crate::secretary::stamp::stamp(said.at),
+                at: suzatary_inbox::secretary::stamp::stamp(said.at),
                 said: match &said.turn {
                     Turn::Person { text, .. } => cut(text),
                     Turn::Model { .. }
@@ -168,7 +168,7 @@ fn cut(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
     use suzatary_held::attachment::Attachment;
     use suzatary_mail::mail::mailbox::Query;
 
@@ -187,10 +187,10 @@ mod tests {
                 .expect("an instant"),
             title: suzatary_memory::secretary::words::Words::kept(format!("About {slug}")),
             model: "m".to_owned(),
-            kind: crate::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         }];
         entries.extend(turns.iter().map(|(at, turn)| Entry::Said {
-            at: crate::secretary::store::instant(at),
+            at: suzatary_conversations::secretary::store::instant(at),
             turn: turn.clone(),
             by: None,
         }));
@@ -271,12 +271,14 @@ mod tests {
             &[(
                 "2026-09-25T09:01:00",
                 Turn::Erased {
-                    shape: crate::secretary::turn_shape::TurnShape::Person {
+                    shape: suzatary_conversations::secretary::turn_shape::TurnShape::Person {
                         references: Vec::new(),
-                        attachments: vec![crate::secretary::turn_shape::AttachmentShape {
-                            id: lease.id.clone(),
-                            media_type: lease.media_type,
-                        }],
+                        attachments: vec![
+                            suzatary_conversations::secretary::turn_shape::AttachmentShape {
+                                id: lease.id.clone(),
+                                media_type: lease.media_type,
+                            },
+                        ],
                     },
                     words: Vec::new(),
                 },

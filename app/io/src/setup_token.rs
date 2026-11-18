@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use rustix::pty::OpenptFlags;
 use suzatary_base::capability::Secret;
-use suzatary_core::secretary::sign_in::SignInUrl;
+use suzatary_inbox::secretary::sign_in::SignInUrl;
 
 pub use screen::Screen;
 

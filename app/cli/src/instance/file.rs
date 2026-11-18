@@ -21,6 +21,7 @@ use suzatary_services::web::AllowRule;
 use suzatary_triage::mail::junk::ChurnList;
 
 use super::{CodeRoot, DataRoot, Reserve};
+use suzatary_conversations::nonempty;
 
 /// The whole file. A key the binary does not read refuses the file.
 #[derive(Debug, Deserialize, Serialize)]
@@ -260,7 +261,7 @@ pub struct Secretary {
     pub compact: bool,
     /// The compactor's models, in the order a span is owed to them: a span one model cannot say
     /// in a line goes to the next.
-    pub compactors: suzatary_core::nonempty::NonEmpty<ModelName>,
+    pub compactors: nonempty::NonEmpty<ModelName>,
     /// The share of the subscription the compactor never takes.
     pub reserve: Reserve,
     pub compact_calls_per_hour: u32,
@@ -297,7 +298,7 @@ impl Default for Secretary {
             model: ModelName::parse("claude-opus-5-5").expect("a model name"),
             // Off by default: the first run compacts every line already stored.
             compact: false,
-            compactors: suzatary_core::nonempty::NonEmpty::new(
+            compactors: nonempty::NonEmpty::new(
                 ModelName::parse("claude-sonnet-5-5").expect("a model name"),
                 vec![ModelName::parse("claude-opus-5-5").expect("a model name")],
             ),
@@ -351,7 +352,7 @@ impl Secretary {
         &self,
         renders: std::sync::Arc<dyn suzatary_todo::render_cache::RenderCache + Send + Sync>,
         sessions: std::sync::Arc<
-            dyn suzatary_core::secretary::model_sessions::ModelSessions + Send + Sync,
+            dyn suzatary_conversations::secretary::model_sessions::ModelSessions + Send + Sync,
         >,
     ) -> suzatary_io::conversations::ConversationStores {
         suzatary_io::conversations::ConversationStores::open(

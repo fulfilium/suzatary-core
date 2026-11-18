@@ -25,9 +25,9 @@ use crate::secretary::digest_label::{Kind, Kinds, Label};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::digest_view::{self, Body, Keep, LINE_BYTES, VIEW_BYTES, rendered};
 use crate::secretary::shown_record::{CleanWords, OwnersWords, Shows as _};
-use crate::secretary::store::Entry;
-use crate::secretary::taint::Taint;
 use suzatary_base::rule_version::{Version, Versioned};
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::taint::Taint;
 
 /// The compactor's rules, the file the code sends: `app/core/src/secretary/compact.md`.
 pub const PROMPT: &str = include_str!("compact.md");
@@ -97,8 +97,8 @@ const PROBE_CUT: usize = 160;
 /// Parts of every shape a log shows, each labelled as the digest labels it: a line of each kind
 /// of turn, clean and tainted, a summary, and a node not summarised yet.
 fn probe() -> Vec<(Label, Body)> {
-    use crate::secretary::model::{ToolCall, Turn};
-    use crate::secretary::outcome::Outcome;
+    use suzatary_conversations::secretary::model::{ToolCall, Turn};
+    use suzatary_conversations::secretary::outcome::Outcome;
     let at =
         || suzatary_base::capability::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant");
     let tool = |outcome| Turn::Tool {
@@ -132,7 +132,7 @@ fn probe() -> Vec<(Label, Body)> {
         at: at(),
         title: suzatary_memory::secretary::words::Words::kept("a title".to_owned()),
         model: "m".to_owned(),
-        kind: crate::secretary::store::Kind::Topic,
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
     };
     let mut parts = Vec::new();
     for taint in [Taint::Clean, Taint::Tainted] {
@@ -287,7 +287,10 @@ impl Ask {
     #[must_use]
     pub fn of(
         digest: &Digest,
-        entries: &std::collections::BTreeMap<&Hash, &crate::secretary::store::Entry>,
+        entries: &std::collections::BTreeMap<
+            &Hash,
+            &suzatary_conversations::secretary::store::Entry,
+        >,
         node: &Hash,
     ) -> Option<(Self, Vec<Hash>)> {
         let asked = digest.node(node)?;

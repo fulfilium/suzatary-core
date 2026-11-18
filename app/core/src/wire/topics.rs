@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::inbox::{Asker, Card, CodingSession, ProposedAct};
 use suzatary_base::reference::Reference;
+use suzatary_conversations::secretary::store;
+use suzatary_inbox::wire::inbox::{Asker, Card, CodingSession, ProposedAct};
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::words;
 use suzatary_signatures::wire::signatures::FailedChain;
@@ -315,7 +316,7 @@ pub struct ConversationPayload {
     /// Never windowed.
     pub unplaced: Vec<UnplacedProposal>,
     /// The page polls while this is not `idle`.
-    pub state: crate::secretary::store::ConversationState,
+    pub state: store::ConversationState,
     /// The earliest index carried, `total` when empty.
     pub first: usize,
     pub total: usize,
@@ -327,7 +328,7 @@ pub struct ConversationPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct UnplacedProposal {
     pub index: usize,
-    pub why: crate::secretary::store::Unheld,
+    pub why: store::Unheld,
 }
 
 /// One row of `GET /api/secretary/conversations`.
@@ -335,7 +336,7 @@ pub struct UnplacedProposal {
 pub struct ConversationRow {
     pub id: String,
     pub title: String,
-    pub kind: crate::secretary::store::Kind,
+    pub kind: store::Kind,
     pub opened: String,
     pub turns: u32,
     pub standing: usize,
@@ -348,7 +349,7 @@ pub struct ConversationRow {
 pub struct SearchPayload {
     pub query: String,
     /// Newest first.
-    pub hits: Vec<crate::secretary::search::Hit>,
+    pub hits: Vec<suzatary_conversations::secretary::search::Hit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

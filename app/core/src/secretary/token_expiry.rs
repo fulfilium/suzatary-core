@@ -4,11 +4,12 @@
 
 use prodrome_core::event::Hash;
 
-use crate::secretary::changes::{self, Act, Changeset, Provenance};
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::{Help, Settable};
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_record::todo::{Deadline, Price, TodoFields};
 
 /// The todo id for `name` expiring on `day`.
@@ -129,8 +130,8 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::changes::Building;
     use suzatary_base::capability::Parses;
+    use suzatary_inbox::secretary::changes::Building;
     use suzatary_signatures::believed::Preview;
 
     /// One todo per token and expiry: the same expiry read again writes nothing, and a later one

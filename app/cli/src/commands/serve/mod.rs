@@ -53,10 +53,10 @@ use axum::http::{HeaderValue, header};
 use suzatary_api::server::Server;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
-use suzatary_core::parts::Parts;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::memories::Texts;
 use suzatary_google::google::Endpoints;
+use suzatary_lines::parts::Parts;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -72,6 +72,9 @@ use suzatary_connect::settings::Declares;
 use suzatary_connect::settings::Settables;
 use suzatary_connect::settings::Verify;
 use suzatary_connect::settings::Writes;
+use suzatary_conversations::secretary::model;
+use suzatary_inbox::secretary::sign_in;
+use suzatary_lines::secretary::transcript;
 pub use world::World;
 
 /// The owner's uploads; only his confirm reaches the vault.
@@ -147,7 +150,7 @@ pub struct Inner {
     /// `None` refuses an upload by name.
     pub uploads: Option<Arc<Uploads>>,
     /// `None` names a topic with the record's model.
-    pub titler: Option<Arc<dyn suzatary_core::secretary::model::Sessions + Send + Sync>>,
+    pub titler: Option<Arc<dyn model::Sessions + Send + Sync>>,
     /// `None` while the compactor is off.
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
@@ -188,7 +191,7 @@ pub struct Inner {
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
     pub answered: Arc<dyn suzatary_health::health::Register<String> + Send + Sync>,
     /// Reached only with a `Tap`.
-    pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
+    pub signing: Arc<dyn sign_in::Sessions + Send + Sync>,
     pub verify: Arc<dyn Verify + Send + Sync>,
     /// Begun only with a `Tap`, finished only by its callback.
     pub consenting: Arc<google::Consenting>,
@@ -219,17 +222,17 @@ impl suzatary_io::secrets::Resolves for Unresolved {
 /// No sign-in is held open.
 pub struct Closed;
 
-impl suzatary_core::secretary::sign_in::Sessions for Closed {
-    fn open(&self) -> Vec<suzatary_core::secretary::sign_in::SignInUrl> {
+impl sign_in::Sessions for Closed {
+    fn open(&self) -> Vec<sign_in::SignInUrl> {
         Vec::new()
     }
 
     fn finish(
         &self,
-        _: &suzatary_core::secretary::sign_in::SignInUrl,
+        _: &sign_in::SignInUrl,
         _: &suzatary_base::capability::Secret,
     ) -> Option<(
-        suzatary_core::secretary::inbox::ProposalId,
+        suzatary_inbox::secretary::inbox::ProposalId,
         Result<suzatary_base::capability::Secret, String>,
     )> {
         None
@@ -465,7 +468,7 @@ impl State {
     #[must_use]
     pub fn with_sign_ins(
         mut self,
-        signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
+        signing: Arc<dyn sign_in::Sessions + Send + Sync>,
         verify: Arc<dyn Verify + Send + Sync>,
     ) -> Self {
         self.building().signing = signing;
@@ -616,7 +619,7 @@ impl State {
                 (&declared.plugins, &declared.accounts),
                 &self.repos,
             ),
-            channels: suzatary_core::nonempty::NonEmpty::of(declared.channels),
+            channels: suzatary_conversations::nonempty::NonEmpty::of(declared.channels),
             accounts,
             plugins: declared.plugins,
         };
@@ -644,10 +647,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_titler(
-        mut self,
-        model: Arc<dyn suzatary_core::secretary::model::Sessions + Send + Sync>,
-    ) -> Self {
+    pub fn with_titler(mut self, model: Arc<dyn model::Sessions + Send + Sync>) -> Self {
         self.building().titler = Some(model);
         self
     }
@@ -678,7 +678,7 @@ impl State {
 
     /// File owed cards, withdraw the rest; failures are logged.
     pub fn notice(&self) {
-        use suzatary_core::parts::part;
+        use suzatary_lines::parts::part;
         let heard = part("lock", || locks::held(&self.noticing));
         let live::Live {
             settables,
@@ -1085,8 +1085,7 @@ async fn started_up(first: &Chained, rest: &[Chained]) {
         .blocking("erase.lines", move || {
             erased_at_startup(
                 "keys destroyed",
-                suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
-                    .map_err(Refusal::from),
+                transcript::sweep(caps.secretary.conversations).map_err(Refusal::from),
             );
         })
         .await;
@@ -1112,7 +1111,7 @@ struct Started(Vec<(&'static str, Parts, Duration)>);
 impl Started {
     fn step<T>(&mut self, step: &'static str, run: impl FnOnce() -> T) -> T {
         let at = Instant::now();
-        let (answer, parts) = suzatary_core::parts::scoped(run);
+        let (answer, parts) = suzatary_lines::parts::scoped(run);
         self.took(step, at.elapsed(), parts);
         answer
     }
@@ -1121,7 +1120,7 @@ impl Started {
     /// did not finish is logged and adds nothing.
     async fn blocking(&mut self, step: &'static str, run: impl FnOnce() + Send + 'static) {
         let at = Instant::now();
-        match tokio::task::spawn_blocking(move || suzatary_core::parts::scoped(run).1).await {
+        match tokio::task::spawn_blocking(move || suzatary_lines::parts::scoped(run).1).await {
             Ok(parts) => self.took(step, at.elapsed(), parts),
             Err(join_error) => tracing::warn!("{step} did not finish: {join_error}"),
         }
@@ -1530,7 +1529,7 @@ fn recording_acting(
 
 /// Open the default conversation; no read writes it.
 fn open_default(caps: &suzatary_api::server::Server<'_>) {
-    if let Err(failed) = suzatary_core::secretary::conversations::open_default(
+    if let Err(failed) = suzatary_lines::secretary::conversations::open_default(
         caps.secretary.conversations,
         caps.secretary.model,
         caps.secretary.clock.now(),
@@ -1693,7 +1692,7 @@ fn resume_waiting(state: &State) {
         }
     };
     let model = state.models.recorded();
-    match suzatary_core::secretary::transcript::waiting(
+    match transcript::waiting(
         caps.secretary.conversations,
         suzatary_health::health::reading_of(&answered, model.as_str()).as_ref(),
         caps.secretary.clock.now(),
@@ -1714,7 +1713,7 @@ fn resume_waiting(state: &State) {
 }
 
 fn reconcile_orphaned_acts(caps: &suzatary_api::server::Server<'_>) {
-    match suzatary_core::secretary::act_lines::reconcile(
+    match suzatary_lines::secretary::act_lines::reconcile(
         caps.secretary.conversations,
         caps.secretary.inbox,
         caps.secretary.clock.now(),

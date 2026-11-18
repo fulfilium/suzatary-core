@@ -1,16 +1,16 @@
 //! The Google consents the box holds open, each begun by a tapped card and bound to the actor who
 //! tapped it; in memory alone, so no verifier is ever written down.
 
-use crate::secretary::{conversations, transcript};
 use std::collections::BTreeMap;
+use suzatary_lines::secretary::{conversations, transcript};
 
 use chrono::NaiveDateTime;
 use prodrome_core::event::Actor;
 
-use crate::secretary::inbox::ProposalId;
-use crate::secretary::responded::{Done, Performed, Tried};
 use suzatary_google::google::KeptGrant;
 use suzatary_google::google::{Client, Exchanged, RedirectUri, Scope, Scopes, State, Verifier};
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::OauthError;
 
@@ -250,8 +250,8 @@ pub fn refused(taken: &Taken, error: Option<&str>) -> Option<(ProposalId, Perfor
 /// # Errors
 /// The stores' own failures.
 pub fn end(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     card: &ProposalId,
     at: suzatary_base::capability::Datetime,
     performed: Performed,
@@ -267,8 +267,8 @@ pub fn end(
             String::new()
         }
     };
-    crate::secretary::inbox::end(inbox, card, &transcript::writer(), at, performed)?;
-    let fold = crate::secretary::inbox::fold(inbox)?;
+    suzatary_inbox::secretary::inbox::end(inbox, card, &transcript::writer(), at, performed)?;
+    let fold = suzatary_inbox::secretary::inbox::fold(inbox)?;
     let Some(asked) = fold
         .objects()
         .find(|object| object.id == *card)
@@ -280,7 +280,11 @@ pub fn end(
         conversations::append(
             conversations,
             &asked.conversation,
-            &crate::secretary::store::Entry::noted(at, said, vec![asked.clone().into()]),
+            &suzatary_conversations::secretary::store::Entry::noted(
+                at,
+                said,
+                vec![asked.clone().into()],
+            ),
         )?;
     }
     Ok(Some(asked.conversation))

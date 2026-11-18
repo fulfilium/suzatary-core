@@ -13,11 +13,11 @@ use suzatary_connect::settings::remote::{self, Pushed, Tip};
 use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
 };
-use suzatary_core::timings::{Part, Phase, timed};
 use suzatary_core::wire::cards as wire;
 use suzatary_google::calendar::Occurrence;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_lines::timings::{Part, Phase, timed};
 use suzatary_store::store::StoreError;
 
 use super::State;
@@ -62,7 +62,7 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
             b"settings::overview::Asking::open of the inbox's fold",
             caps.secretary.inbox,
             |inbox| {
-                Ok(Asking::open(&suzatary_core::secretary::inbox::Fold::of(
+                Ok(Asking::open(&suzatary_inbox::secretary::inbox::Fold::of(
                     &inbox.nodes()?,
                 )))
             },
@@ -77,7 +77,7 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     let declared = Declared {
         deployment: &state.deployment,
         settables: &settables,
-        channels: suzatary_core::nonempty::NonEmpty::listed(channels.as_ref()),
+        channels: suzatary_conversations::nonempty::NonEmpty::listed(channels.as_ref()),
         accounts: accounts.accounts(),
         jobs: &jobs,
         plugins: &plugins,

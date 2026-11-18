@@ -5,8 +5,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::secretary::acts::Act;
-use crate::secretary::proposal::Proposal;
 use crate::wire::cards as wire;
 use suzatary_connect::connect::{self, Checked, Connection, Group, Key, Standing};
 use suzatary_connect::deployment::Deployment;
@@ -17,6 +15,8 @@ use suzatary_connect::settings::remote::Pushed;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_health::health::{Health, Healths};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_mail::mail::account::MailAccount;
 use suzatary_services::plugin::Manifest;
 
@@ -55,7 +55,7 @@ pub struct Asking {
 impl Asking {
     /// The waiting connection cards.
     #[must_use]
-    pub fn open(inbox: &crate::secretary::inbox::Fold) -> Vec<Self> {
+    pub fn open(inbox: &suzatary_inbox::secretary::inbox::Fold) -> Vec<Self> {
         inbox
             .objects()
             .filter(|object| object.reading.open())
@@ -231,7 +231,7 @@ pub struct ModelJob {
 pub enum Calls {
     /// Calls are recorded under `key`.
     Recorded {
-        /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
+        /// The model's name, as [`suzatary_conversations::secretary::model::Model::name`] spells it.
         key: String,
         /// The secret the model reads.
         credential: String,
@@ -1520,14 +1520,14 @@ pub(crate) mod tests {
         /// asked first, the account's line draws the sign-in's card, and the draft's nowhere.
         #[test]
         fn a_waiting_draft_never_hides_the_accounts_sign_in(draft_first in any::<bool>(), kind in 0u8..4) {
-            use crate::secretary::inbox;
+            use suzatary_inbox::secretary::inbox;
             use suzatary_base::conversation_id::ConversationId;
-            use crate::secretary::proposal::{Draft, Reasons};
+            use suzatary_inbox::secretary::proposal::{Draft, Reasons};
             let email = "ada@example.test";
-            let store = crate::stores::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
+            let store = crate::stores::InMemory::<suzatary_inbox::secretary::inbox_event::InboxEvent>::default();
             let ask = |index: usize, proposal: Proposal, minute: u32| {
                 let asked = inbox::Asked {
-                    proposer: crate::secretary::proposer::Proposer::Secretary,
+                    proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
                     proposal,
                     reasons: Reasons::new("asked", vec!["briefing:2026-10-07".parse().expect("a reference")]).expect("reasons"),
                     asked: suzatary_base::reference::ProposalRef {
@@ -1537,7 +1537,7 @@ pub(crate) mod tests {
                     price: inbox::Price::unpriced(),
                 };
                 let at = suzatary_base::capability::Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant");
-                inbox::ask(&store, asked, &crate::secretary::transcript::writer(), at).expect("filed");
+                inbox::ask(&store, asked, &suzatary_lines::secretary::transcript::writer(), at).expect("filed");
             };
             let (draft, sign_in) = if draft_first { (0, 1) } else { (1, 0) };
             ask(0, Proposal::Email(Draft { account: email.to_owned(), ..Draft::default() }), draft);

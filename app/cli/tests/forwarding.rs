@@ -7,9 +7,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::secretary::proposal::Style;
 use suzatary_held::held_value::{Handle, Reopened, Reveal, Shown};
 use suzatary_held::mail_error::MailError;
+use suzatary_inbox::secretary::proposal::Style;
 use suzatary_mail::mail::{MailMessage, MailRow};
 
 /// A synthetic SSN no person holds, as the form writes it and as its copy does.
@@ -283,7 +283,7 @@ fn read_binding_holds() {
         "{refused}"
     );
     assert_eq!(
-        suzatary_core::secretary::inbox::fold(&fakes.inbox)
+        suzatary_inbox::secretary::inbox::fold(&fakes.inbox)
             .expect("the inbox reads")
             .objects()
             .count(),

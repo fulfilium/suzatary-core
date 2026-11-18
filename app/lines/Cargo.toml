@@ -1,0 +1,53 @@
+[package]
+name = "suzatary-lines"
+description = "Suzatary's conversation store and its lines"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_lines"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-health.workspace = true
+suzatary-triage.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+hex.workspace = true
+base64.workspace = true
+postcard.workspace = true
+
+# `secretary::conversation_json`: the exports' `Json` is implemented beside the type.
+prodrome-wasm-exports = { workspace = true, optional = true }
+
+[features]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing"]
+# The e2e fixture's lines (`secretary::line_event`); core's `fixture` alone.
+fixture = []
+# The browser module's view of the lines' schema; `app/wasm` alone enables it.
+wasm = ["dep:prodrome-wasm-exports"]
+
+[dev-dependencies]
+suzatary-lines = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

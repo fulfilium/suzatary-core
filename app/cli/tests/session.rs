@@ -5,10 +5,13 @@ mod common;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::{Halt, Pick, SessionId, Turn};
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::conversation::round::Sink;
-use suzatary_core::secretary::model::{Halt, Pick, SessionId, Turn};
-use suzatary_core::secretary::store::Entry;
-use suzatary_core::secretary::{Bound, answer, queue};
+use suzatary_core::secretary::{Bound, answer};
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-14-1").expect("a slug")
@@ -23,16 +26,16 @@ fn deployment() -> suzatary_connect::deployment::Deployment {
 
 /// Open the conversation with one person turn already on it.
 fn opened_with_a_person_turn(caps: &Fakes) {
-    suzatary_core::secretary::conversations::start(
+    conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
         "A morning",
-        suzatary_core::secretary::store::Kind::Topic,
+        suzatary_conversations::secretary::store::Kind::Topic,
         common::now(),
     )
     .expect("the conversation opens");
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
@@ -130,7 +133,7 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
     let caps = Fakes::new("session-resume").model(FakeModel::saying(["{\"say\": \"still here\"}"]));
     opened_with_a_person_turn(&caps);
     let existing = a_session_id("1");
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
@@ -145,9 +148,8 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
     )
     .expect("the session line appends");
 
-    let before =
-        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
-            .expect("the conversation reads");
+    let before = conversations::read(caps.conversations.conversations(), &id())
+        .expect("the conversation reads");
     let expected_delta: Vec<Turn> = queue::delta(&before)
         .iter()
         .map(|(_, said)| said.turn.clone())
@@ -206,7 +208,7 @@ fn a_retraction_reopens_a_stored_session() {
         caps.owners.clone(),
     );
     opened_with_a_person_turn(&caps);
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
@@ -284,7 +286,7 @@ fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
         .model(FakeModel::saying(["{\"say\": \"reopened and answering\"}"]).losing_next_resume());
     opened_with_a_person_turn(&caps);
     let dead = a_session_id("dead");
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
@@ -366,7 +368,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         "{\"say\": \"resumed\"}",
     ]));
     opened_with_a_person_turn(&caps);
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
@@ -418,7 +420,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         "it records today's surface"
     );
 
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
@@ -505,14 +507,14 @@ fn the_memory_heads_a_batch_once() {
     };
     let heading = |turn: &Turn| match turn {
         Turn::Tool { verb, answer, .. }
-            if *verb == suzatary_core::secretary::tool_name::ToolName::Memory =>
+            if *verb == suzatary_conversations::secretary::tool_name::ToolName::Memory =>
         {
             Some(answer.clone())
         }
         _ => None,
     };
     let say = |text: &str| {
-        suzatary_core::secretary::transcript::push(
+        transcript::push(
             caps.conversations.conversations(),
             &id(),
             &Entry::Said {
@@ -575,7 +577,7 @@ fn asked(text: &str) -> Entry {
 
 fn stopped_act() -> Turn {
     Turn::Act {
-        text: suzatary_core::secretary::store::stopped_by(common::CAST.owner.actor),
+        text: suzatary_conversations::secretary::store::stopped_by(common::CAST.owner.actor),
         references: Vec::new(),
     }
 }
@@ -619,7 +621,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
         "the first round opens a session"
     );
 
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &asked("read every thread"),
@@ -645,7 +647,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
                 &said.turn,
                 said.by
                     .as_ref()
-                    .and_then(suzatary_core::secretary::stamp::Stamp::actor),
+                    .and_then(suzatary_inbox::secretary::stamp::Stamp::actor),
             )
         })
         .collect();
@@ -662,7 +664,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
     assert!(stopped.session.is_none(), "the killed session is dropped");
     assert_eq!(queue::pending(&stopped), 0, "nothing is asked again");
 
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &asked("just the permit"),
@@ -718,7 +720,7 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
         )
     };
     let lines = || {
-        suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), &id())
+        transcript::lines(caps.conversations.conversations(), &id())
             .expect("reads")
             .len()
     };
@@ -731,7 +733,7 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
     assert_eq!(ask(&Halt::new()).expect("nothing to run"), None);
     assert_eq!((lines(), asks()), (before, models), "no model, no line");
 
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &asked(&format!("did {counsel} write back?")),
@@ -752,7 +754,7 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
 
     let stopped = Halt::new();
     stopped.stop(common::actor("ada"));
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &asked("read every thread"),
@@ -805,14 +807,13 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
         .expect("the exchange runs")
     };
     assert!(ask().is_some(), "the question is answered");
-    let before =
-        suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), &id())
-            .expect("reads")
-            .len();
+    let before = transcript::lines(caps.conversations.conversations(), &id())
+        .expect("reads")
+        .len();
     assert_eq!(ask(), None);
     assert_eq!(caps.model.asked().len(), 1, "asked once, for the question");
     assert_eq!(
-        suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), &id())
+        transcript::lines(caps.conversations.conversations(), &id())
             .expect("reads")
             .len(),
         before
@@ -822,20 +823,22 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
 /// A model that answers with its own name.
 struct Named(String);
 
-impl suzatary_core::secretary::model::Model for Named {
+impl suzatary_conversations::secretary::model::Model for Named {
     fn name(&self) -> String {
         self.0.clone()
     }
 
     fn turn(
         &self,
-        _: &suzatary_core::secretary::model::Conversation,
+        _: &suzatary_conversations::secretary::model::Conversation,
         _: &serde_json::Value,
-    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
-    {
-        Ok(suzatary_core::secretary::model::Reply {
+    ) -> Result<
+        suzatary_conversations::secretary::model::Reply,
+        suzatary_conversations::secretary::model::ModelError,
+    > {
+        Ok(suzatary_conversations::secretary::model::Reply {
             say: format!("answered by {}", self.0),
-            ..suzatary_core::secretary::model::Reply::default()
+            ..suzatary_conversations::secretary::model::Reply::default()
         })
     }
 }
@@ -846,12 +849,12 @@ impl suzatary_core::secretary::model::Model for Named {
 #[test]
 fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
     let caps = Fakes::new("pick-per-round").model(FakeModel::saying(["{\"say\": \"hi\"}"]));
-    suzatary_core::secretary::conversations::start(
+    conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
         "A morning",
-        suzatary_core::secretary::store::Kind::Topic,
+        suzatary_conversations::secretary::store::Kind::Topic,
         common::now(),
     )
     .expect("the conversation opens");
@@ -894,7 +897,7 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
     );
 
     *order.lock().expect("unpoisoned") = "second".to_owned();
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
@@ -926,7 +929,7 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
 /// A stamped turn of the owner's, or a model's or a verb's turn, as `answer` would have stored it.
 fn push_said(caps: &Fakes, turn: Turn) {
     let by = matches!(turn, Turn::Person { .. }).then(|| "ada".into());
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
@@ -995,12 +998,12 @@ fn answered_once(
 /// A conversation whose first round read a mail, then 27 rounds of chat and two turns waiting:
 /// sixty turns, the whole of the window an opening sends.
 fn a_full_window_that_read_a_mail(caps: &Fakes) {
-    suzatary_core::secretary::conversations::start(
+    conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
         "A morning",
-        suzatary_core::secretary::store::Kind::Topic,
+        suzatary_conversations::secretary::store::Kind::Topic,
         common::now(),
     )
     .expect("the conversation opens");
@@ -1009,7 +1012,7 @@ fn a_full_window_that_read_a_mail(caps: &Fakes) {
         caps,
         Turn::Model {
             text: String::new(),
-            calls: vec![suzatary_core::secretary::model::ToolCall {
+            calls: vec![suzatary_conversations::secretary::model::ToolCall {
                 verb: "show".into(),
                 args: std::collections::BTreeMap::new(),
             }],
@@ -1020,7 +1023,7 @@ fn a_full_window_that_read_a_mail(caps: &Fakes) {
         Turn::Tool {
             verb: "show".into(),
             answer: "the bank's mail".to_owned(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+            outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
             files: Vec::new(),
         },
     );
@@ -1047,9 +1050,7 @@ fn a_turn_said_while_a_session_opens_moves_nothing_it_was_sent() {
         .gated(gate.clone()),
     );
     a_full_window_that_read_a_mail(&caps);
-    let before =
-        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
-            .expect("it reads");
+    let before = conversations::read(caps.conversations.conversations(), &id()).expect("it reads");
     assert_eq!(before.turns.len(), queue::MODEL_WINDOW);
     let sent = queue::for_model(&before)
         .first()
@@ -1126,12 +1127,8 @@ fn a_round_another_model_answered_ends_the_session() {
         .expect("a round ran")
     };
     let push = |text: &str| {
-        suzatary_core::secretary::transcript::push(
-            caps.conversations.conversations(),
-            &id(),
-            &asked(text),
-        )
-        .expect("the question appends");
+        transcript::push(caps.conversations.conversations(), &id(), &asked(text))
+            .expect("the question appends");
     };
 
     round(Pick::Held(&caps.model));
@@ -1143,9 +1140,7 @@ fn a_round_another_model_answered_ends_the_session() {
         after.stored.session.is_none(),
         "the session did not hear this round"
     );
-    let entries =
-        suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), &id())
-            .expect("reads");
+    let entries = transcript::lines(caps.conversations.conversations(), &id()).expect("reads");
     assert!(
         entries.iter().any(|line| matches!(line,
             Entry::Unheard { model, .. } if model == "a provider")),
@@ -1210,12 +1205,8 @@ fn a_round_the_box_ended_ends_the_session() {
         "the box's closing turn was unheard"
     );
 
-    suzatary_core::secretary::transcript::push(
-        caps.conversations.conversations(),
-        &id(),
-        &asked("go on"),
-    )
-    .expect("the question appends");
+    transcript::push(caps.conversations.conversations(), &id(), &asked("go on"))
+        .expect("the question appends");
     round();
     assert_eq!(caps.model.opened().len(), 2, "the next round opens");
     let sent = caps.model.asked().last().cloned().expect("asked");
@@ -1281,36 +1272,38 @@ fn words(turns: &[Turn]) -> Vec<String> {
 }
 
 impl Simulated {
-    fn reply(&self) -> suzatary_core::secretary::model::Reply {
+    fn reply(&self) -> suzatary_conversations::secretary::model::Reply {
         let n = self.said.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let say = format!("held {n}");
         self.holds.lock().expect("unpoisoned").push(say.clone());
-        suzatary_core::secretary::model::Reply {
+        suzatary_conversations::secretary::model::Reply {
             say,
             calls: if self.calling.load(std::sync::atomic::Ordering::SeqCst) {
-                vec![suzatary_core::secretary::model::ToolCall {
+                vec![suzatary_conversations::secretary::model::ToolCall {
                     verb: "context".into(),
                     args: std::collections::BTreeMap::new(),
                 }]
             } else {
                 Vec::new()
             },
-            ..suzatary_core::secretary::model::Reply::default()
+            ..suzatary_conversations::secretary::model::Reply::default()
         }
     }
 }
 
-impl suzatary_core::secretary::model::Model for Simulated {
+impl suzatary_conversations::secretary::model::Model for Simulated {
     fn name(&self) -> String {
         "claude-cli/simulated".to_owned()
     }
 
     fn turn(
         &self,
-        _: &suzatary_core::secretary::model::Conversation,
+        _: &suzatary_conversations::secretary::model::Conversation,
         _: &serde_json::Value,
-    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
-    {
+    ) -> Result<
+        suzatary_conversations::secretary::model::Reply,
+        suzatary_conversations::secretary::model::ModelError,
+    > {
         let n = self.said.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let calls = self
             .stateless_calls
@@ -1320,45 +1313,47 @@ impl suzatary_core::secretary::model::Model for Simulated {
                 |left| left.checked_sub(1),
             )
             .is_ok();
-        Ok(suzatary_core::secretary::model::Reply {
+        Ok(suzatary_conversations::secretary::model::Reply {
             say: format!("stateless {n}"),
             calls: if calls {
-                vec![suzatary_core::secretary::model::ToolCall {
+                vec![suzatary_conversations::secretary::model::ToolCall {
                     verb: "context".into(),
                     args: std::collections::BTreeMap::new(),
                 }]
             } else {
                 Vec::new()
             },
-            ..suzatary_core::secretary::model::Reply::default()
+            ..suzatary_conversations::secretary::model::Reply::default()
         })
     }
 }
 
-impl suzatary_core::secretary::model::SessionModel for Simulated {
+impl suzatary_conversations::secretary::model::SessionModel for Simulated {
     fn open(
         &self,
         id: &SessionId,
-        conversation: &suzatary_core::secretary::model::Conversation,
+        conversation: &suzatary_conversations::secretary::model::Conversation,
         _: &serde_json::Value,
         _: &Halt,
     ) -> Result<
-        suzatary_core::secretary::model::Sessioned,
-        suzatary_core::secretary::model::ModelError,
+        suzatary_conversations::secretary::model::Sessioned,
+        suzatary_conversations::secretary::model::ModelError,
     > {
         // A session lost this round will not reopen.
         if self.lose.swap(false, std::sync::atomic::Ordering::SeqCst)
             || self.refuses.load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(suzatary_core::secretary::model::ModelError::Failed(
-                "the session will not reopen".to_owned(),
-            ));
+            return Err(
+                suzatary_conversations::secretary::model::ModelError::Failed(
+                    "the session will not reopen".to_owned(),
+                ),
+            );
         }
         self.opens.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         *self.holds.lock().expect("unpoisoned") = words(&conversation.turns);
-        Ok(suzatary_core::secretary::model::Sessioned {
+        Ok(suzatary_conversations::secretary::model::Sessioned {
             reply: self.reply(),
-            session: suzatary_core::secretary::model::Session {
+            session: suzatary_conversations::secretary::model::Session {
                 id: id.clone(),
                 model: "claude-cli/simulated".to_owned(),
                 cwd: String::new(),
@@ -1372,17 +1367,17 @@ impl suzatary_core::secretary::model::SessionModel for Simulated {
     fn resume(
         &self,
         _: &str,
-        session: &suzatary_core::secretary::model::Session,
-        delta: &suzatary_core::secretary::model::Delta,
+        session: &suzatary_conversations::secretary::model::Session,
+        delta: &suzatary_conversations::secretary::model::Delta,
         _: &serde_json::Value,
         _: &dyn Fn(&str),
         _: &Halt,
     ) -> Result<
-        suzatary_core::secretary::model::Sessioned,
-        suzatary_core::secretary::model::ModelError,
+        suzatary_conversations::secretary::model::Sessioned,
+        suzatary_conversations::secretary::model::ModelError,
     > {
         if self.lose.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(suzatary_core::secretary::model::ModelError::Lost(
+            return Err(suzatary_conversations::secretary::model::ModelError::Lost(
                 "the session is gone".to_owned(),
             ));
         }
@@ -1393,7 +1388,7 @@ impl suzatary_core::secretary::model::SessionModel for Simulated {
             .expect("unpoisoned")
             .get_or_insert_with(|| holds.clone());
         drop(holds);
-        Ok(suzatary_core::secretary::model::Sessioned {
+        Ok(suzatary_conversations::secretary::model::Sessioned {
             reply: self.reply(),
             session: session.clone(),
         })
@@ -1426,12 +1421,12 @@ proptest::proptest! {
     ) {
         let caps = Fakes::new("session-law");
         let held = Simulated::default();
-        suzatary_core::secretary::conversations::start(
+        conversations::start(
             caps.conversations.conversations(),
             &held,
             &id(),
             "A morning",
-            suzatary_core::secretary::store::Kind::Topic,
+            suzatary_conversations::secretary::store::Kind::Topic,
             common::now(),
         )
         .expect("the conversation opens");
@@ -1442,13 +1437,13 @@ proptest::proptest! {
             caps: caps.secretary(),
             policy: &policy,
         }];
-        let read = || suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id()).expect("reads");
+        let read = || conversations::read(caps.conversations.conversations(), &id()).expect("reads");
         // Whether the script leaves a session kept, read from the script, never from the fold: a
         // held round keeps one, as does a lost round with none to lose; a provider's round, a
         // lost session that will not reopen and a round the box ends leave none.
         let mut kept_by_script = false;
         for (n, round) in rounds.iter().enumerate() {
-            suzatary_core::secretary::transcript::push(
+            transcript::push(
                 caps.conversations.conversations(),
                 &id(),
                 &asked(&format!("person {n}")),
@@ -1524,12 +1519,12 @@ proptest::proptest! {
 fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
     let caps = Fakes::new("session-refusing");
     let held = Simulated::default();
-    suzatary_core::secretary::conversations::start(
+    conversations::start(
         caps.conversations.conversations(),
         &held,
         &id(),
         "A morning",
-        suzatary_core::secretary::store::Kind::Topic,
+        suzatary_conversations::secretary::store::Kind::Topic,
         common::now(),
     )
     .expect("the conversation opens");
@@ -1558,12 +1553,8 @@ fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
         )
     };
     let push = |text: &str| {
-        suzatary_core::secretary::transcript::push(
-            caps.conversations.conversations(),
-            &id(),
-            &asked(text),
-        )
-        .expect("the question appends");
+        transcript::push(caps.conversations.conversations(), &id(), &asked(text))
+            .expect("the question appends");
     };
 
     push("first");

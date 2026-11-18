@@ -23,6 +23,9 @@ suzatary-mail.workspace = true
 suzatary-health.workspace = true
 suzatary-triage.workspace = true
 suzatary-connect.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-inbox.workspace = true
 suzatary-api.workspace = true
 prodrome_core.workspace = true
 viewtree = { path = "../viewtree", features = ["host"] }

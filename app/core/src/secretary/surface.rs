@@ -6,9 +6,7 @@
 use serde_json::Value;
 
 use super::Call;
-use super::tool_name::ToolName;
 use super::verb_answer::VerbAnswer;
-use super::verb_name::{Binding, VerbName};
 use super::verbs::{
     AddTopics, Attachments, Briefing, BriefingDelta, Calendar, Consolidate, Context, Decisions,
     DraftNote, DriveList, DriveRead, Forget, GitDiffSummary, History, JunkDigest, JunkShow,
@@ -20,15 +18,17 @@ use super::verbs::{
 use super::verbs::{IfCarded, check, propose};
 use crate::agent::Agent;
 use crate::agent::{Holds, Says};
-use crate::secretary::changes::{Act, Changeset, Unapplied};
 use crate::secretary::compaction::Reading;
 use crate::secretary::gate::Gate;
-use crate::secretary::proposal::Proposal;
 use crate::secretary::shown_record::{Everything, ShownRecord};
 use crate::verb::{Surface, verbs};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::writer::Writer;
+use suzatary_conversations::secretary::tool_name::ToolName;
+use suzatary_conversations::secretary::verb_name::{Binding, VerbName};
+use suzatary_inbox::secretary::changes::{Act, Changeset, Unapplied};
+use suzatary_inbox::secretary::proposal::Proposal;
 
 /// The secretary's verbs: each runs against a [`Call`], and answers JSON and the files it hands
 /// the model.
@@ -133,8 +133,10 @@ impl Holds for SecretarySurface {
     fn write(call: &Call<'_>, act: Act, carded: IfCarded) -> Result<Value, Refusal> {
         let changeset = Changeset::new(call.chain.name.as_str(), vec![act])
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-        let round =
-            crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
+        let round = suzatary_lines::secretary::conversations::read(
+            call.caps.conversations,
+            call.conversation,
+        )?;
         match Gate::of(Binding::Writes, &round) {
             Gate::Binds(_) => applied(call, &changeset),
             Gate::Card => {

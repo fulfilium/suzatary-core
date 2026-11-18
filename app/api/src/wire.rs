@@ -10,11 +10,11 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 
 use suzatary_base::wire::base::ErrorPayload;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Overview};
-use suzatary_core::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
 use suzatary_core::wire::topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
     MemoryPayload, ProposalRow, SearchPayload, StreamPayload, TopicsPayload, UnplacedProposal,
 };
+use suzatary_lines::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
 use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use suzatary_triage::wire::triage::WatchesPayload;
@@ -709,7 +709,7 @@ pub struct WaitingPayload {
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Frame {
     State {
-        state: suzatary_core::secretary::store::ConversationState,
+        state: suzatary_conversations::secretary::store::ConversationState,
     },
     /// Verbatim, drawn as text.
     Delta {
@@ -833,14 +833,14 @@ pub enum Found {
     Reached,
     Unreached {
         #[ts(type = "Array<string>")]
-        problems: suzatary_core::nonempty::NonEmpty<String>,
+        problems: suzatary_conversations::nonempty::NonEmpty<String>,
     },
 }
 
 impl Found {
     #[must_use]
     pub fn of(problems: Vec<String>) -> Self {
-        suzatary_core::nonempty::NonEmpty::of(problems)
+        suzatary_conversations::nonempty::NonEmpty::of(problems)
             .map_or(Self::Reached, |problems| Self::Unreached { problems })
     }
 }
@@ -1011,7 +1011,7 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<SayPayload>();
     visit.visit::<Overview>();
     visit.visit::<ErrorPayload>();
-    visit.visit::<suzatary_core::secretary::phase::Phase>();
+    visit.visit::<suzatary_inbox::secretary::phase::Phase>();
 }
 
 /// What a page sends, decoded by the box alone.
@@ -1192,7 +1192,7 @@ mod tests {
     fn the_portal_answer_is_the_json_the_android_portal_reads() {
         use crate::portal::{Portal, Sender};
         use suzatary_connect::connect::Channel;
-        use suzatary_core::nonempty::NonEmpty;
+        use suzatary_conversations::nonempty::NonEmpty;
         let sender = || Sender::try_from("100000000000".to_owned()).expect("a number");
         let fcm = NonEmpty::of(vec![Channel::Ntfy, Channel::Fcm]);
         let ntfy = NonEmpty::of(vec![Channel::Ntfy]);

@@ -14,6 +14,8 @@ use super::store_at::StoreAt;
 use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
+use suzatary_lines::first_read;
+use suzatary_lines::secretary::prune;
 use suzatary_store::store::Reads as _;
 
 /// What `suzatary verify` checks.
@@ -101,9 +103,9 @@ fn every_store(instance: &Instance) -> anyhow::Result<()> {
     };
     let requests =
         suzatary_io::requests::Requests::open(instance.requests(), instance.paths.answers.clone());
-    let stray = suzatary_core::first_read::first("stores", || {
+    let stray = first_read::first("stores", || {
         findings.extend(database.verify());
-        suzatary_core::secretary::prune::stray(conversations.conversations())
+        prune::stray(conversations.conversations())
     })
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     if let Some((_, lines)) = findings.iter_mut().find(|(what, _)| what == "lines") {
@@ -163,8 +165,8 @@ fn husked(instance: &Instance, was: &Path) -> anyhow::Result<()> {
     let now = |name: &prodrome_core::event::Hash| {
         std::fs::read(objects.join(format!("{}.py", name.as_str()))).ok()
     };
-    let findings = suzatary_core::first_read::first("husked lines", || {
-        suzatary_core::secretary::prune::admitted(stores.conversations(), &committed, now)
+    let findings = first_read::first("husked lines", || {
+        prune::admitted(stores.conversations(), &committed, now)
     })
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     for finding in &findings {

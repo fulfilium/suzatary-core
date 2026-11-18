@@ -2,11 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::responded::Withdrawal;
+use crate::secretary;
 use crate::secretary::verbs::withdrawable;
-use crate::secretary::{self, Call, SecretarySurface, inbox};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::responded::Withdrawal;
 
 /// Withdraw a stale proposal that nothing replaces.
 pub struct WithdrawProposal;
@@ -46,7 +48,7 @@ impl Verb for WithdrawProposal {
         inbox::withdraw(
             call.caps.inbox,
             &standing.object.id,
-            &crate::secretary::transcript::writer(),
+            &suzatary_lines::secretary::transcript::writer(),
             call.caps.clock.now(),
             Withdrawal::NoLongerNeeded { why: why.clone() },
         )?;

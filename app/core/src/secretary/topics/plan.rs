@@ -7,12 +7,12 @@ use std::fmt::Write as _;
 use prodrome_core::literal::Datetime;
 use serde::Deserialize;
 
-use crate::secretary::store::Stored;
-use crate::secretary::targets::{MAX_TOPICS, rounds};
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
 use suzatary_base::topic_target::Target;
+use suzatary_conversations::secretary::store::Stored;
+use suzatary_lines::secretary::targets::{MAX_TOPICS, rounds};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Plan(Vec<Planned>);

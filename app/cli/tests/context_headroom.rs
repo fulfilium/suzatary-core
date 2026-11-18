@@ -18,17 +18,17 @@ use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::persona::Persona;
 use suzatary_connect::deployment::Deployment;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 use suzatary_core::secretary::compaction::Reading;
-use suzatary_core::secretary::conversations::InMemory as Lines;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_view::LINE_BYTES;
 use suzatary_core::secretary::digests::ReadDigests;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::shown_record::OwnersRecord;
-use suzatary_core::secretary::store::Entry;
 use suzatary_core::stores::InMemory;
+use suzatary_core::stores::conversations::InMemory as Lines;
+use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };

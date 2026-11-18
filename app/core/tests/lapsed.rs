@@ -4,18 +4,19 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::zone::Zone;
-use suzatary_core::secretary::acts::Act;
-use suzatary_core::secretary::inbox::{self, Asked, Price};
-use suzatary_core::secretary::inbox_event::InboxEvent;
-use suzatary_core::secretary::inbox_reading::Reading;
 use suzatary_core::secretary::lapsed::sweep;
-use suzatary_core::secretary::proposal::Proposal;
-use suzatary_core::secretary::proposal::Reasons;
-use suzatary_core::secretary::proposer::Proposer;
-use suzatary_core::secretary::responded::Responded;
-use suzatary_core::secretary::responded::Withdrawal;
 use suzatary_core::stores::InMemory;
 use suzatary_google::calendar::When;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{Asked, Price};
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::inbox_reading::Reading;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::proposal::Reasons;
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::Responded;
+use suzatary_inbox::secretary::responded::Withdrawal;
 
 fn at(day: u32, hour: u32) -> Datetime {
     Datetime::new(2026, 11, day, hour, 0, 0, 0).expect("an instant")
@@ -43,7 +44,7 @@ fn card(inbox: &InMemory<InboxEvent>, index: usize, when: When) -> inbox::Propos
             },
             price: Price::unpriced(),
         },
-        &suzatary_core::secretary::transcript::writer(),
+        &suzatary_lines::secretary::transcript::writer(),
         at(1, 9),
     )
     .expect("filed")

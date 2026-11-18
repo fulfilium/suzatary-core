@@ -6,11 +6,11 @@ use serde_json::json;
 
 use crate::secretary::gate::Gate;
 use crate::secretary::verb_answer::VerbAnswer;
-use crate::secretary::verb_name::Binding;
 use crate::secretary::verbs::{IfCarded, memory_card};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::verb_name::Binding;
 use suzatary_memory::secretary::memory::{self, Fact, FactId, Replaces, Sources};
 
 /// Replace standing facts with one, where remember would write, or as a card the owner taps.
@@ -57,7 +57,10 @@ impl Verb for Consolidate {
         let replaced: Vec<u64> = from.ids().iter().map(|id| id.0).collect();
         let round = match Gate::of(
             Binding::Remembers,
-            &crate::secretary::conversations::read(call.caps.conversations, call.conversation)?,
+            &suzatary_lines::secretary::conversations::read(
+                call.caps.conversations,
+                call.conversation,
+            )?,
         ) {
             Gate::Refused(why) => return Err(Refusal::forbidden(why)),
             Gate::Binds(round) => round,

@@ -4,18 +4,20 @@
 //! set `owns` that it no longer holds is withdrawn, unless the set is [holding](Owed::holding).
 
 use crate::secretary::filed::{self, Filing};
-use crate::secretary::inbox::{self, ProposalId};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::Entry;
-use crate::secretary::{conversations, transcript};
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
 use suzatary_connect::secrets::SecretState;
 use suzatary_connect::settings::Settable;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::Withdrawal;
+use suzatary_lines::parts;
+use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_store::store::Prodrome;
 
 /// Why a stale card is withdrawn.
@@ -96,7 +98,7 @@ impl Owed {
     /// asks to set a link it retires.
     #[must_use]
     pub(crate) fn retiring(mut self) -> Self {
-        use crate::secretary::acts::Act;
+        use suzatary_inbox::secretary::acts::Act;
         let removed: Vec<String> = self
             .owed
             .iter()
@@ -152,14 +154,14 @@ impl Owed {
     /// stale ones.
     pub fn file(
         &self,
-        conversations: crate::secretary::conversations::Conversations<'_>,
+        conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
         inbox: &dyn Prodrome<InboxEvent>,
         at: Datetime,
     ) -> Result<Filed, Refusal> {
         let conversation = &*suzatary_base::conversation_id::SETUP;
         let mut done = Filed::default();
         // Read once: this filing adds only other proposals, so it changes no answer here.
-        let before = crate::parts::part("refold", || inbox::fold(inbox))?;
+        let before = parts::part("refold", || inbox::fold(inbox))?;
         for noticed in &self.owed {
             let held = before
                 .held(&noticed.proposal, noticed.since)
@@ -169,19 +171,19 @@ impl Owed {
                 continue;
             }
             // Opened by the first card, so a box that owes nothing has no conversation.
-            crate::parts::part("file.open", || {
+            parts::part("file.open", || {
                 filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)
             })?;
             let card = Reference::Proposal(ProposalRef {
                 conversation: conversation.clone(),
-                index: crate::parts::part("file.read", || {
+                index: parts::part("file.read", || {
                     conversations::read(conversations, conversation)
                 })?
                 .proposals
                 .len(),
             });
             let why = suzatary_base::spelling::said(&noticed.why);
-            crate::parts::part("file.note", || {
+            parts::part("file.note", || {
                 conversations::append(
                     conversations,
                     conversation,
@@ -193,7 +195,7 @@ impl Owed {
                 [card].into_iter().chain(noticed.about.clone()).collect(),
             )
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-            let (_, object) = crate::parts::part("file.card", || {
+            let (_, object) = parts::part("file.card", || {
                 filed::file(
                     conversations,
                     inbox,
@@ -223,7 +225,7 @@ impl Owed {
             .map(|object| object.id.clone())
             .collect();
         for id in stale {
-            crate::parts::part("withdraw", || {
+            parts::part("withdraw", || {
                 inbox::withdraw(
                     inbox,
                     &id,
@@ -242,7 +244,7 @@ impl Owed {
 
 /// Whether a box card asking for `proposal` is this set's to file and withdraw.
 pub(crate) fn owns(proposal: &Proposal) -> bool {
-    use crate::secretary::acts::Act;
+    use suzatary_inbox::secretary::acts::Act;
     match proposal {
         Proposal::Act(
             Act::Secret { .. }
@@ -285,12 +287,12 @@ pub struct Seen<'a> {
     pub settables: &'a suzatary_connect::settings::Settables,
     /// Where each stands.
     pub secrets: &'a dyn suzatary_connect::secrets::Secrets,
-    /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
+    /// The model's name, as [`suzatary_conversations::secretary::model::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
     pub answered: &'a suzatary_health::health::Healths<String>,
     /// The sign-ins the box holds open.
-    pub open: &'a [super::sign_in::SignInUrl],
+    pub open: &'a [suzatary_inbox::secretary::sign_in::SignInUrl],
     /// The connection tables now; `None` (unreadable) holds every card.
     pub declared: Option<&'a suzatary_connect::connect::Declared>,
     /// Every source's results; `None` (unreadable) holds every card.
@@ -312,7 +314,7 @@ pub struct Seen<'a> {
 #[must_use]
 pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
     use suzatary_connect::secrets::Answer;
-    let snapshot = crate::parts::part("secrets", || {
+    let snapshot = parts::part("secrets", || {
         suzatary_connect::secrets::Snapshot::read(seen.secrets, seen.settables.iter())
     });
     let Ok(answers) = snapshot.answers() else {
@@ -332,7 +334,7 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         .join(seen.declared.map_or_else(
             || Owed::default().holding(),
             |declared| {
-                crate::parts::part("connections", || {
+                parts::part("connections", || {
                     super::connections::owed(
                         declared,
                         seen.secrets,
@@ -358,7 +360,7 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         ));
     // Joined after, so a secret or sign-in already asked for keeps its card.
     let failing = match (seen.declared, seen.health) {
-        (Some(declared), Some(health)) => crate::parts::part("failing", || {
+        (Some(declared), Some(health)) => parts::part("failing", || {
             super::failing::owed(&super::failing::Observed {
                 declared,
                 answering: &answering,
@@ -383,12 +385,12 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
 /// File what is [`due`] at `at`.
 pub fn notice(
     seen: &Seen<'_>,
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     inbox_store: &dyn Prodrome<InboxEvent>,
     at: Datetime,
 ) -> Result<Filed, Refusal> {
-    let inbox = crate::parts::part("inbox", || inbox::fold(inbox_store))?;
-    crate::parts::part("due", || due(seen, &inbox)).file(conversations, inbox_store, at)
+    let inbox = parts::part("inbox", || inbox::fold(inbox_store))?;
+    parts::part("due", || due(seen, &inbox)).file(conversations, inbox_store, at)
 }
 
 impl FromIterator<Noticed> for Owed {
@@ -406,9 +408,9 @@ impl FromIterator<Noticed> for Owed {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::acts::Act;
     use crate::stores::InMemory;
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_inbox::secretary::acts::Act;
     use suzatary_store::store::Reads as _;
 
     fn at(minute: u32) -> Datetime {
@@ -478,7 +480,7 @@ mod tests {
     /// withdrawn while it waits, and one answered stays as it was answered.
     #[test]
     fn filing_is_idempotent_and_withdraws_what_is_no_longer_owed() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let first = owed(&["a", "b"])
             .file(conversations.conversations(), &inbox_store, at(0))
@@ -504,7 +506,7 @@ mod tests {
                 .reading
                 .shown()
                 .map(|answer| &answer.response),
-            Some(crate::secretary::responded::Responded::Withdrawn(
+            Some(suzatary_inbox::secretary::responded::Responded::Withdrawn(
                 Withdrawal::NoLongerNeeded { why }
             )) if why == WITHDRAWN
         ));
@@ -521,7 +523,7 @@ mod tests {
     /// Only the box's own cards are its to withdraw.
     #[test]
     fn a_card_someone_else_asked_for_is_never_withdrawn() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let asked = inbox::Asked {
             proposer: Proposer::Secretary,
@@ -550,7 +552,7 @@ mod tests {
     /// setup set withdraws none of them.
     #[test]
     fn the_box_s_cards_elsewhere_are_not_the_setup_set_s() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let boxs = |conversation: &str, proposal: Proposal| {
             let asked = inbox::Asked {
@@ -571,14 +573,14 @@ mod tests {
         };
         let build = boxs(
             "build",
-            Proposal::Act(crate::secretary::acts::Act::CodingSession {
-                task: crate::coding::Task::try_from("Build todo:suzatary/x.".to_owned())
+            Proposal::Act(suzatary_inbox::secretary::acts::Act::CodingSession {
+                task: suzatary_inbox::coding::Task::try_from("Build todo:suzatary/x.".to_owned())
                     .expect("a task"),
             }),
         );
         let erase = boxs(
             "default",
-            Proposal::Act(crate::secretary::acts::Act::Erase {
+            Proposal::Act(suzatary_inbox::secretary::acts::Act::Erase {
                 fact: suzatary_memory::secretary::memory::FactId(2),
                 keys: [
                     suzatary_memory::secretary::locked_text::KeyName::new("a".repeat(64))
@@ -598,7 +600,7 @@ mod tests {
     }
 
     fn signing_in() -> Proposal {
-        Proposal::Act(crate::secretary::acts::Act::Auth {
+        Proposal::Act(suzatary_inbox::secretary::acts::Act::Auth {
             account: suzatary_mail::mail::address::EmailAddress::new("ada@example.com")
                 .expect("a shaped address"),
         })
@@ -628,7 +630,7 @@ mod tests {
     }
 
     /// The Setup conversation's turns, none before it is opened.
-    fn said(conversations: &crate::secretary::conversations::InMemory) -> usize {
+    fn said(conversations: &crate::stores::conversations::InMemory) -> usize {
         conversations::read(
             conversations.conversations(),
             &suzatary_base::conversation_id::SETUP,
@@ -640,7 +642,7 @@ mod tests {
     /// same set again says nothing in Setup and files nothing.
     #[test]
     fn a_waiting_card_of_the_secretary_s_holds_the_box_s_and_says_nothing() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let theirs = secretarys(&inbox_store, signing_in(), 1);
         let owed = Owed::one(signing_in(), "the account was connected").since(at(0));
@@ -662,7 +664,7 @@ mod tests {
     /// a new episode begins, the box asks again.
     #[test]
     fn a_card_dismissed_within_the_episode_holds_it() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let theirs = secretarys(&inbox_store, signing_in(), 3);
         inbox::dismiss(
@@ -734,7 +736,7 @@ mod tests {
     }
 
     /// The box's open cards, as the acts they ask for.
-    fn open(inbox_store: &InMemory<InboxEvent>) -> Vec<crate::secretary::acts::Act> {
+    fn open(inbox_store: &InMemory<InboxEvent>) -> Vec<suzatary_inbox::secretary::acts::Act> {
         inbox::fold(inbox_store)
             .expect("reads")
             .objects()
@@ -748,7 +750,7 @@ mod tests {
 
     fn noticed(
         store: &Store,
-        conversations: &crate::secretary::conversations::InMemory,
+        conversations: &crate::stores::conversations::InMemory,
         inbox_store: &InMemory<InboxEvent>,
         minute: u32,
     ) -> Filed {
@@ -809,7 +811,7 @@ mod tests {
         );
         assert_eq!(owed.stale, Stale::Held);
         assert!(owed.iter().any(|noticed| matches!(&noticed.proposal,
-            Proposal::Act(crate::secretary::acts::Act::Secret { name, .. }) if name == "NTFY_TOPIC")));
+            Proposal::Act(suzatary_inbox::secretary::acts::Act::Secret { name, .. }) if name == "NTFY_TOPIC")));
     }
 
     /// A locked store neither asks for a key it may hold nor withdraws a card still waiting: the
@@ -817,7 +819,7 @@ mod tests {
     /// card is withdrawn and the waiting one is as it was.
     #[test]
     fn a_locked_store_holds_every_card_and_asks_once_to_be_unlocked() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let answering = Store {
             locked: Vec::new(),
@@ -828,7 +830,7 @@ mod tests {
         let waiting = open(&inbox_store);
         assert!(
             waiting.iter().any(|act| matches!(act,
-                crate::secretary::acts::Act::Secret { name, .. } if name == "NTFY_TOPIC")),
+                suzatary_inbox::secretary::acts::Act::Secret { name, .. } if name == "NTFY_TOPIC")),
             "{waiting:?}"
         );
 
@@ -848,7 +850,12 @@ mod tests {
         }
         let unlocks: Vec<_> = held
             .iter()
-            .filter(|act| matches!(act, crate::secretary::acts::Act::UnlockStore { .. }))
+            .filter(|act| {
+                matches!(
+                    act,
+                    suzatary_inbox::secretary::acts::Act::UnlockStore { .. }
+                )
+            })
             .collect();
         assert_eq!(unlocks.len(), 1, "{held:?}");
         assert_eq!(
@@ -870,7 +877,7 @@ mod tests {
     /// would mend nothing.
     #[test]
     fn a_name_the_store_failed_on_costs_only_itself() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let broken = Store {
             locked: Vec::new(),
@@ -883,7 +890,7 @@ mod tests {
         let asks = |wanted: &str| {
             cards.iter().any(|act| {
                 matches!(act,
-                crate::secretary::acts::Act::Secret { name, .. } if name == wanted)
+                suzatary_inbox::secretary::acts::Act::Secret { name, .. } if name == wanted)
             })
         };
         assert!(!asks("NTFY_TOPIC"), "{cards:?}");
@@ -892,9 +899,10 @@ mod tests {
             "a missing name is still asked for: {cards:?}"
         );
         assert!(
-            !cards
-                .iter()
-                .any(|act| matches!(act, crate::secretary::acts::Act::UnlockStore { .. })),
+            !cards.iter().any(|act| matches!(
+                act,
+                suzatary_inbox::secretary::acts::Act::UnlockStore { .. }
+            )),
             "{cards:?}"
         );
         let answering = Store::default();
@@ -934,7 +942,7 @@ mod tests {
             )),
             "it answered 401",
         );
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let notice_at = |store: &Store, minute: u32| {
             let seen = Seen {
@@ -968,7 +976,7 @@ mod tests {
             open(&inbox_store)
                 .into_iter()
                 .filter(|act| {
-                    matches!(act, crate::secretary::acts::Act::Secret { name, .. } if *name == link)
+                    matches!(act, suzatary_inbox::secretary::acts::Act::Secret { name, .. } if *name == link)
                 })
                 .count()
         };
@@ -997,7 +1005,7 @@ mod tests {
     /// nothing tied to the account is still asked for.
     #[test]
     fn a_link_pasted_as_a_google_calendar_is_retired_once_the_account_reads_its_calendars() {
-        use crate::secretary::acts::Act;
+        use suzatary_inbox::secretary::acts::Act;
         let calendar = |label: &str| {
             suzatary_connect::connect::Connection::parse("ics", &[label.to_owned()])
                 .expect("a calendar")
@@ -1021,7 +1029,7 @@ mod tests {
             None,
             &declared.plugins,
         );
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let notice_at = |store: &Store, minute: u32| {
             let seen = Seen {
@@ -1103,7 +1111,7 @@ mod tests {
     /// once per name.
     #[test]
     fn a_locked_store_is_asked_once_and_an_answering_one_once_per_name() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let every = [
             suzatary_connect::settings::MODEL_TOKEN,
@@ -1116,11 +1124,10 @@ mod tests {
         };
         noticed(&locked, &conversations, &inbox_store, 0);
         assert_eq!(locked.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert!(
-            open(&inbox_store)
-                .iter()
-                .any(|act| matches!(act, crate::secretary::acts::Act::UnlockStore { .. }))
-        );
+        assert!(open(&inbox_store).iter().any(|act| matches!(
+            act,
+            suzatary_inbox::secretary::acts::Act::UnlockStore { .. }
+        )));
         let answering = Store::default();
         noticed(&answering, &conversations, &inbox_store, 1);
         assert_eq!(

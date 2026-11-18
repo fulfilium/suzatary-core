@@ -71,7 +71,7 @@ mod tests {
 
     use super::*;
     use crate::model_name::ModelName;
-    use crate::secretary::model::ModelError;
+    use suzatary_conversations::secretary::model::ModelError;
 
     /// Answers of the given lengths in turn, and keeps every question.
     struct Lengths {

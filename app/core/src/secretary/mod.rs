@@ -1,10 +1,6 @@
 //! The secretary: a trusted assistant in a conversation the owner is reading, which appends
 //! as itself and proposes, but cannot send, anything outward.
 
-pub mod about;
-pub mod act_lines;
-pub mod act_vocabulary;
-pub mod acts;
 pub mod afresh;
 pub mod answering;
 pub mod answers;
@@ -13,9 +9,7 @@ pub mod briefings;
 pub mod briefs;
 pub mod build;
 mod call;
-pub mod card;
 pub mod caused;
-pub mod changes;
 pub mod coding;
 pub mod compact;
 pub mod compact_ask;
@@ -24,12 +18,7 @@ pub mod compacting;
 pub mod compaction;
 pub mod compactor;
 pub mod connections;
-#[cfg(feature = "wasm")]
-mod conversation_json;
-pub mod conversations;
 pub mod daily;
-pub mod decide;
-pub mod diff;
 pub mod digest;
 pub mod digest_census;
 pub mod digest_event;
@@ -44,93 +33,44 @@ pub mod failing;
 pub(crate) mod file_query;
 pub mod file_search;
 pub mod filed;
-pub mod fix;
 pub mod fixes;
-pub mod found;
 pub mod gate;
 pub mod google_sign_in;
-pub mod held_lines;
-pub mod held_replica;
-pub mod husks;
-pub mod inbox;
-pub mod inbox_event;
-#[cfg(feature = "wasm")]
-mod inbox_json;
-pub mod inbox_reading;
-pub mod inbox_registers;
 pub mod indexed_tree;
 pub mod lapsed;
-pub mod line_event;
-pub mod line_form;
-pub mod line_shape;
-pub mod lines_rule;
 #[cfg(any(test, feature = "nothing"))]
 pub mod live_shape;
 pub mod mail_health;
 pub mod memories;
 pub mod merged_patches;
-pub mod model;
-pub mod model_sessions;
 pub mod noticed;
-pub mod object_stores;
-pub mod opened;
 pub mod opening;
-pub mod outcome;
-pub mod outline;
-pub mod outlines;
-pub mod own_line;
-pub mod own_round;
-pub mod phase;
-pub mod proposal;
-pub mod proposer;
-pub mod prune;
-pub mod queue;
 pub mod read_holders;
 pub mod readings;
 pub mod recollection;
 mod record;
-pub mod request;
-pub mod rescrub;
-pub mod responded;
 pub mod review;
 pub mod rules;
-pub mod search;
-pub mod sending;
 pub mod set_up;
 pub mod shown_record;
-pub mod sign_in;
-pub mod stamp;
-pub mod step;
-pub mod store;
 pub mod stream;
 pub mod surface;
 pub mod sweep;
-pub mod taint;
-pub mod tapped;
-pub mod targets;
 pub mod title;
 pub mod token_expiry;
 pub mod told;
-pub mod tool_name;
 pub mod topics;
-pub mod transcript;
-pub mod turn_shape;
 pub mod undo;
 pub mod verb_answer;
-pub mod verb_name;
 pub mod verbs;
 
 use serde_json::{Map, Value};
 
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
-use crate::secretary::conversations::{append, read};
-use crate::secretary::model::{Halt, Turn};
 use crate::verb::Request;
 pub use call::Call;
 pub use record::Secretary;
-pub use store::{ConversationState, state};
-use store::{Entry, Stored};
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
 pub use surface::{SecretaryCall, SecretaryVerb, tools};
@@ -141,6 +81,13 @@ use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
+use suzatary_conversations::secretary::model::{Halt, Turn};
+use suzatary_conversations::secretary::store::{Entry, Stored};
+use suzatary_conversations::secretary::{queue, store, tool_name};
+use suzatary_inbox::secretary::proposal;
+use suzatary_inbox::secretary::{inbox, own_round, stamp};
+use suzatary_lines::secretary::conversations::{append, read};
+use suzatary_lines::secretary::transcript;
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
@@ -237,7 +184,7 @@ pub fn converse(
     )?;
     answer(
         caps,
-        || crate::secretary::model::Pick::Turn(Box::new(caps.model)),
+        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(caps.model)),
         deployment,
         settables,
         chains,
@@ -258,7 +205,7 @@ pub fn converse(
 )]
 pub fn answer<'p>(
     caps: &Secretary<'_>,
-    pick: impl FnOnce() -> crate::secretary::model::Pick<'p>,
+    pick: impl FnOnce() -> suzatary_conversations::secretary::model::Pick<'p>,
     deployment: &Deployment,
     settables: &Settables,
     chains: &[Bound<'_>],
@@ -276,13 +223,13 @@ pub fn answer<'p>(
         |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
     // A lost session is asked statelessly of the same model, never of a second pick.
     let ask = match &pick {
-        crate::secretary::model::Pick::Held(model) => Ask::Session {
+        suzatary_conversations::secretary::model::Pick::Held(model) => Ask::Session {
             model: *model,
             fallback: *model,
             memories: caps.memories,
             topics: caps.topics,
         },
-        crate::secretary::model::Pick::Turn(model) => Ask::Window {
+        suzatary_conversations::secretary::model::Pick::Turn(model) => Ask::Window {
             model: model.as_ref(),
             memories: caps.memories,
             topics: caps.topics,
@@ -308,7 +255,7 @@ pub fn answer<'p>(
 /// # Errors
 /// [`Refusal::conflict`] when nothing waits; the store's failures.
 pub fn stop_waiting(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
     by: &prodrome_core::event::Actor,
@@ -438,7 +385,7 @@ fn load(
             let standing = read(caps.conversations, conversation)?
                 .standing(*index, &inbox::fold(caps.inbox)?)?;
             let act = match &standing.object.asked.proposal {
-                crate::secretary::proposal::Proposal::Email(draft) => serde_json::json!({
+                proposal::Proposal::Email(draft) => serde_json::json!({
                     "act": "email",
                     "account": draft.account,
                     "to": draft.to,
@@ -446,28 +393,32 @@ fn load(
                     "subject": draft.subject,
                     "body": draft.body,
                 }),
-                crate::secretary::proposal::Proposal::Forward(forward) => serde_json::json!({
-                    "act": "forward",
-                    "account": forward.account,
-                    "to": forward.to,
-                    "cc": forward.cc,
-                    "subject": forward.subject,
-                    "note": forward.note,
-                    "message": forward.message.file.id,
-                    "as": forward.message.style.as_str(),
-                }),
-                crate::secretary::proposal::Proposal::Changes(changeset) => serde_json::json!({
-                    "act": "changes",
-                    "chain": changeset.chain(),
-                    "acts": changeset.acts(),
-                }),
+                proposal::Proposal::Forward(forward) => {
+                    serde_json::json!({
+                        "act": "forward",
+                        "account": forward.account,
+                        "to": forward.to,
+                        "cc": forward.cc,
+                        "subject": forward.subject,
+                        "note": forward.note,
+                        "message": forward.message.file.id,
+                        "as": forward.message.style.as_str(),
+                    })
+                }
+                proposal::Proposal::Changes(changeset) => {
+                    serde_json::json!({
+                        "act": "changes",
+                        "chain": changeset.chain(),
+                        "acts": changeset.acts(),
+                    })
+                }
                 // The act's own sentence, rather than its fields decoded a second way.
-                crate::secretary::proposal::Proposal::Act(act) => serde_json::json!({
+                proposal::Proposal::Act(act) => serde_json::json!({
                     "act": "act",
                     "sentence": act.sentence(),
                 }),
                 // The words while the memory's text store keeps them, and never once deleted.
-                crate::secretary::proposal::Proposal::Remember {
+                proposal::Proposal::Remember {
                     text,
                     kind,
                     replaces,
@@ -490,9 +441,9 @@ fn load(
                     }
                     card
                 }
-                crate::secretary::proposal::Proposal::Decide(draft) => serde_json::json!({
+                proposal::Proposal::Decide(draft) => serde_json::json!({
                     "act": "decide",
-                    "sentence": crate::secretary::decide::sentence(draft),
+                    "sentence": suzatary_inbox::secretary::decide::sentence(draft),
                 }),
             };
             Ok(serde_json::json!({
@@ -644,7 +595,7 @@ pub(crate) fn bound_named<'a>(chains: &'a [Bound<'a>], name: &str) -> Option<&'a
 /// # Errors
 /// An empty reason, an index nothing proposed, one performed or running, or the stores'.
 pub fn dismiss(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     memories: memories::Memories<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
@@ -680,8 +631,8 @@ pub fn dismiss(
 /// # Errors
 /// [`inbox::acknowledge`]'s refusals and the stores' own.
 pub fn acknowledge(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
+    inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     card: &ProposalRef,
@@ -699,7 +650,7 @@ pub fn acknowledge(
 
 /// Say in `card`'s conversation what `by` did to it; answers whether it did.
 fn heard(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     card: &ProposalRef,
@@ -715,7 +666,7 @@ fn heard(
         &Entry::Said {
             at: clock.now(),
             turn: Turn::Act {
-                text: crate::secretary::act_lines::describe_act(
+                text: suzatary_lines::secretary::act_lines::describe_act(
                     &suzatary_base::spelling::capitalised(by.as_str()),
                     verb,
                     words,
@@ -733,7 +684,7 @@ fn heard(
 /// # Errors
 /// [`Stored::rewind`]'s refusals and the store's own.
 pub fn regenerate(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     id: &ConversationId,
@@ -748,7 +699,7 @@ pub fn regenerate(
 /// # Errors
 /// [`Stored::rewind`]'s refusals, a last round no question opened, and the store's own.
 pub fn edit(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     stamped: stamp::Stamp,
@@ -770,7 +721,7 @@ pub fn edit(
 }
 
 fn rewound(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     by: &prodrome_core::event::Actor,
     id: &ConversationId,

@@ -10,14 +10,14 @@ use proptest::prelude::*;
 use sha2::{Digest, Sha256};
 
 use prodrome_core::event::Hash;
-use suzatary_core::secretary::held_replica::{HeldReplica, Moved};
-use suzatary_core::secretary::line_form::{
+use suzatary_lines::secretary::held_replica::{HeldReplica, Moved};
+use suzatary_lines::secretary::line_form::{
     LineDelta, LineFrame, LinePulling, LineReplica, frame, unframe,
 };
-use suzatary_core::secretary::outlines::Parsed;
-use suzatary_core::secretary::step::Step;
-use suzatary_core::wire::lines as wire;
-use suzatary_core::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
+use suzatary_lines::secretary::outlines::Parsed;
+use suzatary_lines::secretary::step::Step;
+use suzatary_lines::wire::lines as wire;
+use suzatary_lines::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::frontier::Frontier;

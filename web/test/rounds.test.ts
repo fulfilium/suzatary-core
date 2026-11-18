@@ -174,7 +174,7 @@ test("examples: where a round begins and ends, what it opens with and answers, a
   }
 });
 
-/** One row of `app/core/tests/about-fixture.json`. */
+/** One row of `app/conversations/tests/about-fixture.json`. */
 interface FixtureTurn {
   readonly who: TurnRow["who"];
   readonly text: string;
@@ -183,14 +183,14 @@ interface FixtureTurn {
 }
 
 /**
- * THE SAME FIXTURE `suzatary_core::secretary::about`'s OWN TEST READS
+ * THE SAME FIXTURE `suzatary_conversations::secretary::about`'s OWN TEST READS
  * (`docs/CHATSHAPE-PLAN-2026-09-15.md` §8.5 commit 9) — one transcript, two
  * independent groupings, pinned to agree: Rust's `round_spans` answers
  * `[(0,3),(4,5),(6,7)]` over the same eight turns, and this asserts `rounds`
  * partitions the identical three spans.
  */
 test("the shared fixture groups into the same three spans the Rust side pins", () => {
-  const rows = JSON.parse(readFileSync("app/core/tests/about-fixture.json", "utf8")) as FixtureTurn[];
+  const rows = JSON.parse(readFileSync("app/conversations/tests/about-fixture.json", "utf8")) as FixtureTurn[];
   const turns: TurnRow[] = rows.map((row, index) => ({
     index,
     who: row.who,

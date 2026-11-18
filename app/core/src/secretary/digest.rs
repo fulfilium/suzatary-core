@@ -41,11 +41,12 @@ use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::digest_policy::Owners;
 use crate::secretary::digest_spent::Spent;
 use crate::secretary::indexed_tree::IndexedTree;
-use crate::secretary::line_event::LineEvent;
-use crate::secretary::store::Entry;
-use crate::secretary::taint::Taint;
-use crate::secretary::transcript;
 use suzatary_base::rule_version::Under;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::taint::Taint;
+use suzatary_lines::secretary::held_lines::Gathered;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::salted_text::TextName;
 use suzatary_memory::secretary::texts::{Liveness, Naming};
 
@@ -147,7 +148,25 @@ pub struct Shape {
     renamed: BTreeMap<Hash, Hash>,
 }
 
+/// The shape a [`Gathered`] keeps once built: lines in a cycle build none.
+#[derive(Default)]
+struct KeptShape(Option<Result<Arc<Shape>, Cycle>>);
+
 impl Shape {
+    /// The shape over the lines `gathered` holds, built on the first ask and kept with them.
+    ///
+    /// # Errors
+    /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
+    pub fn over(gathered: &Gathered) -> Result<Arc<Shape>, Cycle> {
+        gathered.derived(|kept: &mut KeptShape| {
+            kept.0
+                .get_or_insert_with(|| {
+                    Self::of(&gathered.placed(), gathered.entries()).map(Arc::new)
+                })
+                .clone()
+        })
+    }
+
     /// The tree over `lines`, each conversation's in its causal order, read as `opened` reads
     /// them.
     ///
@@ -449,7 +468,7 @@ fn leaves_of<'l>(
     BTreeMap<&'l Hash, &'l Hash>,
     BTreeMap<&'l Hash, (Hash, bool)>,
 ) {
-    let gone = crate::secretary::transcript::erased_lines(
+    let gone = suzatary_lines::secretary::transcript::erased_lines(
         lines.iter().map(|&(name, line, _)| (name, line)),
     );
     let mut carries = BTreeMap::new();
@@ -478,7 +497,7 @@ fn leaves_of<'l>(
     (carries, leaves)
 }
 
-/// Every line's taint in its round ([`crate::secretary::taint::rounds`]), each conversation's
+/// Every line's taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), each conversation's
 /// lines in its causal order, the order its transcript reads in ([`transcript::causal`]), so the
 /// taints are a function of the set of lines, whatever order they are given in. A line whose
 /// words are erased still counts: a mail read whose words went still taints the answer after it.
@@ -504,8 +523,10 @@ fn taints<'l>(
                     .map(|&((name, line, parents), _)| (name, line.at(), parents))
                     .collect::<Vec<_>>(),
             );
-            let taints =
-                crate::secretary::taint::rounds(id, order.iter().map(|(at, _)| said[*at].1));
+            let taints = suzatary_conversations::secretary::taint::rounds(
+                id,
+                order.iter().map(|(at, _)| said[*at].1),
+            );
             order
                 .into_iter()
                 .map(|(at, _)| said[at].0.0)
@@ -568,7 +589,7 @@ fn line_order<'l>(
 fn resealing(line: &LineEvent) -> bool {
     matches!(
         line.shape(),
-        crate::secretary::line_shape::LineShape::Resealed { .. }
+        suzatary_lines::secretary::line_shape::LineShape::Resealed { .. }
     )
 }
 

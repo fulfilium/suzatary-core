@@ -17,28 +17,30 @@ use suzatary_connect::settings::Declaration;
 use suzatary_connect::settings::Help;
 use suzatary_connect::settings::Verify;
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Entry, Kind, Stored};
 use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::act_lines::ActLine;
-use suzatary_core::secretary::acts::Act;
-use suzatary_core::secretary::changes::{self, Changeset};
-use suzatary_core::secretary::conversations;
-use suzatary_core::secretary::decide;
-use suzatary_core::secretary::fix::Fix;
-use suzatary_core::secretary::inbox::{self, ProposalId, Response};
-use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::opening::Opening;
-use suzatary_core::secretary::proposal::{Draft, Proposal};
 use suzatary_core::secretary::read_holders::ReadHolders;
 use suzatary_core::secretary::readings::{self, Draw, Dress, Window};
-use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::store::{Entry, Kind, Stored};
-use suzatary_core::secretary::transcript;
 use suzatary_core::wire::topics as wire;
 use suzatary_google::google::RedirectUri;
 use suzatary_health::health::plugin::{Origin, PluginName};
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::decide;
+use suzatary_inbox::secretary::fix::Fix;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{ProposalId, Response};
+use suzatary_inbox::secretary::proposal::{Draft, Proposal};
+use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
+use suzatary_lines::secretary::act_lines::ActLine;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::oauth::Consent;
 use suzatary_memory::secretary::erasure;
 use suzatary_memory::secretary::locked_text;
@@ -62,7 +64,7 @@ pub trait Perform {
         id: &ConversationId,
         index: usize,
         object: &ProposalId,
-        proposer: &suzatary_core::secretary::proposer::Proposer,
+        proposer: &suzatary_inbox::secretary::proposer::Proposer,
         act: &Act,
         consent: Consent,
     ) -> Performed;
@@ -98,7 +100,7 @@ struct Drawn<'a> {
 
 impl<'a> Drawn<'a> {
     fn of(
-        lines: &suzatary_core::secretary::store::Lines,
+        lines: &suzatary_conversations::secretary::store::Lines,
         cards: &Cards<'_>,
         at: suzatary_base::capability::Datetime,
         typeset: &'a dyn suzatary_base::capability::Typeset,
@@ -156,7 +158,7 @@ impl<'a> Drawn<'a> {
 
 /// The message of every held value a standing email carries.
 fn sources(
-    lines: &suzatary_core::secretary::store::Lines,
+    lines: &suzatary_conversations::secretary::store::Lines,
     cards: &Cards<'_>,
 ) -> std::collections::BTreeMap<String, String> {
     let Some(mail) = cards.chains.first().map(|bound| bound.caps.mail) else {
@@ -246,7 +248,7 @@ impl Draw for Drawn<'_> {
     fn shown(
         &self,
         changeset: &Changeset,
-    ) -> (Vec<suzatary_core::wire::inbox::ProposedObject>, String) {
+    ) -> (Vec<suzatary_inbox::wire::inbox::ProposedObject>, String) {
         let Some((nodes, untrusted)) = self.nodes.get(changeset.chain()) else {
             return (
                 Vec::new(),
@@ -320,7 +322,7 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
 #[serde(rename_all = "lowercase")]
 pub enum Erasing {
     /// These turns' words, by index.
-    Turns(#[ts(as = "Vec<u32>")] suzatary_core::nonempty::NonEmpty<usize>),
+    Turns(#[ts(as = "Vec<u32>")] suzatary_conversations::nonempty::NonEmpty<usize>),
     /// Every line's words, the name included.
     Whole(crate::wire::Yes),
 }
@@ -348,7 +350,7 @@ pub fn erase(
             })
             .collect::<Result<_, _>>()?,
     };
-    let erased = suzatary_core::secretary::transcript::erasures(
+    let erased = suzatary_lines::secretary::transcript::erasures(
         read.lines()
             .iter()
             .map(|written| (&written.name, &written.line)),
@@ -449,7 +451,7 @@ pub fn say(
     said: &str,
     references: &[Reference],
     attachments: &[suzatary_held::attachment::Attachment],
-    by: suzatary_core::secretary::stamp::Stamp,
+    by: suzatary_inbox::secretary::stamp::Stamp,
     after: Option<usize>,
 ) -> Answered<crate::wire::SayPayload> {
     let turn = question(said, references, attachments)?;
@@ -460,8 +462,8 @@ pub fn say(
         });
     }
     // Checked before appending: a turn the box will never get to must not join the transcript.
-    let pending = suzatary_core::secretary::queue::pending(&before);
-    if pending >= suzatary_core::secretary::queue::MAX_PENDING {
+    let pending = suzatary_conversations::secretary::queue::pending(&before);
+    if pending >= suzatary_conversations::secretary::queue::MAX_PENDING {
         return Err(Refusal::bad_request(format!(
             "{pending} lines are already waiting for the secretary; say it after they are answered"
         )));
@@ -485,14 +487,14 @@ fn asked(
     stored: &Stored,
     after: usize,
     turn: &Turn,
-    by: &suzatary_core::secretary::stamp::Stamp,
+    by: &suzatary_inbox::secretary::stamp::Stamp,
 ) -> bool {
     stored.turns.iter().skip(after).any(|said| {
         &said.turn == turn
             && said
                 .by
                 .as_ref()
-                .and_then(suzatary_core::secretary::stamp::Stamp::actor)
+                .and_then(suzatary_inbox::secretary::stamp::Stamp::actor)
                 == by.actor()
     })
 }
@@ -552,7 +554,7 @@ pub fn edit(
     references: &[Reference],
     attachments: &[suzatary_held::attachment::Attachment],
     by: &prodrome_core::event::Actor,
-    stamped: suzatary_core::secretary::stamp::Stamp,
+    stamped: suzatary_inbox::secretary::stamp::Stamp,
 ) -> Answered<wire::ConversationPayload> {
     let turn = question(said, references, attachments)?;
     let stored = suzatary_core::secretary::edit(
@@ -582,7 +584,7 @@ pub struct Effectors<'a> {
     /// Syncs a plugin once its link is stored.
     pub checks: &'a dyn suzatary_connect::settings::Checks,
     /// The sign-ins the box holds open.
-    pub signing: &'a dyn suzatary_core::secretary::sign_in::Sessions,
+    pub signing: &'a dyn suzatary_inbox::secretary::sign_in::Sessions,
     /// Edits the instance file.
     pub edits: &'a dyn Edits,
     /// Deletes what the box kept for a removed account.
@@ -677,14 +679,14 @@ enum KeptMail {
 /// A tapped card paired with its answer: a misplaced or missing answer is refused here alone.
 enum Prepared<'p, 'c> {
     Email(&'p Draft),
-    Forward(&'p suzatary_core::secretary::proposal::Forward),
+    Forward(&'p suzatary_inbox::secretary::proposal::Forward),
     Changes(std::borrow::Cow<'p, Changeset>),
     Secret {
         name: Settable,
         value: &'p Secret,
     },
     Code {
-        url: &'p suzatary_core::secretary::sign_in::SignInUrl,
+        url: &'p suzatary_inbox::secretary::sign_in::SignInUrl,
         code: &'p Secret,
         name: Settable,
     },
@@ -944,7 +946,7 @@ pub fn tap(
     let (id, index) = (&card.conversation, card.index);
     let stored = conversations::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
-    suzatary_core::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
+    suzatary_inbox::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
     let withdrawn =
         |card: &ProposalRef| suzatary_core::secretary::undo::withdrawn(caps.secretary.inbox, card);
@@ -960,7 +962,7 @@ pub fn tap(
         },
     )?;
     let mut then = None;
-    let response = suzatary_core::secretary::tapped::Tapped {
+    let response = suzatary_inbox::secretary::tapped::Tapped {
         now: caps.secretary.clock.now(),
     }
     // The proposal read under the hold is the one prepared: its id names its content.
@@ -980,7 +982,7 @@ pub fn tap(
     let opened = afterwards(caps, effectors, then, card)?;
     summaries_after(caps, &standing.object.asked.proposal);
     if matches!(response, Response::Ran(_)) {
-        suzatary_core::secretary::act_lines::note_act(
+        suzatary_lines::secretary::act_lines::note_act(
             caps.secretary.conversations,
             id,
             &ActLine {
@@ -991,8 +993,8 @@ pub fn tap(
                 note: note.to_owned(),
             },
             // A proposal's index is the box's; nothing it points at was chosen by mail.
-            suzatary_core::secretary::stamp::Stamp::Actor(
-                suzatary_core::secretary::stamp::Speaker::at(tap.who().as_str(), tap.seat()),
+            suzatary_inbox::secretary::stamp::Stamp::Actor(
+                suzatary_inbox::secretary::stamp::Speaker::at(tap.who().as_str(), tap.seat()),
             ),
         )?;
     }
@@ -1138,7 +1140,7 @@ fn calendar_event(
         &ConversationId,
         usize,
         &ProposalId,
-        &suzatary_core::secretary::proposer::Proposer,
+        &suzatary_inbox::secretary::proposer::Proposer,
     ),
     (act, account): (&Act, &suzatary_mail::mail::address::EmailAddress),
     consent: Consent,
@@ -1165,7 +1167,7 @@ pub fn fix(
     let lacked = stored
         .standing(index, &inbox::fold(caps.secretary.inbox)?)?
         .object;
-    suzatary_core::secretary::sending::performs(tap, &lacked.asked.proposal)?;
+    suzatary_inbox::secretary::sending::performs(tap, &lacked.asked.proposal)?;
     let lacking = lacked
         .reading
         .shown()
@@ -1180,7 +1182,7 @@ pub fn fix(
             suzatary_google::google::Held::NotSignedIn
         }
     };
-    let fix = suzatary_core::secretary::fix::of(lacking, &held, effectors.consents.redirect())
+    let fix = suzatary_inbox::secretary::fix::of(lacking, &held, effectors.consents.redirect())
         .map_err(|unfixable| Refusal::conflict(unfixable.to_string()))?;
     let now = caps.secretary.clock.now();
     let filed = suzatary_core::secretary::noticed::Owed::one(Proposal::Act(fix.act()), FIXING)
@@ -1210,7 +1212,7 @@ pub fn fix(
             }
         }
         Fix::GoogleSignIn { .. } | Fix::MicrosoftSend { .. } => {
-            let answered = suzatary_core::secretary::tapped::Tapped { now }.fire(
+            let answered = suzatary_inbox::secretary::tapped::Tapped { now }.fire(
                 caps.secretary.inbox,
                 fixing,
                 tap,
@@ -1231,7 +1233,7 @@ pub fn fix(
                 },
             )?;
             match answered {
-                Response::Ran(suzatary_core::secretary::responded::Responded::Tried {
+                Response::Ran(suzatary_inbox::secretary::responded::Responded::Tried {
                     tried,
                     ..
                 }) => tried.said(),
@@ -1690,7 +1692,7 @@ fn allowed(edits: &dyn Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
             .allow_web(rule)
             .map_err(|failed| Refusal::internal(format!("could not allow {rule}: {failed}"))),
         Allowing::Document(path) => {
-            let folder = suzatary_core::secretary::acts::folder_of(path);
+            let folder = suzatary_inbox::secretary::acts::folder_of(path);
             edits
                 .allow_drive(&folder)
                 .map_err(|failed| Refusal::internal(format!("could not allow {folder}: {failed}")))
@@ -1767,7 +1769,7 @@ pub fn ask_trust(
         conversation: stored.id.clone(),
         index: stored.proposals.len(),
     });
-    let reasons = suzatary_core::secretary::proposal::Reasons::new(
+    let reasons = suzatary_inbox::secretary::proposal::Reasons::new(
         format!("a device asked to be trusted to write as {actor}"),
         vec![asked],
     )
@@ -1795,7 +1797,7 @@ pub const ALREADY_TRUSTED: &str =
 /// # Errors
 /// The stores' own.
 pub fn withdraw_trusted(
-    inbox: &dyn suzatary_store::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     history: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
     root: &prodrome_core::sign::PublicKey,
     at: suzatary_base::capability::Datetime,
@@ -1808,7 +1810,7 @@ pub fn withdraw_trusted(
         let trusted = suzatary_signatures::signatures::trusted_for(history, root, &enrolment.key)?;
         Ok(if trusted.contains(&enrolment.actor) {
             Seen::Closed(
-                suzatary_core::secretary::responded::Withdrawal::DoneElsewhere {
+                suzatary_inbox::secretary::responded::Withdrawal::DoneElsewhere {
                     what: ALREADY_TRUSTED.to_owned(),
                 },
             )
@@ -1923,10 +1925,10 @@ fn forwarded(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
     id: &ConversationId,
-    forward: &suzatary_core::secretary::proposal::Forward,
+    forward: &suzatary_inbox::secretary::proposal::Forward,
 ) -> Performed {
-    use suzatary_core::secretary::proposal::Style;
     use suzatary_held::held_value::Reopened;
+    use suzatary_inbox::secretary::proposal::Style;
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
     let file = &forward.message.file;
     let read = match conversations::read(caps.secretary.conversations, id) {
@@ -2061,7 +2063,7 @@ fn erased(
     keys: &std::collections::BTreeSet<locked_text::KeyName>,
     tap: &Tap,
 ) -> Result<Performed, Refusal> {
-    suzatary_core::secretary::transcript::erase(
+    suzatary_lines::secretary::transcript::erase(
         caps.secretary.conversations,
         id,
         keys.clone(),
@@ -2141,14 +2143,14 @@ fn verified(
 }
 
 struct SignedIn<'a> {
-    signing: &'a dyn suzatary_core::secretary::sign_in::Sessions,
+    signing: &'a dyn suzatary_inbox::secretary::sign_in::Sessions,
     verify: &'a dyn Verify,
     writer: &'a dyn Writes,
 }
 
 fn coded(
     effectors: &Effectors<'_>,
-    url: &suzatary_core::secretary::sign_in::SignInUrl,
+    url: &suzatary_inbox::secretary::sign_in::SignInUrl,
     code: &Secret,
     name: &Settable,
     then: &mut Option<Then>,
@@ -2171,7 +2173,7 @@ fn coded(
 /// test call and the store alone.
 fn signed_in(
     reach: &SignedIn<'_>,
-    url: &suzatary_core::secretary::sign_in::SignInUrl,
+    url: &suzatary_inbox::secretary::sign_in::SignInUrl,
     code: &Secret,
     name: &Settable,
 ) -> (Performed, Option<(ProposalId, Performed)>) {
@@ -2347,7 +2349,7 @@ pub fn build(
         suzatary_core::secretary::build::attempt(&inbox::fold(inbox)?, todo),
     )?;
     let conversation = &*suzatary_core::secretary::build::CONVERSATION;
-    let proposer = suzatary_core::secretary::proposer::Proposer::Box;
+    let proposer = suzatary_inbox::secretary::proposer::Proposer::Box;
     suzatary_core::secretary::filed::opened(conversations, conversation, "Builds", &proposer, at)?;
     suzatary_core::secretary::filed::file_held(
         conversations,
@@ -2358,7 +2360,7 @@ pub fn build(
             conversation,
             proposer,
             proposal: Proposal::Act(Act::CodingSession { task }),
-            reasons: suzatary_core::secretary::proposal::Reasons::new(
+            reasons: suzatary_inbox::secretary::proposal::Reasons::new(
                 format!("{} asked for {todo} to be built.", by.who().as_str()),
                 vec![Reference::Todo(todo.clone())],
             )
@@ -2520,7 +2522,7 @@ fn memory_payload(memory: &memory::Memory) -> wire::MemoryPayload {
             .iter()
             .map(|remembered| wire::FactRow {
                 id: remembered.id,
-                at: suzatary_core::secretary::stamp::stamp(remembered.at),
+                at: suzatary_inbox::secretary::stamp::stamp(remembered.at),
                 fact: remembered.fact.as_str().to_owned(),
                 kind: remembered.kind,
                 said: match &remembered.said.wrote {
@@ -2569,19 +2571,19 @@ fn said_on(origin: &memory::Origin) -> wire::SaidOn {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use suzatary_conversations::secretary::store::Asking;
+    use suzatary_conversations::secretary::store::Said;
+    use suzatary_conversations::secretary::store::Standing;
     use suzatary_core::secretary::answers::Answers;
-    use suzatary_core::secretary::proposal::Reasons;
     use suzatary_core::secretary::readings::{Place, proposal, turn};
-    use suzatary_core::secretary::responded::Responded;
-    use suzatary_core::secretary::store::Asking;
-    use suzatary_core::secretary::store::Said;
-    use suzatary_core::secretary::store::Standing;
+    use suzatary_inbox::secretary::proposal::Reasons;
+    use suzatary_inbox::secretary::responded::Responded;
 
     /// `proposal`, the conversation's first, answered `responses` as the inbox reads them.
     fn standing_of(proposal: Proposal, responses: &[Responded]) -> Standing {
-        use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
+        use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
         let asked = inbox::Asked {
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+            proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
             proposal,
             reasons: reasons(),
             asked: "proposal:default/0".parse().expect("a reference"),
@@ -2665,7 +2667,7 @@ mod tests {
         let row = proposal(2, &standing, &no_chain(), None);
         assert_eq!(row.index, 2);
         assert_eq!(row.turn, 3, "the position travels to the wire too");
-        let suzatary_core::wire::inbox::ProposedAct::Email {
+        let suzatary_inbox::wire::inbox::ProposedAct::Email {
             account,
             to,
             cc,
@@ -2717,7 +2719,7 @@ mod tests {
             &Said {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0)
                     .expect("an instant"),
-                turn: suzatary_core::secretary::model::Turn::Person {
+                turn: suzatary_conversations::secretary::model::Turn::Person {
                     text: "what changed".to_owned(),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -2790,30 +2792,30 @@ mod tests {
     /// verb stopped echoing its fact still names it, and a forgotten fact still draws none.
     #[test]
     fn a_receipt_is_the_shapes_fact_and_its_words_the_memorys() {
-        use suzatary_core::secretary::outcome::Outcome;
+        use suzatary_conversations::secretary::outcome::Outcome;
         use suzatary_memory::secretary::memory::{FactId, Memory};
         let memory = receipts_memory();
-        let row =
-            |turn_said: suzatary_core::secretary::model::Turn, memory: Option<&Memory>| match turn(
-                &NeverAsked,
-                &Said {
-                    at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0)
-                        .expect("an instant"),
-                    turn: turn_said,
-                    by: None,
-                },
-                Place::at(2),
-                memory.map(memory_payload).as_ref(),
-            )
-            .who
-            {
-                wire::Speaker::Verb { outcome, .. } => outcome,
-                other => panic!("a verb's turn reads as {other:?}"),
-            };
+        let row = |turn_said: suzatary_conversations::secretary::model::Turn,
+                   memory: Option<&Memory>| match turn(
+            &NeverAsked,
+            &Said {
+                at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0)
+                    .expect("an instant"),
+                turn: turn_said,
+                by: None,
+            },
+            Place::at(2),
+            memory.map(memory_payload).as_ref(),
+        )
+        .who
+        {
+            wire::Speaker::Verb { outcome, .. } => outcome,
+            other => panic!("a verb's turn reads as {other:?}"),
+        };
         // The answer names another fact than the shape, so a reading of the answer would show.
         let drawn = |outcome: Outcome, memory: Option<&Memory>| {
             row(
-                suzatary_core::secretary::model::Turn::Tool {
+                suzatary_conversations::secretary::model::Turn::Tool {
                     verb: "remember".into(),
                     answer: r#"{"remembered": 5, "kind": "owner"}"#.to_owned(),
                     outcome,
@@ -2858,8 +2860,8 @@ mod tests {
             wire::VerbOutcome::Refused
         );
         // Erased by the owner, not by a forget: the shape still names the fact.
-        let erased = suzatary_core::secretary::turn_shape::join(
-            suzatary_core::secretary::turn_shape::TurnShape::Tool {
+        let erased = suzatary_conversations::secretary::turn_shape::join(
+            suzatary_conversations::secretary::turn_shape::TurnShape::Tool {
                 verb: "remember".into(),
                 outcome: remembered(1),
                 files: Vec::new(),
@@ -2875,7 +2877,7 @@ mod tests {
         );
         assert!(matches!(
             erased,
-            suzatary_core::secretary::model::Turn::Erased { .. }
+            suzatary_conversations::secretary::model::Turn::Erased { .. }
         ));
         assert_eq!(
             row(erased, Some(&memory)),
@@ -2918,7 +2920,7 @@ mod tests {
         let model_turn = Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::secretary::model::Turn::Model {
+            turn: suzatary_conversations::secretary::model::Turn::Model {
                 text: "= Hello\n\n#html.elem(\"b\")[x]".to_owned(),
                 calls: Vec::new(),
             },
@@ -2949,7 +2951,7 @@ mod tests {
         let person = Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::secretary::model::Turn::Person {
+            turn: suzatary_conversations::secretary::model::Turn::Person {
                 text: "what changed".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -2963,7 +2965,7 @@ mod tests {
         let act = Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 3, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::secretary::model::Turn::Act {
+            turn: suzatary_conversations::secretary::model::Turn::Act {
                 text: "dismissed proposal 0".to_owned(),
                 references: Vec::new(),
             },
@@ -3097,7 +3099,7 @@ mod tests {
     #[test]
     fn a_code_card_mints_the_subscription_s_name_at_the_tap() {
         let card = Proposal::Act(Act::SignInCode {
-            url: suzatary_core::secretary::sign_in::SignInUrl::parse(
+            url: suzatary_inbox::secretary::sign_in::SignInUrl::parse(
                 "https://sign-in.example.test/oauth/authorize?code=true&state=s",
             )
             .expect("a link"),

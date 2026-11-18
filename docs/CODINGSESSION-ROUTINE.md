@@ -20,7 +20,7 @@ true}` (an empty `mcp_connections` list changes nothing); check that a
 re-created routine's `mcp_connections` is `[]`.
 
 The box finds a session's branch by the report naming the session's URL
-(`suzatary_core::coding::SessionUrl::named_in`), so rule 9 is load-bearing:
+(`suzatary_inbox::coding::SessionUrl::named_in`), so rule 9 is load-bearing:
 a session that writes no `Session:` line comes back as nothing.
 
 ---

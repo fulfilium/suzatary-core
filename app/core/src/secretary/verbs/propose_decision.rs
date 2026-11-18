@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_todo::decisions::Draft;
 
 /// Propose a decision to record, which the owner's tap records as his.
@@ -48,7 +48,7 @@ impl Verb for ProposeDecision {
         )
         .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
         call.caps.decisions.admits(&draft, call.caps.render)?;
-        let sentence = crate::secretary::decide::sentence(&draft);
+        let sentence = suzatary_inbox::secretary::decide::sentence(&draft);
         let index = args.filing.file(call, Proposal::Decide(draft), &reasons)?;
         Ok(json!({
             "proposed": index,

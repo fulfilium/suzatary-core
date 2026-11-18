@@ -1,9 +1,9 @@
 use suzatary_base::capability::Whois;
+use suzatary_conversations::secretary::model::Sessions;
 use suzatary_core::agent::Agent;
 use suzatary_core::notify::Notify;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::answers::Answers;
-use suzatary_core::secretary::model::Sessions;
 
 /// What the serving process supplies: the secretary's effects, since it runs the
 /// secretary, plus peers and phones. Nothing here sends mail; only a route holding

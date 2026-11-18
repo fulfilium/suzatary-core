@@ -408,7 +408,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/mcp.rs", "docs"),
     ("app/cli/tests/release.rs", "CHANGELOG.md"),
     ("app/cli/tests/release.rs", "changelog.d"),
-    ("app/core/src/coding.rs", "docs"),
+    ("app/inbox/src/coding.rs", "docs"),
     ("app/held/src/leak.rs", "docs"),
     ("app/base/src/repo_ids.rs", "docs"),
     ("app/core/tests/act_literal.rs", "docs"),
@@ -424,7 +424,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/signatures.rs", "memory"),
     ("app/cli/tests/stores.rs", "memory"),
     ("app/cli/tests/writes.rs", "memory"),
-    ("app/core/src/secretary/card.rs", "memory"),
+    ("app/inbox/src/secretary/card.rs", "memory"),
     ("app/io/src/objects.rs", "memory"),
     ("app/pages/src/places.rs", "memory"),
     ("app/pages/tests/laws/memory.rs", "memory"),
@@ -2377,7 +2377,7 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 
 /// The crates the core's library is cut into; a new one joins with its word in `flake.nix`'s
 /// `library`.
-const LIBRARY_CRATES: [&str; 15] = [
+const LIBRARY_CRATES: [&str; 18] = [
     "app/base",
     "app/record",
     "app/store",
@@ -2391,6 +2391,9 @@ const LIBRARY_CRATES: [&str; 15] = [
     "app/services",
     "app/google",
     "app/connect",
+    "app/inbox",
+    "app/conversations",
+    "app/lines",
     "app/core",
     "app/api",
 ];

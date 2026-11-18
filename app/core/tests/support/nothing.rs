@@ -3,8 +3,9 @@ use crate::notify::{Delivered, Notify, NotifyError, Push};
 use crate::secretary::Secretary;
 use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::briefings::{BriefingError, Briefings};
-use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use suzatary_base::capability::Nothing;
+use suzatary_inbox::secretary::responded;
+use suzatary_lines::secretary::conversations;
 use suzatary_todo::render::Html;
 
 impl Agent<'static> {
@@ -39,25 +40,10 @@ impl crate::secretary::memories::Memories<'static> {
             digests: crate::secretary::digests::Digests {
                 history: &Nothing,
                 texts: &Nothing,
-                lines: crate::secretary::conversations::Conversations::nothing(),
+                lines: conversations::Conversations::nothing(),
                 owners: &NO_OWNERS,
                 compacting: &crate::secretary::compacting::Compacting::Off,
             },
-        }
-    }
-}
-
-impl crate::secretary::conversations::Conversations<'static> {
-    /// The conversations, inert: no line and no key.
-    #[must_use]
-    pub fn nothing() -> Self {
-        crate::secretary::conversations::Conversations {
-            lines: &Nothing,
-            keys: &Nothing,
-            entropy: &Nothing,
-            renders: &Nothing,
-            sessions: &Nothing,
-            opened: &OPENED,
         }
     }
 }
@@ -75,7 +61,7 @@ impl Secretary<'static> {
             render: &Nothing,
             clock: &Nothing,
             model: &Nothing,
-            conversations: crate::secretary::conversations::Conversations::nothing(),
+            conversations: conversations::Conversations::nothing(),
             inbox: &Nothing,
             memories: crate::secretary::memories::Memories::nothing(),
             decisions: suzatary_todo::decisions::Decisions { store: &Nothing },
@@ -105,35 +91,9 @@ impl Secretary<'static> {
     }
 }
 
-impl Model for Nothing {
-    fn name(&self) -> String {
-        "nothing".to_owned()
-    }
-    fn turn(
-        &self,
-        _conversation: &Conversation,
-        _tools: &serde_json::Value,
-    ) -> Result<Reply, ModelError> {
-        Ok(Reply::default())
-    }
-}
-
-impl Sessions for Nothing {
-    fn pick(&self) -> crate::secretary::model::Pick<'_> {
-        crate::secretary::model::Pick::Turn(Box::new(self))
-    }
-}
-
 /// No owner: nothing here believes a retraction or an erasure.
 static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =
     std::collections::BTreeSet::new();
-
-/// No session is kept, so none is forgotten.
-impl crate::secretary::model_sessions::ModelSessions for Nothing {
-    fn forget(&self, _: &crate::secretary::model::SessionId, _: &str) -> Result<(), String> {
-        Ok(())
-    }
-}
 
 impl Briefings for Nothing {
     fn all(&self) -> Result<Vec<(chrono::NaiveDate, String)>, BriefingError> {
@@ -156,10 +116,6 @@ impl Answers for Nothing {
     }
 }
 
-/// Nothing opened: [`Nothing::conversations`] holds no line to open.
-static OPENED: std::sync::LazyLock<crate::secretary::opened::Opened> =
-    std::sync::LazyLock::new(crate::secretary::opened::Opened::default);
-
 impl crate::secretary::google_sign_in::Consents for Nothing {
     fn redirect(&self) -> Option<&suzatary_google::google::RedirectUri> {
         None
@@ -167,14 +123,14 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
 
     fn begin(
         &self,
-        _: &crate::secretary::inbox::ProposalId,
+        _: &suzatary_inbox::secretary::inbox::ProposalId,
         _: &suzatary_mail::mail::address::EmailAddress,
         _: &suzatary_google::google::Scopes,
         _: &prodrome_core::event::Actor,
         _: suzatary_base::capability::Datetime,
         _: crate::secretary::google_sign_in::Then,
-    ) -> crate::secretary::responded::Performed {
-        crate::secretary::responded::Performed::Tried(crate::secretary::responded::Tried::NotSent {
+    ) -> responded::Performed {
+        responded::Performed::Tried(responded::Tried::NotSent {
             reason: "nothing opens a sign-in with Google here".to_owned(),
         })
     }

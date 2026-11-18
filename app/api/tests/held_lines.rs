@@ -16,22 +16,27 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::conversations::{Conversations, InMemory};
-use suzatary_core::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
-use suzatary_core::secretary::inbox::ProposalId;
-use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
-use suzatary_core::secretary::line_form::{Husked, LineReplica};
-use suzatary_core::secretary::line_shape::LineShape;
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::outlines::{Outlines, Parsed};
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{
+    Entry, Kind, Namer, NotAConversation, Stored, Title,
+};
 use suzatary_core::secretary::readings::Dress;
-use suzatary_core::secretary::rescrub;
-use suzatary_core::secretary::store::{Entry, Kind, Namer, NotAConversation, Stored, Title};
 use suzatary_core::secretary::stream;
-use suzatary_core::secretary::targets::rounds;
 use suzatary_core::secretary::topics::reading::Reading;
-use suzatary_core::secretary::transcript::{self, Transcript};
+use suzatary_core::stores::conversations::InMemory;
 use suzatary_core::wire::topics as wire;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::stamp;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
+use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
+use suzatary_lines::secretary::line_form::{Husked, LineReplica};
+use suzatary_lines::secretary::line_shape::LineShape;
+use suzatary_lines::secretary::outlines::{Outlines, Parsed};
+use suzatary_lines::secretary::rescrub;
+use suzatary_lines::secretary::targets::rounds;
+use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::key_ring::{KeyRing, spelled};
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -1034,9 +1039,7 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
                 text: "Dismissed: I connect that calendar by its Google account".to_owned(),
                 references: Vec::new(),
             },
-            by: Some(suzatary_core::secretary::stamp::Stamp::Actor(
-                suzatary_core::secretary::stamp::Speaker::device("ada"),
-            )),
+            by: Some(stamp::Stamp::Actor(stamp::Speaker::device("ada"))),
         },
         Entry::Said {
             at: at(5),

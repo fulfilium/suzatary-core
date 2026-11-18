@@ -5,10 +5,10 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::secretary::model::Turn;
-use crate::secretary::store::Stored;
-use crate::secretary::tool_name::ToolName;
-use crate::secretary::verb_name::VerbName;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Stored;
+use suzatary_conversations::secretary::tool_name::ToolName;
+use suzatary_conversations::secretary::verb_name::VerbName;
 use suzatary_held::held_value::{Handle, HeldFile, Holder};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
 

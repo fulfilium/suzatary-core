@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use suzatary_core::secretary::model::{SessionId, TokenUsage};
+use suzatary_conversations::secretary::model::{SessionId, TokenUsage};
 
 use super::stream_event::StreamEvent;
 

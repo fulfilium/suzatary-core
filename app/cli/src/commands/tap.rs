@@ -1,6 +1,6 @@
 //! `suzatary tap proposal:<conversation>/<n>`: the operator's tap on a card, through the route a
 //! device's tap takes. The box refuses the operator's tap on every card that sends mail
-//! (`suzatary_core::secretary::sending`), because sending stays the owner's tap.
+//! (`suzatary_inbox::secretary::sending`), because sending stays the owner's tap.
 
 use std::path::Path;
 

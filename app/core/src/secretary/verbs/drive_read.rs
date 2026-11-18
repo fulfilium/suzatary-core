@@ -2,14 +2,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::secretary::acts::Act;
-use crate::secretary::proposal::Proposal;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verbs::{Reasoned, drive_path, drive_refusal, kept, propose};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_held::held_value::HeldFile;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 
 /// Read one document of the owner's Drive, or ask to.
 pub struct DriveRead;

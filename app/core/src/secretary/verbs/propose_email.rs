@@ -4,19 +4,19 @@ use serde_json::{Value, json};
 
 use crate::secretary;
 use crate::secretary::Secretary;
-use crate::secretary::model::Turn;
 use crate::secretary::opening;
-use crate::secretary::proposal::{Draft, Proposal};
 use crate::secretary::read_holders::ReadHolders;
-use crate::secretary::store::Stored;
 use crate::secretary::verbs::{FilingArgs, kept, mail_refusal, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Stored;
 use suzatary_held::held_value::HeldFile;
 use suzatary_held::secretary::attached::{self, Attached};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_held::upload::Upload;
+use suzatary_inbox::secretary::proposal::{Draft, Proposal};
 
 /// Propose a message, which only a tap sends.
 pub struct ProposeEmail;

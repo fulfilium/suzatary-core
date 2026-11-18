@@ -3,27 +3,27 @@
 
 pub mod candidates;
 
-use crate::secretary::conversations;
 use serde_json::{Map, Value};
+use suzatary_lines::secretary::conversations;
 
-use super::changes::Act;
 use super::daily::{Run, begin};
-use super::proposal::Proposal;
-use super::store::{Entry, Stored};
 use super::surface::{SecretaryCall, SecretaryVerb, Subset};
-use super::verb_name::Effect;
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
 use crate::secretary::Secretary;
-use crate::secretary::model::Halt;
 use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
+use suzatary_conversations::secretary::model::Halt;
+use suzatary_conversations::secretary::store::{Entry, Stored};
+use suzatary_conversations::secretary::verb_name::Effect;
+use suzatary_inbox::secretary::changes::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_signatures::believed::one_outcome;
 
 /// At most this many candidates per todo, in [`Match`] rank order then newest first.
@@ -117,7 +117,7 @@ pub struct Swept {
     /// How many times the model was asked; zero when nothing open had later mail.
     pub rounds: usize,
     /// The changesets this sweep proposed, each with its index.
-    pub proposed: Vec<(usize, super::store::Standing)>,
+    pub proposed: Vec<(usize, suzatary_conversations::secretary::store::Standing)>,
 }
 
 /// Sweeps the first chain's open list in one round; a todo with no later mail proposes nothing,
@@ -191,7 +191,7 @@ pub fn sweep(
 
     let stored = conversations::read(caps.conversations, &id)?;
     let proposed = stored
-        .lines(&super::inbox::fold(caps.inbox)?)
+        .lines(&suzatary_inbox::secretary::inbox::fold(caps.inbox)?)
         // The sweep files into this inbox before it reads, so every line it just filed is placed.
         .into_standings()
         .into_iter()
@@ -444,7 +444,7 @@ fn refuse_bad_act(
     swept: &std::collections::BTreeSet<String>,
     acts: Option<&Value>,
 ) -> Result<(), Refusal> {
-    let acts = super::changes::acts_of(acts)?;
+    let acts = suzatary_inbox::secretary::changes::acts_of(acts)?;
     for act in &acts {
         match act {
             Act::Complete { todo, .. } | Act::Cancel { todo, .. } => {

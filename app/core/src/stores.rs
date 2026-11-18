@@ -1,6 +1,10 @@
 //! Every store the data tree keeps, declared once in `stores!`: a new store is one row and its
 //! schema, and the interpreters, the fsck, the routes and the guards read the rows.
 
+// The conversations held in memory, beside the store they hold: test support, never production.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/conversations.rs"]
+pub mod conversations;
 mod database;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/in_memory.rs"]
@@ -14,11 +18,11 @@ use prodrome_core::schema::Schema;
 
 use crate::asks::AskEvent;
 use crate::secretary::digest_event::DigestEvent;
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::line_event::LineEvent;
-use crate::secretary::lines_rule::LinesRule;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::lines_rule::LinesRule;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_record::record::TodoEvent;
 use suzatary_store::admission::{Admission, Shared};

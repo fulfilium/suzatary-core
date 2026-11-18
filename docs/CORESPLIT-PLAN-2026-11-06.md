@@ -428,6 +428,66 @@ The pages' module, `views_bg.wasm` on x86_64-linux by `nix build`, grew by 452 b
 `wasm-opt` (3,603,049 to 3,603,501) and shrank by 1,137 bytes brotli (645,600 to 644,463). No line
 of `web/wasm-budget` rises.
 
+**Rows 24 to 26 (inbox, conversations, lines), one pull request.** Each module keeps its path
+under the crate's name, the secretary's under `secretary`: `suzatary_inbox::{coding, content_id,
+priced, secretary::*, verb, wire::inbox}`, `suzatary_conversations::{nonempty, secretary::*}` and
+`suzatary_lines::{first_read, parts, timings, secretary::*, wire::lines}`.
+- **inbox** takes `content_id` from base's table; USE 33.6k.
+  - Two inherent methods moved first, since only a type's crate may declare one: `need.rs`
+    (`Proposal::need`) left the conversations' `store/` and `request.rs` (`changes::Act::request`)
+    left the cards cut. Neither layer guard nor table had seen them: an `impl` block names no path.
+  - `verb` splits: `parse` and `Caught`, which `changes` and `priced` read, are
+    `suzatary_inbox::verb`; the `Verb` trait, `verbs!` and `Chained` stay in core under the
+    secretary cut. `Priced`, `Priced::price`, `PRICE_SPELLINGS` and `day_of` become `pub` (the
+    agent reads them); its fields are `pub(crate)`.
+  - Six inbox laws and the tap's law hold `stores::InMemory`, so they are core's integration tests.
+- **conversations** takes `nonempty`; USE 26.7k. `search::{fold, around}` become `pub` (the file
+  verbs read them). Core no longer re-exports `store::{ConversationState, state}`. `about`'s
+  fixture moves to `app/conversations/tests`, where the web tests read it too.
+- **lines** takes `timings`; USE 37.7k.
+  - The two edges into `digest` went first: the box's gathered lines kept the digest's `Shape`, and
+    `Opened` its `Kept`. Both are a value a reader derives from the lines' words, so
+    `secretary/derived.rs` keeps one value per type, and the digest names its own types there
+    (`Shape::over`). A forgetting still drops them all at once.
+  - The in-memory conversations hold `stores::InMemory`, so they are `stores::conversations`, and
+    the test modules of `act_lines`, `held_lines`, `opened` and `transcript` are core's
+    integration tests. `transcript::{erased_lines, causal}` become `pub` (the digest reads them),
+    and `Opened::says` and `held_lines::says` are test support under `nothing`.
+  - Core has no `wasm` feature any more: `inbox_json` and `conversation_json` are their crates'.
+- **What a further cut would take,** since no trim of `//!` reaches 25k (each crate's module docs
+  come to 1.2–2k, and they state orders and boundaries):
+  - inbox: what a proposal asks (`acts`, `changes`, `coding`, `decide`, `diff`, `fix`, `need`,
+    `priced`, `proposal/*`, `request`, `sign_in`, `verb`, `wire/inbox`, about 22k) below the
+    machine that holds it (`inbox`, `inbox_event`, `inbox_reading`, `inbox_registers`, `phase`,
+    `responded`, `tapped`, `sending`, `stamp`, `own_round`, `proposer`, `card`, about 11k). Three
+    names point up: `ProposalId` (read by `sign_in`, `fix`), `inbox_reading::Words` (`proposal`)
+    and `responded::{Done, Performed, Tried}` (`decide`).
+  - conversations: the model's port (`model` with its laws, `model_sessions`, 5.6k) below the
+    entries.
+  - lines: the replicas (`held_replica`, `own_line`, `husks`, `prune`, `outline`, `outlines`,
+    `rescrub`, `object_stores`, about 11k) above the rest; one edge points down into them,
+    `line_form -> outlines`. `timings`, `parts` and `first_read` (2k, a process's measures) could
+    leave too.
+
+Measured with `cargo check --workspace --all-targets` on four cores, one line edited, the second
+run of each:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `lines` (`transcript.rs`) | 37.3 s | 34.8 s |
+| `secretary` (`review.rs`) | 38.7 s | 35.2 s |
+| `routes.rs` | 27.3 s | 27.0 s |
+
+Core's library check fell from 9.8 to 4.6 s and its unit tests' from 11.0 to 5.2 s. The largest
+unit of every case is now the CLI's test binary, `all` (19.5 to 22.1 s), so `server` and the CLI's
+split decide what an edit costs from here, more than the order of the remaining cuts. Core's USE
+fell from 202.8k to 106.8k.
+
+The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, grew by 13,352 bytes after
+`wasm-opt` (4,850,323 to 4,863,675): inbox 9,172, conversations 2,490, lines 1,690. Its strings
+grew by about 640 bytes, so the rest is code. Its line moves from 4,860,000 to 4,870,000. The
+pages' module grew by 400 bytes (3,602,402 to 3,602,802).
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

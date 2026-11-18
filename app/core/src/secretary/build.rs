@@ -6,16 +6,16 @@
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use crate::coding::Task;
 use crate::secretary::Bound;
-use crate::secretary::acts::Act;
 use crate::secretary::coding::Advanced;
-use crate::secretary::inbox::Fold;
-use crate::secretary::proposal::Proposal;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, TodoRef};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::coding::Task;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::inbox::Fold;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_record::record::Authored;
 use suzatary_signatures::believed::Believed;
 
@@ -76,7 +76,9 @@ pub fn task(todo: &TodoRef, record: &Authored, attempt: usize) -> Result<Task, R
 }
 
 /// Every coding-session card serving a todo, with that todo.
-fn serving(fold: &Fold) -> impl Iterator<Item = (&TodoRef, &crate::secretary::inbox::Object)> {
+fn serving(
+    fold: &Fold,
+) -> impl Iterator<Item = (&TodoRef, &suzatary_inbox::secretary::inbox::Object)> {
     fold.objects()
         .filter(|object| {
             matches!(

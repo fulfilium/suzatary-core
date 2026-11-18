@@ -1,11 +1,13 @@
 use serde_json::{Value, json};
 
-use crate::secretary::changes::{self, Building, Changeset};
 use crate::secretary::filed::triage_card;
-use crate::secretary::inbox::{self, Object};
 use crate::secretary::{Bound, Call, SecretarySurface, bound_named};
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::{Building, Changeset};
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::Object;
 
 /// Every card the triage agent filed that still waits for the owner.
 pub struct TriageCards;
@@ -39,7 +41,7 @@ fn open_card(object: &Object) -> Option<&Changeset> {
 /// # Errors
 /// The inbox does not read.
 pub fn standing(
-    inbox: &dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
 ) -> Result<Vec<(suzatary_base::reference::ProposalRef, Changeset)>, Refusal> {
     Ok(inbox::fold(inbox)?
         .objects()

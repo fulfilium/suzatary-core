@@ -13,6 +13,7 @@ use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
+use suzatary_lines::timings;
 use suzatary_memory::secretary::memory::Memory;
 use suzatary_store::store::Reads;
 use suzatary_todo::todos;
@@ -128,10 +129,9 @@ pub fn context(
     let least = wire_len(super::remembered::TOO_BIG);
     let mut answer = manual_within(manuals, deployment, CONTEXT_CAP - key - least);
     let room = (CONTEXT_CAP + memory_bytes).saturating_sub(wire_len(&answer) + key);
-    answer["memory"] = Value::String(crate::timings::timed(
-        crate::timings::Phase::Remembered,
-        || super::remembered::remembered(memory, record, room),
-    ));
+    answer["memory"] = Value::String(timings::timed(timings::Phase::Remembered, || {
+        super::remembered::remembered(memory, record, room)
+    }));
     answer
 }
 

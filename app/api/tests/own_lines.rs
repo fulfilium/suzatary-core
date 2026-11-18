@@ -13,13 +13,15 @@ use prodrome_core::store::frontier::{Frontiers, KEPT, Since};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::DEFAULT;
-use suzatary_core::secretary::conversations::{self, InMemory};
-use suzatary_core::secretary::held_replica::{HeldReplica, NotAnAnswer, Sealing};
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::lines_rule::{LinesRule, SlotKeys};
-use suzatary_core::secretary::own_line::OwnLine;
-use suzatary_core::secretary::store::{Entry, Kind, Namer, Title};
+use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
+use suzatary_core::stores::conversations::InMemory;
 use suzatary_core::sync::Holding;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::held_replica::{HeldReplica, NotAnAnswer, Sealing};
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
+use suzatary_lines::secretary::own_line::OwnLine;
+use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
 use suzatary_store::admission::Beside as _;
 use suzatary_store::replica::held::Node as _;
@@ -40,7 +42,7 @@ fn at(second: u32) -> Datetime {
 }
 
 /// The box's skeleton, whole.
-fn skeleton(lines: &InMemory) -> suzatary_core::wire::lines::SkeletonPayload {
+fn skeleton(lines: &InMemory) -> suzatary_lines::wire::lines::SkeletonPayload {
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
         Frontiers::remembered(KEPT),
@@ -68,8 +70,7 @@ fn the_tab_s_own_line_is_the_line_the_box_serves() {
         model: "a-cli/small".to_owned(),
         kind: Kind::Default,
     };
-    suzatary_core::secretary::transcript::start(lines.conversations(), &DEFAULT, &opened)
-        .expect("opened");
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
     let first = skeleton(&lines);
     let mut tab =
         HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(first.clone())).expect("the tab pulled");
@@ -128,7 +129,7 @@ fn the_tab_s_own_line_is_the_line_the_box_serves() {
         LineEvent::write(DEFAULT.clone(), ada, 1, &entry, &Fixed(AtomicU8::new(9)))
             .expect("a line");
     let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
-        &suzatary_core::secretary::line_event::LineVocabulary,
+        &suzatary_lines::secretary::line_event::LineVocabulary,
         print,
     )
     .expect("parses");
@@ -320,8 +321,7 @@ fn a_posted_key_never_opens_erased_words() {
         model: "a-cli/small".to_owned(),
         kind: Kind::Default,
     };
-    suzatary_core::secretary::transcript::start(lines.conversations(), &DEFAULT, &opened)
-        .expect("opened");
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
     let mut tab =
         HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
     let objects = lines.lines.objects().expect("held");

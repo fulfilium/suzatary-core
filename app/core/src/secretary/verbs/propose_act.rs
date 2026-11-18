@@ -2,16 +2,18 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::acts::Act;
-use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
-use crate::verb::{Caught, Verb};
+use crate::verb::Verb;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::topic_target::Target;
 use suzatary_connect::connect::Connection;
 use suzatary_connect::settings::Settable;
+use suzatary_conversations::secretary::taint;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::verb::Caught;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::memory;
 
@@ -142,7 +144,7 @@ impl Verb for ProposeAct {
 fn other(
     call: &Call<'_>,
     args: &ProposeActArgs,
-    reasons: &crate::secretary::proposal::Reasons,
+    reasons: &suzatary_inbox::secretary::proposal::Reasons,
 ) -> Result<Act, Refusal> {
     Ok(match args.act.as_str() {
         "auth" => {
@@ -262,13 +264,14 @@ const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the own
 
 /// The round the owner opened with their own words, refused in any other.
 fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
-    let stored = crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
-    if crate::secretary::taint::tainted(&stored) {
+    let stored =
+        suzatary_lines::secretary::conversations::read(call.caps.conversations, call.conversation)?;
+    if taint::tainted(&stored) {
         return Err(Refusal::forbidden(format!(
             "{READ_OUTSIDE}, and {why}: say so, and the owner asks again in a round of its own"
         )));
     }
-    match crate::secretary::taint::opener(&stored) {
+    match taint::opener(&stored) {
         Some(memory::Origin::Turn { conversation, turn }) => {
             Ok(Reference::Target(Target::Round { conversation, turn }))
         }

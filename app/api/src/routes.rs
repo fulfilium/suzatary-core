@@ -2,7 +2,7 @@
 //! that cannot name a capability cannot use it.
 
 use std::collections::BTreeMap;
-use suzatary_core::secretary::conversations;
+use suzatary_lines::secretary::conversations;
 
 use chrono::NaiveDate;
 use prodrome_core::fpl;
@@ -22,10 +22,10 @@ use suzatary_base::tree::{By, Classifier, Monoid};
 use suzatary_connect::deployment::Deployment;
 use suzatary_core::secretary::answers::Answers;
 use suzatary_core::secretary::briefings::Briefings;
-use suzatary_core::secretary::husks::{husked, husks, keys_of, retired};
-use suzatary_core::secretary::step::Step;
 use suzatary_core::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
-use suzatary_core::wire::lines::{
+use suzatary_lines::secretary::husks::{husked, husks, keys_of, retired};
+use suzatary_lines::secretary::step::Step;
+use suzatary_lines::wire::lines::{
     Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
     SkeletonNode, SkeletonPayload, StoredObject,
 };
@@ -246,7 +246,7 @@ pub fn tree(
 /// The saved briefings' days, newest first.
 pub fn briefings(
     briefings: &dyn Briefings,
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
 ) -> Answered<wire::BriefingsPayload> {
     let saved = briefings
         .all()
@@ -298,7 +298,7 @@ fn briefing_title(source: &str, day: NaiveDate) -> String {
 pub fn briefing(
     briefings: &dyn Briefings,
     render: &dyn Render,
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     answers: &dyn Answers,
     day: NaiveDate,
 ) -> Answered<wire::BriefingPayload> {
@@ -766,14 +766,14 @@ impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
 /// Each line as its skeleton node.
 struct Nodes;
 
-impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
+impl Sends<line_event::LineEvent> for Nodes {
     type Item = SkeletonNode;
     const WEIGHTS: &'static str = "weights of nodes";
 
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+        envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
     ) -> (SkeletonNode, usize) {
         // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
         let node = node_of(name, envelope, 0);
@@ -784,7 +784,7 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     fn weigh(
         &self,
         name: &prodrome_core::event::Hash,
-        envelope: &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+        envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
     ) -> usize {
         weight(&node_of(name, envelope, 0))
     }
@@ -800,10 +800,10 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
     /// `law_a_piece_is_sent_in_the_whole_order_less_what_is_held`).
     fn order(
         &self,
-        graph: &suzatary_store::store::Graph<suzatary_core::secretary::line_event::LineEvent>,
+        graph: &suzatary_store::store::Graph<line_event::LineEvent>,
         lacking: &[(
             &prodrome_core::event::Hash,
-            &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+            &prodrome_core::event::Envelope<line_event::LineEvent>,
         )],
     ) -> Vec<usize> {
         let rank = graph.reading("newest first, each object's place", |graph| {
@@ -834,7 +834,7 @@ impl Sends<suzatary_core::secretary::line_event::LineEvent> for Nodes {
 fn newest_first(
     every: &[(
         &prodrome_core::event::Hash,
-        &prodrome_core::event::Envelope<suzatary_core::secretary::line_event::LineEvent>,
+        &prodrome_core::event::Envelope<line_event::LineEvent>,
     )],
 ) -> Vec<usize> {
     let mut latest: std::collections::HashMap<
@@ -854,9 +854,7 @@ fn newest_first(
         .iter()
         .enumerate()
         .map(|(at, (_, envelope))| {
-            let conversation = envelope
-                .event()
-                .map(suzatary_core::secretary::line_event::LineEvent::conversation);
+            let conversation = envelope.event().map(line_event::LineEvent::conversation);
             let newest = conversation.and_then(|id| latest.get(id)).copied();
             (std::cmp::Reverse(newest), conversation, at)
         })
@@ -932,21 +930,21 @@ where
     let asked = std::time::Instant::now();
     let read_at = std::cell::Cell::new(None);
     let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
-        suzatary_core::parts::add_part("lock", asked.elapsed());
-        let graph = suzatary_core::parts::part("history", || store.graph())?;
+        parts::add_part("lock", asked.elapsed());
+        let graph = parts::part("history", || store.graph())?;
         let seen = suzatary_signatures::epoch::Seen {
             geneses: names(graph.geneses()).into_iter().collect(),
             heads: names(graph.heads()).into_iter().collect(),
             held: std::sync::Arc::clone(graph.names()),
         };
-        let lacking = suzatary_core::parts::part("lacking", || {
+        let lacking = parts::part("lacking", || {
             books.frontiers.answer(key, since, graph.dag())
         })
         .map_err(suzatary_store::store::StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         // Weighed once per head set, so a pull of many pieces weighs each object once.
-        let weights = suzatary_core::parts::part("weights", || {
+        let weights = parts::part("weights", || {
             graph.reading(S::WEIGHTS, |graph| {
                 graph
                     .objects()
@@ -954,8 +952,8 @@ where
                     .collect::<std::collections::HashMap<_, _>>()
             })
         });
-        let order = suzatary_core::parts::part("order", || sends.order(&graph, lacking.lacking()));
-        suzatary_core::parts::part("emit", || {
+        let order = parts::part("order", || sends.order(&graph, lacking.lacking()));
+        parts::part("emit", || {
             let mut full = false;
             for (name, envelope) in order.into_iter().map(|at| lacking.lacking()[at]) {
                 piece.rest += 1;
@@ -984,14 +982,14 @@ where
         // what the asker held joined to the closure of what it was sent.
         let sent: Vec<_> = piece.sent.iter().map(|(name, _)| name.clone()).collect();
         let frontier = frontier_of(
-            &suzatary_core::parts::part("record", || lacking.record_with(sent))
+            &parts::part("record", || lacking.record_with(sent))
                 .map_err(suzatary_store::store::StoreError::from)?,
         );
         read_at.set(Some(std::time::Instant::now()));
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
     if let Some(read) = read_at.get() {
-        suzatary_core::parts::add_part("epoch", read.elapsed());
+        parts::add_part("epoch", read.elapsed());
     }
     Ok(Pulled {
         snapshot: Snapshot {
@@ -1035,15 +1033,14 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier 
 /// # Errors
 /// The stores' own.
 pub fn lines_skeleton(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
 ) -> Answered<SkeletonPayload> {
     let started = std::time::Instant::now();
-    let (piece, parts) =
-        suzatary_core::parts::scoped(|| skeleton(conversations, since, books, now, cut));
+    let (piece, parts) = parts::scoped(|| skeleton(conversations, since, books, now, cut));
     if let Ok(piece) = &piece {
         // One line a piece, so the box's log says where a slow piece spent its time: the parts,
         // their sum, and the whole call beside it, so what no part names shows as their difference.
@@ -1065,7 +1062,7 @@ pub fn lines_skeleton(
 
 /// The skeleton piece [`lines_skeleton`] answers, each part timed.
 fn skeleton(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
@@ -1089,12 +1086,11 @@ fn skeleton(
     let keys = if sent.is_empty() {
         BTreeMap::new()
     } else {
-        let retired = suzatary_core::parts::part("retired", || retired(&graph));
-        suzatary_core::parts::part("keys", || keys_of(conversations, &graph, &retired, &sent))?
+        let retired = parts::part("retired", || retired(&graph));
+        parts::part("keys", || keys_of(conversations, &graph, &retired, &sent))?
     };
-    let husked = suzatary_core::parts::part("husks", || husked(&graph, &keys, &sent));
-    let sized =
-        suzatary_core::parts::part("sizes", || held_sizes(conversations.lines, &sent, nodes))?;
+    let husked = parts::part("husks", || husked(&graph, &keys, &sent));
+    let sized = parts::part("sizes", || held_sizes(conversations.lines, &sent, nodes))?;
     // A replica that lacks nothing holds the store's heads already.
     let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
         (SinceRead::Known, true) => Heads::Held,
@@ -1134,7 +1130,7 @@ fn skeleton(
 /// That holds while every object has its file; a prune of the box's disk that keeps a husk in a
 /// literal's place has to answer this case again.
 fn held_sizes(
-    lines: &dyn Prodrome<suzatary_core::secretary::line_event::LineEvent>,
+    lines: &dyn Prodrome<line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],
     nodes: Vec<SkeletonNode>,
 ) -> Answered<Vec<SkeletonNode>> {
@@ -1155,8 +1151,11 @@ fn held_sizes(
         .collect()
 }
 
-use suzatary_core::secretary::line_form::sized_node as node_of;
-pub use suzatary_core::secretary::line_form::skeleton_node;
+use suzatary_lines::parts;
+use suzatary_lines::secretary::act_lines;
+use suzatary_lines::secretary::line_event;
+use suzatary_lines::secretary::line_form::sized_node as node_of;
+pub use suzatary_lines::secretary::line_form::skeleton_node;
 
 /// About how many bytes a node is on the wire.
 fn weight(node: &SkeletonNode) -> usize {
@@ -1237,7 +1236,7 @@ pub fn content<E: prodrome_core::schema::Schema>(
 
 /// [`content`] of the lines, each line whose every key the box retires as its husk.
 pub fn lines_content(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     hashes: &query::Hashes,
 ) -> Answered<wire::ContentPayload> {
     let graph = conversations.lines.graph()?;
@@ -1303,8 +1302,8 @@ fn answer<E: prodrome_core::schema::Schema>(
 /// # Errors
 /// A store that does not read, a chain the set does not hold, and lines the fold refuses.
 pub fn waiting(
-    inbox: &suzatary_core::secretary::inbox::Fold,
-    conversations: suzatary_core::secretary::conversations::ReadConversations<'_>,
+    inbox: &suzatary_inbox::secretary::inbox::Fold,
+    conversations: conversations::ReadConversations<'_>,
     set: &ChainSet<'_>,
     chains: &[ChainName],
 ) -> Answered<wire::WaitingPayload> {
@@ -1326,7 +1325,7 @@ pub fn waiting(
     }
     let mut unplaced = BTreeMap::new();
     for (id, read) in
-        conversations.fold(suzatary_core::secretary::held_lines::HeldLines::transcripts)?
+        conversations.fold(suzatary_lines::secretary::held_lines::HeldLines::transcripts)?
     {
         let read = read.map_err(|refused| Refusal::internal(refused.to_string()))?;
         let lines = suzatary_core::secretary::readings::unplaced(&read.stored().lines(inbox));
@@ -1351,10 +1350,7 @@ pub fn receive_objects(
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
-) -> Answered<(
-    ReceiptPayload,
-    Vec<suzatary_core::secretary::act_lines::ActLine>,
-)> {
+) -> Answered<(ReceiptPayload, Vec<act_lines::ActLine>)> {
     let Posted {
         objects: posted,
         since,
@@ -1394,12 +1390,9 @@ pub fn receive_objects(
     } else {
         std::sync::Arc::default()
     };
-    let heard = suzatary_core::secretary::act_lines::heard_from_objects(
-        &taken,
-        actor,
-        &chain.name,
-        &|posted| suzatary_todo::todos::current(&shown, posted.at, posted.todo.as_str()),
-    );
+    let heard = act_lines::heard_from_objects(&taken, actor, &chain.name, &|posted| {
+        suzatary_todo::todos::current(&shown, posted.at, posted.todo.as_str())
+    });
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
     let fresh: Vec<suzatary_base::escape::Escaped> = taken
@@ -2047,10 +2040,10 @@ pub fn calendar(
 /// the box reads it, the lines' whole skeleton read from nothing with books of its own at `at`,
 /// and every line's content answer, asked as a device asks ([`asks`]).
 pub fn lines_readings(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     at: prodrome_core::literal::Datetime,
 ) -> Answered<[(&'static str, String); 3]> {
-    let lines = suzatary_core::secretary::conversations::list(conversations)?;
+    let lines = conversations::list(conversations)?;
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),

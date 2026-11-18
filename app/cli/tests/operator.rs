@@ -9,7 +9,7 @@ use std::sync::Arc;
 use common::{FakeModel, Fakes};
 use suzatary_cli::commands::{ask, tap};
 use suzatary_connect::cast::CAST;
-use suzatary_core::secretary::stamp::{Speaker, Stamp};
+use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_signatures::signatures::Seat;
 
 fn owner() -> suzatary_base::capability::Login {
@@ -47,7 +47,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     )
     .expect("the operator asks");
     assert!(asked.answer.contains("Nothing is due"), "{}", asked.answer);
-    let stored = suzatary_core::secretary::conversations::read(
+    let stored = suzatary_lines::secretary::conversations::read(
         fakes.conversations.conversations(),
         &asked.conversation,
     )
@@ -58,7 +58,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
         .find(|said| {
             matches!(
                 said.turn,
-                suzatary_core::secretary::model::Turn::Person { .. }
+                suzatary_conversations::secretary::model::Turn::Person { .. }
             )
         })
         .expect("the question's line");
@@ -67,7 +67,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
         Some(Stamp::Actor(Speaker::at(CAST.owner.actor, Seat::Operator)))
     );
     assert!(Stamp::owners(said.by.as_ref()), "the owner's words");
-    assert!(!suzatary_core::secretary::taint::tainted(&stored));
+    assert!(!suzatary_conversations::secretary::taint::tainted(&stored));
     let record = running
         .requests
         .get(&asked.request)

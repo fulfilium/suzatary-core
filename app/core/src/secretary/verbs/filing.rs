@@ -3,10 +3,10 @@ use serde::Deserialize;
 
 use super::{propose, references};
 use crate::secretary::Call;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::verb::Caught;
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::verb::Caught;
 
 /// The reasons every proposal carries: why, and what it rests on.
 #[derive(Deserialize, JsonSchema)]

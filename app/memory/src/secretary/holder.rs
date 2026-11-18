@@ -1,7 +1,7 @@
 //! The registry of every store that holds a copy of a conversation's words.
 
 /// A store holding a copy of a conversation's words. For each slot it kills,
-/// `suzatary_core::secretary::transcript::sweep` empties each [`Fate::Deleted`] holder in order; a
+/// `suzatary_lines::secretary::transcript::sweep` empties each [`Fate::Deleted`] holder in order; a
 /// copy it could not delete keeps the key for the next sweep.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Holder {

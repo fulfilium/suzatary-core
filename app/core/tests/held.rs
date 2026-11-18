@@ -12,10 +12,11 @@ use std::collections::BTreeSet;
 
 use proptest::prelude::*;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
-use suzatary_core::secretary::queue;
-use suzatary_core::secretary::store::{Entry, Scope, Stored};
-use suzatary_core::secretary::taint::{self, Taint};
+use suzatary_conversations::secretary::model::{SessionId, ToolCall, Turn};
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::{Entry, Scope, Stored};
+use suzatary_conversations::secretary::taint;
+use suzatary_conversations::secretary::taint::Taint;
 
 #[derive(Debug, Clone)]
 enum Step {
@@ -94,7 +95,7 @@ fn answered(verb: &str) -> Entry {
     said(Turn::Tool {
         verb: verb.into(),
         answer: "{}".to_owned(),
-        outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+        outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
         files: Vec::new(),
     })
 }
@@ -119,7 +120,7 @@ impl Conversation {
                 at: at(),
                 title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
                 model: "m".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             }],
         }
     }
@@ -144,7 +145,7 @@ fn kept(sessions: usize, from: usize) -> Entry {
     }
 }
 
-fn indices(sent: &[(usize, &suzatary_core::secretary::store::Said)]) -> BTreeSet<usize> {
+fn indices(sent: &[(usize, &suzatary_conversations::secretary::store::Said)]) -> BTreeSet<usize> {
     sent.iter().map(|(at, _)| *at).collect()
 }
 

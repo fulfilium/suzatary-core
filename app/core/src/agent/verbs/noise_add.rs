@@ -3,11 +3,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::agent::{Call, TriageSurface, refused};
-use crate::secretary::acts::Act;
-use crate::secretary::proposal::Reasons;
 use crate::verb::Verb;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Reasons;
 
 /// Ask the owner to leave a queued message's sender out of triage.
 pub struct NoiseAdd;

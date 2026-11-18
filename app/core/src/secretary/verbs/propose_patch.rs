@@ -2,13 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::acts::Act;
 use crate::secretary::gate::{Asked, Gate};
-use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::{FilingArgs, located, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_services::repos::{MAX_SHOWN_BYTES, Patch, Visibility};
 use suzatary_services::repositories::RepoFailure;
 
@@ -65,8 +65,10 @@ impl Verb for ProposePatch {
             ));
         }
         let shown = patch.as_str().len() + message.len();
-        let round =
-            crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
+        let round = suzatary_lines::secretary::conversations::read(
+            call.caps.conversations,
+            call.conversation,
+        )?;
         match (visibility, Gate::of(Asked::Publishes, &round)) {
             (Visibility::Public, Gate::Card) if shown > MAX_SHOWN_BYTES => {
                 return Err(Refusal::bad_request(format!(

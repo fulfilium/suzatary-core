@@ -88,9 +88,9 @@ fn a_digest_refuses_an_account_it_does_not_read_and_a_window_out_of_range() {
 /// Reading a Junk message taints the round, so a later `remember` becomes a card.
 #[test]
 fn the_junk_verbs_read_and_are_tainted() {
+    use suzatary_conversations::secretary::taint::Taint;
+    use suzatary_conversations::secretary::verb_name::Effect;
     use suzatary_core::secretary::surface::SecretaryVerb;
-    use suzatary_core::secretary::taint::Taint;
-    use suzatary_core::secretary::verb_name::Effect;
     for verb in [SecretaryVerb::JunkDigest, SecretaryVerb::JunkShow] {
         assert_eq!(verb.class().powers().effect, Effect::Reads, "{verb}");
         assert_eq!(verb.class().powers().taint, Taint::Tainted, "{verb}");

@@ -1,20 +1,22 @@
 //! A proposal filed: asked once in the inbox, by its content, and drawn as a card in one
 //! conversation. Every proposer files through [`file()`].
 
-use crate::secretary::acts::Act;
-use crate::secretary::changes::Changeset;
-use crate::secretary::conversations;
-use crate::secretary::inbox::{self, ProposalId};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::inbox_reading::Reading;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::store::{Entry, Kind};
-use crate::secretary::transcript;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::store::{Entry, Kind};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::inbox_reading::Reading;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 use suzatary_store::store::{Prodrome, StoreError};
 
 /// Where a proposal is drawn: its card's index in the conversation it was filed in.
@@ -58,7 +60,7 @@ pub struct Filing<'a> {
 /// [`crate::secretary::build::admitted`]'s, a conversation that cannot be read, and the
 /// stores' failures to append.
 pub fn file(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
     chains: &[crate::secretary::Bound<'_>],
     at: Datetime,
@@ -73,7 +75,7 @@ pub fn file(
 /// # Errors
 /// As [`file()`]'s.
 pub fn file_held(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
     chains: &[crate::secretary::Bound<'_>],
     at: Datetime,
@@ -155,7 +157,7 @@ pub fn triage_conversation() -> ConversationId {
 /// card and does nothing else, so a verb holding it can ask the owner and never answer for him.
 #[derive(Clone, Copy)]
 pub struct TriageCards<'a> {
-    conversations: crate::secretary::conversations::Conversations<'a>,
+    conversations: conversations::Conversations<'a>,
     inbox: &'a dyn Prodrome<InboxEvent>,
 }
 
@@ -183,7 +185,7 @@ impl<'a> TriageCards<'a> {
     /// The door over the box's conversations and inbox.
     #[must_use]
     pub fn new(
-        conversations: crate::secretary::conversations::Conversations<'a>,
+        conversations: conversations::Conversations<'a>,
         inbox: &'a dyn Prodrome<InboxEvent>,
     ) -> Self {
         Self {
@@ -200,7 +202,7 @@ impl<'a> TriageCards<'a> {
     pub fn file_act(
         &self,
         at: Datetime,
-        act: crate::secretary::acts::Act,
+        act: suzatary_inbox::secretary::acts::Act,
         reasons: Reasons,
     ) -> Result<ProposalRef, Refusal> {
         let conversation = triage_conversation();
@@ -307,7 +309,7 @@ impl<'a> TriageCards<'a> {
                 old,
                 &transcript::writer(),
                 at,
-                crate::secretary::responded::Withdrawal::Superseded,
+                responded::Withdrawal::Superseded,
             )?;
         }
         Ok(Carded {
@@ -331,7 +333,7 @@ impl<'a> TriageCards<'a> {
 /// # Errors
 /// The store's failures to append.
 pub fn opened(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: conversations::Conversations<'_>,
     conversation: &ConversationId,
     title: &str,
     proposer: &Proposer,
@@ -389,7 +391,7 @@ fn open_card<'f>(
     })
 }
 
-fn asked_by(card: &Changeset, act: &crate::secretary::changes::Act) -> bool {
+fn asked_by(card: &Changeset, act: &suzatary_inbox::secretary::changes::Act) -> bool {
     card.acts()
         .iter()
         .any(|asked| asked.request() == act.request())
@@ -481,7 +483,8 @@ mod tests {
             conversation,
             proposer,
             proposal: Proposal::Act(Act::CodingSession {
-                task: crate::coding::Task::try_from(format!("Build {serves}.")).expect("a task"),
+                task: suzatary_inbox::coding::Task::try_from(format!("Build {serves}."))
+                    .expect("a task"),
             }),
             reasons: Reasons::new(
                 "asked",
@@ -495,8 +498,13 @@ mod tests {
 
     /// `todo` asked for as a new todo (0), an update that names a price (1) or a reprice (2), at
     /// `percent`, with a rationale that differs on every pass.
-    fn priced(shape: u8, todo: &str, percent: u32, pass: usize) -> crate::secretary::changes::Act {
-        use crate::secretary::changes::Act as ChainAct;
+    fn priced(
+        shape: u8,
+        todo: &str,
+        percent: u32,
+        pass: usize,
+    ) -> suzatary_inbox::secretary::changes::Act {
+        use suzatary_inbox::secretary::changes::Act as ChainAct;
         use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
         let price = Price::Flat { percent };
         let rationale = format!("read on pass {pass}");
@@ -512,7 +520,7 @@ mod tests {
                     detail: String::new(),
                     waiting_on: String::new(),
                 },
-                from: crate::secretary::changes::Provenance::default(),
+                from: suzatary_inbox::secretary::changes::Provenance::default(),
             },
             1 => ChainAct::Update {
                 todo: todo.to_owned(),
@@ -545,7 +553,7 @@ mod tests {
     fn filed_triage(
         cards: &TriageCards<'_>,
         at: Datetime,
-        act: crate::secretary::changes::Act,
+        act: suzatary_inbox::secretary::changes::Act,
         reasons: Reasons,
     ) -> Result<Carded, Refusal> {
         cards.file(
@@ -566,7 +574,7 @@ mod tests {
             shape in 0u8..3,
             percents in proptest::collection::vec(1u32..100, 1..12),
         ) {
-            let conversations = crate::secretary::conversations::InMemory::default();
+            let conversations = crate::stores::conversations::InMemory::default();
             let inbox = InMemory::<InboxEvent>::default();
             let cards = TriageCards::new(conversations.conversations(), &inbox);
             let mut first = None;
@@ -596,7 +604,7 @@ mod tests {
     /// is asked again, as a new card, on a source the answered card did not rest on.
     #[test]
     fn an_answered_request_comes_back_only_on_a_new_source() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox = InMemory::<InboxEvent>::default();
         let cards = TriageCards::new(conversations.conversations(), &inbox);
         let first = filed_triage(
@@ -618,7 +626,7 @@ mod tests {
             &id,
             &transcript::writer(),
             at(1),
-            crate::secretary::responded::Withdrawal::NoLongerNeeded {
+            responded::Withdrawal::NoLongerNeeded {
                 why: "a repricing with no new fact".to_owned(),
             },
         )
@@ -650,7 +658,7 @@ mod tests {
     /// build card and the secretary's session filed at the same instant cannot both pass.
     #[test]
     fn two_filings_at_once_take_one_free_slot() {
-        let conversations = crate::secretary::conversations::InMemory::default();
+        let conversations = crate::stores::conversations::InMemory::default();
         let inbox = InMemory::<InboxEvent>::default();
         let (build, default) = (
             ConversationId::new("build").expect("a slug"),

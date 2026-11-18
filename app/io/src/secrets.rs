@@ -103,7 +103,7 @@ impl Secretspec {
     /// `names` as [`Secretspec::get`] reads each, in one `secretspec check`.
     #[must_use]
     pub fn snapshot(&self, names: &[Settable], reason: &str) -> Snapshot {
-        use suzatary_core::parts::part;
+        use suzatary_lines::parts::part;
         let (from_env, asking): (Vec<&Settable>, Vec<&Settable>) = names.iter().partition(|name| {
             part("environment", || {
                 given(env::var(name.name()).ok().as_deref()).is_some()

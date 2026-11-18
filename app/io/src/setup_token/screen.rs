@@ -1,7 +1,7 @@
 //! What `claude setup-token` has drawn so far, as text: the terminal's escapes removed, and the
 //! two things the box reads off it, the sign-in URL and the token.
 
-use suzatary_core::secretary::sign_in::SignInUrl;
+use suzatary_inbox::secretary::sign_in::SignInUrl;
 
 /// The prefix of a long-lived subscription token, `sk-ant-oat01-…`.
 const TOKEN_PREFIX: &str = "sk-ant-oat";

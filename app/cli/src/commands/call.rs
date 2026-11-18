@@ -12,13 +12,14 @@ use clap::Subcommand;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::sign::Secret;
 use suzatary_api::gate::OPERATOR_HEADER;
-use suzatary_core::wire::lines as wire;
 use suzatary_io::http::{Http as _, Method, Req, Ureq};
+use suzatary_lines::wire::lines as wire;
 use suzatary_signatures::signatures::{Signers, body_digest, request_name};
 
 use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
 use super::serve::{route, table};
 use crate::instance::Instance;
+use suzatary_lines::secretary::held_replica;
 
 /// Which request.
 #[derive(Debug, clap::Args)]
@@ -213,18 +214,18 @@ impl Operator {
     pub fn lines(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
-    ) -> anyhow::Result<suzatary_core::secretary::held_replica::HeldReplica> {
+    ) -> anyhow::Result<held_replica::HeldReplica> {
         let read = |target: &str| -> anyhow::Result<Vec<u8>> {
             Ok(self.request(route::Method::Get, target, b"")?.body)
         };
-        let mut replica = suzatary_core::secretary::held_replica::HeldReplica::pulled(|since| {
+        let mut replica = held_replica::HeldReplica::pulled(|since| {
             let piece: wire::SkeletonPayload = serde_json::from_slice(&read(&format!(
                 "/api/stores/lines/skeleton?since={since}"
             ))?)
             .context("a piece of the lines' skeleton")?;
             anyhow::Ok(piece)
         })?;
-        let lacking = replica.lacking(&suzatary_core::secretary::outlines::Scope::Conversations(
+        let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Conversations(
             std::collections::BTreeSet::from([id.clone()]),
         ));
         for ask in

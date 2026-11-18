@@ -1,8 +1,8 @@
 use crate::agent::Agent;
 use crate::secretary::briefings::Briefings;
-use crate::secretary::model::Model;
 use suzatary_base::capability::{Clock, Manuals};
 use suzatary_connect::secrets::Secrets;
+use suzatary_conversations::secretary::model::Model;
 use suzatary_google::calendar::effect::Calendar;
 use suzatary_mail::mail::mail_sync::MailSync;
 use suzatary_mail::mail::mailbox::Mailbox;
@@ -68,9 +68,9 @@ pub struct Secretary<'a> {
     /// The model it asks.
     pub model: &'a dyn Model,
     /// Where each exchange is written down.
-    pub conversations: crate::secretary::conversations::Conversations<'a>,
+    pub conversations: suzatary_lines::secretary::conversations::Conversations<'a>,
     /// Where a proposal is filed for a person to tap.
-    pub inbox: &'a dyn suzatary_store::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
+    pub inbox: &'a dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     /// Its memory, shared by every conversation; the agent has none, so an injection
     /// cannot become durable.
     pub memories: crate::secretary::memories::Memories<'a>,

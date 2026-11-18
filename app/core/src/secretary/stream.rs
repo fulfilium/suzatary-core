@@ -10,19 +10,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::secretary::held_lines::Held;
-use crate::secretary::model::Turn;
-use crate::secretary::outline::{Outline, Round, Rounds, Voices};
-use crate::secretary::own_round::OwnRound;
 use crate::secretary::readings::{Dress, Place, turn};
-use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{Entry, NotAConversation, Said, heading};
-use crate::secretary::targets::{self, MAX_TOPICS};
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
 use crate::wire::topics as wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Entry, NotAConversation, Said, heading};
+use suzatary_inbox::secretary::own_round::OwnRound;
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_lines::secretary::held_lines::Held;
+use suzatary_lines::secretary::outline::{Outline, Round, Rounds, Voices};
+use suzatary_lines::secretary::targets;
+use suzatary_lines::secretary::targets::MAX_TOPICS;
 use suzatary_memory::secretary::words::Words;
 
 /// How many rounds one page of the stream holds.

@@ -5,7 +5,7 @@ use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::digest_line::NODE_BYTES;
-use crate::secretary::model::ModelError;
+use suzatary_conversations::secretary::model::ModelError;
 
 /// Joins a span's lines with ` / ` and cuts the result at [`NODE_BYTES`].
 #[derive(Debug, Clone)]

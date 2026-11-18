@@ -2,6 +2,4 @@
 //! and generates their TypeScript.
 
 pub mod cards;
-pub mod inbox;
-pub mod lines;
 pub mod topics;

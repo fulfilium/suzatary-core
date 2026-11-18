@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::secretary;
-use crate::secretary::search::{self, Needle};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::search;
+use suzatary_conversations::secretary::search::Needle;
 
 /// What was said in other conversations.
 pub struct Recall;
@@ -33,10 +33,11 @@ impl Verb for Recall {
         let needle =
             Needle::new(query).map_err(|refused| Refusal::bad_request(refused.to_string()))?;
         let limit = search::recall_limit(args.limit);
-        let others: Vec<_> = secretary::conversations::list(call.caps.conversations)?
-            .into_iter()
-            .filter(|stored| &stored.id != call.conversation)
-            .collect();
+        let others: Vec<_> =
+            suzatary_lines::secretary::conversations::list(call.caps.conversations)?
+                .into_iter()
+                .filter(|stored| &stored.id != call.conversation)
+                .collect();
         let found = search::search(&others, &needle, search::RECALL_CONTEXT, limit);
         Ok(search::recalled(query, &found))
     }

@@ -31,7 +31,7 @@ impl Verb for Forget {
         let forgotten = call.caps.memories.forget(
             FactId(u64::try_from(args.id).unwrap_or(u64::MAX)),
             call.caps.clock.now(),
-            &crate::secretary::transcript::writer(),
+            &suzatary_lines::secretary::transcript::writer(),
         )?;
         Ok(json!({ "forgotten": forgotten.id.0 }))
     }

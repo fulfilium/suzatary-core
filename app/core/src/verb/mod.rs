@@ -1,7 +1,5 @@
 //! A verb a model may call: its name, its words, its arguments, and what it does.
 
-mod arguments;
-mod caught;
 mod chained;
 mod sum;
 
@@ -10,8 +8,6 @@ use serde::de::DeserializeOwned;
 
 use suzatary_base::refusal::Refusal;
 
-pub use arguments::parse;
-pub use caught::Caught;
 pub(crate) use chained::chain_named;
 pub use chained::{Chained, Own, Request};
 pub use sum::tool;

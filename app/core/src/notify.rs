@@ -51,7 +51,7 @@ pub fn decide(events: &[TodoEvent], own: &BTreeSet<String>, _now: Datetime) -> O
 #[must_use]
 pub fn needs_you(
     decisions: &[TodoEvent],
-    asked: &[crate::secretary::inbox_event::InboxEvent],
+    asked: &[suzatary_inbox::secretary::inbox_event::InboxEvent],
 ) -> Option<Push> {
     let created: BTreeSet<&str> = decisions
         .iter()
@@ -66,11 +66,11 @@ pub fn needs_you(
         })
         .filter(|id| created.contains(id))
         .collect();
-    let proposals: BTreeSet<&crate::secretary::inbox::ProposalId> = asked
+    let proposals: BTreeSet<&suzatary_inbox::secretary::inbox::ProposalId> = asked
         .iter()
         .filter_map(|event| match event.said {
-            crate::secretary::inbox_event::Said::Asked(_) => Some(&event.proposal),
-            crate::secretary::inbox_event::Said::Responded(_) => None,
+            suzatary_inbox::secretary::inbox_event::Said::Asked(_) => Some(&event.proposal),
+            suzatary_inbox::secretary::inbox_event::Said::Responded(_) => None,
         })
         .collect();
     let count = NonZeroUsize::new(decided.len() + proposals.len())?;
@@ -94,11 +94,11 @@ pub const QUIET_SECONDS: u64 = 120;
 
 #[cfg(test)]
 mod tests {
-    use crate::secretary::inbox::ProposalId;
-    use crate::secretary::inbox_event::{InboxEvent, Said};
     use prodrome_core::event::{mk_completed, mk_created, mk_reopened};
     use prodrome_core::fpl;
     use proptest::prelude::*;
+    use suzatary_inbox::secretary::inbox::ProposalId;
+    use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_record::record::mk_authored;
 
     use super::*;
@@ -114,18 +114,18 @@ mod tests {
     }
 
     fn asked(proposal: &str, why: &str) -> InboxEvent {
-        let asked = crate::secretary::inbox::Asked {
-            proposer: crate::secretary::proposer::Proposer::Secretary,
-            proposal: crate::secretary::proposal::Proposal::Email(
-                crate::secretary::proposal::Draft::default(),
+        let asked = suzatary_inbox::secretary::inbox::Asked {
+            proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
+            proposal: suzatary_inbox::secretary::proposal::Proposal::Email(
+                suzatary_inbox::secretary::proposal::Draft::default(),
             ),
-            reasons: crate::secretary::proposal::Reasons::new(
+            reasons: suzatary_inbox::secretary::proposal::Reasons::new(
                 why,
                 vec!["mail:abcdef012345".parse().expect("a reference")],
             )
             .expect("reasons"),
             asked: "proposal:default/0".parse().expect("a reference"),
-            price: crate::secretary::inbox::Price::unpriced(),
+            price: suzatary_inbox::secretary::inbox::Price::unpriced(),
         };
         InboxEvent {
             proposal: ProposalId::new(proposal).expect("an id"),
@@ -191,18 +191,18 @@ mod tests {
                 .collect();
             let conversation = suzatary_base::conversation_id::ConversationId::new("2026-09-15-1")
                 .expect("a slug");
-            let round = crate::secretary::store::Stored::of(
+            let round = suzatary_conversations::secretary::store::Stored::of(
                 &conversation,
                 &[
-                    crate::secretary::store::Entry::Opened {
+                    suzatary_conversations::secretary::store::Entry::Opened {
                         at: suzatary_base::capability::Datetime::new(2026, 9, 15, 9, 0, 0, 0).expect("an instant"),
                         title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
                         model: "a-cli".to_owned(),
-                        kind: crate::secretary::store::Kind::Topic,
+                        kind: suzatary_conversations::secretary::store::Kind::Topic,
                     },
-                    crate::secretary::store::Entry::Said {
+                    suzatary_conversations::secretary::store::Entry::Said {
                         at: suzatary_base::capability::Datetime::new(2026, 9, 15, 9, 2, 0, 0).expect("an instant"),
-                        turn: crate::secretary::model::Turn::Model {
+                        turn: suzatary_conversations::secretary::model::Turn::Model {
                             text: answer.clone(),
                             calls: Vec::new(),
                         },

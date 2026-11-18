@@ -8,10 +8,13 @@ mod common;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::{Halt, ModelError, Turn};
+use suzatary_conversations::secretary::outcome;
+use suzatary_conversations::secretary::store::Kind;
 use suzatary_core::conversation::round::{Ending, Sink, Why};
 use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::model::{Halt, ModelError, Turn};
-use suzatary_core::secretary::store::Kind;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-02-1").expect("a slug")
@@ -25,7 +28,7 @@ fn deployment() -> suzatary_connect::deployment::Deployment {
 }
 
 fn opened(caps: &Fakes) {
-    suzatary_core::secretary::conversations::start(
+    conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
@@ -55,7 +58,7 @@ fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
             text: said,
             references: &[],
             by: suzatary_core::secretary::Asker::Box(
-                suzatary_core::secretary::own_round::OwnRound::Brief,
+                suzatary_inbox::secretary::own_round::OwnRound::Brief,
             ),
         },
         "you are the secretary",
@@ -124,13 +127,13 @@ fn a_round_over_a_session() {
         halt: &Halt::new(),
     };
     for said in ["what changed?", "and now?"] {
-        suzatary_core::secretary::transcript::push(
+        transcript::push(
             caps.conversations.conversations(),
             &id(),
-            &suzatary_core::secretary::store::Entry::Said {
+            &suzatary_conversations::secretary::store::Entry::Said {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                     .expect("an instant"),
-                turn: suzatary_core::secretary::model::Turn::Person {
+                turn: suzatary_conversations::secretary::model::Turn::Person {
                     text: said.to_owned(),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -141,7 +144,7 @@ fn a_round_over_a_session() {
         .expect("the person turn appends");
         suzatary_core::secretary::answer(
             &caps.secretary(),
-            || suzatary_core::secretary::model::Pick::Held(&caps.model),
+            || suzatary_conversations::secretary::model::Pick::Held(&caps.model),
             &deployment,
             &suzatary_connect::settings::Settables::default(),
             &chains,
@@ -226,13 +229,13 @@ fn round_under(
 
 fn said_first(caps: &Fakes) {
     opened(caps);
-    suzatary_core::secretary::transcript::push(
+    transcript::push(
         caps.conversations.conversations(),
         &id(),
-        &suzatary_core::secretary::store::Entry::Said {
+        &suzatary_conversations::secretary::store::Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::secretary::model::Turn::Person {
+            turn: suzatary_conversations::secretary::model::Turn::Person {
                 text: "go".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -264,12 +267,12 @@ fn a_round_never_runs_a_verb_its_surface_does_not_list() {
         .appended
         .iter()
         .filter_map(|entry| match entry {
-            suzatary_core::secretary::store::Entry::Said {
+            suzatary_conversations::secretary::store::Entry::Said {
                 turn:
-                    suzatary_core::secretary::model::Turn::Tool {
+                    suzatary_conversations::secretary::model::Turn::Tool {
                         verb,
                         answer,
-                        outcome: suzatary_core::secretary::outcome::Outcome::Refused,
+                        outcome: outcome::Outcome::Refused,
                         ..
                     },
                 ..
@@ -311,8 +314,8 @@ fn a_round_stops_at_its_bound() {
         assert_eq!(ran.lock().expect("not poisoned").len(), bound);
         assert!(matches!(
             round.appended.last(),
-            Some(suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::secretary::model::Turn::Model { text, calls },
+            Some(suzatary_conversations::secretary::store::Entry::Said {
+                turn: suzatary_conversations::secretary::model::Turn::Model { text, calls },
                 ..
             }) if calls.is_empty() && text.contains(&format!("{bound} times"))
         ));
@@ -328,11 +331,10 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
         r#"{"say": "Two."}"#,
     ]));
     said_first(&caps);
-    let before =
-        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
-            .expect("reads")
-            .turns
-            .len();
+    let before = conversations::read(caps.conversations.conversations(), &id())
+        .expect("reads")
+        .turns
+        .len();
     let ran = std::sync::Mutex::new(Vec::new());
     let round = round_of(&caps, 8, &ran)
         .expect("runs")
@@ -342,36 +344,34 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
     // A transcript ask records its scope once, the first time it sends one, and then only turns.
     assert!(matches!(
         round.appended.first(),
-        Some(suzatary_core::secretary::store::Entry::Scoped {
-            scope: suzatary_core::secretary::store::Scope::Transcript,
+        Some(suzatary_conversations::secretary::store::Entry::Scoped {
+            scope: suzatary_conversations::secretary::store::Scope::Transcript,
             ..
         })
     ));
     let turns: Vec<_> = round.appended[1..]
         .iter()
         .map(|entry| match entry {
-            suzatary_core::secretary::store::Entry::Said { turn, .. } => turn.clone(),
+            suzatary_conversations::secretary::store::Entry::Said { turn, .. } => turn.clone(),
             other => panic!("only turns are appended after the scope: {other:?}"),
         })
         .collect();
-    let tool = |answer: &str| suzatary_core::secretary::model::Turn::Tool {
+    let tool = |answer: &str| suzatary_conversations::secretary::model::Turn::Tool {
         verb: "weather".into(),
         answer: answer.to_owned(),
-        outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+        outcome: outcome::Outcome::Answered,
         files: Vec::new(),
     };
     assert_eq!(turns.len(), 4);
     assert!(
-        matches!(&turns[0], suzatary_core::secretary::model::Turn::Model { text, calls } if text == "One." && calls.len() == 2)
+        matches!(&turns[0], suzatary_conversations::secretary::model::Turn::Model { text, calls } if text == "One." && calls.len() == 2)
     );
     assert_eq!(turns[1], tool("sunny"));
     assert_eq!(turns[2], tool("sunny"));
     assert!(
-        matches!(&turns[3], suzatary_core::secretary::model::Turn::Model { text, calls } if text == "Two." && calls.is_empty())
+        matches!(&turns[3], suzatary_conversations::secretary::model::Turn::Model { text, calls } if text == "Two." && calls.is_empty())
     );
-    let stored =
-        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
-            .expect("reads");
+    let stored = conversations::read(caps.conversations.conversations(), &id()).expect("reads");
     let gained: Vec<_> = stored.turns[before..]
         .iter()
         .map(|said| said.turn.clone())
@@ -400,10 +400,10 @@ fn a_refusal_is_an_answer_not_an_error() {
     let second = &caps.model.asked()[1];
     assert_eq!(
         second.turns.last(),
-        Some(&suzatary_core::secretary::model::Turn::Tool {
+        Some(&suzatary_conversations::secretary::model::Turn::Tool {
             verb: "todo_show".into(),
             answer: "no such todo".to_owned(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Refused,
+            outcome: outcome::Outcome::Refused,
             files: Vec::new(),
         })
     );
@@ -411,7 +411,7 @@ fn a_refusal_is_an_answer_not_an_error() {
 
 /// The conversation's last live turn.
 fn last_turn(caps: &Fakes) -> Turn {
-    suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
+    conversations::read(caps.conversations.conversations(), &id())
         .expect("reads")
         .live()
         .last()
@@ -514,7 +514,7 @@ fn a_stopped_round_ends_on_the_stop() {
     assert!(caps.model.asked().is_empty(), "no model was asked");
     assert!(matches!(
         closed.round.appended.last(),
-        Some(suzatary_core::secretary::store::Entry::Stopped { by, .. }) if by == "ada"
+        Some(suzatary_conversations::secretary::store::Entry::Stopped { by, .. }) if by == "ada"
     ));
 }
 
@@ -601,7 +601,7 @@ proptest::proptest! {
             ),
         }
         // Nothing waits after any ending, so no model is asked again for this question.
-        let stored = suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id()).expect("reads");
-        proptest::prop_assert!(suzatary_core::secretary::queue::Pending::of(&stored).is_none());
+        let stored = conversations::read(caps.conversations.conversations(), &id()).expect("reads");
+        proptest::prop_assert!(suzatary_conversations::secretary::queue::Pending::of(&stored).is_none());
     }
 }

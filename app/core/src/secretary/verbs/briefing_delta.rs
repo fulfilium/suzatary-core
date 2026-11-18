@@ -2,12 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::stamp::stamp;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_health::health::Reading;
 use suzatary_health::health::SourceKey;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_record::record::TodoEvent;
 use suzatary_triage::mail::heartbeat;
 
@@ -39,7 +40,7 @@ fn life_row(todo: &str, life: &prodrome_core::event::Lifecycle) -> Value {
 /// The proposals waiting, in one tagged shape: the Inbox's list and every chain that prices
 /// nothing referring into it, or why the inbox did not read, while the rest of the delta stands.
 fn waiting(call: &Call<'_>, at: suzatary_base::capability::Datetime) -> Value {
-    match crate::secretary::inbox::fold(call.caps.inbox) {
+    match inbox::fold(call.caps.inbox) {
         Ok(fold) => {
             let read = crate::secretary::chains_read(call.chains);
             let set = read.set(at);
@@ -72,10 +73,10 @@ const NOTE: &str = "This is what MOVED. The priced list is the app's job — say
 
 /// Each sender a tapped noise card left out of triage on a day from `since` on, with its card.
 fn silenced(call: &Call<'_>, since: chrono::NaiveDate) -> Value {
-    use crate::secretary::acts::Act;
-    use crate::secretary::proposal::Proposal;
-    use crate::secretary::responded::Responded;
-    match crate::secretary::inbox::fold(call.caps.inbox) {
+    use suzatary_inbox::secretary::acts::Act;
+    use suzatary_inbox::secretary::proposal::Proposal;
+    use suzatary_inbox::secretary::responded::Responded;
+    match inbox::fold(call.caps.inbox) {
         Ok(fold) => Value::from(
             fold.objects()
                 .filter_map(|object| {

@@ -11,6 +11,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use prodrome_core::event::{Actor, mk_created};
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
+use suzatary_conversations::secretary::store;
 use suzatary_record::record::{EventStore, mk_authored};
 
 /// A scratch root unique to this process and thread.
@@ -339,22 +340,22 @@ fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
         &suzatary_cli::paths::Env::under(root.join("home"), root.join("run")),
     )
     .expect("reads");
-    let fold = suzatary_core::secretary::inbox::fold(&read.inbox_store()).expect("reads");
+    let fold = suzatary_inbox::secretary::inbox::fold(&read.inbox_store()).expect("reads");
     let mut cards: Vec<(String, String, Vec<&str>)> = fold
         .objects()
         .map(|object| {
             assert_eq!(
                 object.asked.proposer,
-                suzatary_core::secretary::proposer::Proposer::Triage
+                suzatary_inbox::secretary::proposer::Proposer::Triage
             );
             match &object.asked.proposal {
-                suzatary_core::secretary::proposal::Proposal::Changes(changeset) => (
+                suzatary_inbox::secretary::proposal::Proposal::Changes(changeset) => (
                     object.asked.asked.to_string(),
                     changeset.chain().to_owned(),
                     changeset
                         .acts()
                         .iter()
-                        .map(suzatary_core::secretary::changes::Act::word)
+                        .map(suzatary_inbox::secretary::changes::Act::word)
                         .collect(),
                 ),
                 other => panic!("a triage card is a changeset, not {other:?}"),
@@ -529,15 +530,15 @@ fn the_agents_reads_of_the_memory_write_no_file() {
     let id = suzatary_base::conversation_id::ConversationId::new("permits").expect("a slug");
     let at = suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock);
     for (held, entry) in [
-        suzatary_core::secretary::store::Entry::Opened {
+        store::Entry::Opened {
             at,
             title: suzatary_memory::secretary::words::Words::kept("Permits".to_owned()),
             model: "m".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: store::Kind::Topic,
         },
-        suzatary_core::secretary::store::Entry::Said {
+        store::Entry::Said {
             at,
-            turn: suzatary_core::secretary::model::Turn::Person {
+            turn: suzatary_conversations::secretary::model::Turn::Person {
                 text: "Renew the permit before it lapses".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -548,7 +549,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
     .iter()
     .enumerate()
     {
-        let (line, keys) = suzatary_core::secretary::line_event::LineEvent::write(
+        let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::write(
             id.clone(),
             Actor::new("ada").expect("an actor"),
             u32::try_from(held).expect("two lines"),

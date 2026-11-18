@@ -15,12 +15,12 @@ use prodrome_core::event::Hash;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Label};
 use crate::secretary::digest_line::Line;
-use crate::secretary::model::Turn;
-use crate::secretary::outcome::Outcome;
-use crate::secretary::stamp::Stamp;
-use crate::secretary::store::Entry;
-use crate::secretary::tool_name::ToolName;
-use crate::secretary::turn_shape::TurnShape;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::outcome::Outcome;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::tool_name::ToolName;
+use suzatary_conversations::secretary::turn_shape::TurnShape;
+use suzatary_inbox::secretary::stamp::Stamp;
 
 /// One part as shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -360,7 +360,7 @@ fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
         },
         Turn::Act { text, .. } => format!("{acted}: {text}"),
         Turn::Erased { shape, words } => {
-            let prose = crate::secretary::turn_shape::prose(words);
+            let prose = suzatary_conversations::secretary::turn_shape::prose(words);
             match shape {
                 TurnShape::Person { .. } => format!("Owner: {prose}"),
                 TurnShape::Model { calls } => {
@@ -388,7 +388,7 @@ mod tests {
     use std::collections::BTreeMap as Map;
 
     use super::*;
-    use crate::secretary::model::ToolCall;
+    use suzatary_conversations::secretary::model::ToolCall;
 
     /// A call is its verb's name: a `remember` call's words are never shown.
     #[test]

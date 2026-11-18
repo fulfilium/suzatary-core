@@ -2,12 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::changes::{self, Changeset};
-use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::proposal::Proposal;
 
 /// Propose chain acts, which only a tap applies.
 pub struct ProposeChanges;

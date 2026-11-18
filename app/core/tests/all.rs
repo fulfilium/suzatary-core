@@ -4,6 +4,8 @@
 //! target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
 //! cli's tests fails when one is missing.
 
+#[path = "act_lines.rs"]
+mod act_lines;
 #[path = "act_literal.rs"]
 mod act_literal;
 #[path = "attachment.rs"]
@@ -34,6 +36,8 @@ mod drive_port;
 mod fragment;
 #[path = "held.rs"]
 mod held;
+#[path = "held_lines_fold.rs"]
+mod held_lines_fold;
 #[path = "held_values.rs"]
 mod held_values;
 #[path = "holder.rs"]
@@ -44,6 +48,8 @@ mod inbox;
 mod inbox_prices;
 #[path = "inbox_schema.rs"]
 mod inbox_schema;
+#[path = "inbox_store.rs"]
+mod inbox_store;
 #[path = "lapsed.rs"]
 mod lapsed;
 #[path = "laws.rs"]
@@ -64,6 +70,8 @@ mod model_port;
 mod oauth_tap;
 #[path = "object_replica.rs"]
 mod object_replica;
+#[path = "opened.rs"]
+mod opened;
 #[path = "operator_tap.rs"]
 mod operator_tap;
 #[path = "puller_port.rs"]
@@ -86,6 +94,8 @@ mod surface;
 mod tap;
 #[path = "topics.rs"]
 mod topics;
+#[path = "transcript_store.rs"]
+mod transcript_store;
 #[path = "transport_port.rs"]
 mod transport_port;
 #[path = "tree.rs"]

@@ -14,20 +14,21 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_connect::cast::CAST;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::secretary::digests::Digests;
-use suzatary_core::secretary::inbox;
-use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::Memories;
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_core::secretary::store::Entry;
-use suzatary_core::secretary::transcript;
 use suzatary_health::health::plugin::PluginName;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
 use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_lines::secretary::held_lines;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::dedup_key::DedupKey;
 use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 use suzatary_record::record::{EventStore, TodoEvent, mk_authored};
@@ -276,7 +277,7 @@ fn literals(store: &Objects<TodoEvent>) -> Vec<(Hash, String)> {
 }
 
 /// The inbox's prodrome begun with a nonce of zeros, so its bytes can be pinned.
-fn begun(root: &Path) -> Objects<suzatary_core::secretary::inbox_event::InboxEvent> {
+fn begun(root: &Path) -> Objects<suzatary_inbox::secretary::inbox_event::InboxEvent> {
     let store = Objects::open(root.join(INBOX));
     rooted(&store, "inbox");
     store
@@ -314,7 +315,7 @@ fn inbox(root: &Path) -> inbox::ProposalId {
     let assistant = Actor::new("assistant").expect("an actor");
     let ask = |subject: &str, minute: u32| {
         let asked = inbox::Asked {
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+            proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
             proposal: Proposal::Email(Draft {
                 account: CAST.owner.email.to_owned(),
                 to: vec![CAST.counsel.email.to_owned()],
@@ -344,7 +345,7 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
     let (lines, keys) = lines_at(root);
     rooted(&lines, "lines");
     let entropy = Counted::default();
-    let store = suzatary_core::secretary::conversations::Conversations {
+    let store = suzatary_lines::secretary::conversations::Conversations {
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
@@ -356,7 +357,7 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
         at: at(12, 0),
         title: suzatary_memory::secretary::words::Words::kept(title.to_owned()),
         model: "scripted/golden".to_owned(),
-        kind: suzatary_core::secretary::store::Kind::Topic,
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
     };
     let morning = ConversationId::new("2026-09-20-1").expect("a slug");
     transcript::start(store, &morning, &opened("Morning")).expect("starts");
@@ -418,7 +419,7 @@ fn memories(root: &Path) {
         digests: Digests {
             history: &digests,
             texts: &digest_texts,
-            lines: suzatary_core::secretary::conversations::Conversations {
+            lines: suzatary_lines::secretary::conversations::Conversations {
                 lines: &lines,
                 keys: &keys,
                 entropy: &Pinned,
@@ -776,8 +777,8 @@ fn records_are_the_derived_heads(root: &Path) {
 /// The database's conversations, keys drawn as the pins were.
 fn conversations_of<'a>(
     database: &suzatary_core::stores::Database<'a>,
-) -> suzatary_core::secretary::conversations::Conversations<'a> {
-    suzatary_core::secretary::conversations::Conversations {
+) -> suzatary_lines::secretary::conversations::Conversations<'a> {
+    suzatary_lines::secretary::conversations::Conversations {
         lines: database.conversations,
         keys: database.line_keys,
         entropy: &Pinned,
@@ -788,7 +789,7 @@ fn conversations_of<'a>(
 }
 
 /// How many conversations the store holds, each of them read whole and found not empty.
-fn conversations_read(store: suzatary_core::secretary::conversations::Conversations<'_>) -> usize {
+fn conversations_read(store: suzatary_lines::secretary::conversations::Conversations<'_>) -> usize {
     let names = transcript::keys(store).expect("lists");
     for name in &names {
         assert!(!transcript::lines(store, name).expect("reads").is_empty());
@@ -1019,7 +1020,7 @@ pub(crate) fn conversations_at_scale(
         at: at(9, 0),
         title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
         model: "claude-cli/haiku".to_owned(),
-        kind: suzatary_core::secretary::store::Kind::Topic,
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
     };
     let writer = Actor::new(suzatary_base::writer::Writer::Assistant.actor()).expect("an actor");
     let mut written = (0..ids.len() * per).map(|n| (&ids[n / per], n % per));
@@ -1048,7 +1049,7 @@ pub(crate) fn conversations_at_scale(
 #[test]
 #[ignore = "a measurement, run by name"]
 fn digest_at_scale() {
-    use suzatary_core::secretary::opened::Opened;
+    use suzatary_lines::secretary::opened::Opened;
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
     let (history, texts) = (
@@ -1058,14 +1059,15 @@ fn digest_at_scale() {
         suzatary_io::texts::Texts::open(dir.path().join("digest-texts")),
     );
     let entropy = suzatary_io::texts::SystemEntropy;
-    let stores = |opened: &'static Opened| suzatary_core::secretary::conversations::Conversations {
-        lines: &lines,
-        keys: &keys,
-        entropy: &entropy,
-        renders: &suzatary_base::capability::Nothing,
-        sessions: &suzatary_base::capability::Nothing,
-        opened,
-    };
+    let stores =
+        |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
+            lines: &lines,
+            keys: &keys,
+            entropy: &entropy,
+            renders: &suzatary_base::capability::Nothing,
+            sessions: &suzatary_base::capability::Nothing,
+            opened,
+        };
     let owners = std::collections::BTreeSet::new();
     let digests = |opened| Digests {
         history: &history,
@@ -1095,7 +1097,7 @@ fn digest_at_scale() {
     time("the lines' fold alone, warm", &|| {
         stores(warm)
             .reads()
-            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
+            .fold(held_lines::HeldLines::gathered)
             .expect("reads");
     });
     time("one conversation, warm", &|| {
@@ -1109,14 +1111,14 @@ fn digest_at_scale() {
 #[ignore = "a fixture for a measurement, run by name"]
 fn lines_for_a_tab() {
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_core::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
     let out =
         std::env::var("SUZATARY_LINES_FIXTURE").expect("SUZATARY_LINES_FIXTURE names the file");
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
     let entropy = suzatary_io::texts::SystemEntropy;
-    let opened: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
-    let stores = suzatary_core::secretary::conversations::Conversations {
+    let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
+    let stores = suzatary_lines::secretary::conversations::Conversations {
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
@@ -1160,7 +1162,7 @@ fn lines_for_a_tab() {
                 at: at(9, 0),
                 title: suzatary_memory::secretary::words::Words::kept("Long".to_owned()),
                 model: "claude-cli/haiku".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             },
         )
         .expect("started");
@@ -1225,7 +1227,7 @@ fn lines_written_before_kinds_were_stored_read_whole() {
         &dir.path().join(LINE_KEYS),
     );
     let (lines, keys) = lines_at(dir.path());
-    let store = suzatary_core::secretary::conversations::Conversations {
+    let store = suzatary_lines::secretary::conversations::Conversations {
         lines: &lines,
         keys: &keys,
         entropy: &Pinned,
@@ -1236,11 +1238,11 @@ fn lines_written_before_kinds_were_stored_read_whole() {
     let names = transcript::keys(store).expect("lists");
     assert!(!names.is_empty());
     for name in &names {
-        let stored = suzatary_core::secretary::conversations::read(store, name).expect("reads");
+        let stored = suzatary_lines::secretary::conversations::read(store, name).expect("reads");
         assert!(stored.title.get().is_some(), "{name}'s title opens");
         assert_eq!(
             stored.kind,
-            suzatary_core::secretary::line_shape::unkinded(name),
+            suzatary_lines::secretary::line_shape::unkinded(name),
             "{name}"
         );
     }
@@ -1257,8 +1259,8 @@ fn digest_nodes_at_scale() {
     use suzatary_core::secretary::digest::Standing;
     use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
     use suzatary_core::secretary::digest_line::Line;
-    use suzatary_core::secretary::opened::Opened;
     use suzatary_core::secretary::shown_record::OwnersRecord;
+    use suzatary_lines::secretary::opened::Opened;
     use suzatary_memory::secretary::salted_text::Text;
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
@@ -1270,7 +1272,7 @@ fn digest_nodes_at_scale() {
     let digests = Digests {
         history: &history,
         texts: &texts,
-        lines: suzatary_core::secretary::conversations::Conversations {
+        lines: suzatary_lines::secretary::conversations::Conversations {
             lines: &lines,
             keys: &keys,
             entropy: &entropy,
@@ -1408,7 +1410,7 @@ fn a_rules_change_over_a_stored_digest() {
     use suzatary_core::secretary::compact_ask::Beside;
     use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
     use suzatary_core::secretary::digest_line::Line;
-    use suzatary_core::secretary::opened::Opened;
+    use suzatary_lines::secretary::opened::Opened;
     use suzatary_memory::secretary::salted_text::Text;
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     let root = PathBuf::from(std::env::var("SUZATARY_RULES_STORE").expect("a directory"));
@@ -1418,14 +1420,15 @@ fn a_rules_change_over_a_stored_digest() {
     let history = Objects::<DigestEvent>::digests(root.join("digests"), owners.clone());
     let texts = suzatary_io::texts::Texts::open(root.join("digest-texts"));
     let entropy = suzatary_io::texts::SystemEntropy;
-    let stores = |opened: &'static Opened| suzatary_core::secretary::conversations::Conversations {
-        lines: &lines,
-        keys: &keys,
-        entropy: &entropy,
-        renders: &suzatary_base::capability::Nothing,
-        sessions: &suzatary_base::capability::Nothing,
-        opened,
-    };
+    let stores =
+        |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
+            lines: &lines,
+            keys: &keys,
+            entropy: &entropy,
+            renders: &suzatary_base::capability::Nothing,
+            sessions: &suzatary_base::capability::Nothing,
+            opened,
+        };
     let digests = |opened: &'static Opened| Digests {
         history: &history,
         texts: &texts,
@@ -1435,7 +1438,7 @@ fn a_rules_change_over_a_stored_digest() {
     };
     let model = suzatary_core::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
     let rule = suzatary_core::secretary::compaction::Compaction {
-        ladder: suzatary_core::nonempty::NonEmpty::new(model.clone(), Vec::new()),
+        ladder: suzatary_conversations::nonempty::NonEmpty::new(model.clone(), Vec::new()),
     };
     let codes = ConversationId::new("2026-10-09-codes").expect("a slug");
     let code = |k: usize| format!("7391{k:02}");
@@ -1446,7 +1449,7 @@ fn a_rules_change_over_a_stored_digest() {
             at: at(9, 59),
             title: suzatary_memory::secretary::words::Words::kept("Codes".to_owned()),
             model: "claude-cli/haiku".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         };
         transcript::start(stores(opened), &codes, &opening).expect("opened");
         for k in 0..12 {
@@ -1524,13 +1527,13 @@ fn a_rules_change_over_a_stored_digest() {
     time("the lines' fold, cold", &mut || {
         stores(warm)
             .reads()
-            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
+            .fold(held_lines::HeldLines::gathered)
             .expect("reads");
     });
     time("the lines' fold, warm", &mut || {
         stores(warm)
             .reads()
-            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
+            .fold(held_lines::HeldLines::gathered)
             .expect("reads");
     });
     let first = ConversationId::new("2026-10-09-1").expect("a slug");
@@ -1571,8 +1574,8 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
     let writer: &'static Lines = Box::leak(Box::new(writer));
     let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(keys));
     let entropy: &'static Counted = Box::leak(Box::default());
-    let opened: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
-    let stores = suzatary_core::secretary::conversations::Conversations {
+    let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
+    let stores = suzatary_lines::secretary::conversations::Conversations {
         lines: writer,
         keys,
         entropy,
@@ -1588,7 +1591,7 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
             at: at(10, 0),
             title: suzatary_memory::secretary::words::Words::kept("Heads".to_owned()),
             model: "claude-cli/haiku".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         },
     )
     .or_else(|refused| {
@@ -1623,8 +1626,8 @@ fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
 fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
     let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(lines_at(dir).1));
     let entropy: &'static suzatary_io::texts::SystemEntropy = Box::leak(Box::default());
-    let opened: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
-    let stores = suzatary_core::secretary::conversations::Conversations {
+    let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
+    let stores = suzatary_lines::secretary::conversations::Conversations {
         lines,
         keys,
         entropy,

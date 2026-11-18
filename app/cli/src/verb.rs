@@ -168,7 +168,7 @@ pub fn tell_the_journal(matches: &clap::ArgMatches) {
         return;
     }
     let verb = verb_of(matches);
-    suzatary_core::first_read::tell(move |what, spent| {
+    suzatary_lines::first_read::tell(move |what, spent| {
         let ms = spent.as_millis().to_string();
         let message = format!("{verb}: first read of the {what}, {ms} ms");
         let _ = crate::journal::say(&[

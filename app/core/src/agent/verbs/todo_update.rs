@@ -6,10 +6,10 @@ use serde_json::Value;
 
 use super::Written;
 use crate::agent::Holds;
-use crate::priced::Priced;
-use crate::secretary::changes::Act;
 use crate::verb::{Chained, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::priced::Priced;
+use suzatary_inbox::secretary::changes::Act;
 use suzatary_record::todo::TodoPatch;
 
 /// Change fields on a todo, as the surface writes.

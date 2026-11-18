@@ -3,8 +3,8 @@
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use suzatary_core::secretary::search::{Hit, Side};
-use suzatary_core::secretary::store::Kind;
+use suzatary_conversations::secretary::search::{Hit, Side};
+use suzatary_conversations::secretary::store::Kind;
 use suzatary_core::wire::topics::{ConversationRow, SearchPayload};
 use ts_rs::TS;
 use viewtree::Attr::{

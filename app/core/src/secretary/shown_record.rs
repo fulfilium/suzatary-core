@@ -20,10 +20,11 @@ use serde_json::{Value, json};
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view;
-use crate::secretary::search::{self, Needle};
 use crate::secretary::told::{self, Told};
 use crate::secretary::topics::reading::Reading as Topics;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::search;
+use suzatary_conversations::secretary::search::Needle;
 use suzatary_memory::secretary::memory::Memory;
 
 /// The record, shown as `S` reads it.

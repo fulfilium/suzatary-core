@@ -12,14 +12,14 @@ use prodrome_core::fpl::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_api::query;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::held_lines::Admitted;
-use suzatary_core::secretary::held_replica::HeldReplica;
-use suzatary_core::secretary::inbox::Fold;
-use suzatary_core::secretary::outlines::Scope;
+use suzatary_conversations::secretary::store::Stored;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
-use suzatary_core::secretary::store::Stored;
 use suzatary_core::secretary::stream;
 use suzatary_core::wire::topics::{MemoryPayload, Speaker};
+use suzatary_inbox::secretary::inbox::Fold;
+use suzatary_lines::secretary::held_lines::Admitted;
+use suzatary_lines::secretary::held_replica::HeldReplica;
+use suzatary_lines::secretary::outlines::Scope;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use wasm_bindgen::prelude::*;
@@ -127,7 +127,7 @@ impl Lines {
             .filter(|node| {
                 matches!(
                     node.header,
-                    suzatary_core::wire::lines::NodeHeader::Line { .. }
+                    suzatary_lines::wire::lines::NodeHeader::Line { .. }
                 )
             })
             .count();

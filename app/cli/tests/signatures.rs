@@ -11,6 +11,7 @@ use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, seal_hash};
 use prodrome_core::sign::Checks;
 use prodrome_core::sign::{Registrar, Secret};
+use suzatary_inbox::secretary::inbox;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_store::store::Prodrome as _;
@@ -446,7 +447,7 @@ fn a_pairing_code_trusts_the_one_device_that_typed_it() {
         "the paired device writes"
     );
 
-    let cards = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("reads");
+    let cards = inbox::fold(&fakes.inbox).expect("reads");
     let waiting: Vec<_> = cards.objects().filter(|o| o.reading.performs()).collect();
     assert!(waiting.is_empty(), "its card left the Inbox: {waiting:?}");
 
@@ -526,7 +527,7 @@ fn a_key_trusted_at_the_terminal_withdraws_its_card() {
     assert_eq!(common::status(&asked), 200);
     common::body_json(&mut asked);
     let waiting = || {
-        suzatary_core::secretary::inbox::fold(&fakes.inbox)
+        inbox::fold(&fakes.inbox)
             .expect("reads")
             .objects()
             .filter(|object| object.reading.performs())

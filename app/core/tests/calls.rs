@@ -18,11 +18,12 @@ use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_connect::deployment::Deployment;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_core::agent::Agent;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
 use suzatary_held::mail_error::MailError;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::opened;
 use suzatary_mail::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::{AccountSync, SyncReport};
@@ -142,7 +143,7 @@ impl Prodrome<TodoEvent> for Fixed {
 /// Where a line pushed to [`Fixed`]'s conversation keeps its keys.
 static KEYS: std::sync::LazyLock<suzatary_memory::secretary::locked_text::InMemoryKeys> =
     std::sync::LazyLock::new(Default::default);
-static ENTROPY: std::sync::LazyLock<suzatary_core::secretary::conversations::Counting> =
+static ENTROPY: std::sync::LazyLock<suzatary_lines::nothing::Counting> =
     std::sync::LazyLock::new(Default::default);
 /// The watches `watch_mail` sets.
 static WATCHES: std::sync::LazyLock<
@@ -152,8 +153,8 @@ static WATCHES: std::sync::LazyLock<
     >,
 > = std::sync::LazyLock::new(|| suzatary_store::store::InMemoryLog::new("watch"));
 /// The words opened, kept for the calls' conversation.
-static OPENED: std::sync::LazyLock<suzatary_core::secretary::opened::Opened> =
-    std::sync::LazyLock::new(suzatary_core::secretary::opened::Opened::default);
+static OPENED: std::sync::LazyLock<opened::Opened> =
+    std::sync::LazyLock::new(opened::Opened::default);
 
 /// The one open conversation, `default`, which keeps no line pushed to it: its title's key is
 /// kept nowhere, so it reads as missing.
@@ -170,7 +171,7 @@ impl Reads<LineEvent> for Fixed {
                     .expect("an instant"),
                 title: suzatary_memory::secretary::words::Words::kept(String::new()),
                 model: "nothing".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             },
             &Nothing,
         )
@@ -514,8 +515,8 @@ fn agent(
         ..Agent::nothing()
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
-    let conversations = suzatary_core::secretary::conversations::InMemory::default();
-    let inbox = suzatary_core::stores::InMemory::<suzatary_core::secretary::inbox_event::InboxEvent>::default();
+    let conversations = suzatary_core::stores::conversations::InMemory::default();
+    let inbox = suzatary_core::stores::InMemory::<suzatary_inbox::secretary::inbox_event::InboxEvent>::default();
     let cards =
         suzatary_core::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
     suzatary_core::agent::call(&records, &cards, deployment, verb, args)
@@ -532,7 +533,7 @@ fn secretary(
         name: "life",
         caps: suzatary_core::secretary::Secretary {
             chain: fixed,
-            conversations: suzatary_core::secretary::conversations::Conversations {
+            conversations: suzatary_lines::secretary::conversations::Conversations {
                 lines: fixed,
                 keys: &*KEYS,
                 entropy: &*ENTROPY,

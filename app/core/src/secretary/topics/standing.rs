@@ -2,9 +2,9 @@
 //! writes of its names there (`docs/TOPICS-PLAN-2026-10-21.md` §3). Only the cases the secretary
 //! may change carry a token its planners take.
 
-use crate::secretary::transcript;
 use prodrome_core::literal::Datetime;
 use prodrome_core::tags::membership;
+use suzatary_lines::secretary::transcript;
 
 use crate::secretary::topics::reading::{MembershipEvent, Reading};
 use crate::secretary::topics::topic::Topic;

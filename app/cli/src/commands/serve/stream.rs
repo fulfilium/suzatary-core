@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::secretary::store::ConversationState;
+use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_store::store::StoreError;
 
 use super::State;
@@ -129,8 +129,8 @@ pub async fn conversation(AxumState(state): AxumState<State>, raw: RawPathParams
 async fn transcript_state(state: &State, id: ConversationId) -> ConversationState {
     let caps = state.first.caps;
     blocking(move || {
-        Ok::<_, Refusal>(suzatary_core::secretary::state(
-            &suzatary_core::secretary::conversations::read(caps.secretary.conversations, &id)?,
+        Ok::<_, Refusal>(suzatary_conversations::secretary::store::state(
+            &suzatary_lines::secretary::conversations::read(caps.secretary.conversations, &id)?,
         ))
     })
     .await

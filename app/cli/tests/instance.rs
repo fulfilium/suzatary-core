@@ -7,6 +7,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use suzatary_cli::instance::Instance;
+use suzatary_conversations::nonempty;
 
 /// Every table and key the owner's file uses, with the cast's names.
 const LIVE_SHAPED: &str = r#"
@@ -253,10 +254,7 @@ fn printed(instance: &Instance) -> String {
     line("local", path(instance.local.path()));
     line(
         "notify",
-        format!(
-            "{:?}",
-            suzatary_core::nonempty::NonEmpty::listed(instance.notify.as_ref())
-        ),
+        format!("{:?}", nonempty::NonEmpty::listed(instance.notify.as_ref())),
     );
     line("portal", format!("{:?}", instance.portal));
     out
@@ -567,7 +565,7 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
     assert_eq!(
         read(&on),
         Compacting::On {
-            ladder: suzatary_core::nonempty::NonEmpty::new(
+            ladder: nonempty::NonEmpty::new(
                 suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5").expect("a model"),
                 vec![
                     suzatary_core::model_name::ModelName::parse("claude-opus-5-5")

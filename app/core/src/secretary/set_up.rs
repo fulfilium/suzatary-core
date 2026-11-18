@@ -4,15 +4,16 @@
 //! lock only while it is still owed, so each setup gets one note whatever restarts and workers
 //! meet it.
 
-use crate::secretary::conversations::Conversations;
-use crate::secretary::model::Turn;
-use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{Begun, Entry};
-use crate::secretary::transcript::{self, Transcript};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_connect::secrets::SecretState;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Begun, Entry};
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_store::store::StoreError;
 
 /// The template whose opening `reading` is owed: none for a conversation not set up, or one the
@@ -87,7 +88,7 @@ pub fn client_kept(
 mod tests {
     use super::*;
     use crate::secretary::rules::{Conversational, RULES};
-    use crate::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
     use suzatary_memory::secretary::words::Words;
     use suzatary_triage::rule::Engine;
 
@@ -109,7 +110,7 @@ mod tests {
                 r ^= r << 17;
                 r % n
             };
-            let store = crate::secretary::conversations::InMemory::default();
+            let store = crate::stores::conversations::InMemory::default();
             let lines = store.conversations();
             let set_up = transcript::begin(
                 lines,
@@ -126,7 +127,7 @@ mod tests {
                     at: at(1),
                     title: Words::kept("Trip".to_owned()),
                     model: String::new(),
-                    kind: crate::secretary::store::Kind::Topic,
+                    kind: suzatary_conversations::secretary::store::Kind::Topic,
                 },
             )
             .expect("begun");

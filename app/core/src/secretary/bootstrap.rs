@@ -8,17 +8,17 @@
 //! later stops (an expired token) files the same card again, and the owner's no stands within
 //! one episode.
 
-use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
-use crate::secretary::proposal::Proposal;
-use crate::secretary::sign_in::SignInUrl;
 use suzatary_connect::settings::{Settable, Settables};
 use suzatary_health::health::{Healths, Instant, Reading};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::sign_in::SignInUrl;
 
 /// What the box knows of its model.
 #[derive(Clone, Copy)]
 pub struct Answering<'a> {
-    /// The model's name, as [`crate::secretary::model::Model::name`] spells it: the key its calls are
+    /// The model's name, as [`suzatary_conversations::secretary::model::Model::name`] spells it: the key its calls are
     /// recorded under.
     pub model: &'a str,
     /// The model's observed calls.

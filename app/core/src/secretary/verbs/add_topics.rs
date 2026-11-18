@@ -4,16 +4,17 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{Said, Stored};
-use crate::secretary::targets::{MAX_TOPICS, notes_in};
 use crate::secretary::topics::revision::{Revision, held, listing, plan};
 use crate::secretary::topics::topic::Topic;
-use crate::secretary::turn_shape::{TurnShape, shape};
-use crate::secretary::{Call, SecretarySurface, queue, taint};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::topic_target::Target;
+use suzatary_conversations::secretary::store::{Said, Stored};
+use suzatary_conversations::secretary::turn_shape::{TurnShape, shape};
+use suzatary_conversations::secretary::{queue, taint};
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_lines::secretary::targets::{MAX_TOPICS, notes_in};
 
 /// Put topics on the round being answered, or on the note it drafted last.
 pub struct AddTopics;
@@ -72,7 +73,8 @@ pub(super) enum Aim {
 /// Plans `revision` on its target under the store's lock, writes it, and answers the target's
 /// topics after.
 pub(super) fn revise(call: &Call<'_>, aim: Aim, revision: &Revision) -> Result<Value, Refusal> {
-    let stored = crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
+    let stored =
+        suzatary_lines::secretary::conversations::read(call.caps.conversations, call.conversation)?;
     let target = match aim {
         Aim::Answering(on) => answering(&stored, on)?,
         Aim::At(text) => text

@@ -7,13 +7,16 @@ mod common;
 use common::{FakeModel, Fakes};
 use suzatary_base::capability::Clock as _;
 use suzatary_base::reference::ProposalRef;
+use suzatary_conversations::secretary::model;
+use suzatary_conversations::secretary::store::{Outcome, Settle};
 use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::filed::TriageCards;
-use suzatary_core::secretary::proposal::Reasons;
 use suzatary_core::secretary::review::{Reviewed, reviews};
-use suzatary_core::secretary::store::{Outcome, Settle};
+use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::proposal::Reasons;
+use suzatary_lines::secretary::conversations;
 use suzatary_store::store::Reads as _;
 
 /// The review run to its end; a scripted model is under no limit, so it always starts.
@@ -35,7 +38,7 @@ fn review(
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
 /// a store the review does not read, since the review reads cards from the inbox alone.
 fn three_cards(caps: &Fakes) -> [ProposalRef; 3] {
-    let lines = suzatary_core::secretary::conversations::InMemory::default();
+    let lines = suzatary_core::stores::conversations::InMemory::default();
     let cards = TriageCards::new(lines.conversations(), &caps.inbox);
     let file = |act: Act| {
         cards
@@ -104,7 +107,7 @@ fn script(duplicate: &ProposalRef) -> FakeModel {
 
 /// Whether a card still waits for the owner.
 fn open(caps: &Fakes, card: &ProposalRef) -> bool {
-    suzatary_core::secretary::inbox::fold(&caps.inbox)
+    inbox::fold(&caps.inbox)
         .expect("the inbox reads")
         .objects()
         .find(|object| object.asked.asked == *card)
@@ -165,9 +168,9 @@ fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
 /// and the withdrawn card itself never stands again.
 #[test]
 fn the_brief_offers_the_day_s_withdrawals_back_once() {
-    use suzatary_core::secretary::acts::Act as BoxAct;
-    use suzatary_core::secretary::proposal::Proposal;
-    use suzatary_core::secretary::proposer::Proposer;
+    use suzatary_inbox::secretary::acts::Act as BoxAct;
+    use suzatary_inbox::secretary::proposal::Proposal;
+    use suzatary_inbox::secretary::proposer::Proposer;
     let caps = Fakes::new("review-undo");
     let [_, duplicate, _] = three_cards(&caps);
     let policy = common::chain();
@@ -187,7 +190,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     .expect("the review runs");
     let secretary = caps.secretary();
     let brief = suzatary_base::conversation_id::DEFAULT.clone();
-    suzatary_core::secretary::conversations::read_or_open_default(
+    conversations::read_or_open_default(
         secretary.conversations,
         secretary.model,
         &brief,
@@ -211,7 +214,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     assert_eq!(offer(later), 0, "a withdrawal two days old is not offered");
     assert_eq!(offer(caps.clock.now()), 1);
     assert_eq!(offer(caps.clock.now()), 0, "offered once");
-    let fold = suzatary_core::secretary::inbox::fold(&caps.inbox).expect("the inbox reads");
+    let fold = inbox::fold(&caps.inbox).expect("the inbox reads");
     let back = fold
         .objects()
         .find(|object| object.asked.proposer == Proposer::Secretary)
@@ -279,9 +282,9 @@ fn a_review_round_holds_no_write_verb() {
         .turns
         .iter()
         .filter_map(|said| match &said.turn {
-            suzatary_core::secretary::model::Turn::Tool {
+            model::Turn::Tool {
                 verb,
-                outcome: suzatary_core::secretary::outcome::Outcome::Refused,
+                outcome: suzatary_conversations::secretary::outcome::Outcome::Refused,
                 ..
             } => Some(verb.as_str()),
             _ => None,
@@ -318,7 +321,7 @@ fn a_quiet_pass_asks_no_model_and_opens_no_conversation() {
     assert_eq!(done.standing, 0, "nothing was open");
     assert!(done.decided.is_empty());
     assert!(
-        suzatary_core::secretary::transcript::keys(caps.conversations.conversations())
+        suzatary_lines::secretary::transcript::keys(caps.conversations.conversations())
             .expect("the store reads")
             .is_empty(),
         "no conversation was opened for nothing"
@@ -375,9 +378,9 @@ fn holding_the_same_card_again_is_not_a_second_line() {
 #[test]
 fn an_unreadable_conversation_is_named_and_paged_once() {
     use suzatary_base::conversation_id::ConversationId;
+    use suzatary_conversations::secretary::store::{Entry, Kind};
     use suzatary_core::secretary::review::note_unreadable;
-    use suzatary_core::secretary::store::{Entry, Kind};
-    use suzatary_core::secretary::transcript;
+    use suzatary_lines::secretary::transcript;
     let caps = Fakes::new("review-unreadable");
     let zone = suzatary_base::zone::Zone::UTC;
     assert_eq!(
@@ -424,12 +427,11 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
         "the same set pages once"
     );
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
-    let round =
-        suzatary_core::secretary::conversations::read(lines, &today_of(today)).expect("reads");
+    let round = conversations::read(lines, &today_of(today)).expect("reads");
     let named = round
         .turns
         .iter()
-        .filter(|said| matches!(&said.turn, suzatary_core::secretary::model::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
+        .filter(|said| matches!(&said.turn, model::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
         .count();
     assert_eq!(named, 1, "named once in today's review");
 }
@@ -509,11 +511,8 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
 
     // The record names what nobody answered for.
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
-    let stored = suzatary_core::secretary::conversations::read(
-        caps.conversations.conversations(),
-        &today_of(today),
-    )
-    .expect("the conversation was opened before the model was asked");
+    let stored = conversations::read(caps.conversations.conversations(), &today_of(today))
+        .expect("the conversation was opened before the model was asked");
     assert_eq!(
         stored.failures.len(),
         1,

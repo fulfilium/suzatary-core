@@ -1,12 +1,12 @@
 //! A repository card whose patch the default branch already holds is done another way.
 
-use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::proposal::Proposal;
-use crate::secretary::responded::Withdrawal;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::responded::Withdrawal;
 use suzatary_services::repositories::Repositories;
 use suzatary_store::store::Prodrome;
 

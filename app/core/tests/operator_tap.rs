@@ -1,11 +1,11 @@
 //! The operator's tap at the box's terminal performs every card but the ones that send mail or
 //! grant a way to, over one proposal of every kind; the device's tap performs them all.
 
-use suzatary_core::secretary::acts::Act;
-use suzatary_core::secretary::proposal::Proposal;
-use suzatary_core::secretary::sending::performs;
 use suzatary_google::calendar::When;
 use suzatary_google::google::{NewEvent, Scope};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::sending::performs;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_signatures::signatures::ActHeaders;
 use suzatary_signatures::signatures::Seat;

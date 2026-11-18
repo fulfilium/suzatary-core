@@ -7,6 +7,7 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
+use suzatary_conversations::secretary::store;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -99,7 +100,7 @@ fn a_stop_mid_round_ends_it_in_the_act() {
         "{held}"
     );
 
-    let stopped_by = suzatary_core::secretary::store::stopped_by(common::CAST.owner.actor);
+    let stopped_by = store::stopped_by(common::CAST.owner.actor);
     let expected = vec![
         ("person".to_owned(), "read every thread".to_owned(), false),
         ("act".to_owned(), stopped_by, false),
@@ -140,13 +141,13 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
     // Written with no nudge, as a `say` stands between its write and the worker's round.
     let conversation =
         suzatary_base::conversation_id::ConversationId::new(&id).expect("a conversation id");
-    suzatary_core::secretary::transcript::push(
+    suzatary_lines::secretary::transcript::push(
         fakes.conversations.conversations(),
         &conversation,
-        &suzatary_core::secretary::store::Entry::Said {
+        &store::Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::secretary::model::Turn::Person {
+            turn: suzatary_conversations::secretary::model::Turn::Person {
                 text: "read every thread".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -159,7 +160,7 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
     let mut stopped = stop(&base, &id);
     assert_eq!(common::status(&stopped), 202);
     let stopped = common::body_json(&mut stopped);
-    let stopped_by = suzatary_core::secretary::store::stopped_by(common::CAST.owner.actor);
+    let stopped_by = store::stopped_by(common::CAST.owner.actor);
     assert_eq!(
         shape(&stopped),
         [

@@ -1,14 +1,7 @@
 //! The rule over the connections: what each one's standing owes, filed by the box with no model
 //! asked.
 
-use crate::secretary::acts::Act;
-use crate::secretary::conversations::Conversations;
-use crate::secretary::inbox;
-use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::noticed::Owed;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::responded::{Done, Responded};
 use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::{ProposalRef, Reference};
@@ -17,6 +10,13 @@ use suzatary_connect::connect::{Checked, Connection, Declared, Group, Params, Se
 use suzatary_connect::secrets::{SecretState, Secrets};
 use suzatary_google::google::{Held, Scope, Scopes};
 use suzatary_health::health::plugin::{Origin, PluginName};
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::{Done, Responded};
+use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_mail::mail::account::Sync;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_store::store::Prodrome;

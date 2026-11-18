@@ -83,10 +83,11 @@ impl Verb for Search {
 
 /// The files that match, or why the index could not answer: the mail is answered either way.
 fn files(call: &Call<'_>, query: &FileQuery, limit: usize) -> Files {
-    let conversations = match crate::secretary::conversations::list(call.caps.conversations) {
-        Ok(conversations) => conversations,
-        Err(failed) => return Files::NotSearched(failed.message().to_owned()),
-    };
+    let conversations =
+        match suzatary_lines::secretary::conversations::list(call.caps.conversations) {
+            Ok(conversations) => conversations,
+            Err(failed) => return Files::NotSearched(failed.message().to_owned()),
+        };
     match call
         .caps
         .upload_index

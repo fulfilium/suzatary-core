@@ -6,7 +6,7 @@
 //! The measurement, ignored: the overview over the disk stores at the live Inbox's size, about
 //! 760 proposals, its secret store answering each question through a real `gpg --decrypt`, as
 //! `pass` does under `secretspec`. It prints how long each part took
-//! (`suzatary_core::timings`), for a cold first request and for requests over a box where nothing
+//! (`suzatary_lines::timings`), for a cold first request and for requests over a box where nothing
 //! changed, and how many questions the secret store was asked.
 //!
 //! `cargo test --release -p suzatary --features fixture --test all overview_cost -- --ignored
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use suzatary_connect::settings::Settables;
-use suzatary_core::secretary::acts::Act;
+use suzatary_inbox::secretary::acts::Act;
 
 /// How many proposals the Inbox holds, as the live one did when the overview was measured.
 const PROPOSALS: usize = 760;
@@ -123,7 +123,7 @@ struct Phases(Arc<std::sync::Mutex<Vec<(String, f64)>>>);
 
 impl tracing::Subscriber for Phases {
     fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-        metadata.target() == suzatary_core::timings::TARGET
+        metadata.target() == suzatary_lines::timings::TARGET
     }
 
     fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {

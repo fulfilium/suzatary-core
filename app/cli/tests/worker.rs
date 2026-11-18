@@ -7,6 +7,7 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
+use suzatary_conversations::secretary::queue;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -129,7 +130,7 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     assert_eq!(common::status(&first), 202);
     gate.wait_until_entered();
 
-    for n in 1..suzatary_core::secretary::queue::MAX_PENDING {
+    for n in 1..queue::MAX_PENDING {
         let response = say(&base, &id, &format!("line {n}"));
         assert_eq!(
             common::status(&response),
@@ -145,7 +146,7 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
         body["error"],
         format!(
             "{} lines are already waiting for the secretary; say it after they are answered",
-            suzatary_core::secretary::queue::MAX_PENDING
+            queue::MAX_PENDING
         )
     );
 
@@ -155,7 +156,7 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     let persons = turns.iter().filter(|turn| turn["who"] == "person").count();
     assert_eq!(
         persons,
-        suzatary_core::secretary::queue::MAX_PENDING,
+        queue::MAX_PENDING,
         "the refused line never joined the transcript: {turns:?}"
     );
 }

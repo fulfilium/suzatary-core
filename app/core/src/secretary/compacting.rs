@@ -2,8 +2,8 @@
 //! and no budget, and a running one names both.
 
 use crate::model_name::ModelName;
-use crate::nonempty::NonEmpty;
 use crate::secretary::compact_budget::Budget;
+use suzatary_conversations::nonempty::NonEmpty;
 
 /// The compactor as the instance file sets it.
 #[derive(Debug, Clone, PartialEq, Eq)]

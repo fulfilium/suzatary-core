@@ -25,6 +25,11 @@ use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
 use suzatary_mail::mail::account_email::AccountEmail;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
+use suzatary_conversations::secretary::model::pulled;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::proposer;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::transcript;
 
 /// Loopback, the one plain-http origin browsers treat as secure, which `crypto.subtle` needs.
 pub const HOST: &str = "127.0.0.1";
@@ -336,7 +341,7 @@ fn sweep_prompt() -> anyhow::Result<String> {
 /// shape, so the scene reads both stamped and older lines.
 fn a_review(root: &Path) -> anyhow::Result<()> {
     use suzatary_base::conversation_id::Daily;
-    use suzatary_core::secretary::store::Entry;
+    use suzatary_conversations::secretary::store::Entry;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     let open = suzatary_core::secretary::verbs::standing(&read.inbox_store())
@@ -349,28 +354,28 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     let day = read.persona.zone.day(fpl::instant_of(at));
     let store = read.conversation_stores();
     let id = suzatary_base::conversation_id::ConversationId::daily(Daily::Sweep, day);
-    suzatary_core::secretary::transcript::start(
+    transcript::start(
         store.conversations(),
         &id,
         &Entry::Opened {
             at,
             title: suzatary_memory::secretary::words::Words::kept(Daily::Sweep.title().to_owned()),
             model: "scripted/fixture".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Review,
+            kind: suzatary_conversations::secretary::store::Kind::Review,
         },
     )?;
     for turn in [
-        suzatary_core::secretary::model::Turn::Person {
+        suzatary_conversations::secretary::model::Turn::Person {
             text: sweep_prompt()?,
             references: Vec::new(),
             attachments: Vec::new(),
         },
-        suzatary_core::secretary::model::Turn::Model {
+        suzatary_conversations::secretary::model::Turn::Model {
             text: SWEEP_ANSWER.to_owned(),
             calls: Vec::new(),
         },
     ] {
-        suzatary_core::secretary::transcript::push(
+        transcript::push(
             store.conversations(),
             &id,
             &Entry::Said { at, turn, by: None },
@@ -472,8 +477,8 @@ pub const CONNECT_CONVERSATION: &str = "connect";
 fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_connect::settings::Edits as _;
-    use suzatary_core::secretary::proposal::{Proposal, Reasons};
-    use suzatary_core::secretary::store::{Entry, Kind};
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
 
     let calendar = suzatary_connect::connect::Connection::parse("ics", &[CONNECTED.to_owned()])?;
     crate::instance::InstanceEdits::new(root.join("instance.toml")).add_connection(&calendar)?;
@@ -483,7 +488,7 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     let inbox = read.inbox_store();
     let id = ConversationId::new(CONNECT_CONVERSATION)?;
     let now = SystemClock.now();
-    suzatary_core::secretary::transcript::start(
+    transcript::start(
         conversations,
         &id,
         &Entry::Opened {
@@ -500,8 +505,8 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
         now,
         suzatary_core::secretary::filed::Filing {
             conversation: &id,
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: Proposal::Act(suzatary_core::secretary::acts::Act::Disconnect {
+            proposer: proposer::Proposer::Secretary,
+            proposal: Proposal::Act(suzatary_inbox::secretary::acts::Act::Disconnect {
                 connection: calendar,
             }),
             reasons: Reasons::new(
@@ -643,8 +648,8 @@ pub const CODING_CONVERSATION: &str = "codingsession";
 /// nothing actually fired.
 fn a_coding_session(root: &Path) -> anyhow::Result<()> {
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_core::coding::Fired;
-    use suzatary_core::secretary::responded::{Done, Performed};
+    use suzatary_inbox::coding::Fired;
+    use suzatary_inbox::secretary::responded::{Done, Performed};
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     let store = read.conversation_stores();
@@ -675,7 +680,7 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
             ),
         ]),
     )?;
-    let stored = suzatary_core::secretary::conversations::read(store.conversations(), &id)
+    let stored = conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     let object = &stored
         .proposals
@@ -683,7 +688,7 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
         .context("the round proposed the session")?
         .object;
     let owner = prodrome_core::event::Actor::new(CAST.owner.actor)?;
-    suzatary_core::secretary::inbox::submit(&inbox, object, &owner, now, |_| {
+    inbox::submit(&inbox, object, &owner, now, |_| {
         Ok(Performed::Done(Done::Acted {
             what: format!("started a coding session: {url}"),
         }))
@@ -701,8 +706,8 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
 
 /// The `claude/` branch [`a_coding_session`]'s poll sees: its report names
 /// `url`, and it is not merged.
-fn the_branch_back(url: &str) -> anyhow::Result<suzatary_core::coding::Seen> {
-    use suzatary_core::coding::{ReportFile, Seen};
+fn the_branch_back(url: &str) -> anyhow::Result<suzatary_inbox::coding::Seen> {
+    use suzatary_inbox::coding::{ReportFile, Seen};
     use suzatary_memory::coding_report::{FileStat, Lines};
     let path = |text: &str| suzatary_base::repo_ids::RepoPath::try_from(text.to_owned());
     Ok(Seen {
@@ -1359,7 +1364,7 @@ fn bulk_lines(
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::line_words::LineWords;
 
     let count: usize = sizes.iter().map(|(_, size)| size).sum();
@@ -1371,7 +1376,7 @@ fn bulk_lines(
     // Through the store itself first, which begins it if nothing has.
     let start = fpl::instant_of(SystemClock.now())
         - Duration::seconds(i64::try_from(count + reseals.total() * depth)? + 60);
-    suzatary_core::secretary::transcript::start(
+    transcript::start(
         conversations,
         &ConversationId::new("bulk-0")?,
         &bulk_entry(0, 0, fpl::datetime_of(start)?),
@@ -1404,7 +1409,7 @@ fn bulk_lines(
                 conversations.keys.set(&key.name(), key)?;
             }
             if share > 0 {
-                let words = suzatary_core::secretary::line_shape::split(&entry)
+                let words = suzatary_lines::secretary::line_shape::split(&entry)
                     .1
                     .unwrap_or_default();
                 let before = slots.len();
@@ -1446,9 +1451,9 @@ fn bulk_entry(
     n: usize,
     line: usize,
     at: prodrome_core::literal::Datetime,
-) -> suzatary_core::secretary::store::Entry {
-    use suzatary_core::secretary::model::Turn;
-    use suzatary_core::secretary::store::{Entry, Kind};
+) -> suzatary_conversations::secretary::store::Entry {
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::store::{Entry, Kind};
     use suzatary_memory::secretary::words::Words;
     if line == 0 {
         Entry::Opened {
@@ -1599,8 +1604,8 @@ fn bulk_proposals(
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-    use suzatary_core::secretary::store::{Entry, Kind};
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
     if count == 0 {
         return Ok(());
     }
@@ -1609,7 +1614,7 @@ fn bulk_proposals(
     let inbox = read.inbox_store();
     let id = ConversationId::new("bulk-proposals")?;
     let now = SystemClock.now();
-    suzatary_core::secretary::transcript::start(
+    transcript::start(
         conversations,
         &id,
         &Entry::Opened {
@@ -1628,7 +1633,7 @@ fn bulk_proposals(
             now,
             suzatary_core::secretary::filed::Filing {
                 conversation: &id,
-                proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+                proposer: proposer::Proposer::Secretary,
                 proposal: Proposal::Email(Draft {
                     account: CAST.owner.email.to_owned(),
                     to: vec![CAST.counsel.email.to_owned()],
@@ -1651,7 +1656,7 @@ fn bulk_proposals(
         )
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
         if n % 10 != 0 {
-            suzatary_core::secretary::inbox::dismiss(&inbox, &object, &owner, now, "sent by hand")
+            inbox::dismiss(&inbox, &object, &owner, now, "sent by hand")
                 .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
         }
     }
@@ -1662,14 +1667,13 @@ fn bulk_proposals(
 /// names in turn, as a store whose rounds were filed under topics carries them.
 fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::targets::rounds;
     use suzatary_core::secretary::topics::topic::Topic;
+    use suzatary_lines::secretary::targets::rounds;
     const NAMES: [&str; 8] = [
         "permits", "travel", "taxes", "garden", "health", "family", "school", "car",
     ];
-    let listed =
-        suzatary_core::secretary::conversations::list(read.conversation_stores().conversations())
-            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    let listed = conversations::list(read.conversation_stores().conversations())
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     if count == 0 {
         return Ok(());
     }
@@ -1721,16 +1725,16 @@ impl Sealed {
         id: suzatary_base::conversation_id::ConversationId,
         writer: prodrome_core::event::Actor,
         held: u32,
-        entry: &suzatary_core::secretary::store::Entry,
+        entry: &suzatary_conversations::secretary::store::Entry,
         entropy: &dyn suzatary_base::capability::Entropy,
     ) -> Result<
         (
-            suzatary_core::secretary::line_event::LineEvent,
+            suzatary_lines::secretary::line_event::LineEvent,
             Vec<suzatary_memory::secretary::locked_text::TextKey>,
         ),
-        suzatary_core::secretary::line_event::NotALine,
+        suzatary_lines::secretary::line_event::NotALine,
     > {
-        use suzatary_core::secretary::line_event::LineEvent;
+        use suzatary_lines::secretary::line_event::LineEvent;
         match self {
             Sealed::Current => LineEvent::write(id, writer, held, entry, entropy),
             Sealed::Unversioned => LineEvent::written_under(
@@ -1868,33 +1872,37 @@ impl Scripted {
     ///
     /// A question with a reference attached ends on the `reference` verb's answer, since
     /// the box loads it first, so such a scene's script needs a line for that.
-    fn cue(conversation: &suzatary_core::secretary::model::Conversation) -> String {
+    fn cue(conversation: &suzatary_conversations::secretary::model::Conversation) -> String {
         match conversation.turns.last() {
             Some(
-                suzatary_core::secretary::model::Turn::Person { text, .. }
-                | suzatary_core::secretary::model::Turn::Model { text, .. }
-                | suzatary_core::secretary::model::Turn::Act { text, .. },
+                suzatary_conversations::secretary::model::Turn::Person { text, .. }
+                | suzatary_conversations::secretary::model::Turn::Model { text, .. }
+                | suzatary_conversations::secretary::model::Turn::Act { text, .. },
             ) => text.clone(),
-            Some(suzatary_core::secretary::model::Turn::Tool { verb, .. }) => verb.to_string(),
-            Some(suzatary_core::secretary::model::Turn::Erased { words, .. }) => {
-                suzatary_core::secretary::turn_shape::prose(words)
+            Some(suzatary_conversations::secretary::model::Turn::Tool { verb, .. }) => {
+                verb.to_string()
+            }
+            Some(suzatary_conversations::secretary::model::Turn::Erased { words, .. }) => {
+                suzatary_conversations::secretary::turn_shape::prose(words)
             }
             None => String::new(),
         }
     }
 }
 
-impl suzatary_core::secretary::model::Model for Scripted {
+impl suzatary_conversations::secretary::model::Model for Scripted {
     fn name(&self) -> String {
         self.name.clone()
     }
 
     fn turn(
         &self,
-        conversation: &suzatary_core::secretary::model::Conversation,
+        conversation: &suzatary_conversations::secretary::model::Conversation,
         _tools: &serde_json::Value,
-    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
-    {
+    ) -> Result<
+        suzatary_conversations::secretary::model::Reply,
+        suzatary_conversations::secretary::model::ModelError,
+    > {
         let cue = Self::cue(conversation);
         let line = self
             .lines
@@ -1902,19 +1910,19 @@ impl suzatary_core::secretary::model::Model for Scripted {
             .find(|line| line.when.is_empty() || cue.contains(&line.when))
             .ok_or_else(|| {
                 // An uncovered cue is a test bug, refused rather than improvised.
-                suzatary_core::secretary::model::ModelError::Failed(format!(
+                suzatary_conversations::secretary::model::ModelError::Failed(format!(
                     "the script has no line for {cue:?}"
                 ))
             })?;
         if let Some(release) = &line.release {
             // Until the scene lets it answer, or a Stop pulls the round's halt, whose reply the box drops.
-            while !suzatary_core::secretary::model::pulled::halted()
-                && std::fs::remove_file(release).is_err()
-            {
+            while !pulled::halted() && std::fs::remove_file(release).is_err() {
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
         }
-        Ok(suzatary_core::secretary::model::Reply::parse(&line.reply))
+        Ok(suzatary_conversations::secretary::model::Reply::parse(
+            &line.reply,
+        ))
     }
 }
 
@@ -1937,10 +1945,10 @@ mod tests {
     /// waiting is then released, so no test leaves it polling.
     fn line_answers(
         name: &str,
-        halt: &suzatary_core::secretary::model::Halt,
+        halt: &suzatary_conversations::secretary::model::Halt,
         pull_after: Option<std::time::Duration>,
     ) -> bool {
-        use suzatary_core::secretary::model::Model;
+        use suzatary_conversations::secretary::model::Model;
         let release = scratch(name).join("release");
         let script = Scripted {
             lines: vec![Line {
@@ -1953,8 +1961,8 @@ mod tests {
         let (answered, heard) = std::sync::mpsc::channel();
         let asking = halt.clone();
         std::thread::spawn(move || {
-            let _asking = suzatary_core::secretary::model::pulled::Asking::of(&asking);
-            let asked = suzatary_core::secretary::model::Conversation {
+            let _asking = pulled::Asking::of(&asking);
+            let asked = suzatary_conversations::secretary::model::Conversation {
                 system: String::new(),
                 turns: Vec::new(),
             };
@@ -1975,7 +1983,7 @@ mod tests {
     #[test]
     fn a_waiting_script_line_ends_on_its_own_rounds_halt_whenever_it_is_pulled() {
         let ada = || prodrome_core::event::Actor::new("ada").expect("an actor");
-        let before = suzatary_core::secretary::model::Halt::new();
+        let before = suzatary_conversations::secretary::model::Halt::new();
         before.stop(ada());
         assert!(
             line_answers("halt-before", &before, None),
@@ -1984,16 +1992,16 @@ mod tests {
         assert!(
             line_answers(
                 "halt-during",
-                &suzatary_core::secretary::model::Halt::new(),
+                &suzatary_conversations::secretary::model::Halt::new(),
                 Some(std::time::Duration::from_millis(200))
             ),
             "pulled while it waits"
         );
-        suzatary_core::secretary::model::Halt::new().stop(ada());
+        suzatary_conversations::secretary::model::Halt::new().stop(ada());
         assert!(
             !line_answers(
                 "halt-other",
-                &suzatary_core::secretary::model::Halt::new(),
+                &suzatary_conversations::secretary::model::Halt::new(),
                 None
             ),
             "another round's halt, pulled, does not end it"

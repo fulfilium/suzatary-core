@@ -7,6 +7,7 @@ use crate::secretary::compaction::Reading;
 use crate::secretary::memories::ReadMemories;
 use crate::secretary::shown_record::OwnersRecord;
 use suzatary_base::refusal::Refusal;
+use suzatary_lines::timings;
 use suzatary_memory::secretary::memory::Memory;
 
 /// The memory, read-only, and how many bytes it may spend in an answer that carries it.
@@ -28,7 +29,7 @@ impl<'a> Recollection<'a> {
     /// # Errors
     /// [`ReadMemories::read`]'s.
     pub fn facts(&self) -> Result<Memory, Refusal> {
-        crate::timings::timed(crate::timings::Phase::Facts, || self.memories.read())
+        timings::timed(timings::Phase::Facts, || self.memories.read())
     }
 
     /// The record of every conversation, in the owner's words alone.

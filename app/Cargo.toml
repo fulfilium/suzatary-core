@@ -7,7 +7,7 @@
 # `io`'s and `cli`'s tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "core", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -39,6 +39,9 @@ suzatary-triage = { path = "triage" }
 suzatary-services = { path = "services" }
 suzatary-google = { path = "google" }
 suzatary-connect = { path = "connect" }
+suzatary-inbox = { path = "inbox" }
+suzatary-conversations = { path = "conversations" }
+suzatary-lines = { path = "lines" }
 suzatary-core = { path = "core" }
 suzatary-api = { path = "api" }
 suzatary-io = { path = "io" }

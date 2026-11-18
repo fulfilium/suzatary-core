@@ -988,8 +988,8 @@ fn a_broken_answer_is_its_source_block_by_block() {
 /// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a conversation it begins.
 mod default_conversation {
     use suzatary_base::conversation_id::DEFAULT;
-    use suzatary_core::secretary::conversations::read_or_open_default;
     use suzatary_core::secretary::converse;
+    use suzatary_lines::secretary::conversations::read_or_open_default;
 
     use super::{ada, common};
 
@@ -1024,7 +1024,7 @@ mod default_conversation {
                 text: "What changed since the last briefing?",
                 references: &[],
                 by: suzatary_core::secretary::Asker::Box(
-                    suzatary_core::secretary::own_round::OwnRound::Brief,
+                    suzatary_inbox::secretary::own_round::OwnRound::Brief,
                 ),
             },
             "system prompt",
@@ -1059,11 +1059,11 @@ mod default_conversation {
     fn new_begins_a_conversation_of_its_own_and_never_touches_the_default() {
         let fakes = common::Fakes::new("brief-new").model(simple_reply());
         let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
-        let (id, _) = suzatary_core::secretary::conversations::begin(
+        let (id, _) = suzatary_lines::secretary::conversations::begin(
             fakes.conversations.conversations(),
             &fakes.model,
             "Morning",
-            suzatary_core::secretary::store::Kind::Topic,
+            suzatary_conversations::secretary::store::Kind::Topic,
             common::now(),
         )
         .expect("begins a fresh conversation");
@@ -1078,7 +1078,7 @@ mod default_conversation {
                 text: "What changed since the last briefing?",
                 references: &[],
                 by: suzatary_core::secretary::Asker::Box(
-                    suzatary_core::secretary::own_round::OwnRound::Brief,
+                    suzatary_inbox::secretary::own_round::OwnRound::Brief,
                 ),
             },
             "system prompt",
@@ -1087,7 +1087,7 @@ mod default_conversation {
         .expect("a round ran");
         assert!(!answered.stored.turns.is_empty());
 
-        let missing = suzatary_core::secretary::transcript::lines(
+        let missing = suzatary_lines::secretary::transcript::lines(
             fakes.conversations.conversations(),
             &DEFAULT,
         );
@@ -1101,7 +1101,7 @@ mod default_conversation {
 /// A tap on an act runs the performer once with the tap as consent; a second tap is refused.
 #[test]
 fn a_tap_on_an_act_begins_it_once_and_records_what_the_performer_said() {
-    use suzatary_core::secretary::acts::Act;
+    use suzatary_inbox::secretary::acts::Act;
 
     let whois = common::FakeWhois::new()
         .naming(common::v4(), ada())
@@ -1479,7 +1479,7 @@ fn the_inbox_lists_each_proposal_and_where_it_stands() {
 /// A server whose transport fails the first sends as `failures` says.
 fn failing(
     tag: &str,
-    failures: impl IntoIterator<Item = suzatary_core::secretary::responded::Performed>,
+    failures: impl IntoIterator<Item = suzatary_inbox::secretary::responded::Performed>,
 ) -> (String, Arc<Recorder>) {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
     let fakes = Fakes::new(tag).whois(whois).model(script());
@@ -1509,7 +1509,7 @@ fn answer(
 fn a_send_that_sent_nothing_is_tried_again() {
     let (base, recorder) = failing(
         "secretary-decision-failed-send",
-        [suzatary_core::secretary::responded::Tried::NotSent {
+        [suzatary_inbox::secretary::responded::Tried::NotSent {
             reason: "auth: the tenant has SMTP AUTH off".to_owned(),
         }
         .into()],
@@ -1551,7 +1551,7 @@ fn a_send_that_sent_nothing_is_tried_again() {
 fn a_send_that_may_have_gone_waits_until_acknowledged_and_never_sends_again() {
     let (base, recorder) = failing(
         "secretary-decision-unknown-send",
-        [suzatary_core::secretary::responded::Done::MayHaveGone {
+        [suzatary_inbox::secretary::responded::Done::MayHaveGone {
             reason: "the message was handed over and no answer came: reset".to_owned(),
         }
         .into()],
@@ -1675,7 +1675,7 @@ fn the_same_email_proposed_twice_is_one_object_and_sends_once() {
 fn a_send_that_sent_nothing_may_be_dismissed() {
     let (base, _) = failing(
         "secretary-decision-failed-dismissed",
-        [suzatary_core::secretary::responded::Tried::NotSent {
+        [suzatary_inbox::secretary::responded::Tried::NotSent {
             reason: "connect: refused".to_owned(),
         }
         .into()],

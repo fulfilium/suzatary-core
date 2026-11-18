@@ -63,8 +63,9 @@ fn stored(fakes: &Fakes) -> String {
         }
     }
     // And every line as read with its keys, so a word the door let through would be found.
-    for (_, read) in suzatary_core::secretary::transcript::each(fakes.conversations.conversations())
-        .expect("the conversations read")
+    for (_, read) in
+        suzatary_lines::secretary::transcript::each(fakes.conversations.conversations())
+            .expect("the conversations read")
     {
         let transcript = read.expect("the conversation folds");
         all.push_str(&serde_json::to_string(&transcript.entries()).expect("prints"));

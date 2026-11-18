@@ -2,15 +2,16 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::inbox;
-use crate::secretary::proposal::Proposal;
-use crate::secretary::proposer::Proposer;
-use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::{Decision, Entry, Settle};
-use crate::secretary::{Call, SecretarySurface, transcript};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_conversations::secretary::store::{Decision, Entry, Settle};
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::Withdrawal;
+use suzatary_lines::secretary::transcript;
 
 /// Withdraw one of the triage agent's cards, with the reason recorded.
 pub struct TriageWithdraw;
@@ -63,7 +64,7 @@ impl Verb for TriageWithdraw {
                 object.asked.proposer == Proposer::Triage
                     && matches!(
                         object.reading,
-                        crate::secretary::inbox_reading::Reading::Standing
+                        suzatary_inbox::secretary::inbox_reading::Reading::Standing
                     )
             })
             .ok_or_else(not_triage)?;
@@ -92,7 +93,7 @@ impl Verb for TriageWithdraw {
                 batch: reviewed.clone(),
                 decision: Decision::Settled {
                     how: Settle::Rejected,
-                    objects: crate::nonempty::NonEmpty::of(vec![reviewed.clone()])
+                    objects: suzatary_conversations::nonempty::NonEmpty::of(vec![reviewed.clone()])
                         .ok_or_else(|| Refusal::internal("one card"))?,
                 },
                 why: suzatary_memory::secretary::words::Words::kept(why.clone()),

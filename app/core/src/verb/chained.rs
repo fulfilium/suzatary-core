@@ -69,7 +69,7 @@ pub(crate) fn chain_named(args: &Map<String, Value>) -> Result<Option<String>, R
     struct On {
         chain: Option<String>,
     }
-    super::parse::<On>(args).map(|on| on.chain)
+    suzatary_inbox::verb::parse::<On>(args).map(|on| on.chain)
 }
 
 /// A call read whole where it arrives: the chain it names, absent meaning the surface's first,

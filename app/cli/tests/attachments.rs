@@ -6,7 +6,7 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::secretary::model::Turn;
+use suzatary_conversations::secretary::model::Turn;
 use suzatary_held::enclosed::Enclosure;
 use suzatary_mail::mail::AttachmentMeta;
 

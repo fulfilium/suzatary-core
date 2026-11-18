@@ -6,14 +6,14 @@ use super::{Kind, Store};
 use crate::asks::AskEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::digest_line::Line;
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::line_event::LineEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use suzatary_base::chains::ChainName;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::upload::Upload;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
@@ -74,10 +74,13 @@ impl Database<'_> {
             .iter()
             .map(|(name, chain)| (format!("{name} {}", Kind::Chain.name()), chain.verify()))
             .chain([
-                found(self.inbox, crate::secretary::inbox::findings(self.inbox)),
+                found(
+                    self.inbox,
+                    suzatary_inbox::secretary::inbox::findings(self.inbox),
+                ),
                 found(
                     self.conversations,
-                    crate::secretary::transcript::findings(self.conversations, self.inbox),
+                    suzatary_lines::secretary::transcript::findings(self.conversations, self.inbox),
                 ),
                 found(self.memory, self.memory.verify()),
                 found(self.digests, self.digests.verify()),

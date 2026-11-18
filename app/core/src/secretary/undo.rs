@@ -1,18 +1,19 @@
 //! The undo of the secretary's withdrawals: a withdrawn card never stands again, so the brief
 //! offers each back as an [`Act::Restore`] card.
 
-use crate::secretary::acts::Act;
-use crate::secretary::changes::Changeset;
 use crate::secretary::filed::{self, Filing};
-use crate::secretary::inbox::{self, Object, Price};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::proposal::{Proposal, Reasons};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::responded::{Responded, Withdrawal};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{Object, Price};
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::{Responded, Withdrawal};
 use suzatary_store::store::Prodrome;
 
 /// How far back a brief looks for withdrawals: one day, the brief's own cadence.
@@ -41,7 +42,7 @@ fn withdrawn_by_the_secretary(object: &Object) -> Option<(&Changeset, &str, Date
 /// # Errors
 /// The stores' own, and [`filed::file`]'s.
 pub fn offer_withdrawn(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
     chains: &[crate::secretary::Bound<'_>],
     conversation: &ConversationId,
@@ -111,9 +112,9 @@ pub fn withdrawn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::changes::Act as Change;
-    use crate::secretary::conversations::InMemory;
     use crate::secretary::filed::TriageCards;
+    use crate::stores::conversations::InMemory;
+    use suzatary_inbox::secretary::changes::Act as Change;
 
     /// A tapped restore applies exactly the changes of the card the secretary withdrew, and of no
     /// card still standing.
@@ -156,7 +157,7 @@ mod tests {
         inbox::withdraw_unanswered(
             &inbox,
             &id,
-            &crate::secretary::transcript::writer(),
+            &suzatary_lines::secretary::transcript::writer(),
             at,
             Withdrawal::NoLongerNeeded {
                 why: "a duplicate".to_owned(),

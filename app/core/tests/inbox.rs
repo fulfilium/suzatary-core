@@ -10,14 +10,15 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 
-use suzatary_core::secretary::inbox::{self, ProposalId, Response};
-use suzatary_core::secretary::inbox_reading::Reading;
-use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::stores::InMemory;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{ProposalId, Response};
+use suzatary_inbox::secretary::inbox_reading::Reading;
+use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
+use suzatary_inbox::secretary::responded::{Done, Performed, Responded, Tried};
 
 /// The inbox, in memory; its hold is the one lock the law is about.
-type Memory = InMemory<suzatary_core::secretary::inbox_event::InboxEvent>;
+type Memory = InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>;
 
 fn now() -> Datetime {
     Datetime::new(2026, 9, 28, 9, 0, 0, 0).expect("an instant")
@@ -59,7 +60,7 @@ fn proposal(n: usize) -> Proposal {
 
 fn filed(memory: &Memory, n: usize) -> ProposalId {
     let asked = inbox::Asked {
-        proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+        proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
         proposal: proposal(n),
         reasons: Reasons::new(
             "she asked",

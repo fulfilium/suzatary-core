@@ -3,10 +3,10 @@
 
 use serde_json::{Map, Value};
 
-use crate::secretary::model::Turn;
-use crate::secretary::outcome::Outcome;
-use crate::secretary::tool_name::ToolName;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::outcome::Outcome;
+use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::file_read::FileRead;

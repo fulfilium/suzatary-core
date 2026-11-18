@@ -15,12 +15,13 @@ use proptest::prelude::*;
 use prodrome_core::store::frontier::{Frontiers, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::conversations::InMemory;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::store::{Entry, Kind};
-use suzatary_core::secretary::transcript;
-use suzatary_core::wire::lines::Content;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Entry, Kind};
+use suzatary_core::stores::conversations::InMemory;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::prune;
+use suzatary_lines::secretary::transcript;
+use suzatary_lines::wire::lines::Content;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::Reads as _;
@@ -332,7 +333,7 @@ proptest! {
         let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let mut since = Since::Nothing;
-        let mut nodes: Vec<suzatary_core::wire::lines::SkeletonNode> = Vec::new();
+        let mut nodes: Vec<suzatary_lines::wire::lines::SkeletonNode> = Vec::new();
         loop {
             let piece = routes::lines_skeleton(store.lines.conversations(), &since, books, now(), Cut::Bytes(budget)).expect("a piece");
             nodes.extend(piece.nodes.clone());
@@ -341,9 +342,9 @@ proptest! {
             }
             since = Since::Frontier(Token::parse(&piece.frontier.digest).expect("a digest"));
         }
-        let line = |node: &suzatary_core::wire::lines::SkeletonNode| match &node.header {
-            suzatary_core::wire::lines::NodeHeader::Line { conversation, at, .. } => Some((conversation.clone(), at.clone())),
-            suzatary_core::wire::lines::NodeHeader::Structure { .. } => None,
+        let line = |node: &suzatary_lines::wire::lines::SkeletonNode| match &node.header {
+            suzatary_lines::wire::lines::NodeHeader::Line { conversation, at, .. } => Some((conversation.clone(), at.clone())),
+            suzatary_lines::wire::lines::NodeHeader::Structure { .. } => None,
         };
         let mut latest: BTreeMap<String, String> = BTreeMap::new();
         for (conversation, at) in nodes.iter().filter_map(line) {
@@ -388,9 +389,9 @@ fn landed_by_pieces(
     budget: usize,
     each: bool,
     mut landed: impl FnMut(&BTreeSet<Hash>, &BTreeMap<Hash, Vec<Hash>>, bool),
-) -> suzatary_core::secretary::held_replica::HeldReplica {
+) -> suzatary_lines::secretary::held_replica::HeldReplica {
     use suzatary_store::replica::held::Node as _;
-    let mut replica = suzatary_core::secretary::held_replica::HeldReplica::default();
+    let mut replica = suzatary_lines::secretary::held_replica::HeldReplica::default();
     loop {
         let since = match replica.rows().holding().replica().frontier().digest() {
             Some(digest) => Since::Frontier(Token::parse(digest.as_str()).expect("a digest")),
@@ -405,11 +406,11 @@ fn landed_by_pieces(
         )
         .expect("a piece");
         let heads: BTreeSet<Hash> = match &piece.heads {
-            suzatary_core::wire::lines::Heads::These { heads } => heads
+            suzatary_lines::wire::lines::Heads::These { heads } => heads
                 .iter()
                 .map(|h| Hash::new(h.clone()).expect("a name"))
                 .collect(),
-            suzatary_core::wire::lines::Heads::Held => BTreeSet::new(),
+            suzatary_lines::wire::lines::Heads::Held => BTreeSet::new(),
         };
         let given = piece
             .keys
@@ -473,7 +474,7 @@ proptest! {
         let (last, before) = landings.split_last().expect("a landing");
         prop_assert!(!last.1, "the last landing reads as the box's heads");
         prop_assert!(before.iter().all(|(_, behind)| *behind), "each landing before the last reads as behind");
-        let read = |replica: &suzatary_core::secretary::held_replica::HeldReplica| {
+        let read = |replica: &suzatary_lines::secretary::held_replica::HeldReplica| {
             let row = replica.rows().landed();
             let read = row.replica().read();
             let names: BTreeSet<Hash> = read.nodes().map(|node| node.name().clone()).collect();
@@ -488,7 +489,7 @@ proptest! {
 /// answers of at most `query::MOST_HASHES` names and `routes::MOST_CONTENT_BYTES` bytes by the
 /// sizes the skeleton gave, an object larger than that asked for alone.
 fn fetched(
-    lines: suzatary_core::secretary::conversations::Conversations<'_>,
+    lines: suzatary_lines::secretary::conversations::Conversations<'_>,
     nodes: &BTreeMap<String, usize>,
 ) -> BTreeMap<String, Content> {
     routes::asks(nodes.iter().map(|(hash, size)| (hash.as_str(), *size)))
@@ -532,7 +533,7 @@ proptest! {
             first.iter().take(held_first).map(|(name, _)| name.clone()).collect();
         let since = since_of(&frontiers, &first, &held);
         let mut since_now = since.clone();
-        let mut nodes: Vec<suzatary_core::wire::lines::SkeletonNode> = Vec::new();
+        let mut nodes: Vec<suzatary_lines::wire::lines::SkeletonNode> = Vec::new();
         let mut keys = BTreeMap::new();
         let mut moved = false;
         let mut asked = 0usize;
@@ -567,8 +568,8 @@ proptest! {
         let whole = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Whole).expect("the whole");
         let whole_keys = routes::lines_skeleton(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole skeleton").keys;
         match &last.heads {
-            suzatary_core::wire::lines::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
-            suzatary_core::wire::lines::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
+            suzatary_lines::wire::lines::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
+            suzatary_lines::wire::lines::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
         }
         prop_assert_eq!(&last.geneses, &whole.objects.geneses);
         prop_assert_eq!(last.epoch, whole.objects.epoch);
@@ -602,9 +603,9 @@ proptest! {
             parents.dedup();
             prop_assert_eq!(&node.parents, &parents);
         }
-        let rebuilt: Vec<suzatary_core::wire::lines::StoredObject> = nodes
+        let rebuilt: Vec<suzatary_lines::wire::lines::StoredObject> = nodes
             .iter()
-            .map(|node| suzatary_core::wire::lines::StoredObject { hash: node.hash.clone(), literal: literals[&node.hash].clone() })
+            .map(|node| suzatary_lines::wire::lines::StoredObject { hash: node.hash.clone(), literal: literals[&node.hash].clone() })
             .collect();
         if moved {
             let sent: BTreeSet<&str> = rebuilt.iter().map(|o| o.hash.as_str()).collect();
@@ -614,7 +615,7 @@ proptest! {
                 prop_assert_eq!(keys.get(name), Some(key));
             }
         } else {
-            let by_hash = |objects: &[suzatary_core::wire::lines::StoredObject]| -> BTreeMap<String, String> {
+            let by_hash = |objects: &[suzatary_lines::wire::lines::StoredObject]| -> BTreeMap<String, String> {
                 objects.iter().map(|o| (o.hash.clone(), o.literal.clone())).collect()
             };
             prop_assert_eq!(rebuilt.len(), whole.objects.objects.len());
@@ -817,7 +818,7 @@ fn a_node_is_sized_by_the_bytes_its_content_answer_sends() {
         });
     }
     let padded = Padded(&store.lines.lines);
-    let conversations = suzatary_core::secretary::conversations::Conversations {
+    let conversations = suzatary_lines::secretary::conversations::Conversations {
         lines: &padded,
         ..store.lines.conversations()
     };
@@ -882,7 +883,7 @@ fn replica_of(
     store: &Writer,
     content: impl Fn(&BTreeMap<String, usize>) -> BTreeMap<String, Content>,
     purge: bool,
-) -> suzatary_core::secretary::held_replica::HeldReplica {
+) -> suzatary_lines::secretary::held_replica::HeldReplica {
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
         Frontiers::remembered(prodrome_core::store::frontier::KEPT),
@@ -915,7 +916,7 @@ fn replica_of(
             )
         })
         .collect();
-    let mut replica = suzatary_core::secretary::held_replica::HeldReplica::default();
+    let mut replica = suzatary_lines::secretary::held_replica::HeldReplica::default();
     replica
         .piece(
             skeleton,
@@ -974,12 +975,12 @@ proptest! {
             },
             true,
         );
-        let read = |replica: &mut suzatary_core::secretary::held_replica::HeldReplica| {
+        let read = |replica: &mut suzatary_lines::secretary::held_replica::HeldReplica| {
             format!("{:?}", replica.lines.read().0.expect("reads"))
         };
         prop_assert_eq!(read(&mut husked), read(&mut whole));
         prop_assert_eq!(husked.bare(), whole.bare());
-        let husks = |replica: &suzatary_core::secretary::held_replica::HeldReplica| {
+        let husks = |replica: &suzatary_lines::secretary::held_replica::HeldReplica| {
             replica.kept().husks.keys().cloned().collect::<BTreeSet<_>>()
         };
         prop_assert_eq!(husks(&husked), husks(&whole));
@@ -1025,10 +1026,9 @@ fn the_prune_census_counts_the_dead_lines_and_writes_nothing() {
     let graph = store.lines.lines.graph().expect("reads");
     let names: Vec<Hash> = before.iter().map(|(name, _)| name.clone()).collect();
     let husked =
-        suzatary_core::secretary::husks::husks(store.lines.conversations(), &graph, &names)
+        suzatary_lines::secretary::husks::husks(store.lines.conversations(), &graph, &names)
             .expect("husks");
-    let census =
-        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
+    let census = prune::census(store.lines.conversations(), 0).expect("a census");
     assert_eq!(census.all.objects, before.len());
     assert!(
         census.dead.is_empty(),
@@ -1046,8 +1046,7 @@ fn the_prune_census_counts_the_dead_lines_and_writes_nothing() {
             store.lines.keys.remove(key).expect("destroyed");
         }
     }
-    let census =
-        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
+    let census = prune::census(store.lines.conversations(), 0).expect("a census");
     assert_eq!(census.dead, husked.keys().cloned().collect::<BTreeSet<_>>());
     assert!(
         census.retired.objects == 0 && census.husks < census.dead_bytes,
@@ -1063,9 +1062,9 @@ fn the_prune_census_counts_the_dead_lines_and_writes_nothing() {
 /// A replica's pull, piece by piece from its frontier, landed.
 fn pulled_again(
     store: &Writer,
-    mut replica: suzatary_core::secretary::held_replica::HeldReplica,
+    mut replica: suzatary_lines::secretary::held_replica::HeldReplica,
     books: Books<'_>,
-) -> suzatary_core::secretary::held_replica::HeldReplica {
+) -> suzatary_lines::secretary::held_replica::HeldReplica {
     loop {
         let since = match replica.rows().holding().replica().frontier().digest() {
             Some(digest) => Since::Frontier(Token::parse(digest.as_str()).expect("a digest")),
@@ -1111,8 +1110,8 @@ fn pulled_again(
 /// holds the keys the box sends and no other (the browser scene `rescrub`'s law).
 #[test]
 fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
-    use suzatary_core::secretary::held_replica::{HeldReplica, NotAnAnswer};
-    use suzatary_core::secretary::outlines::Scope;
+    use suzatary_lines::secretary::held_replica::{HeldReplica, NotAnAnswer};
+    use suzatary_lines::secretary::outlines::Scope;
     let mut store = Writer::new();
     store.apply(&Write::Said {
         conversation: 0,

@@ -15,13 +15,14 @@ use prodrome_core::policy::Everything;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
-use suzatary_core::secretary::inbox::{self, Asked, ProposalId};
-use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
-use suzatary_core::secretary::phase::Phase;
-use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_core::secretary::proposer::Proposer;
-use suzatary_core::secretary::responded::{Done, Responded, Tried, Withdrawal};
 use suzatary_health::health::plugin::PluginName;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{Asked, ProposalId};
+use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
+use suzatary_inbox::secretary::phase::Phase;
+use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
 type Store = EventStore<InboxEvent, Everything>;
 
@@ -166,7 +167,7 @@ fn phases(store: &Store) -> HashSet<Phase> {
         .map(|(_, stream)| {
             read(stream, None, &Everything)
                 .state
-                .reading::<suzatary_core::secretary::inbox_registers::StateRegister>()
+                .reading::<suzatary_inbox::secretary::inbox_registers::StateRegister>()
                 .into_iter()
                 .filter_map(|stamp| match &stamp.event.said {
                     Said::Responded(responded) => Some(responded.phase()),
@@ -407,8 +408,8 @@ fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
 #[test]
 fn one_unreadable_proposal_leaves_every_other_tappable() {
     use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
-    use suzatary_core::secretary::inbox::Unchecked;
     use suzatary_core::stores::InMemory;
+    use suzatary_inbox::secretary::inbox::Unchecked;
     use suzatary_store::store::Prodrome as _;
 
     let other = Asked {
@@ -447,11 +448,11 @@ fn one_unreadable_proposal_leaves_every_other_tappable() {
     let fold = inbox::fold(&held).expect("the inbox reads");
     assert_eq!(
         fold.get(&id()).map(|object| &object.reading),
-        Some(&suzatary_core::secretary::inbox_reading::Reading::Unreadable(Unchecked))
+        Some(&suzatary_inbox::secretary::inbox_reading::Reading::Unreadable(Unchecked))
     );
     assert!(fold.get(&standing).is_some(), "the other proposal reads");
     let owner = Actor::new("ada").expect("an actor");
-    let sent = || -> Result<suzatary_core::secretary::responded::Performed, _> {
+    let sent = || -> Result<suzatary_inbox::secretary::responded::Performed, _> {
         Ok(Done::Sent {
             recipients: vec!["mira@example.com".to_owned()],
             message_id: "<2@box>".to_owned(),

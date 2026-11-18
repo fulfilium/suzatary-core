@@ -5,9 +5,9 @@
 use prodrome_core::event::EventVocabulary;
 use prodrome_core::literal::codec::Literal;
 use prodrome_core::literal::{Table, Vocabulary as _, parse_literal, print_literal};
-use suzatary_core::secretary::act_vocabulary::SIGNATURES;
-use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary};
-use suzatary_core::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::act_vocabulary::SIGNATURES;
+use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary};
+use suzatary_inbox::secretary::proposal::Proposal;
 
 const DIFF: &str = "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n";
 const SHA: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
@@ -123,7 +123,7 @@ fn every_act_reads_back_what_it_prints_through_the_inbox_walker() {
 #[test]
 fn no_constructor_of_an_act_is_an_events_or_a_terms() {
     let terms = prodrome_core::term::schema::signatures();
-    let events = Table(suzatary_core::secretary::inbox_event::SIGNATURES);
+    let events = Table(suzatary_inbox::secretary::inbox_event::SIGNATURES);
     for (name, _) in SIGNATURES {
         assert!(terms.signature(name).is_none(), "{name} is a term's");
         assert!(events.find(name).is_none(), "{name} is an inbox event's");

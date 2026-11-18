@@ -1,12 +1,13 @@
 //! Close each waiting card a rule finds needs nothing more: done another way, or past its
 //! moment; idempotent.
 
-use crate::secretary::inbox::{self, ProposalId};
-use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::proposal::Proposal;
-use crate::secretary::responded::Withdrawal;
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::responded::Withdrawal;
 use suzatary_store::store::Prodrome;
 
 /// What a rule sees of one waiting card.
@@ -45,7 +46,7 @@ pub fn sweep(
                 inbox::withdraw(
                     inbox,
                     &id,
-                    &crate::secretary::transcript::writer(),
+                    &suzatary_lines::secretary::transcript::writer(),
                     at,
                     withdrawal,
                 )?;

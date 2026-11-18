@@ -5,8 +5,8 @@
 //! past the one it fired on and discharges the rule there. Order is declaration order, so an
 //! answer comes before the title that names it.
 
-use crate::secretary::transcript::Transcript;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_triage::rule::Rule;
 
 /// One of the box's own rules over a conversation.
@@ -49,7 +49,7 @@ impl Rule for Conversational {
             Conversational::Answer => reading
                 .owed()
                 .iter()
-                .any(|(_, said)| crate::secretary::queue::wakes(said)),
+                .any(|(_, said)| suzatary_conversations::secretary::queue::wakes(said)),
             Conversational::Title => crate::secretary::title::owed(reading.stored()),
         }
     }
@@ -58,17 +58,17 @@ impl Rule for Conversational {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::model::Turn;
-    use crate::secretary::store::{Entry, Kind, Namer, Title};
-    use crate::secretary::transcript;
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
+    use suzatary_lines::secretary::transcript;
     use suzatary_triage::rule::{Engine, Named};
 
     fn id() -> ConversationId {
         ConversationId::new("2026-10-05-1").expect("a slug")
     }
 
-    fn store() -> crate::secretary::conversations::InMemory {
-        let store = crate::secretary::conversations::InMemory::default();
+    fn store() -> crate::stores::conversations::InMemory {
+        let store = crate::stores::conversations::InMemory::default();
         transcript::start(
             store.conversations(),
             &id(),
@@ -84,7 +84,7 @@ mod tests {
         store
     }
 
-    fn say(store: &crate::secretary::conversations::InMemory, turn: Turn) {
+    fn say(store: &crate::stores::conversations::InMemory, turn: Turn) {
         transcript::push(
             store.conversations(),
             &id(),
@@ -98,7 +98,7 @@ mod tests {
         .expect("said");
     }
 
-    fn read(store: &crate::secretary::conversations::InMemory) -> std::sync::Arc<Transcript> {
+    fn read(store: &crate::stores::conversations::InMemory) -> std::sync::Arc<Transcript> {
         transcript::read(store.conversations(), &id()).expect("reads")
     }
 

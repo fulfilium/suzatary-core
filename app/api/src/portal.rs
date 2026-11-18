@@ -1,7 +1,7 @@
 //! What the Android portal reads from the box it is pointed at, before it opens the app.
 
 use suzatary_connect::connect::Channel;
-use suzatary_core::nonempty::NonEmpty;
+use suzatary_conversations::nonempty::NonEmpty;
 
 /// The box's answer to a portal at pairing: how the box wakes the phone.
 #[derive(Debug, Clone, PartialEq, Eq)]

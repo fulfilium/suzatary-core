@@ -3,17 +3,19 @@
 use super::SecretarySurface;
 use super::filed::{Filed, Filing};
 use super::gate::Gate;
-use super::proposal::{Proposal, Reasons};
-use super::proposer::Proposer;
-use super::responded::Withdrawal;
-use super::verb_name::Binding;
 use crate::agent::verbs;
 use crate::secretary::Secretary;
-use crate::secretary::{conversations, transcript};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_conversations::secretary::store;
+use suzatary_conversations::secretary::verb_name::Binding;
 use suzatary_held::mail_error::MailError;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::proposer::Proposer;
+use suzatary_inbox::secretary::responded::Withdrawal;
+use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_memory::secretary::memory;
 
 mod add_topics;
@@ -181,7 +183,7 @@ pub fn propose(
     if let Some(old) = revises {
         let stored = conversations::read(caps.conversations, id)?;
         let standing = withdrawable(caps, &stored, old)?;
-        super::inbox::withdraw(
+        inbox::withdraw(
             caps.inbox,
             &standing.object.id,
             &transcript::writer(),
@@ -198,14 +200,14 @@ pub fn propose(
 /// Proposal `index`, if nothing has completed it yet so the secretary may withdraw or revise it.
 fn withdrawable(
     caps: &Secretary<'_>,
-    stored: &super::store::Stored,
+    stored: &store::Stored,
     index: usize,
-) -> Result<super::store::Standing, Refusal> {
-    let standing = stored.standing(index, &super::inbox::fold(caps.inbox)?)?;
+) -> Result<store::Standing, Refusal> {
+    let standing = stored.standing(index, &inbox::fold(caps.inbox)?)?;
     if standing.object.reading.performs() {
         Ok(standing)
     } else {
-        Err(super::store::refused(
+        Err(store::refused(
             index,
             &standing.object.reading,
             caps.clock.now(),

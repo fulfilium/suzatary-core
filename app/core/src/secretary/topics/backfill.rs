@@ -9,15 +9,16 @@ use std::fmt::Write as _;
 
 use serde::Deserialize;
 
-use crate::secretary::model::{ModelError, Turn};
-use crate::secretary::store::Stored;
-use crate::secretary::taint::{self, Taint};
-use crate::secretary::targets::{MAX_TOPICS, rounds};
 use crate::secretary::topics::plan::{NotAPlan, Plan, Planned};
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
 use suzatary_base::topic_target::Target;
+use suzatary_conversations::secretary::model::{ModelError, Turn};
+use suzatary_conversations::secretary::store::Stored;
+use suzatary_conversations::secretary::taint;
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_held::for_model::ForModel;
+use suzatary_lines::secretary::targets::{MAX_TOPICS, rounds};
 
 /// The fewest rounds a new topic must be on to be made.
 pub const RECURS: usize = 3;

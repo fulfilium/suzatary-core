@@ -20,6 +20,7 @@ use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreE
 use crate::durable;
 use crate::husked::Husked;
 use crate::object_files::ObjectFiles;
+use suzatary_lines::parts;
 
 /// A prodrome's objects, behind the memo and its hold, kept in `F`.
 pub struct Objects<E: Schema, F = EventStore<E, Untrusted>> {
@@ -231,8 +232,8 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// heads until the record moves (the Prodrome's law 62), and through a new handle as the
     /// files: a process that opens a store never serves a reading older than its files.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
-        let recorded = suzatary_core::parts::part("record", || self.events.recorded())
-            .map_err(|e| Self::unreadable(e))?;
+        let recorded =
+            parts::part("record", || self.events.recorded()).map_err(|e| Self::unreadable(e))?;
         let mut slot = self
             .remembered
             .lock()
@@ -249,11 +250,10 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
         if let Some(held) = slot.as_mut().filter(|held| held.heads == heads) {
             return Ok(look(held));
         }
-        let excluded =
-            suzatary_core::parts::part("excluded", || suzatary_store::store::left_out(&dag));
+        let excluded = parts::part("excluded", || suzatary_store::store::left_out(&dag));
         Ok(look(slot.insert(Remembered {
             heads,
-            graph: std::sync::Arc::new(suzatary_core::parts::part("graph", || {
+            graph: std::sync::Arc::new(parts::part("graph", || {
                 suzatary_store::store::Graph::over(dag)
             })?),
             excluded,
@@ -448,9 +448,10 @@ mod tests {
     use suzatary_core::model_name::ModelName;
 
     use super::*;
-    use suzatary_core::secretary::inbox::{self, Response};
-    use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
-    use suzatary_core::secretary::responded::{Done, Performed};
+    use suzatary_inbox::secretary::inbox;
+    use suzatary_inbox::secretary::inbox::Response;
+    use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
+    use suzatary_inbox::secretary::responded::{Done, Performed};
 
     /// The deployment's writers in these tests: ada, who taps.
     fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
@@ -668,9 +669,9 @@ mod tests {
     #[test]
     fn a_conversation_is_written_as_changes_through_the_door() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::model::Turn;
-        use suzatary_core::secretary::store::Entry;
-        use suzatary_core::secretary::transcript;
+        use suzatary_conversations::secretary::model::Turn;
+        use suzatary_conversations::secretary::store::Entry;
+        use suzatary_lines::secretary::transcript;
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let store = lines_at(dir.path().join("conversations"));
@@ -683,7 +684,7 @@ mod tests {
                 at: at(0),
                 title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
                 model: "a fake model".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             },
         )
         .expect("starts");
@@ -704,7 +705,7 @@ mod tests {
             .expect("pushes");
         }
         let objects = store.lines.objects().expect("reads");
-        let genesis = |o: &Envelope<suzatary_core::secretary::line_event::LineEvent>| {
+        let genesis = |o: &Envelope<suzatary_lines::secretary::line_event::LineEvent>| {
             matches!(o, Envelope::Genesis(_))
         };
         assert_eq!(objects.iter().filter(|(_, o)| genesis(o)).count(), 1);
@@ -795,14 +796,14 @@ mod tests {
     /// take twice: it returns.
     #[test]
     fn a_triage_card_joins_under_the_inbox_file_lock() {
-        use suzatary_core::secretary::changes::{Act, Changeset};
         use suzatary_core::secretary::filed::{Carding, TriageCards};
+        use suzatary_inbox::secretary::changes::{Act, Changeset};
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let root = dir.path().to_path_buf();
         let (sent, joined) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let inbox: Objects<suzatary_core::secretary::inbox_event::InboxEvent> =
+            let inbox: Objects<suzatary_inbox::secretary::inbox_event::InboxEvent> =
                 Objects::open(root.join("inbox"));
             let lines = lines_at(root.join("lines"));
             let cards = TriageCards::new(lines.conversations(), &inbox);
@@ -955,9 +956,9 @@ mod tests {
     /// A conversation of 48 lines on disk under `dir`, enough to settle a node of the digest.
     fn spoken(dir: &std::path::Path) -> crate::conversations::ConversationStores {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_core::secretary::model::Turn;
-        use suzatary_core::secretary::store::Entry;
-        use suzatary_core::secretary::transcript;
+        use suzatary_conversations::secretary::model::Turn;
+        use suzatary_conversations::secretary::store::Entry;
+        use suzatary_lines::secretary::transcript;
 
         let lines = lines_at(dir.join("conversations"));
         let id = ConversationId::new("default").expect("a slug");
@@ -966,7 +967,7 @@ mod tests {
             at: minute(0),
             title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
             model: "a fake model".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         };
         transcript::start(lines.conversations(), &id, &opened).expect("starts");
         for m in 1..48 {
@@ -1176,7 +1177,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let caps = Objects::open(&dir);
         let asked = inbox::Asked {
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+            proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
             proposal: Proposal::Email(Draft {
                 account: "ada@example.com".to_owned(),
                 to: vec!["mira@example.com".to_owned()],

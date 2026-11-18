@@ -32,11 +32,11 @@ use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, Body, Keep, Shown};
 use crate::secretary::shown_record::{OwnersWords, Shows as _};
-use crate::secretary::store::Entry;
 use crate::secretary::topics::reading::Reading as Topics;
 use crate::secretary::topics::topic::Topic;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::store::Entry;
 use suzatary_memory::secretary::memory::{Change, Kind, Memory, Remembered};
 
 /// What a session is told when it opens.

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use suzatary_core::secretary::model::SessionId;
+use suzatary_conversations::secretary::model::SessionId;
 
 use super::stream::{Block, Ended, Event, System, Unreadable, Usage};
 

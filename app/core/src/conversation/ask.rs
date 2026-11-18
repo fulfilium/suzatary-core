@@ -5,14 +5,14 @@ use serde_json::Value;
 use crate::conversation::round::Sink;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_view::VIEW_BYTES;
-use crate::secretary::model::{
-    Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
-};
-use crate::secretary::queue;
-use crate::secretary::store::{Kept, Scope, Stored};
 use crate::secretary::told::{Asking, context_of};
 use crate::secretary::topics::stores::TopicStores;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::{
+    Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
+};
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::{Kept, Scope, Stored};
 use suzatary_memory::secretary::memory;
 
 /// How a round asks its model: the one difference between a model that remembers and one that
@@ -330,9 +330,9 @@ fn heading(memories: crate::secretary::memories::Memories<'_>, telling: Telling<
         Err(refusal) => {
             return Heading {
                 turn: Some(Turn::Tool {
-                    verb: crate::secretary::tool_name::ToolName::Memory,
+                    verb: suzatary_conversations::secretary::tool_name::ToolName::Memory,
                     answer: format!("your memory could not be read: {}", refusal.message()),
-                    outcome: crate::secretary::outcome::Outcome::Refused,
+                    outcome: suzatary_conversations::secretary::outcome::Outcome::Refused,
                     files: Vec::new(),
                 }),
                 version: None,

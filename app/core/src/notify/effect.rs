@@ -2,9 +2,9 @@
 
 use std::num::NonZeroUsize;
 
-use crate::secretary::inbox::ProposalId;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::MailHash;
+use suzatary_inbox::secretary::inbox::ProposalId;
 
 /// What a push says happened. A closed sum whose every field is a count, a day or an id the
 /// box minted, so no stored text has a field to ride in: a relay (Google's, ntfy's) carries it

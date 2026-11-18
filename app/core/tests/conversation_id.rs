@@ -9,8 +9,8 @@ use prodrome_core::schema::Schema as _;
 use proptest::prelude::*;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT, Daily, SETUP};
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::store::{Entry, Kind};
+use suzatary_conversations::secretary::store::{Entry, Kind};
+use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::words::Words;
 
 /// Each draw the next number, so two seals of the same words differ.

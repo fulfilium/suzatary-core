@@ -28,8 +28,8 @@ use prodrome_core::schema::headed::{Body, Constructors, Event};
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
-use crate::secretary::taint::Taint;
 use suzatary_base::rule_version::Under;
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_signatures::signatures::Tap;
 

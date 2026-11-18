@@ -3,15 +3,15 @@
 //! The job holds no verb and no session, and an answer that is not a [`Title`] is
 //! refused, never repaired past the first line.
 
-use crate::secretary::conversations;
 use prodrome_core::event::Actor;
+use suzatary_lines::secretary::conversations;
 
-use crate::secretary::model::{Conversation, Model, Turn};
-use crate::secretary::store::{Entry, Kind, Namer, Stored, Title};
-use crate::secretary::transcript;
 use suzatary_base::capability::Clock;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::{Conversation, Model, Turn};
+use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Stored, Title};
+use suzatary_lines::secretary::transcript;
 
 /// The opening words of the job's one question, which a scripted fixture keys on.
 pub const ASK: &str = "Title this conversation";
@@ -66,8 +66,10 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
 /// Read a title off the job's answer: its first line, unquoted, cut before `JOB_MAX`.
 ///
 /// # Errors
-/// [`crate::secretary::store::NotATitle`] when nothing is left.
-pub(crate) fn from_answer(say: &str) -> Result<Title, crate::secretary::store::NotATitle> {
+/// [`suzatary_conversations::secretary::store::NotATitle`] when nothing is left.
+pub(crate) fn from_answer(
+    say: &str,
+) -> Result<Title, suzatary_conversations::secretary::store::NotATitle> {
     let line = typst_prose_line(say).unwrap_or("");
     let bare = line
         .trim_matches(|c: char| matches!(c, '"' | '\'' | '“' | '”' | '‘' | '’' | '`'))
@@ -89,7 +91,7 @@ pub(crate) fn from_answer(say: &str) -> Result<Title, crate::secretary::store::N
 /// # Errors
 /// The model's failure or a non-title answer, as [`Refusal::unprocessable`], or the store's.
 pub fn run(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     model: &dyn Model,
     id: &ConversationId,
@@ -124,7 +126,7 @@ pub fn run(
 /// # Errors
 /// [`Refusal::bad_request`], [`Refusal::not_found`], or the store's own.
 pub fn rename(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     by: &Actor,
     id: &ConversationId,
@@ -144,7 +146,7 @@ pub fn rename(
 }
 
 fn titled(
-    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
     title: Title,
@@ -188,7 +190,7 @@ pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::store::Said;
+    use suzatary_conversations::secretary::store::Said;
 
     fn stored(kind: Kind, title: &str, turns: Vec<Turn>) -> Stored {
         let mut entries = vec![Entry::Opened {
@@ -239,7 +241,7 @@ mod tests {
                 Turn::Tool {
                     verb: "search".into(),
                     answer: "secret mail".to_owned(),
-                    outcome: crate::secretary::outcome::Outcome::Answered,
+                    outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                     files: Vec::new(),
                 },
                 answer("On the 3rd."),
@@ -256,7 +258,7 @@ mod tests {
     }
 
     /// The one conversation the job runs over, and the clock it stamps with.
-    struct Lines(crate::secretary::conversations::InMemory);
+    struct Lines(crate::stores::conversations::InMemory);
 
     impl Clock for Lines {
         fn now(&self) -> suzatary_base::capability::Datetime {
@@ -274,8 +276,13 @@ mod tests {
             &self,
             _: &Conversation,
             _: &serde_json::Value,
-        ) -> Result<crate::secretary::model::Reply, crate::secretary::model::ModelError> {
-            Ok(crate::secretary::model::Reply::parse(self.0))
+        ) -> Result<
+            suzatary_conversations::secretary::model::Reply,
+            suzatary_conversations::secretary::model::ModelError,
+        > {
+            Ok(suzatary_conversations::secretary::model::Reply::parse(
+                self.0,
+            ))
         }
     }
 
@@ -296,7 +303,7 @@ mod tests {
                     by: by.clone(),
                 }),
         );
-        let lines = crate::secretary::conversations::InMemory::default();
+        let lines = crate::stores::conversations::InMemory::default();
         let id = ConversationId::new("2026-09-25-1").expect("a slug");
         transcript::start(lines.conversations(), &id, &entries[0]).expect("opens");
         for entry in &entries[1..] {

@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::proposal::{Forward, Forwarded, Proposal, Style};
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::propose_email::{address, addresses};
 use crate::secretary::verbs::{FilingArgs, mail_refusal};
@@ -11,6 +10,7 @@ use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_held::held_value::Written;
 use suzatary_held::secretary::attached::MAX_TOTAL;
+use suzatary_inbox::secretary::proposal::{Forward, Forwarded, Proposal, Style};
 use suzatary_mail::mail::Stored;
 
 /// Propose forwarding a stored message, which only a tap sends.
@@ -73,7 +73,7 @@ impl Verb for ProposeForward {
         let shown = mail
             .message(&args.message)
             .map_err(|failed| mail_refusal(&failed))?;
-        if !ReadHolders::of(&crate::secretary::conversations::read(
+        if !ReadHolders::of(&suzatary_lines::secretary::conversations::read(
             call.caps.conversations,
             call.conversation,
         )?)

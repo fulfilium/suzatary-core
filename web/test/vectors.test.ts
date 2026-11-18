@@ -1,7 +1,7 @@
 /**
  * THE THREE VECTORS THE RUST WRITES, AND WHAT THE PURE MODULES SAY BACK
  * (`docs/WEBALGEBRA-PLAN-2026-09-16.md` §5 commit 6; `docs/WEB-SPEC.md` §4) —
- * the `about-fixture.json` pattern (`app/core/src/secretary/about.rs`,
+ * the `about-fixture.json` pattern (`app/conversations/src/secretary/about.rs`,
  * `rounds.test.ts`) generalised from one payload to three.
  *
  * `app/core/tests/web_vectors.rs` builds a `FoldPayload`, a `ChainPayload` and

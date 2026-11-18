@@ -7,10 +7,11 @@
 
 use chrono::NaiveDate;
 
-use super::store::{Said, Stored};
-use super::verb_name::Effect;
-use crate::secretary::model::Turn;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Said, Stored};
+use suzatary_conversations::secretary::turn_shape;
+use suzatary_conversations::secretary::verb_name::Effect;
 
 /// The question the morning brief asks: a person turn, not a system instruction, since the
 /// secretary answers questions somebody asked.
@@ -86,14 +87,14 @@ pub fn briefs(stored: &Stored) -> Vec<Brief> {
 /// Whether a turn is a status line: the model asked for something read. A
 /// verb this build no longer names reads, since what it did is unknown.
 fn reads(turn: &Turn) -> bool {
-    match super::turn_shape::shape(turn) {
-        super::turn_shape::TurnShape::Model { calls } => calls.iter().any(|verb| {
+    match turn_shape::shape(turn) {
+        turn_shape::TurnShape::Model { calls } => calls.iter().any(|verb| {
             verb.verb()
                 .is_none_or(|verb| verb.powers().effect == Effect::Reads)
         }),
-        super::turn_shape::TurnShape::Person { .. }
-        | super::turn_shape::TurnShape::Tool { .. }
-        | super::turn_shape::TurnShape::Act { .. } => false,
+        turn_shape::TurnShape::Person { .. }
+        | turn_shape::TurnShape::Tool { .. }
+        | turn_shape::TurnShape::Act { .. } => false,
     }
 }
 

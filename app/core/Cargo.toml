@@ -26,6 +26,9 @@ suzatary-triage.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true
 suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -51,17 +54,12 @@ sha2.workspace = true
 hex.workspace = true
 postcard.workspace = true
 
-# How the inbox's schema crosses into the browser's module (`secretary::inbox_json`): the
-# exports' `Json` is implemented beside the type, which a module crate could not do.
-prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
-fixture = []
-# The browser module's view of this crate's schemas; `app/wasm` alone enables it.
-wasm = ["dep:prodrome-wasm-exports"]
+fixture = ["suzatary-conversations/fixture", "suzatary-lines/fixture"]
 
 [dev-dependencies]
 suzatary-core = { path = ".", features = ["nothing"] }

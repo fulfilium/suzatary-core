@@ -19,10 +19,11 @@ use prodrome_core::term::Term;
 use proptest::prelude::*;
 
 use suzatary_base::chains::ChainName;
-use suzatary_core::secretary::inbox::{self, ProposalId};
-use suzatary_core::secretary::inbox_event::InboxEvent;
-use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::stores::InMemory;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::chain_set::{ChainSet, Read};
 use suzatary_store::store::Prodrome;
@@ -170,7 +171,7 @@ fn event(chain: &str, todo: &str, told: &Told, hour: i64, by: By) -> TodoEvent {
 
 fn asked(subject: &str, serves: Option<&str>) -> inbox::Asked {
     inbox::Asked {
-        proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+        proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
         proposal: Proposal::Email(Draft {
             account: "ada@example.com".to_owned(),
             to: vec!["mira@example.com".to_owned()],

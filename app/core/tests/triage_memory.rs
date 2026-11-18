@@ -22,26 +22,27 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::deployment::Deployment;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::outcome::Outcome;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::verb_name::{Binding, Effect};
 use suzatary_core::agent::Agent;
 use suzatary_core::agent::TriageVerb;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::compaction::Reading;
-use suzatary_core::secretary::conversations::{InMemory as Lines, ReadConversations};
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_label::Label;
 use suzatary_core::secretary::digest_line::Line;
 use suzatary_core::secretary::digests::{Digests, ReadDigests};
 use suzatary_core::secretary::filed::{TriageCards, triage_conversation};
-use suzatary_core::secretary::inbox_event::InboxEvent;
-use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::{Memories, ReadMemories};
-use suzatary_core::secretary::model::Turn;
-use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
-use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::surface::SecretaryVerb;
-use suzatary_core::secretary::verb_name::{Binding, Effect};
 use suzatary_core::stores::InMemory;
+use suzatary_core::stores::conversations::InMemory as Lines;
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_lines::secretary::conversations::ReadConversations;
+use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -276,7 +277,7 @@ fn remembered() -> Stores {
             at: at(0),
             title: suzatary_memory::secretary::words::Words::kept("The lease".to_owned()),
             model: "m".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         },
         person(
             1,

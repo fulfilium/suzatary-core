@@ -13,10 +13,10 @@ use prodrome_core::fpl::mk_flat;
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::chains::ChainName;
-use suzatary_core::secretary::inbox::{Fold, Object};
-use suzatary_core::secretary::inbox_event::Said;
-use suzatary_core::secretary::stamp::stamp;
-use suzatary_core::secretary::tapped::Tapped;
+use suzatary_inbox::secretary::inbox::{Fold, Object};
+use suzatary_inbox::secretary::inbox_event::Said;
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_inbox::secretary::tapped::Tapped;
 use suzatary_io::objects::Objects;
 use suzatary_signatures::chain_set::ChainSet;
 use suzatary_signatures::chain_set::Read;
@@ -90,7 +90,7 @@ fn pin(fold: &Fold, object: &Object, set: &ChainSet<'_>) -> String {
         open = object.reading.open(),
         performs = object.reading.performs(),
         tries = object.tries(),
-        value = suzatary_core::secretary::inbox::value(object, set),
+        value = suzatary_inbox::secretary::inbox::value(object, set),
         responses = responses.join(", "),
     )
 }
@@ -102,7 +102,7 @@ fn pin(fold: &Fold, object: &Object, set: &ChainSet<'_>) -> String {
 fn the_frozen_proposal_store_reads_as_pinned() {
     let dir = store();
     let store = Objects::open(&dir);
-    let fold = suzatary_core::secretary::inbox::fold(&store).expect("the proposal store folds");
+    let fold = suzatary_inbox::secretary::inbox::fold(&store).expect("the proposal store folds");
     let pinned = std::fs::read_to_string(dir.join("readings.txt")).expect("the pinned readings");
     assert_eq!(printed(&fold), pinned);
 

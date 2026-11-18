@@ -4,8 +4,9 @@
 use std::fmt::Write as _;
 
 use suzatary_base::reference::Reference;
-use suzatary_core::secretary::model::{Conversation, Delta, Turn};
-use suzatary_core::secretary::turn_shape::{self, TurnShape};
+use suzatary_conversations::secretary::model::{Conversation, Delta, Turn};
+use suzatary_conversations::secretary::turn_shape;
+use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::for_model::ForModel;
 
@@ -151,7 +152,7 @@ fn format_turn(out: &mut String, turn: &Turn, reads: Reads) {
                         out.push_str("\n  (and you asked for: ");
                         let verbs: Vec<&str> = calls
                             .iter()
-                            .map(suzatary_core::secretary::tool_name::ToolName::as_str)
+                            .map(suzatary_conversations::secretary::tool_name::ToolName::as_str)
                             .collect();
                         out.push_str(&verbs.join(", "));
                         out.push(')');
@@ -258,7 +259,7 @@ fn pointing(references: &[Reference]) -> String {
     format!("\n  (pointing at: {named})")
 }
 
-fn called(calls: &[suzatary_core::secretary::model::ToolCall]) -> String {
+fn called(calls: &[suzatary_conversations::secretary::model::ToolCall]) -> String {
     calls
         .iter()
         .map(|call| call.verb.as_str())
@@ -290,14 +291,14 @@ mod tests {
                 Turn::Tool {
                     verb: "web".into(),
                     answer: attack.clone(),
-                    outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+                    outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                     files: Vec::new(),
                 },
                 [
                     Turn::Tool {
                         verb: "show".into(),
                         answer: attack.clone(),
-                        outcome: suzatary_core::secretary::outcome::Outcome::Refused,
+                        outcome: suzatary_conversations::secretary::outcome::Outcome::Refused,
                         files: Vec::new(),
                     },
                     Turn::Model { text: attack.clone(), calls: Vec::new() },

@@ -132,8 +132,8 @@ fn agent(verb: &str, call: Value) -> String {
         ..Agent::nothing()
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
-    let conversations = suzatary_core::secretary::conversations::InMemory::default();
-    let inbox = suzatary_core::stores::InMemory::<suzatary_core::secretary::inbox_event::InboxEvent>::default();
+    let conversations = suzatary_core::stores::conversations::InMemory::default();
+    let inbox = suzatary_core::stores::InMemory::<suzatary_inbox::secretary::inbox_event::InboxEvent>::default();
     let cards =
         suzatary_core::secretary::filed::TriageCards::new(conversations.conversations(), &inbox);
     suzatary_core::agent::call(&records, &cards, &deployment(), verb, &args(call))

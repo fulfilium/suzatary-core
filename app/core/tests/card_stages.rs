@@ -1,10 +1,10 @@
 //! A repository card at each stage its publish can stop at: its own words, and only the answers
 //! that stage admits.
 
-use suzatary_core::secretary::card::{at, of};
-use suzatary_core::secretary::inbox_reading::{Answer, Reading};
-use suzatary_core::secretary::responded::{Responded, Tried};
-use suzatary_core::wire::inbox::{CardLink, ProposedAct};
+use suzatary_inbox::secretary::card::{at, of};
+use suzatary_inbox::secretary::inbox_reading::{Answer, Reading};
+use suzatary_inbox::secretary::responded::{Responded, Tried};
+use suzatary_inbox::wire::inbox::{CardLink, ProposedAct};
 use suzatary_services::repos::Visibility;
 
 #[test]
@@ -29,7 +29,7 @@ fn a_repository_card_says_each_stage_in_its_own_words() {
                     .expect("an instant"),
                 response: Responded::Tried { attempt: 1, tried },
             }),
-            &suzatary_core::secretary::inbox::ProposalId::new(format!("p{:032x}", 1))
+            &suzatary_inbox::secretary::inbox::ProposalId::new(format!("p{:032x}", 1))
                 .expect("an id"),
         )
     };

@@ -30,13 +30,13 @@ proptest! {
         STORED_ANSWER_BYTES..4 * STORED_ANSWER_BYTES,
     ]) {
         let answer = answer_of(len);
-        let turn = suzatary_core::secretary::model::Turn::Tool {
-            verb: suzatary_core::secretary::tool_name::ToolName::from("junk_digest"),
+        let turn = suzatary_conversations::secretary::model::Turn::Tool {
+            verb: suzatary_conversations::secretary::tool_name::ToolName::from("junk_digest"),
             answer: answer.clone(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+            outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
             files: Vec::new(),
         };
-        let (_, words) = suzatary_core::secretary::turn_shape::split(&turn);
+        let (_, words) = suzatary_conversations::secretary::turn_shape::split(&turn);
         let words = words.expect("a whole turn has words");
         let [LineWords::Tool { answer: stored, .. }] = words.as_slice() else {
             panic!("a tool turn is one tool slot: {words:?}");

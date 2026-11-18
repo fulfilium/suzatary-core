@@ -3,11 +3,12 @@
 use prodrome_core::literal::Datetime;
 
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::conversations::InMemory;
-use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::model::{SessionId, Turn};
-use suzatary_core::secretary::store::{Entry, Kind};
-use suzatary_core::secretary::transcript;
+use suzatary_conversations::secretary::model::{SessionId, Turn};
+use suzatary_conversations::secretary::store::{Entry, Kind};
+use suzatary_core::stores::conversations::InMemory;
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::rescrub;
+use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_memory::secretary::words::Words;
@@ -124,7 +125,7 @@ fn a_migration_forgets_the_blocks_its_old_words_were_rendered_to() {
         rendered.iter().any(|block| block.contains("482913")),
         "the old words' blocks hold the code: {rendered:?}"
     );
-    suzatary_core::secretary::rescrub::run(held.conversations(), at(9)).expect("migrated");
+    rescrub::run(held.conversations(), at(9)).expect("migrated");
     let forgot = held.forgot.sources();
     for block in &rendered {
         assert!(
@@ -153,7 +154,7 @@ fn killing_a_slot_deletes_its_conversation_s_model_session() {
                 at(9),
             )
             .map(|_| ()),
-            _ => suzatary_core::secretary::rescrub::run(held.conversations(), at(9)).map(|_| ()),
+            _ => rescrub::run(held.conversations(), at(9)).map(|_| ()),
         }
         .expect("the act runs");
         assert!(

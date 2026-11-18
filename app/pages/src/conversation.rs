@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use suzatary_api::wire::Frame;
 use suzatary_base::reference::Reference;
-use suzatary_core::secretary::store::ConversationState;
+use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_core::wire::topics::{
     ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Speaker, TurnGone, TurnRow,
     VerbOutcome,

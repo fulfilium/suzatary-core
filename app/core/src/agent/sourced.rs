@@ -2,9 +2,9 @@
 
 use prodrome_core::fpl;
 
-use crate::priced::day_of;
-use crate::verb::Caught;
 use suzatary_base::refusal::Refusal;
+use suzatary_inbox::priced::day_of;
+use suzatary_inbox::verb::Caught;
 use suzatary_record::record::Source;
 
 /// The `source_*` arguments of a call.

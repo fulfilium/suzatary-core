@@ -11,15 +11,16 @@ use prodrome_core::literal::Datetime;
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Beside;
-use crate::secretary::conversations::{Conversations, ReadConversations};
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
-use crate::secretary::held_lines::{Gathered, HeldLines};
-use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
-use crate::timings::{Phase, timed};
 use suzatary_base::refusal::Refusal;
+use suzatary_lines::parts;
+use suzatary_lines::secretary::conversations::{Conversations, ReadConversations};
+use suzatary_lines::secretary::held_lines::{Gathered, HeldLines};
+use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::timings::{Phase, timed};
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_memory::secretary::texts::Naming;
 use suzatary_store::store::{Gets, Lists, Prodrome, Reads};
@@ -105,7 +106,7 @@ impl ReadDigests<'_> {
     /// # Errors
     /// As [`ReadDigests::read`].
     pub(crate) fn read_under(&self, gathered: &Gathered) -> Result<Digest, Refusal> {
-        let shape = crate::parts::part("shape", || gathered.shape()).map_err(|cycle| {
+        let shape = parts::part("shape", || digest::Shape::over(gathered)).map_err(|cycle| {
             Refusal::internal(format!(
                 "the conversations' lines rest on {} in a cycle",
                 cycle.0.as_str()
@@ -116,7 +117,7 @@ impl ReadDigests<'_> {
         let read = timed(Phase::Fold, || {
             self.lines.opened.said(|kept| {
                 let read = digest::under_kept(
-                    std::sync::Arc::clone(shape),
+                    std::sync::Arc::clone(&shape),
                     &history,
                     self.owners,
                     |name| {
@@ -168,7 +169,7 @@ impl ReadDigests<'_> {
     /// As [`ReadDigests::read`].
     pub fn naming(&self) -> Result<Naming<Line>, Refusal> {
         let read = self.read()?;
-        Ok(crate::parts::part("naming", || read.naming()))
+        Ok(parts::part("naming", || read.naming()))
     }
 
     /// Refuse unless the history and the lines both read whole.

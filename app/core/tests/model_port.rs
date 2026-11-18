@@ -4,9 +4,11 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use proptest::prelude::*;
+use suzatary_conversations::secretary::model::laws::{Case, Law, Rig, check};
+use suzatary_conversations::secretary::model::{
+    Conversation, Model, ModelError, Reply, ToolCall, Turn,
+};
 use suzatary_core::secretary::answering::Answering;
-use suzatary_core::secretary::model::laws::{Case, Law, Rig, check};
-use suzatary_core::secretary::model::{Conversation, Model, ModelError, Reply, ToolCall, Turn};
 
 type Answer = Box<dyn Fn(&Conversation) -> Result<String, ModelError> + Sync>;
 

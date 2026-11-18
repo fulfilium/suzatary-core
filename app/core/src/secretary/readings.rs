@@ -3,21 +3,7 @@
 
 use suzatary_signatures::chain_set::ChainSet;
 
-use crate::secretary::acts::Act;
 use crate::secretary::answers::{AnswerError, Answers};
-use crate::secretary::changes::Changeset;
-use crate::secretary::inbox;
-use crate::secretary::inbox_reading::{Reading, Words};
-use crate::secretary::model::Turn;
-use crate::secretary::proposal::{Forward, Proposal, Style};
-use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
-use crate::secretary::stamp::stamp;
-use crate::secretary::store::{Said, Standing, Stored};
-use crate::secretary::turn_shape::TurnShape;
-use crate::wire::inbox::{
-    Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
-    ProposedObject, RememberWords, ReplacedFact,
-};
 use crate::wire::topics as wire;
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::Datetime;
@@ -27,8 +13,24 @@ use suzatary_connect::connect::AccountKind;
 use suzatary_connect::connect::Connection;
 use suzatary_connect::connect::RoutineId;
 use suzatary_connect::connect::Table;
+use suzatary_conversations::secretary::about;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::{Said, Standing, Stored};
+use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_held::secretary::attached;
 use suzatary_held::secretary::attachment_source::AttachmentSource;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::card;
+use suzatary_inbox::secretary::changes::Changeset;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox_reading::{Reading, Words};
+use suzatary_inbox::secretary::proposal::{Forward, Proposal, Style};
+use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_inbox::wire::inbox::{
+    Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
+    ProposedObject, RememberWords, ReplacedFact,
+};
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::salted_text::TextName;
@@ -297,12 +299,12 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
     q: &str,
 ) -> Answered<wire::SearchPayload> {
-    let needle = crate::secretary::search::Needle::new(q)
+    let needle = suzatary_conversations::secretary::search::Needle::new(q)
         .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
-    let hits = crate::secretary::search::search(
+    let hits = suzatary_conversations::secretary::search::search(
         stored,
         &needle,
-        crate::secretary::search::LIST_CONTEXT,
+        suzatary_conversations::secretary::search::LIST_CONTEXT,
         SEARCH_LIMIT,
     );
     Ok(wire::SearchPayload {
@@ -322,17 +324,18 @@ pub fn conversation(
     let lines = stored.lines(inbox);
     let total_turns = stored.turns.len();
     // Not a suffix of `stored.turns`, since a rewind can set a turn aside.
-    let queued: std::collections::BTreeSet<usize> = crate::secretary::queue::delta(stored)
-        .into_iter()
-        .map(|(index, _)| index)
-        .collect();
-    let spans = crate::secretary::about::round_spans(&stored.turns);
+    let queued: std::collections::BTreeSet<usize> =
+        suzatary_conversations::secretary::queue::delta(stored)
+            .into_iter()
+            .map(|(index, _)| index)
+            .collect();
+    let spans = about::round_spans(&stored.turns);
     let touched: Vec<bool> = window.about.as_ref().map_or_else(
         || vec![true; spans.len()],
         |reference| {
             spans
                 .iter()
-                .map(|&span| crate::secretary::about::round_touches(&stored.turns, span, reference))
+                .map(|&span| about::round_touches(&stored.turns, span, reference))
                 .collect()
         },
     );
@@ -368,10 +371,8 @@ pub fn conversation(
             // Mirrors `web/src/chat/rounds.ts`'s placement.
             .filter(|standing| {
                 spans.is_empty()
-                    || touched[crate::secretary::about::owning_span(
-                        &spans,
-                        standing.asking.after_turn.saturating_sub(1),
-                    )]
+                    || touched
+                        [about::owning_span(&spans, standing.asking.after_turn.saturating_sub(1))]
             })
             .map(|standing| {
                 drawn(
@@ -384,15 +385,19 @@ pub fn conversation(
             })
             .collect(),
         unplaced: unplaced(&lines),
-        state: crate::secretary::store::state(stored),
+        state: suzatary_conversations::secretary::store::state(stored),
         first,
         total,
-        again: stored.rewind(crate::secretary::store::Rewind::Edit).ok(),
+        again: stored
+            .rewind(suzatary_conversations::secretary::store::Rewind::Edit)
+            .ok(),
     }
 }
 
 #[must_use]
-pub fn unplaced(lines: &crate::secretary::store::Lines) -> Vec<wire::UnplacedProposal> {
+pub fn unplaced(
+    lines: &suzatary_conversations::secretary::store::Lines,
+) -> Vec<wire::UnplacedProposal> {
     lines
         .unplaced()
         .map(|unplaced| wire::UnplacedProposal {
@@ -570,7 +575,7 @@ pub fn turn<A: Answers + ?Sized>(
             files: _,
         } => row(answer, verb_turn(verb, *outcome, memory)),
         Turn::Erased { shape, words } => wire::TurnRow {
-            text: crate::secretary::turn_shape::prose(words),
+            text: suzatary_conversations::secretary::turn_shape::prose(words),
             gone: words
                 .first()
                 .and_then(words::Words::gone)
@@ -581,11 +586,11 @@ pub fn turn<A: Answers + ?Sized>(
 }
 
 fn verb_turn(
-    verb: &crate::secretary::tool_name::ToolName,
-    outcome: crate::secretary::outcome::Outcome,
+    verb: &suzatary_conversations::secretary::tool_name::ToolName,
+    outcome: suzatary_conversations::secretary::outcome::Outcome,
     memory: Option<&wire::MemoryPayload>,
 ) -> wire::Speaker {
-    use crate::secretary::outcome::Outcome;
+    use suzatary_conversations::secretary::outcome::Outcome;
     wire::Speaker::Verb {
         verb: verb.to_string(),
         outcome: match outcome {
@@ -600,10 +605,10 @@ fn verb_turn(
 
 /// The owner's act only when the gate stamped it so; the box's otherwise.
 fn acted_by(
-    by: Option<&crate::secretary::stamp::Stamp>,
+    by: Option<&suzatary_inbox::secretary::stamp::Stamp>,
     references: Vec<suzatary_base::reference::Reference>,
 ) -> wire::Speaker {
-    if crate::secretary::stamp::Stamp::owners(by) {
+    if suzatary_inbox::secretary::stamp::Stamp::owners(by) {
         wire::Speaker::Act { references }
     } else {
         wire::Speaker::Box { references }
@@ -612,7 +617,7 @@ fn acted_by(
 
 fn erased(
     shape: &TurnShape,
-    by: Option<&crate::secretary::stamp::Stamp>,
+    by: Option<&suzatary_inbox::secretary::stamp::Stamp>,
     memory: Option<&wire::MemoryPayload>,
 ) -> wire::Speaker {
     match shape {
@@ -785,9 +790,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::Secret { name, .. } => {
-            crate::secretary::card::secret_act(name, routine, draws.model())
-        }
+        Act::Secret { name, .. } => card::secret_act(name, routine, draws.model()),
         Act::Web { request, rule } => ProposedAct::Web {
             request: request.kind(),
             target: match request {
@@ -819,7 +822,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
         Act::DriveRead { path, size } => ProposedAct::Drive {
             path: path.to_string(),
             name: path.name().unwrap_or("/").to_owned(),
-            folder: crate::secretary::acts::folder_of(path).to_string(),
+            folder: suzatary_inbox::secretary::acts::folder_of(path).to_string(),
             size: size.map(suzatary_base::spelling::bytes).unwrap_or_default(),
             sentence: act.sentence(),
         },
@@ -1000,7 +1003,7 @@ fn forward_on_wire(forward: &Forward) -> ProposedAct {
             })
             .collect(),
         Style::Attached => vec![CardFile {
-            name: crate::secretary::proposal::EML.to_owned(),
+            name: suzatary_inbox::secretary::proposal::EML.to_owned(),
             media: "message/rfc822".to_owned(),
             size: suzatary_base::spelling::bytes(file.size),
             sha256: file.sha256.to_string(),
@@ -1079,7 +1082,7 @@ pub fn proposal(
             kind,
             replaces,
         } => remember_on_wire(&words(text, memory), *kind, replaces, memory),
-        Proposal::Decide(draft) => crate::secretary::decide::on_wire(draft),
+        Proposal::Decide(draft) => suzatary_inbox::secretary::decide::on_wire(draft),
     };
     let reading = &standing.object.reading;
     let (state, outcome) = state(reading);
@@ -1088,11 +1091,7 @@ pub fn proposal(
             &standing.object.asked.proposal,
             &standing.object.asked.asked,
         ),
-        ..crate::secretary::card::at(
-            crate::secretary::card::of(&act),
-            reading,
-            &standing.object.id,
-        )
+        ..card::at(card::of(&act), reading, &standing.object.id)
     };
     wire::ProposalRow {
         index,
@@ -1114,8 +1113,8 @@ pub fn proposal(
     }
 }
 
-fn session_on_wire(session: &crate::coding::Session) -> CodingSession {
-    use crate::coding::Session;
+fn session_on_wire(session: &suzatary_inbox::coding::Session) -> CodingSession {
+    use suzatary_inbox::coding::Session;
     use suzatary_memory::coding_report::Lines;
     match session {
         Session::Fired { id, url, at } => CodingSession::Fired {

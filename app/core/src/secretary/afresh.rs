@@ -2,13 +2,15 @@
 //! gate stamped as the owner's, with words and no file, so it is clean on its own. It is the only
 //! line that crosses from a conversation that read more into the fresh one.
 
-use crate::secretary::model::Turn;
-use crate::secretary::queue;
-use crate::secretary::store::{Entry, Said, Stored};
-use crate::secretary::taint::{self, Taint};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::store::{Entry, Said, Stored};
+use suzatary_conversations::secretary::taint;
+use suzatary_conversations::secretary::taint::Taint;
+use suzatary_inbox::secretary::acts;
 
 /// One turn of the owner's own words, and where it was said.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,8 +76,8 @@ impl Request {
 
     /// The act that asks it again, filed in `conversation`.
     #[must_use]
-    pub fn act(&self, conversation: &ConversationId) -> crate::secretary::acts::Act {
-        crate::secretary::acts::Act::Afresh {
+    pub fn act(&self, conversation: &ConversationId) -> acts::Act {
+        acts::Act::Afresh {
             conversation: conversation.clone(),
             turn: self.turn,
         }
@@ -92,8 +94,8 @@ fn own(said: &Said) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::model::ToolCall;
-    use crate::secretary::stamp::{Speaker, Stamp};
+    use suzatary_conversations::secretary::model::ToolCall;
+    use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 
     fn at() -> Datetime {
         Datetime::new(2026, 11, 1, 9, 0, 0, 0).expect("an instant")
@@ -120,7 +122,7 @@ mod tests {
             at: at(),
             title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
-            kind: crate::secretary::store::Kind::Topic,
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
         }];
         entries.extend(lines);
         Stored::of(&ConversationId::new("default").expect("a slug"), &entries)

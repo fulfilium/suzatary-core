@@ -9,10 +9,11 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_core::secretary::readings;
-use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
 use suzatary_core::wire::topics as wire;
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::file_read::Withheld;
+use suzatary_inbox::secretary::stamp;
+use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_io::attachments::{Stored, UploadError};
 use suzatary_signatures::signatures::Seat;
 
@@ -309,7 +310,7 @@ pub fn block(
     let source = match call.state.workers.closed(id, sha) {
         Some(source) => Some(source),
         None => readings::block_named(
-            &suzatary_core::secretary::conversations::read(
+            &suzatary_lines::secretary::conversations::read(
                 call.chain.caps.secretary.conversations,
                 id,
             )?,

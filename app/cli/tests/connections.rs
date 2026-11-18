@@ -10,7 +10,7 @@ use std::sync::Arc;
 use common::{DeclaredStore, Fakes, SecretRecorder, SettingsFixture};
 use suzatary_base::conversation_id::SETUP;
 use suzatary_connect::connect::Connection;
-use suzatary_core::secretary::acts::Act;
+use suzatary_inbox::secretary::acts::Act;
 
 /// The scratch instance: every required table, one account and nothing connected beside it.
 const INSTANCE: &str = r#"# Ada's box, a scratch copy.

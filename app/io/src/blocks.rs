@@ -1,7 +1,7 @@
 //! The photos and PDFs one request carries, as the `claude` CLI's stream-json blocks.
 
 use serde_json::{Value, json};
-use suzatary_core::secretary::model::{ModelError, Turn};
+use suzatary_conversations::secretary::model::{ModelError, Turn};
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::for_model::ForModel;
@@ -185,7 +185,7 @@ mod tests {
         Turn::Tool {
             verb: "attachments".into(),
             answer: "{}".to_owned(),
-            outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+            outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
             files: vec![Enclosed {
                 id,
                 name: name.to_owned(),

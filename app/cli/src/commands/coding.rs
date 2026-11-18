@@ -10,9 +10,9 @@ use std::time::Duration;
 use suzatary_base::capability::Clock as _;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::RoutineId;
-use suzatary_core::coding::{Fired, Task};
 use suzatary_core::secretary::coding::Advanced;
-use suzatary_core::secretary::responded::{Done, Performed, Tried};
+use suzatary_inbox::coding::{Fired, Task};
+use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::routine::{Endpoint, FireError};
 use suzatary_io::secrets::Resolves;
@@ -182,7 +182,7 @@ fn waiting(conversations: &ConversationStores) -> anyhow::Result<Vec<Advanced>> 
 fn seen(
     mirrors: &suzatary_io::repos::Mirrors,
     repo: &suzatary_base::repo_ids::RepoName,
-) -> anyhow::Result<Vec<suzatary_core::coding::Seen>> {
+) -> anyhow::Result<Vec<suzatary_inbox::coding::Seen>> {
     mirrors
         .seen(repo)
         .map_err(|failed| anyhow::anyhow!("reading {repo}: {failed}"))

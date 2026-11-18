@@ -30,7 +30,7 @@ use suzatary_base::topic_target::Target;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::stores::InMemory;
-use suzatary_core::wire::lines::Frontier;
+use suzatary_lines::wire::lines::Frontier;
 use suzatary_signatures::epoch::Epochs;
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
@@ -146,7 +146,7 @@ impl Device {
     }
 
     /// `objects` taken in, as a tab joins a piece.
-    fn take(&self, objects: &[suzatary_core::wire::lines::StoredObject]) {
+    fn take(&self, objects: &[suzatary_lines::wire::lines::StoredObject]) {
         let prints: std::collections::BTreeMap<Hash, Vec<u8>> = objects
             .iter()
             .map(|o| {
@@ -227,7 +227,7 @@ impl TheBox {
         &mut self,
         device: &Device,
         since: &Since,
-    ) -> suzatary_core::wire::lines::ReceiptPayload {
+    ) -> suzatary_lines::wire::lines::ReceiptPayload {
         let own = device.own();
         let receipt = routes::receive_changes(
             &self.store,

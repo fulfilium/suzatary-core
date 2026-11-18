@@ -8,11 +8,11 @@
 
 use prodrome_core::digest::Measure;
 
-use crate::secretary::model::Turn;
-use crate::secretary::stamp::Stamp;
-use crate::secretary::store::Entry;
-use crate::secretary::taint::Taint;
-use crate::secretary::turn_shape::TurnShape;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::taint::Taint;
+use suzatary_conversations::secretary::turn_shape::TurnShape;
+use suzatary_inbox::secretary::stamp::Stamp;
 
 /// A span of lines' taint and kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -142,7 +142,7 @@ impl Label {
         }
     }
 
-    /// One line's: `taint`, its taint in its round ([`crate::secretary::taint::rounds`]), and its kind.
+    /// One line's: `taint`, its taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), and its kind.
     #[must_use]
     pub fn of(entry: &Entry, taint: Taint) -> Self {
         Self {

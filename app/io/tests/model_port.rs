@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
-use suzatary_core::secretary::model::laws::{Case, Rig, check};
-use suzatary_core::secretary::model::{Conversation, ToolCall, Turn};
+use suzatary_conversations::secretary::model::laws::{Case, Rig, check};
+use suzatary_conversations::secretary::model::{Conversation, ToolCall, Turn};
 use suzatary_io::model::{ClaudeCli, Fence};
 
 /// Each model gets its own script and the file it writes what it heard to; the rig keeps the
@@ -102,7 +102,7 @@ fn the_claude_cli_interpreter_keeps_every_law_over_a_scripted_far_end() {
             Turn::Tool {
                 verb: "search".into(),
                 answer: "one message: the lease renews on 1 October".to_owned(),
-                outcome: suzatary_core::secretary::outcome::Outcome::Answered,
+                outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                 files: Vec::new(),
             },
             Turn::Act {

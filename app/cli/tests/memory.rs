@@ -6,6 +6,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
+use suzatary_conversations::secretary::model;
+use suzatary_conversations::secretary::store;
+use suzatary_lines::secretary::transcript;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -159,12 +162,12 @@ fn holding(root: &std::path::Path, words: &str) -> Vec<String> {
 fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
     let left = holding(&fakes.root, words);
     assert!(left.is_empty(), "no file holds the words: {left:?}");
-    let read = suzatary_core::secretary::transcript::lines(
+    let read = transcript::lines(
         fakes.conversations.conversations(),
         &suzatary_base::conversation_id::ConversationId::new(id).expect("an id"),
     )
     .expect("reads");
-    let holding_words: Vec<&suzatary_core::secretary::store::Entry> = read
+    let holding_words: Vec<&store::Entry> = read
         .iter()
         .filter(|entry| {
             serde_json::to_string(entry)
@@ -175,8 +178,8 @@ fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
     assert!(
         matches!(
             holding_words.as_slice(),
-            [suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::secretary::model::Turn::Model { calls, .. },
+            [store::Entry::Said {
+                turn: model::Turn::Model { calls, .. },
                 ..
             }] if calls.iter().any(|call| call.verb.as_str() == "remember")
         ),
@@ -196,11 +199,8 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     let left = holding(&fakes.root, words);
     assert!(left.is_empty(), "no file holds the words: {left:?}");
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
-    let read = suzatary_core::secretary::transcript::lines(
-        fakes.conversations.conversations(),
-        &conversation,
-    )
-    .expect("reads");
+    let read =
+        transcript::lines(fakes.conversations.conversations(), &conversation).expect("reads");
     assert!(
         !serde_json::to_string(&read)
             .expect("prints")
@@ -210,9 +210,9 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     assert!(
         read.iter().any(|entry| matches!(
             entry,
-            suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::secretary::model::Turn::Erased {
-                    shape: suzatary_core::secretary::turn_shape::TurnShape::Model { calls },
+            store::Entry::Said {
+                turn: model::Turn::Erased {
+                    shape: suzatary_conversations::secretary::turn_shape::TurnShape::Model { calls },
                     ..
                 },
                 ..
@@ -223,7 +223,7 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     assert!(
         read.iter().any(|entry| matches!(
             entry,
-            suzatary_core::secretary::store::Entry::Erased {
+            store::Entry::Erased {
                 erasure: suzatary_memory::secretary::erasure::Erasure::Forgot { .. },
                 ..
             }
@@ -449,7 +449,7 @@ fn a_round_the_box_opened_remembers_nothing() {
     ]));
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let id = suzatary_base::conversation_id::DEFAULT.clone();
-    suzatary_core::secretary::conversations::read_or_open_default(
+    suzatary_lines::secretary::conversations::read_or_open_default(
         fakes.conversations.conversations(),
         &fakes.model,
         &id,
@@ -472,7 +472,7 @@ fn a_round_the_box_opened_remembers_nothing() {
             text: "What changed since the last briefing?",
             references: &[],
             by: suzatary_core::secretary::Asker::Box(
-                suzatary_core::secretary::own_round::OwnRound::Brief,
+                suzatary_inbox::secretary::own_round::OwnRound::Brief,
             ),
         },
         "system prompt",
@@ -484,7 +484,7 @@ fn a_round_the_box_opened_remembers_nothing() {
         .turns
         .iter()
         .find_map(|said| match &said.turn {
-            suzatary_core::secretary::model::Turn::Tool {
+            model::Turn::Tool {
                 verb,
                 answer,
                 outcome,

@@ -5,8 +5,6 @@
 //! The act is a function of the account and the instant it last synced, so asking again asks for
 //! the same object; a new failure after a success is a new act.
 
-use crate::secretary::changes::{self, Act, Changeset};
-use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::escape_markup;
@@ -15,6 +13,9 @@ use suzatary_base::refusal::Refusal;
 use suzatary_connect::deployment::Deployment;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Instant, Reading};
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::{Act, Changeset};
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
 use suzatary_record::todo::{Price, TodoFields};
 
 /// What the proposed todo is priced: an account that does not sync hides its mail from triage,
@@ -225,7 +226,7 @@ mod tests {
             policy,
         });
         let indices = propose_persistent(&chains, &deployment, &stores.id).expect("an answer");
-        let inbox = crate::secretary::inbox::fold(&stores.inbox).expect("reads");
+        let inbox = suzatary_inbox::secretary::inbox::fold(&stores.inbox).expect("reads");
         let written = inbox.objects().map(|object| match &object.asked.proposal {
             Proposal::Changes(changeset) => changeset.chain().to_owned(),
             other => panic!("the rule proposes chain acts, not {other:?}"),
@@ -234,26 +235,26 @@ mod tests {
     }
 
     struct Stores {
-        lines: crate::secretary::conversations::InMemory,
-        inbox: crate::stores::InMemory<crate::secretary::inbox_event::InboxEvent>,
+        lines: crate::stores::conversations::InMemory,
+        inbox: crate::stores::InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
         id: ConversationId,
     }
 
     fn stores() -> Stores {
         let stores = Stores {
-            lines: crate::secretary::conversations::InMemory::default(),
+            lines: crate::stores::conversations::InMemory::default(),
             inbox: crate::stores::InMemory::default(),
             id: ConversationId::new("default").expect("a slug"),
         };
-        crate::secretary::transcript::start(
+        suzatary_lines::secretary::transcript::start(
             stores.lines.conversations(),
             &stores.id,
-            &crate::secretary::store::Entry::Opened {
+            &suzatary_conversations::secretary::store::Entry::Opened {
                 at: suzatary_base::capability::Datetime::new(2026, 10, 1, 8, 0, 0, 0)
                     .expect("an instant"),
                 title: suzatary_memory::secretary::words::Words::kept("Default".to_owned()),
                 model: "a fake model".to_owned(),
-                kind: crate::secretary::store::Kind::Topic,
+                kind: suzatary_conversations::secretary::store::Kind::Topic,
             },
         )
         .expect("opens");

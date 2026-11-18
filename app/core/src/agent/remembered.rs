@@ -8,6 +8,7 @@ use suzatary_base::refusal::Refusal;
 use suzatary_memory::secretary::memory::Memory;
 
 use super::reads::wire_len;
+use suzatary_lines::timings;
 
 /// What an empty memory reads as.
 const NOTHING: &str = "The secretary remembers nothing yet.";
@@ -71,8 +72,8 @@ pub(crate) fn remembered(
     // Then the record, in what they leave.
     let view = largest(room, |view| fits(&told(kept, view)));
     let answer = told(kept, view);
-    crate::timings::counted(
-        crate::timings::Phase::Remembered,
+    timings::counted(
+        timings::Phase::Remembered,
         "views",
         crate::secretary::digest::views() - views,
     );

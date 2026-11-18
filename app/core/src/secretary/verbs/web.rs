@@ -2,12 +2,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::acts::Act;
-use crate::secretary::proposal::Proposal;
+use crate::secretary;
 use crate::secretary::verbs::{Reasoned, propose};
-use crate::secretary::{self, Call, SecretarySurface, taint};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::taint;
+use suzatary_inbox::secretary::acts::Act;
+use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_services::web::{self, AllowRule, SearchQuery, WebError, WebRequest};
 
 /// Read the web: an allowed host at once, any other on a tap.

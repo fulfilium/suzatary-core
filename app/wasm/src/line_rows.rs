@@ -11,10 +11,11 @@ use std::collections::BTreeSet;
 
 use prodrome_core::event::Hash;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::held_replica::{Moved, Took};
-use suzatary_core::secretary::line_form::{self, LineFrame, LineReplica};
-use suzatary_core::secretary::outlines::Parsed;
-use suzatary_core::wire::lines::SkeletonPayload;
+use suzatary_lines::secretary::held_replica::{Moved, Took};
+use suzatary_lines::secretary::line_form;
+use suzatary_lines::secretary::line_form::{LineFrame, LineReplica};
+use suzatary_lines::secretary::outlines::Parsed;
+use suzatary_lines::wire::lines::SkeletonPayload;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_store::replica::frontier::Frontier;

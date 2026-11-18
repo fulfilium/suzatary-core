@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use suzatary_base::capability::Secret;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
-use suzatary_core::coding::{BRANCH_PREFIX, Branch, REPORTS_DIR, ReportFile, Seen};
+use suzatary_inbox::coding::{BRANCH_PREFIX, Branch, REPORTS_DIR, ReportFile, Seen};
 use suzatary_memory::coding_report::{FileStat, Lines};
 use suzatary_services::repos::{Declared, Patch, RepoRow, RepoTarget, TOKEN, Visibility};
 use suzatary_services::repositories::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories};
@@ -1321,7 +1321,7 @@ mod tests {
 
     #[test]
     fn a_branch_merged_before_the_first_poll_is_reported_then_merged() {
-        use suzatary_core::coding::{Session, Step, next};
+        use suzatary_inbox::coding::{Session, Step, next};
         let (temp, mirrors, repo) = fixture("merged-first");
         let work = temp.path().join("work");
         let remote = temp.path().join("remotes/bmabsout/merged-first.git");

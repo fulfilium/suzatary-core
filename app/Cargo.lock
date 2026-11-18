@@ -4143,11 +4143,14 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-google",
  "suzatary-health",
  "suzatary-held",
+ "suzatary-inbox",
  "suzatary-io",
+ "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-plugin",
@@ -4182,10 +4185,13 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-google",
  "suzatary-health",
  "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
@@ -4246,6 +4252,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-conversations"
+version = "0.0.0"
+dependencies = [
+ "hex",
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-conversations",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-mail",
+ "suzatary-memory",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
 name = "suzatary-core"
 version = "0.0.0"
 dependencies = [
@@ -4255,7 +4283,6 @@ dependencies = [
  "hex",
  "postcard",
  "prodrome-core",
- "prodrome-wasm-exports",
  "proptest",
  "regex",
  "schemars",
@@ -4264,10 +4291,13 @@ dependencies = [
  "sha2",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-google",
  "suzatary-health",
  "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
@@ -4344,6 +4374,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-inbox"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "prodrome-wasm-exports",
+ "proptest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-google",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-mail",
+ "suzatary-memory",
+ "suzatary-record",
+ "suzatary-services",
+ "suzatary-signatures",
+ "suzatary-store",
+ "suzatary-todo",
+ "suzatary-triage",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
 name = "suzatary-io"
 version = "0.0.0"
 dependencies = [
@@ -4368,10 +4429,13 @@ dependencies = [
  "sha2",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-google",
  "suzatary-health",
  "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
@@ -4387,6 +4451,38 @@ dependencies = [
  "typst-assets",
  "ureq",
  "webpki-roots",
+]
+
+[[package]]
+name = "suzatary-lines"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "postcard",
+ "prodrome-core",
+ "prodrome-wasm-exports",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-conversations",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
+ "suzatary-memory",
+ "suzatary-record",
+ "suzatary-signatures",
+ "suzatary-store",
+ "suzatary-todo",
+ "suzatary-triage",
+ "thiserror",
+ "tracing",
+ "ts-rs",
 ]
 
 [[package]]
@@ -4442,8 +4538,11 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-health",
+ "suzatary-inbox",
+ "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
  "suzatary-record",
@@ -4629,8 +4728,11 @@ dependencies = [
  "suzatary-api",
  "suzatary-base",
  "suzatary-connect",
+ "suzatary-conversations",
  "suzatary-core",
  "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
  "suzatary-memory",
  "suzatary-record",
  "suzatary-signatures",

@@ -1,8 +1,8 @@
 //! What the lines' husked store costs against the Prodrome's (`suzatary_io::husked`). The prune's
 //! laws are the CLI's (`app/cli/tests/husked.rs`), which reads the routes.
 
-use suzatary_core::secretary::conversations::Conversations;
-use suzatary_core::secretary::transcript;
+use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::transcript;
 
 use crate::stores::{conversations_at_scale, lines_at, said};
 
@@ -12,7 +12,7 @@ use crate::stores::{conversations_at_scale, lines_at, said};
 #[test]
 #[ignore = "a measurement, run by name"]
 fn an_append_at_scale() {
-    static OPENED: std::sync::LazyLock<suzatary_core::secretary::opened::Opened> =
+    static OPENED: std::sync::LazyLock<suzatary_lines::secretary::opened::Opened> =
         std::sync::LazyLock::new(Default::default);
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
@@ -25,7 +25,7 @@ fn an_append_at_scale() {
         sessions: &suzatary_base::capability::Nothing,
         opened: &OPENED,
     };
-    let prodrome: suzatary_io::objects::Objects<suzatary_core::secretary::line_event::LineEvent> =
+    let prodrome: suzatary_io::objects::Objects<suzatary_lines::secretary::line_event::LineEvent> =
         suzatary_io::objects::Objects::open(dir.path().join(crate::stores::LINES));
     for (what, store) in [
         (

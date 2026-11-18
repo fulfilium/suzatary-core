@@ -12,12 +12,13 @@ use prodrome_core::schema::Schema;
 use proptest::prelude::*;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_core::secretary::inbox::{self, Fold, ProposalId};
-use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Kept, Memories};
-use suzatary_core::secretary::proposal::{Proposal, Reasons};
-use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::stores::InMemory;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::inbox::{Fold, ProposalId};
+use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
+use suzatary_inbox::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_memory::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sources};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -42,7 +43,7 @@ struct Box {
     texts: InMemoryDoc<TextName, Text<Fact>>,
     cards: InMemory<InboxEvent>,
     entropy: Counting,
-    lines: suzatary_core::secretary::conversations::InMemory,
+    lines: suzatary_core::stores::conversations::InMemory,
     owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     digests: InMemory<suzatary_core::secretary::digest_event::DigestEvent>,
     digest_texts: InMemoryDoc<TextName, Text<suzatary_core::secretary::digest_line::Line>>,
@@ -113,7 +114,7 @@ fn asked(the: &Box, fact: &Fact, (kind, replaces): (Kind, Replaces), index: usiz
     let held = the.memories().hold().expect("held");
     let kept = held.keep_card(fact).expect("kept");
     let asked = inbox::Asked {
-        proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+        proposer: suzatary_inbox::secretary::proposer::Proposer::Secretary,
         proposal: Proposal::Remember {
             text: kept.name().clone(),
             kind,

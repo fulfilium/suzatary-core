@@ -5,10 +5,10 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use suzatary_base::capability::{Whois, WhoisError};
-use suzatary_core::secretary::compact::Compact;
-use suzatary_core::secretary::model::{
+use suzatary_conversations::secretary::model::{
     Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
 };
+use suzatary_core::secretary::compact::Compact;
 use suzatary_io::secrets::Secretspec;
 use suzatary_io::whois::Tailscaled;
 use suzatary_services::drive::WritePort as _;
@@ -174,7 +174,7 @@ pub enum Verifying {
 fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
     let asked = Conversation {
         system: "This is a test that the model answers. Answer with the one word: ok.".to_owned(),
-        turns: vec![suzatary_core::secretary::model::Turn::Person {
+        turns: vec![suzatary_conversations::secretary::model::Turn::Person {
             text: "ok?".to_owned(),
             references: Vec::new(),
             attachments: Vec::new(),
@@ -571,11 +571,11 @@ impl Model for Recorded {
 impl SessionModel for Recorded {
     fn open(
         &self,
-        id: &suzatary_core::secretary::model::SessionId,
+        id: &suzatary_conversations::secretary::model::SessionId,
         conversation: &Conversation,
         tools: &serde_json::Value,
-        halt: &suzatary_core::secretary::model::Halt,
-    ) -> Result<suzatary_core::secretary::model::Sessioned, ModelError> {
+        halt: &suzatary_conversations::secretary::model::Halt,
+    ) -> Result<suzatary_conversations::secretary::model::Sessioned, ModelError> {
         self.door
             .ask(|| self.cli.open(id, conversation, tools, halt))
     }
@@ -583,12 +583,12 @@ impl SessionModel for Recorded {
     fn resume(
         &self,
         system: &str,
-        session: &suzatary_core::secretary::model::Session,
-        delta: &suzatary_core::secretary::model::Delta,
+        session: &suzatary_conversations::secretary::model::Session,
+        delta: &suzatary_conversations::secretary::model::Delta,
         tools: &serde_json::Value,
         on_delta: &dyn Fn(&str),
-        halt: &suzatary_core::secretary::model::Halt,
-    ) -> Result<suzatary_core::secretary::model::Sessioned, ModelError> {
+        halt: &suzatary_conversations::secretary::model::Halt,
+    ) -> Result<suzatary_conversations::secretary::model::Sessioned, ModelError> {
         self.door.ask(|| {
             self.cli
                 .resume(system, session, delta, tools, on_delta, halt)

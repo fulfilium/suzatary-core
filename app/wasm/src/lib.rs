@@ -33,7 +33,7 @@ pub use chains::{Chains, Linker};
 type Event = suzatary_record::record::TodoEvent;
 
 prodrome_wasm_exports::schema!(Todos = Event, priced);
-object_rows::objects_store!(Proposals = suzatary_core::secretary::inbox_event::InboxEvent);
+object_rows::objects_store!(Proposals = suzatary_inbox::secretary::inbox_event::InboxEvent);
 
 fn refused(reason: impl AsRef<str>) -> JsError {
     JsError::new(reason.as_ref())

@@ -1177,7 +1177,7 @@ fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
         let template = suzatary_connect::connect::TemplateId::Google;
         let id = common::opening(
             &serving.base,
-            &suzatary_core::secretary::store::Entry::SetUp {
+            &suzatary_conversations::secretary::store::Entry::SetUp {
                 at: common::next_instant(),
                 title: suzatary_memory::secretary::words::Words::kept(template.template().called()),
                 template,
@@ -1251,7 +1251,7 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
     common::asked(
         &serving.fakes,
         "connect",
-        suzatary_core::secretary::acts::Act::Connect {
+        suzatary_inbox::secretary::acts::Act::Connect {
             connection: suzatary_connect::connect::Connection::parse("google", &[ADA.to_owned()])
                 .expect("a Google account"),
         },

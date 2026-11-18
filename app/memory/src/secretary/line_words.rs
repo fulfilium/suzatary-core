@@ -1,6 +1,6 @@
 //! The words of one slot of a conversation line: what is locked under one key.
 //!
-//! A line holds at most a few slots (`suzatary_core::secretary::line_shape::LineShape::slots`): a
+//! A line holds at most a few slots (`suzatary_lines::secretary::line_shape::LineShape::slots`): a
 //! turn's words, or a model turn's text and then each call's arguments, each under a key of its
 //! own, so a forgetting can erase the one call that wrote a fact and leave the prose beside it.
 //! Every slot's words go through the redaction door ([`Scrubbed`]) before they are locked

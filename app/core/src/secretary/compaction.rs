@@ -29,7 +29,6 @@ use prodrome_core::fpl::instant_of;
 use prodrome_core::literal::Datetime;
 
 use crate::model_name::ModelName;
-use crate::nonempty::NonEmpty;
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::compact_budget::{Budget, Hold};
@@ -40,11 +39,13 @@ use crate::secretary::digest_event::{self, DigestEvent};
 use crate::secretary::digest_line::NODE_BYTES;
 use crate::secretary::digest_spent::Spent;
 use crate::secretary::digests::{Digests, ReadDigests, compactor};
-use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Memories;
-use crate::secretary::store::Entry;
 use suzatary_base::capability::Clock;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::nonempty::NonEmpty;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_lines::secretary::held_lines;
+use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_store::store::Prodrome;
 use suzatary_triage::rule::{Named, ReadingName, Rule};
 
@@ -63,7 +64,7 @@ impl std::fmt::Display for TheDigest {
 pub struct Reading {
     digest: Digest,
     lines: std::sync::Arc<suzatary_store::store::Graph<LineEvent>>,
-    gathered: std::sync::Arc<crate::secretary::held_lines::Gathered>,
+    gathered: std::sync::Arc<held_lines::Gathered>,
 }
 
 impl Reading {
@@ -72,12 +73,10 @@ impl Reading {
     /// # Errors
     /// [`ReadDigests::whole`]'s, and the stores' own.
     pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
-        crate::first_read::first("digest", || {
+        suzatary_lines::first_read::first("digest", || {
             digests.whole()?;
             let graph = digests.line_graph()?;
-            let gathered = digests
-                .lines
-                .fold(crate::secretary::held_lines::HeldLines::gathered)?;
+            let gathered = digests.lines.fold(held_lines::HeldLines::gathered)?;
             Ok(Self {
                 digest: digests.read_under(&gathered)?,
                 lines: graph,

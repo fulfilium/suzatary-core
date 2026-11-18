@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary::model::Turn;
-use crate::secretary::store::Entry;
-use crate::secretary::transcript;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_lines::secretary::transcript;
 
 /// Prose set aside for the owner to copy; nothing performs it.
 pub struct DraftNote;
@@ -38,7 +38,7 @@ impl Verb for DraftNote {
                 turn: Turn::Tool {
                     verb: crate::secretary::SecretaryVerb::DraftNote.into(),
                     answer: format!("{}\n\n{}", args.title, args.note),
-                    outcome: crate::secretary::outcome::Outcome::Answered,
+                    outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
                     files: Vec::new(),
                 },
                 by: None,

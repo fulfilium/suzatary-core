@@ -749,8 +749,8 @@ impl suzatary_base::capability::Entropy for Counting {
 /// refuses the post.
 #[test]
 fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
-    use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::store::{Entry, Kind, Namer, Title};
+    use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
+    use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::words::Words;
     let base = writing("stores-lines");
     let _ = answered(&base);

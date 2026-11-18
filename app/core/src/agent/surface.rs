@@ -11,7 +11,6 @@ use super::verbs::{
 };
 use super::{Call, Holds, Says};
 use crate::agent::Agent;
-use crate::secretary::changes::{self, Act, Building, Changeset};
 use crate::secretary::filed::Carding;
 use crate::secretary::shown_record::{OwnersRecord, OwnersWords};
 use crate::secretary::verbs::Reasoned;
@@ -23,6 +22,8 @@ use suzatary_base::reference::TodoRef;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::Moment;
+use suzatary_inbox::secretary::changes;
+use suzatary_inbox::secretary::changes::{Act, Building, Changeset};
 
 /// The triage agent's verbs: each runs against a [`Call`] and answers JSON.
 pub enum TriageSurface {}

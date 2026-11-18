@@ -7,15 +7,9 @@
 
 pub mod agent;
 pub mod asks;
-pub mod coding;
-pub mod content_id;
 pub mod conversation;
-pub mod first_read;
 pub mod model_name;
-pub mod nonempty;
 pub mod notify;
-pub mod parts;
-pub mod priced;
 pub mod release;
 pub mod secretary;
 pub mod settings {
@@ -24,7 +18,6 @@ pub mod settings {
 }
 pub mod stores;
 pub mod sync;
-pub mod timings;
 pub mod verb;
 pub mod wire;
 
