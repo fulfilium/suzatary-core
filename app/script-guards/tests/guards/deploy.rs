@@ -1800,35 +1800,65 @@ fn the_roots_run_builds_only_what_a_deploy_pinned() {
     );
 }
 
+/// A publication run the deploy waits for, as the stub `gh` answers it.
+struct PublicationRun {
+    case: &'static str,
+    /// The run's status in turn, one per question; none when no run appears.
+    answers: Option<&'static str>,
+    /// The deploy's deadlines, in seconds, for a run to appear and to end.
+    appear: &'static str,
+    end: &'static str,
+    says: &'static str,
+}
+
+/// The stub `sleep` returns at once, so a case that ends at a deadline asks the stub `gh` until
+/// the deadline passes on the wall clock: those deadlines are short, and the cases that end on the
+/// run's answer keep long ones they never reach.
+const PUBLICATION_RUNS: [PublicationRun; 4] = [
+    PublicationRun {
+        case: "cache-success",
+        answers: Some("queued \nin_progress \ncompleted success"),
+        appear: "30",
+        end: "40",
+        says: "succeeded: its builds come from the binary cache",
+    },
+    PublicationRun {
+        case: "cache-failure",
+        answers: Some("in_progress \ncompleted failure"),
+        appear: "30",
+        end: "40",
+        says: "ended failure: building it here",
+    },
+    PublicationRun {
+        case: "cache-silence",
+        answers: None,
+        appear: "1",
+        end: "40",
+        says: "appeared within 1s: building it here",
+    },
+    PublicationRun {
+        case: "cache-slow",
+        answers: Some("in_progress "),
+        appear: "1",
+        end: "2",
+        says: "was still in_progress after 2s: building it here",
+    },
+];
+
 /// Where the publication run that builds the pinned commit succeeded, the deploy waits for it
 /// and its build downloads; where that run failed, never came, or GitHub could not be asked, it
 /// builds here and says which. Either way it deploys. A deploy whose builds the store holds
 /// asks GitHub nothing.
 #[test]
 fn deploy_waits_for_the_publication_run_and_says_where_its_builds_come_from() {
-    let cases = [
-        (
-            "cache-success",
-            Some("queued \nin_progress \ncompleted success"),
-            "succeeded: its builds come from the binary cache",
-        ),
-        (
-            "cache-failure",
-            Some("in_progress \ncompleted failure"),
-            "ended failure: building it here",
-        ),
-        (
-            "cache-silence",
-            None,
-            "appeared within 30s: building it here",
-        ),
-        (
-            "cache-slow",
-            Some("in_progress "),
-            "was still in_progress after 40s: building it here",
-        ),
-    ];
-    for (name, runs, said) in cases {
+    for PublicationRun {
+        case: name,
+        answers: runs,
+        appear,
+        end: timeout,
+        says: said,
+    } in PUBLICATION_RUNS
+    {
         let deployed = Box_::new(name);
         deployed.set("next-result", "success");
         if let Some(runs) = runs {
@@ -1839,8 +1869,8 @@ fn deploy_waits_for_the_publication_run_and_says_where_its_builds_come_from() {
             &[&deployed.new],
             &[
                 ("SUZATARY_DEPLOY_PUBLICATIONS", "owner/core"),
-                ("SUZATARY_DEPLOY_CACHE_APPEAR", "30"),
-                ("SUZATARY_DEPLOY_CACHE_TIMEOUT", "40"),
+                ("SUZATARY_DEPLOY_CACHE_APPEAR", appear),
+                ("SUZATARY_DEPLOY_CACHE_TIMEOUT", timeout),
             ],
         );
         let stderr = text(&out.stderr);

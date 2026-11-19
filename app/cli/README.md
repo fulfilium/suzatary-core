@@ -19,5 +19,5 @@ The model crates, `suzatary-io`, `suzatary-plugin` and the Prodrome.
 
 ## Develop
 
-`cargo test -p suzatary --test <name>`; the guards are `--test guards`. The merge gate is
-`scripts/merge-gate.sh`.
+`cargo test -p suzatary --test <name>`; the guards are `--test guards` and, in
+`app/script-guards`, `--test script-guards`. The merge gate is `scripts/merge-gate.sh`.

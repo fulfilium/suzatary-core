@@ -37,6 +37,7 @@ let
     sed = gnused;
     sha256sum = coreutils;
     sort = coreutils;
+    stat = coreutils;
     tar = gnutar;
     tr = coreutils;
     wc = coreutils;

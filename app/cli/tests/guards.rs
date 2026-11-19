@@ -15,8 +15,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-#[path = "guards/adopt_signatures.rs"]
-mod adopt_signatures;
 #[path = "guards/agent.rs"]
 mod agent;
 #[path = "binary.rs"]
@@ -29,10 +27,6 @@ mod binary;
 mod changelog;
 #[path = "guards/context.rs"]
 mod context;
-#[path = "guards/credential.rs"]
-mod credential;
-#[path = "guards/deploy.rs"]
-mod deploy;
 #[path = "guards/door_two.rs"]
 mod door_two;
 #[path = "guards/gate_yml.rs"]
@@ -59,37 +53,16 @@ mod template;
 mod this_box;
 #[path = "guards/train.rs"]
 mod train;
+// What the guards share with the script guards' own target (app/script-guards).
+#[path = "../../script-guards/tests/support/gate_list.rs"]
+mod gate_list;
+#[path = "../../script-guards/tests/support/scratch.rs"]
+mod scratch;
+use scratch::{Scratch, repo};
 #[path = "guards/triage_auth.rs"]
 mod triage_auth;
-#[path = "guards/vault.rs"]
-mod vault;
 #[path = "guards/wasm_budget.rs"]
 mod wasm_budget;
-
-/// The repository root, two levels above `CARGO_MANIFEST_DIR`.
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("app/cli/../.. is the repository")
-        .to_path_buf()
-}
-
-/// A scratch directory ([`suzatary_testkit::scratch`]) that reads as its path.
-struct Scratch(suzatary_testkit::TempDir);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        Scratch(suzatary_testkit::scratch(name))
-    }
-}
-
-impl std::ops::Deref for Scratch {
-    type Target = Path;
-    fn deref(&self) -> &Path {
-        self.0.path()
-    }
-}
 
 /// Run `script` as a subprocess, feeding it `stdin` and returning its whole
 /// output.

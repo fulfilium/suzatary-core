@@ -5,7 +5,8 @@
 //! `.github/workflows/gate-store.yml` saves on master and saves nothing; and `scripts/e2e-part.sh`
 //! deals the browser suite's files to parts that hold each once.
 
-use super::merge_gate::{MADE_AND_READ, steps};
+use super::gate_list::steps;
+use super::merge_gate::MADE_AND_READ;
 use super::{Scratch, repo};
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;

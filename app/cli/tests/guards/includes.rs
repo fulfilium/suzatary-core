@@ -3,7 +3,7 @@
 //! checkout reads the whole tree and a build in Nix reads only its fileset, so an include from
 //! outside the fileset compiles everywhere but in Nix.
 
-use super::merge_gate::on_path;
+use super::scratch::on_path;
 use super::{Scratch, repo};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

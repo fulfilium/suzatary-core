@@ -156,6 +156,7 @@
             ./app/plugin-fence
             ./app/plugin-ics
             ./app/testkit
+            ./app/script-guards
             ./app/viewtree
             ./app/pages
             ./app/wasm
@@ -225,6 +226,7 @@
           ./app/plugin-ics/Cargo.toml
           ./app/plugin-ics/ics.schema
           ./app/testkit/Cargo.toml
+          ./app/script-guards/Cargo.toml
           ./app/viewtree/Cargo.toml
           ./app/pages/Cargo.toml
           ./app/wasm/Cargo.toml
@@ -333,6 +335,7 @@
                 ./app/plugin-fence/Cargo.toml
                 ./app/plugin-ics/Cargo.toml
                 ./app/testkit/Cargo.toml
+                ./app/script-guards/Cargo.toml
                 ./app/viewtree/Cargo.toml
                 ./app/pages/Cargo.toml
                 ./app/wasm/Cargo.toml
@@ -427,6 +430,7 @@
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
+              ./app/script-guards/Cargo.toml
               ./app/viewtree/Cargo.toml
               ./app/pages/Cargo.toml
               ./app/wasm/Cargo.toml
@@ -470,6 +474,7 @@
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml
+              ./app/script-guards/Cargo.toml
               ./app/viewtree/Cargo.toml
               ./app/pages/Cargo.toml
               ./app/wasm/Cargo.toml

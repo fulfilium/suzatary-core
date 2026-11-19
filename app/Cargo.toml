@@ -7,7 +7,7 @@
 # tests make: the programs they run and their scratch directories.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -167,6 +167,9 @@ opt-level = 3
 [profile.dev.package.ed25519-dalek]
 opt-level = 3
 [profile.dev.package.sha2]
+opt-level = 3
+# The leak matcher reads every tracked file: unoptimised, 52 s over this tree.
+[profile.dev.package.suzatary-held]
 opt-level = 3
 
 # THE DEPLOYED BINARY (`.#suzatary`): small; sixteen units, faster to build than one; no LTO,

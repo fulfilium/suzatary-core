@@ -231,12 +231,14 @@ check() {
   fi
   # A file that passed under the same rules is not read again. The key hashes everything that
   # judges a file. The table holds `<sha256>  <path>` lines of clean files only. Paths, links and
-  # symbolic links are checked whole every time.
+  # symbolic links are checked whole every time. The programs are named by file, not bytes (a debug
+  # matcher is 680 MB): any write moves a file's change time, so a changed one meets no old table.
   local passes key table read_from
   passes="${SUZATARY_GUARD_PASSES:-${XDG_CACHE_HOME:-$HOME/.cache}/suzatary/public-guard}"
   key="$({
     printf '%s\n' "$rules" "$strict" "${admit_by:-}"
-    sha256sum "$terms" "$words" "$links" "$bin" "$(command -v gitleaks || echo /dev/null)" \
+    stat -L -c '%d %i %s %.9Y %.9Z' "$bin" "$(command -v gitleaks || echo /dev/null)"
+    sha256sum "$terms" "$words" "$links" \
       "$REPO/scripts/secret-rules.toml" "$REPO/scripts/public-tree.sh" "${manifest:-/dev/null}" \
       "${ignore:-/dev/null}" | cut -c1-64
   } | sha256sum | cut -c1-64)" || exit 2

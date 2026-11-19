@@ -214,7 +214,7 @@ together() {
 
 # Heavy steps take the machine one at a time, in the order named, which within a lane is the
 # lane's own: two builds side by side ran the box (11 GB) out of memory.
-s_heavy=() heavy_order=() s_after=()
+s_heavy=() heavy_order=() s_after=() s_turn=()
 heavy() {
   local name i
   ((list)) && { echo "heavy $*"; return; }
@@ -254,7 +254,7 @@ run_step() {
   if [[ -n "${s_heavy[i]:-}" ]]; then
     if [[ -n "${s_after[i]:-}" && ! -e "$logs/${s_after[i]}.row" ]]; then
       echo "==> $name waits for its turn, after ${s_after[i]}" >&2
-      until [[ -e "$logs/${s_after[i]}.row" ]]; do sleep 1; done
+      flock "$logs/${s_after[i]}.turn" true
     fi
     exec 7>>"$heavy_lock"
     flock -n 7 || { echo "==> $name waits for the heavy step $(cat "$heavy_lock")" >&2; flock 7; }
@@ -280,6 +280,7 @@ run_step() {
   [[ -z "${s_heavy[i]:-}" ]] || exec 7>&-
   [[ -z "${SUZATARY_GATE_EVIDENCE:-}" ]] || evidence "$name" "$code"
   printf '%-16s %s  %4ds%s\n' "$name" "$([ "$code" -eq 0 ] && echo ok || echo "FAILED ($code)")" "$took" "$of" >"$logs/$name.row"
+  [[ -z "${s_turn[i]:-}" ]] || flock -u "${s_turn[i]}"
   if [ "$code" -eq 0 ]; then
     [[ -z "${todo_kept[i]:-}" ]] || passes "$i" >"$logs/$name.pass"
   else
@@ -298,12 +299,16 @@ run_lane() {
     if [[ "${s_half[i]}" == "$1" && "${s_lane[i]}" == "$2" ]] && chosen "$i"; then run_step "$i"; fi
   done
 }
+# A heavy step's turn: a lock on `<step>.turn`, taken before the lanes start, released with its row.
 run_half() {
-  local l i turn=""
-  s_after=()
+  local l i fd turn=""
+  s_after=() s_turn=()
   if [[ "$lanes" == weighted ]]; then
     for i in "${heavy_order[@]}"; do
-      if [[ "${s_half[i]}" == "$1" && -z "${hit[i]:-}" ]] && chosen "$i"; then s_after[i]="$turn" turn="${s_name[i]}"; fi
+      if [[ "${s_half[i]}" == "$1" && -z "${hit[i]:-}" ]] && chosen "$i"; then
+        s_after[i]="$turn" turn="${s_name[i]}"
+        exec {fd}>"$logs/${s_name[i]}.turn" && flock "$fd" && s_turn[i]=$fd
+      fi
     done
   fi
   for l in $(for i in "${!s_name[@]}"; do [[ "${s_half[i]}" != "$1" ]] || echo "${s_lane[i]}"; done | awk '!seen[$0]++'); do
@@ -315,6 +320,7 @@ run_half() {
   done
   wait
   run_lane "$1" quiet
+  for fd in "${s_turn[@]}"; do exec {fd}>&-; done
 }
 
 # shellcheck source=scripts/nix-out.sh
@@ -386,7 +392,7 @@ if [ -f app/cli/tests/live.rs ]; then live_pins=(--test live); fi
 # shellcheck disable=SC2329
 clippy_all() {
   cargo_app clippy -q --workspace --all-targets "$@" -- -D warnings &&
-    cargo_app clippy -q --workspace "${live_pins[@]}" --test guards --test fence --test plugin "$@" -- -D warnings
+    cargo_app clippy -q --workspace "${live_pins[@]}" --test guards --test script-guards --test fence --test plugin "$@" -- -D warnings
 }
 
 lane=check
@@ -437,6 +443,9 @@ rust_test_fixture() {
   units_test "${fixture_tests[@]}"
 }
 step tree test-fixture    crates  rust_test_fixture
+# The script guards build their crate and the testkit: they skip other members but manifests.
+script_guards_reads="$rust,$(git ls-files -- app | awk -F/ 'NF > 2 && $2 != "script-guards" && $2 != "testkit" && $3 != "Cargo.toml" { print $1 "/" $2 "/" $3 }' | LC_ALL=C sort -u | paste -sd, -)"
+step tree script-guards   "$script_guards_reads" cargo_app test -q --workspace --test script-guards
 step tree guards          all     cargo_app test -q --workspace --test guards
 step tree plugin-fence    $rust   cargo_app test -q --workspace --test fence
 step tree plugin-sync     $rust   cargo_app test -q --workspace --test plugin
@@ -567,7 +576,7 @@ live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/
   app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/secretary app/api app/server app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
-  app/testkit app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css
+  app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css
   web/static/style.css)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"
@@ -579,7 +588,7 @@ step live live-all        $live_only cargo_app test -q --workspace --test all --
 # The guards that read beyond the public tree (merge_gate.rs holds the list); gate.yml judges the
 # rest. Unkept: the leak guard reads every tracked file.
 mapfile -t box_guards < <(grep -v '^#' app/cli/tests/guards/on-the-box.txt)
-step live live-guards     unkept  cargo_app test -q --workspace --test guards -- --exact "${box_guards[@]}"
+step live live-guards     unkept  cargo_app test -q --workspace --test guards --test script-guards -- --exact "${box_guards[@]}"
 # A smoke per gate: the unit tests that read the live chain (`live_web_units`, which merge_gate.rs
 # holds) and the scenes over a copy of the data tree; --nightly runs every unit test. The scenes
 # read the server's code, so this is kept by all but docs/, memory/, android/ and `cli_only`.

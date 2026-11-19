@@ -4668,6 +4668,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-script-guards"
+version = "0.0.0"
+dependencies = [
+ "suzatary-testkit",
+]
+
+[[package]]
 name = "suzatary-secretary"
 version = "0.0.0"
 dependencies = [

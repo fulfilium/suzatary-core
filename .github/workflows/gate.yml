@@ -51,6 +51,7 @@ jobs:
           - { lane: checks, steps: 'clippy,clippy-fixture,doc', part: '', builds: '', deps: true, wasm: optimised }
           - { lane: tests, steps: 'build,fence-plugin,test,test-fixture,plugin-fence,plugin-sync', part: '', builds: '', deps: true, wasm: optimised }
           - { lane: guards, steps: 'guards', part: '', builds: '', deps: true, wasm: optimised }
+          - { lane: script-guards, steps: 'script-guards', part: '', builds: '', deps: false, wasm: optimised }
     steps: &lane
       # The runner's preinstalled toolchains, none of them used here, hold most of its disk, and
       # the gate does not start short of 12 GB.

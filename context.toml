@@ -389,6 +389,13 @@ depends = []
 scripts = []
 
 [[unit]]
+name = "script-guards"
+path = "app/script-guards"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
 name = "web"
 path = "web"
 shape = "web"

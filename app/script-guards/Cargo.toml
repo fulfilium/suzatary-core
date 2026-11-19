@@ -1,0 +1,21 @@
+[package]
+name = "suzatary-script-guards"
+description = "The guards that run the repository's scripts against stubs and read no application code"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+autotests = false
+
+# `test = false`: they run git in throwaway repositories, which a build sandbox cannot hold.
+[[test]]
+name = "script-guards"
+path = "tests/guards.rs"
+test = false
+
+[dev-dependencies]
+suzatary-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true
