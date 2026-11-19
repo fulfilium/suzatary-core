@@ -16,9 +16,9 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::model::{Halt, Sessions, Turn};
 use suzatary_conversations::secretary::store::ConversationState;
-use suzatary_core::conversation::round::Ending;
-use suzatary_core::secretary;
 use suzatary_lines::secretary::transcript;
+use suzatary_secretary::conversation::round::Ending;
+use suzatary_secretary::secretary;
 use suzatary_topics::secretary::rules::{Conversational, RULES};
 use suzatary_triage::rule::{Engine, Firing};
 use tokio::sync::{broadcast, mpsc};
@@ -436,7 +436,7 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
         let settables = held.settables();
         let on_delta = |fragment: &str| for_round.delta(fragment);
         let on_working = |verb: &str| for_round.working(verb);
-        let sink = suzatary_core::conversation::round::Sink {
+        let sink = suzatary_secretary::conversation::round::Sink {
             on_delta: &on_delta,
             on_working: &on_working,
             halt: &halt,

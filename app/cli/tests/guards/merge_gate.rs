@@ -411,7 +411,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/inbox/src/coding.rs", "docs"),
     ("app/held/src/leak.rs", "docs"),
     ("app/base/src/repo_ids.rs", "docs"),
-    ("app/core/tests/act_literal.rs", "docs"),
+    ("app/inbox/tests/act_literal.rs", "docs"),
     ("app/api/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
@@ -587,7 +587,7 @@ impl Gate {
             &std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads"),
         );
         for path in [
-            "app/core/src/lib.rs",
+            "app/secretary/src/lib.rs",
             "web/src/main.ts",
             "web/test/a.test.ts",
             "web/e2e/list.test.ts",
@@ -1559,7 +1559,7 @@ fn merge_gate_a_scene_reads_every_input_of_the_bundle() {
             "web/typst",
             "tokens.typ",
             "scripts",
-            "app/core",
+            "app/secretary",
             "app/wasm",
         ] {
             assert!(
@@ -1591,7 +1591,7 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
     gate.write(".gitignore", "red\nprobes*\nstub*\nproptest-regressions/\n");
     gate.commit();
     gate.run(&[]);
-    gate.write("app/core/proptest-regressions/sync.txt", "cc 0123\n");
+    gate.write("app/api/proptest-regressions/sync.txt", "cc 0123\n");
     assert_eq!(
         gate.run(&[]).1,
         every,
@@ -1773,25 +1773,25 @@ pub(super) fn on_path(tool: &str) -> bool {
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(tool).is_file()))
 }
 
-/// A throwaway workspace of four members (`suzatary-core`, `suzatary-io` on it, `suzatary` on
-/// that, `suzatary-wasm` on the core) and test files over two modules, written into `gate`.
+/// A throwaway workspace of four members (`suzatary-secretary`, `suzatary-io` on it, `suzatary`
+/// on that, `suzatary-wasm` on the secretary) and test files over two modules, written into `gate`.
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"core\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"secretary\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
-        ("core", "suzatary-core", ""),
+        ("secretary", "suzatary-secretary", ""),
         (
             "io",
             "suzatary-io",
-            "suzatary-core = { path = \"../core\" }\n",
+            "suzatary-secretary = { path = \"../secretary\" }\n",
         ),
         ("cli", "suzatary", "suzatary-io = { path = \"../io\" }\n"),
         (
             "wasm",
             "suzatary-wasm",
-            "suzatary-core = { path = \"../core\" }\n",
+            "suzatary-secretary = { path = \"../secretary\" }\n",
         ),
     ] {
         gate.write(
@@ -1900,7 +1900,7 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
 
     gate.write(
         "app/wasm/Cargo.toml",
-        "[package]\nname = \"suzatary-wasm\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-core = { path = \"../core\" }\n\n[features]\nmore = []\n",
+        "[package]\nname = \"suzatary-wasm\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-secretary = { path = \"../secretary\" }\n\n[features]\nmore = []\n",
     );
     gate.commit();
     assert!(gate.run(&[]).0);
@@ -2381,9 +2381,10 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 
 /// The crates the core's library is cut into; a new one joins with its word in `flake.nix`'s
 /// `library`.
-const LIBRARY_CRATES: [&str; 21] = [
+const LIBRARY_CRATES: [&str; 22] = [
     "app/base",
     "app/record",
+    "app/release",
     "app/store",
     "app/signatures",
     "app/todo",
@@ -2401,7 +2402,7 @@ const LIBRARY_CRATES: [&str; 21] = [
     "app/topics",
     "app/digest",
     "app/cards",
-    "app/core",
+    "app/secretary",
     "app/api",
 ];
 
@@ -2429,7 +2430,7 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
     let library: Vec<String> = LIBRARY_CRATES
         .iter()
         .map(|krate| format!("{krate}/src/"))
-        .chain(["app/core/examples/".to_owned(), "app/wasm/".to_owned()])
+        .chain(["app/todo/examples/".to_owned(), "app/wasm/".to_owned()])
         .collect();
     let files = ["app/Cargo.lock", "app/plugin-ics/ics.schema"];
     let mut sources = Vec::new();
@@ -2534,7 +2535,7 @@ fn merge_gate_roots_the_web_inputs_dependency_builds() {
         })
         .map(|(names, _)| names.split_whitespace().collect::<Vec<_>>())
         .expect("web-inputs roots the dependency builds it holds");
-    for deps in ["suzatary-wasm-deps", "suzatary-core-deps"] {
+    for deps in ["suzatary-wasm-deps", "suzatary-model-deps"] {
         assert!(rooted.contains(&deps), "web-inputs roots {deps}");
     }
 }
@@ -2725,7 +2726,6 @@ fn merge_gate_a_release_reruns_only_what_reads_it() {
 #[test]
 fn merge_gate_the_generated_wire_imports_only_the_wire() {
     let mut sources = Vec::new();
-    files_under(&repo().join("app/core/src/wire"), &mut sources);
     files_under(&repo().join("app/api/src/wire"), &mut sources);
     sources.push(repo().join("app/api/src/wire.rs"));
     let mut imports = Vec::new();

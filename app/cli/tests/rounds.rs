@@ -11,10 +11,10 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{Halt, ModelError, Turn};
 use suzatary_conversations::secretary::outcome;
 use suzatary_conversations::secretary::store::Kind;
-use suzatary_core::conversation::round::{Ending, Sink, Why};
-use suzatary_core::secretary::Bound;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
+use suzatary_secretary::conversation::round::{Ending, Sink, Why};
+use suzatary_secretary::secretary::Bound;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-02-1").expect("a slug")
@@ -48,16 +48,16 @@ fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
         caps: caps.secretary(),
         policy: &policy,
     }];
-    suzatary_core::secretary::converse(
+    suzatary_secretary::secretary::converse(
         &caps.secretary(),
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,
         &id(),
-        suzatary_core::secretary::Saying {
+        suzatary_secretary::secretary::Saying {
             text: said,
             references: &[],
-            by: suzatary_core::secretary::Asker::Box(
+            by: suzatary_secretary::secretary::Asker::Box(
                 suzatary_inbox::secretary::own_round::OwnRound::Brief,
             ),
         },
@@ -142,7 +142,7 @@ fn a_round_over_a_session() {
             },
         )
         .expect("the person turn appends");
-        suzatary_core::secretary::answer(
+        suzatary_secretary::secretary::answer(
             &caps.secretary(),
             || suzatary_conversations::secretary::model::Pick::Held(&caps.model),
             &deployment,
@@ -150,10 +150,10 @@ fn a_round_over_a_session() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &sink,
             suzatary_lines::secretary::transcript::Retry::Allowed,
-            suzatary_core::secretary::Holder::Task,
+            suzatary_secretary::secretary::Holder::Task,
         )
         .expect("the exchange runs")
         .expect("a round ran");
@@ -173,13 +173,14 @@ fn round_of(
     caps: &Fakes,
     bound: usize,
     ran: &std::sync::Mutex<Vec<String>>,
-) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_base::refusal::Refusal> {
+) -> Result<Option<suzatary_secretary::conversation::round::Closed>, suzatary_base::refusal::Refusal>
+{
     round_under(
         caps,
         bound,
         ran,
         &Halt::new(),
-        suzatary_core::conversation::round::LOAD_NOTHING,
+        suzatary_secretary::conversation::round::LOAD_NOTHING,
     )
 }
 
@@ -189,12 +190,13 @@ fn round_under(
     bound: usize,
     ran: &std::sync::Mutex<Vec<String>>,
     halt: &Halt,
-    load: &suzatary_core::conversation::round::Load<'_>,
-) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_base::refusal::Refusal> {
-    use suzatary_core::conversation::ask::Ask;
-    use suzatary_core::conversation::round::{Round, Rules, Transcript};
-    use suzatary_core::secretary::surface::Subset;
-    use suzatary_core::secretary::verb_answer::VerbAnswer;
+    load: &suzatary_secretary::conversation::round::Load<'_>,
+) -> Result<Option<suzatary_secretary::conversation::round::Closed>, suzatary_base::refusal::Refusal>
+{
+    use suzatary_secretary::conversation::ask::Ask;
+    use suzatary_secretary::conversation::round::{Round, Rules, Transcript};
+    use suzatary_secretary::secretary::surface::Subset;
+    use suzatary_secretary::secretary::verb_answer::VerbAnswer;
 
     const SOME: Subset = Subset {
         allows: |verb| verb.name() == "weather" || verb.name() == "todo_show",
@@ -202,7 +204,9 @@ fn round_under(
             suzatary_base::refusal::Refusal::not_found(format!("not {called}, only {listed}"))
         },
     };
-    let run = |request: suzatary_core::verb::Request<suzatary_core::secretary::SecretaryCall>| {
+    let run = |request: suzatary_secretary::verb::Request<
+        suzatary_secretary::secretary::SecretaryCall,
+    >| {
         let verb = request.call.verb().name();
         ran.lock().expect("not poisoned").push(verb.to_owned());
         if verb == "todo_show" {
@@ -503,7 +507,7 @@ fn a_stopped_round_ends_on_the_stop() {
         8,
         &ran,
         &halt,
-        suzatary_core::conversation::round::LOAD_NOTHING,
+        suzatary_secretary::conversation::round::LOAD_NOTHING,
     )
     .expect("runs")
     .expect("a round ran");
@@ -579,7 +583,7 @@ proptest::proptest! {
             halt.stop(prodrome_core::event::Actor::new("ada").expect("an actor"));
         }
         let ran = std::sync::Mutex::new(Vec::new());
-        let closed = round_under(&caps, bound, &ran, &halt, suzatary_core::conversation::round::LOAD_NOTHING)
+        let closed = round_under(&caps, bound, &ran, &halt, suzatary_secretary::conversation::round::LOAD_NOTHING)
             .expect("the store takes every line")
             .expect("a person's turn waited");
         let last = last_turn(&caps);
@@ -666,13 +670,13 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
         during: &during,
     };
     let answered = || {
-        use suzatary_core::conversation::ask::Ask;
-        use suzatary_core::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
+        use suzatary_secretary::conversation::ask::Ask;
+        use suzatary_secretary::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
         Round::answer(
             &Rules {
                 ask: Ask::Transcript { model: &model },
                 system: "you are the secretary",
-                verbs: &suzatary_core::secretary::surface::Subset::ALL,
+                verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
                 run: &|_| Ok(serde_json::json!("unused").into()),
                 bound: 8,
                 sink: &Sink::quiet(&Halt::new()),
@@ -748,15 +752,15 @@ impl suzatary_conversations::secretary::model::Model for Panicking<'_> {
 fn round_over(
     caps: &Fakes,
     model: &dyn suzatary_conversations::secretary::model::Model,
-) -> std::thread::Result<Option<suzatary_core::conversation::round::Closed>> {
-    use suzatary_core::conversation::ask::Ask;
-    use suzatary_core::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
+) -> std::thread::Result<Option<suzatary_secretary::conversation::round::Closed>> {
+    use suzatary_secretary::conversation::ask::Ask;
+    use suzatary_secretary::conversation::round::{LOAD_NOTHING, Round, Rules, Transcript};
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         Round::answer(
             &Rules {
                 ask: Ask::Transcript { model },
                 system: "you are the secretary",
-                verbs: &suzatary_core::secretary::surface::Subset::ALL,
+                verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
                 run: &|_| Ok(serde_json::json!("unused").into()),
                 bound: 8,
                 sink: &Sink::quiet(&Halt::new()),
@@ -1038,7 +1042,7 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
         caps: caps.secretary(),
         policy: &policy,
     }];
-    let answered = suzatary_core::secretary::answer(
+    let answered = suzatary_secretary::secretary::answer(
         &caps.secretary(),
         || suzatary_conversations::secretary::model::Pick::Turn(Box::new(&model)),
         &deployment,
@@ -1046,10 +1050,10 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink::quiet(&Halt::new()),
         suzatary_lines::secretary::transcript::Retry::Allowed,
-        suzatary_core::secretary::Holder::Alone,
+        suzatary_secretary::secretary::Holder::Alone,
     )
     .expect("runs")
     .expect("a round ran");

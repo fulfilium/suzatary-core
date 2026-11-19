@@ -8,14 +8,18 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use suzatary_base::chains::ChainName;
-use suzatary_core::stores::{Database, Kind};
+use suzatary_secretary::stores::{Database, Kind};
 
 use super::store_at::StoreAt;
 use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
+use prodrome_core::event::Hash;
+use suzatary_io::objects::Objects;
+use suzatary_io::texts::Texts;
 use suzatary_lines::first_read;
 use suzatary_lines::secretary::prune;
+use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
 
 /// What `suzatary verify` checks.
@@ -61,25 +65,20 @@ fn every_store(instance: &Instance) -> anyhow::Result<()> {
     let inbox = instance.inbox_store();
     let conversations = instance.conversation_stores();
     let memory = instance.memory_store();
-    let memory_texts = suzatary_io::texts::Texts::open(instance.secretary.memory_texts());
+    let memory_texts = Texts::open(instance.secretary.memory_texts());
     let digests = instance.digest_store();
-    let digest_texts = suzatary_io::texts::Texts::open(instance.secretary.digest_texts());
-    let decisions = suzatary_io::objects::Objects::open(instance.decisions());
+    let digest_texts = Texts::open(instance.secretary.digest_texts());
+    let decisions = Objects::open(instance.decisions());
     let topics = instance.secretary.topics.open();
-    let asks = suzatary_io::objects::Objects::open(instance.asks());
+    let asks = Objects::open(instance.asks());
     let triage = suzatary_io::state::State::open(instance.mail.state.clone());
     let triage_local = suzatary_io::state::Local::open(instance.local.mail());
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
     let uploads = upload_store(instance);
     let kept = file_store(instance);
-    let chains: BTreeMap<ChainName, &dyn suzatary_store::store::Prodrome<_>> = stores
+    let chains: BTreeMap<ChainName, &dyn Prodrome<_>> = stores
         .iter()
-        .map(|(name, store)| {
-            (
-                name.clone(),
-                store as &dyn suzatary_store::store::Prodrome<_>,
-            )
-        })
+        .map(|(name, store)| (name.clone(), store as &dyn Prodrome<_>))
         .collect();
     let database = Database {
         chains,
@@ -157,14 +156,9 @@ fn husked(instance: &Instance, was: &Path) -> anyhow::Result<()> {
             .file_stem()
             .and_then(|stem| stem.to_str())
             .unwrap_or_default();
-        committed.push((
-            prodrome_core::event::Hash::new(name)?,
-            std::fs::read(&file)?,
-        ));
+        committed.push((Hash::new(name)?, std::fs::read(&file)?));
     }
-    let now = |name: &prodrome_core::event::Hash| {
-        std::fs::read(objects.join(format!("{}.py", name.as_str()))).ok()
-    };
+    let now = |name: &Hash| std::fs::read(objects.join(format!("{}.py", name.as_str()))).ok();
     let findings = first_read::first("husked lines", || {
         prune::admitted(stores.conversations(), &committed, now)
     })

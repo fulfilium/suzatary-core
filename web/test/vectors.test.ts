@@ -4,7 +4,7 @@
  * the `about-fixture.json` pattern (`app/conversations/src/secretary/about.rs`,
  * `rounds.test.ts`) generalised from one payload to three.
  *
- * `app/core/tests/web_vectors.rs` builds a `FoldPayload`, a `ChainPayload` and
+ * `app/api/tests/web_vectors.rs` builds a `FoldPayload`, a `ChainPayload` and
  * a `ConversationPayload` over the six-todo fixture chain at a fixed instant,
  * and beside each one writes the ANSWER the Rust gives to the question this
  * file asks — never regenerated here, only READ: a disagreement with a
@@ -27,13 +27,13 @@ import { found, verifyChain } from "../src/prodrome/verify";
 import { rounds } from "../src/chat/rounds";
 
 function vector<T>(file: string, decoder: d.Decoder<T>): T {
-  const decoded = decoder(JSON.parse(readFileSync(`app/core/tests/web/${file}`, "utf8")));
+  const decoded = decoder(JSON.parse(readFileSync(`app/api/tests/web/${file}`, "utf8")));
   if (decoded.type !== "Val") throw new Error(`${file} does not decode: ${decoded.type === "Error" ? decoded.e : ""}`);
   return decoded.v;
 }
 
 function answer<T>(file: string): T {
-  return JSON.parse(readFileSync(`app/core/tests/web/${file}`, "utf8")) as T;
+  return JSON.parse(readFileSync(`app/api/tests/web/${file}`, "utf8")) as T;
 }
 
 // --- the fold: the open list's own order -------------------------------------

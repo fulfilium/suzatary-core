@@ -17,12 +17,12 @@ use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};
-use suzatary_core::stores::conversations::InMemory;
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::words::Words;
+use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::store::{Counted, Doc as _, Prodrome as _, Reads as _};
 
 const CONVERSATIONS: usize = 100;

@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-io"
-description = "Suzatary's interpreters: the capabilities of suzatary-core, against the world"
+description = "Suzatary's interpreters: the capabilities of its model crates, against the world"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -31,7 +31,7 @@ suzatary-topics.workspace = true
 suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
-suzatary-core.workspace = true
+suzatary-secretary.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
@@ -86,7 +86,7 @@ workspace = true
 # THE TRIPWIRE IS FUZZED: `suspicious` answers every string and never panics.
 proptest.workspace = true
 # Inert effects a test fills a record from (a render cache that keeps nothing).
-suzatary-core = { workspace = true, features = ["nothing"] }
+suzatary-secretary = { workspace = true, features = ["nothing"] }
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 

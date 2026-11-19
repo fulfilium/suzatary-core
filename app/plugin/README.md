@@ -13,7 +13,8 @@ its grant.
 
 ## Depends on
 
-`suzatary-core`, `suzatary-io` and the Prodrome.
+`suzatary-base`, `suzatary-health`, `suzatary-services`, `suzatary-secretary`, `suzatary-io` and
+the Prodrome.
 
 ## Develop
 

@@ -14,7 +14,7 @@ import { forAllAsync } from "./gen"
 import { held as prodromes } from "./held"
 import heads from "../src/prodrome/heads"
 
-const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
+const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
 const all: StoredObject[] = box.conversations.map(o => ({ hash: o.hash, literal: o.text }))
 
 // What an object rests on, as the box's `parents_of` reads it: its parents, and the genesis of the prodrome it is in.

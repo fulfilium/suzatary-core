@@ -18,8 +18,6 @@ use suzatary_api::routes::Books;
 use suzatary_api::secretary::routes::Cards;
 use suzatary_api::secretary::routes::Perform;
 use suzatary_api::secretary::routes::Post;
-use suzatary_core::asks::AskEvent;
-use suzatary_core::secretary::Bound;
 use suzatary_health::health::Register;
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
@@ -27,6 +25,8 @@ use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::model_health::Answered;
 use suzatary_io::objects::Objects;
 use suzatary_io::requests::Requests;
+use suzatary_secretary::asks::AskEvent;
+use suzatary_secretary::secretary::Bound;
 use suzatary_signatures::epoch::Epochs;
 use suzatary_signatures::signatures::BoxKeys;
 pub(crate) mod asked;
@@ -93,6 +93,7 @@ use crate::instance::Instance;
 pub use conversation_worker::Workers;
 pub use interpreters::{Brain, Peers};
 pub use live::Live;
+use prodrome_core::fpl::instant_of;
 pub use settings::pushed_at;
 use suzatary_connect::connect::Reach;
 use suzatary_connect::secrets::Remembering;
@@ -101,7 +102,9 @@ use suzatary_connect::settings::Settables;
 use suzatary_connect::settings::Verify;
 use suzatary_connect::settings::Writes;
 use suzatary_conversations::secretary::model;
+use suzatary_health::health::Reading;
 use suzatary_inbox::secretary::sign_in;
+use suzatary_lines::parts::scoped;
 use suzatary_lines::secretary::transcript;
 pub use world::World;
 
@@ -459,7 +462,7 @@ impl State {
     /// Reread the busy calendars; a failed reading holds their cards.
     pub fn hear(&self) {
         let caps = self.first.caps;
-        let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+        let now = instant_of(caps.secretary.clock.now());
         let heard = heard(caps.secretary.calendar, now);
         *locks::held(&self.noticing) = heard;
     }
@@ -670,8 +673,8 @@ impl State {
                 &answered,
                 self.models.recorded().as_str(),
             ) {
-                Some(suzatary_health::health::Reading::Failing { .. }) => Retry::Held,
-                Some(suzatary_health::health::Reading::Ok { .. }) | None => Retry::Allowed,
+                Some(Reading::Failing { .. }) => Retry::Held,
+                Some(Reading::Ok { .. }) | None => Retry::Allowed,
             },
             Err(failed) => {
                 tracing::warn!("secretary: the model health did not read, so no retry: {failed}");
@@ -715,7 +718,7 @@ impl State {
         let health = part("sources", || caps.secretary.health.healths())
             .inspect_err(|failed| tracing::warn!("noticed: the sources' health: {failed}"))
             .ok();
-        let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+        let now = instant_of(caps.secretary.clock.now());
         let model = part("model", || self.models.recorded());
         locks::held(&self.secrets_answered).forget();
         let secrets = self.secrets(caps);
@@ -1113,7 +1116,7 @@ struct Started(Vec<(&'static str, Parts, Duration)>);
 impl Started {
     fn step<T>(&mut self, step: &'static str, run: impl FnOnce() -> T) -> T {
         let at = Instant::now();
-        let (answer, parts) = suzatary_lines::parts::scoped(run);
+        let (answer, parts) = scoped(run);
         self.took(step, at.elapsed(), parts);
         answer
     }
@@ -1122,7 +1125,7 @@ impl Started {
     /// did not finish is logged and adds nothing.
     async fn blocking(&mut self, step: &'static str, run: impl FnOnce() + Send + 'static) {
         let at = Instant::now();
-        match tokio::task::spawn_blocking(move || suzatary_lines::parts::scoped(run).1).await {
+        match tokio::task::spawn_blocking(move || scoped(run).1).await {
             Ok(parts) => self.took(step, at.elapsed(), parts),
             Err(join_error) => tracing::warn!("{step} did not finish: {join_error}"),
         }
@@ -1747,7 +1750,7 @@ fn erase_after_start(caps: &'static Server<'static>) {
         after_start("erase.uploads", move || {
             erased_at_startup(
                 "uploads in the search index",
-                suzatary_core::secretary::file_search::reindex(
+                suzatary_secretary::secretary::file_search::reindex(
                     caps.secretary.conversations,
                     caps.secretary.upload_index,
                 ),

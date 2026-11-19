@@ -8,10 +8,10 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{Halt, Pick, SessionId, Turn};
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_core::conversation::round::Sink;
-use suzatary_core::secretary::{Bound, Holder, answer};
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
+use suzatary_secretary::conversation::round::Sink;
+use suzatary_secretary::secretary::{Bound, Holder, answer};
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-14-1").expect("a slug")
@@ -73,9 +73,9 @@ fn a_session_id(seed: &str) -> SessionId {
 
 /// The surface a session opened today would carry.
 fn current_surface() -> String {
-    suzatary_core::conversation::ask::surface_of(
+    suzatary_secretary::conversation::ask::surface_of(
         "you are the secretary",
-        &suzatary_core::secretary::tools(),
+        &suzatary_secretary::secretary::tools(),
         &std::collections::BTreeSet::new(),
     )
 }
@@ -101,7 +101,7 @@ fn no_session_opens_once() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink {
             on_delta: &|_| {},
             on_working: &|_| {},
@@ -178,7 +178,7 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink {
             on_delta: &|_| {},
             on_working: &|_| {},
@@ -227,7 +227,7 @@ fn a_retraction_reopens_a_stored_session() {
     )
     .expect("the session line appends");
     let tap = suzatary_signatures::signatures::Tap::of(
-        &suzatary_core::stores::scene("ada"),
+        &suzatary_secretary::stores::scene("ada"),
         &suzatary_signatures::signatures::ActHeaders {
             act: Some("1"),
             content_type: Some("application/json"),
@@ -264,7 +264,7 @@ fn a_retraction_reopens_a_stored_session() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink {
             on_delta: &|_| {},
             on_working: &|_| {},
@@ -323,7 +323,7 @@ fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink {
             on_delta: &|_| {},
             on_working: &|_| {},
@@ -411,7 +411,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &sink,
         suzatary_lines::secretary::transcript::Retry::Allowed,
         Holder::Task,
@@ -453,7 +453,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &sink,
         suzatary_lines::secretary::transcript::Retry::Allowed,
         Holder::Task,
@@ -507,7 +507,7 @@ fn the_memory_heads_a_batch_once() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink::quiet(&Halt::new()),
             suzatary_lines::secretary::transcript::Retry::Allowed,
             Holder::Task,
@@ -616,7 +616,7 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -723,7 +723,7 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -758,8 +758,8 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
         .expect("a round ran");
     assert!(matches!(
         ran_out.ending,
-        suzatary_core::conversation::round::Ending::Ended {
-            why: suzatary_core::conversation::round::Why::Model { .. }
+        suzatary_secretary::conversation::round::Ending::Ended {
+            why: suzatary_secretary::conversation::round::Why::Model { .. }
         }
     ));
     let (before, models) = (lines(), asks());
@@ -803,7 +803,7 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
         policy: &policy,
     }];
     let ask = || {
-        suzatary_core::secretary::answer(
+        suzatary_secretary::secretary::answer(
             &caps.secretary(),
             || Pick::Turn(Box::new(&caps.model)),
             &deployment,
@@ -811,7 +811,7 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -895,7 +895,7 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -988,7 +988,7 @@ fn answered_once(
     caps: &Fakes,
     deployment: &suzatary_connect::deployment::Deployment,
     policy: &suzatary_base::chains::ChainPolicy,
-) -> suzatary_core::secretary::Answered {
+) -> suzatary_secretary::secretary::Answered {
     let chains = [Bound {
         name: "life",
         caps: caps.secretary(),
@@ -1002,7 +1002,7 @@ fn answered_once(
         &chains,
         &id(),
         "you are the secretary",
-        &suzatary_core::secretary::surface::Subset::ALL,
+        &suzatary_secretary::secretary::surface::Subset::ALL,
         &Sink {
             on_delta: &|_| {},
             on_working: &|_| {},
@@ -1136,7 +1136,7 @@ fn a_round_another_model_answered_ends_the_session() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -1189,7 +1189,7 @@ fn a_round_another_model_answered_ends_the_session() {
 fn a_round_the_box_ended_ends_the_session() {
     let calling = "{\"say\": \"Checking.\", \"calls\": [{\"verb\": \"context\", \"args\": {}}]}";
     let caps = Fakes::new("session-bound").model(FakeModel::saying(
-        std::iter::repeat_n(calling, suzatary_core::secretary::MAX_ROUNDS)
+        std::iter::repeat_n(calling, suzatary_secretary::secretary::MAX_ROUNDS)
             .chain(["{\"say\": \"from a fresh session\"}"]),
     ));
     opened_with_a_person_turn(&caps);
@@ -1209,7 +1209,7 @@ fn a_round_the_box_ended_ends_the_session() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},
@@ -1499,7 +1499,7 @@ proptest::proptest! {
                 &chains,
                 &id(),
                 "you are the secretary",
-                &suzatary_core::secretary::surface::Subset::ALL,
+                &suzatary_secretary::secretary::surface::Subset::ALL,
                 &Sink { on_delta: &|_| {}, on_working: &|_| {}, halt: &Halt::new() },
                 suzatary_lines::secretary::transcript::Retry::Allowed,
                 Holder::Task,
@@ -1570,7 +1570,7 @@ fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
             &chains,
             &id(),
             "you are the secretary",
-            &suzatary_core::secretary::surface::Subset::ALL,
+            &suzatary_secretary::secretary::surface::Subset::ALL,
             &Sink {
                 on_delta: &|_| {},
                 on_working: &|_| {},

@@ -1,14 +1,14 @@
 /**
  * THE REFERENCE GRAMMAR, IN THE BROWSER'S HALF OF IT.
  *
- * `suzatary_core::reference` is the authority: it refuses a reference on the
+ * `suzatary_base::reference` is the authority: it refuses a reference on the
  * way in and it decides what the stored bytes mean. `web/src/chat/refs.ts` is the
  * SECOND reader, and it exists because the linking happens here, over prose
  * that arrives as one string with no offsets. Two readers of one grammar is
  * exactly the shape this repository normally refuses, so the ones that could
  * disagree are pinned:
  *
- * - THE EIGHT SPELLINGS are the same eight `suzatary_core::reference`'s own test
+ * - THE EIGHT SPELLINGS are the same eight `suzatary_base::reference`'s own test
  *   asserts, character for character. If either side changes one, one of the
  *   two files goes red.
  * - THE ROUND TRIP is a law here as it is there: whatever `print` writes,
@@ -29,7 +29,7 @@ import type { Reference } from "../src/chat/refs";
 import { parse, print, tokenise, urlTokens } from "../src/chat/refs";
 
 /** The seven `SECRETARY.md` shows the model, and a triage batch's, which held decisions still
- * name, as `suzatary_core::reference::tests` asserts them. */
+ * name, as `suzatary_base::reference::tests` asserts them. */
 const SPELLINGS = [
   "todo:life/book-flight",
   "mail:a1b2c3d4e5f6",

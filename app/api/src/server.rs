@@ -1,8 +1,8 @@
 use suzatary_base::capability::Whois;
 use suzatary_cards::notify::Notify;
 use suzatary_conversations::secretary::model::Sessions;
-use suzatary_core::agent::Agent;
-use suzatary_core::secretary::Secretary;
+use suzatary_secretary::agent::Agent;
+use suzatary_secretary::secretary::Secretary;
 use suzatary_topics::secretary::answers::Answers;
 
 /// What the serving process supplies: the secretary's effects, since it runs the
@@ -35,8 +35,8 @@ impl<'a> Server<'a> {
 #[cfg(test)]
 mod tests {
     use super::Server;
-    use suzatary_core::agent::Agent;
-    use suzatary_core::secretary::Secretary;
+    use suzatary_secretary::agent::Agent;
+    use suzatary_secretary::secretary::Secretary;
 
     /// Each record is exactly these effects, so widening a role's authority is an edit here too.
     #[test]

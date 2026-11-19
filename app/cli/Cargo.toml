@@ -32,6 +32,7 @@ required-features = ["fixture"]
 [dependencies]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
+suzatary-release.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
@@ -49,7 +50,7 @@ suzatary-topics.workspace = true
 suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
-suzatary-core.workspace = true
+suzatary-secretary.workspace = true
 suzatary-api.workspace = true
 suzatary-io.workspace = true
 # The plugin host: `suzatary plugin sync` runs the `[[plugins]]` sources.
@@ -93,7 +94,7 @@ async-stream = "0.3"
 # that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
-fixture = ["suzatary-core/fixture"]
+fixture = ["suzatary-secretary/fixture"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
 # repository's containment scripts with `git` against throwaway repositories, which a build
@@ -126,7 +127,7 @@ tempfile = "3"
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 # Inert effects the fakes fill a record with.
-suzatary-core = { workspace = true, features = ["nothing"] }
+suzatary-secretary = { workspace = true, features = ["nothing"] }
 # The integration tests drive the axum app with FAKE capabilities, which needs
 # a client and a runtime of their own; a socket bound to a second loopback
 # address is a second tailnet peer (tests/google.rs).

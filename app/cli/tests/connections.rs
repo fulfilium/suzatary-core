@@ -111,7 +111,7 @@ fn serving_answering(
     let base = with(
         common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
             .effects(|effects| suzatary_api::server::Server {
-                secretary: suzatary_core::secretary::Secretary {
+                secretary: suzatary_secretary::secretary::Secretary {
                     secrets: &GitHubHeld,
                     ..effects.secretary
                 },

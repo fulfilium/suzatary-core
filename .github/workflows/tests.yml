@@ -33,7 +33,7 @@ jobs:
       # CLAUDE.md's Log 2026-09-08 (5), one box over): `/nix` and `app/target`
       # both land on the ~14GB free on ubuntu-latest's root filesystem.
       # `nix flake check` below used to build the whole crate twice on its own
-      # (`suzatary-core`, `suzatary-clippy`; since 2026-09-13 both start from
+      # (`suzatary-test`, `suzatary-clippy`; since 2026-09-13 both start from
       # crane's one dependency build). None of what's removed here is this repo's:
       # Android SDK, .NET, GHC and Swift are GitHub's own preinstalled
       # toolchains, unused by anything in this workflow, at ~30GB combined.
@@ -83,7 +83,7 @@ jobs:
           scripts/check-commits.sh "$range"
 
       # THE SUITE IS THE RUST ONE (§8.6). `nix flake check` runs the flake's
-      # two checks — `suzatary-core` is cargo test over the application's own
+      # two checks — `suzatary-test` is cargo test over the application's own
       # laws, `suzatary-clippy` is clippy over the workspace with warnings
       # denied — from the vendored lock, so no rustup and no crates.io. It was
       # four until 2026-09-09, when the database became its own repository

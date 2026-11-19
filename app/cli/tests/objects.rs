@@ -682,7 +682,7 @@ fn confirming_content_a_trusted_actor_wrote_confirms_nothing() {
     assert_eq!(common::status(&missing), 404);
 }
 
-/// A `Created` for an unknown todo is taken; only what `suzatary_core::sync` names is refused.
+/// A `Created` for an unknown todo is taken; only what `suzatary_api::sync` names is refused.
 #[test]
 fn the_sync_route_has_no_opinions_beyond_the_four_refusals() {
     let (base, caps) = writer("sync-no-opinions");

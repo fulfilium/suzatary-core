@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 suzatary-base.workspace = true
 suzatary-record.workspace = true
-suzatary-core.workspace = true
+suzatary-release.workspace = true
 suzatary-todo.workspace = true
 suzatary-memory.workspace = true
 suzatary-mail.workspace = true

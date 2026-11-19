@@ -1,4 +1,4 @@
-// The placeholder grammar's browser half: the Rust's spellings (`suzatary_core::held_value`) read here, and the tokens print back to their input.
+// The placeholder grammar's browser half: the Rust's spellings (`suzatary_held::held_value`) read here, and the tokens print back to their input.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

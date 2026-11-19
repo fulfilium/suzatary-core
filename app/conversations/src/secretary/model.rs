@@ -306,7 +306,7 @@ impl SessionId {
         }
     }
 
-    /// Mint one from `seed` by hashing, since `suzatary-core` holds no source of randomness.
+    /// Mint one from `seed` by hashing, since the model crates hold no source of randomness.
     #[must_use]
     pub fn minted(seed: &str) -> Self {
         use sha2::{Digest, Sha256};

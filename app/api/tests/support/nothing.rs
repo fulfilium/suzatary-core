@@ -1,5 +1,5 @@
 use suzatary_base::capability::Nothing;
-use suzatary_core::secretary::Secretary;
+use suzatary_secretary::secretary::Secretary;
 
 use crate::server::Server;
 

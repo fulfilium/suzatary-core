@@ -13,9 +13,9 @@ use prodrome_core::event::{Envelope, Hash, TodoEvent};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
-use suzatary_core::stores::{Kind, Store};
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_record::record::Record;
+use suzatary_secretary::stores::{Kind, Store};
 use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreError, WriteLock};
 
 use crate::durable;

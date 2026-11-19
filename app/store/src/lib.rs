@@ -16,3 +16,7 @@ pub mod wire {
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/nothing.rs"]
 mod nothing;
+// The laws an order and a join state, for every schema's tests: test support.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/laws.rs"]
+pub mod laws;

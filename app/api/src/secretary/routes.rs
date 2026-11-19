@@ -31,9 +31,6 @@ use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Lines;
 use suzatary_conversations::secretary::store::{Entry, Kind, Stored};
-use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::opening::Opening;
-use suzatary_core::secretary::read_holders::ReadHolders;
 use suzatary_digest::secretary::memories::Memories;
 use suzatary_google::google::RedirectUri;
 use suzatary_health::health::plugin::{Origin, PluginName};
@@ -66,6 +63,10 @@ use suzatary_memory::secretary::erasure;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::salted_text;
+use suzatary_secretary::secretary;
+use suzatary_secretary::secretary::Bound;
+use suzatary_secretary::secretary::opening::Opening;
+use suzatary_secretary::secretary::read_holders::ReadHolders;
 use suzatary_services::plugin::Manifest;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Endorsement;
@@ -282,7 +283,7 @@ impl Draw for Drawn<'_> {
             nodes,
             &changes::Building {
                 now: self.now,
-                by: suzatary_core::secretary::WRITES_AS,
+                by: secretary::WRITES_AS,
                 categories: &known,
                 untrusted,
                 typeset: self.typeset,
@@ -532,26 +533,21 @@ fn question(
 /// `POST …/<id>/regenerate`: ask the last round again.
 ///
 /// # Errors
-/// [`suzatary_core::secretary::regenerate`]'s.
+/// [`suzatary_secretary::secretary::regenerate`]'s.
 pub fn regenerate(
     caps: &Server<'_>,
     cards: &Cards<'_>,
     id: &ConversationId,
     by: &Actor,
 ) -> Answered<wire::ConversationPayload> {
-    let stored = suzatary_core::secretary::regenerate(
-        caps.secretary.conversations,
-        caps.secretary.clock,
-        by,
-        id,
-    )?;
+    let stored = secretary::regenerate(caps.secretary.conversations, caps.secretary.clock, by, id)?;
     payload(&stored, caps, cards)
 }
 
 /// `POST …/<id>/edit`: replace the last round's question, under `say`'s rules.
 ///
 /// # Errors
-/// `question`'s and [`suzatary_core::secretary::edit`]'s.
+/// `question`'s and [`suzatary_secretary::secretary::edit`]'s.
 #[expect(
     clippy::too_many_arguments,
     reason = "a turn's parts, who set the last round aside and the stamp it is written with"
@@ -567,7 +563,7 @@ pub fn edit(
     stamped: Stamp,
 ) -> Answered<wire::ConversationPayload> {
     let turn = question(said, references, attachments)?;
-    let stored = suzatary_core::secretary::edit(
+    let stored = secretary::edit(
         caps.secretary.conversations,
         caps.secretary.clock,
         by,
@@ -1275,7 +1271,7 @@ fn retried(lacked: &inbox::Object, tap: &Tap) -> suzatary_cards::secretary::goog
 /// # Errors
 /// The stores' own failures.
 pub fn retry(
-    caps: &suzatary_core::secretary::Secretary<'_>,
+    caps: &secretary::Secretary<'_>,
     (edits, settables, performer): (&dyn Edits, &Settables, &dyn Perform),
     (card, by, consent): (&ProposalId, &Actor, Consent),
     signed: &Performed,
@@ -1763,7 +1759,7 @@ pub fn ask_trust(caps: &Server<'_>, actor: &Actor, key: &PublicKey) -> Answered<
         vec![asked],
     )
     .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    suzatary_core::secretary::verbs::propose(
+    secretary::verbs::propose(
         &secretary,
         &[],
         &stored.id,
@@ -1900,7 +1896,7 @@ fn fetch(
         | AttachmentSource::Kept { .. }
         | AttachmentSource::Upload { .. }) => source,
     };
-    suzatary_core::secretary::opening::open(&caps.secretary, source, read)
+    secretary::opening::open(&caps.secretary, source, read)
         .map(|opened| opened.bytes)
         .map_err(|refused| refused.message().to_owned())
 }
@@ -2238,13 +2234,13 @@ fn apply(cards: &Cards<'_>, changeset: &Changeset) -> Performed {
         .keys()
         .map(String::as_str)
         .collect();
-    match suzatary_core::secretary::gate::apply(
+    match secretary::gate::apply(
         &bound.caps,
         bound.policy,
         &known,
         cards.deployment.zone,
         changeset,
-        suzatary_core::secretary::WRITES_AS,
+        secretary::WRITES_AS,
     ) {
         Ok(names) => Performed::Done(Done::Applied {
             objects: names.iter().map(|name| name.as_str().to_owned()).collect(),
@@ -2262,7 +2258,7 @@ fn apply(cards: &Cards<'_>, changeset: &Changeset) -> Performed {
 /// `POST …/proposals/<n>/dismiss`: answers a proposal no, with a reason.
 ///
 /// # Errors
-/// As [`suzatary_core::secretary::dismiss`].
+/// As [`suzatary_secretary::secretary::dismiss`].
 pub fn dismiss(
     caps: &Server<'_>,
     by: &Tap,
@@ -2270,7 +2266,7 @@ pub fn dismiss(
     card: &ProposalRef,
     reason: &str,
 ) -> Answered<wire::ConversationPayload> {
-    let after = suzatary_core::secretary::dismiss(
+    let after = secretary::dismiss(
         caps.secretary.conversations,
         caps.secretary.memories,
         caps.secretary.clock,
@@ -2284,14 +2280,14 @@ pub fn dismiss(
 /// `POST …/proposals/<n>/acknowledge`: the owner checked a send that may have gone.
 ///
 /// # Errors
-/// As [`suzatary_core::secretary::acknowledge`].
+/// As [`suzatary_secretary::secretary::acknowledge`].
 pub fn acknowledge(
     caps: &Server<'_>,
     by: &Tap,
     cards: &Cards<'_>,
     card: &ProposalRef,
 ) -> Answered<wire::ConversationPayload> {
-    let after = suzatary_core::secretary::acknowledge(
+    let after = secretary::acknowledge(
         caps.secretary.conversations,
         caps.secretary.inbox,
         caps.secretary.clock,
@@ -2314,7 +2310,7 @@ pub fn build(
     plan_store: Option<&suzatary_base::chains::ChainName>,
 ) -> Answered<wire::ConversationPayload> {
     cards.deployment.builder(&todo.chain, plan_store)?;
-    let bound = suzatary_core::secretary::bound_of(cards.chains, Some(todo.chain.as_str()))?;
+    let bound = secretary::bound_of(cards.chains, Some(todo.chain.as_str()))?;
     let at = caps.secretary.clock.now();
     let believed = suzatary_signatures::believed::Believed::of(
         &bound.caps.chain.nodes()?,
@@ -2346,7 +2342,7 @@ pub fn build(
         &cards
             .chains
             .iter()
-            .map(suzatary_core::secretary::Bound::chain)
+            .map(secretary::Bound::chain)
             .collect::<Vec<_>>(),
         at,
         suzatary_topics::secretary::filed::Filing {
@@ -2969,7 +2965,7 @@ mod tests {
     /// The tap's own [`Tap`], minted as the gate mints it.
     fn tapped() -> Tap {
         Tap::of(
-            &suzatary_core::stores::scene("ada"),
+            &suzatary_secretary::stores::scene("ada"),
             &suzatary_signatures::signatures::ActHeaders {
                 act: Some("1"),
                 client: Some(suzatary_signatures::signatures::CLIENT),

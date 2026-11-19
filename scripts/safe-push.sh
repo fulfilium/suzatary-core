@@ -63,7 +63,7 @@ cd "$DATA"
 # (`secretary-lines-keys/`, so destroying a key erases words a pushed object holds as
 # ciphertext), and the topics. `requests/` is provenance only, never a body or an answer.
 #
-# The three lists are the stores' rows (`suzatary_core::store::Kind`), spelled out so a quiet
+# The three lists are the stores' rows (`suzatary_secretary::stores::Kind`), spelled out so a quiet
 # pass runs no program but git; app/cli/tests/guards/lists.rs pins each.
 ALLOWED_PATTERN='^(events/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes|\.gitignore)|events-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes|\.gitignore)|inbox/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|secretary-lines/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|memory/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|digests/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|decisions/(objects/[0-9a-f]{64}\.py|\.gitattributes|\.gitignore)|state\.json|requests/([0-9a-f]{64}\.json|\.gitignore))$'
 ADD_PATHS='events/ events-suzatary/ inbox/ secretary-lines/ memory/ digests/ decisions/ state.json requests/'

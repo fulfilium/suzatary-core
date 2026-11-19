@@ -7,9 +7,9 @@ use suzatary_api::server::Server;
 use suzatary_api::wire::{StoreName, WrittenName};
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::asks::AskEvent;
 use suzatary_lines::secretary::lines_rule::SlotKeys;
 use suzatary_lines::wire::lines::ReceiptPayload;
+use suzatary_secretary::asks::AskEvent;
 use suzatary_store::admission::Beside;
 use suzatary_store::store::{Prodrome, StoreError};
 
@@ -19,6 +19,7 @@ use super::chain::Literals;
 use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
+use prodrome_core::event::Hash;
 use suzatary_lines::secretary::line_event;
 
 /// # Errors
@@ -157,12 +158,12 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
         at: caps.secretary.clock.now(),
     };
     let keyless = || beside::<()>(&call.body);
-    let nothing = |_: &[prodrome_core::event::Hash]| Ok(());
+    let nothing = |_: &[Hash]| Ok(());
     match call.params.0 {
         WrittenName::Lines => {
             let conversations = caps.secretary.conversations;
             let keys = beside::<SlotKeys>(&call.body)?;
-            let keep = |taken: &[prodrome_core::event::Hash]| -> Result<(), Refusal> {
+            let keep = |taken: &[Hash]| -> Result<(), Refusal> {
                 for name in taken {
                     for key in keys.of(name) {
                         conversations.keys.set(&key.name(), key)?;

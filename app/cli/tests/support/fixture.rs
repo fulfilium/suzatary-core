@@ -344,7 +344,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     use suzatary_conversations::secretary::store::Entry;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
-    let open = suzatary_core::secretary::verbs::standing(&read.inbox_store())
+    let open = suzatary_secretary::secretary::verbs::standing(&read.inbox_store())
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     anyhow::ensure!(
         !open.is_empty(),
@@ -815,7 +815,7 @@ fn filed(
         let args = args
             .as_object()
             .context("a verb's arguments are an object")?;
-        suzatary_core::agent::call(&chains, &cards, &read.deployment, verb, args)
+        suzatary_secretary::agent::call(&chains, &cards, &read.deployment, verb, args)
             .map_err(|refusal| anyhow::anyhow!("{verb}: {}", refusal.message()))?;
     }
     Ok(())
@@ -1382,7 +1382,7 @@ fn bulk_lines(
         &bulk_entry(0, 0, fpl::datetime_of(start)?),
     )?;
     let mut events: Vec<LineEvent> = Vec::new();
-    let writer = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
+    let writer = Actor::new(suzatary_secretary::secretary::WRITES_AS.actor())?;
     let mut written = 0u32;
     let mut resealing = reseals.total();
     for (n, (id, size)) in sizes.iter().enumerate() {
@@ -1679,7 +1679,7 @@ fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result
     }
     let topics = read.secretary.topics.open();
     topics.begin()?;
-    let actor = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
+    let actor = Actor::new(suzatary_secretary::secretary::WRITES_AS.actor())?;
     let at = SystemClock.now();
     let names = NAMES.map(Topic::new);
     let mut events = Vec::new();

@@ -191,21 +191,21 @@ fn an_include_outside_the_source_is_named() {
         std::fs::create_dir_all(path.parent().expect("a directory")).expect("a directory");
         std::fs::write(path, text).expect("a file");
     };
-    write("app/core/releases.toml", "");
+    write("app/secretary/releases.toml", "");
     write(
-        "app/core/src/release/plan.rs",
+        "app/secretary/src/release/plan.rs",
         "const DECLARED: &str = include_str!(\"../../releases.toml\");\n",
     );
     assert!(unheld(&source).is_empty(), "{:?}", unheld(&source));
     write(
-        "app/core/src/secretary/line_event.rs",
+        "app/secretary/src/secretary/line_event.rs",
         "#[cfg(test)]\nconst REPLICAS: &str = include_str!(\n    \"../../tests/web/replicas.json\");\n",
     );
     assert_eq!(
         unheld(&source),
         [
-            "app/core/src/secretary/line_event.rs includes \"../../tests/web/replicas.json\", \
-          which is app/core/tests/web/replicas.json"
+            "app/secretary/src/secretary/line_event.rs includes \"../../tests/web/replicas.json\", \
+          which is app/secretary/tests/web/replicas.json"
         ]
     );
 }

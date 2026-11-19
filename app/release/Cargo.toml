@@ -1,0 +1,31 @@
+[package]
+name = "suzatary-release"
+description = "Suzatary's releases: the plan, what a version completed, and a cut"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_release"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-record.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

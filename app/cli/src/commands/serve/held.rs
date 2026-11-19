@@ -8,9 +8,9 @@ use axum::Json;
 use suzatary_api::wire::{self, RevealPayload};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::secretary::opening::Opening;
-use suzatary_core::secretary::read_holders::ReadHolders;
 use suzatary_held::held_value::{Handle, Holder, Holders, Place};
+use suzatary_secretary::secretary::opening::Opening;
+use suzatary_secretary::secretary::read_holders::ReadHolders;
 use suzatary_signatures::signatures::Tap;
 
 use super::State;

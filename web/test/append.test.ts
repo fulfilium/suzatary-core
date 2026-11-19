@@ -16,7 +16,7 @@ const core = ((): Core => {
   if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
   return createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
 })()
-const chain = JSON.parse(readFileSync("app/core/tests/web/chain.json", "utf8")) as {
+const chain = JSON.parse(readFileSync("app/api/tests/web/chain.json", "utf8")) as {
   links: Named[]
   untrusted: string[]
 }

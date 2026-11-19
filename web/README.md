@@ -14,7 +14,7 @@ the laws no test can check, and `docs/TS-STYLE.md` its layout rules.
 
 ## Depends on
 
-- `app/core`: the generated wire types (`src/wire/generated/`).
+- `app/api`: the generated wire types (`src/wire/generated/`).
 - `app/wasm`: the evaluator the tab runs (`prodrome_bg.wasm`), the same core as the box.
 - `app/pages` and `app/viewtree`: the pages compiled to wasm (`views_bg.wasm`) and the patches
   `src/painter` applies.

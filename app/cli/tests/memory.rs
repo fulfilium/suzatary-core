@@ -457,21 +457,21 @@ fn a_round_the_box_opened_remembers_nothing() {
     )
     .expect("opens");
     let policy = common::chain();
-    let chains = [suzatary_core::secretary::Bound {
+    let chains = [suzatary_secretary::secretary::Bound {
         name: "life",
         caps: fakes.secretary(),
         policy: &policy,
     }];
-    let answered = suzatary_core::secretary::converse(
+    let answered = suzatary_secretary::secretary::converse(
         &fakes.secretary(),
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,
         &id,
-        suzatary_core::secretary::Saying {
+        suzatary_secretary::secretary::Saying {
             text: "What changed since the last briefing?",
             references: &[],
-            by: suzatary_core::secretary::Asker::Box(
+            by: suzatary_secretary::secretary::Asker::Box(
                 suzatary_inbox::secretary::own_round::OwnRound::Brief,
             ),
         },

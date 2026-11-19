@@ -10,12 +10,16 @@ mod frontiers;
 mod held_lines;
 #[path = "known_pull.rs"]
 mod known_pull;
+#[path = "lines_rule.rs"]
+mod lines_rule;
 #[path = "own_lines.rs"]
 mod own_lines;
 #[path = "pieces.rs"]
 mod pieces;
 #[path = "sequenced.rs"]
 mod sequenced;
+#[path = "topics.rs"]
+mod topics;
 #[path = "transcript.rs"]
 mod transcript;
 #[path = "web_vectors.rs"]

@@ -134,11 +134,11 @@
         # ===== THE APPLICATION (docs/ARCHITECTURE.md); above it, scaffolding and the ONE line
         # that takes the database, the Prodrome, off the input — one direction (§1, §2).
 
-        # The crates the core's library is cut into (`merge_gate.rs`'s `LIBRARY_CRATES`): each
+        # The model crates, the application's library (`merge_gate.rs`'s `LIBRARY_CRATES`): each
         # fileset below names the part of each it reads, so a new crate is one word here.
-        library = part: map (crate: ./app + "/${crate}${part}") [ "core" "base" "record" "store"
+        library = part: map (crate: ./app + "/${crate}${part}") [ "base" "record" "release" "store"
           "signatures" "todo" "held" "memory" "mail" "health" "triage" "services" "google" "connect"
-          "inbox" "conversations" "lines" "topics" "digest" "cards" "api" ];
+          "inbox" "conversations" "lines" "topics" "digest" "cards" "secretary" "api" ];
         # The test supports their libraries include, of the crates that have one.
         supports = lib.filter builtins.pathExists (library "/tests/support");
 
@@ -208,13 +208,12 @@
         cargoVendorDir = craneLib.vendorCargoDeps { cargoLock = ./app/Cargo.lock; };
         appCrate = args: craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; } // args);
 
-        # THE CORE'S LIBRARY ALONE: the manifests, the library's sources and what
-        # they compile in (the release plan, the calendar's schema, the two test
-        # supports its unit tests include), and the examples. What the wire's
-        # generator and the conformance vectors compile, so an edit to the
-        # server, the CLI, a live pin or the core's own integration tests moves
-        # neither.
-        coreFiles = lib.fileset.unions ([
+        # THE MODEL CRATES ALONE: the manifests, the library's sources and what
+        # they compile in (the calendar's schema, the test supports their unit
+        # tests include), and the examples. What the wire's generator and the
+        # conformance vectors compile, so an edit to the server, the CLI, a live
+        # pin or a crate's integration tests moves neither.
+        modelFiles = lib.fileset.unions ([
           ./app/Cargo.toml
           ./app/Cargo.lock
           ./app/cli/Cargo.toml
@@ -227,28 +226,29 @@
           ./app/viewtree/Cargo.toml
           ./app/pages/Cargo.toml
           ./app/wasm/Cargo.toml
-          ./app/core/examples
+          ./app/todo/examples
         ] ++ library "/Cargo.toml" ++ library "/src" ++ supports);
-        coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
+        modelSrc = lib.fileset.toSource { root = ./.; fileset = modelFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
-        # the generators are a `cargo test` and a `cargo run`, and with the core's
-        # own feature set (`-p suzatary-core`): built against the release,
-        # whole-workspace `cargoArtifacts`, they compiled every dependency again.
-        coreArgs = commonArgs // {
-          src = coreSrc;
+        # the generators are a `cargo test` and a `cargo run`, and with the
+        # generators' own feature sets (`-p suzatary-api`, `-p suzatary-todo`):
+        # built against the release, whole-workspace `cargoArtifacts`, they
+        # compiled every dependency again.
+        modelArgs = commonArgs // {
+          src = modelSrc;
           CARGO_PROFILE = "";
         };
-        # `.#suzatary-core-deps`: the dependencies of the core's unit tests and of its
-        # examples, built once per lock and rooted by the merge gate.
-        suzatary-core-deps = depsOf (coreArgs // {
-          pname = "suzatary-core";
-          buildPhaseCargoCommand = "cargo build --locked -p suzatary-core --examples";
-          checkPhaseCargoCommand = "cargo test --locked -p suzatary-core --lib --no-run";
+        # `.#suzatary-model-deps`: the dependencies of the wire's generator (the api crate's unit
+        # tests) and of the todo crate's examples, built once per lock and rooted by the merge gate.
+        suzatary-model-deps = depsOf (modelArgs // {
+          pname = "suzatary-model";
+          buildPhaseCargoCommand = "cargo build --locked -p suzatary-todo --examples";
+          checkPhaseCargoCommand = "cargo test --locked -p suzatary-api --lib --no-run";
         });
-        coreCrate = args: craneLib.buildPackage (coreArgs // { cargoArtifacts = suzatary-core-deps; } // args);
+        modelCrate = args: craneLib.buildPackage (modelArgs // { cargoArtifacts = suzatary-model-deps; } // args);
 
         # `nix build .#suzatary-bin`, the one binary: vendored from app/Cargo.lock, offline, no
-        # OpenSSL. `doCheck` is off: the laws are `checks.suzatary-core`, from the same artifacts.
+        # OpenSSL. `doCheck` is off: the laws are `checks.suzatary-test`, from the same artifacts.
         #
         # IT DOES NOT READ THE RELEASE (`appSrc` lacks `app/release.toml`), so a release commit
         # recompiles nothing (scripts/release-free.sh is the gate's proof).
@@ -306,7 +306,7 @@
           };
         };
 
-        # THE BROWSER MODULES: `package` compiled to wasm32 from the manifests, the core and
+        # THE BROWSER MODULES: `package` compiled to wasm32 from the manifests, the model crates and
         # `crates` (a server edit rebuilds none), the deploy's build or the gate's (no LTO, no
         # wasm-opt). Dependencies build once per lock; the glues are `web/` and `nodejs/`; panic
         # locations are remapped off the vendor directory. `app/wasm` and the pages' are its
@@ -380,18 +380,19 @@
             meta.description = description;
           });
         };
-        # The core: the glue keeps the name `prodrome` the loader and the tests have always fetched.
-        coreModule = build: wasmModule build {
+        # The Prodrome's module: the glue keeps the name `prodrome` the loader and the tests have always
+        # fetched.
+        prodromeModule = build: wasmModule build {
           pname = "suzatary-wasm";
           package = "suzatary-wasm";
           name = "prodrome";
           crates = [ ./app/wasm ];
           description = "Suzatary's browser module: the Prodrome's exports at Suzatary's schemas, with the JS glue";
         };
-        suzatary-wasm-deps = (coreModule "optimised").deps;
-        suzatary-wasm = (coreModule "optimised").module;
-        suzatary-wasm-dev-deps = (coreModule "development").deps;
-        suzatary-wasm-dev = (coreModule "development").module;
+        suzatary-wasm-deps = (prodromeModule "optimised").deps;
+        suzatary-wasm = (prodromeModule "optimised").module;
+        suzatary-wasm-dev-deps = (prodromeModule "development").deps;
+        suzatary-wasm-dev = (prodromeModule "development").module;
         # The pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md), loaded by the page
         # that is drawn from them.
         viewsModule = build: wasmModule build {
@@ -493,10 +494,10 @@
 
         # THE FRONTEND'S WIRE TYPES, GENERATED: `cargo test -p suzatary-api` writes `wire.ts` and
         # `payload.ts` when `TS_RS_EXPORT_DIR` is set. A derivation, so the frontend's shell needs no
-        # toolchain. It and the vectors below build from `coreSrc` alone (the manifests and the
+        # toolchain. It and the vectors below build from `modelSrc` alone (the manifests and the
         # model crates), so the private tree and the public one give one derivation, rebuilt only
         # when those crates move.
-        suzatary-wire-ts = coreCrate {
+        suzatary-wire-ts = modelCrate {
           pname = "suzatary-wire-ts";
           doCheck = false;
           # This build phase is a `cargo test`, not a `cargo build`: there is
@@ -515,16 +516,16 @@
             echo "wire.ts: $(wc -l < $out/wire.ts) lines, payload.ts: $(wc -l < $out/payload.ts)"
             runHook postInstall
           '';
-          meta.description = "The TypeScript for Suzatary's wire, generated from suzatary-core";
+          meta.description = "The TypeScript for Suzatary's wire, generated from suzatary-api";
         };
         # THE PAGES' BOUNDARY TYPES (`app/pages/tests/boundary.rs`): what a host hands each page
-        # of `app/pages` and what the page asks of it, from the core's sources and the two
-        # crates of the view tree, so the wire's own derivation stays the core's alone.
-        suzatary-pages-ts = coreCrate {
+        # of `app/pages` and what the page asks of it, from the model crates' sources and the two
+        # crates of the view tree, so the wire's own derivation stays the model crates' alone.
+        suzatary-pages-ts = modelCrate {
           pname = "suzatary-pages-ts";
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.unions [ coreFiles ./app/viewtree ./app/pages ];
+            fileset = lib.fileset.unions [ modelFiles ./app/viewtree ./app/pages ];
           };
           doCheck = false;
           doNotPostBuildInstallCargoBinaries = true;
@@ -590,10 +591,10 @@
         };
 
         # THE WEB TEST'S FPL/SERIES VECTORS, read from the Prodrome's `conformance/*.py` with the
-        # crate's own parser (`app/core/examples/vector_json.rs`), so `web/test/wasm.test.ts` needs
+        # crate's own parser (`app/todo/examples/vector_json.rs`), so `web/test/wasm.test.ts` needs
         # no second reader of that grammar; `env`/`json` come from `prodrome-wasm`'s frozen
         # `term-json.json` as they are.
-        suzatary-vector-json = coreCrate {
+        suzatary-vector-json = modelCrate {
           pname = "suzatary-vector-json";
           doCheck = false;
           # A `cargo run` of an example: nothing for the post-build hook.
@@ -601,11 +602,11 @@
           buildPhase = ''
             runHook preBuild
             mkdir -p $out
-            cargo run --offline -p suzatary-core --example vector_json -- \
+            cargo run --offline -p suzatary-todo --example vector_json -- \
               fpl ${prodrome}/conformance/fpl.py \
               ${prodrome}/wasm/conformance/term-json.json \
               > $out/fpl.json
-            cargo run --offline -p suzatary-core --example vector_json -- \
+            cargo run --offline -p suzatary-todo --example vector_json -- \
               series ${prodrome}/conformance/series.py \
               > $out/series.json
             runHook postBuild
@@ -709,7 +710,7 @@
           inherit suzatary-bin;
           # The dependency builds, exposed so a gate can root them: no output keeps them alive.
           suzatary-deps = cargoArtifacts;
-          inherit suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps;
+          inherit suzatary-wasm-deps suzatary-views-wasm-deps suzatary-model-deps;
           inherit suzatary-wasm-dev-deps suzatary-views-wasm-dev-deps;
           inherit suzatary-wire-ts;
           inherit suzatary-pages-ts suzatary-web-ts;
@@ -750,9 +751,9 @@
           };
           # `cargo test` and clippy over the workspace, both from `cargoArtifacts`, so neither
           # builds a dependency.
-          suzatary-core = craneLib.cargoTest (commonArgs // {
+          suzatary-test = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
-            pname = "suzatary-core";
+            pname = "suzatary-test";
           });
           suzatary-clippy = craneLib.cargoClippy (commonArgs // {
             inherit cargoArtifacts;

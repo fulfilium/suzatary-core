@@ -15,7 +15,7 @@ interpreters of `suzatary-io` and serves the web app (`suzatary serve`).
 
 ## Depends on
 
-`suzatary-core`, `suzatary-io`, `suzatary-plugin` and the Prodrome.
+The model crates, `suzatary-io`, `suzatary-plugin` and the Prodrome.
 
 ## Develop
 

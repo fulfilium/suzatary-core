@@ -1,4 +1,4 @@
-//! The box's proposals (`app/core/tests/web/proposals.json`) read by the card: an open one has
+//! The box's proposals (`app/api/tests/web/proposals.json`) read by the card: an open one has
 //! something to press, a closed one nothing.
 
 use suzatary_pages::card::answerable;
@@ -10,7 +10,7 @@ struct Open {
 }
 
 fn read<T: serde::de::DeserializeOwned>(file: &str) -> T {
-    let path = format!("{}/../core/tests/web/{file}", env!("CARGO_MANIFEST_DIR"));
+    let path = format!("{}/../api/tests/web/{file}", env!("CARGO_MANIFEST_DIR"));
     serde_json::from_str(&std::fs::read_to_string(&path).expect("the vector is in the tree"))
         .expect("the vector reads as its type")
 }

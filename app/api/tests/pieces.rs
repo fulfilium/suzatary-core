@@ -17,13 +17,13 @@ use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};
-use suzatary_core::stores::conversations::InMemory;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::prune;
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::wire::lines::Content;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::words::Words;
+use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc as _, Prodrome as _};
 
@@ -132,7 +132,7 @@ impl Writer {
             } => {
                 let said = self.said(*conversation, *words);
                 // The other replica holds what this one does, and each writes a line from it.
-                let other = suzatary_core::stores::InMemory::<LineEvent>::default();
+                let other = suzatary_secretary::stores::InMemory::<LineEvent>::default();
                 let held: Vec<(Hash, String)> = self
                     .lines
                     .lines

@@ -74,7 +74,7 @@ test("law: an outbound anchor shows the host it leads to, and its label only bes
 });
 
 // The box's vectors: every stored link still renders, and the tab draws each outbound one by its host.
-const vectors = JSON.parse(readFileSync("app/core/tests/web/closed-world.json", "utf8")) as { text: string; admitted: boolean }[]
+const vectors = JSON.parse(readFileSync("app/api/tests/web/closed-world.json", "utf8")) as { text: string; admitted: boolean }[]
 
 test("every link in the box's vectors renders, and an outbound one is drawn by its host with its label beside", () => {
   let outbound = 0

@@ -34,7 +34,7 @@ async fn once(state: &State, tokens: &Arc<GithubTokens>) {
             .collect();
         let now = prodrome_core::fpl::instant_of(state.first.caps.secretary.clock.now());
         let expiring = tokens.expiries(&github, now);
-        suzatary_core::secretary::token_expiry::write(
+        suzatary_secretary::secretary::token_expiry::write(
             &state.every_chain(),
             &state.deployment,
             &expiring,

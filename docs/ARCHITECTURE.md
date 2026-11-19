@@ -59,22 +59,21 @@ The temporal FPL database: literals, objects and the DAG, the trust rule, folds 
 the evaluator, the closed-world Typst compiler. It knows nothing of Suzatary. It is pinned by
 revision, the same sha in `app/Cargo.toml` and `flake.nix`. Read its `README.md` and `SPEC.md`.
 
-**core** (`app/core`, `suzatary-core`). The application's meaning, pure: no I/O, no async, no
-clock. It owns the record (`record.rs`), the capability traits and the records of them that
-each role holds (`capability/`), every store's row (`store/kind.rs`, the `stores!` table), the
-chain set that prices every row (`chain_set`), the agent's and the secretary's verbs (`agent/`,
-`secretary/`, `verb/`), the wire types (`wire.rs`), signatures, the gate's decisions and the
-replicas the tab holds (`replica/`). It depends on the Prodrome. Start at its `README.md`, then
-`lib.rs`, `record.rs` and `capability/`.
+**The model crates** (`app/base` … `app/api`, each `suzatary-<name>`). The application's
+meaning, pure: no I/O, no async, no clock. Each depends on the Prodrome and the crates below it
+(`app/Cargo.toml`'s `members` lists them bottom up), and its `lib.rs` says what it holds. The top
+two are `secretary`, a turn of the secretary or the triage agent, the records of effects each
+role holds and the `stores!` table of every store's row, and `api`, the routes, the gate's
+decisions and the wire the browser and the server share.
 
 **io** (`app/io`, `suzatary-io`). The interpreters: each capability trait run against the
 world (files, subprocesses, IMAP and SMTP, HTTP, the `claude` CLI, notmuch, tailscaled). It
-makes no decisions. It depends on core and the Prodrome. Start at `run.rs` (every subprocess),
+makes no decisions. It depends on the model crates below `api` and the Prodrome. Start at `run.rs` (every subprocess),
 `objects.rs` (a store on disk) and `model.rs` (the model port).
 
 **plugin** (`app/plugin`). The plugin host: wasmtime components of `app/wit/plugin.wit`,
 each call in a fresh store under a time and memory budget, each `fetch` admitted against the
-plugin's manifest. It depends on core and io. Start at its `README.md` and `Host::load`.
+plugin's manifest. It depends on the secretary crate and io. Start at its `README.md` and `Host::load`.
 
 **plugin-ics** (`app/plugin-ics`). The calendar plugin, built to `ics.wasm`, with its schema
 `ics.schema`. **plugin-fence** (`app/plugin-fence`) is a hostile plugin that
@@ -86,18 +85,19 @@ verb, `src/commands/<verb>.rs`; `src/verb.rs` is the argument tree and the one `
 owns the runtime (tokio, axum), the instance file (`instance/`), the HTTP server
 (`commands/serve/`, its routes in `serve/table.rs`), the tap that performs a proposal
 (`commands/tap.rs`) and the one file that names the mail transport
-(`commands::mail::deliver`). It depends on core, io and plugin. Start at `verb.rs`, then the
+(`commands::mail::deliver`). It depends on the model crates, io and plugin. Start at `verb.rs`, then the
 verb you change.
 
 **wasm** (`app/wasm`). The tab's module: the Prodrome's exports at this application's schemas,
-with the evaluator, so the tab and the box give the same answers. It depends on core. Start at
+with the evaluator, so the tab and the box give the same answers. It depends on the model
+crates. Start at
 its `README.md`.
 
 **viewtree** (`app/viewtree`). A page's view as data, the keyed diff and the patches a painter
 applies. It knows nothing of Suzatary. Start at `program.rs` and `patch.rs`.
 
 **pages** (`app/pages`). The app's pages as `viewtree` programs, compiled to wasm for the tab.
-It depends on core and viewtree. Start at `lib.rs` and `runtime.rs`.
+It depends on the model crates and viewtree. Start at `lib.rs` and `runtime.rs`.
 
 **web** (`web/`). The frontend: TypeScript, one esbuild bundle, no framework, no npm. It owns
 the shell (`src/app/`, `src/shell/`), the replicas' sync (`src/prodrome/`), the painter of the
@@ -132,7 +132,7 @@ decisions.
 
 ## 3. The stores
 
-Every store is one row of `stores!` in `app/core/src/stores.rs`, with its tier: PUSHED
+Every store is one row of `stores!` in `app/secretary/src/stores.rs`, with its tier: PUSHED
 (committed to the data repository), LOCAL (on the box and in the vault, never pushed) or CACHE
 (on the box, rebuilt by syncing). A prodrome store has its own schema and its own hold.
 
@@ -168,19 +168,19 @@ change is wrong, not the mechanism.
   frozen. Held by `web/test/wasm.test.ts` and the Prodrome's conformance tests.
 - Low fulfillment is urgent. Never flip the renderer.
 - The inbox's phase only climbs, and `inbox::submit` under `submit.lock` is the only door that
-  performs a proposal. Held by `app/core/tests/inbox.rs` and `inbox_schema.rs`.
+  performs a proposal. Held by `app/secretary/tests/inbox.rs` and `inbox_schema.rs`.
 - Every stored format is frozen once shipped; evolution adds kinds. Held by the stored
-  vocabulary snapshots under `app/core/tests/` and `live.rs`.
+  vocabulary snapshots under `app/secretary/tests/` and `live.rs`.
 
 **Authority**
 
 - The triage agent cannot send and cannot write a chain. Its verbs take an `Agent` record
   with no field that sends; its writes are cards. Held by the `compile_fail` doc tests in
-  `app/core/src/agent/record.rs`, the snapshot `app/core/tests/mcp-surface.json` and the fence
+  `app/secretary/src/agent/record.rs`, the snapshot `app/secretary/tests/mcp-surface.json` and the fence
   `scripts/tool-guard.sh`.
 - Only the owner's tap sends mail or performs a proposal: a `Tap` minted by `Tap::of` from the
   door's proof. Exactly one file names the transport. Held by `app/cli/tests/writes.rs`.
-- The secretary's verb list is closed. Held by `app/core/tests/secretary-surface.json`.
+- The secretary's verb list is closed. Held by `app/secretary/tests/secretary-surface.json`.
 - An address is not an identity: every request asks tailscaled whose peer it is; loopback
   never writes. The one chain write is `POST /api/objects`. Held by `app/cli/tests/writes.rs`
   and `gate.rs`.

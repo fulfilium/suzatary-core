@@ -22,7 +22,7 @@ const core = ((): Core => {
 
 type Shipped = { hash: string; text: string }
 type Asked = { id: string; before: string | null; limit: string | null; about: string | null; memory: boolean; answer: string }
-const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as {
+const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as {
   at: string
   chains: { name: string; untrusted: string[]; objects: Shipped[] }[]
   inbox: Shipped[]

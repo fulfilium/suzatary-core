@@ -1,5 +1,5 @@
 //! The routes, the gate and the wire that the browser and the server share: the top of the
-//! application, over `suzatary-core`.
+//! application, over the model crates.
 
 #![forbid(unsafe_code)]
 
@@ -13,6 +13,7 @@ pub mod secretary {
     pub mod routes;
 }
 pub mod server;
+pub mod sync;
 pub mod wire;
 
 // The inert server: test support.

@@ -9,7 +9,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use prodrome_core::event::{Hash, canonical_envelope};
-use suzatary_core::secretary::live_shape::{self, Shape, Summaries};
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_digest::secretary::digests::ReadDigests;
 use suzatary_digest::secretary::memories::ReadMemories;
@@ -17,10 +16,11 @@ use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
+use suzatary_secretary::secretary::live_shape::{self, Shape, Summaries};
 use suzatary_store::store::{Doc as _, Gets as _, Prodrome, Reads};
 
 /// Every object of `from` handed to `to`, as a replica hands its objects over.
-fn handed<E: suzatary_core::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
+fn handed<E: suzatary_secretary::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
     let prints: Vec<(Hash, String)> = from
         .objects()
         .expect("the objects read")

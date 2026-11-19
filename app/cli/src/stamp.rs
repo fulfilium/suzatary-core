@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::release::{Released, ReleasedError};
+use suzatary_release::release::{Released, ReleasedError};
 
 /// Where the release file is installed, relative to the package's `<out>`.
 pub const BESIDE: &str = "share/suzatary/release.toml";

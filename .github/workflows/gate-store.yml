@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           roots="$RUNNER_TEMP/roots"
           mkdir -p "$roots"
-          for out in suzatary-deps suzatary-wasm-deps suzatary-views-wasm-deps suzatary-wasm-dev-deps suzatary-views-wasm-dev-deps suzatary-core-deps suzatary-typst-wasm; do
+          for out in suzatary-deps suzatary-wasm-deps suzatary-views-wasm-deps suzatary-wasm-dev-deps suzatary-views-wasm-dev-deps suzatary-model-deps suzatary-typst-wasm; do
             nix build --print-build-logs --out-link "$roots/$out" ".#$out"
           done
 

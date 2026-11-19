@@ -292,7 +292,7 @@ pub fn erase(
         })
         .inspect(|_| {
             let caps = call.chain.caps;
-            if let Err(failed) = suzatary_core::secretary::file_search::reindex(
+            if let Err(failed) = suzatary_secretary::secretary::file_search::reindex(
                 caps.secretary.conversations,
                 caps.secretary.upload_index,
             ) {

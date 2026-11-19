@@ -19,9 +19,11 @@ ts-rs.workspace = true
 postcard.workspace = true
 hex.workspace = true
 sha2.workspace = true
+# The laws an order and a join state (`laws`), under `nothing` alone.
+proptest = { workspace = true, optional = true }
 
 [features]
-nothing = ["suzatary-base/nothing"]
+nothing = ["suzatary-base/nothing", "dep:proptest"]
 
 [dev-dependencies]
 suzatary-store = { path = ".", features = ["nothing"] }

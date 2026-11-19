@@ -37,7 +37,7 @@ const box = (build: string, announced: string[] = []) => {
 }
 
 test("this build writes by a contract the box takes", () => {
-  const box: unknown = JSON.parse(readFileSync("app/core/tests/web/client.json", "utf8"))
+  const box: unknown = JSON.parse(readFileSync("app/api/tests/web/client.json", "utf8"))
   const min = typeof box === "object" && box !== null && "min" in box ? Number(box.min) : NaN
   assert.ok(http.CLIENT >= min, `the bundle keeps contract ${http.CLIENT}, the box takes ${min} or later`)
   const headers = new Headers(http.actRequest({}).headers)

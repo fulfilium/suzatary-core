@@ -9,6 +9,7 @@ use crate::commands::serve::sign_ins::SignIns;
 use crate::wiring::Opened;
 use crate::wiring::Stores;
 use prodrome_core::event::Actor;
+use prodrome_core::fpl::instant_of;
 use std::path::Path;
 use std::sync::Arc;
 use suzatary_base::capability::Clock;
@@ -18,12 +19,6 @@ use suzatary_base::reference::Reference;
 use suzatary_conversations::secretary::store::Kind;
 use suzatary_conversations::secretary::store::Line;
 use suzatary_conversations::secretary::store::Lines;
-use suzatary_core::secretary::Answered;
-use suzatary_core::secretary::Asker;
-use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::Saying;
-use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::review::{Noticed, Pass};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::HeldFile;
@@ -42,19 +37,27 @@ use suzatary_io::state::Ledger;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::Consent;
 use suzatary_mail::mail::oauth::Protocol;
+use suzatary_secretary::secretary;
+use suzatary_secretary::secretary::Answered;
+use suzatary_secretary::secretary::Asker;
+use suzatary_secretary::secretary::Bound;
+use suzatary_secretary::secretary::Saying;
+use suzatary_secretary::secretary::daily::Run;
+use suzatary_secretary::secretary::review::{Noticed, Pass};
+use suzatary_store::store::Prodrome;
 
 use anyhow::Context as _;
 use suzatary_api::secretary::routes::Post;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
-use suzatary_core::conversation::round::Ending;
-use suzatary_core::secretary::Secretary;
 use suzatary_held::excerpt::Excerpt;
 use suzatary_held::held_value::Filled;
 use suzatary_held::secretary::attached::Checked;
 use suzatary_inbox::secretary::proposal::Draft;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::send::{Composed, Outgoing};
+use suzatary_secretary::conversation::round::Ending;
+use suzatary_secretary::secretary::Secretary;
 
 use crate::instance::Instance;
 use suzatary_memory::secretary::salted_text;
@@ -131,7 +134,7 @@ pub enum Acting {
 pub type ActingConversations = &'static ConversationStores;
 
 /// The inbox an act ends in.
-pub type ActingInbox = &'static dyn suzatary_store::store::Prodrome<inbox_event::InboxEvent>;
+pub type ActingInbox = &'static dyn Prodrome<inbox_event::InboxEvent>;
 
 /// The server's own store handles, so the process holds one copy of each.
 #[derive(Clone, Copy)]
@@ -668,7 +671,7 @@ impl Flow<'_> {
             .saturating_add(2 * code.interval_seconds)
             .min(20 * 60);
         let expiry_seconds = code.expires_in_seconds.min(deadline_seconds);
-        let expiry_instant = prodrome_core::fpl::instant_of(started)
+        let expiry_instant = instant_of(started)
             + chrono::Duration::seconds(i64::try_from(expiry_seconds).unwrap_or(i64::MAX));
         let expires_at = prodrome_core::fpl::iso(expiry_instant);
 
@@ -830,9 +833,9 @@ fn drive_turn(
     read: Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
 ) -> Performed {
     use Clock as _;
+    use secretary::verb_answer::VerbAnswer;
     use suzatary_base::refusal::Refusal;
     use suzatary_conversations::secretary::store::Entry;
-    use suzatary_core::secretary::verb_answer::VerbAnswer;
     use suzatary_held::file_read::FileRead;
 
     if let Ok(FileRead::Withheld { size, digest, .. }) = &read {
@@ -945,7 +948,7 @@ fn maybe_append_triage_alarm(
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
     if let Some(line) = suzatary_triage::mail::heartbeat::alarm(
-        prodrome_core::fpl::instant_of(now),
+        instant_of(now),
         corpus.last_triage_pass().as_deref(),
         STALE_HOURS,
         &outcome,
@@ -1010,8 +1013,7 @@ fn append_completion(
     performed: Performed,
     line: &suzatary_conversations::secretary::store::Entry,
 ) {
-    let by =
-        Actor::new(suzatary_core::secretary::WRITES_AS.actor()).expect("assistant is an actor");
+    let by = Actor::new(secretary::WRITES_AS.actor()).expect("assistant is an actor");
     if let Err(failed) = suzatary_inbox::secretary::inbox::end(*inbox, object, &by, at, performed) {
         tracing::warn!(
             "secretary: could not end proposal {object} of conversation {id}: {}",
@@ -1397,11 +1399,11 @@ enum BackfillRun {
 }
 
 use suzatary_connect::settings::Edits;
-pub(crate) use suzatary_core::secretary::briefs::BRIEF;
 use suzatary_inbox::secretary::inbox_event;
 use suzatary_inbox::secretary::inbox_reading;
 use suzatary_inbox::secretary::proposer;
 use suzatary_lines::secretary::prune;
+pub(crate) use suzatary_secretary::secretary::briefs::BRIEF;
 use suzatary_services::web::WebAnswer;
 
 /// Hours before a stale triage heartbeat alarms: twelve missed five-minute timers.
@@ -1670,7 +1672,6 @@ pub fn backfill_apply(
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_store::store::Prodrome as _;
     use suzatary_topics::secretary::topics::plan::Plan;
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
@@ -1704,7 +1705,6 @@ pub fn carry(
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_store::store::Prodrome as _;
     use suzatary_topics::secretary::topics::carry::{self, Carrying, Map};
     let refused =
         |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
@@ -1981,7 +1981,7 @@ pub fn dismiss(
         opened.remembering.conversations.conversations(),
     )?;
     let id = ConversationId::among(conversation, &held)?;
-    let stored = suzatary_core::secretary::dismiss(
+    let stored = secretary::dismiss(
         opened.remembering.conversations.conversations(),
         opened.memories(),
         &SystemClock,
@@ -2086,7 +2086,7 @@ pub fn scripted_round(
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     }
     let owner = Actor::new(suzatary_connect::cast::CAST.owner.actor)?;
-    suzatary_core::secretary::converse(
+    secretary::converse(
         caps,
         &instance.deployment,
         &instance.settables,
@@ -2095,7 +2095,7 @@ pub fn scripted_round(
         Saying {
             text: said,
             references: &[],
-            by: Asker::Person(suzatary_core::secretary::Speaker::scripted(&owner)),
+            by: Asker::Person(secretary::Speaker::scripted(&owner)),
         },
         "the fixture's scripted round",
     )
@@ -2113,7 +2113,7 @@ pub fn scripted_review(
     wired.brain = Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
-    let run = match suzatary_core::secretary::review::pass(
+    let run = match secretary::review::pass(
         caps,
         &instance.deployment,
         &instance.settables,
@@ -2147,7 +2147,7 @@ pub fn scripted_brief(
 
 fn unasked(instance: &Instance, chains: &[Bound<'_>], id: &ConversationId) {
     if let Err(refusal) =
-        suzatary_core::secretary::mail_health::propose_persistent(chains, &instance.deployment, id)
+        secretary::mail_health::propose_persistent(chains, &instance.deployment, id)
     {
         eprintln!(
             "secretary: the mail health proposal was refused: {}",
@@ -2189,7 +2189,7 @@ fn brief(
             serde_json::json!({
                 "conversation": id.as_str(),
                 "url": url,
-                "briefing": instance.persona.zone.day(prodrome_core::fpl::instant_of(caps.clock.now()))
+                "briefing": instance.persona.zone.day(instant_of(caps.clock.now()))
                 .to_string(),
             })
         );
@@ -2295,7 +2295,7 @@ fn ask_brief(
 ) -> anyhow::Result<Option<Answered>> {
     let caps = &wired.secretary();
     let Some(limited) = limited else {
-        return suzatary_core::secretary::converse(
+        return secretary::converse(
             caps,
             &instance.deployment,
             &instance.settables,
@@ -2352,7 +2352,7 @@ fn review(
     let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
-    let run = match suzatary_core::secretary::review::pass(
+    let run = match secretary::review::pass(
         caps,
         &instance.deployment,
         &instance.settables,
@@ -2383,22 +2383,16 @@ fn review(
             paused("review", &limited, json, serde_json::json!({"reviewed": 0}))
         }
         Err(refusal) => {
-            let today = instance
-                .persona
-                .zone
-                .day(prodrome_core::fpl::instant_of(caps.clock.now()));
-            let outage = suzatary_core::secretary::review::outage(
-                conversations(instance).conversations(),
-                today,
-            )
-            .inspect_err(|failed| {
-                eprintln!(
-                    "secretary: the conversations do not list, so the outage is not known and \
+            let today = instance.persona.zone.day(instant_of(caps.clock.now()));
+            let outage = secretary::review::outage(conversations(instance).conversations(), today)
+                .inspect_err(|failed| {
+                    eprintln!(
+                        "secretary: the conversations do not list, so the outage is not known and \
                      nobody is paged: {}",
-                    failed.message()
-                );
-            })
-            .ok();
+                        failed.message()
+                    );
+                })
+                .ok();
             if let Some(page) = outage.and_then(|outage| outage.page(page_after))
                 && let Err(failed) = super::notify::deliver(instance, &page)
             {
@@ -2437,7 +2431,7 @@ fn review(
 }
 
 /// A review that ran, as a person reads it.
-fn print_reviewed(reviewed: &suzatary_core::secretary::review::Reviewed) {
+fn print_reviewed(reviewed: &secretary::review::Reviewed) {
     if reviewed.rounds == 0 {
         println!("secretary: no triage card is open, nothing to review");
         return;
@@ -2500,13 +2494,9 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
     let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
-    let report = suzatary_core::secretary::sweep::dry_run(
-        caps,
-        &instance.deployment,
-        &instance.settables,
-        &chains,
-    )
-    .context("gathering the open list for a dry run")?;
+    let report =
+        secretary::sweep::dry_run(caps, &instance.deployment, &instance.settables, &chains)
+            .context("gathering the open list for a dry run")?;
 
     if json {
         println!(
@@ -2562,7 +2552,7 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
     let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
-    let Noticed { unreadable, run } = suzatary_core::secretary::sweep::pass(
+    let Noticed { unreadable, run } = secretary::sweep::pass(
         caps,
         &instance.deployment,
         &instance.settables,
@@ -2618,19 +2608,19 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         None => instance
             .persona
             .zone
-            .day(prodrome_core::fpl::instant_of(Clock::now(&SystemClock))),
+            .day(instant_of(Clock::now(&SystemClock))),
         Some(text) => chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
             .map_err(|failed| anyhow::anyhow!("--since must be YYYY-MM-DD: {failed}"))?,
     };
     let store = conversations(instance);
-    let found = suzatary_core::secretary::review::reviews(store.conversations(), day)
+    let found = secretary::review::reviews(store.conversations(), day)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     for unreadable in &found.unreadable {
         eprintln!("secretary: {unreadable}");
     }
     let found = found.items;
     // Outages interleave, so a gap cannot look complete.
-    let failed = suzatary_core::secretary::review::failures(store.conversations(), day)
+    let failed = secretary::review::failures(store.conversations(), day)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
         .items;
     if found.is_empty() && failed.is_empty() {
@@ -2815,9 +2805,9 @@ mod sign_in_completion {
     use suzatary_conversations::secretary::model::{ToolCall, Turn};
     use suzatary_conversations::secretary::store::{Entry, Stored};
     use suzatary_conversations::secretary::taint;
-    use suzatary_core::stores::InMemory;
     use suzatary_inbox::secretary::inbox::ProposalId;
     use suzatary_lines::secretary::transcript;
+    use suzatary_secretary::stores::InMemory;
 
     use super::{append_completion, completion};
 

@@ -87,7 +87,7 @@ const written = (label: string, make: () => ObjectStore, event: (s: ObjectStore,
   return objects
 }
 
-const inbox = (JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as { inbox: { hash: string; text: string }[] }).inbox.map(o => ({ hash: o.hash, literal: o.text }))
+const inbox = (JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as { inbox: { hash: string; text: string }[] }).inbox.map(o => ({ hash: o.hash, literal: o.text }))
 
 const KINDS: readonly Kind[] = [
   { name: "topics", make: () => new core.Memberships(), registers: true, box: written("topics", () => new core.Memberships(), memberships), event: memberships },

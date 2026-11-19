@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
 use suzatary_base::chains::ChainName;
-use suzatary_core::release::Plan;
+use suzatary_release::release::Plan;
 
 /// The file beside a store that declares its releases.
 pub(crate) const PLAN: &str = "releases.toml";

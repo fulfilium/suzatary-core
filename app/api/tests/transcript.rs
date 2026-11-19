@@ -23,7 +23,6 @@ use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{
     Decision, Entry, Line, Namer, Rewind, Stored, Title, Unheld,
 };
-use suzatary_core::stores::InMemory;
 use suzatary_inbox::coding;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::ProposalId;
@@ -38,10 +37,11 @@ use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::words::Words;
+use suzatary_secretary::stores::InMemory;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Prodrome, linearised};
 
-type Memory = suzatary_core::stores::conversations::InMemory;
+type Memory = suzatary_secretary::stores::conversations::InMemory;
 type Disk = EventStore<LineEvent, Everything>;
 
 /// Every key the lines written straight to a store were locked under, and where they came from.

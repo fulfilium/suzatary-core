@@ -16,13 +16,13 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 target_dir="$root/app/target"
 if [[ "${1:-}" == "--fixture" ]]; then
-  echo "==> cargo build --bin suzatary-dev --workspace --features suzatary/fixture,suzatary-core/nothing, CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-1} (target-dir: $target_dir)" >&2
+  echo "==> cargo build --bin suzatary-dev --workspace --features suzatary/fixture,suzatary-secretary/nothing, CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-1} (target-dir: $target_dir)" >&2
   CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}" cargo build \
     --manifest-path "$root/app/Cargo.toml" \
     --workspace \
     --bin suzatary-dev \
     --target-dir "$target_dir" \
-    --features suzatary/fixture,suzatary-core/nothing >&2
+    --features suzatary/fixture,suzatary-secretary/nothing >&2
   echo "$target_dir/debug/suzatary-dev"
   exit 0
 fi

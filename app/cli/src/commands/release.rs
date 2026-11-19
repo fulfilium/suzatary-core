@@ -15,15 +15,16 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::markup_text;
-use suzatary_core::release::{
-    Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,
-};
 use suzatary_io::clock::SystemClock;
 use suzatary_record::record::Node;
+use suzatary_release::release::{
+    Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,
+};
 use suzatary_store::store::Prodrome;
 
 use super::{chain_at, store_of};
 use crate::instance::{ChainDir, Instance, project};
+use suzatary_signatures::believed::Believed;
 use suzatary_store::store::Reads as _;
 
 /// Which reading or act.
@@ -259,11 +260,9 @@ impl Source {
 
     /// Each todo's spec in force.
     fn current(&self) -> anyhow::Result<BTreeMap<TodoId, Vec<Term>>> {
-        Ok(
-            suzatary_signatures::believed::Believed::of(&self.nodes, self.now, &self.untrusted)
-                .context("folding the store")?
-                .specs,
-        )
+        Ok(Believed::of(&self.nodes, self.now, &self.untrusted)
+            .context("folding the store")?
+            .specs)
     }
 
     /// A todo's action line as plain text, `None` when the store holds no record of it.
@@ -466,14 +465,14 @@ fn items(
     let Some(parent) = suzatary_todo::todos::current(&nodes, now, release) else {
         bail!("no todo {release:?} in the plan store");
     };
-    let functions = suzatary_signatures::believed::Believed::of(&nodes, now, &dir.policy.untrusted)
+    let functions = Believed::of(&nodes, now, &dir.policy.untrusted)
         .context("folding the plan store")?
         .linkable();
     let event = suzatary_todo::authoring::rescope(&parent, add, remove, &functions, now, actor)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     writer.append(event).context("appending the revision")?;
     let after = writer.nodes().context("re-reading the plan store")?;
-    let current = suzatary_signatures::believed::Believed::of(&after, now, &dir.policy.untrusted)
+    let current = Believed::of(&after, now, &dir.policy.untrusted)
         .context("folding the plan store")?
         .specs;
     let reading = Reading::of(plan, binding(&after, &dir.policy.untrusted), now, &current);

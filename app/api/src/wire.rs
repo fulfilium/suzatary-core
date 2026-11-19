@@ -2,9 +2,9 @@
 //! the name on the wire, so renaming one is a contract change.
 
 use suzatary_base::refusal::Refusal;
-use suzatary_core::release::Lot;
 use suzatary_held::held_value::Revealed;
 use suzatary_mail::mail::MailRow;
+use suzatary_release::release::{Lot, Named, Place};
 pub mod shape;
 
 use std::collections::BTreeMap;
@@ -15,6 +15,7 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 use suzatary_base::wire::base::ErrorPayload;
 use suzatary_cards::wire::cards::{AboutPayload, HeldTodo, Overview};
 use suzatary_lines::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
+use suzatary_secretary::stores;
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
 use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use suzatary_topics::wire::topics::{
@@ -154,8 +155,8 @@ impl StoreName {
     ];
 
     #[must_use]
-    pub const fn kind(self) -> suzatary_core::stores::Kind {
-        use suzatary_core::stores::Kind;
+    pub const fn kind(self) -> stores::Kind {
+        use stores::Kind;
         match self {
             StoreName::Inbox => Kind::Inbox,
             StoreName::Lines => Kind::Lines,
@@ -619,7 +620,7 @@ pub struct ReleaseRow {
     pub held: Option<HeldTodo>,
     pub version: String,
     pub lot: Lot,
-    pub place: suzatary_core::release::Place,
+    pub place: Place,
     /// Every todo its spec has named, in id order.
     pub items: Vec<ReleaseItem>,
 }
@@ -630,7 +631,7 @@ pub struct ReleaseItem {
     /// `null` where the spec names a todo the chain does not hold.
     pub held: Option<HeldTodo>,
     pub lot: Lot,
-    pub named: suzatary_core::release::Named,
+    pub named: Named,
 }
 
 /// `GET /api/me`.
@@ -891,7 +892,7 @@ pub const SPEC_NODE: &str = "type SpecNode = { kind: string } & Record<string, u
 const HEADER: &str = "\
 // GENERATED FROM app/api/src/wire.rs BY `cargo test -p suzatary-api`.
 // DO NOT EDIT: docs/ARCHITECTURE.md §2 — every wire type is declared ONCE, in
-// suzatary-core, and its decoder in payload.ts is folded from the same text.
+// the Rust, and its decoder in payload.ts is folded from the same text.
 
 /** A `to_json` node: tagged by its Term constructor, with per-constructor
  * fields a consumer renders generically. */
@@ -1110,7 +1111,7 @@ mod tests {
     /// The stores the tab hands its writes to are exactly the rows whose writer is `Tab`.
     #[test]
     fn the_written_names_are_the_rows_a_tab_writes() {
-        use suzatary_core::stores::Writer;
+        use suzatary_secretary::stores::Writer;
         let rows: Vec<StoreName> = StoreName::ALL
             .into_iter()
             .filter(|store| store.kind().writer() == Writer::Tab)

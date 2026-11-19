@@ -1,4 +1,4 @@
-// The generated decoders over every answer the Rust writes (app/core/tests/web/answers.json, a sample of each type a
+// The generated decoders over every answer the Rust writes (app/api/tests/web/answers.json, a sample of each type a
 // route answers): each decodes to itself, a field dropped anywhere is refused naming it, an extra one is dropped, and a
 // field of another type is refused. A map's keys are its data, never fields, so the field laws leave them alone.
 
@@ -14,7 +14,7 @@ type Path = (string | number)[]
 type Sample = { value: unknown; maps: Path[] }
 
 const Samples = d.rec(d.arr(d.obj<Sample>({ value: d.unknown, maps: d.arr(d.arr(d.alt(d.str, d.num))) })))
-const read = Samples(JSON.parse(readFileSync("app/core/tests/web/answers.json", "utf8")))
+const read = Samples(JSON.parse(readFileSync("app/api/tests/web/answers.json", "utf8")))
 if (read.type !== "Val") throw new Error(`answers.json: ${read.type === "Error" ? read.e : "not read"}`)
 
 const decoders = new Map<string, d.Decoder<unknown>>(Object.entries(payload))

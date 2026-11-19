@@ -1,0 +1,14 @@
+//! Every integration test of this crate as one binary: one link of the whole
+//! application instead of one per file. Each file stays where it was and reads
+//! as it did on its own; a file under `tests/` that is not a module here, or a
+//! target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
+//! cli's tests fails when one is missing.
+
+#[path = "connect.rs"]
+mod connect;
+#[path = "drive_port.rs"]
+mod drive_port;
+#[path = "puller_port.rs"]
+mod puller_port;
+#[path = "transport_port.rs"]
+mod transport_port;

@@ -28,7 +28,7 @@ const core = ((): Core => {
 })()
 
 type Shipped = { hash: string; text: string }
-const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as {
+const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as {
   inbox: Shipped[]
   conversations: Shipped[]
   skeleton: SkeletonPayload

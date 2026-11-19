@@ -8,7 +8,7 @@ import payload from "../src/wire/generated/payload"
 import { GROUPS } from "./gen"
 
 test("the box's own overview decodes, holds every group once in order, and names no secret", () => {
-  const samples: unknown = JSON.parse(readFileSync("app/core/tests/web/answers.json", "utf8"))
+  const samples: unknown = JSON.parse(readFileSync("app/api/tests/web/answers.json", "utf8"))
   const sampled = typeof samples === "object" && samples !== null && "Overview" in samples && Array.isArray(samples.Overview) ? samples.Overview : []
   assert.ok(sampled.length > 0, "the box writes an overview")
   for (const sample of sampled) {

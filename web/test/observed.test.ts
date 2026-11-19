@@ -34,7 +34,7 @@ test("the screen's whole percent is idempotent, within half a percent, and the c
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
 const core = createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
-const chain = JSON.parse(readFileSync("app/core/tests/web/chain.json", "utf8")) as { links: { hash: string; literal: string }[]; untrusted: string[] }
+const chain = JSON.parse(readFileSync("app/api/tests/web/chain.json", "utf8")) as { links: { hash: string; literal: string }[]; untrusted: string[] }
 const none = new core.Chains()
 const reads: viewstate.Reads = { prose: m => core.prose(m) ?? undefined }
 const named = memo.tabulatedNamer((own, kids) => core.memo_name(own, kids), table.of(table.lru(8192)))

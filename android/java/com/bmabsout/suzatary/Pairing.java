@@ -1,6 +1,6 @@
 /*
  * PAIRING: the generic APK asks a box it was given how that box wakes the
- * phone, before it keeps the box (`GET /api/portal`, app/core's
+ * phone, before it keeps the box (`GET /api/portal`, app/api's
  * `wire::PortalPayload`). A 200 with that shape proves only that the gate
  * at this name admits this phone's login at its own `app_url`; it does not
  * prove that the host is a Suzatary box. Off the main thread; the caller

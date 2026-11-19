@@ -42,7 +42,7 @@ pub struct Possessed(Proven);
 /// proof a route acting for the owner may hold. Only [`Asking::trusted`] makes one.
 ///
 /// ```compile_fail
-/// let forged = suzatary_core::signatures::Trusted(todo!());
+/// let forged = suzatary_signatures::signatures::Trusted(todo!());
 /// ```
 #[derive(Debug)]
 pub struct Trusted(Proven);

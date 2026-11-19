@@ -15,7 +15,7 @@ fn repo() -> PathBuf {
 /// The tree's release, `app/release.toml`'s version.
 fn declared() -> Option<String> {
     let text = std::fs::read_to_string(repo().join("app/release.toml")).ok()?;
-    suzatary_core::release::Released::parse(&text)
+    suzatary_release::release::Released::parse(&text)
         .ok()
         .map(|released| released.version.to_string())
 }
@@ -137,7 +137,8 @@ fn the_tree_s_release_reads_and_prints_as_itself() {
         eprintln!("skipped: no {}", path.display());
         return;
     };
-    let released = suzatary_core::release::Released::parse(&text).expect("app/release.toml reads");
+    let released =
+        suzatary_release::release::Released::parse(&text).expect("app/release.toml reads");
     assert_eq!(
         released.print_over(&text),
         text,
@@ -160,7 +161,7 @@ fn every_fragment_is_one_the_cut_folds() {
             path.display()
         );
         let text = std::fs::read_to_string(&path).expect("reads");
-        if let Err(refused) = suzatary_core::release::Fragment::parse(&text) {
+        if let Err(refused) = suzatary_release::release::Fragment::parse(&text) {
             panic!("{}: {refused}", path.display());
         }
     }

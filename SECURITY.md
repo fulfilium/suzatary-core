@@ -104,13 +104,13 @@ checks read, or in a file listed by its path and SHA-256 in
   path allowlist passes over nothing. A test's throwaway key is admitted by its finding's
   fingerprint in `.gitleaksignore`, and its bytes by the manifest, since a
   fingerprint names a path and a line, never the bytes.
-- **The term matcher** (`suzatary_core::leak`) finds the owner's private
+- **The term matcher** (`suzatary_held::leak`) finds the owner's private
   terms and this deployment's names as whole words, folded (accents,
   invisible characters and line breaks hide nothing), and addresses, home
   paths, tailnet names and telephone numbers. It decodes nothing.
 - **The admitted files.** A file the guard recognises as encoded (a binary,
   base64, hex that reads as text, or text spelled with escapes, at the
-  thresholds `suzatary_core::leak` states) fails the guard until the manifest
+  thresholds `suzatary_held::leak` states) fails the guard until the manifest
   lists it. The guard judges the whole file, so wrapping, quoting or escaping
   the line breaks of an encoding does not hide it.
 - **Admissions are held.** The train publishes a new manifest line, a new
@@ -156,7 +156,7 @@ and the rewrite only limits who finds it later.
    else; nothing below makes a published key safe.
 2. **Teach the guard.** Add the leaked word to the data repository's lists
    (a secret's shape to `scripts/secret-rules.toml`, or a rule to
-   `suzatary_core::leak`, each with its throwaway-tree test), so the next
+   `suzatary_held::leak`, each with its throwaway-tree test), so the next
    check fails where this one passed. Confirm that
    `scripts/public-tree.sh --check --strict` now finds it in the published
    tree.

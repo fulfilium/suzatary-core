@@ -25,7 +25,7 @@ const readOf = (t: text.Text<questions.Read>): questions.Read => JSON.parse(new 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
 const core = createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
-const chain = JSON.parse(readFileSync("app/core/tests/web/chain.json", "utf8")) as { links: Named[]; untrusted: string[] }
+const chain = JSON.parse(readFileSync("app/api/tests/web/chain.json", "utf8")) as { links: Named[]; untrusted: string[] }
 
 // The objects in causal order, so every prefix is a down-set a replica could hold.
 const ordered: Named[] = (() => {

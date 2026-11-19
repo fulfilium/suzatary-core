@@ -398,7 +398,7 @@ fn the_wire_lists_the_verb_table_and_nothing_it_may_never_hold() {
         .collect();
     assert_eq!(
         names.len(),
-        suzatary_core::agent::TriageVerb::ALL.len(),
+        suzatary_secretary::agent::TriageVerb::ALL.len(),
         "the wire and the sum disagree about how many verbs there are"
     );
     for expected in ["context", "list_open_todos", "todo_add", "record"] {

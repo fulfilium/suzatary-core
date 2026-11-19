@@ -188,7 +188,7 @@ mod tests {
         }
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../core/tests/web/closed-world.json"
+            "/../api/tests/web/closed-world.json"
         );
         let vectors: Vec<Vector> =
             serde_json::from_str(&std::fs::read_to_string(path).expect("the vectors read"))

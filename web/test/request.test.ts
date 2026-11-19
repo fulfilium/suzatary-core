@@ -5,7 +5,7 @@ import http from "../src/wire/http"
 
 const KEY = "1".repeat(64)
 
-// The box names a request with `suzatary_core::signatures::request_name`, whose test pins the same name.
+// The box names a request with `suzatary_signatures::signatures::request_name`, whose test pins the same name.
 test("a request is named as the box names it", async () => {
   const at = "2026-10-06T09:00:00.000Z"
   const nonce = "0123456789abcdef0123456789abcdef"

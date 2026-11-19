@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-api"
-description = "Suzatary's routes, gate and wire, over suzatary-core (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
+description = "Suzatary's routes, gate and wire, over the model crates (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,6 +15,7 @@ path = "src/lib.rs"
 prodrome_core.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
+suzatary-release.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
@@ -32,7 +33,7 @@ suzatary-topics.workspace = true
 suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
-suzatary-core.workspace = true
+suzatary-secretary.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -43,11 +44,13 @@ base64.workspace = true
 chrono.workspace = true
 
 [features]
-nothing = ["suzatary-core/nothing"]
+nothing = ["suzatary-secretary/nothing"]
 
 [dev-dependencies]
 suzatary-api = { path = ".", features = ["nothing"] }
 proptest.workspace = true
+# A device key is printed as hex (`tests/lines_rule.rs`).
+hex.workspace = true
 
 [lints]
 workspace = true

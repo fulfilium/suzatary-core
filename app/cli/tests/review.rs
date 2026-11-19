@@ -10,20 +10,20 @@ use suzatary_base::reference::ProposalRef;
 use suzatary_cards::notify::Push;
 use suzatary_conversations::secretary::model;
 use suzatary_conversations::secretary::store::{Outcome, Settle};
-use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::review::{Noticed, Pass, Reviewed, pass, reviews};
 use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::Reasons;
 use suzatary_lines::secretary::conversations;
+use suzatary_secretary::secretary::Bound;
+use suzatary_secretary::secretary::daily::Run;
+use suzatary_secretary::secretary::review::{Noticed, Pass, Reviewed, pass, reviews};
 use suzatary_store::store::Reads as _;
 use suzatary_topics::secretary::filed::TriageCards;
 
 /// The review of the cards standing run to its end; a scripted model is under no limit, so it
 /// always starts.
 fn review(
-    caps: &suzatary_core::secretary::Secretary<'_>,
+    caps: &suzatary_secretary::secretary::Secretary<'_>,
     deployment: &suzatary_connect::deployment::Deployment,
     settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
@@ -41,7 +41,7 @@ fn review(
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
 /// a store the review does not read, since the review reads cards from the inbox alone.
 fn three_cards(caps: &Fakes) -> [ProposalRef; 3] {
-    let lines = suzatary_core::stores::conversations::InMemory::default();
+    let lines = suzatary_secretary::stores::conversations::InMemory::default();
     let cards = TriageCards::new(lines.conversations(), &caps.inbox);
     let file = |act: Act| {
         cards
@@ -206,7 +206,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
             &caps.inbox,
             &chains
                 .iter()
-                .map(suzatary_core::secretary::Bound::chain)
+                .map(suzatary_secretary::secretary::Bound::chain)
                 .collect::<Vec<_>>(),
             &brief,
             at,
@@ -331,8 +331,15 @@ fn with_no_card_standing_the_review_reads_no_line_and_the_sweep_names_the_unread
     assert_eq!(counted.reads(), 0, "no object of the lines was read");
     assert!(caps.model.asked().is_empty(), "the model was asked nothing");
 
-    let sweep =
-        || suzatary_core::secretary::sweep::pass(&secretary, &deployment, &settables, &chains, "a");
+    let sweep = || {
+        suzatary_secretary::secretary::sweep::pass(
+            &secretary,
+            &deployment,
+            &settables,
+            &chains,
+            "a",
+        )
+    };
     let swept = sweep();
     assert!(
         matches!(&swept.unreadable, Ok(Some(Push::Unreadable { conversations, .. }))
@@ -476,7 +483,7 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
             run: Ok(Run::Paused(limited)),
         })))
     );
-    let swept = suzatary_core::secretary::sweep::pass(
+    let swept = suzatary_secretary::secretary::sweep::pass(
         &caps.secretary(),
         &deployment,
         &suzatary_connect::settings::Settables::default(),
@@ -538,7 +545,7 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
     );
 
     let seen =
-        suzatary_core::secretary::review::failures(caps.conversations.conversations(), today)
+        suzatary_secretary::secretary::review::failures(caps.conversations.conversations(), today)
             .expect("the store reads")
             .items;
     assert_eq!(seen.len(), 1);

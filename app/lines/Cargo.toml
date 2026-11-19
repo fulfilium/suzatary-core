@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
 
 [lib]
 name = "suzatary_lines"
@@ -51,3 +52,7 @@ proptest.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

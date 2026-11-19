@@ -211,9 +211,9 @@ confirm. Everything below derives from this.
 - **Sending is structurally human-only, as a TYPE**: the agent's
   verbs take an `Agent` record, whose fields hold no `Notify`, no `Whois` and
   nothing that sends, so a send verb would not compile
-  (one file per effect and per record, as `app/core/src/agent/record.rs`; its
+  (one file per effect and per record, as `app/secretary/src/agent/record.rs`; its
   `compile_fail` doc tests and the field-by-field destructuring are the pin;
-  the verb list's snapshot is `app/core/tests/mcp-surface.json`).
+  the verb list's snapshot is `app/secretary/tests/mcp-surface.json`).
   `suzatary_io::corpus::Operator` holds no send path either. `suzatary send`
   over `suzatary_io::smtp` is the one command that reaches outward, and the
   SMTP grant is a separate consent from the IMAP one, in a separate slot, so a
@@ -381,7 +381,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   it link into `…/roots-dev`, so a dev build cannot repoint what the units run.
   The roots refresh when the lock moves, and `roots/app` moves last (→
   `rootsrefresh`).
-- **A record is shown as a block** (`suzatary_core::decoration`): `raise_block`
+- **A record is shown as a block** (`suzatary_record::decoration`): `raise_block`
   prints it as `#kind(fields)[body]`, and typst is READ with typst's own parser
   only to check that a write renders as what was built.
 - `suzatary todos open` is the open list the briefing reads.
@@ -422,7 +422,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     stays local and NAMED, never retried (→ `phonereplica`).
   - **A reference has ONE text form** that prints and parses (`todo:life/x`,
     `mail:<hash>`, `thread:<id>`, `briefing:<day>`,
-    `proposal:<conversation>/<n>`; `suzatary_core::reference::Reference`),
+    `proposal:<conversation>/<n>`; `suzatary_base::reference::Reference`),
     because a model writes text. A link between todos is derived from content,
     never a stored kind.
   - **Local-first, and staleness is DATED**: the service worker keeps the SHELL
@@ -493,8 +493,8 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   completes is AGENTS.md's "Releases and `Completes:`" (→ `versionreading`).
   The version is no compiled input: the binary reads `app/release.toml` at run
   time (→ `versionnotcompiled`). The contracts keep their own snapshots
-  (`app/core/tests/mcp-surface.json`, the stored vocabulary under
-  `app/core/tests/`), so widening one fails a test instead of drifting.
+  (`app/secretary/tests/mcp-surface.json`, the stored vocabulary under
+  `app/secretary/tests/`), so widening one fails a test instead of drifting.
 - `CHANGELOG.md` — what changed, per release, written only by a release. A
   pull request's entry is its own fragment, `changelog.d/<branch>.md`, which
   the release cut folds and deletes; the merge gate's `changelog` step refuses

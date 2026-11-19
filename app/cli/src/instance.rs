@@ -1,5 +1,5 @@
 //! `instance.toml`, parsed: the one place this binary learns about a box, so
-//! `suzatary-core` and `suzatary-io` never see a path. It holds nothing secret.
+//! the model crates and `suzatary-io` never see a path. It holds nothing secret.
 
 use suzatary_api::portal::Portal;
 use suzatary_base::persona::Persona;
@@ -43,7 +43,7 @@ use suzatary_connect::connect::Reach;
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::nonempty::NonEmpty;
-use suzatary_core::stores::Kind;
+use suzatary_secretary::stores::Kind;
 
 /// The environment variable that names an instance file.
 pub const ENV: &str = "SUZATARY_INSTANCE";

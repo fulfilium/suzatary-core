@@ -20,9 +20,6 @@ use suzatary_base::persona::Persona;
 use suzatary_connect::deployment::Deployment;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
-use suzatary_core::stores::InMemory;
-use suzatary_core::stores::conversations::InMemory as Lines;
 use suzatary_digest::secretary::compaction::Reading;
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_digest::secretary::digest_view::LINE_BYTES;
@@ -32,6 +29,9 @@ use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };
+use suzatary_secretary::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
+use suzatary_secretary::stores::InMemory;
+use suzatary_secretary::stores::conversations::InMemory as Lines;
 use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 
 fn repo_root() -> PathBuf {

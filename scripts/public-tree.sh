@@ -22,7 +22,7 @@
 # `root`; a path to a private-history file; this deployment's box, tailnet or Unix user; a term
 # of `<data>/local/{personal,context}-terms.txt`; a tailnet address outside 100.64.0.0/24 or a
 # phone number outside 555; outside `--terms`, a gitleaks secret not fingerprinted in
-# `.gitleaksignore`, or an opaque file (`suzatary_core::leak::Opaque`) or one with an ignored
+# `.gitleaksignore`, or an opaque file (`suzatary_held::leak::Opaque`) or one with an ignored
 # finding that the manifest does not admit with these bytes; with every rule, a front page's
 # relative link to nothing.
 # A path with a control character is refused (2) before anything reads it. Terms match as whole

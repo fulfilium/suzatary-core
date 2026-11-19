@@ -13,25 +13,25 @@ use prodrome_core::event::mk_completed;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Datetime;
 use suzatary_conversations::secretary::model;
-use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::sweep::{Swept, dry_run};
 use suzatary_inbox::secretary::changes::Act;
 use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_lines::secretary::transcript;
 use suzatary_record::record::{EventStore, TodoEvent, mk_source};
+use suzatary_secretary::secretary::Bound;
+use suzatary_secretary::secretary::daily::Run;
+use suzatary_secretary::secretary::sweep::{Swept, dry_run};
 use suzatary_store::store::Reads as _;
 use suzatary_todo::authoring::{NewTodo, build_todo};
 
 /// The sweep run to its end; a scripted model is under no limit, so it always starts.
 fn sweep(
-    caps: &suzatary_core::secretary::Secretary<'_>,
+    caps: &suzatary_secretary::secretary::Secretary<'_>,
     deployment: &suzatary_connect::deployment::Deployment,
     settables: &suzatary_connect::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
 ) -> Result<Swept, suzatary_base::refusal::Refusal> {
-    suzatary_core::secretary::sweep::pass(caps, deployment, settables, chains, system)
+    suzatary_secretary::secretary::sweep::pass(caps, deployment, settables, chains, system)
         .run
         .map(|run| match run {
             Run::Done(swept) => swept,

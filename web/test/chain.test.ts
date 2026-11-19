@@ -5,7 +5,7 @@
  * (`/api/<chain>/fold`), and the selection is remembered in `localStorage`,
  * which is an input from outside the program like any other. A hand-edited or
  * stale entry must not become `/api/../fold` — so the value that comes back is
- * parsed against the same rule `suzatary_core::chains::ChainName` keeps, and a
+ * parsed against the same rule `suzatary_base::chains::ChainName` keeps, and a
  * value that is not a slug opens the default chain instead.
  *
  * `theme.ts`'s equivalent three-line guard has had a test since it shipped;

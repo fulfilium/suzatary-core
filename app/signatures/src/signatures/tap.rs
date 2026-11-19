@@ -18,9 +18,9 @@ use suzatary_base::refusal::Refusal;
 /// its field is private, so nothing builds one but [`Tap::of`]:
 ///
 /// ```compile_fail
-/// let tap = suzatary_core::signatures::Tap {
+/// let tap = suzatary_signatures::signatures::Tap {
 ///     who: prodrome_core::event::Actor::new("ada").unwrap(),
-///     seat: suzatary_core::signatures::Seat::Device,
+///     seat: suzatary_signatures::signatures::Seat::Device,
 /// };
 /// ```
 #[derive(Debug)]

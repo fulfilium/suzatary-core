@@ -2,7 +2,7 @@
 
 use suzatary_api::wire::{ReleaseItem, ReleaseRow, ReleasesPayload};
 use suzatary_cards::wire::cards::HeldTodo;
-use suzatary_core::release::{Lot, Named, Place};
+use suzatary_release::release::{Lot, Named, Place};
 use suzatary_todo::wire::todo::Fulfillment;
 use viewtree::Attr::{Class, Data};
 use viewtree::kit::Reading;
@@ -140,13 +140,13 @@ pub(crate) fn view<M>(r: &Reading<ReleasesPayload>) -> Option<Node<M>> {
 mod tests {
     use super::*;
 
-    /// The box's release sample (`app/core/tests/web/answers.json`): an item completed once stays
+    /// The box's release sample (`app/api/tests/web/answers.json`): an item completed once stays
     /// done, a dropped one moves out, and what is owed comes first.
     #[test]
     fn the_box_sample_reads_as_the_box_reads_it() {
         let text = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../core/tests/web/answers.json"
+            "/../api/tests/web/answers.json"
         ))
         .expect("the core's answer samples");
         let samples: serde_json::Value = serde_json::from_str(&text).expect("the samples are JSON");

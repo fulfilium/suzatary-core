@@ -20,7 +20,6 @@ use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{
     Entry, Kind, Namer, NotAConversation, Stored, Title,
 };
-use suzatary_core::stores::conversations::InMemory;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::stamp;
 use suzatary_lines::secretary::conversations::Conversations;
@@ -39,6 +38,7 @@ use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::locked_text::opens;
 use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_memory::secretary::words::Words;
+use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;

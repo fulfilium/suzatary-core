@@ -344,7 +344,7 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
             // The constructors' own file, and the law that mints a tap over a test chain.
             if path.extension().is_some_and(|e| e == "rs")
                 && !path.ends_with("app/mail/src/mail/oauth.rs")
-                && !path.ends_with("app/core/tests/oauth_tap.rs")
+                && !path.ends_with("app/secretary/tests/oauth_tap.rs")
             {
                 let Ok(text) = std::fs::read_to_string(&path) else {
                     continue;
@@ -440,7 +440,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     // The cli's test support holds the fixture, compiled into the dev binary.
     for crate_dir in [
         "base",
-        "core",
+        "secretary",
         "api",
         "io",
         "cli",

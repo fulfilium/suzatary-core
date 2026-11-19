@@ -20,7 +20,7 @@ const core = ((): Core => {
   return createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
 })()
 
-const decoded = d.json(wire.FoldPayload)(readFileSync("app/core/tests/web/fold.json", "utf8"))
+const decoded = d.json(wire.FoldPayload)(readFileSync("app/api/tests/web/fold.json", "utf8"))
 if (decoded.type !== "Val") throw new Error("fold.json does not decode")
 const entries = decoded.v.entries
 

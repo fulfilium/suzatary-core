@@ -28,7 +28,7 @@ if [[ -z "${SUZATARY_PRODROME_CONFORMANCE:-}" ]]; then
     const path = require("path")
     const core = JSON.parse(require("fs").readFileSync(0, "utf8")).packages.find(p => p.name === "prodrome-core")
     console.log(path.dirname(path.dirname(core.manifest_path)))')"
-  vectors() { cargo run -q --manifest-path app/Cargo.toml -p suzatary-core --example vector_json -- "$@"; }
+  vectors() { cargo run -q --manifest-path app/Cargo.toml -p suzatary-todo --example vector_json -- "$@"; }
   mkdir "$out/vectors"
   vectors fpl "$prodrome/conformance/fpl.py" "$prodrome/wasm/conformance/term-json.json" > "$out/vectors/fpl.json"
   vectors series "$prodrome/conformance/series.py" > "$out/vectors/series.json"

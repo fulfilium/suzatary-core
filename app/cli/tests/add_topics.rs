@@ -27,7 +27,7 @@ fn call_in(
 ) -> Result<Value, suzatary_base::refusal::Refusal> {
     let deployment = common::deployment([], []);
     let policy = common::chain();
-    let chains = [suzatary_core::secretary::Bound {
+    let chains = [suzatary_secretary::secretary::Bound {
         name: "life",
         caps: fakes.secretary(),
         policy: &policy,
@@ -35,7 +35,7 @@ fn call_in(
     let Value::Object(args) = args else {
         panic!("arguments are an object: {args}");
     };
-    suzatary_core::secretary::call(
+    suzatary_secretary::secretary::call(
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,

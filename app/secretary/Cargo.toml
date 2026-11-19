@@ -1,0 +1,65 @@
+[package]
+name = "suzatary-secretary"
+description = "One turn of Suzatary's secretary or triage agent, pure (see ../../docs/ARCHITECTURE.md)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_secretary"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-mail.workspace = true
+suzatary-health.workspace = true
+suzatary-triage.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+suzatary-digest.workspace = true
+suzatary-cards.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+# The sweep reads a code out of a message (`secretary::sweep::candidates`).
+regex.workspace = true
+# A window's arithmetic, on `prodrome::fpl::Instant`: the chrono prodrome-core takes.
+chrono.workspace = true
+# The hashes prodrome-core uses.
+sha2.workspace = true
+hex.workspace = true
+
+[features]
+# Inert effects a test fills a record from; never in the shipped build.
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-digest/nothing", "suzatary-cards/nothing"]
+# The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
+fixture = ["suzatary-conversations/fixture", "suzatary-lines/fixture"]
+
+[dev-dependencies]
+suzatary-secretary = { path = ".", features = ["nothing"] }
+# The laws are properties over arbitrary strings.
+proptest.workspace = true
+
+[lints]
+workspace = true
+
+# ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
+# module of `tests/all.rs`, so the suite links the application once, not per file.
+[[test]]
+name = "all"
+path = "tests/all.rs"

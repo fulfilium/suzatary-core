@@ -21,6 +21,7 @@ use suzatary_store::store::{Rule, Shut};
 
 use crate::instance::Local;
 use crate::stamp::{self, Package};
+use suzatary_secretary::agent;
 
 /// Door 1 of one public store opened from one place: whom it takes writes from, what it reads,
 /// and the typesetter that draws a markup field as every renderer draws it.
@@ -157,11 +158,8 @@ impl Door {
         typeset: Arc<dyn Typeset + Send>,
     ) -> Door {
         let barred: &[suzatary_base::writer::Writer] = match opened {
-            Opened::AtTerminal => &[suzatary_core::agent::WRITES_AS],
-            Opened::ByTheBox => &[
-                suzatary_core::agent::WRITES_AS,
-                suzatary_core::secretary::WRITES_AS,
-            ],
+            Opened::AtTerminal => &[agent::WRITES_AS],
+            Opened::ByTheBox => &[agent::WRITES_AS, suzatary_secretary::secretary::WRITES_AS],
         };
         let writers = writers
             .into_iter()

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// `hash` is what `mark` takes and `id` what `show` takes; they are not
 /// interchangeable.
 ///
-/// `Deserialize` lets `suzatary_core::secretary::sweep::candidates::candidates` read `Corpus::search`'s
+/// `Deserialize` lets `suzatary_secretary::secretary::sweep::candidates::candidates` read `Corpus::search`'s
 /// JSON back into this type rather than a second row shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Summary {

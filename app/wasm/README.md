@@ -13,7 +13,8 @@ the evaluator. The tab and the box therefore give the same answers for the same 
 
 ## Depends on
 
-`suzatary-core` (with `wasm`), `prodrome_core` and `prodrome-wasm-exports`.
+The model crates up to `suzatary-api` (`suzatary-inbox` and `suzatary-lines` with `wasm`),
+`prodrome_core` and `prodrome-wasm-exports`.
 
 ## Develop
 

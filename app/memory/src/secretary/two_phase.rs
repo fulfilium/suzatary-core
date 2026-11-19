@@ -9,7 +9,7 @@
 //! joins them.
 //!
 //! A consolidation is a remembering whose provenance is its sources' ([`Provenance`]). Law 11
-//! (`app/core/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
+//! (`app/secretary/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
 //!
 //! 1. When every source stands, `live(h + C) = live(h) − from + {into}`, and the sources' words
 //!    are dead. One box refuses any other consolidation, under the memory's hold.
@@ -44,6 +44,7 @@ use crate::secretary::memory_event::{LifeRegister, MemoryEvent, Said};
 use crate::secretary::provenance::{Origins, Provenance, Wrote};
 use crate::secretary::salted_text::TextName;
 use crate::secretary::texts::{Liveness, Naming};
+use prodrome_core::schema::Schema;
 
 /// The memory's two-phase set.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -367,7 +368,7 @@ impl Order for Held {
 }
 
 fn kept(stamp: &Stamp<MemoryEvent>) -> Option<Kept> {
-    let at = prodrome_core::schema::Schema::at(&*stamp.event);
+    let at = Schema::at(&*stamp.event);
     let object = stamp.name.clone();
     match stamp.event.body() {
         Said::Remembered { text, kind, origin } => Some(Kept {
@@ -399,8 +400,8 @@ fn kept(stamp: &Stamp<MemoryEvent>) -> Option<Kept> {
 fn gone(stamp: &Stamp<MemoryEvent>) -> Option<Gone> {
     match stamp.event.body() {
         Said::Forgotten { version } => Some(Gone {
-            at: prodrome_core::schema::Schema::at(&*stamp.event),
-            by: prodrome_core::schema::Schema::actor(&*stamp.event).clone(),
+            at: Schema::at(&*stamp.event),
+            by: Schema::actor(&*stamp.event).clone(),
             version: *version,
         }),
         Said::Remembered { .. } | Said::Consolidated { .. } => None,

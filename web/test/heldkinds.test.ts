@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs"
 import heldvalue from "../src/view/heldvalue"
 
 test("every kind is named as the box names it, and each name reads as a placeholder's kind", () => {
-  const box: unknown = JSON.parse(readFileSync("app/core/tests/web/held-kinds.json", "utf8"))
+  const box: unknown = JSON.parse(readFileSync("app/api/tests/web/held-kinds.json", "utf8"))
   assert.deepEqual(heldvalue.NAMES, box)
   for (const name of Object.values(heldvalue.NAMES)) {
     const s = `[${name} ending 6789 · withheld]`

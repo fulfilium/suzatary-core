@@ -988,8 +988,8 @@ fn a_broken_answer_is_its_source_block_by_block() {
 /// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a conversation it begins.
 mod default_conversation {
     use suzatary_base::conversation_id::DEFAULT;
-    use suzatary_core::secretary::converse;
     use suzatary_lines::secretary::conversations::read_or_open_default;
+    use suzatary_secretary::secretary::converse;
 
     use super::{ada, common};
 
@@ -1020,10 +1020,10 @@ mod default_conversation {
             &suzatary_connect::settings::Settables::default(),
             &[],
             &id,
-            suzatary_core::secretary::Saying {
+            suzatary_secretary::secretary::Saying {
                 text: "What changed since the last briefing?",
                 references: &[],
-                by: suzatary_core::secretary::Asker::Box(
+                by: suzatary_secretary::secretary::Asker::Box(
                     suzatary_inbox::secretary::own_round::OwnRound::Brief,
                 ),
             },
@@ -1074,10 +1074,10 @@ mod default_conversation {
             &suzatary_connect::settings::Settables::default(),
             &[],
             &id,
-            suzatary_core::secretary::Saying {
+            suzatary_secretary::secretary::Saying {
                 text: "What changed since the last briefing?",
                 references: &[],
-                by: suzatary_core::secretary::Asker::Box(
+                by: suzatary_secretary::secretary::Asker::Box(
                     suzatary_inbox::secretary::own_round::OwnRound::Brief,
                 ),
             },

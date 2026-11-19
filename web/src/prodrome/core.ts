@@ -44,7 +44,7 @@ export interface Core {
   lifecycle: (kind: string, todo: string, at: string, actor: string, note: string) => string;
   /** `unescape_markup`: the prose behind escaped markup, or `undefined` for markup a person wrote. */
   prose: (markup: string) => string | undefined;
-  /** The box's tripwire, `suzatary_core::tripwire`: the reason a compiled page is refused, or `undefined`. */
+  /** The box's tripwire, `suzatary_base::tripwire`: the reason a compiled page is refused, or `undefined`. */
   suspicious: (html: string) => string | undefined;
   /** `prodrome::memo::name`: a node's content name. */
   memo_name: (own: string, children: string[]) => string;

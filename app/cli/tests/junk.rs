@@ -51,7 +51,7 @@ fn fakes(tag: &str) -> Fakes {
 fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_base::refusal::Refusal> {
     let deployment = common::deployment([], []);
     let policy = common::chain();
-    let chains = [suzatary_core::secretary::Bound {
+    let chains = [suzatary_secretary::secretary::Bound {
         name: "life",
         caps: fakes.secretary(),
         policy: &policy,
@@ -59,7 +59,7 @@ fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_base::
     let Value::Object(args) = args else {
         panic!("arguments are an object: {args}");
     };
-    suzatary_core::secretary::call(
+    suzatary_secretary::secretary::call(
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,
@@ -90,7 +90,7 @@ fn a_digest_refuses_an_account_it_does_not_read_and_a_window_out_of_range() {
 fn the_junk_verbs_read_and_are_tainted() {
     use suzatary_conversations::secretary::taint::Taint;
     use suzatary_conversations::secretary::verb_name::Effect;
-    use suzatary_core::secretary::surface::SecretaryVerb;
+    use suzatary_secretary::secretary::surface::SecretaryVerb;
     for verb in [SecretaryVerb::JunkDigest, SecretaryVerb::JunkShow] {
         assert_eq!(verb.class().powers().effect, Effect::Reads, "{verb}");
         assert_eq!(verb.class().powers().taint, Taint::Tainted, "{verb}");

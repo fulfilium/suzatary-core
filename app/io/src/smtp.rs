@@ -1,7 +1,7 @@
 //! The three send transports: Microsoft SMTP over `lettre`, the local Proton Bridge by
 //! hand, and the Gmail API.
 //!
-//! Sending is structurally human-only: this crate is unreachable from `suzatary_core::agent`.
+//! Sending is structurally human-only: this crate is unreachable from `suzatary_secretary::agent`.
 //! A message reaches a transport already checked (`Outgoing::new`); each transport says
 //! whether a failed send may still have gone.
 

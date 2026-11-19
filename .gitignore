@@ -52,7 +52,7 @@ proptest-regressions/
 # here that only this box has — said out loud rather than discovered.
 #
 # ANCHORED WITH A LEADING SLASH, and that is not decoration: a bare `secretary/`
-# matches a directory of that name ANYWHERE, and `app/core/src/secretary/` is a
+# matches a directory of that name ANYWHERE, and `app/secretary/src/secretary/` is a
 # module. The unanchored pattern silently untracked a source file the moment it
 # was written — caught the same afternoon, by `git status` not listing it.
 /secretary/

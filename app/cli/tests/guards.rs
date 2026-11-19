@@ -41,8 +41,6 @@ mod gate_yml;
 mod guide;
 #[path = "guards/includes.rs"]
 mod includes;
-#[path = "guards/layers.rs"]
-mod layers;
 #[path = "guards/leak.rs"]
 mod leak;
 #[path = "guards/lists.rs"]
@@ -51,6 +49,8 @@ mod lists;
 mod merge_gate;
 #[path = "guards/publication.rs"]
 mod publication;
+#[path = "guards/rendering.rs"]
+mod rendering;
 #[path = "guards/reports.rs"]
 mod reports;
 #[path = "guards/template.rs"]

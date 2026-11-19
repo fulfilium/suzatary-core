@@ -82,7 +82,7 @@ public final class Widget extends AppWidgetProvider {
     /**
      * The fold this widget draws, a path under the box's home page.
      *
-     * `limit` is `suzatary_core::query::fold_limit` and it means "the lowest
+     * `limit` is `suzatary_api::query::fold_limit` and it means "the lowest
      * fulfillments, ascending, open only" — pinned by `app/cli/tests/reads.rs`
      * so this widget's contract is a test on the box and not a hope here.
      */

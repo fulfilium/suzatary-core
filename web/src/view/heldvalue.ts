@@ -1,4 +1,4 @@
-// A held value's placeholder as the box writes it into mail and file text (`suzatary_core::held_value`), and the chip a tap reveals.
+// A held value's placeholder as the box writes it into mail and file text (`suzatary_held::held_value`), and the chip a tap reveals.
 
 import { el } from "./dom"
 import type { HeldKind } from "../wire/generated/wire"

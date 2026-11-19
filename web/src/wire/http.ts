@@ -192,7 +192,7 @@ export namespace http {
   const hex = (bytes: ArrayBuffer): string => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("")
   const sha256 = async (text: string): Promise<string> => hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))
 
-  // A request's name, `suzatary_core::signatures::request_name`: what it asks, when, a nonce, with which body, and who asks.
+  // A request's name, `suzatary_signatures::signatures::request_name`: what it asks, when, a nonce, with which body, and who asks.
   // The box never records the nonce, so a body cannot be guessed back from a record.
   export const requestName = async (method: string, target: string, at: string, nonce: string, body: string, key: string): Promise<string> =>
     sha256(`suzatary request\n${method} ${target}\n${at}\n${nonce}\n${await sha256(body)}\n${key}`)

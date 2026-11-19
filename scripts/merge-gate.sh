@@ -351,7 +351,7 @@ web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src
 web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # Paths a member's tests read beyond its cargo dependencies; merge_gate.rs checks them.
-crate_reads=(suzatary-core=app/plugin-ics suzatary=app suzatary=CLAUDE.md suzatary-io=CLAUDE.md)
+crate_reads=(suzatary-secretary=app/plugin-ics suzatary=app suzatary=CLAUDE.md suzatary-io=CLAUDE.md suzatary-io=app/api/tests/web)
 # What every unit skips unless it declares the path, and the step's reads when its graph cannot
 # be read.
 rust_skips="${rust#all-but:}" web_skips="${web#all-but:}"
@@ -397,7 +397,7 @@ lane=tests
 # Every test executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
 # resolves other features and rebuilds wasmtime and the wit crates.
 # The cli's tests that need `fixture`, in app-build.sh --fixture's feature set, which e2e reuses.
-fixture_tests=(--test all --features suzatary/fixture --features suzatary-core/nothing)
+fixture_tests=(--test all --features suzatary/fixture --features suzatary-secretary/nothing)
 # shellcheck disable=SC2329
 build_once() {
   cargo_app test -q --workspace --no-run &&
@@ -446,7 +446,7 @@ lane=web
 web_inputs() {
   local deps
   web_outputs || return
-  for deps in suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps; do nix_held "$deps" >/dev/null || true; done
+  for deps in suzatary-wasm-deps suzatary-views-wasm-deps suzatary-model-deps; do nix_held "$deps" >/dev/null || true; done
   . scripts/web-inputs.sh
 }
 # publication.yml pushes these outputs for the live half.
@@ -561,9 +561,9 @@ step tree changelog       unkept  changelog_entry
 lane=live
 # Kept by the code that reads the data, not by the data (the nightly reruns them); merge_gate.rs
 # holds the list to the paths their sources name.
-live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record
+live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record app/release
   app/store app/signatures app/todo app/held app/memory app/mail app/health app/triage
-  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/core app/api app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
+  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/secretary app/api app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
   app/testkit app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css

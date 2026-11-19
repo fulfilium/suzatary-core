@@ -1,6 +1,6 @@
-//! The interpreters: `suzatary-core`'s capabilities, run against the world.
+//! The interpreters: the ports' capabilities, run against the world.
 //!
-//! No policy (decisions arrive from `suzatary-core` as values) and no logging (a refusal is a
+//! No policy (decisions arrive as values) and no logging (a refusal is a
 //! returned value).
 
 #![forbid(unsafe_code)]

@@ -12,7 +12,7 @@
  * `$SUZATARY_PRODROME_CONFORMANCE` is the seeded, frozen evidence that
  * travels with the crate — since prodrome 0.4 (`conformance/*.py`, "the
  * evidence is a literal") it is the crate's own §2 grammar rather than JSON,
- * so this points at `app/core/examples/vector_json.rs`'s output, which reads
+ * so this points at `app/todo/examples/vector_json.rs`'s output, which reads
  * `fpl.py`/`series.py` with the crate's own parser (never a second one —
  * see `suzatary-vector-json`'s comment in `flake.nix`) and re-emits the SAME 900
  * samples and 1429 knots as the `fpl.json`/`series.json` this file always

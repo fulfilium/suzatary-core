@@ -1,10 +1,10 @@
-// Presentation only, in `suzatary_core::site`'s vocabulary, so both consumers say a number the same way.
+// Presentation only, in `suzatary_pages::chrome`'s vocabulary, so both consumers say a number the same way.
 
 import type { Fulfillment } from "../wire/generated/wire";
 import { el } from "./dom";
 import time from "../app/time";
 
-/** `site::pct`, verbatim. */
+/** `chrome::pct`, verbatim. */
 export function pct(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${(value * 100).toFixed(1)}%`;
 }

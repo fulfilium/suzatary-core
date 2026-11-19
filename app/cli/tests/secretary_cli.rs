@@ -388,7 +388,7 @@ fn answered(text: &str) -> suzatary_conversations::secretary::model::Turn {
 /// A `draft_note` call as the store holds it: the model's call, the note, the verb's answer.
 fn drafted() -> [suzatary_conversations::secretary::model::Turn; 3] {
     use suzatary_conversations::secretary::model::{ToolCall, Turn};
-    use suzatary_core::secretary::SecretaryVerb;
+    use suzatary_secretary::secretary::SecretaryVerb;
     let tool = |answer: &str| Turn::Tool {
         verb: SecretaryVerb::DraftNote.into(),
         answer: answer.to_owned(),

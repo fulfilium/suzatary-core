@@ -137,7 +137,7 @@ test("the listing leaves decisions to the Inbox", () => {
 // --- the fixture the browser scenes read --------------------------------------
 
 /** The box's fold of the six-todo fixture chain (`web_vectors.rs`), at the instant it was folded. */
-const fixture = JSON.parse(readFileSync("app/core/tests/web/fold.json", "utf8")) as { at: string; entries: Entry[] };
+const fixture = JSON.parse(readFileSync("app/api/tests/web/fold.json", "utf8")) as { at: string; entries: Entry[] };
 
 test("on the fixture, each filter narrows the open list to its own todos, most urgent first", () => {
   const { todos } = cast.world;

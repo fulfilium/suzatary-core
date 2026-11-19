@@ -89,7 +89,7 @@ And one for documents:
 
 ## 2. Ports: the interfaces an agent must satisfy
 
-A **port** is a Rust trait in `suzatary-core` with typed inputs and outputs,
+A **port** is a Rust trait in a model crate with typed inputs and outputs,
 errors as values, and a CONFORMANCE SUITE. The suite is a set of tests any
 implementation must pass against a fake world, plus an optional live smoke
 test that only reads.

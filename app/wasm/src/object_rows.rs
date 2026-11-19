@@ -7,9 +7,9 @@ use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
 use suzatary_api::wire::StorePayload;
-use suzatary_core::asks::{AskEvent, AskVocabulary};
 use suzatary_lines::secretary::object_stores;
 use suzatary_lines::wire::lines::ReceiptPayload;
+use suzatary_secretary::asks::{AskEvent, AskVocabulary};
 use suzatary_store::receipt;
 use suzatary_store::replica::held::Node as _;
 use suzatary_store::replica::objects::{self, Move, Object, Objects};
@@ -304,7 +304,7 @@ impl Store<AskEvent> {
     }
 }
 
-impl<E: suzatary_core::stores::Store<Vocabulary: Default>> Store<E> {
+impl<E: suzatary_secretary::stores::Store<Vocabulary: Default>> Store<E> {
     /// The asks' refusals of what the tab wrote here, held as refused; none where none is new.
     pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
         let objects = asks.standing_envelopes();

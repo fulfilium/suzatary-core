@@ -12,13 +12,13 @@ use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash}
 use prodrome_core::literal::Datetime;
 use prodrome_core::schema::Schema as _;
 use suzatary_conversations::secretary::store::{Entry, Namer, Title};
-use suzatary_core::stores::conversations::InMemory;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::line_shape::LineShape;
 use suzatary_lines::secretary::sequence::{self, Node, Order};
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::wire::lines::LineWriter;
 use suzatary_memory::secretary::words::Words;
+use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::store::{Doc as _, Prodrome as _, Reads as _};
 
 /// How many conversations get a tab's rename.

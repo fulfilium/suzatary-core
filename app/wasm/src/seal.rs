@@ -262,7 +262,7 @@ impl Lines {
                 .standing_envelopes()
                 .iter()
                 .map(|(name, o)| (name, o)),
-            &suzatary_core::stores::Kind::Lines,
+            &suzatary_secretary::stores::Kind::Lines,
         );
         let (owned, moved) = self.0.answer_own(|w| w.refused(refused));
         if owned.is_empty() {

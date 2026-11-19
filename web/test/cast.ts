@@ -33,6 +33,6 @@ export namespace cast {
     notice: Notice
   }
 
-  export const world: Cast = JSON.parse(readFileSync("app/core/tests/web/cast.json", "utf8"))
+  export const world: Cast = JSON.parse(readFileSync("app/api/tests/web/cast.json", "utf8"))
 }
 export default cast

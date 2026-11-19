@@ -556,7 +556,114 @@ The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, shrank 
 `wasm-opt` (4,863,675 to 4,863,093), and the pages' module grew by 46 (3,602,802 to 3,602,848). No
 line of `web/wasm-budget` moves.
 
-After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
+**Rows 30 and 31 (secretary, and the api cut's remainder), one pull request.** No crate is named
+core. Each module keeps its path under its crate's name: `suzatary_secretary::{agent, asks,
+conversation, secretary::*, stores, verb}`, `suzatary_api::sync` and `suzatary_release::release`.
+- **The api cut's remainder went first,** each module to the crate that owns its meaning:
+  - `release` is a crate of its own, over `record`, against the crate table, which gave it to
+    `todo` for `releases.toml`. That file is no longer in this tree (it is beside the roadmap
+    store), and `train.sh` reads `app/release.toml`, which does not move. Nothing in `todo`
+    names `release`, and it names only `record` and the Prodrome; in `todo` it took that crate's
+    USE from 24.9k to 31.5k and gave every crate above it 6.6k more to read, none of which names
+    a release. Its readers are `api`, `pages` and the CLI, its changelog guard among them.
+  - `sync` decides what the box takes from a replica, and its one reader is `routes.rs`, so it is
+    `api`'s, with its counterexamples and the two laws that post through it (`lines_rule`,
+    `topics`).
+  - `wire` held no module since #447, and `receipt` was already the store crate's.
+  - `stores` and `asks` stay with the secretary, against the crate table. Nothing below the
+    secretary names them, and `io`, `api`, `wasm` and the CLI, which do, already depend on it. In
+    `api`, `io` would wait for `api` (2.3 s of library check) and recheck after each edit to
+    `routes.rs`. And the secretary's own unit tests hold the in-memory stores: the `remembered`
+    law reads its crate-private function over a `live_shape` memory, so it would need a
+    dev-dependency cycle through `api` or a widened `remembered`. `live_shape` stays with them.
+- **The vectors** the browser checks are `api`'s, at `app/api/tests/web`, beside their writer,
+  `web_vectors.rs`. `vector_json`, which reads the Prodrome's conformance files, is `todo`'s
+  example.
+- **Then core is renamed** by `git mv` to `app/secretary`, the package `suzatary-secretary`. A
+  trial rename first found no tie the compiler did not; three compile-fail doc tests in
+  `signatures` had named `suzatary_core::signatures`, a crate `signatures` never depended on, and
+  now refuse for the private field.
+- **Core's test binary split.** The 18 files that name nothing of the secretary went to the
+  highest crate each names: `todo` (`tree`, `decisions_schema`), `memory` (`memory_schema`),
+  `services` (`vault`), `connect` (`connect`, `drive_port`, `puller_port`, `transport_port`),
+  `inbox` (`act_literal`, `card_stages`), `conversations` (`attachment`, `held`, `line_words`)
+  and `lines` (`conversation_id`, `line_replica`, `sequence`, `snapshot`). The other 40 hold
+  the secretary's items, most of them the in-memory stores, and stay. `laws.rs`, which three
+  crates' schema tests call and which names only `prodrome_core::fold::Order`, is
+  `suzatary_store::laws` under `nothing`. `release` and `fragment` are the release crate's tests.
+  `#[test]` functions: 2,222 on master and 2,221 here, the one gone being the layer guard's.
+- **The layer guard** held nothing once core was one cut, so it is gone; what is left is the pin
+  of the sources `rendering.rs` hashes, `guards/rendering.rs`.
+- **Nothing widens.** `suzatary_store::laws` is test support under `nothing`.
+- **USE:** secretary 35.4k, `api` 25.6k with `sync`, `release` 6.7k; `todo` stays at 24.9k.
+  The two over the line are in `[ratchet.use]` at their figures. A further cut of each:
+  - api: `wire` with `wire/shape` (10.2k), which `routes`, `query`, the pages and the CLI read.
+    It names `release` and `stores` from below; the one name that points across is
+    `From<&portal::Portal> for PortalPayload`, which would move beside `Portal`.
+  - secretary: the triage agent (`agent`, 6.4k of USE) below the secretary's turn. The
+    secretary's record and surface name `Agent`, `Holds` and `Says`, and its verbs reuse the
+    agent's (`agent::verbs`, `reads`, `answered`, `refused`); all point down.
+
+Measured with `cargo check --workspace --all-targets` on four cores, one line edited, the second
+run of each, master (2.1.168, where the CLI's test binary checks its support once) and branch
+interleaved on one target directory:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `lines` (`transcript.rs`) | 20.5, 21.2 s | 18.9, 19.2 s |
+| `secretary` (`review.rs`) | 17.7, 17.4 s | 15.5, 16.2 s |
+| `routes.rs` | 13.0, 13.4 s | 12.5, 13.8 s |
+
+An edit at or below the secretary is about 1.5 s faster: the secretary's test binary lost 18
+files to crates that check beside it. What a session that works in one crate waits for,
+`cargo check -p <crate> --all-targets` after one line there:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| core / `secretary` (`review.rs`) | 5.2, 5.4 s | 4.4, 4.4 s |
+| `api` (`routes.rs`) | 4.7, 4.5 s | 4.8, 5.0 s |
+| `io` (`objects.rs`) | 4.1, 4.4 s | 4.4, 4.3 s |
+
+`api` gained `sync`, its unit tests and two laws; `io` is unchanged within the spread.
+
+The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, grew by 5,256 bytes
+after `wasm-opt` (4,865,823 to 4,871,079): its code by 5,247 bytes and two functions, its data
+by 7. Its x86_64 line moves from 4,870,000 to 4,880,000. The pages' module shrank by 9 bytes
+(3,602,848 to 3,602,839). Both modules still compile the secretary crate, the mail crates and
+the sources, since `wasm` and `pages` depend on `api`, whose server records and secretary routes
+name them; LTO keeps none of it it does not call. Cutting them off takes `api`'s server half
+(`server`, `secretary/routes`) out, which is row 32, and the stores' table (`stores`, `asks`,
+which `wasm` names) below the secretary, into a crate above `topics` and `digest`.
+
+The crates after PR 31, from `scripts/context.sh` at this branch's head, in thousands of tokens.
+"own" is the crate's own files in its DEVELOP, "deps" its direct dependencies but the Prodrome.
+
+| # | Crate (`app/<name>`) | own | use | deps | DEVELOP |
+|---|---|---|---|---|---|
+| 1 | `base` | 58.2 | 24.6 | 0 | 226 |
+| 2 | `record` | 31.9 | 11.1 | 1 | 224 |
+| 3 | `release` | 13.4 | 6.7 | 1 | 192 |
+| 4 | `store` | 47.0 | 23.9 | 1 | 239 |
+| 5 | `signatures` | 49.0 | 23.6 | 3 | 276 |
+| 6 | `todo` | 74.7 | 24.9 | 4 | 326 |
+| 7 | `held` | 68.4 | 24.1 | 2 | 285 |
+| 8 | `memory` | 38.7 | 18.3 | 3 | 279 |
+| 9 | `mail` | 46.3 | 24.6 | 3 | 286 |
+| 10 | `health` | 17.2 | 8.5 | 3 | 258 |
+| 11 | `triage` | 41.2 | 22.8 | 4 | 306 |
+| 12 | `services` | 31.4 | 14.1 | 3 | 256 |
+| 13 | `google` | 33.3 | 14.6 | 5 | 313 |
+| 14 | `connect` | 57.6 | 24.1 | 7 | 347 |
+| 15 | `inbox` | 106.1 | **33.5** | 13 | **540** |
+| 16 | `conversations` | 63.8 | **26.7** | 7 | 389 |
+| 17 | `lines` | 124.3 | **39.2** | 12 | **565** |
+| 18 | `topics` | 63.2 | 20.5 | 14 | **558** |
+| 19 | `digest` | 73.9 | **28.4** | 11 | **523** |
+| 20 | `cards` | 49.5 | 13.3 | 15 | **550** |
+| 21 | `secretary` | 178.8 | **35.4** | 19 | **767** |
+| 22 | `api` | 107.9 | **25.6** | 21 | **744** |
+
+Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's
 compile.

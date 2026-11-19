@@ -211,7 +211,7 @@ Use a callable argument only when the set is open:
 ### 6. Keep a pure core, with effects at the edge
 
 Code that decides is pure. Code that reads files, calls the network or reads the clock is
-separate. The crate `suzatary-core` is pure and never sees a file path. `suzatary-io`
+separate. The model crates are pure and never see a file path. `suzatary-io`
 contains the implementations of the effects. The binary in `app/cli` connects the two.
 
 - **Effects are values.** A function receives the effects it may use as an argument. The
@@ -241,7 +241,7 @@ make it smaller by removing a capability that someone uses.
 
 - Rust: `stores::Database` uses three generic store shapes: `Prodrome<E>` for objects of a
   schema `E`, `Log<E>` for lines, and `Doc<K, V>` for values. A new store is one row of the
-  `stores!` list (`app/core/src/stores.rs`), its schema and a field of `Database`, not a
+  `stores!` list (`app/secretary/src/stores.rs`), its schema and a field of `Database`, not a
   new trait. The row gives its name, tier, files and hold to every layer.
 - Rust: the Prodrome's `schema::headed::Event<B>` is the event of every schema whose events
   print as `Constructor(<key>, at, actor, <body>)`. A schema gives only its body, which
@@ -250,7 +250,7 @@ make it smaller by removing a capability that someone uses.
   it. The Prodrome's `fold::sole::One` is the register product of every schema with one
   register. Its parameter is the register's type, which implements `Sole` (and says how an
   append climbs, where it must), or the Prodrome's `Whole` where the value is the whole event.
-- Rust: `laws::partial_order<V: Order>` (`app/core/tests/laws.rs`) states the partial-order
+- Rust: `laws::partial_order<V: Order>` (`app/store/tests/support/laws.rs`) states the partial-order
   laws once. Each schema's tests call it.
 - TypeScript: `lo.combine` is a monoid whose identity is `val([])`. `lo.map`, `lo.bind` and
   `lo.fold` serve every loading state in the app. A caller uses these functions and does not
@@ -272,7 +272,7 @@ generated inputs. Write the test's name next to the law in the docs, except for 
 - In `web/`, the test is the law, and its name states the law: `laws.test.ts` has "a route
   survives print and parse". No document repeats it. `docs/WEB-SPEC.md` §3 holds only the
   laws that no test can check, one sentence each.
-- The Rust code writes test vectors to `app/core/tests/web/`. The TypeScript modules must give
+- The Rust code writes test vectors to `app/api/tests/web/`. The TypeScript modules must give
   the same answers for them.
 
 Do not make a test pass because a read is fast. If a test needs one event before another, make
@@ -296,7 +296,7 @@ What to test, and where:
   what the code does, tell its history or justify a choice. A public item needs no doc comment
   when its name and type say what it is.
 - When a change alters behaviour, change its test in the same commit. Regenerate a pin, a
-  vector or a golden file (`app/cli/tests/pins/`, `app/core/tests/web/`) only when the change
+  vector or a golden file (`app/cli/tests/pins/`, `app/api/tests/web/`) only when the change
   is meant to move it, and say in the commit what moved.
 
 ### 9. Put one concept in each file
@@ -310,7 +310,7 @@ from its folder names and types.
 - TypeScript: a module is a namespace named for one idea, such as `lo`, `tree` or `parsed`.
   The details are in `docs/TS-STYLE.md`.
 
-Known debt: `app/core/src/secretary/store.rs` contains 28 public types, from `ConversationId` to
+Known debt: `app/conversations/src/secretary/store/` contains 28 public types, from `ConversationId` to
 `Kept`.
 
 ### 10. No defensive programming, and no backward compatibility

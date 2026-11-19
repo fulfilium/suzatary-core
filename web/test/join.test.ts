@@ -11,7 +11,7 @@ import type { ObjectsPayload, RefusedObject, StoredObject } from "../src/wire/ge
 import { forAll, rng, type Rng } from "./gen"
 import { KNOWN, held as prodromes } from "./held"
 
-const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
+const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
 // The box's history in the order it took the objects, so the box at any instant holds a prefix of it.
 const history: StoredObject[] = box.conversations.map(o => ({ hash: o.hash, literal: o.text }))
 

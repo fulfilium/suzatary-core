@@ -19,7 +19,7 @@ const core = (): Core => {
   return createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
 }
 const wasm = core()
-const chain = JSON.parse(readFileSync("app/core/tests/web/chain.json", "utf8")) as {
+const chain = JSON.parse(readFileSync("app/api/tests/web/chain.json", "utf8")) as {
   links: { hash: string; literal: string }[]
   untrusted: string[]
 }

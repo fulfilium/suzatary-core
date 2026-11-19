@@ -84,7 +84,7 @@ test("an escaped title opens in its prose, and markup a writer wrote opens uncha
 })
 
 // The box's vectors: the same texts the Rust door is tested against, admitted or refused alike in the tab.
-const vectors = JSON.parse(readFileSync("app/core/tests/web/closed-world.json", "utf8")) as { text: string; admitted: boolean }[]
+const vectors = JSON.parse(readFileSync("app/api/tests/web/closed-world.json", "utf8")) as { text: string; admitted: boolean }[]
 
 test("the tab's restricted project admits exactly what the box's does", () => {
   assert.ok(vectors.length > 5)

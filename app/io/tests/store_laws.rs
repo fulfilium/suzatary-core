@@ -1,5 +1,5 @@
 //! The laws every prodrome keeps whatever its schema, checked for every prodrome row of
-//! `suzatary_core::stores::Kind` over the objects its pins hold (`tests/stores-changes/`):
+//! `suzatary_secretary::stores::Kind` over the objects its pins hold (`tests/stores-changes/`):
 //!
 //! - a store begun holds one `Genesis`, labelled as its row says;
 //! - each object reads back by its name as its canonical print, and a name it does not hold
@@ -16,13 +16,13 @@ use prodrome_core::declared::Declared;
 use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::store::{EventStore, Replica as _};
-use suzatary_core::stores::{Files, Kind, Store};
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_io::objects::Objects;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_record::record::TodoEvent;
+use suzatary_secretary::stores::{Files, Kind, Store};
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Hold, Prodrome};
 use suzatary_todo::decisions::DecisionEvent;
@@ -192,7 +192,7 @@ fn every_prodrome_keeps_the_store_laws() {
         laws::<DecisionEvent>("decisions", Objects::open),
         laws::<MembershipEvent>("secretary-topics", Objects::open),
         laws::<AliasEvent>("secretary-topic-aliases", Objects::open),
-        laws::<suzatary_core::asks::AskEvent>("secretary-asks", Objects::open),
+        laws::<suzatary_secretary::asks::AskEvent>("secretary-asks", Objects::open),
         laws::<Declared>("cache/plugins/ics/store", |root| {
             let pinned =
                 suzatary_io::plugin_store::PluginStore::at(pins("cache/plugins/ics/store"))

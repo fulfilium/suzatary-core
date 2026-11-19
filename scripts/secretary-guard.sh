@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse hook for the secretary's model subprocess: deny everything, including tools that do
-# not exist yet. Its verbs run through `suzatary_core::secretary::converse` from the JSON
+# not exist yet. Its verbs run through `suzatary_secretary::secretary::converse` from the JSON
 # envelope it prints, so it needs no tools.
 #
 # ToolSearch stays out of every `.claude/` deny list (app/cli/tests/guards.rs checks), since the
