@@ -3,10 +3,10 @@
 use axum::http::HeaderMap;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
-use suzatary_api::gate::{actor_of, writer_of};
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
 use suzatary_record::record::TodoEvent;
+use suzatary_server::gate::{actor_of, writer_of};
 use suzatary_signatures::signatures::Admitted;
 use suzatary_signatures::signatures::Tap;
 use suzatary_signatures::signatures::{ActHeaders, check_csrf};
@@ -14,6 +14,8 @@ use suzatary_signatures::signatures::{Asking, Possessed, Proven, Trusted, Unprov
 use suzatary_store::store::Prodrome;
 
 use super::State;
+use suzatary_api::clienterror::Verdict;
+use suzatary_signatures::signatures;
 
 /// Who may call a route, beyond the gate every request already passed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,11 +231,7 @@ impl Guarded for Tap {
         headers: &ActHeaders<'_>,
         proof: &Trusted,
     ) -> Result<Self, Refusal> {
-        Tap::of(
-            proof,
-            headers,
-            suzatary_signatures::signatures::Seat::of(admitted),
-        )
+        Tap::of(proof, headers, signatures::Seat::of(admitted))
     }
 }
 
@@ -251,7 +249,6 @@ impl Guarded for Reporter {
         _: &ActHeaders<'_>,
         (): &(),
     ) -> Result<Self, Refusal> {
-        use suzatary_api::clienterror::Verdict;
         let Some(login) = admitted.login().cloned() else {
             return Err(Refusal::forbidden(
                 "a report must come from a named tailnet peer",
@@ -309,7 +306,7 @@ pub fn act_headers(headers: &HeaderMap) -> ActHeaders<'_> {
     let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
     ActHeaders {
         act: read("x-suzatary-act"),
-        client: read(suzatary_signatures::signatures::CLIENT_HEADER),
+        client: read(signatures::CLIENT_HEADER),
         content_type: read("content-type"),
         site: read("sec-fetch-site"),
     }

@@ -23,6 +23,7 @@ use suzatary_triage::mail::junk::ChurnList;
 
 use super::{CodeRoot, DataRoot, Reserve};
 use suzatary_conversations::nonempty;
+use suzatary_digest::secretary::compacting::Compacting;
 
 /// The whole file. A key the binary does not read refuses the file.
 #[derive(Debug, Deserialize, Serialize)]
@@ -320,8 +321,7 @@ impl Default for Secretary {
 impl Secretary {
     /// The compactor as these keys set it: off, or its models within a budget.
     #[must_use]
-    pub fn compacting(&self) -> suzatary_digest::secretary::compacting::Compacting {
-        use suzatary_digest::secretary::compacting::Compacting;
+    pub fn compacting(&self) -> Compacting {
         if !self.compact {
             return Compacting::Off;
         }
@@ -459,7 +459,7 @@ pub(crate) struct Notify {
     pub(crate) channels: Vec<suzatary_connect::connect::Channel>,
     /// The Firebase project's number the box hands the Android portal at pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) fcm_sender: Option<suzatary_api::portal::Sender>,
+    pub(crate) fcm_sender: Option<suzatary_server::portal::Sender>,
 }
 
 /// A value the file spells as one string, read through its own constructor.

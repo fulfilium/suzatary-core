@@ -11,9 +11,9 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::sign::Secret;
-use suzatary_api::gate::OPERATOR_HEADER;
 use suzatary_io::http::{Http as _, Method, Req, Ureq};
 use suzatary_lines::wire::lines as wire;
+use suzatary_server::gate::OPERATOR_HEADER;
 use suzatary_signatures::signatures::{Signers, body_digest, request_name};
 
 use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};

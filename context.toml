@@ -40,8 +40,6 @@ reading = 3058358
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
-# 2026-11-18: `sync` joined `api` (row 31 of the core split), over the line; the plan names the further cut.
-api = 25590
 cli = 81630
 # 2026-11-18: `inbox`, `conversations` and `lines` left core over the line (#538); the core split's plan names the further cut of each (rows 24 to 26). Core's figure is lowered by hand to the same tree's.
 conversations = 26661
@@ -316,8 +314,15 @@ scripts = []
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "held", "inbox", "lines", "mail", "prodrome-core", "record", "release", "secretary", "signatures", "store", "todo", "topics", "triage"]
 scripts = ["scripts/wire.sh"]
+
+[[unit]]
+name = "server"
+path = "app/server"
+shape = "crate"
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "secretary", "services", "signatures", "store", "todo", "topics"]
+scripts = []
 
 [[unit]]
 name = "io"
@@ -337,7 +342,7 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plugin", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "todo", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]

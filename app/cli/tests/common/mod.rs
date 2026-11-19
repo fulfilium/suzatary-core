@@ -510,7 +510,7 @@ fn dialled(
     deploying: Deployment,
     this_box: Vec<IpAddr>,
     address: SocketAddr,
-) -> (Chained, Arc<Deployment>, suzatary_api::gate::Door) {
+) -> (Chained, Arc<Deployment>, suzatary_server::gate::Door) {
     let whois: &'static dyn Whois = if this_box.is_empty() {
         record.whois
     } else {
@@ -1541,7 +1541,7 @@ impl ActRecorder {
     }
 }
 
-impl suzatary_api::secretary::routes::Perform for ActRecorder {
+impl suzatary_server::secretary::routes::Perform for ActRecorder {
     fn begin(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
@@ -1570,7 +1570,7 @@ pub struct SignsIn {
     signing: Arc<serve::sign_ins::SignIns>,
 }
 
-impl suzatary_api::secretary::routes::Perform for SignsIn {
+impl suzatary_server::secretary::routes::Perform for SignsIn {
     fn begin(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
@@ -2014,7 +2014,7 @@ impl SettingsFixture {
     }
 }
 
-impl suzatary_api::secretary::routes::Post for Recorder {
+impl suzatary_server::secretary::routes::Post for Recorder {
     fn send(
         &self,
         draft: &suzatary_inbox::secretary::proposal::Draft,
@@ -2048,7 +2048,7 @@ pub struct FailsFirst {
     sent: Arc<Recorder>,
 }
 
-impl suzatary_api::secretary::routes::Post for FailsFirst {
+impl suzatary_server::secretary::routes::Post for FailsFirst {
     fn send(
         &self,
         draft: &suzatary_inbox::secretary::proposal::Draft,
@@ -2714,8 +2714,8 @@ impl Fakes {
         }
     }
 
-    pub fn server(&self) -> suzatary_api::server::Server<'_> {
-        suzatary_api::server::Server {
+    pub fn server(&self) -> suzatary_server::server::Server<'_> {
+        suzatary_server::server::Server {
             secretary: self.secretary(),
             whois: &self.whois,
             notify: &self.notify,
@@ -3046,7 +3046,7 @@ impl suzatary_connect::settings::Verify for VerifyRecorder {
 }
 
 /// The record a started server serves.
-type Effects = suzatary_api::server::Server<'static>;
+type Effects = suzatary_server::server::Server<'static>;
 
 /// A change a scene makes to the fakes' record.
 type Swap = dyn FnOnce(Effects) -> Effects;
@@ -3354,7 +3354,7 @@ impl Server {
                 .map_or_else(serve::Workers::new, serve::Workers::with_idle),
         );
         let (sent, acts) = (Arc::new(Recorder::new()), Arc::new(ActRecorder::new()));
-        let postman: Arc<dyn suzatary_api::secretary::routes::Post + Send + Sync> =
+        let postman: Arc<dyn suzatary_server::secretary::routes::Post + Send + Sync> =
             Arc::new(FailsFirst {
                 failures: Mutex::new(self.failures.into()),
                 sent: Arc::clone(&sent),
@@ -3543,7 +3543,7 @@ fn performer(
     ),
     firing: suzatary_cli::commands::coding::Firing,
     google: Arc<suzatary_io::google::Grants>,
-) -> Arc<dyn suzatary_api::secretary::routes::Perform + Send + Sync> {
+) -> Arc<dyn suzatary_server::secretary::routes::Perform + Send + Sync> {
     use suzatary_cli::commands::coding::Coder;
     use suzatary_cli::commands::secretary::Acting;
     match chosen {

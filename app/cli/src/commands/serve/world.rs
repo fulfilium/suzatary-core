@@ -1,12 +1,13 @@
 //! The interpreters `suzatary serve` holds, and the one place they become records.
 
-use suzatary_api::server::Server;
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::Configured;
+use suzatary_server::server::Server;
 
 use super::interpreters::{Brain, Peers};
 use crate::instance::Instance;
 use crate::wiring::{Opened, Stores};
+use suzatary_signatures::signatures::Signers;
 
 /// [`Opened`] plus what only a server holds (peers, push, devices), and one [`Stores`] per
 /// chain.
@@ -19,18 +20,13 @@ pub struct World {
     /// Each chain's stores, in the instance file's order.
     pub chains: Vec<Stores>,
     /// What the box signs with; missing keys leave every write refusing and every read as it was.
-    pub signers: suzatary_signatures::signatures::Signers,
+    pub signers: Signers,
 }
 
 impl World {
     /// Choose an interpreter for every effect, out of what the instance file says.
     #[must_use]
-    pub fn assemble(
-        instance: &Instance,
-        signers: suzatary_signatures::signatures::Signers,
-        peers: Peers,
-        brain: Brain,
-    ) -> Self {
+    pub fn assemble(instance: &Instance, signers: Signers, peers: Peers, brain: Brain) -> Self {
         let devices = Devices::open(instance.paths.devices.clone());
         Self {
             opened: Opened::of(

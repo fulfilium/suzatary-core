@@ -1,0 +1,58 @@
+[package]
+name = "suzatary-server"
+description = "The box's half of Suzatary's routes, over suzatary-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_server"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-mail.workspace = true
+suzatary-health.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-connect.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+suzatary-digest.workspace = true
+suzatary-cards.workspace = true
+suzatary-inbox.workspace = true
+suzatary-secretary.workspace = true
+suzatary-api.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[features]
+nothing = ["suzatary-secretary/nothing"]
+
+[dev-dependencies]
+suzatary-server = { path = ".", features = ["nothing"] }
+suzatary-release.workspace = true
+suzatary-triage.workspace = true
+proptest.workspace = true
+ts-rs.workspace = true
+# A device key is printed as hex (`tests/web_vectors.rs`).
+hex.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

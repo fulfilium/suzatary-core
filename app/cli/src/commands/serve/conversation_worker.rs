@@ -265,7 +265,7 @@ impl Workers {
     /// round; the store's failures.
     pub fn stop(
         &self,
-        caps: &suzatary_api::server::Server<'_>,
+        caps: &suzatary_server::server::Server<'_>,
         id: &ConversationId,
         by: Actor,
     ) -> Result<(), Refusal> {

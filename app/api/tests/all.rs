@@ -22,5 +22,3 @@ mod sequenced;
 mod topics;
 #[path = "transcript.rs"]
 mod transcript;
-#[path = "web_vectors.rs"]
-mod web_vectors;

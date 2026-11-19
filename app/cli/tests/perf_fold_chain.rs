@@ -22,11 +22,11 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::{fpl, view as folds};
 use sha2::{Digest, Sha256};
 use suzatary_api::routes;
-use suzatary_api::server::Server;
 use suzatary_base::capability::Datetime;
 use suzatary_io::render::Typst;
 use suzatary_record::record::EventStore;
 use suzatary_secretary::secretary::Secretary;
+use suzatary_server::server::Server;
 use suzatary_store::store::Reads as _;
 
 /// The repository root.

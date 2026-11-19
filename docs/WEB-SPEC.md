@@ -67,7 +67,7 @@ is a finding, never a vector to refresh.
 - **Fulfillment**: `web/test/wasm.test.ts` drives the core's wasm under node
   against the Prodrome's frozen conformance vectors and this chain.
 - **`app/api/tests/web/`**: read by both sides. A file a Rust test writes
-  (most, by `app/api/tests/web_vectors.rs`) is written only under
+  (most, by `app/server/tests/web_vectors.rs`) is written only under
   `SUZATARY_WRITE_VECTORS=1`, in the same change as the Rust that moves it;
   otherwise that test recomputes it and compares the committed bytes.
   `closed-world.json` is written by hand.

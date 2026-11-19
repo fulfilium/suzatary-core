@@ -151,6 +151,7 @@
             ./app/Cargo.lock
             ./app/cli
             ./app/io
+            ./app/server
             ./app/plugin
             ./app/plugin-fence
             ./app/plugin-ics
@@ -218,6 +219,7 @@
           ./app/Cargo.lock
           ./app/cli/Cargo.toml
           ./app/io/Cargo.toml
+          ./app/server/Cargo.toml
           ./app/plugin/Cargo.toml
           ./app/plugin-fence/Cargo.toml
           ./app/plugin-ics/Cargo.toml
@@ -326,6 +328,7 @@
                 ./app/Cargo.lock
                 ./app/cli/Cargo.toml
                 ./app/io/Cargo.toml
+                ./app/server/Cargo.toml
                 ./app/plugin/Cargo.toml
                 ./app/plugin-fence/Cargo.toml
                 ./app/plugin-ics/Cargo.toml
@@ -420,6 +423,7 @@
               ./app/Cargo.lock
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
+              ./app/server/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -462,6 +466,7 @@
               ./app/Cargo.lock
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
+              ./app/server/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml

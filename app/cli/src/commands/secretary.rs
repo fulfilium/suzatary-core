@@ -47,7 +47,6 @@ use suzatary_secretary::secretary::review::{Noticed, Pass};
 use suzatary_store::store::Prodrome;
 
 use anyhow::Context as _;
-use suzatary_api::secretary::routes::Post;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_held::excerpt::Excerpt;
@@ -58,9 +57,27 @@ use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::send::{Composed, Outgoing};
 use suzatary_secretary::conversation::round::Ending;
 use suzatary_secretary::secretary::Secretary;
+use suzatary_server::secretary::routes::Post;
 
 use crate::instance::Instance;
+use suzatary_api::routes;
+use suzatary_base::capability;
+use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model;
+use suzatary_conversations::secretary::model::Turn;
+use suzatary_conversations::secretary::store;
+use suzatary_conversations::secretary::store::Entry;
+use suzatary_google::google;
+use suzatary_held::file_read::FileRead;
+use suzatary_inbox::secretary::inbox;
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_io::google::Inserted;
+use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::rescrub;
+use suzatary_mail::mail::account;
 use suzatary_memory::secretary::salted_text;
+use suzatary_services::web;
+use suzatary_topics::secretary::topics::backfill;
 
 /// `SECRETARY.md`; without it the model is told to propose nothing.
 #[must_use]
@@ -167,7 +184,7 @@ impl suzatary_io::secrets::Resolves for NoToken {
         &self,
         _name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -182,7 +199,7 @@ pub struct Publishing {
 impl Publishing {
     fn publish(
         &self,
-        id: &suzatary_base::conversation_id::ConversationId,
+        id: &ConversationId,
         index: usize,
         proposer: &proposer::Proposer,
         act: &suzatary_inbox::secretary::acts::Act,
@@ -285,7 +302,7 @@ impl Acting {
         stores: ActingStores,
         workers: Arc<Workers>,
         signing: Arc<SignIns>,
-        google: &suzatary_google::google::Endpoints,
+        google: &google::Endpoints,
     ) -> Self {
         Acting::Recording {
             conversations: stores.conversations,
@@ -336,12 +353,7 @@ impl Acting {
         }
     }
 
-    fn calendar_event(
-        &self,
-        account: &EmailAddress,
-        event: &suzatary_google::google::NewEvent,
-    ) -> Performed {
-        use suzatary_io::google::Inserted;
+    fn calendar_event(&self, account: &EmailAddress, event: &google::NewEvent) -> Performed {
         let google = match self {
             Acting::NotYet => {
                 return Performed::Tried(Tried::NotSent {
@@ -377,7 +389,7 @@ impl Acting {
         }
     }
 
-    fn sign_in(&self, object: &suzatary_inbox::secretary::inbox::ProposalId) -> Performed {
+    fn sign_in(&self, object: &inbox::ProposalId) -> Performed {
         use Clock as _;
         let now = SystemClock.now();
         match self {
@@ -395,7 +407,7 @@ impl Acting {
 
     fn read_document(
         &self,
-        id: &suzatary_base::conversation_id::ConversationId,
+        id: &ConversationId,
         path: &DrivePath,
         act: &suzatary_inbox::secretary::acts::Act,
     ) -> Performed {
@@ -420,12 +432,12 @@ impl Acting {
     }
 }
 
-impl suzatary_api::secretary::routes::Perform for Acting {
+impl suzatary_server::secretary::routes::Perform for Acting {
     fn begin(
         &self,
-        id: &suzatary_base::conversation_id::ConversationId,
+        id: &ConversationId,
         index: usize,
-        object: &suzatary_inbox::secretary::inbox::ProposalId,
+        object: &inbox::ProposalId,
         proposer: &proposer::Proposer,
         act: &suzatary_inbox::secretary::acts::Act,
         consent: Consent,
@@ -542,8 +554,8 @@ fn begin_real(
     tokens: &TokenStore,
     inbox: &ActingInbox,
     (workers, ended): (&Arc<Workers>, &Arc<dyn Fn() + Send + Sync>),
-    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
-    object: &suzatary_inbox::secretary::inbox::ProposalId,
+    (id, index): (&ConversationId, usize),
+    object: &inbox::ProposalId,
     act: &suzatary_inbox::secretary::acts::Act,
     consent: Consent,
 ) -> Performed {
@@ -582,8 +594,7 @@ fn begin_real(
         .declared()
         .map_err(|failed| failed.to_string())
         .and_then(|declared| {
-            suzatary_mail::mail::account::Roster::new(declared.accounts)
-                .map_err(|refused| refused.to_string())
+            account::Roster::new(declared.accounts).map_err(|refused| refused.to_string())
         }) {
         Ok(accounts) => accounts,
         Err(failed) => {
@@ -622,8 +633,8 @@ struct Flow<'a> {
     inbox: &'a ActingInbox,
     workers: &'a Arc<Workers>,
     ended: &'a Arc<dyn Fn() + Send + Sync>,
-    at: (&'a suzatary_base::conversation_id::ConversationId, usize),
-    object: &'a suzatary_inbox::secretary::inbox::ProposalId,
+    at: (&'a ConversationId, usize),
+    object: &'a inbox::ProposalId,
 }
 
 impl Flow<'_> {
@@ -632,7 +643,7 @@ impl Flow<'_> {
         self,
         tokens: &TokenStore,
         consent: Consent,
-        mail_account: &suzatary_mail::mail::account::MailAccount,
+        mail_account: &account::MailAccount,
         account: &EmailAddress,
         named: String,
     ) -> Performed
@@ -641,7 +652,6 @@ impl Flow<'_> {
         Pending<P>: Send,
     {
         use Clock as _;
-        use suzatary_inbox::secretary::stamp::stamp;
         let Flow {
             conversations,
             inbox,
@@ -720,12 +730,12 @@ impl Flow<'_> {
 fn finish_act<P: Protocol + Send + 'static>(
     pending: Pending<P>,
     deadline_seconds: u64,
-    object: &suzatary_inbox::secretary::inbox::ProposalId,
+    object: &inbox::ProposalId,
     account: &EmailAddress,
     named: &str,
     conversations: &ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_base::conversation_id::ConversationId,
+    id: &ConversationId,
     workers: &Arc<Workers>,
 ) {
     use Clock as _;
@@ -746,14 +756,12 @@ fn finish_act<P: Protocol + Send + 'static>(
 
 fn web_turn(
     conversations: &ConversationStores,
-    id: &suzatary_base::conversation_id::ConversationId,
-    request: &suzatary_services::web::WebRequest,
-    answered: Result<WebAnswer, suzatary_services::web::WebFailure>,
+    id: &ConversationId,
+    request: &web::WebRequest,
+    answered: Result<WebAnswer, web::WebFailure>,
 ) -> Performed {
     use Clock as _;
-    use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::outcome::Outcome;
-    use suzatary_conversations::secretary::store::Entry;
 
     let (answer, said, outcome) = match answered {
         // The shape the `web` verb answers an allowed read in.
@@ -828,15 +836,12 @@ fn keep_tapped(
 fn drive_turn(
     conversations: &ConversationStores,
     kept: &Blobs,
-    id: &suzatary_base::conversation_id::ConversationId,
+    id: &ConversationId,
     path: &DrivePath,
-    read: Result<suzatary_held::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
+    read: Result<FileRead, suzatary_base::drive_path::DriveFailure>,
 ) -> Performed {
     use Clock as _;
     use secretary::verb_answer::VerbAnswer;
-    use suzatary_base::refusal::Refusal;
-    use suzatary_conversations::secretary::store::Entry;
-    use suzatary_held::file_read::FileRead;
 
     if let Ok(FileRead::Withheld { size, digest, .. }) = &read {
         keep_tapped(kept, path, *size, digest);
@@ -894,13 +899,10 @@ fn drive_turn(
 /// Append an act line relaying outside words, unstamped so taint reads them as foreign.
 fn append_act_turn(
     conversations: &ConversationStores,
-    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
-    at: suzatary_base::capability::Datetime,
+    (id, index): (&ConversationId, usize),
+    at: capability::Datetime,
     text: String,
 ) {
-    use suzatary_conversations::secretary::model::Turn;
-    use suzatary_conversations::secretary::store::Entry;
-
     if let Err(failed) = suzatary_lines::secretary::transcript::push(
         conversations.conversations(),
         id,
@@ -923,12 +925,10 @@ fn append_act_turn(
 /// Append the box's own line, which taint reads clean.
 fn append_note(
     conversations: &ConversationStores,
-    id: &suzatary_base::conversation_id::ConversationId,
-    at: suzatary_base::capability::Datetime,
+    id: &ConversationId,
+    at: capability::Datetime,
     text: String,
 ) {
-    use suzatary_conversations::secretary::store::Entry;
-
     if let Err(failed) = suzatary_lines::secretary::transcript::push(
         conversations.conversations(),
         id,
@@ -943,7 +943,7 @@ fn maybe_append_triage_alarm(
     corpus: &dyn suzatary_triage::mail::corpus::Corpus,
     clock: &dyn Clock,
     conversations: &ConversationStores,
-    id: &suzatary_base::conversation_id::ConversationId,
+    id: &ConversationId,
 ) {
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
@@ -964,11 +964,8 @@ fn completion<E: std::fmt::Display>(
     named: &str,
     slot: &str,
     finished: Result<Result<(), E>, ()>,
-    at: suzatary_base::capability::Datetime,
-) -> (Performed, suzatary_conversations::secretary::store::Entry) {
-    use suzatary_conversations::secretary::model::Turn;
-    use suzatary_conversations::secretary::store::Entry;
-
+    at: capability::Datetime,
+) -> (Performed, Entry) {
     match finished {
         Ok(Ok(())) => {
             tracing::info!("secretary: act auth {named} ended: acted");
@@ -1007,14 +1004,14 @@ fn completion<E: std::fmt::Display>(
 fn append_completion(
     conversations: &ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_base::conversation_id::ConversationId,
-    object: &suzatary_inbox::secretary::inbox::ProposalId,
-    at: suzatary_base::capability::Datetime,
+    id: &ConversationId,
+    object: &inbox::ProposalId,
+    at: capability::Datetime,
     performed: Performed,
-    line: &suzatary_conversations::secretary::store::Entry,
+    line: &Entry,
 ) {
     let by = Actor::new(secretary::WRITES_AS.actor()).expect("assistant is an actor");
-    if let Err(failed) = suzatary_inbox::secretary::inbox::end(*inbox, object, &by, at, performed) {
+    if let Err(failed) = inbox::end(*inbox, object, &by, at, performed) {
         tracing::warn!(
             "secretary: could not end proposal {object} of conversation {id}: {}",
             failed.message()
@@ -1032,7 +1029,7 @@ fn append_completion(
 fn begin_recording(
     conversations: &ConversationStores,
     workers: &Arc<Workers>,
-    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
+    (id, index): (&ConversationId, usize),
     act: &suzatary_inbox::secretary::acts::Act,
 ) -> Performed {
     use suzatary_inbox::secretary::acts::Act;
@@ -1427,7 +1424,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 /// No store at `store`, or one that does not read.
 pub fn owed_compare(
     store: &Path,
-    now: suzatary_base::capability::Datetime,
+    now: capability::Datetime,
     out: &mut dyn std::io::Write,
 ) -> anyhow::Result<()> {
     use suzatary_lines::secretary::compare::{Order, compare};
@@ -1596,20 +1593,13 @@ pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Resu
 pub fn backfill_plan(
     instance: &Instance,
     file: Option<&std::path::Path>,
-    model: &mut dyn FnMut(
-        &ForModel,
-        ForModel,
-    )
-        -> Result<String, suzatary_conversations::secretary::model::ModelError>,
+    model: &mut dyn FnMut(&ForModel, ForModel) -> Result<String, model::ModelError>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
-    use suzatary_topics::secretary::topics::backfill;
-    let refused =
-        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+    let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
-        suzatary_lines::secretary::conversations::list(conversations(instance).conversations())
-            .map_err(refused)?;
+        conversations::list(conversations(instance).conversations()).map_err(refused)?;
     let topics = instance.secretary.topics.open();
     let planned = backfill::plan(&conversations, &topics.stores().reading()?, model)?;
     for (target, given) in &planned.rounds {
@@ -1673,15 +1663,13 @@ pub fn backfill_apply(
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
     use suzatary_topics::secretary::topics::plan::Plan;
-    let refused =
-        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+    let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());
     let text = std::fs::read_to_string(file)
         .with_context(|| format!("reading the plan {}", file.display()))?;
     let plan =
         Plan::parse(&text).with_context(|| format!("the plan {} does not read", file.display()))?;
     let conversations =
-        suzatary_lines::secretary::conversations::list(conversations(instance).conversations())
-            .map_err(refused)?;
+        conversations::list(conversations(instance).conversations()).map_err(refused)?;
     let topics = instance.secretary.topics.open();
     topics.begin()?;
     let _held = topics.memberships.locked()?;
@@ -1706,11 +1694,9 @@ pub fn carry(
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
     use suzatary_topics::secretary::topics::carry::{self, Carrying, Map};
-    let refused =
-        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+    let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
-        suzatary_lines::secretary::conversations::list(conversations(instance).conversations())
-            .map_err(refused)?;
+        conversations::list(conversations(instance).conversations()).map_err(refused)?;
     let (path, write) = match run {
         CarryRun::List => {
             for listed in carry::listing(&conversations) {
@@ -1855,8 +1841,7 @@ fn husk_dead(
 /// Read at one fixed instant, so it is a function of the stores alone.
 pub fn readings(instance: &Instance, out: &mut impl std::io::Write) -> anyhow::Result<()> {
     use sha2::Digest as _;
-    let refused =
-        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+    let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());
     let stores = conversations(instance);
     let conversations = stores.conversations();
     let at = prodrome_core::literal::Datetime::new(2026, 1, 1, 0, 0, 0, 0)?;
@@ -1868,12 +1853,10 @@ pub fn readings(instance: &Instance, out: &mut impl std::io::Write) -> anyhow::R
         .iter()
         .map(|chain| chain.policy.name.clone())
         .collect();
-    let inbox = suzatary_inbox::secretary::inbox::fold(&inbox(instance)).map_err(refused)?;
+    let inbox = inbox::fold(&inbox(instance)).map_err(refused)?;
     let waiting =
-        suzatary_api::routes::waiting(&inbox, conversations.reads(), &read.set(at), &chains)
-            .map_err(refused)?;
-    let [lines, skeleton, content] =
-        suzatary_api::routes::lines_readings(conversations, at).map_err(refused)?;
+        routes::waiting(&inbox, conversations.reads(), &read.set(at), &chains).map_err(refused)?;
+    let [lines, skeleton, content] = routes::lines_readings(conversations, at).map_err(refused)?;
     let read = [
         lines,
         ("digest", String::from_utf8(digest)?),
@@ -1895,7 +1878,6 @@ pub fn migrate_scrub(
     apply: bool,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<Option<suzatary_lines::secretary::rescrub::Done>> {
-    use suzatary_lines::secretary::rescrub;
     use suzatary_lines::secretary::rescrub::Census;
     let stores = conversations(instance);
     let census = |census: &Census| {
@@ -2074,8 +2056,8 @@ pub fn scripted_round(
     wired.brain = Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
-    if suzatary_lines::secretary::conversations::read(caps.conversations, id).is_err() {
-        suzatary_lines::secretary::conversations::start(
+    if conversations::read(caps.conversations, id).is_err() {
+        conversations::start(
             caps.conversations,
             caps.model,
             id,
@@ -2217,7 +2199,7 @@ fn brief(
 fn begun_topic(instance: &Instance) -> anyhow::Result<ConversationId> {
     let wired = wired(instance, None)?;
     let caps = &wired.secretary();
-    let (id, _) = suzatary_lines::secretary::conversations::begin(
+    let (id, _) = conversations::begin(
         caps.conversations,
         caps.model,
         "",
@@ -2237,7 +2219,7 @@ fn run_brief(
     let chains = wired.bound();
     let caps = &wired.secretary();
     let id = if new {
-        let (id, _) = suzatary_lines::secretary::conversations::begin(
+        let (id, _) = conversations::begin(
             caps.conversations,
             caps.model,
             title,
@@ -2248,13 +2230,8 @@ fn run_brief(
         id
     } else {
         let id = DEFAULT.clone();
-        suzatary_lines::secretary::conversations::read_or_open_default(
-            caps.conversations,
-            caps.model,
-            &id,
-            caps.clock.now(),
-        )
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+        conversations::read_or_open_default(caps.conversations, caps.model, &id, caps.clock.now())
+            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
         id
     };
 
@@ -2324,7 +2301,7 @@ fn ask_brief(
 /// be said.
 fn page_unreadable(
     instance: &Instance,
-    unreadable: Result<Option<suzatary_cards::notify::Push>, suzatary_base::refusal::Refusal>,
+    unreadable: Result<Option<suzatary_cards::notify::Push>, Refusal>,
 ) {
     match unreadable {
         Ok(Some(page)) => {
@@ -2440,7 +2417,7 @@ fn print_reviewed(reviewed: &secretary::review::Reviewed) {
         "secretary: reviewed in {} round(s) — {}",
         reviewed.rounds, reviewed.stored.id
     );
-    for outcome in suzatary_conversations::secretary::store::Outcome::ALL {
+    for outcome in store::Outcome::ALL {
         for line in reviewed.with(outcome) {
             println!("  {line}");
         }
@@ -2451,11 +2428,7 @@ fn print_reviewed(reviewed: &secretary::review::Reviewed) {
         .iter()
         .rev()
         .find_map(|said| match &said.turn {
-            suzatary_conversations::secretary::model::Turn::Model { text, .. }
-                if !text.trim().is_empty() =>
-            {
-                Some(text.trim())
-            }
+            model::Turn::Model { text, .. } if !text.trim().is_empty() => Some(text.trim()),
             _ => None,
         })
     {
@@ -2526,10 +2499,7 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
 }
 
 /// A sweep's refusal, printed and returned, so the exit status says the day went unswept.
-pub fn swept_or_failed<T>(
-    outcome: Result<T, suzatary_base::refusal::Refusal>,
-    json: bool,
-) -> anyhow::Result<T> {
+pub fn swept_or_failed<T>(outcome: Result<T, Refusal>, json: bool) -> anyhow::Result<T> {
     outcome.map_err(|refusal| {
         if json {
             println!(
@@ -2627,24 +2597,18 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         println!("secretary: no batches were reviewed on or after {day}");
         return Ok(());
     }
-    let mut lines: Vec<(suzatary_base::capability::Datetime, String)> = found
+    let mut lines: Vec<(capability::Datetime, String)> = found
         .into_iter()
         .map(|(conversation, review)| {
             (
                 review.at,
-                format!(
-                    "{}  {conversation}  {review}",
-                    suzatary_inbox::secretary::stamp::stamp(review.at)
-                ),
+                format!("{}  {conversation}  {review}", stamp(review.at)),
             )
         })
         .chain(failed.iter().map(|(conversation, failure)| {
             (
                 failure.at,
-                format!(
-                    "{}  {conversation}  {failure}",
-                    suzatary_inbox::secretary::stamp::stamp(failure.at)
-                ),
+                format!("{}  {conversation}  {failure}", stamp(failure.at)),
             )
         }))
         .collect();
@@ -2656,8 +2620,8 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         println!(
             "secretary: {} review(s) could not run between {} and {} — {} batch(es) stood unanswered at the last one",
             failed.len(),
-            suzatary_inbox::secretary::stamp::stamp(first.1.at),
-            suzatary_inbox::secretary::stamp::stamp(last.1.at),
+            stamp(first.1.at),
+            stamp(last.1.at),
             last.1.standing
         );
     }
@@ -2666,12 +2630,12 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
 
 fn list(instance: &Instance) -> anyhow::Result<()> {
     let store = conversations(instance);
-    let conversations = suzatary_lines::secretary::conversations::list(store.conversations())
+    let conversations = conversations::list(store.conversations())
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     if conversations.is_empty() {
         println!("secretary: no conversations yet");
     }
-    let fold = suzatary_inbox::secretary::inbox::fold(&inbox(instance))
+    let fold = inbox::fold(&inbox(instance))
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     for stored in conversations {
         let standing = stored
@@ -2697,50 +2661,47 @@ fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
     let store = conversations(instance);
     let held = suzatary_lines::secretary::transcript::keys(store.conversations())?;
     let id = ConversationId::among(id, &held)?;
-    let stored = suzatary_lines::secretary::conversations::read(store.conversations(), &id)
+    let stored = conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     println!("{}  {}  ({})", stored.id, stored.title, stored.model);
     transcript(&stored, &lines_of(instance, &stored)?, &words_of(instance));
     Ok(())
 }
 
-fn lines_of(
-    instance: &Instance,
-    stored: &suzatary_conversations::secretary::store::Stored,
-) -> anyhow::Result<Lines> {
-    suzatary_inbox::secretary::inbox::fold(&inbox(instance))
+fn lines_of(instance: &Instance, stored: &store::Stored) -> anyhow::Result<Lines> {
+    inbox::fold(&inbox(instance))
         .map(|fold| stored.lines(&fold))
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))
 }
 
 /// Print a conversation as plain text; the model's prose is the least trusted string here.
 fn transcript(
-    stored: &suzatary_conversations::secretary::store::Stored,
+    stored: &store::Stored,
     lines: &Lines,
     words: &impl Fn(&salted_text::TextName) -> inbox_reading::Words,
 ) {
     for said in &stored.turns {
         match &said.turn {
-            suzatary_conversations::secretary::model::Turn::Person {
+            model::Turn::Person {
                 text, references, ..
             } => {
                 println!("\nOWNER: {text}{}", pointing(references));
             }
-            suzatary_conversations::secretary::model::Turn::Act { text, .. } => {
+            model::Turn::Act { text, .. } => {
                 println!("\n* {text}");
             }
-            suzatary_conversations::secretary::model::Turn::Model { text, .. } => {
+            model::Turn::Model { text, .. } => {
                 if !text.is_empty() {
                     println!("\nSECRETARY: {text}");
                 }
             }
-            suzatary_conversations::secretary::model::Turn::Tool { verb, outcome, .. } => {
+            model::Turn::Tool { verb, outcome, .. } => {
                 println!(
                     "  [{}{verb}]",
                     if outcome.refused() { "refused " } else { "" }
                 );
             }
-            suzatary_conversations::secretary::model::Turn::Erased { words, .. } => {
+            model::Turn::Erased { words, .. } => {
                 println!(
                     "\n{}",
                     suzatary_conversations::secretary::turn_shape::prose(words)

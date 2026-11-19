@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-api"
-description = "Suzatary's routes, gate and wire, over the model crates (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
+description = "Suzatary's wire and the routes the browser and the box share"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,17 +20,12 @@ suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
 suzatary-held.workspace = true
-suzatary-memory.workspace = true
 suzatary-mail.workspace = true
-suzatary-health.workspace = true
 suzatary-triage.workspace = true
-suzatary-services.workspace = true
-suzatary-google.workspace = true
 suzatary-connect.workspace = true
 suzatary-conversations.workspace = true
 suzatary-lines.workspace = true
 suzatary-topics.workspace = true
-suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
@@ -43,11 +38,12 @@ regex.workspace = true
 base64.workspace = true
 chrono.workspace = true
 
-[features]
-nothing = ["suzatary-secretary/nothing"]
-
 [dev-dependencies]
-suzatary-api = { path = ".", features = ["nothing"] }
+suzatary-memory.workspace = true
+suzatary-health.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-secretary = { workspace = true, features = ["nothing"] }
 proptest.workspace = true
 # A device key is printed as hex (`tests/lines_rule.rs`).
 hex.workspace = true

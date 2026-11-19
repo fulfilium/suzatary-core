@@ -663,6 +663,112 @@ The crates after PR 31, from `scripts/context.sh` at this branch's head, in thou
 | 21 | `secretary` | 178.8 | **35.4** | 19 | **767** |
 | 22 | `api` | 107.9 | **25.6** | 21 | **744** |
 
+**Row 32 (the server's half of `api`), one pull request.** The box's half of `api` is the crate
+`suzatary-server`, and each module keeps its path under the crate's name:
+`suzatary_server::{gate, portal, routes, secretary::routes, server}`. The CLI's `serve` is still
+the CLI's; what blocks it is below.
+- **The seam is who names what.** The browser's modules name `wire`, `query` and two items of
+  `routes` (`fold`, `MAX_POSTED`); the box names everything. So:
+
+  | module | named by | went to |
+  |---|---|---|
+  | `wire`, `wire/shape` | `wasm`, `pages`, the CLI, the generator | stays |
+  | `query` | `wasm`, the CLI | stays |
+  | `routes` | `wasm` (`fold`, `MAX_POSTED`), the CLI, `api`'s tests | stays, cut at the item: `briefings`, `briefing` (the secretary's `Briefings` and briefs) and `calendar` (Google) are `suzatary_server::routes` |
+  | `sync` | `routes` | stays |
+  | `clienterror` | the CLI's `serve`, the generator (`Sent`) | stays whole: the seam between `Sent` and `Report` would widen `Kind::name`, and it names only `base` and `held` |
+  | `server`, `secretary/routes` | the CLI, `web_vectors` | server |
+  | `gate` | the CLI (`serve`, `call`, `doctor`) | server |
+  | `portal` | the CLI (`instance`, `serve`) | server, with `From<&Portal> for PortalPayload` |
+- **Three ties went first:** `Erasing`, a body the generator declares, is `wire`'s; `routes::author`
+  takes the chain, clock and renderer it read from the `Server` record; and `PortalPayload`'s
+  `From` moved beside `Portal`. The generated `wire.ts`, `payload.ts` and `pages.ts` are master's,
+  byte for byte. `MAX_BRIEFINGS` went with its one reader.
+- **`api` no longer depends on** `digest`, `memory`, `health`, `services` or `google` (the last
+  four stay dev-dependencies of its laws). It names the secretary crate only through `stores` and
+  `asks`, so both browser modules still compile the secretary, the mail crates and the sources:
+  `pages` through `api`, `wasm` through `api` and directly. The stores' table as a crate of its
+  own, below the secretary, is the cut that removes them.
+- **The CLI's `serve` is not a crate yet.** A trial move into the crate leaves 42 paths into the
+  CLI unresolved, and the CLI's other verbs name `serve` back:
+  - `serve` names the instance (`Instance`, `Reserve`, `File`, `InstanceEdits`, `Mounts`,
+    `Plugins`, `Project`), `wiring` (`Ground`, `Opened`, `Stores`), `stamp` (`build`, `release`,
+    `Release`) and nine verbs' helpers: `secretary` (`Acting`, `ActingStores`, `Postman`,
+    `system_prompt`, `BRIEF`), `mail` (`tokens`, `syncer`, `notmuch`, `google_grants`), `plugin`
+    (`sync`, `effects`, `components`), `google::sync_calendars`, `notify::push`,
+    `coding::spawn_polling`, `doctor::upkeep_line`, `fixture::Scripted` and `commands/mod.rs`.
+  - `wiring`, `instance`, `secretary`, `coding`, `mail`, `plugin`, `verify` and `ran` name
+    `serve::interpreters` (the ports interpreted from the instance) and `serve::mail_cache`;
+    `secretary` and `coding` name `Workers`, `Brain` and `sign_ins`; `ask`, `tap` and `call` name
+    `route`, `table` and `asked`; `doctor` names `door`.
+  - What removes it: `interpreters` and `mail_cache` are the CLI's wiring, not the server's, and
+    move beside `wiring.rs`; the run (`run`, `serving`, `listen`, `performers`, the `real_*`
+    builders and each `of(&Instance)` constructor) stays the CLI's verb and hands the crate a
+    built `State`; `State` holds the values it reads instead of `Mounts`, `Plugins`, `Postman`
+    and `Stamp`; `Checks` takes the plugin and calendar syncs as values; `system_prompt` and
+    `BRIEF` move down to the secretary crate. Then `serve` names nothing of the CLI, and its two
+    `gate` modules (the door's rules and the axum wrapper) become one.
+- **Tests:** `web_vectors.rs` names the secretary's routes, so it is the server's `tests/all.rs`.
+  Its vectors stay at `app/api/tests/web`: they are what the tab and the box share, and `pages`
+  reads them through its dependency on `api`. Moved beside their writer, they needed a
+  `crate_reads` entry for `pages`, which the gate's unit fixture does not know, so every unit
+  ran. The CLI's tests that name `serve` stay with it. `#[test]` functions: 2,236 on master and here; `proptest!`
+  blocks 164 on both.
+- **Nothing widens.** Every item the crate's dependents name was `pub` in `api`.
+- **USE:** `api` 19.0k, back within the line, so its `[ratchet.use]` row is gone; `server` 6.5k.
+  The reading set is 1,205 tokens under master's: the new manifest and root and the longer paths
+  cost 1,096, and an import-once pass over the production code of the files the branch touches
+  paid it back.
+
+Measured with `cargo check` on four cores, one line edited, the second run of each, master and
+branch on one target directory (the secretary's routes were `api`'s on master):
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `--workspace --all-targets`, `lines` (`transcript.rs`) | 16.6 s | 15.9 s |
+| `--workspace --all-targets`, `routes.rs` | 10.5 s | 10.0 s |
+| `--workspace --all-targets`, the secretary's routes | 10.5 s | 8.7 s |
+| `--workspace --all-targets`, the conversation worker | 8.1 s | 8.4 s |
+| `-p suzatary-api`, `routes.rs` | 4.2 s | 2.7 s |
+| `-p` api / `suzatary-server`, the secretary's routes | 3.9 s | 0.8 s |
+| `-p suzatary`, the conversation worker | 8.7 s | 8.1 s |
+| `-p suzatary`, a verb (`todo.rs`) | 8.5 s | 8.0 s |
+
+A cold `cargo build -p suzatary-wasm --target wasm32-unknown-unknown` took 79.5 s on master and
+77.8 s here, 141 units on both: the browser's developer still compiles every model crate.
+
+The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, grew by 397 bytes after
+`wasm-opt` (4,877,806 to 4,878,203), and the pages' module shrank by 1,757 (3,602,881 to
+3,601,124). No line of `web/wasm-budget` moves.
+
+The crates after PR 32, from `scripts/context.sh` at this branch's head, in thousands of tokens:
+
+| # | Crate (`app/<name>`) | own | use | deps | DEVELOP |
+|---|---|---|---|---|---|
+| 1 | `base` | 58.2 | 24.6 | 0 | 226 |
+| 2 | `record` | 31.9 | 11.1 | 1 | 224 |
+| 3 | `release` | 13.4 | 6.7 | 1 | 192 |
+| 4 | `store` | 47.0 | 23.9 | 1 | 239 |
+| 5 | `signatures` | 49.0 | 23.6 | 3 | 276 |
+| 6 | `todo` | 74.7 | 24.9 | 4 | 326 |
+| 7 | `held` | 68.4 | 24.1 | 2 | 285 |
+| 8 | `memory` | 38.7 | 18.3 | 3 | 279 |
+| 9 | `mail` | 46.3 | 24.6 | 3 | 286 |
+| 10 | `health` | 17.2 | 8.5 | 3 | 258 |
+| 11 | `triage` | 41.2 | 22.8 | 4 | 306 |
+| 12 | `services` | 31.4 | 14.1 | 3 | 256 |
+| 13 | `google` | 33.3 | 14.6 | 5 | 313 |
+| 14 | `connect` | 57.6 | 24.1 | 7 | 347 |
+| 15 | `inbox` | 106.1 | **33.5** | 13 | **540** |
+| 16 | `conversations` | 65.5 | **27.3** | 7 | 391 |
+| 17 | `lines` | 134.7 | **40.9** | 12 | **576** |
+| 18 | `topics` | 63.2 | 20.5 | 14 | **560** |
+| 19 | `digest` | 74.0 | **28.4** | 11 | **525** |
+| 20 | `cards` | 49.5 | 13.3 | 15 | **552** |
+| 21 | `secretary` | 180.2 | **35.7** | 19 | **771** |
+| 22 | `api` | 66.3 | 19.0 | 16 | **621** |
+| 23 | `server` | 41.8 | 6.5 | 20 | **665** |
+
 Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

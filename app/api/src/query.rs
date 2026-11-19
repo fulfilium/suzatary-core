@@ -6,6 +6,8 @@
 
 use prodrome_core::fpl;
 
+use prodrome_core::event::Hash;
+use prodrome_core::store::frontier;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
@@ -16,8 +18,6 @@ pub(crate) const MAIL_LIMIT: usize = 50;
 pub(crate) const MAX_MAIL: usize = 200;
 /// A notmuch query is a query and not a document.
 pub const MAX_QUERY_CHARS: usize = 500;
-/// Every day the assistant has saved a briefing for, capped.
-pub(crate) const MAX_BRIEFINGS: usize = 400;
 /// The most rows a limited `/api/fold` will answer with.
 pub const MAX_FOLD_ROWS: usize = 200;
 
@@ -79,11 +79,11 @@ pub fn fold_limit(raw: Option<&str>) -> Result<Option<usize>, Refusal> {
 /// A pull's `since`: absent or empty is a replica holding nothing; anything else is the frontier
 /// an earlier answer named, 64 hex digits, so a request names what a replica holds in the same
 /// few bytes however many tips it has.
-pub fn since(raw: Option<&str>) -> Result<prodrome_core::store::frontier::Since, Refusal> {
+pub fn since(raw: Option<&str>) -> Result<frontier::Since, Refusal> {
     match raw.unwrap_or_default() {
-        "" => Ok(prodrome_core::store::frontier::Since::Nothing),
-        text => prodrome_core::store::frontier::Token::parse(text)
-            .map(prodrome_core::store::frontier::Since::Frontier)
+        "" => Ok(frontier::Since::Nothing),
+        text => frontier::Token::parse(text)
+            .map(frontier::Since::Frontier)
             .map_err(|refused| Refusal::bad_request(format!("{refused}, got {}", shown(text)))),
     }
 }
@@ -95,7 +95,7 @@ pub const MOST_HASHES: usize = 64;
 /// ascending order with none twice, so one set of objects has one URL and a cache that kept its
 /// answer answers every tab that asks for the same set.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Hashes(Vec<prodrome_core::event::Hash>);
+pub struct Hashes(Vec<Hash>);
 
 impl Hashes {
     /// The names `raw` spells, comma-separated.
@@ -131,7 +131,7 @@ impl Hashes {
     }
 
     /// The names, in ascending order.
-    pub fn iter(&self) -> impl Iterator<Item = &prodrome_core::event::Hash> {
+    pub fn iter(&self) -> impl Iterator<Item = &Hash> {
         self.0.iter()
     }
 }

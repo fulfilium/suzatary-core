@@ -395,7 +395,7 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
     );
     assert_eq!(
         by_tap,
-        vec!["app/api/src/secretary/routes.rs".to_owned()],
+        vec!["app/server/src/secretary/routes.rs".to_owned()],
         "given_by_tap callers"
     );
 }
@@ -442,6 +442,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         "base",
         "secretary",
         "api",
+        "server",
         "io",
         "cli",
         "plugin",
@@ -493,10 +494,10 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         editing,
         [
-            "api/src/secretary/routes.rs",
             "cli/src/commands/serve/google.rs",
             "cli/src/commands/serve/proposals.rs",
             "cli/tests/support/fixture.rs",
+            "server/src/secretary/routes.rs",
         ],
         "callers of the connection edits"
     );
@@ -504,9 +505,9 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         forgetting,
         [
-            "api/src/secretary/routes.rs",
             "cli/src/commands/serve/mail_cache.rs",
             "cli/tests/support/fixture.rs",
+            "server/src/secretary/routes.rs",
         ],
         "callers of the mail delete"
     );

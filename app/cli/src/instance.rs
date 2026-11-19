@@ -1,11 +1,13 @@
 //! `instance.toml`, parsed: the one place this binary learns about a box, so
 //! the model crates and `suzatary-io` never see a path. It holds nothing secret.
 
-use suzatary_api::portal::Portal;
 use suzatary_base::persona::Persona;
 use suzatary_io::objects::Objects;
 use suzatary_io::secrets::Declarations;
 use suzatary_record::record::TodoEvent;
+use suzatary_server::portal::Portal;
+use suzatary_signatures::signatures;
+use suzatary_store::store;
 use suzatary_store::store::Signing;
 mod chain_dir;
 pub(crate) mod charter;
@@ -318,7 +320,7 @@ impl Instance {
     /// What the box signs with, or why not: never an error, so a box whose secrets are locked
     /// still starts and reads, and every write refuses with that sentence.
     #[must_use]
-    pub fn signers(&self) -> suzatary_signatures::signatures::Signers {
+    pub fn signers(&self) -> signatures::Signers {
         use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Signers};
         let root = self.root();
         let secrets = self.secrets();
@@ -344,7 +346,7 @@ impl Instance {
     /// Adoption of every chain (idempotent): the box's and the agent's keys and its epoch, under
     /// a lock beside each chain.
     #[must_use]
-    pub fn adopt(&self, signers: &suzatary_signatures::signatures::Signers) -> Adopted<'_> {
+    pub fn adopt(&self, signers: &signatures::Signers) -> Adopted<'_> {
         let (adopted, failed): (Vec<_>, Vec<_>) = self
             .chains
             .iter()
@@ -360,11 +362,9 @@ impl Instance {
             .collect();
         if let Some(keys) = signers.held() {
             let stores: Vec<_> = self.chains.iter().map(crate::commands::store_of).collect();
-            let stores: Vec<&dyn suzatary_store::store::Prodrome<TodoEvent>> =
+            let stores: Vec<&dyn store::Prodrome<TodoEvent>> =
                 stores.iter().map(|store| store as _).collect();
-            if let Err(why) =
-                suzatary_signatures::signatures::complete_revocations(&stores, keys.root())
-            {
+            if let Err(why) = signatures::complete_revocations(&stores, keys.root()) {
                 failed.push(format!("completing a revocation across chains: {why}"));
             }
         }
@@ -381,19 +381,12 @@ impl Instance {
     ///
     /// # Errors
     /// The lock not taken, a store failing, or writes since the epoch that no key signed.
-    fn adopted(
-        chain: &ChainDir,
-        signers: &suzatary_signatures::signatures::Signers,
-    ) -> anyhow::Result<Registered> {
+    fn adopted(chain: &ChainDir, signers: &signatures::Signers) -> anyhow::Result<Registered> {
         let Some(keys) = signers.held() else {
             return Ok(Vec::new());
         };
         let _held = adoption_lock(&chain.events)?;
-        let adoption = suzatary_signatures::signatures::adopt(
-            &crate::commands::store_of(chain),
-            keys,
-            &chain.policy,
-        )?;
+        let adoption = signatures::adopt(&crate::commands::store_of(chain), keys, &chain.policy)?;
         Ok(adoption.registered)
     }
 
@@ -419,7 +412,7 @@ impl Instance {
     #[must_use]
     pub fn writer_of(
         chain: &ChainDir,
-        signers: &suzatary_signatures::signatures::Signers,
+        signers: &signatures::Signers,
         actor: &prodrome_core::event::Actor,
         opened: crate::commands::door::Opened,
     ) -> Signing<Objects<TodoEvent>> {
@@ -427,7 +420,7 @@ impl Instance {
             crate::commands::opened(chain, opened),
             match chain.charter {
                 Charted::Private => signers.for_actor(actor, &chain.policy.untrusted),
-                Charted::Public(_) => suzatary_store::store::Signer::Unsigned,
+                Charted::Public(_) => store::Signer::Unsigned,
             },
         )
     }

@@ -535,7 +535,7 @@ fn a_key_trusted_at_the_terminal_withdraws_its_card() {
     };
     assert_eq!(waiting(), 1);
     let withdraw = || {
-        suzatary_api::secretary::routes::withdraw_trusted(
+        suzatary_server::secretary::routes::withdraw_trusted(
             &fakes.inbox,
             &fakes.chain,
             &keys().root().public(),

@@ -18,7 +18,6 @@ use suzatary_held::mail_error::MailError;
 use suzatary_lines::secretary::conversations;
 use suzatary_release::release::{Plan, Reading, Released, binding};
 use suzatary_secretary::asks::AskEvent;
-use suzatary_secretary::secretary;
 use suzatary_secretary::stores;
 use suzatary_secretary::stores::Store;
 use suzatary_signatures::chain_set::NotAMember;
@@ -28,7 +27,6 @@ use suzatary_store::store::Graph;
 use suzatary_store::store::StoreError;
 use suzatary_triage::mail::gone::SAID;
 
-use chrono::NaiveDate;
 use prodrome_core::fpl;
 use prodrome_core::observe::Observation;
 use prodrome_core::policy::Untrusted;
@@ -39,11 +37,15 @@ use suzatary_signatures::chain_set::ChainSet;
 
 use crate::query;
 use crate::wire;
+use prodrome_core::event;
+use prodrome_core::store::frontier;
 use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
 use suzatary_base::tree::{By, Classifier, Monoid};
+use suzatary_cards::settings::overview;
 use suzatary_cards::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
+use suzatary_connect::connect;
 use suzatary_connect::deployment::Deployment;
 use suzatary_lines::parts::part;
 use suzatary_lines::secretary::husks::{husked, husks, keys_of, retired};
@@ -54,14 +56,17 @@ use suzatary_lines::wire::lines::{
 };
 use suzatary_mail::mail;
 use suzatary_mail::mail::mailbox::{Mailbox, Query};
-use suzatary_secretary::secretary::briefings::Briefings;
+use suzatary_record::record;
+use suzatary_signatures::signatures;
+use suzatary_store::receipt;
 use suzatary_store::store::Prodrome;
 use suzatary_store::wire::store::SinceRead;
+use suzatary_todo::authoring;
 use suzatary_todo::reading;
 use suzatary_todo::render::Render;
 use suzatary_todo::view;
 use suzatary_todo::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
-use suzatary_topics::secretary::answers::Answers;
+use suzatary_topics::secretary::readings;
 
 /// Every head, sorted, with none of them picked.
 pub(crate) fn head_set<E: Schema>(store: &dyn Prodrome<E>) -> Result<Vec<String>, Refusal> {
@@ -139,9 +144,9 @@ fn rows<'s>(
     set: &'s ChainSet<'_>,
     name: &ChainName,
 ) -> Answered<(
-    std::collections::BTreeMap<Hash, &'s suzatary_record::record::Envelope>,
-    &'s [suzatary_record::record::Node],
-    Vec<suzatary_record::record::Entry>,
+    std::collections::BTreeMap<Hash, &'s record::Envelope>,
+    &'s [record::Node],
+    Vec<record::Entry>,
 )> {
     let held = set.held(name).map_err(not_a_member)?;
     let rows = set.entries(name).map_err(not_a_member)?;
@@ -186,7 +191,7 @@ pub fn todo(
     zone: suzatary_base::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
-    builder: Option<&suzatary_connect::connect::RoutineId>,
+    builder: Option<&connect::RoutineId>,
 ) -> Answered<wire::TodoPayload> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let id = todo_id(id)?;
@@ -261,95 +266,6 @@ pub fn tree(
         at: fpl::iso(fpl::instant_of(at)),
         by,
         root: view::tree_node(view::tree(&rows, &members, &classifier, at, &env), &members),
-    })
-}
-
-/// The saved briefings' days, newest first.
-pub fn briefings(
-    briefings: &dyn Briefings,
-    conversations: conversations::Conversations<'_>,
-) -> Answered<wire::BriefingsPayload> {
-    let saved = briefings
-        .all()
-        .map_err(|e| Refusal::internal(e.to_string()))?;
-    let mut briefs: Vec<secretary::briefs::Brief> = conversations::list(conversations)?
-        .iter()
-        .flat_map(secretary::briefs::briefs)
-        .collect();
-    briefs.sort_by(|a, b| b.date.cmp(&a.date).then(b.turn.cmp(&a.turn)));
-    Ok(wire::BriefingsPayload {
-        briefs: briefs
-            .into_iter()
-            .take(query::MAX_BRIEFINGS)
-            .map(|brief| wire::BriefRow {
-                date: brief.date.to_string(),
-                conversation: brief.conversation.as_str().to_owned(),
-                turn: u32::try_from(brief.turn).unwrap_or(u32::MAX),
-                title: secretary::briefs::headline(&brief.text),
-                words: u32::try_from(secretary::briefs::words(&brief.text)).unwrap_or(u32::MAX),
-                text: brief.text,
-            })
-            .collect(),
-        briefings: saved
-            .into_iter()
-            .take(query::MAX_BRIEFINGS)
-            .map(|(day, source)| wire::BriefingRow {
-                title: briefing_title(&source, day),
-                words: u32::try_from(source.split_whitespace().count()).unwrap_or(u32::MAX),
-                date: day.to_string(),
-            })
-            .collect(),
-    })
-}
-
-/// The first `= …` heading's text, else the date, without a compile.
-fn briefing_title(source: &str, day: NaiveDate) -> String {
-    source
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with('='))
-        .map(|line| line.trim_start_matches('=').trim())
-        .find(|text| !text.is_empty())
-        .map_or_else(|| day.to_string(), str::to_owned)
-}
-
-/// One day's briefing: the secretary's brief by block, else the saved file.
-pub fn briefing(
-    briefings: &dyn Briefings,
-    render: &dyn Render,
-    conversations: conversations::Conversations<'_>,
-    answers: &dyn Answers,
-    day: NaiveDate,
-) -> Answered<wire::BriefingPayload> {
-    let brief = conversations::list(conversations)?
-        .iter()
-        .flat_map(secretary::briefs::briefs)
-        .filter(|brief| brief.date == day)
-        .max_by_key(|brief| brief.turn);
-    if let Some(brief) = brief {
-        return Ok(wire::BriefingPayload {
-            date: day.to_string(),
-            day: wire::BriefingDay::Brief {
-                conversation: brief.conversation.as_str().to_owned(),
-                turn: u32::try_from(brief.turn).unwrap_or(u32::MAX),
-                blocks: suzatary_topics::secretary::readings::blocks_of(answers, &brief.text),
-                text: brief.text,
-            },
-        });
-    }
-    let source = briefings
-        .read(day)
-        .map_err(|_| Refusal::not_found(format!("no briefing for {day}")))?;
-    let markup = Escaped::from_chain(source.clone());
-    Ok(wire::BriefingPayload {
-        date: day.to_string(),
-        day: wire::BriefingDay::Saved {
-            rich: render
-                .html(&markup)
-                .ok()
-                .map(|html| html.as_str().to_owned()),
-            source,
-        },
     })
 }
 
@@ -654,10 +570,7 @@ fn store_answer<E: Store>(
 }
 
 /// One object, weighed by its literal's bytes.
-fn stored<E: Schema>(
-    name: &Hash,
-    envelope: &prodrome_core::event::Envelope<E>,
-) -> (StoredObject, usize) {
+fn stored<E: Schema>(name: &Hash, envelope: &event::Envelope<E>) -> (StoredObject, usize) {
     let literal = canonical_envelope(envelope);
     let bytes = literal.len();
     (
@@ -726,21 +639,13 @@ trait Sends<E: Schema> {
     /// The key of the weights, read once per head set.
     const WEIGHTS: &'static str;
     /// The item and its weight.
-    fn emit(
-        &self,
-        name: &Hash,
-        envelope: &prodrome_core::event::Envelope<E>,
-    ) -> (Self::Item, usize);
+    fn emit(&self, name: &Hash, envelope: &event::Envelope<E>) -> (Self::Item, usize);
     /// Its weight alone.
-    fn weigh(&self, name: &Hash, envelope: &prodrome_core::event::Envelope<E>) -> usize;
+    fn weigh(&self, name: &Hash, envelope: &event::Envelope<E>) -> usize;
     /// The order to send `lacking` in, as its indices: a linear extension of the causal order,
     /// so each prefix joined to what the asker holds is closed under parents. The store's linear
     /// order unless a store says which objects a reader wants first.
-    fn order(
-        &self,
-        _graph: &Graph<E>,
-        lacking: &[(&Hash, &prodrome_core::event::Envelope<E>)],
-    ) -> Vec<usize> {
+    fn order(&self, _graph: &Graph<E>, lacking: &[(&Hash, &event::Envelope<E>)]) -> Vec<usize> {
         (0..lacking.len()).collect()
     }
 }
@@ -752,15 +657,11 @@ impl<E: Schema> Sends<E> for Literals {
     type Item = StoredObject;
     const WEIGHTS: &'static str = "weights of literals";
 
-    fn emit(
-        &self,
-        name: &Hash,
-        envelope: &prodrome_core::event::Envelope<E>,
-    ) -> (StoredObject, usize) {
+    fn emit(&self, name: &Hash, envelope: &event::Envelope<E>) -> (StoredObject, usize) {
         stored(name, envelope)
     }
 
-    fn weigh(&self, _: &Hash, envelope: &prodrome_core::event::Envelope<E>) -> usize {
+    fn weigh(&self, _: &Hash, envelope: &event::Envelope<E>) -> usize {
         canonical_envelope(envelope).len()
     }
 }
@@ -775,7 +676,7 @@ impl Sends<line_event::LineEvent> for Nodes {
     fn emit(
         &self,
         name: &Hash,
-        envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
+        envelope: &event::Envelope<line_event::LineEvent>,
     ) -> (SkeletonNode, usize) {
         // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
         let node = node_of(name, envelope, 0);
@@ -783,11 +684,7 @@ impl Sends<line_event::LineEvent> for Nodes {
         (node, weight)
     }
 
-    fn weigh(
-        &self,
-        name: &Hash,
-        envelope: &prodrome_core::event::Envelope<line_event::LineEvent>,
-    ) -> usize {
+    fn weigh(&self, name: &Hash, envelope: &event::Envelope<line_event::LineEvent>) -> usize {
         weight(&node_of(name, envelope, 0))
     }
 
@@ -803,10 +700,7 @@ impl Sends<line_event::LineEvent> for Nodes {
     fn order(
         &self,
         graph: &Graph<line_event::LineEvent>,
-        lacking: &[(
-            &Hash,
-            &prodrome_core::event::Envelope<line_event::LineEvent>,
-        )],
+        lacking: &[(&Hash, &event::Envelope<line_event::LineEvent>)],
     ) -> Vec<usize> {
         let rank = graph.reading("newest first, each object's place", |graph| {
             let every: Vec<_> = graph.objects().collect();
@@ -833,12 +727,7 @@ impl Sends<line_event::LineEvent> for Nodes {
 }
 
 /// [`Nodes::order`] over `every` object of one head set, as their indices.
-fn newest_first(
-    every: &[(
-        &Hash,
-        &prodrome_core::event::Envelope<line_event::LineEvent>,
-    )],
-) -> Vec<usize> {
+fn newest_first(every: &[(&Hash, &event::Envelope<line_event::LineEvent>)]) -> Vec<usize> {
     let mut latest: std::collections::HashMap<
         &suzatary_base::conversation_id::ConversationId,
         fpl::Instant,
@@ -869,7 +758,7 @@ fn newest_first(
 /// made a linear extension: each object is sent after every ancestor of it `lacking` holds, those
 /// in `lacking`'s own order, which is one.
 fn closed_order<E>(
-    lacking: &[(&Hash, &prodrome_core::event::Envelope<E>)],
+    lacking: &[(&Hash, &event::Envelope<E>)],
     wanted: impl Iterator<Item = usize>,
 ) -> Vec<usize> {
     let at: std::collections::HashMap<&Hash, usize> = lacking
@@ -892,7 +781,7 @@ fn closed_order<E>(
             sent[next] = true;
             before.push(next);
             pending.extend(
-                prodrome_core::event::parents_of(lacking[next].1)
+                event::parents_of(lacking[next].1)
                     .iter()
                     .filter_map(|parent| at.get(parent).copied())
                     .filter(|&parent| !sent[parent]),
@@ -1018,7 +907,7 @@ fn since_read(reached: Reached<'_>) -> SinceRead {
 }
 
 /// The frontier an answer recorded.
-fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier {
+fn frontier_of(recorded: &frontier::Recorded) -> Frontier {
     Frontier {
         digest: recorded.token.as_str().to_owned(),
         count: recorded.count,
@@ -1312,7 +1201,7 @@ pub fn waiting(
     set: &ChainSet<'_>,
     chains: &[ChainName],
 ) -> Answered<wire::WaitingPayload> {
-    let proposals = suzatary_topics::secretary::readings::waiting(inbox, set).len();
+    let proposals = readings::waiting(inbox, set).len();
     let mut decisions = 0usize;
     for chain in chains {
         let (by_hash, _, rows) = rows(set, chain)?;
@@ -1333,7 +1222,7 @@ pub fn waiting(
         conversations.fold(suzatary_lines::secretary::held_lines::HeldLines::transcripts)?
     {
         let read = read.map_err(|refused| Refusal::internal(refused.to_string()))?;
-        let lines = suzatary_topics::secretary::readings::unplaced(&read.stored().lines(inbox));
+        let lines = readings::unplaced(&read.stored().lines(inbox));
         if !lines.is_empty() {
             unplaced.insert(id.as_str().to_owned(), lines);
         }
@@ -1377,9 +1266,7 @@ pub fn receive_objects(
     let taken: Vec<TodoEvent> = outcome
         .taken
         .iter()
-        .filter_map(|(_, literal)| {
-            parse_envelope(&suzatary_record::record::TodoVocabulary::default(), literal).ok()
-        })
+        .filter_map(|(_, literal)| parse_envelope(&record::TodoVocabulary::default(), literal).ok())
         .filter_map(|envelope| envelope.event().cloned())
         .collect();
     // A sealed act's note is known here only on adoption; a record's verb reads the record before.
@@ -1439,7 +1326,7 @@ pub struct Writer<'a> {
     /// The gate's actor.
     pub actor: &'a Actor,
     /// Every chain.
-    pub chains: &'a [&'a dyn Prodrome<suzatary_record::record::TodoEvent>],
+    pub chains: &'a [&'a dyn Prodrome<record::TodoEvent>],
     /// The deployment's root.
     pub root: &'a prodrome_core::sign::PublicKey,
 }
@@ -1493,7 +1380,7 @@ where
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.
         let trusting = part("trust", || {
-            suzatary_signatures::signatures::Trusting::held(writer.chains, writer.root)
+            signatures::Trusting::held(writer.chains, writer.root)
         })?;
         let objects = part("read", || store.objects())?;
         let ruled = part("held", || {
@@ -1533,10 +1420,7 @@ where
 /// The store as a post left it: `held`, the objects read under the store's lock, and `taken`,
 /// the prints the post took while it held the lock. So a receipt answers what this post's
 /// write made of the store, read once. A taken print was parsed as this schema to be taken.
-fn left<E: Schema>(
-    held: Vec<(Hash, prodrome_core::event::Envelope<E>)>,
-    taken: &[(Hash, String)],
-) -> Dag<E>
+fn left<E: Schema>(held: Vec<(Hash, event::Envelope<E>)>, taken: &[(Hash, String)]) -> Dag<E>
 where
     E::Vocabulary: Default,
 {
@@ -1551,7 +1435,7 @@ where
 
 /// Each of `refused` recorded once in the asks.
 fn record(
-    refused: &[(Hash, suzatary_store::receipt::Grounds, crate::sync::Reason)],
+    refused: &[(Hash, receipt::Grounds, crate::sync::Reason)],
     store: stores::Kind,
     Recording { asks, at }: Recording<'_>,
 ) -> Result<(), Refusal> {
@@ -1560,16 +1444,14 @@ fn record(
     }
     let _held = asks.locked()?;
     let objects = asks.objects()?;
-    let mut recorded = suzatary_store::receipt::refusals(
-        objects.iter().map(|(name, object)| (name, object)),
-        &store,
-    );
+    let mut recorded =
+        receipt::refusals(objects.iter().map(|(name, object)| (name, object)), &store);
     for (name, grounds, reason) in refused {
         if recorded
             .insert(name.clone(), (*grounds, reason.said()))
             .is_none()
         {
-            asks.append(suzatary_store::receipt::refused(
+            asks.append(receipt::refused(
                 name.clone(),
                 at,
                 suzatary_secretary::asks::keeper(),
@@ -1634,7 +1516,7 @@ fn receipt<E: Schema>(
 pub fn about(
     released: Option<&Released>,
     build: &str,
-    plan_store: Option<&suzatary_base::chains::ChainName>,
+    plan_store: Option<&ChainName>,
     set: &ChainSet<'_>,
 ) -> Answered<AboutPayload> {
     let completes = released.map_or(&[][..], |r| r.completes.as_slice());
@@ -1657,7 +1539,7 @@ pub fn about(
 
 /// Each of `todos` as the plan store `name` reads it now; `None` where the set lacks it.
 fn held_todos(
-    name: &suzatary_base::chains::ChainName,
+    name: &ChainName,
     set: &ChainSet<'_>,
     todos: &[TodoId],
 ) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
@@ -1693,7 +1575,7 @@ fn held_todos(
 /// # Errors
 /// The store held and not read.
 pub fn releases(
-    name: &suzatary_base::chains::ChainName,
+    name: &ChainName,
     plan: &Plan,
     set: &ChainSet<'_>,
 ) -> Answered<wire::ReleasesPayload> {
@@ -1750,7 +1632,7 @@ pub fn releases(
 pub fn me(
     deployment: &Deployment,
     chain: &ChainPolicy,
-    admitted: &suzatary_signatures::signatures::Admitted,
+    admitted: &signatures::Admitted,
 ) -> wire::MePayload {
     let login = admitted.login();
     wire::MePayload {
@@ -1773,22 +1655,23 @@ pub fn me(
 
 /// `POST /api/author`: build an event and append nothing; the replica seals it.
 pub fn author(
-    caps: &crate::server::Server<'_>,
+    store: &dyn Prodrome<TodoEvent>,
+    clock: &dyn Clock,
+    typeset: &dyn Render,
     deployment: &Deployment,
     chain: &ChainPolicy,
     request: &wire::Authoring,
     actor: &Actor,
 ) -> Answered<wire::AuthoredPayload> {
-    let nodes = caps.secretary.chain.nodes()?;
-    let at = caps.secretary.clock.now();
-    let typeset = caps.secretary.render;
+    let nodes = store.nodes()?;
+    let at = clock.now();
     let (todo, event) = match request {
         wire::Authoring::Add(new) => {
             let (todo, event, revision) = add(deployment, chain, &nodes, new, at, actor, typeset)?;
             return Ok(wire::AuthoredPayload {
                 todo,
-                event: prodrome_core::event::canonical(&event),
-                revision: revision.as_ref().map(prodrome_core::event::canonical),
+                event: event::canonical(&event),
+                revision: revision.as_ref().map(event::canonical),
             });
         }
         wire::Authoring::Update(update) => {
@@ -1802,7 +1685,7 @@ pub fn author(
             };
             capped_patch(patch)?;
             let known: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
-            let event = suzatary_todo::authoring::update_todo(
+            let event = authoring::update_todo(
                 &before,
                 patch,
                 Moment {
@@ -1824,33 +1707,26 @@ pub fn author(
                     shown(&id)
                 )));
             };
-            let event = suzatary_todo::authoring::confirm_todo(
-                &before,
-                at,
-                actor.as_str(),
-                &chain.untrusted,
-                note,
-            )?;
+            let event =
+                authoring::confirm_todo(&before, at, actor.as_str(), &chain.untrusted, note)?;
             (id, event)
         }
         wire::Authoring::Undo(todo) => {
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
-            let event =
-                suzatary_todo::authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+            let event = authoring::undo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
         wire::Authoring::Redo(todo) => {
             let id = todo_id(todo)?.to_owned();
             let stream = view::stream_of(&nodes, &id);
-            let event =
-                suzatary_todo::authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
+            let event = authoring::redo(&stream, &id, at, actor.as_str(), &chain.untrusted)?;
             (id, event)
         }
     };
     Ok(wire::AuthoredPayload {
         todo,
-        event: prodrome_core::event::canonical(&event),
+        event: event::canonical(&event),
         revision: None,
     })
 }
@@ -1889,10 +1765,7 @@ fn add(
         .map(|e| e.todo().as_str().to_owned())
         .collect();
     let todo = match &new.id {
-        None => suzatary_todo::authoring::fresh_id(
-            &suzatary_todo::authoring::slug(&fields.body)?,
-            &taken,
-        )?,
+        None => authoring::fresh_id(&authoring::slug(&fields.body)?, &taken)?,
         Some(named) => {
             let named = todo_id(named)?.to_owned();
             if taken.contains(&named) {
@@ -1904,7 +1777,7 @@ fn add(
             named
         }
     };
-    let new_todo = suzatary_todo::authoring::NewTodo {
+    let new_todo = authoring::NewTodo {
         todo: todo.clone(),
         fields,
         source: None,
@@ -1915,8 +1788,7 @@ fn add(
             at,
             zone: deployment.zone,
         };
-        let event =
-            suzatary_todo::authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
+        let event = authoring::build_todo(&new_todo, now, actor.as_str(), &known, typeset)?;
         return Ok((todo, event, None));
     };
     let Some(record) = suzatary_todo::todos::current(nodes, at, todo_id(parent)?) else {
@@ -1927,7 +1799,7 @@ fn add(
     };
     let believed =
         Believed::of(nodes, at, &chain.untrusted).map_err(|e| Refusal::internal(e.to_string()))?;
-    let (event, revision) = suzatary_todo::authoring::build_subtodo(
+    let (event, revision) = authoring::build_subtodo(
         &new_todo,
         &record,
         &believed.linkable(),
@@ -2010,16 +1882,16 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
 /// `GET /api/overview`: what is connected, by group, and what the box's registers say of it.
 #[must_use]
 pub fn overview(
-    declared: &suzatary_cards::settings::overview::Declared<'_>,
-    asked: &suzatary_cards::settings::overview::Asked,
-    registers: suzatary_cards::settings::overview::Registers<'_>,
-    asking: &[suzatary_cards::settings::overview::Asking],
+    declared: &overview::Declared<'_>,
+    asked: &overview::Asked,
+    registers: overview::Registers<'_>,
+    asking: &[overview::Asking],
 ) -> Overview {
-    suzatary_cards::settings::overview::overview(declared, &asked.observed(registers)).wire(
+    overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
         suzatary_base::conversation_id::SETUP.as_str().to_owned(),
-        suzatary_connect::connect::offered(declared.channels)
+        connect::offered(declared.channels)
             .into_iter()
             .map(|template| Offer {
                 template: template.id.as_str().to_owned(),
@@ -2030,28 +1902,6 @@ pub fn overview(
     )
 }
 
-/// `GET /api/calendar/<date>`: a week of the owner's calendars, as Typst's HTML and plain text.
-pub fn calendar(
-    calendar: &dyn suzatary_google::calendar::effect::Calendar,
-    render: &dyn Render,
-    from: NaiveDate,
-) -> Answered<wire::CalendarPayload> {
-    const DAYS: u32 = 7;
-    let days = calendar
-        .days(from, DAYS)
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    Ok(wire::CalendarPayload {
-        from: from.to_string(),
-        days: DAYS,
-        text: suzatary_google::calendar::page::calendar_text(&days),
-        rich: suzatary_todo::rendering::CALENDAR
-            .call(&suzatary_google::calendar::page::calendar(&days))
-            .ok()
-            .and_then(|page| render.page(&page).ok())
-            .map(|html| html.as_str().to_owned()),
-    })
-}
-
 /// Every reading of the lines a prune must leave as it was, each printed: every conversation as
 /// the box reads it, the lines' whole skeleton read from nothing with books of its own at `at`,
 /// and every line's content answer, asked as a device asks ([`asks`]).
@@ -2060,10 +1910,7 @@ pub fn lines_readings(
     at: prodrome_core::literal::Datetime,
 ) -> Answered<[(&'static str, String); 3]> {
     let lines = conversations::list(conversations)?;
-    let (epochs, frontiers) = (
-        Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
-    );
+    let (epochs, frontiers) = (Epochs::remembered(), Frontiers::remembered(frontier::KEPT));
     let skeleton = lines_skeleton(
         conversations,
         &Since::Nothing,

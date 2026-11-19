@@ -13,6 +13,8 @@ use suzatary_mail::mail::account::Sync;
 
 use crate::instance;
 use suzatary_connect::secrets::SecretState;
+use suzatary_io::model::name_of;
+use suzatary_signatures::signatures::Signers;
 
 /// What `suzatary doctor` was told; the default reads the deployment.
 #[derive(Debug, Default, clap::Args)]
@@ -244,7 +246,6 @@ fn deployment(path: &Path) {
 /// The deployment's root (SPEC law 42), and whether its two keys resolve: names, never a
 /// value.
 fn signs(read: &instance::Instance) -> String {
-    use suzatary_signatures::signatures::Signers;
     let root = read.root().as_str();
     match read.signers() {
         Signers::Held(_) => format!("root {root}; the box's and the agent's keys resolve"),
@@ -268,7 +269,7 @@ fn print_models(read: &instance::Instance) {
     println!("\nmodels");
     println!(
         "  chat, reviews and titles  {}",
-        suzatary_io::model::name_of(read.secretary.model.as_str())
+        name_of(read.secretary.model.as_str())
     );
     match read.secretary.compacting() {
         Compacting::Off => {
@@ -277,7 +278,7 @@ fn print_models(read: &instance::Instance) {
         Compacting::On { ladder, .. } => println!(
             "  compactor                 {}, leaving {:.0}% of the subscription",
             ladder
-                .map(|model| suzatary_io::model::name_of(model.as_str()))
+                .map(|model| name_of(model.as_str()))
                 .as_slice()
                 .join(", then "),
             read.secretary.reserve.get() * 100.0
@@ -330,7 +331,7 @@ enum Binds {
 
 /// The door line: a mismatch is an alarm only where the port compared is the one `serve` will
 /// bind; in a shell it says what the unit binds and what a hand-run `serve` would.
-fn door_said(door: Option<suzatary_api::gate::Door>, binds: Binds) -> String {
+fn door_said(door: Option<suzatary_server::gate::Door>, binds: Binds) -> String {
     match (door, binds) {
         (None, _) => "none: the gate cannot read app_url, and serve will not start".to_owned(),
         (Some(door), Binds::Unit(port) | Binds::Shell(port)) if door.port() == port => {

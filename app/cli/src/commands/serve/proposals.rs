@@ -1,13 +1,13 @@
 //! Proposals: the inbox, and the owner's answers to one proposal.
 
 use axum::Json;
-use suzatary_api::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_api::wire::Reasoning;
 use suzatary_api::wire::Tapping;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
 use suzatary_connect::settings::EditError;
+use suzatary_server::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_signatures::signatures::Endorsement;
 use suzatary_signatures::signatures::Tap;
 use suzatary_topics::wire::topics as wire;
@@ -18,8 +18,10 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::secretary::conversation_named;
 use super::{Chained, State};
+use prodrome_core::sign;
 use suzatary_connect::connect::Connection;
 use suzatary_connect::settings::Edits;
+use suzatary_health::health::plugin;
 
 /// Proposals of one conversation, named by their indices.
 pub struct Drawn {
@@ -116,9 +118,9 @@ impl Body for Answer {
 
 fn endorsement_of(endorsing: &suzatary_api::wire::Endorsing) -> Result<Endorsement, Refusal> {
     Ok(Endorsement {
-        key: prodrome_core::sign::PublicKey::new(&endorsing.key)
+        key: sign::PublicKey::new(&endorsing.key)
             .map_err(|e| Refusal::bad_request(format!("endorsement.key: {e}")))?,
-        signature: prodrome_core::sign::Signature::new(&endorsing.signature)
+        signature: sign::Signature::new(&endorsing.signature)
             .map_err(|e| Refusal::bad_request(format!("endorsement.signature: {e}")))?,
     })
 }
@@ -242,8 +244,8 @@ impl Edits for Noting<'_> {
 
     fn add_origin(
         &self,
-        plugin: &suzatary_health::health::plugin::PluginName,
-        origin: &suzatary_health::health::plugin::Origin,
+        plugin: &plugin::PluginName,
+        origin: &plugin::Origin,
     ) -> Result<(), EditError> {
         self.noted(self.edits.add_origin(plugin, origin))
     }

@@ -4,10 +4,10 @@ use std::collections::BTreeSet;
 use suzatary_store::store::StoreError;
 
 use suzatary_api::routes;
-use suzatary_api::server::Server;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_cards::notify;
 use suzatary_connect::deployment::Deployment;
+use suzatary_server::server::Server;
 use suzatary_todo::view;
 
 use super::watched::{Pace, Watched};

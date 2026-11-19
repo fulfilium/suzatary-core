@@ -3,13 +3,13 @@
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
-use suzatary_api::server::Server;
 use suzatary_api::wire::{StoreName, WrittenName};
 use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
 use suzatary_lines::secretary::lines_rule::SlotKeys;
 use suzatary_lines::wire::lines::ReceiptPayload;
 use suzatary_secretary::asks::AskEvent;
+use suzatary_server::server::Server;
 use suzatary_store::admission::Beside;
 use suzatary_store::store::{Prodrome, StoreError};
 
@@ -19,7 +19,9 @@ use super::chain::Literals;
 use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
+use prodrome_core::event;
 use prodrome_core::event::Hash;
+use suzatary_base::refusal;
 use suzatary_lines::secretary::line_event;
 
 /// # Errors
@@ -34,13 +36,13 @@ pub fn named(segment: &str) -> Result<StoreName, Refusal> {
     // An older page asks for the store the lines replaced.
     if segment == "conversations" {
         return Err(Refusal::new(
-            suzatary_base::refusal::Status::UpgradeRequired,
+            refusal::Status::UpgradeRequired,
             "the conversations are read from the lines now: a new version of this page is ready, and Reload loads it",
         ));
     }
     Err(Refusal::not_found(format!(
         "a tab holds the inbox, the lines, the topics, the topic aliases and the asks, not {}",
-        suzatary_base::refusal::shown(segment)
+        refusal::shown(segment)
     )))
 }
 
@@ -209,9 +211,8 @@ fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
         .iter()
         .filter_map(|literal| {
             let envelope =
-                prodrome_core::event::parse_envelope::<line_event::LineEvent>(&vocabulary, literal)
-                    .ok()?;
-            let name = prodrome_core::event::seal_hash(&envelope);
+                event::parse_envelope::<line_event::LineEvent>(&vocabulary, literal).ok()?;
+            let name = event::seal_hash(&envelope);
             let taken = receipt.adopted.iter().any(|n| n == name.as_str());
             taken.then(|| envelope.event().map(|line| line.conversation().clone()))?
         })

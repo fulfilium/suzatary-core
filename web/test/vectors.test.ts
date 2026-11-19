@@ -4,7 +4,7 @@
  * the `about-fixture.json` pattern (`app/conversations/src/secretary/about.rs`,
  * `rounds.test.ts`) generalised from one payload to three.
  *
- * `app/api/tests/web_vectors.rs` builds a `FoldPayload`, a `ChainPayload` and
+ * `app/server/tests/web_vectors.rs` builds a `FoldPayload`, a `ChainPayload` and
  * a `ConversationPayload` over the six-todo fixture chain at a fixed instant,
  * and beside each one writes the ANSWER the Rust gives to the question this
  * file asks — never regenerated here, only READ: a disagreement with a

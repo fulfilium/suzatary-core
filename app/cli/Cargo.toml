@@ -52,6 +52,7 @@ suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
 suzatary-api.workspace = true
+suzatary-server.workspace = true
 suzatary-io.workspace = true
 # The plugin host: `suzatary plugin sync` runs the `[[plugins]]` sources.
 suzatary-plugin.workspace = true

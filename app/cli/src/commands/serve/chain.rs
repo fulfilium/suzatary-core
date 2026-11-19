@@ -212,7 +212,7 @@ pub fn build(
     let plan_store = project.as_ref().map(|project| &project.chain);
     call.state
         .with_cards(|caps, cards| {
-            suzatary_api::secretary::routes::build(
+            suzatary_server::secretary::routes::build(
                 caps,
                 &call.guard,
                 cards,
@@ -298,8 +298,11 @@ pub fn author(
         .policy
         .named(&call.guard)
         .map_err(|unnamed| Refusal::forbidden(unnamed.to_string()))?;
+    let secretary = &call.chain.caps.secretary;
     routes::author(
-        call.chain.caps,
+        secretary.chain,
+        secretary.clock,
+        secretary.render,
         &call.state.deployment,
         &call.chain.policy,
         &call.body,

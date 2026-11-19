@@ -1,7 +1,7 @@
 //! Every effect the application performs is a trait, one per file, here when it is the base's
 //! and otherwise beside its domain (as `suzatary_todo::render` or `suzatary_mail::mail::mailbox`), or a store in one of `suzatary_store::store`'s three shapes, and a
 //! role's effects are a record of them passed as a value: `suzatary_secretary::agent::Agent`,
-//! `suzatary_secretary::secretary::Secretary`, `suzatary_api::server::Server`.
+//! `suzatary_secretary::secretary::Secretary`, `suzatary_server::server::Server`.
 //! `suzatary-io` implements the traits, the binary assembles the records, tests fill
 //! them from fakes; a rule then is a fact about which fields a record has.
 //!

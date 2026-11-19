@@ -1,22 +1,10 @@
-//! The routes, the gate and the wire that the browser and the server share: the top of the
-//! application, over the model crates.
+//! The routes, the query string and the wire that the browser and the server share, over the
+//! model crates.
 
 #![forbid(unsafe_code)]
 
 pub mod clienterror;
-pub mod gate;
-pub mod portal;
 pub mod query;
 pub mod routes;
-pub mod secretary {
-    //! The secretary's routes.
-    pub mod routes;
-}
-pub mod server;
 pub mod sync;
 pub mod wire;
-
-// The inert server: test support.
-#[cfg(any(test, feature = "nothing"))]
-#[path = "../tests/support/nothing.rs"]
-mod nothing;

@@ -1,8 +1,8 @@
 //! The vectors the Rust writes and `web/test/vectors.test.ts` must agree with.
 //!
-//! It lives in `suzatary-api` because every capability and route it needs is this crate's, so
-//! the six-todo chain is a byte-for-byte port of `app/cli/tests/common::six_todo_chain` rather
-//! than a dependency in the wrong direction.
+//! It lives in `suzatary-server` because every capability and route it needs is this crate's or
+//! `suzatary-api`'s, so the six-todo chain is a byte-for-byte port of
+//! `app/cli/tests/common::six_todo_chain` rather than a dependency in the wrong direction.
 //!
 //! A disagreement is a finding, never a file to refresh: vectors are written only under
 //! `SUZATARY_WRITE_VECTORS=1`, and otherwise recomputed and compared.
@@ -18,8 +18,6 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
 use suzatary_api::routes;
-use suzatary_api::secretary::routes::{self as secretary_routes, Cards};
-use suzatary_api::server::Server;
 use suzatary_base::capability::Entropy;
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime};
@@ -48,6 +46,8 @@ use suzatary_record::record::TodoEvent;
 use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_secretary::secretary::Secretary;
 use suzatary_secretary::stores::InMemory;
+use suzatary_server::secretary::routes::{self as secretary_routes, Cards};
+use suzatary_server::server::Server;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
@@ -59,7 +59,7 @@ use suzatary_topics::wire::topics as wire;
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/web")
+        .join("../api/tests/web")
         .join(file)
 }
 
@@ -111,7 +111,7 @@ fn actor(name: &str) -> Actor {
 /// parallel.
 fn scratch(test: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "suzatary-api-web-vectors-{test}-{}",
+        "suzatary-server-web-vectors-{test}-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
@@ -800,7 +800,7 @@ fn conversation_answer(stored: &Stored) -> ConversationAnswer {
 }
 
 /// Builds the three payloads and their answers over the six-todo chain at a fixed instant, once,
-/// and checks them against `tests/web/`.
+/// and checks them against `app/api/tests/web/`.
 /// The oldest write contract the box takes, which the bundle's own contract must reach.
 #[test]
 fn the_client_vector_holds_the_box_s_minimum() {

@@ -12,12 +12,11 @@ use prodrome_core::memo::Cache;
 use prodrome_core::memo::Lru;
 use prodrome_core::store::frontier::Frontiers;
 use suzatary_api::clienterror::Limiter;
-use suzatary_api::gate::Door;
-use suzatary_api::portal::Portal;
 use suzatary_api::routes::Books;
-use suzatary_api::secretary::routes::Cards;
-use suzatary_api::secretary::routes::Perform;
-use suzatary_api::secretary::routes::Post;
+use suzatary_base::capability;
+use suzatary_cards::secretary::noticed;
+use suzatary_cards::settings::overview;
+use suzatary_health::health;
 use suzatary_health::health::Register;
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
@@ -25,8 +24,16 @@ use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::model_health::Answered;
 use suzatary_io::objects::Objects;
 use suzatary_io::requests::Requests;
+use suzatary_lines::parts::part;
+use suzatary_lines::secretary::transcript::Retry;
 use suzatary_secretary::asks::AskEvent;
 use suzatary_secretary::secretary::Bound;
+use suzatary_server::gate::Door;
+use suzatary_server::portal::Portal;
+use suzatary_server::secretary::routes::Cards;
+use suzatary_server::secretary::routes::Perform;
+use suzatary_server::secretary::routes::Post;
+use suzatary_signatures::chain_set;
 use suzatary_signatures::epoch::Epochs;
 use suzatary_signatures::signatures::BoxKeys;
 pub(crate) mod asked;
@@ -78,13 +85,13 @@ use anyhow::Context;
 use axum::Router;
 use axum::http::{HeaderValue, header};
 
-use suzatary_api::server::Server;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_digest::secretary::memories::Texts;
 use suzatary_google::google::Endpoints;
 use suzatary_lines::parts::Parts;
+use suzatary_server::server::Server;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -192,10 +199,10 @@ pub struct Inner {
     pub repos: Arc<suzatary_services::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
-    pub read: Arc<Mutex<suzatary_signatures::chain_set::Read>>,
+    pub read: Arc<Mutex<chain_set::Read>>,
     /// Open connection cards, memoised.
-    pub asking: Arc<Mutex<Cache<Vec<suzatary_cards::settings::overview::Asking>, Lru>>>,
-    pub built: Arc<Mutex<Cache<suzatary_cards::settings::overview::Build, Lru>>>,
+    pub asking: Arc<Mutex<Cache<Vec<overview::Asking>, Lru>>>,
+    pub built: Arc<Mutex<Cache<overview::Build, Lru>>>,
     /// Reached only by a tapped device card.
     pub keys: Option<Arc<BoxKeys>>,
     pub requests: Arc<Requests>,
@@ -231,7 +238,7 @@ impl suzatary_io::secrets::Resolves for Unresolved {
         &self,
         _: &str,
         _: &str,
-    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -247,10 +254,10 @@ impl sign_in::Sessions for Closed {
     fn finish(
         &self,
         _: &sign_in::SignInUrl,
-        _: &suzatary_base::capability::Secret,
+        _: &capability::Secret,
     ) -> Option<(
         suzatary_inbox::secretary::inbox::ProposalId,
-        Result<suzatary_base::capability::Secret, String>,
+        Result<capability::Secret, String>,
     )> {
         None
     }
@@ -263,7 +270,7 @@ impl Verify for Unverified {
     fn verify(
         &self,
         name: &suzatary_connect::settings::Settable,
-        _: &suzatary_base::capability::Secret,
+        _: &capability::Secret,
     ) -> Result<(), String> {
         Err(format!(
             "this server tests no credential, so {} is kept by no tap",
@@ -299,7 +306,7 @@ impl Stamp {
     pub fn about(
         &self,
         mounts: &Mounts,
-        set: &suzatary_signatures::chain_set::ChainSet<'_>,
+        set: &chain_set::ChainSet<'_>,
     ) -> Result<suzatary_cards::wire::cards::AboutPayload, Refusal> {
         let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
         let released = match crate::stamp::release().map_err(|e| internal(&e))? {
@@ -366,10 +373,10 @@ impl State {
             data,
         }: Settings,
     ) -> Self {
-        let answered = Mutex::new(suzatary_health::health::Healths::one(
+        let answered = Mutex::new(health::Healths::one(
             models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
-            suzatary_health::health::Outcome::Succeeded,
+            health::Outcome::Succeeded,
             "",
         ));
         let consenting = Arc::new(google::Consenting::new(
@@ -632,7 +639,7 @@ impl State {
 
     /// `caps`' secret store, as last answered.
     #[must_use]
-    pub fn secrets<'a>(&'a self, caps: &'a suzatary_api::server::Server<'_>) -> Remembering<'a> {
+    pub fn secrets<'a>(&'a self, caps: &'a Server<'_>) -> Remembering<'a> {
         Remembering {
             store: caps.secretary.secrets,
             answers: &self.secrets_answered,
@@ -666,13 +673,9 @@ impl State {
     /// Nudge this conversation's task and the compactor.
     /// Whether a round a lost run left may be claimed again: not while the model's last observed
     /// call failed, nor while its health does not read.
-    pub fn retry(&self) -> suzatary_lines::secretary::transcript::Retry {
-        use suzatary_lines::secretary::transcript::Retry;
+    pub fn retry(&self) -> Retry {
         match self.answered.healths() {
-            Ok(answered) => match suzatary_health::health::reading_of(
-                &answered,
-                self.models.recorded().as_str(),
-            ) {
+            Ok(answered) => match health::reading_of(&answered, self.models.recorded().as_str()) {
                 Some(Reading::Failing { .. }) => Retry::Held,
                 Some(Reading::Ok { .. }) | None => Retry::Allowed,
             },
@@ -692,7 +695,6 @@ impl State {
 
     /// File owed cards, withdraw the rest; failures are logged.
     pub fn notice(&self) {
-        use suzatary_lines::parts::part;
         let heard = part("lock", || locks::held(&self.noticing));
         let live::Live {
             settables,
@@ -722,7 +724,7 @@ impl State {
         let model = part("model", || self.models.recorded());
         locks::held(&self.secrets_answered).forget();
         let secrets = self.secrets(caps);
-        let seen = suzatary_cards::secretary::noticed::Seen {
+        let seen = noticed::Seen {
             settables: &settables,
             secrets: &secrets,
             model: &model,
@@ -737,7 +739,7 @@ impl State {
                 self.consenting.as_ref(),
             ),
         };
-        match suzatary_cards::secretary::noticed::notice(
+        match noticed::notice(
             &seen,
             caps.secretary.conversations,
             caps.secretary.inbox,
@@ -754,7 +756,7 @@ impl State {
         // A key trusted while no server ran leaves its card.
         if let Some(keys) = &self.keys {
             match part("trusted", || {
-                suzatary_api::secretary::routes::withdraw_trusted(
+                suzatary_server::secretary::routes::withdraw_trusted(
                     caps.secretary.inbox,
                     caps.secretary.chain,
                     &keys.root().public(),
@@ -814,7 +816,7 @@ impl State {
 
     /// Every chain; only moved heads are reread.
     #[must_use]
-    pub fn chains_read(&self) -> suzatary_signatures::chain_set::Read {
+    pub fn chains_read(&self) -> chain_set::Read {
         let lock = || locks::held(&self.read);
         // Read unlocked; of two racing requests the last to finish wins.
         let last = lock().clone();
@@ -1311,7 +1313,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
                 anyhow::bail!("--whois-fixture is test-only and refuses to run with a certificate");
             }
             tracing::warn!("serve: --whois-fixture {login} — every peer is this login");
-            Peers::Fixture(suzatary_base::capability::Login::from_whois(login))
+            Peers::Fixture(capability::Login::from_whois(login))
         }
     };
     #[cfg(not(feature = "fixture"))]
@@ -1531,7 +1533,7 @@ fn recording_acting(
 }
 
 /// Open the default conversation; no read writes it.
-fn open_default(caps: &suzatary_api::server::Server<'_>) {
+fn open_default(caps: &Server<'_>) {
     if let Err(failed) = suzatary_lines::secretary::conversations::open_default(
         caps.secretary.conversations,
         caps.secretary.model,
@@ -1584,7 +1586,7 @@ pub type Heard = std::collections::BTreeSet<suzatary_google::calendar::CalendarN
 /// `None`, logged, on a failed read.
 fn heard(
     calendar: &dyn suzatary_google::calendar::effect::Calendar,
-    now: suzatary_health::health::Instant,
+    now: health::Instant,
 ) -> Option<Heard> {
     use suzatary_cards::secretary::failing::{QUIET, quiet};
     calendar
@@ -1705,7 +1707,7 @@ fn resume_waiting(state: &State) {
     }
 }
 
-fn reconcile_orphaned_acts(caps: &suzatary_api::server::Server<'_>) {
+fn reconcile_orphaned_acts(caps: &Server<'_>) {
     match suzatary_lines::secretary::act_lines::reconcile(
         caps.secretary.conversations,
         caps.secretary.inbox,

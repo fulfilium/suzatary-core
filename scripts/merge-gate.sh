@@ -347,7 +347,7 @@ fi
 cli_only=CHANGELOG.md,changelog.d,CLAUDE.md,app/release.toml
 rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
-web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/wit
+web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/wit
 web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # Paths a member's tests read beyond its cargo dependencies; merge_gate.rs checks them.
@@ -563,7 +563,7 @@ lane=live
 # holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record app/release
   app/store app/signatures app/todo app/held app/memory app/mail app/health app/triage
-  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/secretary app/api app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
+  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/cards app/secretary app/api app/server app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
   app/testkit app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css

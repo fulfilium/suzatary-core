@@ -3,6 +3,8 @@
 use suzatary_connect::connect::Channel;
 use suzatary_conversations::nonempty::NonEmpty;
 
+use suzatary_api::wire::{PortalPayload, PortalPush};
+
 /// The box's answer to a portal at pairing: how the box wakes the phone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Portal {
@@ -22,6 +24,18 @@ impl Portal {
             Some(sender) if pushes => Self::Fcm(sender),
             Some(_) | None => Self::Quiet,
         }
+    }
+}
+
+impl From<&Portal> for PortalPayload {
+    fn from(portal: &Portal) -> Self {
+        let push = match portal {
+            Portal::Quiet => PortalPush::None,
+            Portal::Fcm(sender) => PortalPush::Fcm {
+                sender: sender.as_str().to_owned(),
+            },
+        };
+        Self { push }
     }
 }
 
@@ -61,5 +75,49 @@ impl TryFrom<String> for Sender {
 impl From<Sender> for String {
     fn from(sender: Sender) -> Self {
         sender.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Portal, Sender};
+    use suzatary_api::wire::PortalPayload;
+    use suzatary_connect::connect::Channel;
+    use suzatary_conversations::nonempty::NonEmpty;
+
+    /// A phone keeps an installed APK for months, so the portal's JSON moves with `Pairing.java`.
+    #[test]
+    fn the_portal_answer_is_the_json_the_android_portal_reads() {
+        let sender = || Sender::try_from("100000000000".to_owned()).expect("a number");
+        let fcm = NonEmpty::of(vec![Channel::Ntfy, Channel::Fcm]);
+        let ntfy = NonEmpty::of(vec![Channel::Ntfy]);
+        for (channels, sender, json) in [
+            (
+                fcm.as_ref(),
+                Some(sender()),
+                serde_json::json!({"push": {"kind": "fcm", "sender": "100000000000"}}),
+            ),
+            (
+                fcm.as_ref(),
+                None,
+                serde_json::json!({"push": {"kind": "none"}}),
+            ),
+            (
+                ntfy.as_ref(),
+                Some(sender()),
+                serde_json::json!({"push": {"kind": "none"}}),
+            ),
+            (
+                None,
+                Some(sender()),
+                serde_json::json!({"push": {"kind": "none"}}),
+            ),
+        ] {
+            let answer = PortalPayload::from(&Portal::of(channels, sender));
+            assert_eq!(serde_json::to_value(&answer).expect("prints"), json);
+        }
+        for refused in ["", "12a", "+1000", &"1".repeat(21)] {
+            assert!(Sender::try_from(refused.to_owned()).is_err(), "{refused:?}");
+        }
     }
 }

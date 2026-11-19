@@ -16,6 +16,9 @@ use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Trust};
 
 use super::store_of;
 use crate::instance::Instance;
+use suzatary_base::capability;
+use suzatary_signatures::signatures;
+use suzatary_signatures::signatures::MINUTES;
 use suzatary_store::store::Reads as _;
 
 /// Which act.
@@ -85,15 +88,15 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Trust { key, actor } => {
             let (keys, key, actor) = asked(&instance, key, actor.as_deref())?;
             for chain in &instance.chains {
-                suzatary_signatures::signatures::trust(&store_of(chain), keys.root(), &actor, &key)
+                signatures::trust(&store_of(chain), keys.root(), &actor, &key)
                     .with_context(|| format!("registering the key on {}", chain.policy.name))?;
             }
             println!("trusted {} for {actor} on every chain", key.as_str());
-            let withdrawn = suzatary_api::secretary::routes::withdraw_trusted(
+            let withdrawn = suzatary_server::secretary::routes::withdraw_trusted(
                 &instance.inbox_store(),
                 &store_of(instance.first()),
                 &keys.root().public(),
-                suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
+                capability::Clock::now(&suzatary_io::clock::SystemClock),
             )
             .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
             if !withdrawn.is_empty() {
@@ -119,12 +122,8 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
         let mut actors = BTreeSet::new();
         for chain in &instance.chains {
             actors.extend(
-                suzatary_signatures::signatures::trusted_for(
-                    &store_of(chain),
-                    &keys.root().public(),
-                    &key,
-                )
-                .with_context(|| format!("reading {}", chain.policy.name))?,
+                signatures::trusted_for(&store_of(chain), &keys.root().public(), &key)
+                    .with_context(|| format!("reading {}", chain.policy.name))?,
             );
         }
         if actors.is_empty() {
@@ -138,7 +137,7 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
         .iter()
         .flat_map(|chain| actors.iter().map(move |actor| (chain, actor)))
         .filter_map(|(chain, actor)| {
-            suzatary_signatures::signatures::revoke(&store_of(chain), keys.root(), actor, &key)
+            signatures::revoke(&store_of(chain), keys.root(), actor, &key)
                 .err()
                 .map(|why| format!("{} ({actor}): {why}", chain.policy.name))
         })
@@ -164,13 +163,13 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
 /// The unsigned writes listed, chain by chain, and signed only when asked.
 fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
     use prodrome_core::fpl::{instant_of, iso};
-    let signers = suzatary_signatures::signatures::Signers::Held(held_keys(instance)?);
+    let signers = signatures::Signers::Held(held_keys(instance)?);
     let root = instance.root();
     let mut listed = 0;
     for chain in &instance.chains {
         let _held = chain_lock(chain)?;
         let store = store_of(chain);
-        let writes = suzatary_signatures::signatures::unsigned_writes(&store, root)
+        let writes = signatures::unsigned_writes(&store, root)
             .with_context(|| format!("reading {}", chain.policy.name))?;
         for write in &writes {
             println!(
@@ -183,13 +182,9 @@ fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
         }
         listed += writes.len();
         if yes {
-            let signed = suzatary_signatures::signatures::sign_unsigned(
-                &store,
-                &signers,
-                &chain.policy.untrusted,
-                &writes,
-            )
-            .with_context(|| format!("signing on {}", chain.policy.name))?;
+            let signed =
+                signatures::sign_unsigned(&store, &signers, &chain.policy.untrusted, &writes)
+                    .with_context(|| format!("signing on {}", chain.policy.name))?;
             println!("{}: signed {} write(s)", chain.policy.name, signed.len());
         }
     }
@@ -202,8 +197,8 @@ fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
 /// The box's keys, or why this box cannot sign.
 fn held_keys(instance: &Instance) -> anyhow::Result<BoxKeys> {
     match instance.signers() {
-        suzatary_signatures::signatures::Signers::Held(keys) => Ok(keys),
-        suzatary_signatures::signatures::Signers::Missing(why) => bail!("{why}"),
+        signatures::Signers::Held(keys) => Ok(keys),
+        signatures::Signers::Missing(why) => bail!("{why}"),
     }
 }
 
@@ -216,10 +211,10 @@ fn pair(instance: &Instance, actor: Option<&str>) -> anyhow::Result<()> {
     let actor = on_every_roster(instance, actor)?;
     let (code, salt) = suzatary_io::pairing::fresh().map_err(|e| anyhow::anyhow!(e))?;
     let now = chrono::Utc::now();
-    let minted = suzatary_signatures::signatures::Pairing::minted(&code, salt, &actor, now);
+    let minted = signatures::Pairing::minted(&code, salt, &actor, now);
     suzatary_io::pairing::Pairings::at(instance.paths.pairing.clone())
         .rewrite(&mut |_| Some(minted.clone()))?;
-    let until = now + chrono::TimeDelta::minutes(suzatary_signatures::signatures::MINUTES);
+    let until = now + chrono::TimeDelta::minutes(MINUTES);
     println!("Pairing code for {actor}: {}", code.shown());
     println!();
     println!(
@@ -229,9 +224,9 @@ fn pair(instance: &Instance, actor: Option<&str>) -> anyhow::Result<()> {
     println!(
         "It trusts one device, for {} minutes, until {} UTC. After {} wrong tries it stops \
          working. A new code replaces this one.",
-        suzatary_signatures::signatures::MINUTES,
+        MINUTES,
         until.format("%H:%M"),
-        suzatary_signatures::signatures::TRIES,
+        signatures::TRIES,
     );
     Ok(())
 }
@@ -270,10 +265,10 @@ fn on_every_roster(instance: &Instance, actor: Option<&str>) -> anyhow::Result<A
 /// # Errors
 /// The store not answering or refusing a seed, or a seed that is not one.
 pub(crate) fn kept_or_minted(
-    get: impl Fn(&str) -> anyhow::Result<Option<suzatary_base::capability::Secret>>,
-    set: impl Fn(&str, &suzatary_base::capability::Secret) -> anyhow::Result<()>,
+    get: impl Fn(&str) -> anyhow::Result<Option<capability::Secret>>,
+    set: impl Fn(&str, &capability::Secret) -> anyhow::Result<()>,
 ) -> anyhow::Result<BoxKeys> {
-    let seed = |name: &str| -> anyhow::Result<suzatary_base::capability::Secret> {
+    let seed = |name: &str| -> anyhow::Result<capability::Secret> {
         if let Some(held) =
             get(name).with_context(|| format!("reading {name}; nothing was minted"))?
         {
@@ -317,7 +312,7 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
              not this box's"
         );
     }
-    let signers = suzatary_signatures::signatures::Signers::Held(keys.clone());
+    let signers = signatures::Signers::Held(keys.clone());
     // Every chain is tried, whatever one answers, as a revoke's are: each that adopted is
     // repaired, and every failure of either step is said together.
     let adopted = instance.adopt(&signers);
@@ -351,9 +346,7 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
 fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
     let name = &chain.policy.name;
     let _held = chain_lock(chain)?;
-    for (actor, key) in
-        suzatary_signatures::signatures::revoke_misplaced(&store_of(chain), keys, &chain.policy)?
-    {
+    for (actor, key) in signatures::revoke_misplaced(&store_of(chain), keys, &chain.policy)? {
         println!("{name}: revoked {} for {actor}", key.as_str());
     }
     Ok(())

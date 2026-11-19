@@ -7,7 +7,7 @@
 # `io`'s and `cli`'s tests run.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -48,6 +48,7 @@ suzatary-digest = { path = "digest" }
 suzatary-cards = { path = "cards" }
 suzatary-secretary = { path = "secretary" }
 suzatary-api = { path = "api" }
+suzatary-server = { path = "server" }
 suzatary-io = { path = "io" }
 suzatary-plugin = { path = "plugin" }
 # The evaluator's time type; "serde" for a changeset act's stored `Priority::Deadline`.

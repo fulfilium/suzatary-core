@@ -412,7 +412,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/held/src/leak.rs", "docs"),
     ("app/base/src/repo_ids.rs", "docs"),
     ("app/inbox/tests/act_literal.rs", "docs"),
-    ("app/api/tests/web_vectors.rs", "docs"),
+    ("app/server/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
     ("app/cli/tests/support/fixture.rs", "memory"),

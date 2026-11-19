@@ -20,6 +20,8 @@ use super::guard::{Asker, Mapped, Reader, Reporter};
 use super::params::{Asked, Params};
 use super::reply::refused;
 use super::{Chained, State};
+use suzatary_signatures::signatures;
+use suzatary_signatures::signatures::Presented;
 
 /// The day a path names, `YYYY-MM-DD`.
 pub struct Day(chrono::NaiveDate);
@@ -61,13 +63,14 @@ impl Body for Report {
 /// `GET /api/briefings`: every day that has one.
 pub fn briefings(call: &Call<Reader, (), ()>) -> Result<Json<wire::BriefingsPayload>, Refusal> {
     let caps = call.chain.caps;
-    routes::briefings(caps.secretary.briefings, caps.secretary.conversations).map(Json)
+    suzatary_server::routes::briefings(caps.secretary.briefings, caps.secretary.conversations)
+        .map(Json)
 }
 
 /// `GET /api/briefings/<date>`: one day's, block by block.
 pub fn briefing(call: &Call<Reader, Day, ()>) -> Result<Json<wire::BriefingPayload>, Refusal> {
     let caps = call.chain.caps;
-    routes::briefing(
+    suzatary_server::routes::briefing(
         caps.secretary.briefings,
         caps.secretary.render,
         caps.secretary.conversations,
@@ -80,7 +83,7 @@ pub fn briefing(call: &Call<Reader, Day, ()>) -> Result<Json<wire::BriefingPaylo
 /// `GET /api/calendar/<date>`: a week of the owner's calendars from that day.
 pub fn calendar(call: &Call<Reader, Day, ()>) -> Result<Json<wire::CalendarPayload>, Refusal> {
     let caps = call.chain.caps;
-    routes::calendar(
+    suzatary_server::routes::calendar(
         caps.secretary.calendar,
         caps.secretary.render,
         call.params.0,
@@ -165,7 +168,7 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
         ));
     }
     let caps = call.state.first.caps;
-    let index = suzatary_api::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
+    let index = suzatary_server::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
     call.state.heard(&DEFAULT);
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
@@ -189,7 +192,6 @@ impl Body for PairingCode {
 /// The key it trusts is the one that signed this request, never a field of it, so a code
 /// trusts only the device that typed it; neither the code nor its hash is logged.
 pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Value>, Refusal> {
-    use suzatary_signatures::signatures::Presented;
     let state = &call.state;
     let Asker(actor, device) = &call.guard;
     let pairings = &*state.pairings;
@@ -200,32 +202,26 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
     };
     // Asked before the code is read, so a revoked key spends no try and no code.
     for chain in state.chain_stores() {
-        if suzatary_signatures::signatures::revoked_for(
-            chain,
-            &keys.root().public(),
-            actor,
-            device,
-        )? {
+        if signatures::revoked_for(chain, &keys.root().public(), actor, device)? {
             return Err(Refusal::forbidden(
                 "This device's key was revoked, so no code can trust it again. Use a new key on \
                  this device (Settings, This device), then type the code.",
             ));
         }
     }
-    let presented =
-        suzatary_signatures::signatures::present(pairings, &call.body.0, actor, (state.wall)())?;
+    let presented = signatures::present(pairings, &call.body.0, actor, (state.wall)())?;
     match presented {
         Presented::Refused(refused) => Err(Refusal::forbidden(refused.said())),
         Presented::Matched => {
             for chain in state.chain_stores() {
-                suzatary_signatures::signatures::trust(chain, keys.root(), actor, device)?;
+                signatures::trust(chain, keys.root(), actor, device)?;
             }
             tracing::info!(
                 "paired: trusted the device key {} for {actor}",
                 device.as_str()
             );
             let caps = state.first.caps;
-            match suzatary_api::secretary::routes::withdraw_trusted(
+            match suzatary_server::secretary::routes::withdraw_trusted(
                 caps.secretary.inbox,
                 caps.secretary.chain,
                 &keys.root().public(),

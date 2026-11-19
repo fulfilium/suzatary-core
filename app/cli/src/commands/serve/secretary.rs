@@ -5,8 +5,8 @@ use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Actor;
 use prodrome_core::event::Hash;
-use suzatary_api::secretary::routes as secretary_routes;
 use suzatary_api::wire::BlockRender;
+use suzatary_api::wire::Erasing;
 use suzatary_api::wire::RecordPayload;
 use suzatary_api::wire::Saying;
 use suzatary_api::wire::Uploaded;
@@ -19,6 +19,7 @@ use suzatary_held::file_read::Withheld;
 use suzatary_inbox::secretary::stamp;
 use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_io::attachments::{Stored, UploadError};
+use suzatary_server::secretary::routes as secretary_routes;
 use suzatary_signatures::signatures::Seat;
 use suzatary_signatures::signatures::Tap;
 use suzatary_topics::secretary::readings;
@@ -119,7 +120,7 @@ impl Params for AttachmentId {
     }
 }
 
-impl Body for secretary_routes::Erasing {
+impl Body for Erasing {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -281,7 +282,7 @@ pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value
 
 /// `POST …/<id>/erase`, by tap, after any running round stops.
 pub fn erase(
-    call: &Call<Tap, ConversationId, secretary_routes::Erasing>,
+    call: &Call<Tap, ConversationId, Erasing>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .workers
