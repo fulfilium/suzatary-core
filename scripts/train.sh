@@ -55,27 +55,50 @@ cd "$root"
 # In .git, never in the tree.
 state="$(git rev-parse --path-format=absolute --git-common-dir)/train"
 mkdir -p "$state"
+# A coproc holds the lock until this shell and each half's (`start`) close its stdin, a pipe bash
+# keeps from what it execs, so no command it runs inherits the lock.
+# lock [-n]: the lock taken; with -n, 1 at once while another holds it.
+lock_pid="" lock_fd=""
+lock() {
+  local said=""
+  coproc LOCK { trap '' HUP INT TERM; exec 9>>"$state/lock" && flock "$@" 9 && echo held && read -r _; } 2>/dev/null
+  lock_pid="$LOCK_PID" lock_fd="${LOCK[1]}"
+  read -r said <&"${LOCK[0]}" || true
+  [[ "$said" == held ]] && return
+  wait "$lock_pid" 2>/dev/null || true
+  return 1
+}
+
+# unlock: the lock is free when it returns.
+unlock() {
+  [[ -n "$lock_pid" ]] || return 0
+  exec {lock_fd}>&-
+  wait "$lock_pid" 2>/dev/null || true
+  lock_pid="" lock_fd=""
+}
+
 # One train at a time; the nightly waits, a check takes no lock.
 if [[ "${1:-}" != check ]]; then
-  exec 9>>"$state/lock"
   if [[ "${1:-}" == nightly ]]; then
-    flock -n 9 || { say "a train is running here: the nightly gate waits for it"; flock 9; }
+    lock -n || { say "a train is running here: the nightly gate waits for it"; lock; }
   else
-    flock -n 9 || die "another scripts/train.sh is running in this checkout ($(cat "$state/lock.holder" 2>/dev/null)); wait for it to finish."
+    lock -n || die "another scripts/train.sh is running in this checkout ($(cat "$state/lock.holder" 2>/dev/null)); wait for it to finish."
   fi
   echo "${1:-}, pid $$, since $(date -u +%FT%TZ)" >"$state/lock.holder"
 fi
 
-return_to="" there="" live="" cloud="" gate_branch="" gate_pushed=""
-# Both halves are signalled before either is waited on: a HUP or TERM can run this trap after
-# bash reaped a half before it noted it, and a `wait` on that half returns once no child is left.
+return_to="" cloud="" gate_branch="" gate_pushed=""
+# shellcheck source=scripts/groups.sh
+. "$scripts/groups.sh"
+# Above the gate's, so a gate told to stop has stopped its lanes before the train kills it.
+group_grace=10
+# Every half is stopped before its worktree goes.
 finish() {
-  [[ -z "$there" ]] || kill "$there" 2>/dev/null || true
-  [[ -z "$live" ]] || live_stop
-  [[ -z "$there" ]] || wait "$there" 2>/dev/null || true
+  group_stop "${groups[@]}"
   [[ -z "$gate_branch" ]] || cloud_close
   worktree_close
   [[ -z "$return_to" ]] || git checkout --quiet "$return_to"
+  unlock
 }
 trap finish EXIT
 
@@ -492,18 +515,42 @@ run_half() {
   record "$half" "$commit" "$code"
 }
 
-# run_here <half> <commit> [gate args...]: its gate in a worktree, without train_reads; 75: no worktree.
+# run_here <half> <commit> [gate args...]: its gate in a worktree, as a half; 75: no worktree.
 run_here() {
-  local half="$1" commit="$2" code=0 gate unset=() name
+  local commit="$2" code=0
   worktree_open "$commit" \
     || { say "no worktree could be made at ${commit:0:12}"; return 75; }
+  half gating "$@" || code=$?
+  worktree_close
+  return "$code"
+}
+
+# gating <half> <commit> [gate args...]: the gate, without train_reads, its log kept.
+gating() {
+  local gate unset=() name
   gate="${SUZATARY_TRAIN_GATE:-$worktree/scripts/merge-gate.sh}"
   for name in "${train_reads[@]}"; do unset+=(-u "$name"); done
   # shellcheck disable=SC2046
-  (cd "$worktree" && env "${unset[@]}" SUZATARY_GATE_EVIDENCE="$evidence_dir" "$gate" $(gate_flags "$half") "${@:3}") 2>&1 \
-    | tee "$(log_of "$half" "$commit")" >&2 || code=$?
-  worktree_close
-  return "$code"
+  (cd "$worktree" && env "${unset[@]}" SUZATARY_GATE_EVIDENCE="$evidence_dir" "$gate" $(gate_flags "$1") "${@:3}") 2>&1 \
+    | tee "$(log_of "$1" "$2")" >&2
+}
+
+# half <command...>: <command> as a group `finish` stops, and its status; inside a half, part of it.
+in_half=""
+half() {
+  [[ -z "$in_half" ]] || { "$@"; return; }
+  start "$@"
+  group_wait "$group"
+}
+
+# start <command...>: a half in the background; sets `group`. A subshell's, `finish` would miss.
+start() {
+  ((BASHPID == $$)) || die "a half started in a subshell: $*"
+  exec 9>&"$lock_fd"
+  in_half=1
+  group_start "$@"
+  in_half=""
+  exec 9>&-
 }
 
 # The train's own test seams and signing keys; a gate is handed none of them.
@@ -566,17 +613,26 @@ core_repo() {
 # The tree half of <commit> on GitHub's runners, start to end: 0 green, 1 red, 2 no verdict.
 cloud_half() {
   local commit="$1" pushed code=0
-  pushed="$(cloud_push "$commit")" || return
+  cloud_push "$commit" || return
   gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
   cloud_dispatch "$pushed"
   cloud_after "$commit" "$pushed" || code=$?
-  ((code)) || cloud_wait "$commit" "$pushed" || code=$?
+  ((code)) || half cloud_wait "$commit" "$pushed" || code=$?
   cloud_close
   return "$code"
 }
 
-# The box's steps, then the public tree pushed; prints the gate commit, else 1 (red) or 2.
+# Sets `pushed`: `pushing` <commit> as a half.
 cloud_push() {
+  local code=0
+  pushed=""
+  half pushing "$1" >"$state/pushed" || code=$?
+  ((code)) || pushed="$(<"$state/pushed")"
+  return "$code"
+}
+
+# The box's steps, then the public tree pushed; prints the gate commit, else 1 (red) or 2.
+pushing() {
   local commit="$1" dir code=0 repo pushed
   repo="$(core_repo)" \
     || { say "the remote \`core\` is not a GitHub repository, so the tree half cannot run on GitHub's runners"; return 2; }
@@ -744,50 +800,22 @@ train_commit() {
   git rev-parse --verify --quiet "train^{commit}" || die "there is no train; scripts/train.sh build <pr>... first."
 }
 
-# Monitor mode makes its pid a process group, which live_stop stops by pid, never by a pattern.
-live_start() {
-  set -m
-  run_half live "$@" </dev/null &
-  live=$!
-  set +m
-}
-
-# No verdict recorded.
-live_stop() {
-  local tries=0
-  kill -TERM -- "-$live" 2>/dev/null || true
-  wait "$live" 2>/dev/null || true
-  while kill -0 -- "-$live" 2>/dev/null && ((tries++ < 50)); do sleep 0.1; done
-  kill -KILL -- "-$live" 2>/dev/null || true
-  live=""
-  worktree_close
-}
-
-# beside <commit> [gate args...]: the live half beside the background tree half ($there); a red one stops the other.
+# beside <tree> <commit> [gate args...]: the live half beside the half <tree>; a red one stops the
+# other, which records no verdict.
 beside() {
-  local commit="$1" ended code=0
-  live_start "$@"
-  wait -n -p ended "$there" "$live" || code=$?
-  if [[ "$ended" == "$there" ]]; then
-    there=""
-    if ((code == 1)); then
-      say "the tree half is red, so the live half is stopped"
-      live_stop
-    else
-      wait "$live" || true
-      live=""
-    fi
+  local tree="$1" live ended code=0 name=(tree live) other
+  shift
+  start run_half live "$@"
+  live="$group"
+  wait -n -p ended "$tree" "$live" || code=$?
+  group_stop "$ended"
+  if [[ "$ended" == "$tree" ]]; then other="$live"; else other="$tree" name=(live tree); fi
+  if ((code == 1)); then
+    say "the ${name[0]} half is red, so the ${name[1]} half is stopped"
+    group_stop "$other"
+    worktree_close
   else
-    live=""
-    if ((code == 1)); then
-      say "the live half is red, so the tree half is stopped"
-      kill "$there" 2>/dev/null || true
-      wait "$there" 2>/dev/null || true
-      there=""
-    else
-      wait "$there" || true
-      there=""
-    fi
+    group_wait "$other" || true
   fi
 }
 
@@ -802,7 +830,7 @@ gate() {
   if [[ -n "$cloud" ]]; then
     # The box's steps first, so the live half's deploy-build finds their builds in the store.
     local pushed early=""
-    pushed="$(cloud_push "$commit")" || code=$?
+    cloud_push "$commit" || code=$?
     if ((code == 0)); then
       gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
       cloud_dispatch "$pushed"
@@ -813,9 +841,8 @@ gate() {
       else
         cloud_after "$commit" "$pushed" || code=$?
         if ((code == 0)); then
-          cloud_wait "$commit" "$pushed" &
-          there=$!
-          beside "$commit" --steps "$live_after"
+          start cloud_wait "$commit" "$pushed"
+          beside "$group" "$commit" --steps "$live_after"
         fi
       fi
       cloud_close
@@ -1033,7 +1060,7 @@ post() {
 nightly_remote() {
   local commit="$1" pushed code=0 a=0 b=0
   gate_prefix=gate/nightly-
-  if pushed="$(cloud_push "$commit")"; then
+  if cloud_push "$commit"; then
     gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
     cloud_dispatch "$pushed"
     run_here live "$commit" --steps "$live_early" || a=$?
@@ -1048,10 +1075,10 @@ nightly_remote() {
   record live "$commit" "$a" || true
   # Unlocked, a train may own the worktree.
   trap '[[ -z "$gate_branch" ]] || cloud_close' EXIT
-  flock -u 9
+  unlock
   ((code)) || cloud_wait "$commit" "$pushed" || true
   [[ -z "$gate_branch" ]] || cloud_close
-  flock 9
+  lock
   trap finish EXIT
 }
 
@@ -1121,14 +1148,11 @@ shipped() {
     | awk -v rev="$1" '$0 == rev { f = 1 } END { exit !f }'
 }
 
-# record_release <rev>: the land's writes for the release at <rev>, by <rev>'s app, each skipped
-# where the roadmap already holds it. In order: its Completes: todos done where each is found
-# (`release complete`: the roadmap's through the mount, a private one on the upkeep chain), the
-# roadmap's pin moved to core's publication of <rev>, then one roadmap commit naming <rev> in its
-# `Shipped:` trailer, with the pictures drawn, scanned by door 2 and pushed (roadmap-push.sh). A
-# release with no `Tasks:` trailer was cut before the roadmap and has nothing to record there.
-# What reaches the roadmap names nothing of the private repository: the release's version and the
-# landed commit, which core's publication already names as its `Source:`.
+# record_release <rev>: by <rev>'s app, each step skipped where the roadmap holds it: its Completes:
+# todos done where each is found, the roadmap's pin moved to core's publication of <rev>, then one
+# roadmap commit naming <rev> in `Shipped:` (roadmap-push.sh). No `Tasks:`: nothing to record.
+# The roadmap learns nothing of the private repository: only the version and the landed commit,
+# which core's publication names as its `Source:`.
 record_release() {
   local rev="$1" version tasks subject release completes todo core notes=() todos=()
   version="$(trailer_of "$rev" Release)"
@@ -1142,7 +1166,6 @@ record_release() {
     return 0
   fi
   if ! shipped "$rev" HEAD; then
-    # The PRs since the previous release, in one pass of the log.
     while IFS=$'\x1f' read -r subject release completes; do
       [[ -z "$release" ]] || break
       [[ "$subject" =~ ^Merge\ \#([0-9]+): ]] || continue

@@ -3,6 +3,7 @@
 //! `gh` that answers their titles and plays GitHub, and a stub gate whose halves' verdicts
 //! are functions of the tree.
 
+use super::process::{children, runs};
 use super::{Scratch, repo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -109,16 +110,19 @@ esac
 
 /// The stub merge gate. A half is red where the tree holds the file its case below names, and a
 /// red run names its one step, `stub`, as the real gate's summary does. Each run records its
-/// environment, arguments and directory beside `<TRAIN_PROBES>`. `GATE_HOLD` and `GATE_HOLD_LIVE`
-/// hold a half on a fifo until the test lets it go on.
+/// environment, arguments and directory beside `<TRAIN_PROBES>`. `GATE_HOLD` (a tree half),
+/// `GATE_HOLD_LIVE` (a live half) and `GATE_HOLD_ARGS` (the run whose arguments are exactly these,
+/// held on `GATE_HOLD_AT`) hold a half on a fifo until the test lets it go on, its pid in `<fifo>.pid`.
 const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
+held() { echo $$ >"$1.pid"; echo up >"$1.up"; cat "$1" >/dev/null; }
 full=""
 if [ "$1" = --full ] || [ "$1" = --nightly ]; then full="$1"; shift; echo "$1 $(git rev-parse HEAD) $full" >>"$TRAIN_PROBES.full"; fi
 echo "$1 $(git rev-parse HEAD) $(pwd)" >>"$TRAIN_PROBES"
 [ -z "$full" ] || [ ! -e missed ] || { echo "missed is in the tree" >&2; exit 1; }
-[ -z "$GATE_HOLD" ] || [ "$1" != --no-live ] || { echo up >"$GATE_HOLD.up"; cat "$GATE_HOLD" >/dev/null; }
+[ -z "$GATE_HOLD" ] || [ "$1" != --no-live ] || held "$GATE_HOLD"
+[ -z "$GATE_HOLD_ARGS" ] || [ "$*" != "$GATE_HOLD_ARGS" ] || held "$GATE_HOLD_AT"
 case "$1" in
   --no-live)
     bad=broken
@@ -131,7 +135,7 @@ case "$1" in
     case "$2 $3" in "--steps live,"*) bad=broken-live-early ;; esac ;;
   *) exit 64 ;;
 esac
-[ -z "$GATE_HOLD_LIVE" ] || [ "$bad" != broken-live ] || { echo $$ >"$GATE_HOLD_LIVE.pid"; echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
+[ -z "$GATE_HOLD_LIVE" ] || [ "$bad" != broken-live ] || held "$GATE_HOLD_LIVE"
 [ -z "$GATE_RED_TEXT" ] || [ "$1" != --no-live ] || ! grep -qs "$GATE_RED_TEXT" CHANGELOG.md || bad=CHANGELOG.md
 test -e "$bad" || exit 0
 [ "$bad" != broken-live ] || {
@@ -481,14 +485,6 @@ impl Train {
         .map(str::to_string)
         .collect()
     }
-}
-
-/// Whether the process <pid> still runs, a zombie counted as gone.
-fn runs(pid: &str) -> bool {
-    std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
-        stat.rsplit_once(") ")
-            .is_some_and(|(_, rest)| !rest.starts_with('Z'))
-    })
 }
 
 /// A command that reads no global or system git configuration and commits as one
@@ -1385,6 +1381,201 @@ fn within_two_minutes(done: impl Fn() -> bool) -> bool {
             false
         }
     })
+}
+
+/// Every verdict row the train has kept, its files read in name order.
+fn verdict_rows(t: &Train) -> String {
+    fn rows(dir: &Path, into: &mut String) {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                rows(&path, into);
+            } else {
+                into.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
+            }
+        }
+    }
+    let mut all = String::new();
+    rows(&t.work().join(".git/train/gates"), &mut all);
+    all
+}
+
+/// Whether the train's lock is free now, asked once.
+fn lock_free(t: &Train) -> bool {
+    Command::new("flock")
+        .args(["-n"])
+        .arg(t.work().join(".git/train/lock"))
+        .arg("true")
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// `child`, a train whose half the stub gate holds on `hold` (it said so on `said`), stopped by a
+/// TERM to the train's pid alone: the train ends, no process of the half is left, the lock is free
+/// the moment the train has ended, and no verdict row was written.
+fn stopped_by_term(
+    t: &Train,
+    hold: &Path,
+    said: &mut std::io::BufReader<std::fs::File>,
+    child: std::process::Child,
+) -> Output {
+    let mut line = String::new();
+    std::io::BufRead::read_line(said, &mut line).expect("the fifo reads");
+    assert_eq!(line, "up\n", "the half runs");
+    let gate = std::fs::read_to_string(hold.with_extension("pid")).expect("the held gate's pid");
+    let gate = gate.trim().to_owned();
+    assert!(
+        within_two_minutes(|| !children(&gate).is_empty()),
+        "the held gate waits on its fifo"
+    );
+    let half: Vec<String> = std::iter::once(gate.clone())
+        .chain(children(&gate))
+        .collect();
+    let rows = verdict_rows(t);
+    let train = child.id();
+    run(
+        Command::new("kill").args(["-TERM", &train.to_string()]),
+        "TERM to the train",
+    );
+    let out = ends_within_two_minutes(t, child);
+    let free = lock_free(t);
+    assert!(!out.status.success(), "a stopped train is not green");
+    let left: Vec<&String> = half.iter().filter(|pid| runs(pid)).collect();
+    assert!(
+        left.is_empty(),
+        "no process of the half is left: {left:?} of {half:?}\n{}",
+        alive(train, &t.scratch)
+    );
+    assert!(
+        free,
+        "the lock is free once the train ended, held by {:?}",
+        holders(&t.work().join(".git/train/lock"))
+    );
+    assert_eq!(verdict_rows(t), rows, "no verdict row was written");
+    out
+}
+
+/// `gate`, `--remote github`'s box halves and `bisect`'s probes each run a half as a process group:
+/// a TERM to the train's pid alone, while a half runs, stops the half whole before the train ends
+/// and lets its lock go, so the next train is not refused by the last one's half.
+#[test]
+fn train_stopped_by_term_stops_the_half_it_runs() {
+    let t = Train::new("term-local");
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    for (n, args) in ["--no-live", "--only-live"].into_iter().enumerate() {
+        let (hold, mut said) = holding(&t, &format!("hold-{n}"));
+        let gating = t
+            .command(
+                &["gate"],
+                &[
+                    ("GATE_HOLD_ARGS", args),
+                    ("GATE_HOLD_AT", hold.to_str().expect("a UTF-8 path")),
+                ],
+            )
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("train.sh starts");
+        stopped_by_term(&t, &hold, &mut said, gating);
+    }
+    let again = t.train(&["gate"]);
+    assert!(again.status.success(), "gate: {}", text(&again.stderr));
+
+    // A red train's bisect, stopped in its probe.
+    let t = Train::new("term-bisect");
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    t.pr(2, "the second", &[("broken", "x\n")]);
+    assert!(t.train(&["build", "1", "2"]).status.success());
+    assert!(!t.train(&["gate"]).status.success(), "the train is red");
+    let (hold, mut said) = holding(&t, "hold-probe");
+    let bisecting = t
+        .command(
+            &["bisect"],
+            &[
+                ("GATE_HOLD_ARGS", "--no-live"),
+                ("GATE_HOLD_AT", hold.to_str().expect("a UTF-8 path")),
+            ],
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("train.sh starts");
+    stopped_by_term(&t, &hold, &mut said, bisecting);
+
+    for (n, args) in [
+        "--no-live --steps fmt,changelog",
+        "--only-live --steps live,live-all,live-guards",
+        "--no-live --steps public-tree,deployed-shape",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let t = Train::new(&format!("term-github-{n}"));
+        t.on_github();
+        t.pr(1, "the first", &[("a.txt", "a\n")]);
+        assert!(t.train(&["build", "1"]).status.success());
+        let (hold, mut said) = holding(&t, "hold");
+        let gating = t
+            .command(
+                &["gate", "--remote", "github"],
+                &[
+                    ("GATE_HOLD_ARGS", args),
+                    ("GATE_HOLD_AT", hold.to_str().expect("a UTF-8 path")),
+                ],
+            )
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("train.sh starts");
+        stopped_by_term(&t, &hold, &mut said, gating);
+        assert_eq!(
+            t.core(&["for-each-ref", "refs/heads/gate/"]),
+            "",
+            "{args}: no gate branch is left"
+        );
+    }
+}
+
+/// `build` ends only once nothing it started holds the lock, so a `gate` started the moment it
+/// ended is never refused. After a fetch, a merge or a commit git runs `git maintenance run --auto
+/// --detach`, which goes on in the background. Here its `gc` task runs (every fetch keeps a pack,
+/// and two are too many), and its `pre-auto-gc` hook takes a second, as a large repository's
+/// maintenance does.
+#[test]
+fn train_gate_right_after_build_is_never_refused() {
+    let t = Train::new("build-then-gate");
+    for (key, value) in [
+        ("fetch.unpackLimit", "1"),
+        ("gc.autoPackLimit", "1"),
+        ("maintenance.gc.enabled", "true"),
+    ] {
+        t.git(&["config", key, value]);
+    }
+    t.git(&["repack", "-q"]);
+    let _ = suzatary_testkit::fake_program(
+        &t.work().join(".git/hooks"),
+        "pre-auto-gc",
+        "#!/bin/sh\nsleep 1\n",
+    );
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    let built = t.train(&["build", "1"]);
+    let lock = t.work().join(".git/train/lock");
+    let held = holders(&lock);
+    assert!(built.status.success(), "build: {}", text(&built.stderr));
+    assert_eq!(
+        held,
+        Vec::<String>::new(),
+        "nothing holds the lock once build ended"
+    );
+    let gated = t.train(&["gate"]);
+    assert!(gated.status.success(), "gate: {}", text(&gated.stderr));
 }
 
 impl Train {

@@ -92,8 +92,11 @@ fi
 # The `all` modules that find the owner's data tree through instance::ENV.
 live_modules=(accounts context_headroom live_blocks perf_fold_chain)
 
+# shellcheck source=scripts/groups.sh
+. "$root/scripts/groups.sh"
+group_grace=5
 logs="$(mktemp -d)"
-trap 'rm -rf "$logs"' EXIT
+trap 'group_stop "${groups[@]}"; rm -rf "$logs"' EXIT
 selected() { [[ " ${halves[*]} " == *" $1 "* ]]; }
 chosen() { selected "${s_half[$1]}" && { [[ -z "$only" ]] || [[ ",$only," == *",${s_name[$1]},"* ]]; }; }
 
@@ -313,13 +316,12 @@ run_half() {
   fi
   for l in $(for i in "${!s_name[@]}"; do [[ "${s_half[i]}" != "$1" ]] || echo "${s_lane[i]}"; done | awk '!seen[$0]++'); do
     [[ "$l" == quiet ]] && continue
-    case "$lanes" in
-      serial) run_lane "$1" "$l" ;;
-      weighted) run_lane "$1" "$l" & ;;
-    esac
+    group_start run_lane "$1" "$l"
+    [[ "$lanes" == weighted ]] || group_wait "$group"
   done
-  wait
-  run_lane "$1" quiet
+  for l in "${groups[@]}"; do group_wait "$l"; done
+  group_start run_lane "$1" quiet
+  group_wait "$group"
   for fd in "${s_turn[@]}"; do exec {fd}>&-; done
 }
 

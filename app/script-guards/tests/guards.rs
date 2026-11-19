@@ -16,6 +16,8 @@ mod deploy;
 mod gate_list;
 #[path = "guards/gate_runs.rs"]
 mod gate_runs;
+#[path = "support/process.rs"]
+mod process;
 #[path = "support/scratch.rs"]
 mod scratch;
 #[path = "guards/vault.rs"]

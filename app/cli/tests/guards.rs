@@ -56,6 +56,8 @@ mod train;
 // What the guards share with the script guards' own target (app/script-guards).
 #[path = "../../script-guards/tests/support/gate_list.rs"]
 mod gate_list;
+#[path = "../../script-guards/tests/support/process.rs"]
+mod process;
 #[path = "../../script-guards/tests/support/scratch.rs"]
 mod scratch;
 use scratch::{Scratch, repo};

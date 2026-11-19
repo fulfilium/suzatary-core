@@ -3,6 +3,7 @@
 //! machine from one heavy step to the next, and lets one gate at a time into a checkout.
 
 use super::gate_list::{Step, heavies, heavy_order, steps, togethers};
+use super::process::{children, runs};
 use super::scratch::{Scratch, on_path, repo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -50,6 +51,10 @@ impl Gate {
         gate.program(
             "scripts/merge-gate.sh",
             &std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads"),
+        );
+        gate.write(
+            "scripts/groups.sh",
+            &std::fs::read_to_string(repo().join("scripts/groups.sh")).expect("reads"),
         );
         for path in [
             "app/secretary/src/lib.rs",
@@ -846,6 +851,87 @@ fn merge_gate_two_worktrees_share_the_heavy_lock() {
     for probes in [&first_probes, &second_probes] {
         let ran: BTreeSet<String> = read(probes).lines().map(str::to_owned).collect();
         assert_eq!(ran, every, "each gate ran every step");
+    }
+}
+
+/// The stub of the stop's test: the step named `GATE_HOLD_STEP` writes its pid and waits on the
+/// fifo `GATE_HOLD`; every other step passes.
+const HELD: &str = r#"#!/bin/sh
+[ "$1" = "$GATE_HOLD_STEP" ] || exit 0
+echo $$ >"$GATE_HOLD.pid"
+cat "$GATE_HOLD" >/dev/null
+"#;
+
+/// A TERM to the gate's pid alone stops every lane: the step a lane runs, in a lane beside others,
+/// in the quiet lane, and in a serial gate's lane, is gone once the gate ended, and so is the
+/// gate's lock.
+#[test]
+fn merge_gate_stopped_by_term_stops_its_lanes() {
+    for (step, env) in [
+        ("fmt", None),
+        ("e2e", None),
+        ("fmt", Some(("SUZATARY_GATE_SERIAL", "1"))),
+    ] {
+        let gate = Gate::new();
+        gate.program("stub-held", HELD);
+        let hold = gate.scratch.join("hold");
+        let made = Command::new("mkfifo").arg(&hold).status().expect("mkfifo");
+        assert!(made.success());
+        let mut cmd = Command::new(gate.scratch.join("scripts/merge-gate.sh"));
+        cmd.args(["--no-live"])
+            .current_dir(&*gate.scratch)
+            .env("SUZATARY_GATE_RUN", gate.scratch.join("stub-held"))
+            .env("GATE_PROBES", gate.scratch.join("probes"))
+            .env("GATE_HOLD", &hold)
+            .env("GATE_HOLD_STEP", step)
+            .envs(env)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let mut running = cmd.spawn().expect("the gate runs");
+        let pid = hold.with_extension("pid");
+        let waiting = (0..1200)
+            .find_map(|_| {
+                let read = std::fs::read_to_string(&pid)
+                    .ok()
+                    .filter(|p| p.ends_with('\n'));
+                read.filter(|p| !children(p.trim()).is_empty()).or_else(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    None
+                })
+            })
+            .unwrap_or_else(|| panic!("{step}: the held step runs"));
+        let step_pid = waiting.trim().to_owned();
+        let parts: Vec<String> = std::iter::once(step_pid.clone())
+            .chain(children(&step_pid))
+            .collect();
+        let killed = Command::new("kill")
+            .args(["-TERM", &running.id().to_string()])
+            .status()
+            .expect("kill runs");
+        assert!(killed.success());
+        let (said, ended) = std::sync::mpsc::channel();
+        std::thread::spawn(move || said.send(running.wait()));
+        let status = ended
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .unwrap_or_else(|_| panic!("{step}: the gate ended within two minutes"))
+            .expect("the gate ends");
+        assert!(!status.success(), "{step}: a stopped gate is not green");
+        let left: Vec<&String> = parts.iter().filter(|p| runs(p)).collect();
+        assert!(
+            left.is_empty(),
+            "{step} {env:?}: its step is stopped: {left:?}"
+        );
+        let lock = gate.scratch.join(".git/merge-gate.lock");
+        let free = Command::new("flock")
+            .args(["-n"])
+            .arg(&lock)
+            .arg("true")
+            .status()
+            .is_ok_and(|s| s.success());
+        assert!(
+            free,
+            "{step} {env:?}: the gate's lock is free once it ended"
+        );
     }
 }
 
