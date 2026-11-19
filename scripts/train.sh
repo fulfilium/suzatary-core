@@ -18,7 +18,8 @@
 # leaves the box); the box keeps the steps that read this repository and the live half. Run inside
 # `nix develop .#triage`, from a clean checkout; it never touches the data repository.
 #
-# Verdicts go to .git/train/gates/, keyed by half and tree; a key holding both is a flake.
+# Verdicts go to .git/train/gates/, keyed by half and tree, and only the train's tool reads or
+# writes them (app/tooling, `train table`); a key holding both is a finding.
 #
 # Test seams: the SUZATARY_TRAIN_ names of `train_reads`; a stub gate's verdicts are keyed by its
 # own bytes, so a stub's green never lands a train.
@@ -49,6 +50,7 @@ needs() {
 }
 needs git flock
 case "${1:-}" in build | land | check | nightly) needs "$gh" ;; esac
+case "${1:-}" in gate | bisect | land | nightly) needs cargo getent ;; esac
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --show-toplevel)" || die "not inside a git checkout."
 cd "$root"
@@ -438,48 +440,21 @@ gate_flags() {
   half_flag "$1"
 }
 
-# verdicts <half> <commit> [full]: the verdicts file. A stub gate's are keyed by its bytes.
-verdicts() {
-  local gate=merge-gate
-  [[ -z "${SUZATARY_TRAIN_GATE:-}" ]] || gate="other-$(git hash-object "$SUZATARY_TRAIN_GATE")"
-  echo "$state/gates/$gate/$1${3:+-$3}/$(git rev-parse "$2^{tree}")"
+# reading <var> <commit> [--half <half>] [--full]: <var> := ok, failed, unknown or finding, of one
+# half or, with no --half, the train's verdict (ok < unknown < failed < finding); from every gate or
+# with --full from full gates. A table the tool cannot read stops the train.
+reading() {
+  local -n into="$1"
+  into="$("$tool" table read "${@:2}")" || die "the verdict table could not be read (above)."
 }
 
-# ok, failed, unknown or finding (both seen), from every gate or with `full` from full gates.
-verdict() {
-  local seen files=()
-  if [[ "${3:-}" == full ]]; then
-    files=("$(verdicts "$1" "$2" full)")
-  else
-    files=("$(verdicts "$1" "$2")" "$(verdicts "$1" "$2" full)")
-  fi
-  seen="$(cat "${files[@]}" 2>/dev/null | cut -d' ' -f1 | sort -u | paste -sd' ')"
-  [[ -n "$seen" ]] || { echo unknown; return; }
-  case "$seen" in
-    ok | failed) echo "$seen" ;;
-    *) echo finding ;;
-  esac
-}
-
-# The greatest of the halves' verdicts in ok < unknown < failed < finding.
-verdict_all() {
-  local h v all=ok
-  for h in "${halves[@]}"; do
-    v="$(verdict "$h" "$1")"
-    (($(rank "$v") <= $(rank "$all"))) || all="$v"
-  done
-  echo "$all"
-}
-rank() { case "$1" in ok) echo 0 ;; unknown) echo 1 ;; failed) echo 2 ;; finding) echo 3 ;; esac; }
-
-# record <half> <commit> <code>: 0 ok, 75 no verdict (did not start), else failed.
+# record <half> <commit> <code>: the half's row; 0 ok, 1 failed, 2 no row (75: did not start).
 record() {
-  local half="$1" commit="$2" code="$3" file
-  ((code == 75)) && { say "the $half half did not start, so it says nothing of the tree"; return 2; }
-  file="$(verdicts "$half" "$commit" "$( ((!full)) || echo full)")"
-  mkdir -p "$(dirname "$file")"
-  printf '%s %s %s\n' "$( ((code)) && echo failed || echo ok)" "$commit" "$(date -u +%FT%TZ)" >>"$file"
-  return $((code ? 1 : 0))
+  local said=0 scope=()
+  ((!full)) || scope=(--full)
+  "$tool" table write "$@" "${scope[@]}" || said=$?
+  ((said <= 2)) || die "the verdict table could not be written (above)."
+  return "$said"
 }
 
 log_of() { mkdir -p "$state/logs" && echo "$state/logs/$1-$(git rev-parse "$2^{tree}").log"; }
@@ -889,14 +864,15 @@ failing_lines() {
 }
 
 report() {
-  local commit="$1" h v short
+  local commit="$1" h v all short
   short="$(git rev-parse --short "$commit")"
   for h in "${halves[@]}"; do
-    v="$(verdict "$h" "$commit")"
+    reading v "$commit" --half "$h"
     say "$h half: $v"
     [[ "$v" != failed || ! -s "$(log_of "$h" "$commit")" ]] || failing_lines "$(log_of "$h" "$commit")" >&2
   done
-  case "$(verdict_all "$commit")" in
+  reading all "$commit"
+  case "$all" in
     ok) say "green: the train $short may land (scripts/train.sh land)" ;;
     finding) die "red, where a half once passed this tree: the gate is not a function of the tree. The logs are in $state/logs/." ;;
     unknown) die "a half has no verdict on $short: gate again." ;;
@@ -913,13 +889,12 @@ bisect() {
   gate_environment bisect "$@"
   remote_opt "$@"
   sync
-  local half="" h train
+  local half="" h v all train
   train="$(train_commit)"
-  case "$(verdict_all "$train")" in
+  reading all "$train"
+  case "$all" in
     failed)
-      for h in "${halves[@]}"; do
-        if [[ -z "$half" && "$(verdict "$h" "$train")" == failed ]]; then half="$h"; fi
-      done
+      for h in "${halves[@]}"; do reading v "$train" --half "$h"; if [[ -z "$half" && "$v" == failed ]]; then half="$h"; fi; done
       ;;
     ok) die "the train is green; there is nothing to bisect." ;;
     unknown) die "the gate has not judged the train's HEAD in both halves: scripts/train.sh gate first." ;;
@@ -934,11 +909,11 @@ bisect() {
   ((hi)) || die "the train merges no PR, so there is nothing to bisect."
   if [[ "${merges[hi - 1]}" != "$train" ]]; then
     commit="${merges[hi - 1]}"
-    seen="$(verdict "$half" "$commit")"
+    reading seen "$commit" --half "$half"
     if [[ "$seen" == unknown ]]; then
       say "probe: every merge, through #$(pr_of "$commit"), without the release on top"
       run_half "$half" "$commit" || true
-      seen="$(verdict "$half" "$commit")"
+      reading seen "$commit" --half "$half"
     fi
     if [[ "$seen" == ok ]]; then
       printf 'green in the %s half: master and every merge of the train\n' "$half"
@@ -953,11 +928,11 @@ bisect() {
   while ((hi - lo > 1)); do
     mid=$(((lo + hi) / 2))
     commit="${merges[mid - 1]}"
-    seen="$(verdict "$half" "$commit")"
+    reading seen "$commit" --half "$half"
     if [[ "$seen" == unknown ]]; then
       say "probe: the first $mid merges, through #$(pr_of "$commit")"
       run_half "$half" "$commit" || true
-      seen="$(verdict "$half" "$commit")"
+      reading seen "$commit" --half "$half"
     fi
     case "$seen" in
       ok) lo=$mid ;;
@@ -986,7 +961,7 @@ nightly_gate() {
   gate_environment nightly
   full=1 nightly=1
   sync
-  local commit h code failed=() unknown=()
+  local commit h v code failed=() unknown=()
   commit="$(git rev-parse --verify origin/master)"
   if core_repo >/dev/null; then
     cloud=github
@@ -995,7 +970,7 @@ nightly_gate() {
     for h in "${halves[@]}"; do run_half "$h" "$commit" || true; done
   fi
   for h in "${halves[@]}"; do
-    case "$(verdict "$h" "$commit" full)" in
+    reading v "$commit" --half "$h" --full; case "$v" in
       ok) ;;
       failed) failed+=("$h") ;;
       *) unknown+=("$h") ;;
@@ -1085,9 +1060,9 @@ nightly_remote() {
 # The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree on
 # the instance's [upkeep] chain, or on none when it names none.
 report_nightly() {
-  local commit="$1" h steps=() logs=() scenes=() step detail id upkeep
+  local commit="$1" h v steps=() logs=() scenes=() step detail id upkeep
   shift
-  for h in "${halves[@]}"; do say "$h half: $(verdict "$h" "$commit" full)"; done
+  for h in "${halves[@]}"; do reading v "$commit" --half "$h" --full; say "$h half: $v"; done
   (($#)) || { say "the nightly gate passed origin/master ${commit:0:12}"; return 0; }
   for h; do
     logs+=(".git/train/logs/${h}-$(git rev-parse "$commit^{tree}").log")
@@ -1226,9 +1201,10 @@ land() {
   on_train
   local short
   short="$(git rev-parse --short HEAD)"
-  local h missing=()
-  for h in "${halves[@]}"; do [[ "$(verdict "$h" HEAD)" == ok ]] || missing+=("$h: $(verdict "$h" HEAD)"); done
-  case "$(verdict_all HEAD)" in
+  local h v all missing=()
+  for h in "${halves[@]}"; do reading v HEAD --half "$h"; [[ "$v" == ok ]] || missing+=("$h: $v"); done
+  reading all HEAD
+  case "$all" in
     ok) ;;
     unknown) die "the gate has not passed the train's HEAD ($short) in both halves (${missing[*]}): scripts/train.sh gate first. Nothing landed." ;;
     failed) die "the gate failed on the train's HEAD ($short) (${missing[*]}): scripts/train.sh bisect, build without the merge it names, gate again. Nothing landed." ;;
@@ -1520,6 +1496,22 @@ row() {
     || die "core took ${commit:0:12}, but the local ref of it did not move; scripts/train.sh publish again reads it afresh."
   printf 'published: core %s is %s (Source: %s)\n' "$core_branch" "$commit" "$source"
 }
+
+# The train's tool, built from this checkout before anything else into its own target under .git,
+# so a train that changes the tool is gated and landed by it; under a test seam, apart, with seams.
+case "${1:-}" in
+  gate | bisect | land | nightly)
+    tool="$(git -C "$scripts" rev-parse --path-format=absolute --git-common-dir)/train/tool" features=()
+    if [[ -n "${!SUZATARY_TRAIN_*}" ]]; then tool+=-seams && features=(--features seams); fi
+    # The account's cargo home, whatever HOME the train was handed: another registry path makes every
+    # dependency dirty, and the next build compiles them all again.
+    account="$(getent passwd "$(id -u)" | cut -d: -f6)" || account="$HOME"
+    CARGO_HOME="${CARGO_HOME:-$account/.cargo}" cargo build --quiet --locked -p suzatary-tooling \
+      --manifest-path "$scripts/../app/Cargo.toml" --target-dir "$tool" "${features[@]}" \
+      || die "the train's tool (app/tooling) did not build (above). Nothing ran."
+    tool+=/debug/train
+    ;;
+esac
 
 case "${1:-}" in
   build) shift && build "$@" ;;

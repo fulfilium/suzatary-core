@@ -141,6 +141,11 @@
           "inbox" "conversations" "lines" "topics" "digest" "stores" "cards" "secretary" "api" ];
         # The test supports their libraries include, of the crates that have one.
         supports = lib.filter builtins.pathExists (library "/tests/support");
+        # The other workspace members, but those in `except`: every build names each member's
+        # manifest, or cargo cannot load the workspace.
+        members = part: except: map (crate: ./app + "/${crate}${part}") (lib.subtractLists except [
+          "cli" "io" "server" "plugin" "plugin-fence" "plugin-ics" "testkit" "script-guards"
+          "viewtree" "pages" "wasm" "tooling" ]);
 
         # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ: a `fileset`, so a briefing, a commit
         # or a document does not change this hash, and `target/` never reaches the store.
@@ -149,17 +154,6 @@
           fileset = lib.fileset.unions ([
             ./app/Cargo.toml
             ./app/Cargo.lock
-            ./app/cli
-            ./app/io
-            ./app/server
-            ./app/plugin
-            ./app/plugin-fence
-            ./app/plugin-ics
-            ./app/testkit
-            ./app/script-guards
-            ./app/viewtree
-            ./app/pages
-            ./app/wasm
             # The plugin worlds the host binds at compile time.
             ./app/wit
             # The site vouches for the Android app, and a test pins the file
@@ -173,7 +167,7 @@
             ./instance.sample.toml
             # The colour roles a picture of a public store is drawn in (`prodrome draw`).
             ./tokens.typ
-          ] ++ library "");
+          ] ++ members "" [ ] ++ library "");
         };
 
         # THE BUILD STAMP IS `appSrc`'s hash, so `GET /api/about`'s `build` moves with the
@@ -218,20 +212,9 @@
         modelFiles = lib.fileset.unions ([
           ./app/Cargo.toml
           ./app/Cargo.lock
-          ./app/cli/Cargo.toml
-          ./app/io/Cargo.toml
-          ./app/server/Cargo.toml
-          ./app/plugin/Cargo.toml
-          ./app/plugin-fence/Cargo.toml
-          ./app/plugin-ics/Cargo.toml
           ./app/plugin-ics/ics.schema
-          ./app/testkit/Cargo.toml
-          ./app/script-guards/Cargo.toml
-          ./app/viewtree/Cargo.toml
-          ./app/pages/Cargo.toml
-          ./app/wasm/Cargo.toml
           ./app/todo/examples
-        ] ++ library "/Cargo.toml" ++ library "/src" ++ supports);
+        ] ++ members "/Cargo.toml" [ ] ++ library "/Cargo.toml" ++ library "/src" ++ supports);
         modelSrc = lib.fileset.toSource { root = ./.; fileset = modelFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
         # the generators are a `cargo test` and a `cargo run`, and with the
@@ -328,18 +311,7 @@
               fileset = lib.fileset.unions ([
                 ./app/Cargo.toml
                 ./app/Cargo.lock
-                ./app/cli/Cargo.toml
-                ./app/io/Cargo.toml
-                ./app/server/Cargo.toml
-                ./app/plugin/Cargo.toml
-                ./app/plugin-fence/Cargo.toml
-                ./app/plugin-ics/Cargo.toml
-                ./app/testkit/Cargo.toml
-                ./app/script-guards/Cargo.toml
-                ./app/viewtree/Cargo.toml
-                ./app/pages/Cargo.toml
-                ./app/wasm/Cargo.toml
-              ] ++ library "/Cargo.toml" ++ library "/src" ++ crates);
+              ] ++ members "/Cargo.toml" [ ] ++ library "/Cargo.toml" ++ library "/src" ++ crates);
             };
             inherit cargoVendorDir;
             preBuild = ''
@@ -424,19 +396,9 @@
             fileset = lib.fileset.unions ([
               ./app/Cargo.toml
               ./app/Cargo.lock
-              ./app/cli/Cargo.toml
-              ./app/io/Cargo.toml
-              ./app/server/Cargo.toml
-              ./app/plugin/Cargo.toml
-              ./app/plugin-ics/Cargo.toml
-              ./app/testkit/Cargo.toml
-              ./app/script-guards/Cargo.toml
-              ./app/viewtree/Cargo.toml
-              ./app/pages/Cargo.toml
-              ./app/wasm/Cargo.toml
               ./app/plugin-fence
               ./app/wit
-            ] ++ library "/Cargo.toml");
+            ] ++ members "/Cargo.toml" [ "plugin-fence" ] ++ library "/Cargo.toml");
           };
           cargoArtifacts = null;
           inherit cargoVendorDir;
@@ -468,19 +430,9 @@
             fileset = lib.fileset.unions ([
               ./app/Cargo.toml
               ./app/Cargo.lock
-              ./app/cli/Cargo.toml
-              ./app/io/Cargo.toml
-              ./app/server/Cargo.toml
-              ./app/plugin/Cargo.toml
-              ./app/plugin-fence/Cargo.toml
-              ./app/testkit/Cargo.toml
-              ./app/script-guards/Cargo.toml
-              ./app/viewtree/Cargo.toml
-              ./app/pages/Cargo.toml
-              ./app/wasm/Cargo.toml
               ./app/plugin-ics
               ./app/wit
-            ] ++ library "/Cargo.toml");
+            ] ++ members "/Cargo.toml" [ "plugin-ics" ] ++ library "/Cargo.toml");
           };
           cargoArtifacts = null;
           inherit cargoVendorDir;
@@ -848,6 +800,8 @@
             # util-linux: scripts/train.sh's flock, and the `script` that gives
             # the remote gate's keep-alive session its pty.
             util-linux
+            # getent: the account's home, where scripts/train.sh finds cargo's.
+            getent
             # The leak guard's secret scanner (scripts/public-tree.sh): a
             # maintained rule set, run offline over a directory, never
             # verifying a finding against its issuer.

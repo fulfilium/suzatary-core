@@ -37,7 +37,8 @@ allowance = 2000
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.166 for the claim (#543, +15,067 over #539's: `claim.rs` and its laws' generator, the transcript's claim step, join and guarded close, `began.rs`, the runs and their lock files, and `compare.rs`'s baseline); accepted at the review of #543.
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.172 for the Prodrome pin at 42f526f (#551, +1,641: `held`'s three category tables of Unicode 16.0.0, the leak guard's value rule, and the reprint law over every store); accepted at the review of #551, which left 32 tokens of the allowance.
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.177 (#557 +1,098, #558 +448, #560 −266, #561 +1,270: test files for the scratch directories, the script law over the stores and the cache's stub).
-reading = 3062408
+# 2026-11-19: raised by hand to the figure of the tree merged with 2.1.181 for typedtooling T1 (#567, +9,943: the crate app/tooling, which T2 to T4 pay back by deleting the shell it replaces; the plan restates the running total); accepted at the review of #567.
+reading = 3073933
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
@@ -181,6 +182,9 @@ task = "lazysync"
 [[in_force]]
 file = "docs/MEMORYDIGEST-PLAN-2026-10-06.md"
 task = "memorydigest"
+[[in_force]]
+file = "docs/TYPEDTOOLING-PLAN-2026-11-19.md"
+task = "typedtooling"
 
 # One unit per workspace member, and the web app. `depends` names the units and the external
 # libraries this unit's code uses: for a crate, its Cargo.toml's `[dependencies]` (crates.io
@@ -424,6 +428,13 @@ path = "app/script-guards"
 shape = "crate"
 depends = []
 scripts = []
+
+[[unit]]
+name = "tooling"
+path = "app/tooling"
+shape = "crate"
+depends = []
+scripts = ["scripts/train.sh"]
 
 [[unit]]
 name = "web"

@@ -4869,6 +4869,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-tooling"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "suzatary-topics"
 version = "0.0.0"
 dependencies = [

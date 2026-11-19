@@ -356,7 +356,7 @@ fi
 cli_only=CHANGELOG.md,changelog.d,CLAUDE.md,app/release.toml
 rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
-web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/wit
+web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/tooling/src,app/tooling/tests,app/wit
 web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # Paths a member's tests read beyond its cargo dependencies; merge_gate.rs checks them.
@@ -367,7 +367,7 @@ rust_skips="${rust#all-but:}" web_skips="${web#all-but:}"
 declare -A unit_base=(
   [crates]="${rust_skips//,/ }"
   [files:web/test]="${web_skips//,/ }"
-  [files:web/e2e]="android docs memory ${cli_only//,/ } app/conformance app/plugin-fence/src app/plugin-fence/wit"
+  [files:web/e2e]="android docs memory ${cli_only//,/ } app/conformance app/plugin-fence/src app/plugin-fence/wit app/tooling/src app/tooling/tests"
 )
 declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]="${web//,/ }" [files:web/e2e]=all)
 ((!list)) || echo "cli_only $cli_only"
@@ -400,7 +400,7 @@ clippy_all() {
 lane=check
 step tree fmt             $rust   cargo fmt --manifest-path app/Cargo.toml --all --check
 step tree clippy          $rust   clippy_all
-step tree clippy-fixture  $rust   clippy_all --features suzatary/fixture
+step tree clippy-fixture  $rust   clippy_all --features suzatary/fixture --features suzatary-tooling/seams
 step tree doc             $rust   env RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/Cargo.toml -q --workspace --no-deps --features suzatary/fixture
 lane=tests
 # Every test executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
@@ -578,7 +578,8 @@ live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/
   app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
-  app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml tokens.typ web/static/tokens.css
+  app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml app/tooling/Cargo.toml tokens.typ
+  web/static/tokens.css
   web/static/style.css)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"

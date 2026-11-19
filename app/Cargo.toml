@@ -4,10 +4,11 @@
 # store, record → base → prodrome-core.
 # `wasm` is the browser's module; `plugin` the plugin host, alone because wasmtime is the largest
 # tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` what the
-# tests make: the programs they run and their scratch directories.
+# tests make: the programs they run and their scratch directories; `tooling` the merge train's
+# program, which depends on no member, so `-p` builds it alone.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages"]
+members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
