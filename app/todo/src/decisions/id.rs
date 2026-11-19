@@ -4,7 +4,10 @@ use super::NotADecision;
 
 /// A decision's name, the key every event about it carries: a todo id's shape, 3-64 lowercase
 /// letters and digits starting with a letter, so it prints inside any text unescaped.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, prodrome_core::literal::codec::Literal,
+)]
+#[literal(new = DecisionId::stored)]
 pub struct DecisionId(String);
 
 impl DecisionId {
@@ -24,6 +27,11 @@ impl DecisionId {
         } else {
             Err(NotADecision::Id(text.chars().take(80).collect()))
         }
+    }
+
+    fn stored(text: String) -> Result<Self, prodrome_core::literal::ProdromeError> {
+        Self::new(text)
+            .map_err(|failed| prodrome_core::literal::ProdromeError::invalid(failed.to_string()))
     }
 
     /// The id.

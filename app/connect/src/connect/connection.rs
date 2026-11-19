@@ -272,6 +272,7 @@ impl Connection {
 /// `Connection(template, params)`.
 pub const CONNECTION: Constructor = ("Connection", &["template", "params"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Connection {
     fn to_value(&self) -> Value {
         record(

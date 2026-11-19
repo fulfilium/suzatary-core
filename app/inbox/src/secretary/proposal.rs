@@ -181,6 +181,7 @@ pub const CONSOLIDATE: Constructor = ("Consolidate", &["text", "kind", "from"]);
 /// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Consolidate`,
 /// `Decide`, or
 /// one of the acts the box performs.
+// By hand: most variants print as the record they hold, and one prints two constructors.
 impl prodrome_core::literal::codec::Literal for Proposal {
     fn to_value(&self) -> Value {
         use prodrome_core::literal::codec::record;

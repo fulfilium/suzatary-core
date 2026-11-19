@@ -16,7 +16,7 @@ pub enum Carried {
     From(Hash),
 }
 
-/// A line prints `None`, or the name of the object it carries.
+/// A line prints `None`, or the name of the object it carries. By hand: its literal is no call.
 impl prodrome_core::literal::codec::Literal for Carried {
     fn to_value(&self) -> prodrome_core::literal::Value {
         match self {

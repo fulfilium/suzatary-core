@@ -29,6 +29,7 @@ pub const EMAIL: prodrome_core::literal::codec::Constructor = (
     &["account", "to", "cc", "subject", "body", "attachments"],
 );
 
+// By hand: its reads refuse as `Fields` does.
 impl prodrome_core::literal::codec::Literal for Draft {
     fn to_value(&self) -> prodrome_core::literal::Value {
         use prodrome_core::literal::codec::record;

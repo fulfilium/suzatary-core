@@ -18,7 +18,7 @@ pub const SIGNATURES: &[Constructor] = &[
     changes::CHANGES,
     changes::ADD,
     changes::ADD_FROM,
-    suzatary_record::record::SOURCE,
+    <suzatary_record::record::Source as prodrome_core::literal::codec::Record>::CONSTRUCTOR,
     changes::UPDATE,
     changes::COMPLETE,
     changes::CANCEL,
@@ -65,3 +65,98 @@ pub const SIGNATURES: &[Constructor] = &[
     suzatary_mail::mail::STORED_PART,
     suzatary_held::held_value::HELD,
 ];
+
+#[cfg(test)]
+mod tests {
+    /// Every constructor the inbox stores, with its fields in print order: an act's, from the
+    /// proposal down to its leaves' records, the inbox's events, and the identity a proposal's
+    /// name hashes.
+    #[test]
+    fn the_stored_names_are_pinned() {
+        let stored = [
+            super::SIGNATURES,
+            crate::secretary::inbox_event::SIGNATURES,
+            &[crate::secretary::inbox::RECURRING],
+        ]
+        .concat();
+        suzatary_base::own::assert_pinned(
+            &stored,
+            "
+            Email(account, to, cc, subject, body, attachments)
+            Forward(account, to, cc, subject, note, message)
+            Forwarded(file, style, from, subject, date)
+            Remember(text, kind)
+            Consolidate(text, kind, from)
+            Decide(id, title, body, rationale, supersedes)
+            Changes(chain, acts)
+            Add(todo, body, rationale, kind, category, priority, detail, waiting_on)
+            AddFrom(todo, body, rationale, kind, category, priority, detail, waiting_on, source, created, parent)
+            Source(sender, subject, date, hash, thread_id, message_id)
+            Update(todo, body, detail, detail_append, rationale, priority, waiting_on, clear_waiting_on, category, subtodos, defer_to)
+            Complete(todo, note)
+            Cancel(todo, note)
+            Reopen(todo, note)
+            Tend(todo, note)
+            Reprice(todo, priority, rationale)
+            FlatPrice(percent)
+            DeadlinePrice(end_date, start_percent, end_percent, lead_up_days, start_date)
+            RecurPrice(days, from_percent, to_percent)
+            PeriodicPrice(days, from_percent, to_percent)
+            SubTodo(body, done)
+            Auth(account)
+            AuthSend(account)
+            Secret(name, why)
+            Web(request, rule)
+            Patch(repo, visibility, base, patch, message)
+            DriveRead(path, size)
+            CodingSession(task)
+            Device(actor, key)
+            SignIn(since)
+            SignInCode(url)
+            UnlockStore(after)
+            Connect(connection)
+            Disconnect(connection)
+            Grant(plugin, origin)
+            Connection(template, params)
+            Erase(fact, keys)
+            Afresh(conversation, turn)
+            Retract(node)
+            Noise(sender, message)
+            Restore(card)
+            GoogleClient(redirect)
+            GoogleSignIn(account, scopes)
+            CalendarEvent(account, title, when, place)
+            Search(query)
+            Fetch(url)
+            Attached(source, name, media, size, sha256)
+            FromMail(message, name)
+            FromDrive(path)
+            FromUpload(id)
+            FromKept(id)
+            FromRepo(repo, path, at)
+            StoredMessage(id, size, sha256, held, parts)
+            StoredPart(name, media, size, sha256)
+            Held(kind, hint)
+            Asked(proposal, at, actor, act, why, sources, asked, serves, spec)
+            Noticed(proposal, at, actor, act, why, sources, asked, serves, spec)
+            Triaged(proposal, at, actor, act, why, sources, asked, serves, spec)
+            Offered(proposal, at, actor, plugin, act, why, sources, asked, serves, spec)
+            NotSent(proposal, at, actor, attempt, reason)
+            Lacks(proposal, at, actor, attempt, lacking)
+            Refused(proposal, at, actor, attempt, reason)
+            Unfinished(proposal, at, actor, attempt, reason, link)
+            Started(proposal, at, actor, attempt, began, expires_at)
+            Sent(proposal, at, actor, recipients, message_id)
+            Applied(proposal, at, actor, objects, chain)
+            Acted(proposal, at, actor, what)
+            MayHaveGone(proposal, at, actor, reason)
+            Checked(proposal, at, actor)
+            Dismissed(proposal, at, actor, reason)
+            Superseded(proposal, at, actor)
+            NoLongerNeeded(proposal, at, actor, why)
+            DoneElsewhere(proposal, at, actor, what)
+            Recurring(at, act)
+            ",
+        );
+    }
+}

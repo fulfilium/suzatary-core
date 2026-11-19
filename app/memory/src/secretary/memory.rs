@@ -167,6 +167,7 @@ impl Kind {
     Deserialize,
     Default,
     ts_rs::TS,
+    Literal,
 )]
 pub struct FactId(
     // A fact's number stays far below the 2^53 a page's number holds exactly.
@@ -174,11 +175,13 @@ pub struct FactId(
 );
 
 /// The standing facts one new fact replaces, at least one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Literal)]
 #[serde(
     try_from = "std::collections::BTreeSet<FactId>",
     into = "std::collections::BTreeSet<FactId>"
 )]
+// A literal that reads no source is refused, as the serde form is.
+#[literal(new = Sources::stored)]
 pub struct Sources(std::collections::BTreeSet<FactId>);
 
 impl Sources {
@@ -186,6 +189,10 @@ impl Sources {
     #[must_use]
     pub fn new(ids: std::collections::BTreeSet<FactId>) -> Option<Self> {
         (!ids.is_empty()).then_some(Self(ids))
+    }
+
+    fn stored(ids: std::collections::BTreeSet<FactId>) -> Result<Self, ProdromeError> {
+        Self::try_from(ids).map_err(ProdromeError::invalid)
     }
 
     /// The ids, least first.
@@ -263,7 +270,7 @@ pub(crate) const TURN: Constructor = ("Turn", &["conversation", "turn"]);
 /// `Tapped(conversation, proposal)`: the owner's tap on a remember card.
 pub(crate) const TAPPED: Constructor = ("Tapped", &["conversation", "proposal"]);
 
-/// An origin is its arm's own constructor.
+/// An origin is its arm's own constructor. By hand: its reads refuse as `Fields` does.
 impl Literal for Origin {
     fn to_value(&self) -> Value {
         match self {
@@ -576,29 +583,6 @@ pub fn kind_of(word: &str) -> Result<Kind, Refusal> {
 
 // The literal of each is its text, as an inbox act stores it.
 prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
-
-/// A fact's literal is its number.
-impl Literal for FactId {
-    fn to_value(&self) -> Value {
-        self.0.to_value()
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        u64::from_value(value).map(FactId)
-    }
-}
-
-/// Sources print as their set; an empty set does not read.
-impl Literal for Sources {
-    fn to_value(&self) -> Value {
-        self.0.to_value()
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        Self::try_from(std::collections::BTreeSet::from_value(value)?)
-            .map_err(ProdromeError::invalid)
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -135,6 +135,7 @@ impl Scopes {
 
 prodrome_core::word_literal!(Scope: Scope::ALL => |scope| scope.as_str());
 
+// By hand: it reads its scopes in any order, where a derived set refuses all but sorted.
 impl Literal for Scopes {
     fn to_value(&self) -> Value {
         self.iter().collect::<Vec<_>>().to_value()
@@ -167,7 +168,8 @@ impl<'de> serde::Deserialize<'de> for Scopes {
 
 /// Where Google sends the owner back: the app's own origin and [`super::CALLBACK`], exactly,
 /// since Google compares it byte for byte with what the client lists (RFC 9700 §2.1).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Literal)]
+#[literal(new = RedirectUri::read)]
 pub struct RedirectUri(String);
 
 impl RedirectUri {
@@ -231,13 +233,14 @@ impl std::fmt::Display for RedirectUri {
     }
 }
 
-impl Literal for RedirectUri {
-    fn to_value(&self) -> Value {
-        Value::str(&self.0)
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let text = String::from_value(value)?;
+impl RedirectUri {
+    /// A callback read back: refused unless it is the callback on an origin, spelt as
+    /// [`RedirectUri::of_app`] spells it.
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "the derived read passes what it read"
+    )]
+    fn read(text: String) -> Result<Self, ProdromeError> {
         let read = text
             .strip_suffix(super::CALLBACK)
             .ok_or_else(|| ProdromeError::invalid(format!("{text:?} is not the callback")))
@@ -261,7 +264,7 @@ impl serde::Serialize for RedirectUri {
 impl<'de> serde::Deserialize<'de> for RedirectUri {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let text = String::deserialize(deserializer)?;
-        Self::from_value(&Value::str(&text)).map_err(serde::de::Error::custom)
+        Self::read(text).map_err(serde::de::Error::custom)
     }
 }
 

@@ -437,3 +437,21 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
     }
     .expect("an event")
 }
+
+/// Every constructor the decisions store and the inbox's decision card print, with its fields
+/// in print order.
+#[test]
+fn the_stored_names_are_pinned() {
+    use prodrome_core::schema::headed::Body;
+    use suzatary_todo::decisions::{DECIDE, Said};
+    let stored = [<Said as Body>::EVENTS, &[DECIDE]].concat();
+    suzatary_base::own::assert_pinned(
+        &stored,
+        "
+        Decided(decision, at, actor, title, body, rationale, supersedes)
+        Revised(decision, at, actor, title, body, rationale, supersedes)
+        Withdrawn(decision, at, actor, reason)
+        Decide(id, title, body, rationale, supersedes)
+        ",
+    );
+}

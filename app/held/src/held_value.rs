@@ -598,6 +598,7 @@ impl Held {
 /// `Held(kind, hint)`.
 pub const HELD: prodrome_core::literal::codec::Constructor = ("Held", &["kind", "hint"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl prodrome_core::literal::codec::Literal for Held {
     fn to_value(&self) -> prodrome_core::literal::Value {
         prodrome_core::literal::codec::record(

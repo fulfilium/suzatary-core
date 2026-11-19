@@ -10,11 +10,8 @@
 use prodrome_core::event::Name;
 use prodrome_core::fpl::mk_absent;
 use prodrome_core::literal::codec::{self, Constructor, Literal};
-use prodrome_core::literal::{Call, Datetime, ProdromeError, Value};
-use prodrome_core::payload::{
-    Payload, bool_field, datetime_field, expect_call, spec_field, string_field, string_or_empty,
-    strings, tuple_field, tuple_or_empty,
-};
+use prodrome_core::literal::{Datetime, ProdromeError, Value};
+use prodrome_core::payload::Payload;
 use prodrome_core::term::{Term, TermF};
 
 use suzatary_base::capability::{Rejected, Typeset, parsed};
@@ -27,8 +24,9 @@ use suzatary_base::capability::{Rejected, Typeset, parsed};
 ///
 /// Its constructors are its doors: [`MarkupSource::checked`] for a writer's markup, whoever
 /// the writer, [`MarkupSource::escaped`] for text that is data, and
-/// [`MarkupSource::from_chain`] for bytes already admitted when they were stored.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// [`MarkupSource::from_chain`] for bytes already admitted when they were stored. Its `Default`
+/// is [`MarkupSource::empty`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct MarkupSource(String);
 
 impl MarkupSource {
@@ -141,7 +139,7 @@ fn embeds(text: &str) -> bool {
 }
 
 /// Typst string source, the inside of a `".."` literal.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct StringSource(String);
 
 impl StringSource {
@@ -193,6 +191,12 @@ pub enum NoteSite {
     Subtodos,
 }
 
+impl AsRef<str> for NoteSite {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl NoteSite {
     /// Every site, in declared order.
     pub const ALL: [NoteSite; 9] = [
@@ -238,26 +242,33 @@ impl NoteSite {
 
 /// The message a todo came from. `date` is a day; the three identifiers are `""` when the
 /// writer did not record them.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Literal)]
 pub struct Source {
     /// Who it came from, as the header read.
+    #[literal(with = stored_text)]
     pub sender: StringSource,
     /// Its subject.
+    #[literal(with = stored_text)]
     pub subject: StringSource,
     /// The day it was sent.
     pub date: Datetime,
     /// The canonical message hash, the one `/api/mail/message/<hash>` resolves.
+    #[literal(with = stored_text, default)]
     pub hash: StringSource,
     /// The thread it belongs to, `""` when unrecorded.
+    #[literal(with = stored_text, default)]
     pub thread_id: StringSource,
     /// Its `Message-ID`, `""` when unrecorded.
+    #[literal(with = stored_text, default)]
     pub message_id: StringSource,
 }
 
 /// A comment run attached to one field of a record.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Literal)]
+#[literal(new = mk_note)]
 pub struct Note {
     /// Which field it is about.
+    #[literal(with = codec::text_field)]
     pub on: NoteSite,
     /// Its lines, nonempty by construction.
     pub lines: Vec<String>,
@@ -273,36 +284,49 @@ pub struct SubTodo {
 }
 
 /// The payload: everything Suzatary attaches to a todo, beyond the `todo`, `at` and `actor`
-/// the database owns.
-#[derive(Debug, Clone, PartialEq)]
+/// the database owns. Stored as `Authored`, not `Record`: the constructor's name is in the bytes
+/// of every stored object.
+#[derive(Debug, Clone, PartialEq, Literal)]
+#[literal(rename = "Authored", new = mk_record)]
 pub struct Record {
     /// Which constructor renders it, one of `decoration::KINDS`.
+    #[literal(with = codec::text_field)]
     pub kind: Name,
     /// The day the todo was authored, a block's `created:`.
     pub created: Datetime,
     /// The todo itself, in typst markup source.
+    #[literal(with = stored_markup)]
     pub body: MarkupSource,
     /// What it is worth as a function of time: FPL's `Absent` when the chain prices it not at
     /// all, the one spelling of absence. Stored `spec=None`, the bytes every such record already
     /// holds; an explicit `Absent()` is refused at the parse, so the two cannot both exist.
+    #[literal(with = stored_spec)]
     pub spec: Term,
     /// Why the price is what it is: the `//` run above `priority:`, the only place that
     /// reasoning exists.
+    #[literal(default)]
     pub rationale: Vec<String>,
     /// Which section it renders under, or `None`. The vocabulary is
     /// `instance.toml`'s `[categories]`.
+    #[literal(with = codec::blank_field, default)]
     pub category: Option<Name>,
     /// Who or what is blocking it, `""` when nothing is.
+    #[literal(with = stored_text, default)]
     pub waiting_on: StringSource,
     /// The long form, in typst markup source.
+    #[literal(with = stored_markup, default)]
     pub detail: MarkupSource,
     /// The message it came from, when it came from one.
+    #[literal(default)]
     pub source: Option<Source>,
     /// The checklist; its length is read by the database.
+    #[literal(with = authored_subtodos, default)]
     pub subtodos: Vec<SubTodo>,
     /// The comment runs a block carries, each on the site it explains.
+    #[literal(default)]
     pub notes: Vec<Note>,
     /// A note about this write: why the record was appended.
+    #[literal(default)]
     pub note: String,
 }
 
@@ -329,14 +353,18 @@ pub fn mk_source(
 }
 
 /// One comment run. Refuses an unknown site and an empty run.
-pub(crate) fn mk_note(on: &str, lines: Vec<String>) -> Result<Note, ProdromeError> {
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the derived read passes what it read"
+)]
+pub(crate) fn mk_note(on: String, lines: Vec<String>) -> Result<Note, ProdromeError> {
     if lines.is_empty() {
         return Err(ProdromeError::invalid(
             "Note.lines must be nonempty — an empty note is not a note",
         ));
     }
     Ok(Note {
-        on: NoteSite::parse(on)?,
+        on: NoteSite::parse(&on)?,
         lines,
     })
 }
@@ -357,18 +385,18 @@ pub fn mk_subtodo(body: &str, done: bool) -> Result<SubTodo, ProdromeError> {
 /// and a builder that let one be forgotten could print a different object under the same name.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn mk_record(
-    kind: &str,
+    kind: String,
     created: Datetime,
     body: MarkupSource,
     spec: Term,
     rationale: Vec<String>,
-    category: &str,
-    waiting_on: &str,
+    category: String,
+    waiting_on: StringSource,
     detail: MarkupSource,
     source: Option<Source>,
     subtodos: Vec<SubTodo>,
     notes: Vec<Note>,
-    note: &str,
+    note: String,
 ) -> Result<Record, ProdromeError> {
     if body.as_str().trim().is_empty() {
         return Err(ProdromeError::invalid("Authored.body cannot be empty"));
@@ -380,12 +408,12 @@ pub(crate) fn mk_record(
         spec,
         rationale,
         category: Name::optional("Authored.category", category)?,
-        waiting_on: StringSource::new(waiting_on),
+        waiting_on,
         detail,
         source,
         subtodos,
         notes,
-        note: note.to_owned(),
+        note,
     })
 }
 
@@ -420,103 +448,104 @@ pub fn mk_authored(
         at,
         actor,
         mk_record(
-            kind, created, body, spec, rationale, category, waiting_on, detail, source, subtodos,
-            notes, note,
+            kind.to_owned(),
+            created,
+            body,
+            spec,
+            rationale,
+            category.to_owned(),
+            StringSource::new(waiting_on),
+            detail,
+            source,
+            subtodos,
+            notes,
+            note.to_owned(),
         )?,
     )
 }
 
 // --- the literal round trip --------------------------------------------------
 
-fn text(value: impl Into<String>) -> Value {
-    Value::Str(value.into())
-}
+/// A field of [`StringSource`]: its text.
+mod stored_text {
+    use super::{Literal as _, ProdromeError, StringSource, Value};
 
-fn optional_text(value: Option<&Name>) -> Value {
-    Value::Str(
-        value
-            .map(|name| name.as_str().to_owned())
-            .unwrap_or_default(),
-    )
-}
+    pub(super) use prodrome_core::literal::codec::text_field::to_value;
 
-fn tuple_of<T>(items: &[T], each: impl Fn(&T) -> Value) -> Value {
-    Value::Tuple(items.iter().map(each).collect())
-}
-
-fn field(name: &str, value: Value) -> (String, Value) {
-    (name.to_owned(), value)
-}
-
-impl Source {
-    /// `Source(sender, subject, date, hash, thread_id, message_id)`, in `VOCABULARY`'s order.
-    #[must_use]
-    pub fn to_value(&self) -> Value {
-        Value::call(
-            "Source",
-            vec![
-                field("sender", text(self.sender.as_str())),
-                field("subject", text(self.subject.as_str())),
-                field("date", Value::Datetime(self.date)),
-                field("hash", text(self.hash.as_str())),
-                field("thread_id", text(self.thread_id.as_str())),
-                field("message_id", text(self.message_id.as_str())),
-            ],
-        )
+    pub(super) fn from_field(
+        value: &Value,
+        context: &dyn std::fmt::Display,
+    ) -> Result<StringSource, ProdromeError> {
+        String::from_field(value, context).map(StringSource::new)
     }
 }
 
-impl Note {
-    /// `Note(on, lines)`.
-    #[must_use]
-    pub fn to_value(&self) -> Value {
-        Value::call(
-            "Note",
-            vec![
-                field("on", text(self.on.as_str())),
-                field("lines", tuple_of(&self.lines, |line| text(line.clone()))),
-            ],
-        )
+/// A field of [`MarkupSource`]: its text, read back through the door for stored bytes.
+mod stored_markup {
+    use super::{Literal as _, MarkupSource, ProdromeError, Value};
+
+    pub(super) use prodrome_core::literal::codec::text_field::to_value;
+
+    pub(super) fn from_field(
+        value: &Value,
+        context: &dyn std::fmt::Display,
+    ) -> Result<MarkupSource, ProdromeError> {
+        Ok(MarkupSource::from_chain(String::from_field(
+            value, context,
+        )?))
     }
 }
 
-impl SubTodo {
-    /// `SubTodo(body, done)`.
-    #[must_use]
-    pub fn to_value(&self) -> Value {
-        Value::call(
-            "SubTodo",
-            vec![
-                field("body", text(self.body.clone())),
-                field("done", Value::Bool(self.done)),
-            ],
-        )
+/// `Authored.spec`: `Absent` is stored `None`, and an `Absent()` written out is refused.
+mod stored_spec {
+    use super::{Literal as _, ProdromeError, Term, Value, is_absent, mk_absent};
+
+    pub(super) fn to_value(spec: &Term) -> Value {
+        if is_absent(spec) {
+            Value::None
+        } else {
+            spec.to_value()
+        }
+    }
+
+    pub(super) fn from_field(
+        value: &Value,
+        context: &dyn std::fmt::Display,
+    ) -> Result<Term, ProdromeError> {
+        match Option::<Term>::from_field(value, context)? {
+            None => Ok(mk_absent()),
+            Some(term) if is_absent(&term) => Err(ProdromeError::invalid(
+                "Authored.spec spells absence `None`, never `Absent()`",
+            )),
+            Some(term) => Ok(term),
+        }
     }
 }
 
-fn source_from_value(value: &Value) -> Result<Source, ProdromeError> {
-    let call = expect_call(value, "Source")?;
-    Ok(mk_source(
-        &string_field(call, "sender")?,
-        &string_field(call, "subject")?,
-        datetime_field(call, "date")?,
-        &string_or_empty(call, "hash")?,
-        &string_or_empty(call, "thread_id")?,
-        &string_or_empty(call, "message_id")?,
-    ))
-}
+/// `Authored.subtodos`: each item through [`mk_subtodo`], which refuses a blank body. An inbox
+/// act reads [`SubTodo`]'s own literal, which does not, so the two reads stay apart.
+mod authored_subtodos {
+    use super::{Literal, ProdromeError, SubTodo, Value, codec, mk_subtodo};
 
-fn note_from_value(value: &Value) -> Result<Note, ProdromeError> {
-    let call = expect_call(value, "Note")?;
-    mk_note(
-        &string_field(call, "on")?,
-        strings(tuple_field(call, "lines")?, "Note.lines")?,
-    )
-}
+    pub(super) fn to_value(items: &[SubTodo]) -> Value {
+        Value::Tuple(items.iter().map(SubTodo::to_value).collect())
+    }
 
-fn subtodo_from_value(value: &Value) -> Result<SubTodo, ProdromeError> {
-    let call = expect_call(value, "SubTodo")?;
-    mk_subtodo(&string_field(call, "body")?, bool_field(call, "done")?)
+    pub(super) fn from_field(
+        value: &Value,
+        context: &dyn std::fmt::Display,
+    ) -> Result<Vec<SubTodo>, ProdromeError> {
+        codec::tuple(value, context)?
+            .iter()
+            .map(|item| {
+                let call = codec::call_of(item, "SubTodo")?;
+                mk_subtodo(
+                    &codec::read(call, "body", String::from_field)?,
+                    codec::read(call, "done", bool::from_field)?,
+                )
+            })
+            .collect()
+    }
 }
 
 impl Record {
@@ -549,113 +578,11 @@ impl Record {
     }
 }
 
-impl codec::Record for Record {
-    /// `Authored`, not `Record`: the constructor's name is in the bytes of every stored object.
-    const CONSTRUCTOR: Constructor = (
-        "Authored",
-        &[
-            "kind",
-            "created",
-            "body",
-            "spec",
-            "rationale",
-            "category",
-            "waiting_on",
-            "detail",
-            "source",
-            "subtodos",
-            "notes",
-            "note",
-        ],
-    );
-
-    fn values(&self) -> Vec<Value> {
-        vec![
-            text(self.kind.as_str()),
-            Value::Datetime(self.created),
-            text(self.body.as_str()),
-            if is_absent(&self.spec) {
-                Value::None
-            } else {
-                self.spec.to_value()
-            },
-            tuple_of(&self.rationale, |line| text(line.clone())),
-            optional_text(self.category.as_ref()),
-            text(self.waiting_on.as_str()),
-            text(self.detail.as_str()),
-            self.source.as_ref().map_or(Value::None, Source::to_value),
-            tuple_of(&self.subtodos, SubTodo::to_value),
-            tuple_of(&self.notes, Note::to_value),
-            text(self.note.clone()),
-        ]
-    }
-
-    fn from_call(call: &Call) -> Result<Record, ProdromeError> {
-        mk_record(
-            &string_field(call, "kind")?,
-            datetime_field(call, "created")?,
-            MarkupSource::from_chain(string_field(call, "body")?),
-            match spec_field(call, "spec")? {
-                None => mk_absent(),
-                Some(term) if is_absent(&term) => {
-                    return Err(ProdromeError::invalid(
-                        "Authored.spec spells absence `None`, never `Absent()`",
-                    ));
-                }
-                Some(term) => term,
-            },
-            strings(tuple_or_empty(call, "rationale")?, "Authored.rationale")?,
-            &string_or_empty(call, "category")?,
-            &string_or_empty(call, "waiting_on")?,
-            MarkupSource::from_chain(string_or_empty(call, "detail")?),
-            match call.field("source") {
-                None | Some(Value::None) => None,
-                Some(other) => Some(source_from_value(other)?),
-            },
-            tuple_or_empty(call, "subtodos")?
-                .iter()
-                .map(subtodo_from_value)
-                .collect::<Result<Vec<_>, _>>()?,
-            tuple_or_empty(call, "notes")?
-                .iter()
-                .map(note_from_value)
-                .collect::<Result<Vec<_>, _>>()?,
-            &string_or_empty(call, "note")?,
-        )
-    }
-}
-
-impl Literal for Record {
-    fn to_value(&self) -> Value {
-        codec::record(
-            <Self as codec::Record>::CONSTRUCTOR,
-            codec::Record::values(self),
-        )
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        <Self as codec::Record>::from_call(codec::call_of(
-            value,
-            <Self as codec::Record>::CONSTRUCTOR.0,
-        )?)
-    }
-}
-
 impl Payload for Record {
-    const VOCABULARY: &'static [(&'static str, &'static [&'static str])] = &[
-        (
-            "Source",
-            &[
-                "sender",
-                "subject",
-                "date",
-                "hash",
-                "thread_id",
-                "message_id",
-            ],
-        ),
-        ("Note", &["on", "lines"]),
-        ("SubTodo", &["body", "done"]),
+    const VOCABULARY: &'static [Constructor] = &[
+        <Source as codec::Record>::CONSTRUCTOR,
+        <Note as codec::Record>::CONSTRUCTOR,
+        SUBTODO,
     ];
 
     /// The database prices a record with no spec by its head, so `Absent` is none here.
@@ -669,9 +596,6 @@ impl Payload for Record {
 }
 
 // --- the parameter, applied once ---------------------------------------------
-//
-// The application has one record shape, so these aliases apply it once, under the
-// database's own names: the import line is where a reader sees which payload a type is over.
 
 /// A stored content record: the database's three fields around a [`Record`].
 pub type Authored = prodrome_core::event::Authored<Record>;
@@ -701,6 +625,7 @@ pub type EventStore = prodrome_core::store::EventStore<TodoEvent>;
 pub type Entry = prodrome_core::view::Entry<TodoEvent>;
 
 /// `SubTodo(body, done)`, a checklist line in a stored act.
+// By hand: an inbox act reads it through `Fields`, whose refusals the derive does not write.
 pub const SUBTODO: prodrome_core::literal::codec::Constructor = ("SubTodo", &["body", "done"]);
 
 impl prodrome_core::literal::codec::Literal for SubTodo {
@@ -717,29 +642,6 @@ impl prodrome_core::literal::codec::Literal for SubTodo {
             body: fields.get("body")?,
             done: fields.get("done")?,
         })
-    }
-}
-
-/// `Source(sender, subject, date, hash, thread_id, message_id)`, the message a stored act names.
-pub const SOURCE: prodrome_core::literal::codec::Constructor = (
-    "Source",
-    &[
-        "sender",
-        "subject",
-        "date",
-        "hash",
-        "thread_id",
-        "message_id",
-    ],
-);
-
-impl prodrome_core::literal::codec::Literal for Source {
-    fn to_value(&self) -> Value {
-        Source::to_value(self)
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        source_from_value(value)
     }
 }
 
@@ -820,27 +722,34 @@ mod tests {
         );
     }
 
+    /// Every constructor this crate stores, with its fields in print order.
     #[test]
-    fn values_has_one_value_for_each_field() {
-        let at = Datetime::new(2026, 9, 9, 7, 3, 0, 0).expect("a real instant");
-        let record = mk_record(
-            "todo",
-            at,
-            MarkupSource::escaped("body"),
-            prodrome_core::fpl::mk_absent(),
-            vec![],
-            "",
-            "",
-            MarkupSource::empty(),
-            None,
-            vec![],
-            vec![],
-            "",
-        )
-        .expect("valid");
-        assert_eq!(
-            codec::Record::values(&record).len(),
-            <Record as codec::Record>::CONSTRUCTOR.1.len()
+    fn the_stored_names_are_pinned() {
+        use crate::todo::price;
+        let mut stored = vec![<Record as codec::Record>::CONSTRUCTOR];
+        stored.extend(Record::VOCABULARY);
+        stored.extend([
+            <Source as codec::Record>::CONSTRUCTOR,
+            SUBTODO,
+            price::FLAT_PRICE,
+            price::DEADLINE_PRICE,
+            price::RECUR_PRICE,
+            price::PERIODIC_PRICE,
+        ]);
+        suzatary_base::own::assert_pinned(
+            &stored,
+            "
+            Authored(kind, created, body, spec, rationale, category, waiting_on, detail, source, subtodos, notes, note)
+            Source(sender, subject, date, hash, thread_id, message_id)
+            Note(on, lines)
+            SubTodo(body, done)
+            Source(sender, subject, date, hash, thread_id, message_id)
+            SubTodo(body, done)
+            FlatPrice(percent)
+            DeadlinePrice(end_date, start_percent, end_percent, lead_up_days, start_date)
+            RecurPrice(days, from_percent, to_percent)
+            PeriodicPrice(days, from_percent, to_percent)
+            ",
         );
     }
 

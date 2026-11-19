@@ -125,6 +125,7 @@ pub const DECIDE: Constructor = (
     &["id", "title", "body", "rationale", "supersedes"],
 );
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Draft {
     fn to_value(&self) -> Value {
         record(

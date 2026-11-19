@@ -189,6 +189,7 @@ impl InboxEvent {
     }
 }
 
+// By hand: an event schema with a head of its own, which the derive does not write.
 impl Schema for InboxEvent {
     type Vocabulary = InboxVocabulary;
     type Key = ProposalId;

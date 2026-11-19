@@ -147,6 +147,7 @@ const CONSOLIDATED: Constructor = (
 /// event nests a term.
 pub type MemoryVocabulary = Constructors<Said>;
 
+// By hand: an event body of `schema::headed`, which the derive does not write.
 impl Body for Said {
     type Key = FactId;
     type Register = Only;

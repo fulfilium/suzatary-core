@@ -457,3 +457,20 @@ fn two_consolidations_numbered_alike_keep_the_least_named() {
     assert!(dead.contains(&lost), "the outranked words are dead");
     assert!(!dead.contains(&won));
 }
+
+/// Every constructor the memory stores, with its fields in print order.
+#[test]
+fn the_stored_names_are_pinned() {
+    use prodrome_core::schema::headed::Body;
+    let stored = [<Said as Body>::EVENTS, <Said as Body>::NESTED].concat();
+    suzatary_base::own::assert_pinned(
+        &stored,
+        "
+        Remembered(fact, at, actor, text, kind, said)
+        Forgotten(fact, at, actor, version)
+        Consolidated(fact, at, actor, from, text, kind, round)
+        Turn(conversation, turn)
+        Tapped(conversation, proposal)
+        ",
+    );
+}

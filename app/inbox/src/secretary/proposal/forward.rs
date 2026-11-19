@@ -140,6 +140,7 @@ pub(crate) const FORWARD: Constructor = (
 pub(crate) const FORWARDED: Constructor =
     ("Forwarded", &["file", "style", "from", "subject", "date"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Forward {
     fn to_value(&self) -> Value {
         record(
@@ -168,6 +169,7 @@ impl Literal for Forward {
     }
 }
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Forwarded {
     fn to_value(&self) -> Value {
         record(

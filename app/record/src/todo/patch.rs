@@ -47,7 +47,7 @@ impl<'de, A: Deserialize<'de>> Deserialize<'de> for Patch<A> {
     }
 }
 
-/// A kept field is `None`, a set one its value.
+/// A kept field is `None`, a set one its value. By hand: the derive takes no generic.
 impl<A: prodrome_core::literal::codec::Literal> prodrome_core::literal::codec::Literal
     for Patch<A>
 {

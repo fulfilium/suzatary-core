@@ -367,6 +367,7 @@ pub const GOOGLE_SIGN_IN: Constructor = ("GoogleSignIn", &["account", "scopes"])
 /// `CalendarEvent(account, title, when, place)`.
 pub const CALENDAR_EVENT: Constructor = ("CalendarEvent", &["account", "title", "when", "place"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Act {
     fn to_value(&self) -> Value {
         match self {

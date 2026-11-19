@@ -125,6 +125,7 @@ fn cycle_of(value: &Value, signature: Constructor) -> Result<Cycle, ProdromeErro
 /// A lead-up in whole days, the only spans a price holds.
 struct Days(chrono::Duration);
 
+// By hand: its literal is an integer of days, not a call.
 impl Literal for Days {
     fn to_value(&self) -> Value {
         Value::int(self.0.num_days())
@@ -140,6 +141,7 @@ impl Literal for Days {
     }
 }
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Price {
     fn to_value(&self) -> Value {
         match self {

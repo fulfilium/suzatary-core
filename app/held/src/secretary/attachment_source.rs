@@ -162,6 +162,7 @@ pub const FROM_KEPT: Constructor = ("FromKept", &["id"]);
 /// `FromRepo(repo, path, at)`.
 pub const FROM_REPO: Constructor = ("FromRepo", &["repo", "path", "at"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for AttachmentSource {
     fn to_value(&self) -> LiteralValue {
         match self {

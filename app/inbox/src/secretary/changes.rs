@@ -657,6 +657,7 @@ pub const TEND: Constructor = ("Tend", &["todo", "note"]);
 /// `Reprice(todo, priority, rationale)`.
 pub const REPRICE: Constructor = ("Reprice", &["todo", "priority", "rationale"]);
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Act {
     fn to_value(&self) -> LiteralValue {
         let noted = |signature, todo: &String, note: &String| {
@@ -794,6 +795,7 @@ impl Literal for Act {
     }
 }
 
+// By hand: its reads refuse as `Fields` does.
 impl Literal for Changeset {
     fn to_value(&self) -> LiteralValue {
         record(CHANGES, vec![self.chain.to_value(), self.acts.to_value()])

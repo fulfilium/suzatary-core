@@ -149,17 +149,6 @@ const SIGNATURES: &[Constructor] = &[DECIDED, REVISED, WITHDRAWN];
 /// The decisions' whitelist: three constructors and nothing else, since no event nests a term.
 pub type DecisionVocabulary = Constructors<Said>;
 
-/// A decision's literal is its id.
-impl Literal for DecisionId {
-    fn to_value(&self) -> Value {
-        Value::str(self.as_str())
-    }
-
-    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        DecisionId::new(String::from_value(value)?).map_err(invalid)
-    }
-}
-
 fn invalid(failed: impl std::fmt::Display) -> ProdromeError {
     ProdromeError::invalid(failed.to_string())
 }
@@ -174,6 +163,7 @@ fn stated(statement: &Statement, supersedes: &BTreeSet<DecisionId>) -> Vec<Value
     ]
 }
 
+// By hand: an event body of `schema::headed`, which the derive does not write.
 impl Body for Said {
     type Key = DecisionId;
     type Register = DecisionRegister;

@@ -194,7 +194,8 @@ pub(crate) enum Identity {
     Recurring { at: Datetime, proposal: Proposal },
 }
 
-const RECURRING: prodrome_core::literal::codec::Constructor = ("Recurring", &["at", "act"]);
+pub(crate) const RECURRING: prodrome_core::literal::codec::Constructor =
+    ("Recurring", &["at", "act"]);
 
 impl Identity {
     /// What `asked`, asked at `at`, is.
@@ -211,6 +212,7 @@ impl Identity {
     }
 }
 
+// By hand: it prints as the proposal itself, or as a call around it.
 impl Literal for Identity {
     fn to_value(&self) -> Value {
         match self {
@@ -278,6 +280,7 @@ impl ProposalId {
     }
 }
 
+// By hand: its inner `TodoId` has no literal of its own.
 impl prodrome_core::literal::codec::Literal for ProposalId {
     fn to_value(&self) -> Value {
         Value::str(self.as_str())
