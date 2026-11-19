@@ -14,13 +14,14 @@ use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_health::health::plugin::PluginName;
+use suzatary_inbox::drawn::{a_response, asked};
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::{Asked, ProposalId};
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use suzatary_inbox::secretary::phase::Phase;
-use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
+use suzatary_inbox::secretary::proposal::{Draft, Proposal};
 use suzatary_inbox::secretary::proposer::Proposer;
-use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_inbox::secretary::responded::{Done, Responded};
 
 type Store = EventStore<InboxEvent, Everything>;
 
@@ -42,27 +43,6 @@ impl Scratch {
 
 fn at(minute: u32) -> Datetime {
     Datetime::new(2026, 10, 1, 9 + minute / 60, minute % 60, 0, 0).expect("an instant")
-}
-
-fn asked() -> Asked {
-    inbox::Asked {
-        proposer: Proposer::Secretary,
-        proposal: Proposal::Email(Draft {
-            account: "ada@example.com".to_owned(),
-            to: vec!["mira@example.com".to_owned()],
-            cc: Vec::new(),
-            subject: "Thursday".to_owned(),
-            body: "Thursday works.".to_owned(),
-            attachments: Vec::new(),
-        }),
-        reasons: Reasons::new(
-            "she asked",
-            vec!["mail:abcdef012345".parse().expect("a ref")],
-        )
-        .expect("reasons"),
-        asked: "proposal:default/0".parse().expect("a ref"),
-        price: inbox::Price::Serves("todo:life/reply".parse().expect("a ref")),
-    }
 }
 
 fn id() -> ProposalId {
@@ -96,54 +76,6 @@ fn every_phase() -> Vec<Phase> {
             Phase::Withdrawn,
         ])
         .collect()
-}
-
-/// A response of each kind, at a small attempt.
-fn a_response() -> impl Strategy<Value = Responded> {
-    let reason = "[a-z ]{0,8}";
-    prop_oneof![
-        (1..4_u32, reason).prop_map(|(attempt, reason)| Responded::Tried {
-            attempt,
-            tried: Tried::NotSent { reason }
-        }),
-        (1..4_u32).prop_map(|attempt| Responded::Tried {
-            attempt,
-            tried: Tried::Lacks(suzatary_mail::mail::lacking::Lacking::GoogleClient),
-        }),
-        (1..4_u32).prop_map(|attempt| Responded::Tried {
-            attempt,
-            tried: Tried::Running {
-                began: "2026-10-01T09:00:00".to_owned(),
-                expires_at: "2026-10-01T09:15:00".to_owned(),
-            }
-        }),
-        "[a-z]{1,4}".prop_map(|message| Responded::Done(Done::Sent {
-            recipients: vec!["mira@example.com".to_owned()],
-            message_id: format!("<{message}@box>"),
-        })),
-        Just(Responded::Done(Done::Applied {
-            objects: vec!["a".repeat(64)],
-            chain: "life".to_owned(),
-        })),
-        "[a-z ]{0,8}".prop_map(|what| Responded::Done(Done::Acted { what })),
-        reason.prop_map(|reason| Responded::Done(Done::MayHaveGone { reason })),
-        Just(Responded::Checked(())),
-        reason.prop_map(|reason| Responded::Dismissed { reason }),
-        Just(Responded::Withdrawn(Withdrawal::Superseded)),
-        reason.prop_map(|why| Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })),
-        (1..4_u32, reason).prop_map(|(attempt, reason)| Responded::Tried {
-            attempt,
-            tried: Tried::Refused { reason }
-        }),
-        (1..4_u32, reason).prop_map(|(attempt, reason)| Responded::Tried {
-            attempt,
-            tried: Tried::Unfinished {
-                reason,
-                link: "https://github.com/owner/name/pulls".to_owned(),
-            }
-        }),
-        reason.prop_map(|what| Responded::Withdrawn(Withdrawal::DoneElsewhere { what })),
-    ]
 }
 
 /// The phases the store reads for the one proposal.

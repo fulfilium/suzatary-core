@@ -89,6 +89,8 @@ proptest.workspace = true
 suzatary-secretary = { workspace = true, features = ["nothing"] }
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
+# The Prodrome's law kit: law 68's script machine over each store's schema (`tests/script_law.rs`).
+prodrome_core = { workspace = true, features = ["laws"] }
 
 # ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
 # module of `tests/all.rs`, so the suite links the application once, not per file.

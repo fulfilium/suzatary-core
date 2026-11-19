@@ -16,6 +16,8 @@ mod lines_rule;
 mod own_lines;
 #[path = "pieces.rs"]
 mod pieces;
+#[path = "sealed_decision.rs"]
+mod sealed_decision;
 #[path = "sequenced.rs"]
 mod sequenced;
 #[path = "topics.rs"]

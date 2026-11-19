@@ -88,13 +88,22 @@ impl Objects {
     /// Is `todo` a `decision` record? Its kind never changes, so any `Authored` answers.
     #[must_use]
     pub fn is_decision(&self, todo: &TodoId) -> bool {
-        self.by_name.values().any(|envelope| {
-            matches!(
-                envelope.event(),
-                Some(TodoEvent::Authored(record))
-                    if record.todo == *todo && record.payload.is_decision()
-            )
-        })
+        self.by_name
+            .values()
+            .any(|envelope| decision(envelope) == Some(todo))
+    }
+}
+
+/// The todo a `decision` record is of; none for any other object.
+fn decision(envelope: &Envelope) -> Option<&TodoId> {
+    match envelope.event()? {
+        TodoEvent::Authored(record) => record.payload.is_decision().then_some(&record.todo),
+        TodoEvent::Created(_)
+        | TodoEvent::Completed(_)
+        | TodoEvent::Cancelled(_)
+        | TodoEvent::Reopened(_)
+        | TodoEvent::Tended(_)
+        | TodoEvent::SpecRevised(_) => None,
     }
 }
 
@@ -243,8 +252,15 @@ fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
     let mut candidates: Vec<(Hash, String, Envelope)> = Vec::new();
     let mut refused: Vec<Refused> = Vec::new();
     let mut already: Vec<Hash> = Vec::new();
-    for literal in posted {
-        match named(literal) {
+    let parsed: Vec<_> = posted.iter().map(|literal| named(literal)).collect();
+    // A record posted beside its lifecycle event seals it as a held one does.
+    let decisions: BTreeSet<TodoId> = parsed
+        .iter()
+        .flatten()
+        .filter_map(|(_, _, envelope)| decision(envelope).cloned())
+        .collect();
+    for literal in parsed {
+        match literal {
             Err(reason) => refused.push(Refused { name: None, reason }),
             Ok((name, canonical, envelope)) => {
                 // Already-held comes before the actor rule: a replica offers back the box's own
@@ -271,7 +287,7 @@ fn placed(held: &Objects, posted: &[String], writer: &Actor) -> Placed {
                     | TodoEvent::Reopened(_)
                     | TodoEvent::Tended(_)),
                 ) = envelope.event()
-                    && held.is_decision(event.todo())
+                    && (held.is_decision(event.todo()) || decisions.contains(event.todo()))
                 {
                     refused.push(Refused {
                         name: Some(name),
@@ -911,8 +927,6 @@ mod tests {
                 },
             }]
         );
-
-        // …and a merge, which carries no event, is allowed from any actor.
         let mut held = Objects::default();
         apply(&mut held, &outcome.taken);
         let other = sealed(
@@ -1022,7 +1036,6 @@ mod tests {
         posted.reverse();
         let outcome = placed(&Objects::default(), &posted, &actor("ada"));
         assert_eq!(outcome.taken.len(), 4);
-        // Parents first, whatever order they arrived in.
         let order: Vec<Hash> = outcome.taken.iter().map(|(name, _)| name.clone()).collect();
         let expected: Vec<Hash> = chain.iter().map(seal_hash).collect();
         assert_eq!(order, expected);
@@ -1553,12 +1566,10 @@ mod tests {
         ) {
             let one = deliver(&objects, &order, &batches);
             let two = deliver(&objects, &other_order, &other_batches);
-            // Every object posted is held: every parent is in the same set.
             for object in &objects {
                 prop_assert!(one.holds(&seal_hash(object)));
                 prop_assert!(two.holds(&seal_hash(object)));
             }
-            // …and nothing else is, either side.
             prop_assert_eq!(one.names(), two.names());
             prop_assert_eq!(one.len(), objects.len());
             prop_assert_eq!(folded(&one), folded(&two));
@@ -1598,11 +1609,8 @@ mod tests {
                 set
             };
             let tip = heads(&base).iter().next().cloned();
-            // Two branches off one head, each a little chain of its own.
             let left = branch(tip.as_ref(), "left", mine);
             let right = branch(tip.as_ref(), "right", theirs);
-
-            // The box: the shared prefix, then one branch, then the other.
             let mut box_side = base.clone();
             for object in &left { box_side.insert(seal_hash(object), object.clone()); }
             let posted: Vec<String> = right.iter().map(canonical_envelope).collect();

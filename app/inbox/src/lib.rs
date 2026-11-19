@@ -41,3 +41,8 @@ pub mod verb {
 pub mod wire {
     pub mod inbox;
 }
+
+// A proposal and every response to one, drawn for the schema's laws: test support.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/drawn.rs"]
+pub mod drawn;

@@ -3190,6 +3190,7 @@ dependencies = [
  "ed25519-dalek",
  "memchr",
  "prodrome-derive",
+ "proptest",
  "rustix",
  "sha2",
  "thiserror",

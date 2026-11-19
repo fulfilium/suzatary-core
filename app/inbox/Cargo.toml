@@ -35,11 +35,14 @@ chrono.workspace = true
 sha2.workspace = true
 hex.workspace = true
 
+# The drawn proposal and responses (`drawn`), under `nothing` alone.
+proptest = { workspace = true, optional = true }
+
 # `secretary::inbox_json`: the exports' `Json` is implemented beside the type.
 prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing"]
+nothing = ["dep:proptest", "suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing"]
 # The browser module's view of the inbox's schema; `app/wasm` alone enables it.
 wasm = ["dep:prodrome-wasm-exports"]
 
