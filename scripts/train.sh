@@ -67,9 +67,12 @@ if [[ "${1:-}" != check ]]; then
 fi
 
 return_to="" there="" live="" cloud="" gate_branch="" gate_pushed=""
+# Both halves are signalled before either is waited on: a HUP or TERM can run this trap after
+# bash reaped a half before it noted it, and a `wait` on that half returns once no child is left.
 finish() {
+  [[ -z "$there" ]] || kill "$there" 2>/dev/null || true
   [[ -z "$live" ]] || live_stop
-  [[ -z "$there" ]] || { kill "$there" 2>/dev/null; wait "$there" 2>/dev/null; } || true
+  [[ -z "$there" ]] || wait "$there" 2>/dev/null || true
   [[ -z "$gate_branch" ]] || cloud_close
   worktree_close
   [[ -z "$return_to" ]] || git checkout --quiet "$return_to"
@@ -742,7 +745,7 @@ live_start() {
   set +m
 }
 
-# TERM to the group, KILL 5 s later; no verdict recorded.
+# No verdict recorded.
 live_stop() {
   local tries=0
   kill -TERM -- "-$live" 2>/dev/null || true

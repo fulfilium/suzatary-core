@@ -1249,19 +1249,108 @@ fn holding(t: &Train, name: &str) -> (PathBuf, std::io::BufReader<std::fs::File>
     (hold, std::io::BufReader::new(said))
 }
 
-/// The output of `child`, a train, which must end within two minutes; one that does not is
-/// killed and fails the test, so a half that was never stopped fails it rather than hangs it.
-fn ends_within_two_minutes(child: std::process::Child) -> Output {
-    let pid = child.id().to_string();
+/// The output of `child`, a train run in `t`, which must end within two minutes; one that does not
+/// is killed and fails the test, so a half that was never stopped fails it rather than hangs it.
+/// The failure says what was still alive and, where the train writes to `train.stderr` in the
+/// scratch, its last lines.
+fn ends_within_two_minutes(t: &Train, child: std::process::Child) -> Output {
+    let pid = child.id();
     let (said, ended) = std::sync::mpsc::channel();
     std::thread::spawn(move || said.send(child.wait_with_output()));
     let Ok(out) = ended.recv_timeout(std::time::Duration::from_secs(120)) else {
-        let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        let alive = alive(pid, &t.scratch);
+        let printed = std::fs::read_to_string(t.scratch.join("train.stderr")).unwrap_or_default();
+        let last = printed.lines().rev().take(20).collect::<Vec<_>>();
+        let _ = Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .status();
         panic!(
-            "the train did not end within two minutes: a half it should have stopped still runs"
+            "the train did not end within two minutes: a half it should have stopped still runs\n\
+             still alive:\n{alive}\nits last lines:\n{}",
+            last.into_iter().rev().collect::<Vec<_>>().join("\n")
         );
     };
     out.expect("the train ends")
+}
+
+/// Each process of `train`'s tree or holding a file under `scratch` (an orphan of the train's
+/// included), a line each: pid, parent, group, state, kernel wait channel, the syscall it is in
+/// (61 is wait4, 0 read), its command line, and its descriptors that are not /dev/null.
+fn alive(train: u32, scratch: &Path) -> String {
+    let scratch = scratch
+        .canonicalize()
+        .unwrap_or_else(|_| scratch.to_owned());
+    let read = |pid: &str, file: &str| {
+        std::fs::read_to_string(format!("/proc/{pid}/{file}")).unwrap_or_default()
+    };
+    let procs = std::fs::read_dir("/proc")
+        .expect("/proc reads")
+        .flatten()
+        .filter_map(|entry| {
+            let pid = entry.file_name().to_string_lossy().into_owned();
+            pid.parse::<u32>().ok()?;
+            let stat = read(&pid, "stat");
+            let (_, rest) = stat.rsplit_once(") ")?;
+            let fields = rest
+                .split(' ')
+                .take(3)
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            (fields.len() == 3).then_some((pid, fields))
+        })
+        .collect::<Vec<_>>();
+    let mut tree = BTreeSet::from([train.to_string()]);
+    while let Some(child) = procs
+        .iter()
+        .find(|(pid, f)| tree.contains(&f[1]) && !tree.contains(pid))
+    {
+        tree.insert(child.0.clone());
+    }
+    procs
+        .iter()
+        .filter_map(|(pid, f)| {
+            let fds = fds(pid);
+            let under = |to: &Path| to.starts_with(&scratch);
+            let ours = tree.contains(pid)
+                || fds.iter().any(|(_, to)| under(to))
+                || std::fs::read_link(format!("/proc/{pid}/cwd")).is_ok_and(|cwd| under(&cwd));
+            ours.then(|| {
+                let open = fds
+                    .iter()
+                    .filter(|(_, to)| to != Path::new("/dev/null"))
+                    .map(|(fd, to)| format!("{fd}:{}", to.display()))
+                    .collect::<Vec<_>>();
+                format!(
+                    "{pid} ppid {} pgid {} {} {} syscall {} {} [{}]",
+                    f[1],
+                    f[2],
+                    f[0],
+                    read(pid, "wchan"),
+                    read(pid, "syscall")
+                        .split(' ')
+                        .next()
+                        .unwrap_or_default()
+                        .trim(),
+                    read(pid, "cmdline").replace('\0', " ").trim(),
+                    open.join(" ")
+                )
+            })
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The open descriptors of the process `pid`, each with what it names.
+fn fds(pid: &str) -> Vec<(String, PathBuf)> {
+    std::fs::read_dir(format!("/proc/{pid}/fd"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|fd| {
+            let to = std::fs::read_link(fd.path()).ok()?;
+            Some((fd.file_name().to_string_lossy().into_owned(), to))
+        })
+        .collect()
 }
 
 /// The processes that hold `path` open, by pid.
@@ -1270,13 +1359,8 @@ fn holders(path: &Path) -> Vec<String> {
     std::fs::read_dir("/proc")
         .expect("/proc reads")
         .flatten()
-        .filter_map(|entry| {
-            let pid = entry.file_name().to_string_lossy().into_owned();
-            let fds = std::fs::read_dir(entry.path().join("fd")).ok()?;
-            fds.flatten()
-                .any(|fd| std::fs::read_link(fd.path()).is_ok_and(|to| to == path))
-                .then_some(pid)
-        })
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|pid| fds(pid).iter().any(|(_, to)| *to == path))
         .collect()
 }
 
@@ -1505,7 +1589,7 @@ fn train_gate_github_red_checks_job_stops_the_live_half_at_once() {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("train.sh starts");
-    let red = ends_within_two_minutes(gating);
+    let red = ends_within_two_minutes(&t, gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     assert!(
@@ -1572,7 +1656,7 @@ fn train_gate_github_red_live_half_stops_the_run() {
         t.github_calls()
     );
     std::fs::write(&hold, "").expect("the held live half goes on");
-    let red = ends_within_two_minutes(gating);
+    let red = ends_within_two_minutes(&t, gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     assert!(
@@ -1791,7 +1875,7 @@ fn train_gate_github_killed_deletes_its_branch() {
             .args(started.get_args())
             .current_dir(t.work())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
+            .stderr(std::fs::File::create(t.scratch.join("train.stderr")).expect("a log"));
         for (key, value) in started.get_envs() {
             match value {
                 Some(value) => ignoring.env(key, value),
@@ -1816,7 +1900,7 @@ fn train_gate_github_killed_deletes_its_branch() {
                 .arg(gating.id().to_string()),
             "stop the train",
         );
-        let out = ends_within_two_minutes(gating);
+        let out = ends_within_two_minutes(&t, gating);
         assert!(
             !out.status.success(),
             "{signal}: a stopped train is not green"
@@ -3989,7 +4073,7 @@ fn train_gate_github_reports_a_red_scene_without_a_block() {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("train.sh starts");
-    let red = ends_within_two_minutes(gating);
+    let red = ends_within_two_minutes(&t, gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "{stderr}");
     let report = &stderr[stderr.find("tree half: failed").expect("the report")..];
