@@ -1,5 +1,5 @@
 /**
- * THE LINES, IN A TAB (docs/WORDS-PLAN-2026-10-09.md §5): the conversations are read from
+ * THE LINES, IN A TAB (decision `lockedwords`): the conversations are read from
  * `secretary-lines`, whose objects hold their words locked, with the keys the pull hands over
  * kept beside them in one row. Its claims, each a scene:
  *

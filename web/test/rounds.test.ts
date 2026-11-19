@@ -1,6 +1,5 @@
 /**
- * The transcript regrouped into rounds (`docs/CHATSHAPE-PLAN-2026-09-15.md`
- * §4.1, §6 commit 2; each row's own `index` field, §8.5 commit 9). Pure, so
+ * The transcript regrouped into rounds, by each row's own `index` field. Pure, so
  * every shape below is a plain object — no DOM, no fetch.
  */
 
@@ -184,7 +183,7 @@ interface FixtureTurn {
 
 /**
  * THE SAME FIXTURE `suzatary_conversations::secretary::about`'s OWN TEST READS
- * (`docs/CHATSHAPE-PLAN-2026-09-15.md` §8.5 commit 9) — one transcript, two
+ * — one transcript, two
  * independent groupings, pinned to agree: Rust's `round_spans` answers
  * `[(0,3),(4,5),(6,7)]` over the same eight turns, and this asserts `rounds`
  * partitions the identical three spans.

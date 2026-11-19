@@ -12,7 +12,7 @@ stage 5's second half, the routine taught to build a plugin, waits. It replaces 
 WebAssembly COMPONENT loaded at run time, holding exactly the authority its
 imports give it. Its neighbours: the Prodrome's
 `docs/design-register-types.md` §6.0 (views are data, and the open question of
-agent-authored state), §6.2 (caches), and `APP-AS-READING-PLAN-2026-10-02.md`.
+agent-authored state), §6.2 (caches), and the decision `memoisedfold`.
 
 ## 1. A plugin is a bundle of three data
 

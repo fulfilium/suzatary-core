@@ -1,6 +1,6 @@
 /**
  * THE TYPST LIST, IN A BROWSER: the open list compiled in the tab by typst-wasm from a typed state
- * (docs/APP-AS-READING-PLAN-2026-10-02.md, stages 0 and 4), beside today's list.
+ * beside today's list.
  *
  * Laws: no horizontal overflow at 390 and 1280 px, a crafted title renders as its literal text, a long title takes
  * three lines beside a narrow mark and is whole in the open todo, the owner's markup renders while the agent's reads

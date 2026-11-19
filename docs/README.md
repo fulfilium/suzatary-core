@@ -39,8 +39,6 @@ and the plans are how it got here.
   commands, the style rules for the Rust and the TypeScript, and the rules
   for written English.
 - [`TS-STYLE.md`](TS-STYLE.md) — how the TypeScript is written.
-- [`SIMPLIFY-PLAN-2026-09-28.md`](SIMPLIFY-PLAN-2026-09-28.md) — the long
-  form of the Rust style: the types tell the story.
 - [`../OPERATOR.md`](../OPERATOR.md) and [`../SECRETARY.md`](../SECRETARY.md)
   — the manuals the triage agent and the secretary work from, pricing table
   included.
@@ -70,19 +68,9 @@ the git history keeps it. Newest first.
 |---|---|---|
 | 2026-10-21 | [TOPICS](TOPICS-PLAN-2026-10-21.md) | One stream of rounds, with topics that merge |
 | 2026-10-21 | [LAZYSYNC](LAZYSYNC-PLAN-2026-10-21.md) | A store's skeleton eagerly, its content by hash on demand |
-| 2026-10-02 | [APP-AS-READING](APP-AS-READING-PLAN-2026-10-02.md) | The whole app as one reading of history, intents, ui and time |
 | 2026-10-02 | [PLUGINS](PLUGINS-PLAN-2026-10-02.md) | The outside world behind WebAssembly interfaces |
 | 2026-10-01 | [USERREPO](USERREPO-PLAN-2026-10-01.md) | A private host repository that pins the public app |
-| 2026-09-28 | [PROPOSALS](PROPOSALS-PLAN-2026-09-28.md) | A proposal is an object, so a submit is idempotent |
-| 2026-09-28 | [SIMPLIFY](SIMPLIFY-PLAN-2026-09-28.md) | The types tell the story |
 | 2026-09-27 | [CODINGSESSION](CODINGSESSION-PLAN-2026-09-27.md) | A coding session started from the phone |
-| 2026-09-27 | [MULTIPRODROME](MULTIPRODROME-PLAN-2026-09-27.md) | Many prodromes in many repositories |
 | 2026-09-25 | [CHAT](CHAT-PLAN-2026-09-25.md) | Many chats, one memory |
 | 2026-09-25 | [DESIGN-DECISIONS](DESIGN-DECISIONS-2026-09-25.md) | The design system's decisions for the app |
 | 2026-09-25 | [REDESIGN](REDESIGN-PLAN-2026-09-25.md) | The web app redrawn in the design system |
-| 2026-09-25 | [TODOTREE](TODOTREE-PLAN-2026-09-25.md) | Todos, subtodos and groups are one tree of terms |
-| 2026-09-16 | [WEBALGEBRA](WEBALGEBRA-PLAN-2026-09-16.md) | The web app to the Prodrome's standard |
-| 2026-09-15 | [CHATSHAPE](CHATSHAPE-PLAN-2026-09-15.md) | The chat, tightened |
-| 2026-09-14 | [DATASPLIT](DATASPLIT-PLAN-2026-09-14.md) | The data in a repository of its own |
-| 2026-09-14 | [SECRETARYACTS](SECRETARYACTS-PLAN-2026-09-14.md) | The box's own acts as proposals |
-| 2026-09-13 | [ONECHAT](ONECHAT-PLAN-2026-09-13.md) | One conversation that remembers |

@@ -140,6 +140,15 @@ pub fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding> {
             allowance: plan.budget.allowance,
         });
     }
+    found.extend(
+        plan.in_force
+            .iter()
+            .filter(|row| tree.get(&row.file).is_none())
+            .map(|row| Finding::Missing {
+                by: format!("the plan in force for {}", row.task),
+                path: row.file.clone(),
+            }),
+    );
     found.extend(members(plan, tree));
     for external in &plan.externals {
         if !tree

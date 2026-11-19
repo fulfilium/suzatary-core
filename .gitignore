@@ -66,7 +66,7 @@ proptest-regressions/
 # mistaken for a line of the append-only transcript.
 /secretary-render/
 
-# The inbox prodrome (`docs/PROPOSALS-PLAN-2026-09-28.md`): every proposal and
+# The inbox prodrome (decision `inboxschema`): every proposal and
 # what became of it, box-local like `/secretary/`, whose drafts it quotes.
 /inbox/
 

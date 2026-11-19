@@ -2,7 +2,7 @@
 
 The owner approved the canvas, a private claude.ai artifact ("build this").
 The design system is his `bmabsout`, another. Everything here is
-settled; the tree behind the Todos list is docs/TODOTREE-PLAN-2026-09-25.md.
+settled; the tree behind the Todos list is `app/base/src/tree.rs`.
 TypeScript follows docs/TS-STYLE.md.
 
 ## Tokens

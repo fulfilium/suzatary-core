@@ -76,7 +76,7 @@ Four ideas that make the rest simpler:
   same object again returns that response. "Nothing was sent" records
   nothing, so trying again is submitting again. No "in progress" state is
   ever visible; a lock under the interpreter handles concurrent submits.
-  (PROPOSALS-PLAN-2026-09-28, being built.)
+  (Built; decision `inboxschema`.)
 
 And one for documents:
 - **Contracts are files, decisions are items.** Whatever the code must obey
@@ -423,6 +423,6 @@ is where attention goes next.
 7. **Where the effect lives.** Is "a request object, and one binding
    completion carrying its response" a Prodrome operation that every host
    gets, or a Suzatary rule written over plain objects? It starts in
-   Suzatary (PROPOSALS-PLAN) and moves down if a second host needs it.
+   Suzatary (decision `inboxschema`) and moves down if a second host needs it.
 8. **Decisions as items:** which record kind, and does merging a PR complete
    its item automatically, through the GitHub mirror?

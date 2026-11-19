@@ -255,8 +255,8 @@ fn over_budget(plan: &Plan, report: &Report) -> Vec<Over> {
         .collect()
 }
 
-/// The repository's lines of the table: the goal, the reading set, the ratchets and the uncited
-/// plans.
+/// The repository's lines of the table: the goal, the reading set, the ratchets, the plans in
+/// force and the uncited plans.
 fn footer(plan: &Plan, report: &Report, base: &Base) -> String {
     let mut out = String::new();
     let over = over_budget(plan, report);
@@ -306,6 +306,12 @@ fn footer(plan: &Plan, report: &Report, base: &Base) -> String {
             held.join(", ")
         );
     }
+    let _ = writeln!(
+        out,
+        "plans in force, outside the reading set: {}, {} tokens",
+        report.in_force.0.len(),
+        short(report.in_force.total())
+    );
     if !report.uncited_plans.is_empty() {
         let _ = writeln!(
             out,

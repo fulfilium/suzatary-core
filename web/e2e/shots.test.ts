@@ -304,8 +304,7 @@ const SHOTS: readonly Shot[] = [
     },
   },
   /**
-   * A CONVERSATION WITH A REAL EXCHANGE ON IT
-   * (`docs/ONECHAT-PLAN-2026-09-13.md` §6 commit 6) — NOT MID-ANSWER, and that
+   * A CONVERSATION WITH A REAL EXCHANGE ON IT — NOT MID-ANSWER, and that
    * limit is measured rather than assumed: `say`'s own response draws the
    * turn it just appended as `queued` before the worker has answered it
    * (`serve::secretary::say`'s ordering), which is a deterministic fact about the

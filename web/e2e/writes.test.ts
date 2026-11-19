@@ -497,8 +497,7 @@ app.scene("the toast's Undo button reopens what was just completed, and U redoes
   );
 });
 
-// --- the one-line field beside an act (docs/CHATSHAPE-PLAN-2026-09-15.md
-// §8.2, commit 12) -------------------------------------------------------
+// --- the one-line field beside an act ----------------------------------
 
 /**
  * A LINE ON DONE REACHES BOTH RECORDS. `app/cli/tests/acts.rs` already pins

@@ -179,9 +179,8 @@ app.scene("the filter is remembered, and comes back parsed rather than trusted",
 });
 
 /**
- * A SUBTODO FROM THE LIST (docs/TODOTREE-PLAN-2026-09-25.md step 5): the add
- * sheet opens under the line, the box authors the child and the parent's
- * revision, this replica seals both, and the child is drawn under its parent.
+ * A SUBTODO FROM THE LIST: the add sheet opens under the line, the box authors the child and the
+ * parent's revision, this replica seals both, and the child is drawn under its parent.
  */
 app.scene("Add a subtodo puts the new todo under its parent", async () => {
   await app.open(WRITE_BASE);

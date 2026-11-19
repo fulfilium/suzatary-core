@@ -89,6 +89,8 @@ request:
 4. When a plan's stages are done, cut the plan to its decisions and propose each decision for
    `memory/` (see "The project's memory"). Delete a dated plan that nothing cites.
    `scripts/context.sh` lists the plans under `docs/` that nothing in the reading set cites.
+   The plans in force are the `in_force` table of `context.toml`, each beside the open roadmap
+   task it guides; a plan leaves the tree when its task completes.
 5. In the pull request that makes something unused, delete it: old paths, tests, fixtures and
    documents.
 6. Write a test as a law over generated inputs where you can, and delete an example test that a

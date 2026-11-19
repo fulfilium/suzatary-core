@@ -1346,9 +1346,9 @@ fn matches_allowed_pattern(pattern: &str, probe: &str) -> bool {
 /// Every store `safe-push.sh` admits is classified by what its pushed objects say: `WORDLESS` (no
 /// object holds a person's or a model's words, each with the law test that says so), `BY_DESIGN`
 /// (words the owner means to keep in history: the chains, his decisions, his notes, the
-/// deployment) or `PENDING` (words still pushed in the clear, owed to a later stage of the words
-/// plan). A store admitted and in no table, or in a table and not admitted, fails; and no store of
-/// keys or texts, which hold the words themselves, is ever admitted.
+/// deployment) or `PENDING` (words still pushed in the clear, owed the same locking by decision
+/// `wordsowed`). A store admitted and in no table, or in a table and not admitted, fails; and no
+/// store of keys or texts, which hold the words themselves, is ever admitted.
 #[test]
 fn every_store_safe_push_admits_is_classified() {
     const WORDLESS: &[(&str, &str)] = &[

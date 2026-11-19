@@ -139,7 +139,7 @@ test("a sentence splits into prose and the things it names, at boundaries only",
 
 /**
  * `urlTokens` IS THE DECISION `textWithReferences` LINKS ON, PURE OF THE DOM
- * (`docs/SECRETARYACTS-PLAN-2026-09-14.md` §3, §6 commit 6): an act turn's
+ * (decision `boxturnslink`): an act turn's
  * own device-code URL becomes a link and a model turn's stays plain text —
  * `textWithReferences(text, who)` gates this call on `who === "act"`, which is
  * the browser scene's to prove (`web/e2e`), since that is where a link that

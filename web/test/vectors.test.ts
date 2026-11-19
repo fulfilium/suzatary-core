@@ -1,6 +1,6 @@
 /**
  * THE THREE VECTORS THE RUST WRITES, AND WHAT THE PURE MODULES SAY BACK
- * (`docs/WEBALGEBRA-PLAN-2026-09-16.md` §5 commit 6; `docs/WEB-SPEC.md` §4) —
+ * (`docs/WEB-SPEC.md` §4) —
  * the `about-fixture.json` pattern (`app/conversations/src/secretary/about.rs`,
  * `rounds.test.ts`) generalised from one payload to three.
  *
@@ -8,8 +8,7 @@
  * a `ConversationPayload` over the six-todo fixture chain at a fixed instant,
  * and beside each one writes the ANSWER the Rust gives to the question this
  * file asks — never regenerated here, only READ: a disagreement with a
- * vector is a finding, not staleness (`docs/WEBALGEBRA-PLAN-2026-09-16.md`
- * §1 item 5). Every payload is passed through its runtime guard first
+ * vector is a finding, not staleness. Every payload is passed through its runtime guard first
  * (`isFoldPayload` etc.) exactly as a page would, and then folded with the
  * PURE module a page actually uses — `todos.ts` for the fold, `verify.ts`
  * (the fallback verifier; `wasm.test.ts` covers the wasm one) for the chain,

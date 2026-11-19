@@ -80,7 +80,7 @@ fn write_or_check<T: Serialize>(value: &T, file: &str) {
         stored,
         printed,
         "{} disagrees with what the Rust now computes. That is a finding, \
-         not staleness (docs/WEBALGEBRA-PLAN-2026-09-16.md §1 item 5) — decide \
+         not staleness (docs/WEB-SPEC.md §4) — decide \
          whether the Rust or the TypeScript is right, fix the one that is \
          wrong, and only then rerun with SUZATARY_WRITE_VECTORS=1 to update \
          this file in the same commit.",

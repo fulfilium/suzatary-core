@@ -1,4 +1,4 @@
-//! Door 1 of a public store (`docs/PUBLICTASKS-PLAN-2026-11-15.md` §3.1, stage 2), a security
+//! Door 1 of a public store (decision `publictaskwords`), a security
 //! boundary: a store whose charter says `public = true` takes no event that names a term of the
 //! lists, a name of the deployment's own, a tailnet, a home path, an address, a telephone number
 //! or a secret, and nothing at all while it cannot read the lists. The refusal names the field

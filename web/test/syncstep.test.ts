@@ -1,6 +1,5 @@
 /**
- * `stepSync` (`docs/WEBALGEBRA-PLAN-2026-09-16.md` §5 commit 6): the
- * replica, which chain it belongs to, the exchange's own phase — idle,
+ * `stepSync`: the replica, which chain it belongs to, the exchange's own phase — idle,
  * pushing, pulling, refused with what — and the fold fetch in flight
  * (`fetching`), as a closed
  * `SyncState` and a pure fold over `SyncEvent`. One example per arm and a

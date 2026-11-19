@@ -143,8 +143,8 @@ Chain items: `onechat` (the default conversation, the session, the queue,
 streaming), `typstanswers` (the rendered answer, since replaced by HTML
 blocks) and `chatshape` (rounds,
 cards in place, a windowed dated transcript, acts that wake the model, a push
-when unwatched, the about-slice, the sheet and the panel; plan
-`docs/CHATSHAPE-PLAN-2026-09-15.md`). `askfromanywhere` was the first door
+when unwatched, the about-slice, the sheet and the panel; decisions
+`showrounds` and `actswake`). `askfromanywhere` was the first door
 into the conversation and the sheet is its generalisation;
 `briefwherethemorningstarts` is settled by `onechat`.
 

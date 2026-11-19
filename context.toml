@@ -160,6 +160,28 @@ records = ["CHANGELOG.md"]
 # nothing in the reading set cites are listed.
 documents = "docs"
 
+# The dated plans in force, each with the open roadmap task it guides. The session that does the
+# task reads its plan; no other reader does, so a plan here is outside the reading set. A plan
+# leaves the tree when its task completes.
+[[in_force]]
+file = "docs/CORESPLIT-PLAN-2026-11-06.md"
+task = "coresplit"
+[[in_force]]
+file = "docs/LOCALWRITES-PLAN-2026-11-01.md"
+task = "localwrites"
+[[in_force]]
+file = "docs/EFFECTS-PLAN-2026-10-25.md"
+task = "localwrites"
+[[in_force]]
+file = "docs/ONEOWNER-PLAN-2026-11-02.md"
+task = "coreskeleton"
+[[in_force]]
+file = "docs/LAZYSYNC-PLAN-2026-10-21.md"
+task = "lazysync"
+[[in_force]]
+file = "docs/MEMORYDIGEST-PLAN-2026-10-06.md"
+task = "memorydigest"
+
 # One unit per workspace member, and the web app. `depends` names the units and the external
 # libraries this unit's code uses: for a crate, its Cargo.toml's `[dependencies]` (crates.io
 # libraries are not measured); for any unit, also a unit whose `witnesses` text appears in its

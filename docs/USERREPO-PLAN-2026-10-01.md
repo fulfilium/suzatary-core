@@ -8,7 +8,7 @@ application, "not the other way around due to one being private and the other
 should be public one day, it can also host the specific section of the code
 that acts like plugins and such".
 
-A design, not built. It extends `DATASPLIT-PLAN-2026-09-14.md` (the data tree
+A design, not built. It extends the decision `tworoots` (the data tree
 split out of this repository) and replaces the live clone that an
 earlier plan, since deleted, described.
 
@@ -128,7 +128,7 @@ for its NixOS rebuild.
    app moves out, found by a guard that finds code naming this deployment.
 5. **A second host**: a flake template a new user starts from, and the
    owner's decision on publishing the app (a fresh clone, as
-   `DATASPLIT-PLAN-2026-09-14.md` §9 says, since this repository's history
+   the decisions `tworoots` and `publication` say, since this repository's history
    holds the data).
 
 ## 7. Non-goals

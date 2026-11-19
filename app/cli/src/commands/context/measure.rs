@@ -48,8 +48,11 @@ pub struct Report {
     /// The repository's reading set: every unit's production source, README and scripts, the
     /// paths of `repository.include`, and every document any of them cites.
     pub reading: Reading,
-    /// The dated plans of `repository.documents` that nothing in the reading set cites.
+    /// The dated plans of `repository.documents` that nothing in the reading set cites and
+    /// `in_force` does not name.
     pub uncited_plans: Vec<String>,
+    /// The plans of `in_force` that the tree holds, outside the reading set.
+    pub in_force: Reading,
 }
 
 impl Report {
@@ -171,17 +174,38 @@ pub fn measure(plan: &Plan, tree: &Tree) -> Report {
         }));
     }
     let reading = with_cited(&read, plan, tree);
-    let uncited_plans = tree
-        .under(&plan.repository.documents)
-        .map(|(path, _)| path)
-        .filter(|path| is_plan(path, &plan.repository.documents) && !reading.0.contains_key(*path))
-        .map(str::to_owned)
-        .collect();
+    let (uncited_plans, in_force) = plans(plan, tree, &reading);
     Report {
         units,
         reading,
         uncited_plans,
+        in_force,
     }
+}
+
+/// The dated plans that `reading` does not cite and `plan.in_force` does not name, and the plans
+/// in force that the tree holds.
+fn plans(plan: &Plan, tree: &Tree, reading: &Reading) -> (Vec<String>, Reading) {
+    let mut in_force = Reading::default();
+    for row in &plan.in_force {
+        if let Some(text) = tree.get(&row.file) {
+            in_force.add(
+                &row.file,
+                plan.tokens.ratio.tokens(Kind::of(&row.file), text),
+            );
+        }
+    }
+    let uncited = tree
+        .under(&plan.repository.documents)
+        .map(|(path, _)| path)
+        .filter(|path| {
+            is_plan(path, &plan.repository.documents)
+                && !reading.0.contains_key(*path)
+                && plan.in_force.iter().all(|row| row.file != *path)
+        })
+        .map(str::to_owned)
+        .collect();
+    (uncited, in_force)
 }
 
 /// The files of `read`, and every document they cite.

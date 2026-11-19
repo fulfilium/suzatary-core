@@ -1,5 +1,5 @@
 /**
- * THE TYPST LIST, MEASURED (docs/APP-AS-READING-PLAN-2026-10-02.md stage 4, the draw as one memoised fold): the
+ * THE TYPST LIST, MEASURED (the draw as one memoised fold): the
  * modules' and the bundle's bytes on a first visit's wire, time to first view, the page's redraw after an Open intent,
  * and the draw's first draw, one-row change and Open intent over 53 and 250 rows, at no throttling and at CPU
  * throttling 4 and 6, the median of ten runs each, printed and written to `$SUZATARY_SHOTS/typst-measure.json`. The

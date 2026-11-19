@@ -20,6 +20,8 @@ pub struct Plan {
     pub tokens: Tokens,
     /// What the repository's reading set holds beside the units.
     pub repository: Repository,
+    /// The dated plans that guide an open roadmap task, read by that task's session alone.
+    pub in_force: Vec<InForce>,
     /// The units, in the file's order.
     #[serde(rename = "unit")]
     pub units: Vec<Unit>,
@@ -93,6 +95,16 @@ pub struct Repository {
     /// The directory of the documents: a bare document name resolves under it, and its dated
     /// plans that nothing cites are listed.
     pub documents: String,
+}
+
+/// A dated plan in force: outside the reading set, and never listed as uncited.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InForce {
+    /// Its path from the repository's root.
+    pub file: String,
+    /// The open roadmap task it guides.
+    pub task: String,
 }
 
 /// One unit: a workspace member or the web app. (`serde` cannot deny unknown fields beside a
@@ -175,6 +187,10 @@ impl Plan {
             if !names.insert(name.as_str()) {
                 bail!("{FILE} names {name} twice");
             }
+        }
+        let mut files = BTreeSet::new();
+        if let Some(row) = plan.in_force.iter().find(|row| !files.insert(&row.file)) {
+            bail!("{FILE}: in_force names {} twice", row.file);
         }
         if let Some(name) = plan
             .ratchet
