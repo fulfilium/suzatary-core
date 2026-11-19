@@ -89,7 +89,8 @@ wit-bindgen = { version = "0.62", default-features = false, features = ["macros"
 webpki-roots = "1"
 # The push service account's RS256 JWT; `rust_crypto` for the reason above.
 jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }
-# The maildir files: RFC 2047 words, address lists and dates. notmuch stays a SUBPROCESS.
+# The maildir files: RFC 2047 words, address lists, dates and HTML entities. notmuch stays a
+# SUBPROCESS.
 mail-parser = "0.11"
 sha2 = "0.10"
 hmac = "0.12"

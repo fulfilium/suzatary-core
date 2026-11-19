@@ -2,9 +2,9 @@
 
 use std::sync::LazyLock;
 
+use mail_parser::decoders::html::add_html_token;
 use regex::Regex;
 use serde_json::Value;
-use suzatary_base::spelling::shorten;
 use suzatary_mail::mail::MailLink;
 
 /// Every leaf whose `content-type` starts with `mimetype`. A multipart container is recursed
@@ -47,32 +47,9 @@ pub fn body_text(body: &Value) -> String {
     html_to_text(&html_parts.concat())
 }
 
-/// One named or numeric character reference, without its `&`/`;`. Deliberately narrow: a full
-/// named-entity table would be a dependency this crate does not take.
-fn decode_entity(entity: &str) -> Option<char> {
-    match entity {
-        "amp" => Some('&'),
-        "lt" => Some('<'),
-        "gt" => Some('>'),
-        "quot" => Some('"'),
-        "apos" | "#39" => Some('\''),
-        "nbsp" => Some('\u{a0}'),
-        _ => {
-            if let Some(hex) = entity
-                .strip_prefix('#')
-                .and_then(|e| e.strip_prefix('x').or_else(|| e.strip_prefix('X')))
-            {
-                u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
-            } else {
-                let dec = entity.strip_prefix('#')?;
-                dec.parse::<u32>().ok().and_then(char::from_u32)
-            }
-        }
-    }
-}
-
-/// Unescape the entities `decode_entity` knows; anything else, a bare `&` included, passes
-/// through unchanged.
+/// Every `&name;`, `&#n;` and `&#xh;` decoded by `mail-parser`'s table, which names every HTML
+/// entity; a number that is no character becomes U+FFFD, as a browser draws it. An unknown name
+/// or a `&` that opens no reference passes through unchanged.
 #[must_use]
 pub fn unescape_entities(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -80,19 +57,16 @@ pub fn unescape_entities(text: &str) -> String {
     while let Some(amp) = rest.find('&') {
         out.push_str(&rest[..amp]);
         let tail = &rest[amp..];
-        // The longest reference decoded is `&#x10FFFF;`. The window counts chars, not bytes: a
-        // byte cut would panic inside a multi-byte character.
-        let window = shorten(tail, 12);
-        if let Some(semi) = window.find(';') {
-            let entity = &tail[1..semi];
-            if let Some(decoded) = decode_entity(entity) {
-                out.push(decoded);
-                rest = &tail[semi + 1..];
-                continue;
-            }
+        let semi = tail[1..]
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '#'))
+            .map_or(tail.len(), |at| at + 1);
+        if tail[semi..].starts_with(';') {
+            add_html_token(&mut out, &tail.as_bytes()[..=semi], false);
+            rest = &tail[semi + 1..];
+        } else {
+            out.push('&');
+            rest = &tail[1..];
         }
-        out.push('&');
-        rest = &tail[1..];
     }
     out.push_str(rest);
     out
@@ -120,6 +94,10 @@ const BREAK: [&str; 12] = [
     "table",
 ];
 
+/// Tags whose closing tag separates their words from the next cell's by a space; the row's `tr`
+/// ends the line.
+const CELL: [&str; 2] = ["td", "th"];
+
 static SPACES: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[ \t]+").expect("a literal pattern"));
 static BLANK_RUN: LazyLock<Regex> =
@@ -137,6 +115,12 @@ fn finish_text(joined: &str) -> String {
 
 /// HTML mail, walked into readable text. A comment's content is dropped; a tag's name is read
 /// up to its first whitespace, `!` or `/`, so `<!DOCTYPE …>` is the inert empty name.
+///
+/// The leak guard reads drawn markup through this (`door::drawing`), so the text keeps every
+/// word a browser draws, and two blocks' words never join into one. `mail-parser`'s own
+/// `html_to_text` is not used: it breaks lines only at `<br>` and `</p>`, so `<li>Ada</li><li>x`
+/// reads `Adax`; it drops everything after a comment closed by `--->`; and it skips a `<style>`
+/// or `<script>` only when the tag has no attributes.
 #[must_use]
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::new();
@@ -186,6 +170,8 @@ pub fn html_to_text(html: &str) -> String {
                 skip = skip.saturating_sub(1);
             } else if BREAK.contains(&name.as_str()) {
                 out.push('\n');
+            } else if CELL.contains(&name.as_str()) {
+                out.push(' ');
             }
         }
     }
@@ -265,5 +251,37 @@ mod tests {
     fn a_display_name_whose_cjk_character_crosses_the_old_byte_cut_does_not_panic() {
         let unresolved = "&Nora Vale 诺拉) joins the call";
         assert_eq!(unescape_entities(unresolved), unresolved);
+    }
+
+    /// Every named entity decodes, not only the six a hand-written table knew; the longest name
+    /// included.
+    #[test]
+    fn a_named_entity_beyond_the_six_decodes() {
+        assert_eq!(
+            html_to_text(
+                "<p>don&rsquo;t &mdash; caf&eacute; &CounterClockwiseContourIntegral;</p>"
+            ),
+            "don’t — café ∳"
+        );
+    }
+
+    /// The leak guard's reading: a word split by an inline element and ended by a block stays
+    /// one word apart from the next block, and a comment closed by `--->` hides nothing after it.
+    #[test]
+    fn the_guards_reading_keeps_blocks_apart_and_reads_past_an_odd_comment_close() {
+        assert_eq!(html_to_text("<li>A<b>da</b></li><li>x</li>"), "Ada\nx");
+        assert_eq!(html_to_text("a<!-- hidden --->Ada"), "aAda");
+    }
+
+    /// The leak guard's reading of a table: a two-word term set in two cells of a row reads as
+    /// its two words, as a browser draws the cells apart, and each row is its own line.
+    #[test]
+    fn the_guards_reading_keeps_table_cells_apart() {
+        assert_eq!(
+            html_to_text(
+                "<table><tr><th>Ada</th><td>Love<b>lace</b></td></tr><tr><td>x</td></tr></table>"
+            ),
+            "Ada Lovelace\nx"
+        );
     }
 }
