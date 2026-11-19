@@ -154,7 +154,7 @@ mod tests {
     /// is already absent.
     #[test]
     fn a_removal_is_idempotent_and_absence_is_success() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let path = dir.path().join("keys/k");
         replace(&path, b"key", Mode::Private).expect("written");
         remove(&path).expect("removed");
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn a_replacement_holds_the_new_bytes_and_leaves_nothing_beside_them() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let path = dir.path().join("deep/er/state.json");
         replace(&path, b"first", Mode::Readable).expect("written");
         replace(&path, b"second", Mode::Readable).expect("rewritten");
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn each_mode_writes_its_own_bits() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let private = dir.path().join("grant.json");
         let readable = dir.path().join("instance.toml");
         replace(&private, b"{}", Mode::Private).expect("written");
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn a_failed_replacement_leaves_the_target_and_no_temporary() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let path = dir.path().join("kept");
         replace(&path, b"kept", Mode::Readable).expect("written");
         // A directory where the file goes: the rename is refused.
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn a_delivery_is_staged_apart_and_leaves_nothing_there() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let (tmp, new) = (dir.path().join("tmp"), dir.path().join("new"));
         deliver(&new.join("1.eml"), &tmp, b"mail", Mode::Private).expect("delivered");
         assert_eq!(std::fs::read(new.join("1.eml")).expect("read"), b"mail");
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn a_hold_excludes_a_second_until_dropped_and_never_truncates() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("durable");
         let path = dir.path().join("sub/.lock");
         let first = hold(&path).expect("held");
         std::fs::write(&path, b"note").expect("written");

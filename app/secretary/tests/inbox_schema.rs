@@ -5,8 +5,6 @@
 //! back.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use prodrome_core::event::{Actor, Hash, canonical, parse_event};
 use prodrome_core::fold::{Order, maximal, read};
@@ -26,28 +24,19 @@ use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
 type Store = EventStore<InboxEvent, Everything>;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A store at the inbox schema, removed when dropped.
-struct Scratch(Store);
+struct Scratch(
+    Store,
+    #[expect(dead_code, reason = "held for its drop, which removes the directory")]
+    suzatary_testkit::TempDir,
+);
 
 impl Scratch {
     fn new() -> Scratch {
-        let root: PathBuf = std::env::temp_dir().join(format!(
-            "suzatary-inbox-schema-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        let store = Store::new(root, Everything);
+        let dir = suzatary_testkit::scratch("inbox-schema");
+        let store = Store::new(dir.path().join("store"), Everything);
         store.init("inbox").expect("begins");
-        Scratch(store)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(self.0.root());
+        Scratch(store, dir)
     }
 }
 

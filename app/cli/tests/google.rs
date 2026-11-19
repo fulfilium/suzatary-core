@@ -364,8 +364,7 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     );
 
     // The sync hands lieer a token minted from the grant, never the grant or the client.
-    let maildir =
-        std::env::temp_dir().join(format!("suzatary-google-lieer-{}", std::process::id()));
+    let maildir = common::scratch("google-lieer");
     let grants = suzatary_io::google::Grants::new(
         suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(
             &serving.fake.base,
@@ -381,7 +380,6 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     for kept in ["fake-refresh", fake_google::CLIENT_SECRET] {
         assert!(!handed.contains(kept), "{kept} in {handed}");
     }
-    let _ = std::fs::remove_dir_all(&maildir);
 }
 
 /// A second writer, signed in to the tailnet as someone else, can neither follow the consent
@@ -784,9 +782,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         2 * suzatary_google::google::EVENTS,
         "two calendars, each read to its bound"
     );
-    let root =
-        std::env::temp_dir().join(format!("suzatary-google-calendar-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = common::scratch("google-calendar");
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
     let learnt = suzatary_io::google::learn(&root, &read, at).expect("learned");
     assert_eq!(learnt.written, read.len());
@@ -1055,7 +1051,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
     // A directory of this call's own: the three fix-from-its-button scenes run as threads of one
     // process, so a root named by the process alone was one store that each removed while
     // another appended to it.
-    let scratch = tempfile::tempdir().expect("a scratch dir");
+    let scratch = suzatary_testkit::scratch("google");
     let root = scratch.path();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
     let (lines, healths, stored) = suzatary_cli::commands::google::read_calendars(

@@ -634,7 +634,7 @@ mod tests {
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
         use suzatary_conversations::secretary::model::Halt;
         use suzatary_health::health::{Limit, Limited};
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("model");
         let result = |text: &str| {
             format!(
                 r#"{{"type":"result","subtype":"success","is_error":true,"num_turns":1,"duration_ms":5,"session_id":"00000000-0000-4000-8000-000000000001","result":"{text}"}}"#
@@ -753,7 +753,7 @@ mod tests {
     #[test]
     fn a_pdf_a_verb_handed_over_goes_down_stream_json_as_a_document_block() {
         use suzatary_held::enclosed::{Enclosed, Enclosure};
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("model");
         let files = Blobs::open(dir.path().to_path_buf());
         let pdf = b"%PDF-1.7\n%%EOF\n";
         let id = files.put(pdf).expect("kept");
@@ -882,7 +882,7 @@ mod tests {
 
     #[test]
     fn the_cli_runs_with_non_essential_traffic_off() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("model");
         let seen = dir.path().join("env");
         let answer = dir.path().join("answer");
         std::fs::write(
@@ -922,7 +922,7 @@ mod tests {
     /// lists, the cache's lifetime, [`QUIET`]); `sh`'s own are the shell's.
     #[test]
     fn the_child_sees_its_config_dir_and_nothing_unlisted() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("model");
         let seen = dir.path().join("env");
         let script = suzatary_testkit::fake_program(
             dir.path(),

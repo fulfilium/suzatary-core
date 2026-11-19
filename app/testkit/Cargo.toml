@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-testkit"
-description = "Programs a test makes and runs, made so that no test's process ever executes a file it holds open for writing"
+description = "What a test makes: programs it runs, never a file it holds open for writing, and scratch directories removed when the test ends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,7 @@ publish = false
 name = "suzatary_testkit"
 path = "src/lib.rs"
 
-[dev-dependencies]
+[dependencies]
 tempfile = "3"
 
 [lints]

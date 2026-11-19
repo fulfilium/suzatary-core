@@ -591,7 +591,7 @@ mod tests {
 
     #[test]
     fn a_timeout_kills_the_grandchildren_too() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("run");
         let pid_file = dir.path().join("pid");
         let script = format!("sleep 30 & echo $! > {}; wait", pid_file.display());
         let failed = run(&Cmd::new("sh")

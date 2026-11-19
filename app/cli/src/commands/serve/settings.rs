@@ -224,8 +224,8 @@ mod tests {
 
     #[test]
     fn a_worktree_reads_the_configuration_its_gitdir_shares() {
-        let main = tempfile::tempdir().expect("a scratch directory");
-        let worktree = tempfile::tempdir().expect("a scratch directory");
+        let main = suzatary_testkit::scratch("settings");
+        let worktree = suzatary_testkit::scratch("settings");
         let gitdir = main.path().join(".git").join("worktrees").join("w");
         std::fs::create_dir_all(&gitdir).expect("a gitdir");
         std::fs::write(gitdir.join("commondir"), "../..\n").expect("a commondir");
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn the_pushes_are_read_from_the_reflogs() {
         use suzatary_health::health::Reading;
-        let root = tempfile::tempdir().expect("a scratch directory");
+        let root = suzatary_testkit::scratch("settings");
         let git = root.path().join(".git");
         std::fs::create_dir_all(git.join("logs/refs/remotes/origin")).expect("the logs");
         std::fs::write(git.join("HEAD"), "ref: refs/heads/main\n").expect("a head");

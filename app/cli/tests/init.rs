@@ -21,12 +21,7 @@ fn parse(argv: &[&str]) -> init::Args {
 }
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "suzatary-cli-init-doctor-{name}-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::common::scratch(name);
     std::fs::create_dir_all(&dir).expect("a temp dir");
     dir
 }
@@ -86,8 +81,6 @@ fn the_committed_sample_equals_a_fresh_init() {
         "instance.sample.toml has drifted from what `suzatary init` writes today \
          — regenerate it with the same answers this test uses"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A fresh `init`, then `doctor`, over a deployment nothing has hand-edited.
@@ -126,8 +119,6 @@ fn doctor_over_a_fresh_init_passes_its_startup_checks() {
 
     // And `doctor` over it, the operator-facing half of the same claim.
     doctor::run(&instance_path, &doctor::Args::default()).expect("doctor never fails outright");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The deployed binary runs the code its unit's wrapper rooted: `SUZATARY_REPO` is its code
@@ -184,7 +175,6 @@ fn the_binary_takes_its_code_root_from_the_unit_over_the_instance() {
         line(&doctor(Some("/nix/store/0000-app"))),
         Some("/nix/store/0000-app".to_owned())
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A fresh init with a separate `--data` puts the chain directories there and nothing under
@@ -239,9 +229,6 @@ fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none()
             "{name} leaked into the code root {code_dir:?}"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&code_dir);
-    let _ = std::fs::remove_dir_all(&data_dir);
 }
 
 /// The cast's deployment keys, what a test's `init` keeps rather than mints.
@@ -360,7 +347,6 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
     )
     .expect("the instance reads");
     assert_eq!(*written.root(), suzatary_connect::cast::keys::root());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An environment beside the instance file at `path`, so a test reads none of this process's.
@@ -438,7 +424,6 @@ fn the_signers_leave_the_instance_directory_byte_identical() {
     let adopted = tree(&dir);
     run(&["doctor"]);
     assert_eq!(tree(&dir), adopted);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// LAW: `suzatary notify` pushes through the server's one channel list, so a deployment whose
@@ -468,5 +453,4 @@ fn notify_reads_the_channel_list_the_server_reads() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

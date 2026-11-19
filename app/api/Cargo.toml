@@ -44,6 +44,8 @@ suzatary-health.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true
 suzatary-secretary = { workspace = true, features = ["nothing"] }
+# Not `suzatary-testkit`: the wire and the vectors build these from the core library alone.
+tempfile = "3"
 proptest.workspace = true
 # A device key is printed as hex (`tests/lines_rule.rs`).
 hex.workspace = true

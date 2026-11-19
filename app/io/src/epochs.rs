@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn an_epoch_outlives_the_process_that_kept_it() {
-        let dir = std::env::temp_dir().join(format!("suzatary-epochs-{}", std::process::id()));
+        let dir = suzatary_testkit::this_test().join("epochs");
         let now =
             suzatary_base::capability::Datetime::new(2026, 10, 7, 12, 0, 0, 0).expect("an instant");
         let one = |names: &[&str]| names.iter().map(|&n| n.to_owned()).collect::<BTreeSet<_>>();
@@ -95,12 +95,11 @@ mod tests {
             "the head it answered last is gone: a rollback"
         );
         assert!(dir.join("store-inbox").exists());
-        std::fs::remove_dir_all(dir).expect("cleaned");
     }
 
     #[test]
     fn a_file_of_the_first_format_is_refused() {
-        let dir = std::env::temp_dir().join(format!("suzatary-epochs-old-{}", std::process::id()));
+        let dir = suzatary_testkit::this_test().join("epochs-old");
         std::fs::create_dir_all(&dir).expect("a directory");
         std::fs::write(dir.join("chain-life"), "7\nabc123\n").expect("an old file");
         let now =
@@ -110,6 +109,5 @@ mod tests {
                 .served("chain/life", now, || Ok((Seen::default(), ())))
                 .is_err()
         );
-        std::fs::remove_dir_all(dir).expect("cleaned");
     }
 }

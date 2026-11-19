@@ -14,14 +14,9 @@ use prodrome_core::literal::Datetime;
 use suzatary_conversations::secretary::store;
 use suzatary_record::record::{EventStore, mk_authored};
 
-/// A scratch root unique to this process and thread.
+/// A scratch root of its own.
 fn scratch(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "suzatary-mcp-{name}-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = crate::common::scratch(name);
     std::fs::create_dir_all(&root).expect("a scratch root");
     root
 }
@@ -378,7 +373,6 @@ fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
             ),
         ]
     );
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// The names a served process actually lists match the versioned surface.
@@ -426,7 +420,6 @@ fn the_wire_lists_the_verb_table_and_nothing_it_may_never_hold() {
         "the refusal names what was asked for: {shown}"
     );
     drop(session);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// THE GATE FOR ADOPTION: a deployment shaped as the instance sample writes it (no actor
@@ -477,7 +470,6 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     drop(session);
 
     ran(&["verify"]);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Every file under `root`, by its path, with its bytes.
@@ -591,5 +583,4 @@ fn the_agents_reads_of_the_memory_write_no_file() {
         answers.join("kept.html").exists(),
         "the agent's server swept the secretary's answers when it opened"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }

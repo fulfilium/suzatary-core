@@ -150,7 +150,7 @@ mod tests {
     /// are the store's, and a file whose tips are not its name's reads as unknown.
     #[test]
     fn a_frontier_outlives_the_process_that_recorded_it() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("frontiers");
         let genesis: Envelope<MembershipEvent> =
             Envelope::Genesis(mk_genesis("topics", &"0".repeat(32)).expect("a genesis"));
         let name = seal_hash(&genesis);

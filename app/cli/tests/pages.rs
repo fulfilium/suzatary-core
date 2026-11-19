@@ -506,33 +506,130 @@ fn git(root: &Path, args: &[&str]) {
     assert!(done.success(), "git {args:?}");
 }
 
+/// The workflow's text read as the template lays it out: two spaces a level, each item of a
+/// sequence a `- ` at its key's depth plus two, a literal block after `key: |`, and comments only
+/// on lines of their own or after a value. That the text is GitHub's syntax is
+/// `gate_workflows_pass_actionlint`'s to say, over the template the verb writes.
+struct Outline(Vec<String>);
+
+fn depth(line: &str) -> usize {
+    line.len() - line.trim_start().len()
+}
+
+impl Outline {
+    fn of(text: &str) -> Self {
+        Self(
+            text.lines()
+                .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+                .map(str::to_owned)
+                .collect(),
+        )
+    }
+
+    fn top(&self) -> impl Iterator<Item = &str> {
+        let top = self.0.iter().map(|line| depth(line)).min().unwrap_or(0);
+        self.0
+            .iter()
+            .filter(move |line| depth(line) == top)
+            .map(|line| line.trim_start())
+    }
+
+    /// The lines after the top line `head`, up to the next line no deeper than it.
+    fn after(&self, head: &str) -> Self {
+        let top = self.0.iter().map(|line| depth(line)).min().unwrap_or(0);
+        let at = self
+            .0
+            .iter()
+            .position(|line| depth(line) == top && line.trim_start() == head)
+            .unwrap_or_else(|| panic!("a line `{head}`"));
+        Self(
+            self.0[at + 1..]
+                .iter()
+                .take_while(|line| depth(line) > top)
+                .cloned()
+                .collect(),
+        )
+    }
+
+    /// The block under `key`.
+    fn under(&self, key: &str) -> Self {
+        self.after(&format!("{key}:"))
+    }
+
+    /// The keys of its top lines, in order.
+    fn keys(&self) -> Vec<&str> {
+        self.top()
+            .map(|line| line.split(':').next().expect("a key"))
+            .collect()
+    }
+
+    /// What its top line `key:` holds, less a comment after it.
+    fn value(&self, key: &str) -> Option<&str> {
+        let key = format!("{key}: ");
+        self.top()
+            .find_map(|line| line.strip_prefix(key.as_str()))
+            .map(|value| value.split(" #").next().expect("a value").trim_end())
+    }
+
+    /// The literal block `key: |` as its text.
+    fn literal(&self, key: &str) -> String {
+        let block = self.after(&format!("{key}: |"));
+        let indent = block.0.iter().map(|line| depth(line)).min().unwrap_or(0);
+        block
+            .0
+            .iter()
+            .fold(String::new(), |text, line| text + &line[indent..] + "\n")
+    }
+
+    /// The items of the sequence it is, each with its `- ` written as two spaces, so that its keys
+    /// share one depth.
+    fn items(&self) -> Vec<Self> {
+        let top = self.0.iter().map(|line| depth(line)).min().unwrap_or(0);
+        let mut items: Vec<Self> = Vec::new();
+        for line in &self.0 {
+            match line[top..].strip_prefix("- ") {
+                Some(first) if depth(line) == top => {
+                    items.push(Self(vec![format!("{}  {first}", &line[..top])]));
+                }
+                _ => items
+                    .last_mut()
+                    .expect("a sequence starts with an item")
+                    .0
+                    .push(line.clone()),
+            }
+        }
+        items
+    }
+}
+
 /// The permissions `job` asks, by name.
-fn asked(workflow: &serde_yaml::Value, job: &str) -> BTreeMap<String, String> {
-    workflow["jobs"][job]["permissions"]
-        .as_mapping()
-        .expect("a job names its permissions")
-        .iter()
-        .map(|(k, v)| {
+fn asked(jobs: &Outline, job: &str) -> BTreeMap<String, String> {
+    let permissions = jobs.under(job).under("permissions");
+    permissions
+        .keys()
+        .into_iter()
+        .map(|name| {
             (
-                k.as_str().expect("a name").to_owned(),
-                v.as_str().expect("a level").to_owned(),
+                name.to_owned(),
+                permissions.value(name).expect("a level").to_owned(),
             )
         })
         .collect()
 }
 
 /// The one step that uses the action `named` (`owner/repo@`).
-fn using<'a>(steps: &[&'a serde_yaml::Value], named: &str) -> &'a serde_yaml::Value {
+fn using<'a>(steps: &'a [Outline], named: &str) -> &'a Outline {
     steps
         .iter()
-        .find(|step| step["uses"].as_str().is_some_and(|u| u.starts_with(named)))
+        .find(|step| step.value("uses").is_some_and(|u| u.starts_with(named)))
         .unwrap_or_else(|| panic!("a step uses {named}"))
 }
 
-/// The workflow `prodrome init --public` writes: it parses, it runs on a push alone and its build
-/// on the default branch alone, its token asks nothing at the top and each job only what Pages
-/// needs, it names no secret, every action is pinned by its commit, and the command it runs is
-/// `prodrome pages` over the checkout, whose directory is the one it publishes.
+/// The workflow `prodrome init --public` writes: it is the template actionlint passes, it runs on
+/// a push alone and its build on the default branch alone, its token asks nothing at the top and
+/// each job only what Pages needs, it names no secret, every action is pinned by its commit, and
+/// the command it runs is `prodrome pages` over the checkout, whose directory is the one it
+/// publishes.
 #[test]
 fn the_pages_workflow_runs_the_verb_holding_no_secret() {
     let root = scratch("pages-workflow");
@@ -548,71 +645,67 @@ fn the_pages_workflow_runs_the_verb_holding_no_secret() {
         .is_ok()
     );
     let yaml = std::fs::read_to_string(root.join(".github/workflows/pages.yml")).expect("written");
-    let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("the workflow parses");
-
-    let on = workflow["on"].as_mapping().expect("a trigger");
     assert_eq!(
-        on.keys().collect::<Vec<_>>(),
-        [&serde_yaml::Value::from("push")],
-        "a push alone"
+        yaml,
+        include_str!("../src/commands/prodrome/roadmap.pages.yml"),
+        "the template actionlint passes"
     );
+    let workflow = Outline::of(&yaml);
+
+    assert_eq!(workflow.under("on").keys(), ["push"], "a push alone");
     assert!(!yaml.contains("pull_request"), "no pull request event");
     assert!(!yaml.contains("secrets."), "no secret");
     assert_eq!(
-        workflow["permissions"],
-        serde_yaml::Value::Mapping(serde_yaml::Mapping::new()),
+        workflow.value("permissions"),
+        Some("{}"),
         "the token asks nothing outside a job"
     );
-    let jobs: Vec<&str> = workflow["jobs"]
-        .as_mapping()
-        .expect("jobs")
-        .keys()
-        .map(|k| k.as_str().expect("a name"))
-        .collect();
-    assert_eq!(jobs, ["build", "deploy"]);
+    let jobs = workflow.under("jobs");
+    assert_eq!(jobs.keys(), ["build", "deploy"]);
     assert_eq!(
-        asked(&workflow, "build"),
+        asked(&jobs, "build"),
         BTreeMap::from([("contents".into(), "read".into())])
     );
     assert_eq!(
-        asked(&workflow, "deploy"),
+        asked(&jobs, "deploy"),
         BTreeMap::from([
             ("id-token".into(), "write".into()),
             ("pages".into(), "write".into())
         ])
     );
     assert_eq!(
-        workflow["jobs"]["build"]["if"].as_str(),
+        jobs.under("build").value("if"),
         Some("github.ref_name == github.event.repository.default_branch")
     );
 
-    let steps: Vec<&serde_yaml::Value> = jobs
-        .iter()
-        .flat_map(|job| workflow["jobs"][job]["steps"].as_sequence().expect("steps"))
+    let steps: Vec<Outline> = jobs
+        .keys()
+        .into_iter()
+        .flat_map(|job| jobs.under(job).under("steps").items())
         .collect();
     let pin = regex::Regex::new(r"\A[a-z0-9-]+/[a-z0-9-]+@[0-9a-f]{40}\z").expect("a pattern");
-    for uses in steps.iter().filter_map(|step| step["uses"].as_str()) {
+    for uses in steps.iter().filter_map(|step| step.value("uses")) {
         assert!(pin.is_match(uses), "pinned by commit: {uses}");
     }
     let checkout = using(&steps, "actions/checkout@");
     assert_eq!(
-        checkout["with"]["persist-credentials"].as_bool(),
-        Some(false)
+        checkout.under("with").value("persist-credentials"),
+        Some("false")
     );
 
     let run = steps
         .iter()
-        .filter_map(|step| step["run"].as_str())
+        .filter(|step| step.keys().contains(&"run"))
+        .map(|step| step.literal("run"))
         .find(|run| run.contains("prodrome pages"))
         .expect("a step runs the verb");
-    let published = using(&steps, "actions/upload-pages-artifact@")["with"]["path"]
-        .as_str()
-        .expect("the directory published");
+    let upload = using(&steps, "actions/upload-pages-artifact@").under("with");
+    let published = upload.value("path").expect("the directory published");
     git(&root, &["add", "-A"]);
     git(&root, &["commit", "-q", "-m", "began"]);
     let binary = crate::binary::path();
     assert_eq!(
-        workflow["concurrency"]["group"].as_str(),
+        workflow.under("concurrency").value("group"),
         Some("pages-${{ github.ref }}"),
         "each ref waits in its own group"
     );

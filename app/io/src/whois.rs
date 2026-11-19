@@ -147,11 +147,7 @@ mod tests {
 
     /// Terse, because a unix socket path is limited to about 108 bytes.
     fn scratch_socket(tag: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "ts-{tag}-{}-{:?}.sock",
-            std::process::id(),
-            std::thread::current().id()
-        ))
+        suzatary_testkit::this_test().join(format!("ts-{tag}.sock"))
     }
 
     #[test]

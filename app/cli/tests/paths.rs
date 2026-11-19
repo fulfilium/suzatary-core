@@ -120,7 +120,7 @@ fn every_path_resolves_as_the_golden_file_says() {
         print!("<<paths\n{}paths>>", print_paths(Path::new(&instance_file)));
         return;
     }
-    let dir = std::env::temp_dir().join(format!("suzatary-paths-{}", std::process::id()));
+    let dir = crate::common::scratch("paths");
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let instance_file = dir.join("instance.toml");
     std::fs::write(&instance_file, INSTANCE).expect("writes");
@@ -164,7 +164,6 @@ fn every_path_resolves_as_the_golden_file_says() {
             ("XDG_RUNTIME_DIR", "/run/user/1000"),
         ],
     );
-    let _ = std::fs::remove_dir_all(&dir);
     let printed = format!("# HOME and the runtime directory\n{bare}\n# with XDG\n{xdg}");
     assert_eq!(printed, include_str!("paths.golden"));
 }

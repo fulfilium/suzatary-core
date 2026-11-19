@@ -1,14 +1,12 @@
 //! The shared test harness: fake capabilities, a real server per test over a real socket, and a
 //! six-todo fixture chain. The gate caches a whois answer per loopback address process-wide.
 
-#![allow(dead_code)]
-
 pub mod fake_google;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use chrono::Duration;
@@ -284,18 +282,13 @@ pub fn shift(at: Datetime, days: i64) -> Datetime {
     fpl::datetime_of(fpl::instant_of(at) + Duration::days(days)).expect("in range")
 }
 
-/// A scratch directory unique to this process, thread and call, by a counter: a `ThreadId` may be reused.
+/// A path nothing is at yet, unique by a counter, in the running test's directory
+/// ([`suzatary_testkit::this_test`]), which goes when the test ends though a server outlives it.
 #[must_use]
 pub fn scratch(name: &str) -> PathBuf {
     static CALLS: AtomicUsize = AtomicUsize::new(0);
     let call = CALLS.fetch_add(1, Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "suzatary-cli-tests-{name}-{}-{:?}-{call}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    root
+    suzatary_testkit::this_test().join(format!("{name}-{call}"))
 }
 
 /// Six todos from `CAST`: `urgent` (a Decay near its deadline, markup in its body), `flat`,
@@ -430,7 +423,6 @@ pub struct FakeWhois {
     named: BTreeMap<IpAddr, Login>,
     unreachable: BTreeSet<IpAddr>,
     this_box: BTreeSet<IpAddr>,
-    asked: Mutex<Vec<IpAddr>>,
 }
 
 impl FakeWhois {
@@ -459,15 +451,6 @@ impl FakeWhois {
     pub fn unreachable_at(mut self, address: IpAddr) -> Self {
         self.unreachable.insert(address);
         self
-    }
-
-    /// Every address asked, in order.
-    #[must_use]
-    pub fn asked(&self) -> Vec<IpAddr> {
-        self.asked
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
     }
 }
 
@@ -537,10 +520,6 @@ fn dialled(
 
 impl Whois for FakeWhois {
     fn peer(&self, address: IpAddr) -> Result<suzatary_base::capability::Peer, WhoisError> {
-        self.asked
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(address);
         if self.unreachable.contains(&address) {
             return Err(WhoisError::Unreachable {
                 peer: address,
@@ -607,8 +586,6 @@ impl Clock for FakeClock {
 #[derive(Default)]
 pub struct FakeRender {
     compiled: Mutex<HashMap<String, String>>,
-    cold: AtomicBool,
-    warms: AtomicUsize,
 }
 
 impl FakeRender {
@@ -616,17 +593,6 @@ impl FakeRender {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// After this, `cached` answers `None` for everything.
-    pub fn make_cold(&self) {
-        self.cold.store(true, Ordering::SeqCst);
-    }
-
-    /// How many times `Render::warm` ran.
-    #[must_use]
-    pub fn warms(&self) -> usize {
-        self.warms.load(Ordering::SeqCst)
     }
 }
 
@@ -648,9 +614,6 @@ impl Render for FakeRender {
     }
 
     fn cached(&self, markup: &Escaped) -> Option<Html> {
-        if self.cold.load(Ordering::SeqCst) {
-            return None;
-        }
         self.compiled
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -660,7 +623,6 @@ impl Render for FakeRender {
     }
 
     fn warm(&self, markup: &[Escaped]) -> usize {
-        self.warms.fetch_add(1, Ordering::SeqCst);
         markup.iter().filter(|m| self.html(m).is_ok()).count()
     }
 
@@ -723,7 +685,6 @@ pub struct FakeMailbox {
     /// Each message's file, by notmuch id.
     pub message_files: HashMap<String, Vec<u8>>,
     asked_messages: Mutex<Vec<String>>,
-    asked_threads: Mutex<Vec<String>>,
 }
 
 impl FakeMailbox {
@@ -804,15 +765,6 @@ impl FakeMailbox {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
     }
-
-    /// Every thread id read, in order.
-    #[must_use]
-    pub fn asked_threads(&self) -> Vec<String> {
-        self.asked_threads
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-    }
 }
 
 impl Mailbox for FakeMailbox {
@@ -854,10 +806,6 @@ impl Mailbox for FakeMailbox {
     }
 
     fn thread(&self, thread: &str, _limit: usize) -> Result<Vec<MailMessage>, MailError> {
-        self.asked_threads
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(thread.to_owned());
         self.threads
             .get(thread)
             .cloned()
@@ -1745,16 +1693,14 @@ pub struct DeclaredStore {
     pub declarations: suzatary_io::secrets::Declarations,
     /// What it set and cleared.
     pub recorded: SecretRecorder,
-    /// The code root and the state directory, removed with the store.
-    _dir: tempfile::TempDir,
 }
 
 impl DeclaredStore {
     /// A store declaring the built-in keys alone, as a deployment's server starts.
     #[must_use]
     pub fn new() -> Self {
-        let dir = tempfile::tempdir().expect("a scratch directory");
-        let base = dir.path().join("code").join("secretspec.toml");
+        let dir = scratch("declared-store");
+        let base = dir.join("code").join("secretspec.toml");
         std::fs::create_dir_all(base.parent().expect("a parent")).expect("a code root");
         std::fs::write(
             &base,
@@ -1763,13 +1709,12 @@ impl DeclaredStore {
         .expect("the code root's own file");
         let declarations = suzatary_io::secrets::Declarations::new(
             base,
-            dir.path().join("state"),
+            dir.join("state"),
             suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
         );
         Self {
             declarations,
             recorded: SecretRecorder::new(),
-            _dir: dir,
         }
     }
 
@@ -1812,33 +1757,6 @@ impl suzatary_connect::settings::Writes for DeclaredStore {
     }
 }
 
-/// A store that will not take any name it is told of, as one whose state directory is full.
-pub struct DeclaresAlwaysFail;
-
-impl suzatary_connect::settings::Declares for DeclaresAlwaysFail {
-    fn declare(&self, _: &suzatary_connect::settings::Settables) -> Result<(), String> {
-        Err("the declared file was not written (fake)".to_owned())
-    }
-}
-
-/// A secret writer that always refuses.
-#[derive(Default)]
-pub struct SecretsAlwaysFail;
-
-impl suzatary_connect::settings::Writes for SecretsAlwaysFail {
-    fn write_secret(
-        &self,
-        _name: &suzatary_connect::settings::Settable,
-        _value: &suzatary_base::capability::Secret,
-    ) -> Result<(), String> {
-        Err("the store refused (fake)".to_owned())
-    }
-
-    fn clear_secret(&self, _name: &suzatary_connect::settings::Settable) -> Result<(), String> {
-        Err("the store refused (fake)".to_owned())
-    }
-}
-
 /// Records every allow rule it is handed and always succeeds; a connection's edit is the
 /// algebra's, over the tables it holds.
 #[derive(Default)]
@@ -1866,12 +1784,14 @@ impl EditsRecorder {
 
     /// Every web allow rule written, oldest first.
     #[must_use]
+    #[cfg_attr(not(feature = "fixture"), expect(dead_code))]
     pub fn allowed(&self) -> Vec<suzatary_services::web::AllowRule> {
         self.allowed.lock().expect("not poisoned").clone()
     }
 
     /// Every Drive folder "Always allow this folder" wrote, oldest first.
     #[must_use]
+    #[cfg_attr(not(feature = "fixture"), expect(dead_code))]
     pub fn folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         self.folders.lock().expect("not poisoned").clone()
     }
@@ -2006,6 +1926,7 @@ impl SettingsFixture {
 
     /// Like `empty`, with `edits` overridden.
     #[must_use]
+    #[cfg_attr(not(feature = "fixture"), expect(dead_code))]
     pub fn with_edits(edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>) -> Self {
         Self {
             edits,
@@ -3317,6 +3238,7 @@ impl Server {
     }
 
     /// With this fake Drive behind a tapped document.
+    #[cfg_attr(not(feature = "fixture"), expect(dead_code))]
     pub fn reading(self, drive: &FakeDrive) -> Self {
         Self {
             drive: Some(drive.proton()),
@@ -3492,27 +3414,23 @@ fn publishing(
     })
 }
 
-/// Where a server records the requests it admitted, and keeps their answers, emptied first: a
-/// port is reused across runs, and a record is the run's own.
+/// Where a server records the requests it admitted, and keeps their answers.
 fn recorded_requests(port: u16) -> suzatary_io::requests::Requests {
-    let dir = requests_dir(port);
-    let answered = answers_dir(port);
-    for scratch in [&dir, &answered] {
-        let _ = std::fs::remove_dir_all(scratch);
-    }
-    suzatary_io::requests::Requests::open(dir, answered)
+    suzatary_io::requests::Requests::open(requests_dir(port), answers_dir(port))
 }
 
-/// The directory a server on `port` pushes its request records from.
+/// The directory a server on `port`, started by the running test, pushes its request records
+/// from.
 #[must_use]
 pub fn requests_dir(port: u16) -> PathBuf {
-    std::env::temp_dir().join(format!("suzatary-test-requests-{port}"))
+    suzatary_testkit::this_test().join(format!("requests-{port}"))
 }
 
-/// The box-local directory a server on `port` keeps its replay answers in.
+/// The box-local directory a server on `port`, started by the running test, keeps its replay
+/// answers in.
 #[must_use]
 pub fn answers_dir(port: u16) -> PathBuf {
-    std::env::temp_dir().join(format!("suzatary-test-answers-{port}"))
+    suzatary_testkit::this_test().join(format!("answers-{port}"))
 }
 
 /// The box's clock in UTC as a request's window reads it: [`STAMPED`].

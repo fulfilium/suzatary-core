@@ -1,4 +1,4 @@
-//! Programs a test makes and then runs.
+//! Programs a test makes and then runs, and its scratch directories ([`scratch()`]).
 //!
 //! Linux refuses to `execve` a file that any process holds open for writing (`ETXTBSY`). When a
 //! test thread writes a program, a `fork` on another thread copies the open descriptor into a
@@ -12,6 +12,11 @@
 //!   holds a descriptor on it.
 
 #![forbid(unsafe_code)]
+
+mod scratch;
+
+pub use scratch::{scratch, this_test};
+pub use tempfile::TempDir;
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -93,7 +98,7 @@ mod tests {
     /// refused.
     #[test]
     fn fake_programs_run_while_other_threads_fork() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = scratch("testkit");
         let done = AtomicBool::new(false);
         std::thread::scope(|scope| {
             for _ in 0..4 {
@@ -137,7 +142,7 @@ mod tests {
     /// does not, and the programs [`write_program`] and [`copy_program`] made hold none.
     #[test]
     fn only_a_descriptor_on_the_executed_file_refuses_a_run() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = scratch("testkit");
         let script = "#!/bin/sh\nexit 0\n";
 
         let old = dir.path().join("old");

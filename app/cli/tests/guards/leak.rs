@@ -81,8 +81,11 @@ fn public_tree_is_a_fixpoint_of_itself() {
     let made = public_tree(&[&first], None);
     assert!(made.status.success(), "{}", stderr(&made));
     let git = |args: &[&str]| {
+        // A commit of this many objects starts a detached `git gc`, which would write into the
+        // scratch as it is removed.
         let out = Command::new("git")
             .args(["-c", "user.name=cast", "-c", "user.email=cast@example.test"])
+            .args(["-c", "gc.auto=0"])
             .args(args)
             .current_dir(&first)
             .output()

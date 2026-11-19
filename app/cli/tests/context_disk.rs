@@ -96,7 +96,7 @@ fn footprint(dir: &Path) -> (u64, usize) {
 #[test]
 #[ignore = "a measurement, printed, not a law"]
 fn measure_the_context_over_the_disk_stores_at_the_live_size() {
-    let root = tempfile::tempdir().expect("a scratch directory");
+    let root = suzatary_testkit::scratch("context-disk");
     let started = std::time::Instant::now();
     let memory = Shape {
         lines: 15_900,

@@ -395,7 +395,7 @@ mod tests {
     /// A token without `user:profile` is refused for good.
     #[test]
     fn a_scope_refusal_is_said_in_the_endpoints_words_over_a_remembered_reading() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         std::fs::write(
             &path,
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn a_remembered_answer_on_disk_survives_construction_and_rides_out_a_throttle() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         std::fs::write(
             &path,
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn a_successful_read_is_remembered_to_disk_and_a_throttle_leaves_it_alone() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         let reader = allowance_over(
             body_200(&serde_json::json!({
@@ -482,7 +482,7 @@ mod tests {
 
     #[test]
     fn a_second_call_inside_the_hour_never_asks_the_endpoint_again() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         let reader = allowance_over(
             body_200(&serde_json::json!({
@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn the_first_throttle_is_a_transition_and_a_cached_read_is_not() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         let reader = allowance_over(throttled_429("120"), &path);
         let (_, first) = reader.read_allowance();
@@ -521,7 +521,7 @@ mod tests {
     /// Calls `read` directly on a throttled `Cached`, so no clock has to elapse.
     #[test]
     fn the_first_success_after_a_throttle_is_a_transition() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("usage");
         let path = dir.path().join("last-reported.json");
         let reader = allowance_over(
             body_200(&serde_json::json!({"five_hour": {"utilization": 0.2, "resets_at": null}})),

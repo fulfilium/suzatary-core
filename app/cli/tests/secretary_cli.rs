@@ -31,12 +31,7 @@ fn parse(argv: &[&str]) -> init::Args {
 }
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "suzatary-cli-secretary-{name}-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::common::scratch(name);
     std::fs::create_dir_all(&dir).expect("a temp dir");
     dir
 }

@@ -6,24 +6,24 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::OnceLock;
 
 /// What a run keeps of this process's environment: where its tools are, and where scratch goes.
 const KEPT: [&str; 2] = ["PATH", "TMPDIR"];
 
 /// `suzatary`, its environment the [`KEPT`] variables and a `HOME` and a runtime directory of
-/// this process's own that start empty, as a login session or a unit has both.
+/// the running test's own that start empty, as a login session or a unit has both.
 pub(crate) fn suzatary() -> Command {
     run(std::path::Path::new(path()))
 }
 
 /// The executable at `exe` (a copy of the binary), run as [`suzatary`] runs the binary.
 pub(crate) fn run(exe: &std::path::Path) -> Command {
+    let home = home();
     let mut command = Command::new(exe);
     command
         .env_clear()
-        .env("HOME", home())
-        .env("XDG_RUNTIME_DIR", home().join("run"));
+        .env("HOME", &home)
+        .env("XDG_RUNTIME_DIR", home.join("run"));
     for name in KEPT {
         if let Some(value) = std::env::var_os(name) {
             command.env(name, value);
@@ -75,13 +75,9 @@ pub(crate) fn typeset() -> suzatary_io::typeset::Closed {
     )
 }
 
-/// The `HOME` every run of this process shares, made empty once.
-fn home() -> &'static PathBuf {
-    static HOME: OnceLock<PathBuf> = OnceLock::new();
-    HOME.get_or_init(|| {
-        let home = std::env::temp_dir().join(format!("suzatary-tests-home-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&home);
-        std::fs::create_dir_all(home.join("run")).expect("a home for the binary's runs");
-        home
-    })
+/// The `HOME` every run in the running test shares, made at its first run.
+fn home() -> PathBuf {
+    let home = suzatary_testkit::this_test().join("home");
+    std::fs::create_dir_all(home.join("run")).expect("a home for the binary's runs");
+    home
 }

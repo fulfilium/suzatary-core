@@ -30,6 +30,7 @@ nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-held/not
 
 [dev-dependencies]
 suzatary-memory = { path = ".", features = ["nothing"] }
+suzatary-testkit = { path = "../testkit" }
 proptest.workspace = true
 
 [lints]

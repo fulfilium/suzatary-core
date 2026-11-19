@@ -1931,11 +1931,7 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-fixture-mail-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("fixture-mail-{name}"));
         std::fs::create_dir_all(&dir).expect("a writable temp directory");
         dir
     }

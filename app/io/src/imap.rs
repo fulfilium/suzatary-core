@@ -370,15 +370,7 @@ mod tests {
     use super::*;
 
     fn scratch(tag: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "suzatary-io-imap-{tag}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ))
-    }
-
-    fn cleanup(path: &Path) {
-        let _ = std::fs::remove_dir_all(path);
+        suzatary_testkit::this_test().join(format!("imap-{tag}"))
     }
 
     /// A refetch never gives notmuch two copies of one message.
@@ -404,7 +396,6 @@ mod tests {
             b"second",
             "the rewrite's bytes win"
         );
-        cleanup(&root);
     }
 
     struct FakeSession {
@@ -479,7 +470,6 @@ mod tests {
         landed.sort();
 
         assert_eq!(landed, expected);
-        cleanup(&root);
     }
 
     #[test]
@@ -491,7 +481,6 @@ mod tests {
             assert!(root.join(leaf).is_dir(), "{leaf}/ should exist");
         }
         folder.ensure().expect("ensure is idempotent");
-        cleanup(&root);
     }
 
     #[test]
@@ -517,7 +506,6 @@ mod tests {
         );
         assert!(!root.join("cur").join("unread.ms").exists());
         assert!(!root.join("new").join("read.ms:2,S").exists());
-        cleanup(&root);
     }
 
     #[test]
@@ -542,7 +530,6 @@ mod tests {
             names,
             vec!["in-cur.ms:2,S".to_owned(), "in-new.ms".to_owned()]
         );
-        cleanup(&root);
     }
 
     #[test]
@@ -560,6 +547,5 @@ mod tests {
             tmp_entries.is_empty(),
             "tmp/ should be empty after a write lands"
         );
-        cleanup(&root);
     }
 }

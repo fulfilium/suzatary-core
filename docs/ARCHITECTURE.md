@@ -78,7 +78,7 @@ plugin's manifest. It depends on the secretary crate and io. Start at its `READM
 **plugin-ics** (`app/plugin-ics`). The calendar plugin, built to `ics.wasm`, with its schema
 `ics.schema`. **plugin-fence** (`app/plugin-fence`) is a hostile plugin that
 `app/plugin/tests/fence.rs` runs against the host. **testkit** (`app/testkit`) writes and runs
-fake programs for tests.
+fake programs for tests, and makes their scratch directories, each removed when its test ends.
 
 **cli** (`app/cli`, the binary `suzatary`; `suzatary-dev` adds the fixtures). One module per
 verb, `src/commands/<verb>.rs`; `src/verb.rs` is the argument tree and the one `match`. It

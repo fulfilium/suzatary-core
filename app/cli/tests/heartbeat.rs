@@ -65,5 +65,4 @@ fn what_the_verb_records_is_what_the_brief_reads() {
         !refused.status.success(),
         "a stage outside the closed list is refused"
     );
-    let _ = std::fs::remove_dir_all(&root);
 }

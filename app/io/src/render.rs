@@ -207,11 +207,7 @@ mod tests {
     use suzatary_todo::rendering::CALENDAR;
 
     fn scratch_cache(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "suzatary-io-render-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let root = suzatary_testkit::this_test().join(format!("render-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         root
     }
@@ -258,14 +254,13 @@ mod tests {
             typst.cached(&markup).map(|html| html.as_str().to_string()),
             Some("<p>kept</p>".to_string())
         );
-        let _ = std::fs::remove_dir_all(&cache);
     }
 
     /// A detail with a link into the app (`todo:<id>`, as `rich.ts` routes it) and one out of it
     /// renders, past the tripwire: the fixture's checklist detail, which a refusal served as source.
     #[test]
     fn a_todo_link_and_an_outbound_link_render() {
-        let (typst, cache) = typst_at("links");
+        let (typst, _) = typst_at("links");
         let html = typst
             .html(&Escaped::from_chain(
                 "After #link(\"todo:book-flight\")[the flight] is booked. Weights: \
@@ -281,13 +276,12 @@ mod tests {
             html.as_str()
                 .contains("href=\"https://example.invalid/baggage\"")
         );
-        let _ = std::fs::remove_dir_all(&cache);
     }
 
     /// Every fixture todo's markup renders past the tripwire, as the fixture server warms it.
     #[test]
     fn every_cast_todo_renders() {
-        let (typst, cache) = typst_at("cast");
+        let (typst, _) = typst_at("cast");
         for todo in suzatary_connect::cast::CAST.todos.all() {
             for text in [todo.body, todo.detail]
                 .into_iter()
@@ -297,12 +291,11 @@ mod tests {
                 assert!(rendered.is_ok(), "{}: {text:?}: {rendered:?}", todo.id);
             }
         }
-        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
     fn an_answer_block_is_html_with_mathml_in_the_closed_world() {
-        let (typst, cache) = typst_at("answer-blocks");
+        let (typst, _) = typst_at("answer-blocks");
         let answer = |source: &str| typst.answer(&Renderable::of(source));
         let block = |source: &str| answer(source).expect("the block compiles");
         assert!(block("$ x^2 $").as_str().contains("<math"), "MathML");
@@ -324,13 +317,12 @@ mod tests {
         ] {
             assert!(answer(reaching).is_err(), "{reaching}");
         }
-        let _ = std::fs::remove_dir_all(&cache);
     }
 
     /// A page's every datum is data: a stranger's title is drawn as text.
     #[test]
     fn a_page_is_classed_html_and_its_data_stays_text() {
-        let (typst, cache) = typst_at("todo-page");
+        let (typst, _) = typst_at("todo-page");
         let stranger = "Review\"] #eval(\"x\") [<script>";
         let calendar = CalendarPage {
             days: vec![suzatary_todo::reading::CalendarDay {
@@ -357,7 +349,6 @@ mod tests {
             html.contains("<li class=\"calendarentry cancelled\">"),
             "{html}"
         );
-        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
@@ -382,6 +373,5 @@ mod tests {
             .html(&Escaped::from_chain("a body"))
             .expect("the body compiles");
         assert_eq!(files(&cache), 1, "a body is kept on disk");
-        let _ = std::fs::remove_dir_all(&cache);
     }
 }

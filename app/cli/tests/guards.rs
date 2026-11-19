@@ -75,33 +75,19 @@ fn repo() -> PathBuf {
         .to_path_buf()
 }
 
-/// A directory under the system temp dir, unique to this test within this
-/// run, removed on drop even if the test panics.
-struct Scratch(PathBuf);
+/// A scratch directory ([`suzatary_testkit::scratch`]) that reads as its path.
+struct Scratch(suzatary_testkit::TempDir);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "suzatary-guards-tests-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("scratch dir");
-        Scratch(root)
+        Scratch(suzatary_testkit::scratch(name))
     }
 }
 
 impl std::ops::Deref for Scratch {
     type Target = Path;
     fn deref(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        self.0.path()
     }
 }
 
@@ -447,7 +433,7 @@ fn the_fence_refuses_a_guard_that_does_not_guard() {
         ("missing", None),
     ] {
         let scratch = Scratch::new(&format!("fence-{case}"));
-        let root = &scratch.0;
+        let root: &Path = &scratch;
         std::fs::create_dir_all(root.join(".claude")).expect("dir");
         std::fs::create_dir_all(root.join("scripts")).expect("dir");
         std::fs::copy(

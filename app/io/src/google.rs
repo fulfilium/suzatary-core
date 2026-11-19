@@ -542,11 +542,7 @@ mod tests {
     /// The fields Google's library requires are there, and null.
     #[test]
     fn lieer_is_handed_a_token_and_never_the_grant() {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-io-google-lieer-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join("google-lieer");
         let _ = std::fs::remove_dir_all(&dir);
         let token = AccessToken {
             token: Secret::new("ya29.a"),
@@ -579,7 +575,6 @@ mod tests {
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o600);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -54,7 +54,6 @@ struct Held {
     codes: BTreeMap<String, Issued>,
     used: BTreeSet<String>,
     refresh: BTreeSet<String>,
-    revoked: bool,
     /// The scopes the person unticks on the consent page.
     unticked: BTreeSet<String>,
     /// Every scope each account has granted the client, which a consent of that account with
@@ -64,7 +63,6 @@ struct Held {
     events: usize,
     exchanges: usize,
     inserted: Vec<serde_json::Value>,
-    asked: Vec<String>,
 }
 
 /// A running fake.
@@ -107,13 +105,12 @@ impl FakeGoogle {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Sign `account` in on the consent page from now on.
-    pub fn signing_in(&self, account: &str) {
-        account.clone_into(&mut self.held().account);
-    }
-
     /// Sign in, from now on, the account each consent's `login_hint` names, as a person signed in
     /// to that account would.
+    #[allow(
+        dead_code,
+        reason = "the fixture binary's fake Google calls it; no cargo test does"
+    )]
     pub fn following_hints(&self) {
         self.held().hinted = true;
     }
@@ -122,11 +119,6 @@ impl FakeGoogle {
     /// answer them again.
     pub fn refusing_mail(&self, refusing: bool) {
         self.held().mailless = refusing;
-    }
-
-    /// Revoke every grant: a refresh answers `invalid_grant`, as a revoked or 7-day grant does.
-    pub fn revoke(&self) {
-        self.held().revoked = true;
     }
 
     /// Untick `scopes` on the consent page from now on, or tick every one again with none.
@@ -149,12 +141,6 @@ impl FakeGoogle {
     #[must_use]
     pub fn inserted(&self) -> Vec<serde_json::Value> {
         self.held().inserted.clone()
-    }
-
-    /// Every request line it was sent, in order.
-    #[must_use]
-    pub fn asked(&self) -> Vec<String> {
-        self.held().asked.clone()
     }
 }
 
@@ -275,8 +261,6 @@ fn answer(stream: TcpStream, held: &Mutex<Held>) -> std::io::Result<()> {
     let mut held = held
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    held.asked
-        .push(format!("{} {}", request.method, request.path));
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/o/oauth2/v2/auth") => consent(stream, &request, &mut held),
         ("POST", "/token") => token(stream, &request, &mut held),
@@ -339,7 +323,7 @@ fn consent(stream: TcpStream, request: &Request, held: &mut Held) {
 }
 
 /// The token endpoint: a code redeemed once, with the verifier its challenge was made from and
-/// the redirect its consent named; a refresh while the grant is not revoked.
+/// the redirect its consent named; a refresh of a token it issued.
 fn token(stream: TcpStream, request: &Request, held: &mut Held) {
     let fields = form(&String::from_utf8_lossy(&request.body));
     let field = |key: &str| fields.get(key).cloned().unwrap_or_default();
@@ -367,7 +351,7 @@ fn token(stream: TcpStream, request: &Request, held: &mut Held) {
                 granted(stream, &issued, held);
             }
         }
-        "refresh_token" if held.revoked || !held.refresh.contains(&field("refresh_token")) => {
+        "refresh_token" if !held.refresh.contains(&field("refresh_token")) => {
             refused(
                 stream,
                 "invalid_grant",

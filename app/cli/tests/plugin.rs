@@ -148,7 +148,7 @@ fn synced(
 #[test]
 fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
     let feed = Feed::serve(&calendar("CONFIRMED"));
-    let scratch = tempfile::tempdir().expect("a scratch dir");
+    let scratch = suzatary_testkit::scratch("plugin");
     let manifest = manifest(&feed.origin);
     let plugins = Plugins {
         manifests: vec![manifest.clone()],

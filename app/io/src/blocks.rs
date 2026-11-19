@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn a_pdf_is_a_document_block_and_an_image_an_image_block() {
         use base64::Engine as _;
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         let turns = [
             handed(&stores, "notice.pdf", PDF),
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn a_photo_and_a_file_come_back_in_the_order_they_were_said() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         let photo = stores
             .uploads
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn an_uploaded_pdf_is_a_document_titled_as_it_was_picked_and_counts_as_a_file() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         // Written around `put`: these bytes are no PDF pdftotext could read.
         let beside = Blobs::open(dir.path().join("uploads"));
@@ -284,7 +284,7 @@ mod tests {
     /// Law: no document title carries an identity number from a file's name.
     #[test]
     fn a_number_in_a_file_s_name_never_reaches_the_model() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         let turns = [handed(&stores, "W-2 SSN 000-12-3456.pdf", PDF)];
         let content = Blocks::of(&stores, &turns).expect("read").content("x");
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn only_the_latest_files_within_the_count_cross() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         let turns: Vec<Turn> = (0..6u8)
             .map(|n| handed(&stores, &format!("{n}.pdf"), &[PDF, &[n]].concat()))
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn only_the_latest_photos_cross_in_order() {
         use base64::Engine as _;
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let stores = stores(dir.path());
         let turns: Vec<Turn> = (0..10u8)
             .map(|n| {
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn a_file_no_store_holds_is_refused_not_dropped() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("blocks");
         let turn = handed(&stores(dir.path()), "notice.pdf", PDF);
         let refused = Blocks::of(&Stores::default(), std::slice::from_ref(&turn));
         assert!(matches!(refused, Err(ModelError::Failed(why)) if why.contains("no file store")));

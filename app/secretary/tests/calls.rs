@@ -64,14 +64,8 @@ fn deployment() -> Deployment {
 /// One todo, `alpha`, on a chain nothing is appended to, and one open conversation that
 /// keeps no line, so every case meets the same box.
 struct Fixed {
-    root: PathBuf,
     events: EventStore,
-}
-
-impl Drop for Fixed {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
-    }
+    _root: suzatary_testkit::TempDir,
 }
 
 struct NoLock;
@@ -79,9 +73,8 @@ impl WriteLock for NoLock {}
 
 impl Fixed {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("suzatary-calls-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let events = EventStore::new(root.join("events"), chain().untrusted);
+        let root = suzatary_testkit::scratch("calls");
+        let events = EventStore::new(root.path().join("events"), chain().untrusted);
         let alpha = suzatary_todo::authoring::build_todo(
             &suzatary_todo::authoring::NewTodo {
                 todo: "alpha".to_owned(),
@@ -108,7 +101,10 @@ impl Fixed {
         )
         .expect("a todo");
         append_to(&events, suzatary_record::record::GENESIS, alpha).expect("appends");
-        Self { root, events }
+        Self {
+            events,
+            _root: root,
+        }
     }
 }
 

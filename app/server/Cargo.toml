@@ -45,6 +45,7 @@ nothing = ["suzatary-secretary/nothing"]
 suzatary-server = { path = ".", features = ["nothing"] }
 suzatary-release.workspace = true
 suzatary-triage.workspace = true
+suzatary-testkit = { path = "../testkit" }
 proptest.workspace = true
 ts-rs.workspace = true
 # A device key is printed as hex (`tests/web_vectors.rs`).

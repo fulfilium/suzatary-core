@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn recorded_passes_read_back_beside_the_heartbeat() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pulse");
         let pulse = pulse(&dir);
         pulse
             .record(Pass::Ok, at("2026-10-07T08:00:00"))
@@ -154,7 +154,7 @@ mod tests {
     /// A line with no count starts the run at one.
     #[test]
     fn a_line_without_a_count_is_followed_by_the_second_failure() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pulse");
         std::fs::write(
             dir.path().join(OUTCOME),
             "failed 2026-10-07T08:00:00 verify\n",
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn a_garbled_line_is_unparseable_and_the_next_pass_replaces_it() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pulse");
         std::fs::write(dir.path().join(OUTCOME), "half a line\n").expect("writes");
         let pulse = Pulse::at(&dir.path().join("triage-heartbeat"));
         assert_eq!(pulse.last_outcome(), PassOutcome::Unparseable);

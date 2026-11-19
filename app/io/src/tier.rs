@@ -24,7 +24,7 @@ mod tests {
     /// Git reads the file as ignoring everything beside it, the file included.
     #[test]
     fn the_tier_ignores_everything_in_it_and_is_written_once() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("tier");
         let tier = dir.path().join("local");
         ignored(&tier).expect("written");
         assert_eq!(

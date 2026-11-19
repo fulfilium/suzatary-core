@@ -205,7 +205,7 @@ mod tests {
     }
 
     fn scratch() -> (tempfile::TempDir, Ledger) {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("state");
         let ledger = Ledger::new(
             dir.path().join("state.json"),
             dir.path().join("local/mail.json"),
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn a_key_that_does_not_resolve_refuses_the_read_and_is_asked_again() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("state");
         let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counted = Arc::clone(&asked);
         let ledger = Ledger::new(
@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn a_device_with_no_key_reads_as_unkeyed_where_a_reader_can_go_without_it() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("state");
         let ledger = Ledger::sourced(
             dir.path().join("state.json"),
             dir.path().join("mail.json"),
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn a_file_that_is_not_a_state_document_is_a_refusal_and_not_an_empty_state() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("state");
         let path = dir.path().join("state.json");
         std::fs::write(&path, "not json at all").expect("writes");
         assert!(matches!(

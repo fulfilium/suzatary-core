@@ -1143,7 +1143,7 @@ mod tests {
     }
 
     fn checked_fixture(tag: &str, check: Option<&str>) -> (tempfile::TempDir, Mirrors, RepoName) {
-        let temp = tempfile::tempdir().expect("a temp dir");
+        let temp = suzatary_testkit::scratch("repos");
         let work = temp.path().join("work");
         std::fs::create_dir_all(work.join("docs")).expect("work dir");
         std::fs::write(work.join("cv.typ"), "= Ada\nResearch engineer\n").expect("cv");
@@ -1409,7 +1409,7 @@ mod tests {
     /// `NoToken` fails the test if the token is asked for.
     #[test]
     fn an_undeclared_repository_is_refused_before_any_network() {
-        let temp = tempfile::tempdir().expect("a temp dir");
+        let temp = suzatary_testkit::scratch("repos");
         let declared_one: RepoName = "bmabsout/cv".parse().expect("a name");
         let mirrors = Mirrors::new(
             temp.path().join("mirrors"),

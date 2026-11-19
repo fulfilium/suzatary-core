@@ -102,7 +102,7 @@ struct Bridge(tempfile::TempDir, PathBuf);
 
 impl Bridge {
     fn new() -> Self {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("puller-port");
         std::fs::write(
             dir.path().join("mbsyncrc"),
             format!(
@@ -183,7 +183,7 @@ struct Gmail(tempfile::TempDir);
 
 impl Gmail {
     fn new() -> Self {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("puller-port");
         gmi(dir.path(), ":");
         std::fs::create_dir_all(dir.path().join("Mail/ada")).expect("the maildir");
         Self(dir)
@@ -253,7 +253,7 @@ struct Signed(tempfile::TempDir);
 
 impl Signed {
     fn new() -> Self {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("puller-port");
         // lieer reads its mail on the token the box handed it, and on nothing else.
         gmi(
             dir.path(),
@@ -507,7 +507,7 @@ impl Rig for Outlook365 {
 
 #[test]
 fn the_microsoft_pull_keeps_every_law_behind_a_fake_imap_server() {
-    let rig = Outlook365(tempfile::tempdir().expect("a scratch dir"));
+    let rig = Outlook365(suzatary_testkit::scratch("puller-port"));
     assert_eq!(check(&rig, since(), &arrivals()), Ok(()));
     let sent = rig.0.path().join("Mail/ada/Sent");
     assert_eq!(
@@ -523,7 +523,7 @@ fn the_microsoft_pull_keeps_every_law_behind_a_fake_imap_server() {
 /// still land, and once the server lists it again the next sync lands what it holds.
 #[test]
 fn every_declared_folder_syncs_and_one_the_server_does_not_list_fails_by_name() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("puller-port");
     let message = |id: &str| {
         format!("Message-ID: <{id}@example.test>\r\nSubject: {id}\r\n\r\n{id}\r\n").into_bytes()
     };

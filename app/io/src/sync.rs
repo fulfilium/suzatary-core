@@ -280,7 +280,7 @@ mod tests {
     /// An unreadable state must not read as a first sync, which would refetch the whole folder.
     #[test]
     fn only_a_missing_sync_state_is_a_first_sync() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("sync");
         let path = dir.path().join("account.json");
         assert_eq!(
             read_sync_state(&path).expect("a first sync"),
@@ -292,11 +292,7 @@ mod tests {
 
     #[test]
     fn a_sync_state_file_round_trips_and_an_absent_one_is_a_first_sync() {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-sync-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join("sync");
         let path = dir.join("her-at-example-test.json");
         assert_eq!(
             read_sync_state(&path).expect("a first sync"),
@@ -310,6 +306,5 @@ mod tests {
         };
         write_sync_state(&path, &state).expect("writes");
         assert_eq!(read_sync_state(&path).expect("reads"), state);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

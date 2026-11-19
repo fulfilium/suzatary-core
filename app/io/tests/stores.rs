@@ -713,7 +713,7 @@ fn write_every_store(root: &Path) {
 
 #[test]
 fn every_store_writes_the_pinned_bytes() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     write_every_store(dir.path());
     records_are_the_derived_heads(dir.path());
     let found = tree(dir.path());
@@ -818,7 +818,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     use suzatary_held::attachment::AttachmentId;
     use suzatary_secretary::stores::Database;
 
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     let root = dir.path();
     let changed = copy_pins(root);
 
@@ -1053,7 +1053,7 @@ pub(crate) fn conversations_at_scale(
 #[ignore = "a measurement, run by name"]
 fn digest_at_scale() {
     use suzatary_lines::secretary::opened::Opened;
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     let (lines, keys) = lines_at(dir.path());
     let (history, texts) = (
         Objects::<suzatary_digest::secretary::digest_event::DigestEvent>::open(
@@ -1118,7 +1118,7 @@ fn lines_for_a_tab() {
     use suzatary_conversations::secretary::store::Entry;
     let out =
         std::env::var("SUZATARY_LINES_FIXTURE").expect("SUZATARY_LINES_FIXTURE names the file");
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     let (lines, keys) = lines_at(dir.path());
     let entropy = suzatary_io::texts::SystemEntropy;
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
@@ -1220,7 +1220,7 @@ fn lines_for_a_tab() {
 /// every title opens under the binding it was locked with, and each kind is read off its id.
 #[test]
 fn lines_written_before_kinds_were_stored_read_whole() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     copy(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-unkinded"),
         dir.path(),
@@ -1268,7 +1268,7 @@ fn digest_nodes_at_scale() {
     use suzatary_digest::secretary::shown_record::OwnersRecord;
     use suzatary_lines::secretary::opened::Opened;
     use suzatary_memory::secretary::salted_text::Text;
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     let (lines, keys) = lines_at(dir.path());
     let owners = std::collections::BTreeSet::new();
     let history = Objects::<DigestEvent>::digests(dir.path().join("digests"), owners.clone());
@@ -1688,7 +1688,7 @@ fn derived(dir: &Path) -> prodrome_core::dag::Heads {
 /// heads, so `heads()` serves it; the store's root holds a `.gitignore` of `/.heads` alone.
 #[test]
 fn the_husked_store_records_the_derived_heads() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("stores");
     let (reader, writer, push) = two_handles(dir.path());
     let other: &'static Lines = Box::leak(Box::new(lines_at(dir.path()).0));
     let push_other = said_through(other, dir.path());
@@ -1741,8 +1741,8 @@ fn the_husked_store_records_the_derived_heads() {
 /// served.
 #[test]
 fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
-    let elsewhere = tempfile::tempdir().expect("a second store");
+    let dir = suzatary_testkit::scratch("stores");
+    let elsewhere = suzatary_testkit::scratch("stores");
     let (reader, _, push) = two_handles(dir.path());
     push(1);
     let recorded = derived(dir.path());
@@ -1797,8 +1797,8 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
 /// reads the files too. So no process that opens a store serves a reading older than its files.
 #[test]
 fn the_lines_reading_is_kept_by_the_record_and_read_from_the_files() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
-    let elsewhere = tempfile::tempdir().expect("a second store");
+    let dir = suzatary_testkit::scratch("stores");
+    let elsewhere = suzatary_testkit::scratch("stores");
     let (reader, _, push) = two_handles(dir.path());
     push(1);
     let names = |store: &Lines| -> BTreeSet<Hash> {

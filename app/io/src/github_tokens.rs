@@ -215,7 +215,7 @@ mod tests {
     /// expiry; a token GitHub refuses has none.
     #[test]
     fn each_token_is_read_with_its_own_value_once_a_day() {
-        let temp = tempfile::tempdir().expect("a temp dir");
+        let temp = suzatary_testkit::scratch("github-tokens");
         let refused = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let refusing = Arc::clone(&refused);
         let github = Arc::new(Scripted::new(move |req: &Req| {

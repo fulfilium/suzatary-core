@@ -116,7 +116,7 @@ mod tests {
     /// it, and a hash recorded again under another id answers the later one.
     #[test]
     fn a_recorded_hash_resolves_by_its_prefix() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("located");
         let located = Located::open(dir.path().join("located"));
         let prefix = |text: &str| HashPrefix::parse(text).expect("a prefix");
         let (one, two) = (

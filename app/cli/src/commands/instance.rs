@@ -324,7 +324,7 @@ mod tests {
         let raw: toml::Value = toml::Value::Table(toml::from_str(&text).expect("toml"));
         let read = toml::Value::try_from(File::read(&path).expect("the reader reads it"))
             .expect("the reading prints");
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("instance");
         Instance::read(&path, &Env::under(dir.path(), dir.path())).expect("and starts");
         let mut every = Vec::new();
         leaves(&raw, &mut Vec::new(), &mut every);
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn set_writes_one_value_and_nothing_the_box_would_refuse() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("instance");
         let env = Env::under(dir.path(), dir.path());
         let path = dir.path().join("instance.toml");
         let before = format!(
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn set_and_a_tap_wait_for_the_lock_beside_the_file() {
         use suzatary_connect::settings::Edits as _;
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("instance");
         let env = Env::under(dir.path(), dir.path());
         let path = dir.path().join("instance.toml");
         std::fs::write(

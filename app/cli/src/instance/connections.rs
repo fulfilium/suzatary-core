@@ -389,7 +389,7 @@ sync = "gmail"
     ];
 
     fn path() -> PathBuf {
-        std::env::temp_dir().join("suzatary-connections-instance.toml")
+        suzatary_testkit::this_test().join("connections-instance.toml")
     }
 
     fn file() -> impl Strategy<Value = String> {

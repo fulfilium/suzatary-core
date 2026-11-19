@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn a_key_is_put_read_back_opens_and_is_destroyed_once_and_for_all() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("text-keys");
         let keys = open(dir.path().join("keys"));
         let (text, key) = locked("He takes the 7:40");
         let name = key.name();
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn a_swapped_file_reads_as_absent_and_a_key_is_kept_only_under_its_name() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("text-keys");
         let keys = open(dir.path().to_path_buf());
         let (_, key) = locked("Mira is the accountant");
         let (_, other) = locked("Mira is the accountant");

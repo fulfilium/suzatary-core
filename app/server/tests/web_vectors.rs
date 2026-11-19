@@ -107,15 +107,9 @@ fn actor(name: &str) -> Actor {
     Actor::new(name).expect("a roster name")
 }
 
-/// A scratch directory unique to this process and test, since one process's tests run in
-/// parallel.
+/// A path nothing is at yet, in the running test's directory.
 fn scratch(test: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "suzatary-server-web-vectors-{test}-{}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    root
+    suzatary_testkit::this_test().join(test)
 }
 
 /// The six-todo chain, ported from `app/cli/tests/common::six_todo_chain` with [`CAST`]'s prose.

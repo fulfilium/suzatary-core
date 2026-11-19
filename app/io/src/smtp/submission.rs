@@ -711,7 +711,7 @@ mod tests {
             };
             while converse(&listener, Stop::Nowhere, &take).is_ok() {}
         });
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("submission");
         let cert = dir.path().join("bridge-cert.pem");
         std::fs::write(&cert, BRIDGE_CERT).expect("the pin");
         let bridge = crate::smtp::Bridge {

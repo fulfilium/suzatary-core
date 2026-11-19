@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn results_recorded_into_the_file_read_back_as_their_join() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("source-health");
         let store = beside(&dir.path().join("triage-heartbeat"));
         for (ok, hour) in [(true, 1), (false, 2)] {
             store
@@ -98,7 +98,7 @@ mod tests {
     /// Each writer opens its own handle, as each process does.
     #[test]
     fn writers_that_join_at_once_lose_no_result() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("source-health");
         let heartbeat = dir.path().join("triage-heartbeat");
         let writers: Vec<_> = (0..4)
             .map(|writer| {

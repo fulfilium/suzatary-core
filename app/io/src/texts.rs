@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn a_text_is_kept_read_back_and_removed() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("texts");
         let store = Texts::<Fact>::open(dir.path().join("texts"));
         let text = Text::new(
             Fact::new("Mira is the accountant").expect("a fact"),
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn a_swapped_file_reads_as_absent_and_a_text_is_kept_only_under_its_name() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("texts");
         let store = Texts::<Fact>::open(dir.path().to_path_buf());
         let text = Text::new(
             Fact::new("He takes the 7:40").expect("a fact"),

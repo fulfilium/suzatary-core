@@ -129,8 +129,8 @@ if ((shards > 1 && ${#shared[@]} > 0 && ${#names[@]} > 1)); then
   fi
   # shellcheck disable=SC2329
   stop_shards() { for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done; }
-  trap 'stop_shards; exit 130' INT
-  trap 'stop_shards; exit 143' TERM
+  trap 'stop_shards; rm -rf "$dealt"; exit 130' INT
+  trap 'stop_shards; rm -rf "$dealt"; exit 143' TERM
   for ((i = 0; i < shards; i++)); do
     mapfile -t mine <"$dealt/$i.names"
     SUZATARY_E2E_SHARDS=1 SUZATARY_E2E_PART="" SUZATARY_FIXTURE_BIN="$fixture_bin" "$0" "${mine[@]}" >"$dealt/$i.log" 2>&1 &
@@ -215,7 +215,7 @@ cleanup() {
     [[ -n "$pid" ]] || continue
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   done
-  if [ -n "${SUZATARY_E2E_KEEP:-}" ]; then echo "==> kept $work (SUZATARY_E2E_KEEP)"; else rm -rf "$work"; fi
+  if [ -n "${SUZATARY_KEEP_SCRATCH:-}" ]; then echo "==> kept $work (SUZATARY_KEEP_SCRATCH)"; else rm -rf "$work"; fi
   (( status != 0 )) || [[ -z "$made_shots" ]] || rm -rf "$made_shots"
 }
 trap cleanup EXIT INT TERM

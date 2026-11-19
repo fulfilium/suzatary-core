@@ -2775,7 +2775,7 @@ mod sign_in_completion {
     /// The default conversation on disk, a sign-in act's line appended through the real writer
     /// (`append_completion`, then `transcript::push`), then a round the owner opens to remember.
     fn after<E: std::fmt::Display>(finished: Result<Result<(), E>, ()>) -> Stored {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("secretary");
         let conversations = suzatary_io::conversations::ConversationStores::open(
             dir.path().join("lines"),
             dir.path().join("lines-keys"),

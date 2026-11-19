@@ -138,7 +138,7 @@ fn file(root: &Path, name: &Hash) -> Vec<u8> {
 /// reads; each husk holds no sealed word; verify finds nothing; and a second prune writes nothing.
 #[test]
 fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("husked");
     let dead = written(dir.path());
     assert!(dead.len() >= 4, "{dead:?}");
     let held = stores_at(dir.path());
@@ -274,7 +274,7 @@ fn a_second_chain_after_a_deep_one_in_the_same_conversation() {
 /// The husked chain law over `chains`, each a conversation and how many times its slots are
 /// sealed again.
 fn husked_chains(chains: &[(usize, usize)]) -> Result<(), TestCaseError> {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("husked");
     let before = chains_written(dir.path(), chains);
     let held = stores_at(dir.path());
     let conversations = held.conversations();
@@ -399,7 +399,7 @@ fn chains_written(
 /// alone and keeps each husk. It still writes over its husks.
 #[test]
 fn a_pruned_store_takes_back_no_dropped_whole() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("husked");
     let (at_box, at_device) = (dir.path().join("box"), dir.path().join("device"));
     let dead = written(&at_box);
     copy(&at_box, &at_device);

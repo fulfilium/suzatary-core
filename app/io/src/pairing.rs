@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn a_pairing_is_kept_private_and_holds_no_code() {
         use std::os::unix::fs::PermissionsExt as _;
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pairing");
         let path = dir.path().join("pairing").join("one.json");
         let store = Pairings::at(path.clone());
         let (code, salt) = fresh().expect("random bytes");
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn a_new_code_replaces_the_last() {
         use suzatary_signatures::signatures::{Presented, Refused, TRIES, present};
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pairing");
         let store = Pairings::at(dir.path().join("one.json"));
         let now = chrono::Utc::now();
         let minted = || {
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn of_tries_at_once_through_two_handles_one_matches() {
         use suzatary_signatures::signatures::{Presented, Refused, present};
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("pairing");
         let path = dir.path().join("one.json");
         let (code, salt) = fresh().expect("random bytes");
         let now = chrono::Utc::now();

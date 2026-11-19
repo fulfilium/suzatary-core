@@ -30,6 +30,8 @@ nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/n
 
 [dev-dependencies]
 suzatary-todo = { path = ".", features = ["nothing"] }
+# Not `suzatary-testkit`: the wire and the vectors build these from the core library alone.
+tempfile = "3"
 proptest.workspace = true
 
 [lints]

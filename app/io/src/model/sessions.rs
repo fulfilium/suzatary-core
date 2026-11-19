@@ -120,7 +120,7 @@ mod tests {
             "/srv/suzatary/code",
             &format!("/srv/{}", "deep/".repeat(60)),
         ] {
-            let dir = tempfile::tempdir().expect("scratch");
+            let dir = suzatary_testkit::scratch("sessions");
             let root = dir.path().join("config");
             let named = project(cwd);
             let project = root.join("projects").join(if named.len() > PROJECT_NAME {

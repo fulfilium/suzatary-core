@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn register_then_read_round_trips() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("devices");
         let store = Devices::open(dir.path().to_path_buf());
         register(&store, "ada", "android", "tok-1", 1);
         let read = phones(&store, "ada");
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn a_ragged_line_costs_one_device_and_not_the_file() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("devices");
         let store = Devices::open(dir.path().to_path_buf());
         register(&store, "ada", "android", "tok-1", 1);
         let path = store.path(&"ada".to_owned());
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn a_tab_in_a_token_is_refused() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("devices");
         let store = Devices::open(dir.path().to_path_buf());
         let line = |platform: &str, token: &str| Device {
             platform: platform.to_owned(),
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn everyone_finds_two_actors_by_their_file_names() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("devices");
         let store = Devices::open(dir.path().to_path_buf());
         register(&store, "ada", "android", "tok-1", 1);
         register(&store, "tri age", "ios", "tok-2", 1);

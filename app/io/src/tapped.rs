@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn a_record_is_read_back_only_under_its_own_file() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("tapped");
         let store = beside(&crate::blobs::Blobs::open(dir.path().to_path_buf()));
         let w2 = HeldFile::Drive {
             path: "/my-files/Suzatary/Private/w2.pdf".parse().expect("a path"),

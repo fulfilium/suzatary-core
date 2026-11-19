@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn a_photo_is_stored_once_and_read_back_by_its_name() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(dir.path().join("attachments"), Pdftotext::new("."));
         let first = store.put(PNG).expect("stored");
         let again = store.put(PNG).expect("stored again");
@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn a_refused_or_missing_photo_is_named_not_guessed() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(
             dir.path().to_path_buf(),
             crate::pdftotext::Pdftotext::new("."),
@@ -300,7 +300,7 @@ mod tests {
             eprintln!("skipping: pdftotext or pdfinfo is not on PATH");
             return;
         }
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(
             dir.path().to_path_buf(),
             crate::pdftotext::Pdftotext::new("."),
@@ -323,7 +323,7 @@ mod tests {
             eprintln!("skipping: pdftotext is not on PATH");
             return;
         }
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(
             dir.path().to_path_buf(),
             crate::pdftotext::Pdftotext::new("."),
@@ -369,7 +369,7 @@ mod tests {
             eprintln!("skipping: pdftotext is not on PATH");
             return;
         }
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(dir.path().to_path_buf(), Pdftotext::new("."));
         let vault = FakeVault::default();
         let w2 = crate::pdftotext::minimal_pdf("SSN 123-45-6789");

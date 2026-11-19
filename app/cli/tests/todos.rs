@@ -10,14 +10,9 @@ use prodrome_core::literal::Datetime;
 use suzatary_record::record::{EventStore, mk_authored};
 use suzatary_store::store::Reads as _;
 
-/// A scratch root unique to this process and thread.
+/// A scratch root of its own.
 pub(crate) fn scratch(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "suzatary-todos-{name}-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = crate::common::scratch(name);
     std::fs::create_dir_all(&root).expect("a scratch root");
     root
 }

@@ -775,7 +775,7 @@ mod tests {
     use super::*;
 
     fn fake(script: &str, timeout: Duration) -> (tempfile::TempDir, Secretspec) {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("secrets");
         let program = suzatary_testkit::fake_program(
             dir.path(),
             "secretspec",
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn a_store_that_cannot_start_is_unavailable() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("secrets");
         std::fs::write(dir.path().join("secretspec.toml"), "").expect("a spec file");
         let spec = Secretspec {
             program: "/nonexistent/secretspec".into(),
@@ -1133,7 +1133,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
     }
 
     fn rooted() -> (tempfile::TempDir, PathBuf, PathBuf) {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("secrets");
         let base = dir.path().join("code").join("secretspec.toml");
         std::fs::create_dir_all(base.parent().expect("a parent")).expect("a code root");
         std::fs::write(&base, BASE).expect("the code root's file");
@@ -1257,7 +1257,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
 
     #[test]
     fn a_code_root_with_no_file_declares_nothing_and_holds_no_store() {
-        let dir = tempfile::tempdir().expect("a scratch directory");
+        let dir = suzatary_testkit::scratch("secrets");
         let base = dir.path().join("secretspec.toml");
         let state = dir.path().join("state");
         let declared =

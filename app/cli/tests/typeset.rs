@@ -98,7 +98,7 @@ fn a_short_text_compiles_while_the_box_is_busy() {
 /// building a deploy can, uses no CPU and is not counted against the text.
 #[test]
 fn a_slow_start_is_not_counted_against_the_text() {
-    let dir = tempfile::tempdir().expect("scratch");
+    let dir = suzatary_testkit::scratch("typeset");
     let script = suzatary_testkit::fake_program(
         dir.path(),
         "slow-start",
@@ -116,7 +116,7 @@ fn a_slow_start_is_not_counted_against_the_text() {
 /// A child that waits without using CPU is stopped at the backstop and named as such.
 #[test]
 fn a_child_that_never_answers_is_stopped_at_the_backstop() {
-    let dir = tempfile::tempdir().expect("scratch");
+    let dir = suzatary_testkit::scratch("typeset");
     let script = suzatary_testkit::fake_program(dir.path(), "stuck", "#!/bin/sh\nexec sleep 30\n");
     let started = Instant::now();
     let refused = Closed::new(&script, Duration::from_millis(500))

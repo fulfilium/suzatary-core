@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn the_fanout_forgets_a_dead_token_and_counts_only_the_live_one() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("notify");
         let devices = crate::devices::Devices::open(dir.path().to_path_buf());
         let at = Datetime::new(2026, 9, 7, 12, 0, 0, 0).expect("a real instant");
         let phone = |token: &str| Device {

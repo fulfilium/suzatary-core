@@ -458,7 +458,7 @@ mod tests {
     }
 
     fn store(name: &str) -> (tempfile::TempDir, Objects<TodoEvent<Record>>) {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let untrusted = Untrusted::of([Actor::new("triage").expect("valid")]);
         let store = Objects::chain(EventStore::new(dir.path().join(name), untrusted));
         (dir, store)
@@ -475,7 +475,7 @@ mod tests {
         use prodrome_core::event::{canonical_envelope, parse_event};
         use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let guarded = Objects::digests(dir.path().join("digests"), owners());
         let node = "a".repeat(64);
         let event = |actor: &str| {
@@ -672,7 +672,7 @@ mod tests {
         use suzatary_conversations::secretary::store::Entry;
         use suzatary_lines::secretary::transcript;
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let store = lines_at(dir.path().join("conversations"));
         let id = ConversationId::new("2026-09-30-1").expect("an id");
         let at = |second| Datetime::new(2026, 9, 30, 9, 0, second, 0).expect("an instant");
@@ -744,7 +744,7 @@ mod tests {
         use suzatary_digest::secretary::memories::Memories;
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let history = Objects::open(dir.path().join("memory"));
         let texts = crate::texts::Texts::open(dir.path().join("memory-texts"));
         let cards = Objects::open(dir.path().join("inbox"));
@@ -798,7 +798,7 @@ mod tests {
         use suzatary_inbox::secretary::changes::{Act, Changeset};
         use suzatary_topics::secretary::filed::{Carding, TriageCards};
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let root = dir.path().to_path_buf();
         let (sent, joined) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
@@ -846,7 +846,7 @@ mod tests {
         use suzatary_digest::secretary::memories::Memories;
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let history = Objects::open(dir.path().join("memory"));
         let texts = crate::texts::Texts::open(dir.path().join("memory-texts"));
         let cards = Objects::open(dir.path().join("inbox"));
@@ -1006,7 +1006,7 @@ mod tests {
         use suzatary_digest::secretary::{digest_line::Line, digests::Digests, memories::Memories};
         use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let lines = spoken(dir.path());
         let (history, cards, summaries) = (
             Objects::open(dir.path().join("memory")),
@@ -1113,7 +1113,7 @@ mod tests {
         use suzatary_digest::secretary::digests::Digests;
         use suzatary_digest::secretary::memories::Memories;
 
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("objects");
         let lines = spoken(dir.path());
         let (line, _) = lines
             .lines
@@ -1174,7 +1174,7 @@ mod tests {
     /// hold is the file's, and it waits across threads as across processes.
     #[test]
     fn two_threads_on_the_store_send_once() {
-        let dir = std::env::temp_dir().join(format!("suzatary-inbox-{}", std::process::id()));
+        let dir = suzatary_testkit::this_test().join("inbox");
         let _ = std::fs::remove_dir_all(&dir);
         let caps = Objects::open(&dir);
         let asked = inbox::Asked {
@@ -1237,6 +1237,5 @@ mod tests {
             said[0].starts_with("Sent("),
             "the one send is what both answer: {said:?}"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

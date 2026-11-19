@@ -85,7 +85,7 @@ fn the_writers_refusals(store: &Path) {
 
 #[test]
 fn a_decision_is_recorded_superseded_withdrawn_and_viewed() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("decisions");
     let store = dir.path().join("decisions");
 
     ok(

@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn a_store_reads_at_the_schema_beside_it_and_another_schema_begins_it_afresh() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("plugin-store");
         let place = PluginStore::at(dir.path().join("store"));
         assert!(
             place.read().expect("reads").is_none(),
@@ -214,7 +214,7 @@ mod tests {
     /// schema only once the holder lets go.
     #[test]
     fn a_begin_at_another_schema_waits_for_the_sync_that_holds_the_store() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("plugin-store");
         let place = PluginStore::at(dir.path().join("store"));
         let schema = Declaration::admit(SCHEMA).expect("lawful");
         let other = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");

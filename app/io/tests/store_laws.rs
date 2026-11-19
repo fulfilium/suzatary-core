@@ -51,7 +51,7 @@ fn copy(from: &Path, to: &Path) {
 
 /// The laws, for the store `pinned` names, each copy of it opened by `open`; answers its row.
 fn laws<E: Store>(pinned: &str, open: impl Fn(PathBuf) -> Objects<E>) -> Kind {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("store-laws");
     let source_at = dir.path().join("source");
     std::fs::create_dir_all(&source_at).expect("a directory");
     copy(&pins(pinned), &source_at);

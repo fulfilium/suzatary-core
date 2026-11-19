@@ -7,8 +7,6 @@
 //! replica, reads the same whatever the order, and never stands on a forgotten fact.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
@@ -31,10 +29,12 @@ use suzatary_store::store::linearised;
 
 type Disk = EventStore<MemoryEvent, Everything>;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
-
 /// A store at the memory schema, removed when dropped.
-struct Scratch(Disk);
+struct Scratch(
+    Disk,
+    #[expect(dead_code, reason = "held for its drop, which removes the directory")]
+    suzatary_testkit::TempDir,
+);
 
 impl Scratch {
     fn new() -> Self {
@@ -45,19 +45,8 @@ impl Scratch {
 
     /// A store with nothing in it, not even a genesis: a replica about to adopt one.
     fn empty() -> Self {
-        let root: PathBuf = std::env::temp_dir().join(format!(
-            "suzatary-memory-schema-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        Self(Disk::new(root, Everything))
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(self.0.root());
+        let dir = suzatary_testkit::scratch("memory-schema");
+        Self(Disk::new(dir.path().join("store"), Everything), dir)
     }
 }
 

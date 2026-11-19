@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn the_record_store_names_every_file_that_is_not_its_record() {
-        let dir = tempfile::tempdir().expect("a directory");
+        let dir = suzatary_testkit::scratch("requests");
         let requests = Requests::open(dir.path().join("requests"), dir.path().join("answers"));
         assert_eq!(requests.verify(), Vec::<String>::new(), "an absent store");
         let answer = Answer {
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn an_unlistable_record_store_is_a_finding() {
-        let dir = tempfile::tempdir().expect("a directory");
+        let dir = suzatary_testkit::scratch("requests");
         let records = dir.path().join("requests");
         let requests = Requests::open(records.clone(), dir.path().join("answers"));
         assert_eq!(requests.verify(), Vec::<String>::new());
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn an_answer_past_its_window_is_pruned() {
-        let dir = std::env::temp_dir().join(format!("suzatary-answers-{}", std::process::id()));
+        let dir = suzatary_testkit::this_test().join("answers");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a directory");
         std::fs::write(dir.join("a.json"), "{}").expect("written");
@@ -255,6 +255,5 @@ mod tests {
         assert!(dir.join("a.json").exists(), "a fresh answer stays");
         prune(&dir, SystemTime::now() + KEPT + Duration::from_secs(1));
         assert!(!dir.join("a.json").exists(), "an old one goes");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

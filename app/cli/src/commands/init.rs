@@ -433,11 +433,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-init-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("init-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a temp dir");
         dir
@@ -565,7 +561,6 @@ mod tests {
                 Some(prodrome_core::event::Envelope::Genesis(_))
             ));
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -610,7 +605,6 @@ mod tests {
         // Past the refusal: with no secret store here, what stops it is the box's keys.
         let past = keyed(parse(&argv)).map_or_else(|e| format!("{e:#}"), |()| String::new());
         assert!(!past.contains("--force"), "{past}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

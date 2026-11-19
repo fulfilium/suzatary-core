@@ -14,7 +14,7 @@ use crate::stores::{conversations_at_scale, lines_at, said};
 fn an_append_at_scale() {
     static OPENED: std::sync::LazyLock<suzatary_lines::secretary::opened::Opened> =
         std::sync::LazyLock::new(Default::default);
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("husked");
     let (lines, keys) = lines_at(dir.path());
     let (ids, _) = conversations_at_scale(&lines, &keys, 100, 300);
     let conversations = Conversations {

@@ -98,11 +98,13 @@ refused() {
 
 "${git[@]}" fetch --quiet origin master || die "the roadmap's origin could not be fetched."
 commit "$@"
+said="$(mktemp)"
+trap 'rm -f "$said"' EXIT
 for _ in 1 2 3; do
   join
   [[ "$("${git[@]}" rev-parse HEAD)" != "$("${git[@]}" rev-parse origin/master)" ]] \
     || { say "nothing to push"; exit 0; }
-  code=0 said="$(mktemp)"
+  code=0
   SUZATARY_BIN="$bin" "$scripts/public-scan.sh" "$clone" origin/master..HEAD 2>"$said" || code=$?
   cat "$said" >&2
   case "$code" in

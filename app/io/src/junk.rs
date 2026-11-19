@@ -600,11 +600,7 @@ mod tests {
 
     #[test]
     fn a_missing_grant_is_needs_login_and_nothing_is_dialled() {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-io-junk-no-grant-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join("junk-no-grant");
         let junk = OutlookJunk::new(
             &roster(),
             ChurnList::default(),

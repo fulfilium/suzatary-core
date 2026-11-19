@@ -319,11 +319,7 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-corpus-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("corpus-{name}"));
         std::fs::create_dir_all(&dir).expect("a writable temp directory");
         dir
     }
@@ -343,7 +339,7 @@ mod tests {
         if !crate::mailbox::fixture::notmuch_present("the listed-hash law") {
             return;
         }
-        let root = tempfile::tempdir().expect("a scratch directory");
+        let root = suzatary_testkit::scratch("corpus");
         let (mail, ledger) = crate::mailbox::fixture::indexed(
             root.path(),
             "inbox;unread",
@@ -438,6 +434,5 @@ mod tests {
         for private in ["abc123", "why", "msg-1"] {
             assert!(!pushed.contains(private), "{private} was pushed");
         }
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

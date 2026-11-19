@@ -368,8 +368,7 @@ mod tests {
 
     impl Fake {
         fn new(tag: &str) -> Self {
-            let dir = std::env::temp_dir()
-                .join(format!("suzatary-io-drive-{tag}-{}", std::process::id()));
+            let dir = suzatary_testkit::this_test().join(format!("drive-{tag}"));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(dir.join("files")).expect("a fixture dir");
             std::fs::write(dir.join("listing.json"), LISTING).expect("the listing");
@@ -450,12 +449,6 @@ mod tests {
                 .flatten()
                 .next()
                 .is_none()
-        }
-    }
-
-    impl Drop for Fake {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 

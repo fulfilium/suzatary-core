@@ -455,11 +455,7 @@ mod tests {
     }
 
     fn scratch(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-older-{tag}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("older-{tag}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         dir
@@ -780,7 +776,6 @@ mod tests {
             cur.iter().all(|name| name.ends_with(":2,S")),
             "lands read: {cur:?}"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A second search over the same range fetches nothing and runs no index.
@@ -807,7 +802,6 @@ mod tests {
             1,
             "no second index"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// The cap, end to end: thirty matches, twenty-five pulled, five counted on the server.
@@ -841,7 +835,6 @@ mod tests {
             said.contains("5 more left on the server past the cap of 25"),
             "{said}"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A non-ASCII term is not put to an IMAP server, and the answer says so; a Proton account
@@ -868,7 +861,6 @@ mod tests {
         let said = older::coverage(range(), &answer);
         assert!(said.contains(&format!("{ADA}: not searched")), "{said}");
         assert!(said.contains(&format!("{PROTON}: not searched")), "{said}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Two searches at once, as two rounds would ask them: the sync's hold puts one after the
@@ -912,7 +904,6 @@ mod tests {
                 .count(),
             2
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     struct Down;
@@ -959,7 +950,6 @@ mod tests {
         let said = older::coverage(range(), &answer);
         assert!(said.contains(&format!("{ADA}: not searched")), "{said}");
         assert!(said.contains(&format!("{GMAIL}: not searched")), "{said}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     fn lieer(root: &Path) {
@@ -1035,7 +1025,6 @@ mod tests {
             "{sent:?}"
         );
         assert!(sent.iter().all(|url| !url.contains("/a1")), "{sent:?}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A Google account is searched with the token the box mints from its own grant: no token
@@ -1067,7 +1056,6 @@ mod tests {
                     == Some("Bearer box-minted")),
             "{sent:?}"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// notmuch with its own config, never the box's.
@@ -1180,6 +1168,5 @@ mod tests {
             .rows(&["invite-2023@example.test".to_owned()])
             .expect("rows");
         assert_eq!(rows.len(), 1, "one message, however many files: {rows:?}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

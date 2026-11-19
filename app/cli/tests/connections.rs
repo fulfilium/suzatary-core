@@ -134,13 +134,9 @@ fn serving_answering(
     }
 }
 
-/// The scratch instance file the scene `tag` is served over.
+/// The scratch instance file the scene `tag` is served over, the same for each call in a test.
 fn scratch(tag: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!(
-        "suzatary-connections-{tag}-{}-{:?}.toml",
-        std::process::id(),
-        std::thread::current().id()
-    ))
+    suzatary_testkit::this_test().join(format!("connections-{tag}.toml"))
 }
 
 /// A store holding the GitHub tokens and nothing else.
@@ -300,7 +296,6 @@ fn a_calendar_is_connected_granted_and_removed_by_its_cards() {
         .expect("a card");
     assert_eq!(again["act"]["kind"], "secret", "{asked}");
     assert_eq!(again["state"], "standing", "{asked}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// Over a store that refuses, as `secretspec` does, a name its file does not declare: Connect
@@ -362,7 +357,6 @@ fn a_calendar_s_link_is_declared_before_its_card_and_cleared_before_it_is_droppe
         "cleared while still declared: {after}"
     );
     assert!(!store.declares("PLUGIN_ICS_WORK"), "dropped once cleared");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// Storing a link syncs its plugin at the tap, once, so the link is checked then and not at the
@@ -400,7 +394,6 @@ fn a_stored_link_is_checked_at_its_tap() {
     let (status, after) = tap(base, setup, 0, &serde_json::json!({ "value": LINK }));
     assert_eq!(after["proposals"][0]["state"], "acted", "{status} {after}");
     assert_eq!(checks.checked(), ["ics"], "synced once, at the tap");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A calendar added to the instance file by hand is seen with no restart: the server reads the
@@ -459,7 +452,6 @@ fn a_calendar_added_by_hand_is_seen_without_a_restart() {
     // The watcher reads the file every second; two more reads of the unmoved file file nothing.
     std::thread::park_timeout(std::time::Duration::from_millis(2500));
     assert_eq!(asked_for(), 1, "an unmoved file asks nothing more");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 fn asked_of(served: &Box, act: Act) {
@@ -514,7 +506,6 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
         proposals[0]["act"]["label"],
         "your Work calendar's secret link"
     );
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A connect the owner asks for in their own words is filed on the first try, its source the
@@ -564,7 +555,6 @@ fn a_connect_in_the_owners_words_is_filed_on_the_first_try() {
         2,
         "a second connect in the same conversation: {second}"
     );
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A second add is a failed card that wrote nothing, and a connection added and removed leaves
@@ -602,7 +592,6 @@ fn connecting_twice_writes_once_and_removing_takes_out_what_it_wrote() {
     assert!(left.starts_with(INSTANCE), "{left}");
     assert!(left.contains("name = \"ics\""), "{left}");
     assert!(!left.contains("credentials"), "{left}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A mail account's removal offers its wider yes, deleting its cached mail too; a calendar's
@@ -633,7 +622,6 @@ fn only_a_mail_account_s_removal_may_delete_its_mail() {
         after.to_string().contains("this server keeps no mail"),
         "{after}"
     );
-    let _ = std::fs::remove_file(&served.path);
 
     let calendar = serving(
         "mail-calendar",
@@ -648,7 +636,6 @@ fn only_a_mail_account_s_removal_may_delete_its_mail() {
         &serde_json::json!({ "always": true }),
     );
     assert_eq!(status, 400);
-    let _ = std::fs::remove_file(&calendar.path);
 }
 
 /// A tap carries at most one answer beside its note: a body naming two is refused where it is
@@ -684,7 +671,6 @@ fn a_tap_naming_two_answers_is_refused_and_the_card_stands() {
     );
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A grant the owner dismissed is asked for anew when a link from its origin is pasted again:
@@ -718,7 +704,6 @@ fn a_dismissed_grant_is_asked_again_when_the_link_is_pasted_again() {
     assert_eq!(again["act"]["kind"], "grant", "{after}");
     assert_eq!(again["act"]["origin"], "https://cal.example.test");
     assert_eq!(again["state"], "standing", "{after}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// The box's sign-in card the owner dismissed stays dismissed while the account stays, and an
@@ -771,7 +756,6 @@ fn an_account_connected_again_is_asked_for_its_sign_in_again() {
     assert_eq!(proposals.len(), 2, "{asked}");
     assert_eq!(proposals[1]["act"]["kind"], "auth", "{asked}");
     assert_eq!(proposals[1]["state"], "standing", "{asked}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A link in the clear is refused before any grant is asked for, since the plugin's fetch never
@@ -801,7 +785,6 @@ fn a_link_in_the_clear_is_refused_before_any_grant() {
         "no grant is asked for: {after}"
     );
     assert!(served.secrets.calls().is_empty(), "nothing was stored");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A link to a Google calendar is stored nowhere, since the box reads a Google account's
@@ -863,7 +846,6 @@ fn a_google_calendar_s_link_asks_for_its_google_account() {
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][1]["state"], "acted", "{after}");
     assert_eq!(file(&served), before, "the instance file is as it was");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A calendar's card says what its plugin may reach as the instance declares it now: the
@@ -902,7 +884,6 @@ fn a_connect_card_names_the_origins_its_plugin_may_reach_now() {
         serde_json::json!(["https://calendar.example.test"]),
         "{now}"
     );
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// Removing a Microsoft account deletes the sign-ins it held, reading and sending, which its
@@ -916,11 +897,7 @@ fn removing_a_microsoft_account_forgets_its_sign_in() {
         )
         .expect("an account")
     };
-    let tokens = std::env::temp_dir().join(format!(
-        "suzatary-connections-grants-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
+    let tokens = common::scratch("connections-grants");
     std::fs::create_dir_all(&tokens).expect("a token directory");
     let grant = tokens.join("bo-at-example-test.json");
     let other = tokens.join("ada-at-example-test.json");
@@ -953,8 +930,6 @@ fn removing_a_microsoft_account_forgets_its_sign_in() {
     assert!(after.to_string().contains("forgot its sign-in"), "{after}");
     assert!(!grant.exists(), "its grants are deleted");
     assert!(other.exists(), "another account's are not");
-    let _ = std::fs::remove_dir_all(&tokens);
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A calendar's link tapped while the instance file does not read is refused, never stored
@@ -975,7 +950,6 @@ fn a_link_is_refused_while_the_instance_file_does_not_read() {
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
     assert!(served.secrets.calls().is_empty(), "nothing was stored");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A server whose data repository pushes to `origin`, if any, holding every name the deployment
@@ -1031,7 +1005,6 @@ fn a_connect_tap_leaves_the_push_token_settable_and_owed() {
     assert_eq!(status, 200, "{after}");
     let owed = push_token_card(&served).expect("the push token's card");
     assert_eq!(owed["state"], "standing", "{owed}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A data repository that pushes nowhere, or to a host that is not GitHub, is asked for no
@@ -1046,7 +1019,6 @@ fn a_repository_pushing_nowhere_is_asked_for_no_push_token() {
         let (status, after) = tap(&served.base, CONNECT, 0, &serde_json::json!({}));
         assert_eq!(status, 200, "{after}");
         assert_eq!(push_token_card(&served), None, "{tag}");
-        let _ = std::fs::remove_file(&served.path);
     }
 }
 
@@ -1122,7 +1094,6 @@ fn a_new_microsoft_account_is_asked_for_its_sign_in() {
         serde_json::Value::Null,
         "once the flow ends the card says nothing more of it: {granted}"
     );
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// The Notifications lines, as `GET /api/overview` reads them now.
@@ -1156,7 +1127,6 @@ fn a_connected_channel_is_on_the_overview_with_no_restart() {
     assert!(file(&served).contains("\"ntfy\""), "{}", file(&served));
     let lines = notifications(&served.base);
     assert!(names_ntfy(&lines), "{lines:?}");
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// A topic opened for `served`, its id.
@@ -1245,7 +1215,6 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
         again["proposals"].as_array().expect("cards").is_empty(),
         "no second card: {again}"
     );
-    let _ = std::fs::remove_file(&served.path);
 }
 
 /// An account, a calendar or a folder is the owner's to name: after a round read mail, a
@@ -1284,5 +1253,4 @@ fn a_round_that_read_mail_proposes_no_connect_card() {
         !file(&served).contains("PLUGIN_ICS_WORK"),
         "nothing was written"
     );
-    let _ = std::fs::remove_file(&served.path);
 }

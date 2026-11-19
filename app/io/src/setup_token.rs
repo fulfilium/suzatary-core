@@ -256,7 +256,7 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
 
     #[test]
     fn the_url_comes_out_the_code_goes_in_and_the_token_is_captured() {
-        let dir = tempfile::tempdir().expect("a directory");
+        let dir = suzatary_testkit::scratch("setup-token");
         let signing = SignIn::start(&fake(dir.path()), WAIT).expect("a URL");
         assert_eq!(signing.url().as_str(), URL);
         let token = signing
@@ -268,7 +268,7 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
     /// The real CLI asks again after a wrong code; the refusal must not wait for the timeout.
     #[test]
     fn a_wrong_code_is_refused_at_once_and_says_nothing_it_drew() {
-        let dir = tempfile::tempdir().expect("a directory");
+        let dir = suzatary_testkit::scratch("setup-token");
         let signing = SignIn::start(&fake(dir.path()), WAIT).expect("a URL");
         let began = Instant::now();
         let refused = signing
@@ -285,7 +285,7 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
 
     #[test]
     fn dropping_a_sign_in_ends_its_whole_group() {
-        let dir = tempfile::tempdir().expect("a directory");
+        let dir = suzatary_testkit::scratch("setup-token");
         let pidfile = dir.path().join("child.pid");
         let script = suzatary_testkit::fake_program(
             dir.path(),

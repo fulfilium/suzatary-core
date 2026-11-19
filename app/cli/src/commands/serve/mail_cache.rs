@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn forgetting_deletes_one_account_s_folder_and_nothing_else() {
-        let root = tempfile::tempdir().expect("a scratch root");
+        let root = suzatary_testkit::scratch("mail-cache");
         for folder in [
             "ada-at-example-test",
             "bo-at-example-test",

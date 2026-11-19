@@ -19,7 +19,7 @@ struct Scripts {
 impl Scripts {
     fn new() -> Self {
         Self {
-            dir: tempfile::tempdir().expect("a scratch directory"),
+            dir: suzatary_testkit::scratch("model-port"),
             made: Mutex::new((0, None)),
         }
     }

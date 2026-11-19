@@ -55,7 +55,7 @@ mod tests {
     /// The boundary a search row rests on: a record holds no digit of a value.
     #[test]
     fn a_pdf_s_layer_is_recorded_as_its_kinds_and_never_its_number() {
-        let dir = tempfile::tempdir().expect("scratch");
+        let dir = suzatary_testkit::scratch("attached");
         let attached = Attached::open(dir.path().to_owned());
         let pdftotext = Pdftotext::new(".");
         let named = crate::pdftotext::minimal_pdf(&format!("SSN {SSN}"));

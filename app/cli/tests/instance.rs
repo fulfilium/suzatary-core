@@ -511,7 +511,7 @@ fn refused(dir: &Path, name: &str, text: &str) -> String {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("suzatary-instance-{name}-{}", std::process::id()));
+    let dir = crate::common::scratch(name);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     dir
 }
@@ -532,7 +532,6 @@ fn the_instance_file_reads_and_refuses_as_the_golden_file_says() {
             refused(&dir, name, &edited(from, to))
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
     if std::env::var_os("SUZATARY_UPDATE_INSTANCE").is_some() {
         std::fs::write(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/instance.golden"),
@@ -595,5 +594,4 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
         &format!("{model}compact = false\ncompactors = [\"claude-haiku-4-5\"]\n"),
     );
     assert_eq!(read(&off), Compacting::Off);
-    let _ = std::fs::remove_dir_all(&dir);
 }

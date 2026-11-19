@@ -172,7 +172,7 @@ mod tests {
             eprintln!("skipping: pdftotext is not on PATH");
             return None;
         }
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("upload-index");
         let store = AttachmentStore::new(dir.path().join("attachments"), Pdftotext::new("."));
         let index = UploadIndexFiles::new(dir.path().join("upload-index"), store.clone());
         Some((dir, store, index))

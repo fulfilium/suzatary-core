@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn a_scratch_is_private_unique_and_removed_whole() {
-        let root = tempfile::tempdir().expect("a root");
+        let root = suzatary_testkit::scratch("scratch");
         let first = Scratch::under(&root.path().join("made"), "job-").expect("made");
         let second = Scratch::under(&root.path().join("made"), "job-").expect("made");
         assert_ne!(first.path(), second.path());

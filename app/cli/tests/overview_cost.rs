@@ -185,7 +185,7 @@ impl Phases {
 fn measure_the_overview_over_the_disk_stores_at_the_live_size() {
     let phases = Phases::default();
     tracing::subscriber::set_global_default(phases.clone()).expect("the only subscriber");
-    let scratch = tempfile::tempdir().expect("a scratch directory");
+    let scratch = suzatary_testkit::scratch("overview-cost");
     let store: &'static Decrypting = Box::leak(Box::new(Decrypting::under(scratch.path())));
     let ada = common::login("ada@example.com");
     let whois = common::FakeWhois::new().naming(common::v4(), ada.clone());

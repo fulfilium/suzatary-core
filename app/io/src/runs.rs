@@ -78,7 +78,7 @@ mod tests {
     /// A run is held, against another holder in the same process too, until its hold drops.
     #[test]
     fn a_run_is_gone_once_its_hold_drops() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("runs");
         let runs = Locks::at(dir.path().join("runs"));
         let held = runs.begin().expect("held");
         let run = held.run.clone();

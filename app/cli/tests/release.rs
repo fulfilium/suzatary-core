@@ -686,9 +686,7 @@ fn complete_writes_where_each_todo_is_found_once() {
 /// `<out>/share/suzatary/release.toml` holding `release` (none when `None`): what `--version`
 /// then prints.
 fn version_installed(name: &str, release: Option<&str>) -> String {
-    let out =
-        std::env::temp_dir().join(format!("suzatary-installed-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&out);
+    let out = crate::common::scratch(&format!("installed-{name}"));
     std::fs::create_dir_all(out.join("bin")).expect("a bin dir");
     let exe = out.join("bin/suzatary");
     suzatary_testkit::copy_program(Path::new(&crate::binary::path()), &exe);

@@ -197,11 +197,7 @@ mod tests {
     use prodrome_core::memo;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-io-rendered-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("rendered-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -244,7 +240,6 @@ mod tests {
         let rendered = Rendered::on_disk(&dir, 8, &[&function()]);
         std::fs::create_dir_all(rendered.file(&key).expect("on disk")).expect("a directory");
         assert!(rendered.recall(&key).is_err());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -257,7 +252,6 @@ mod tests {
             "<p onclick=\"steal()\">click</p>",
         );
         assert_eq!(rendered.recall(&key).expect("read"), None);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -287,7 +281,6 @@ mod tests {
                 .expect("read"),
             None
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -304,7 +297,6 @@ mod tests {
         );
         assert!(!here.file(&key).expect("on disk").exists());
         assert_eq!(here.recall(&key).expect("read"), None);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -327,7 +319,6 @@ mod tests {
         let sub = dir.join(function().as_str());
         trim(&sub, 3);
         assert_eq!(std::fs::read_dir(&sub).expect("dir").count(), 3);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -347,7 +338,6 @@ mod tests {
             dir.join("not-a-function").exists(),
             "what is not a function's folder stays"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -373,7 +363,6 @@ mod tests {
             Some("<p>kept</p>"),
             "and nothing of this build's but the key"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -400,6 +389,5 @@ mod tests {
         for (key, html) in keys.iter().zip(["<p>a</p>", "<p>b</p>", "<p>c</p>"]) {
             assert_eq!(rendered.recall(key).expect("read").as_deref(), Some(html));
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

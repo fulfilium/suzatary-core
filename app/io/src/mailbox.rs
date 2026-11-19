@@ -1018,7 +1018,7 @@ mod tests {
         if !fixture::notmuch_present("the real-index half of held values") {
             return;
         }
-        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let scratch = suzatary_testkit::scratch("mailbox");
         let mailbox = indexed(scratch.path());
         let query = |text: &str| Query::new(text).expect("a query");
 
@@ -1113,7 +1113,7 @@ mod tests {
         if !fixture::notmuch_present("the rebuild of the locators") {
             return;
         }
-        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let scratch = suzatary_testkit::scratch("mailbox");
         let text = "From: counsel@example.test\nTo: ada@example.test\nSubject: cited\n\
                     Message-ID: <cited-1@example.test>\nDate: Wed, 08 Mar 2023 10:00:00 +0000\n\n\
                     Cited by a todo.\n";
@@ -1157,7 +1157,7 @@ mod tests {
             eprintln!("notmuch is not on PATH: the real-index half of held values is not run");
             return;
         }
-        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let scratch = suzatary_testkit::scratch("mailbox");
         let mailbox = indexed(scratch.path());
         let query = Query::new("zebra or yak or ibex").expect("a query");
         let rows = mailbox.search(&query, None, 10, None).expect("rows");

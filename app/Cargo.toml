@@ -3,8 +3,8 @@
 # io → core → {todo → signatures, memory → held, services → {held, health}, {health, triage} → mail → {held, signatures}} →
 # store, record → base → prodrome-core.
 # `wasm` is the browser's module; `plugin` the plugin host, alone because wasmtime is the largest
-# tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` the programs
-# `io`'s and `cli`'s tests run.
+# tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` what the
+# tests make: the programs they run and their scratch directories.
 [workspace]
 resolver = "3"
 members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]

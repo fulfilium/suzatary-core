@@ -651,11 +651,7 @@ sent_folder = "Sent Items"
     }
 
     fn write(text: &str, name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "suzatary-instance-{name}-{}-{:?}.toml",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let path = suzatary_testkit::this_test().join(format!("instance-{name}.toml"));
         std::fs::write(&path, text).expect("a writable temp file");
         path
     }
@@ -753,7 +749,7 @@ sent_folder = "Sent Items"
     /// The home is a file, so even root cannot write under it.
     #[test]
     fn reading_an_instance_writes_nothing_even_where_nothing_can_be_written() {
-        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let scratch = suzatary_testkit::scratch("instance");
         let home = scratch.path().join("home");
         std::fs::write(&home, "").expect("a file where the home would be");
         let instance = Instance::read(
@@ -804,8 +800,8 @@ sent_folder = "Sent Items"
 
     #[test]
     fn the_code_and_data_roots_resolve_from_the_file() {
-        let base = std::env::temp_dir().join("suzatary-instance-roots");
-        let elsewhere = std::env::temp_dir().join("suzatary-instance-roots-elsewhere");
+        let base = suzatary_testkit::this_test().join("suzatary-instance-roots");
+        let elsewhere = suzatary_testkit::this_test().join("suzatary-instance-roots-elsewhere");
         for dir in [&base, &elsewhere] {
             std::fs::create_dir_all(dir).unwrap();
         }

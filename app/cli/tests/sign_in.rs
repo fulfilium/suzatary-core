@@ -17,8 +17,7 @@ const URL: &str = "https://claude.com/cai/oauth/authorize?code=true&client_id=fa
 /// A `claude` that draws the link `setup-token` draws and prints a token for one code, as the
 /// io crate's spike's fake does.
 fn fake_claude(tag: &str) -> String {
-    let dir =
-        std::env::temp_dir().join(format!("suzatary-test-claude-{tag}-{}", std::process::id()));
+    let dir = common::scratch(&format!("claude-{tag}"));
     std::fs::create_dir_all(&dir).expect("a directory");
     suzatary_testkit::fake_program(
         &dir,

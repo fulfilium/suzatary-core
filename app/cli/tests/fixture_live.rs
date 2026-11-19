@@ -19,7 +19,7 @@ fn fixture(root: &Path) -> Command {
 
 #[test]
 fn a_copy_of_a_deployment_with_a_certificate_names_none_and_serves_its_viewer() {
-    let scratch = tempfile::tempdir().expect("a scratch directory");
+    let scratch = suzatary_testkit::scratch("fixture-live");
     let root = scratch.path();
     std::fs::create_dir_all(root.join("state")).expect("a directory");
     let built = fixture(root)

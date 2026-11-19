@@ -70,24 +70,20 @@ fn at(n: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, n / 60, n % 60, 0).expect("an instant")
 }
 
-/// A scratch directory of this process's own, gone when dropped.
-struct Scratch(PathBuf);
+/// A path nothing is at yet, gone with its directory when dropped.
+struct Scratch(
+    PathBuf,
+    #[expect(dead_code, reason = "held for its drop, which removes the directory")]
+    tempfile::TempDir,
+);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-transcript-{}-{name}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        let dir = tempfile::Builder::new()
+            .prefix("suzatary-transcript-")
+            .tempdir()
+            .expect("a scratch directory");
+        Self(dir.path().join(name), dir)
     }
 }
 

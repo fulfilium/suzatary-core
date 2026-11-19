@@ -64,7 +64,7 @@ fn case(folder: &str, name: &str, bytes: &[u8]) -> Case {
 
 #[test]
 fn the_proton_drive_adapter_keeps_every_law_behind_a_fake_cli() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("drive-port");
     let drive = ProtonDrive::new(
         fake_cli(dir.path()),
         dir.path().join("scratch"),
@@ -95,7 +95,7 @@ fn the_private_folder_is_fenced_whatever_its_case() {
     use suzatary_base::drive_path::DrivePath;
     use suzatary_services::drive::{Fenced, Port as _};
 
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("drive-port");
     let drive = ProtonDrive::new(
         fake_cli(dir.path()),
         dir.path().join("scratch"),

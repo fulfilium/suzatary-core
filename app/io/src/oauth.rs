@@ -410,11 +410,7 @@ mod tests {
     use suzatary_mail::mail::account::{Authority, MsImap, Sync};
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "suzatary-io-oauth-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let dir = suzatary_testkit::this_test().join(format!("oauth-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -454,7 +450,6 @@ mod tests {
             .expect("writes");
             assert_eq!(store.read_grants(&account).is_ok(), reads, "{tenant:?}");
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

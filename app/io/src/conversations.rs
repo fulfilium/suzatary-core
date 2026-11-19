@@ -102,7 +102,7 @@ mod tests {
     /// another.
     #[test]
     fn one_cache_per_keys_directory() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("conversations");
         let renders: Arc<dyn RenderCache + Send + Sync> =
             Arc::new(suzatary_base::capability::Nothing);
         let open = |keys: &str| {

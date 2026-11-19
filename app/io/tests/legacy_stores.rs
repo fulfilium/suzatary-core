@@ -145,7 +145,7 @@ fn objects(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
 
 #[test]
 fn every_legacy_store_reads_as_it_did() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("legacy-stores");
     copy(&legacy(), dir.path());
     let found = readings(dir.path());
     let pinned = std::fs::read_to_string(legacy().join("readings.txt")).expect("the pin");
@@ -158,7 +158,7 @@ fn every_legacy_store_reads_as_it_did() {
 /// What ordinary writes put on a legacy chain, as bytes, and that nothing already stored moves.
 #[test]
 fn writes_on_a_legacy_chain() {
-    let dir = tempfile::tempdir().expect("a scratch dir");
+    let dir = suzatary_testkit::scratch("legacy-stores");
     copy(&legacy(), dir.path());
     let root = dir.path().join("events");
     let before = objects(&root);

@@ -84,7 +84,7 @@ mod tests {
     /// and the bell rings only when the reading moves.
     #[test]
     fn calls_recorded_into_the_file_read_back_as_their_join() {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = suzatary_testkit::scratch("model-health");
         let rung = Arc::new(AtomicUsize::new(0));
         let ringing = Arc::clone(&rung);
         let store = beside(&dir.path().join("triage-heartbeat")).ringing(move || {

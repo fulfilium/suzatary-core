@@ -120,8 +120,7 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("suzatary-mail-sync-{name}-{}", std::process::id()));
+        let dir = suzatary_testkit::this_test().join(format!("mail-sync-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         dir
@@ -159,7 +158,6 @@ mod tests {
         std::fs::write(dir.join("last-sync.json"), report("done")).expect("written");
         let read = timer.last().expect("read").expect("a report");
         assert_eq!(read.report.synced[0].tail, "done");
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -168,7 +166,6 @@ mod tests {
         std::fs::create_dir(dir.join("last-sync.json")).expect("a directory");
         assert!(timer(&dir, "true").last().is_err());
         assert!(read_report(&dir.join("last-sync.json")).is_err());
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -187,6 +184,5 @@ mod tests {
         writer.join().expect("the writer finished");
         assert_eq!(synced.report.synced[0].tail, "after");
         assert!(synced.at > since);
-        let _ = std::fs::remove_dir_all(dir);
     }
 }

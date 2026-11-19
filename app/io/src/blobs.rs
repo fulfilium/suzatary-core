@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn a_file_is_kept_once_and_read_back_by_its_digest() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("blobs");
         let store = Blobs::open(dir.path().join("files"));
         let first = store.put(b"%PDF-1.7 a").expect("kept");
         assert_eq!(store.put(b"%PDF-1.7 a").expect("kept again"), first);
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn a_swapped_or_absent_file_is_absent() {
-        let dir = tempfile::tempdir().expect("a scratch dir");
+        let dir = suzatary_testkit::scratch("blobs");
         let store = Blobs::open(dir.path().to_path_buf());
         let id = store.put(b"%PDF-1.7 a").expect("kept");
         std::fs::write(dir.path().join(id.as_str()), b"%PDF-1.7 b").expect("swapped");
