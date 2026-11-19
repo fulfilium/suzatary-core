@@ -25,6 +25,8 @@ pub mod upload;
 pub mod upload_index;
 pub mod vault;
 
+mod categories;
+
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/nothing.rs"]
 mod nothing;

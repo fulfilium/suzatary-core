@@ -21,7 +21,6 @@ ts-rs.workspace = true
 regex.workspace = true
 regex-syntax.workspace = true
 unicode-normalization = "0.1"
-unicode-general-category = "1"
 base64.workspace = true
 sha2.workspace = true
 hex.workspace = true
@@ -32,6 +31,9 @@ nothing = ["suzatary-base/nothing", "suzatary-store/nothing"]
 [dev-dependencies]
 suzatary-held = { path = ".", features = ["nothing"] }
 proptest.workspace = true
+# The oracle of `categories`' tables: version 1.1.0 holds the General_Category data of Unicode
+# 16.0.0, and a version with another Unicode's data would fail the tables' test.
+unicode-general-category = "=1.1.0"
 
 [lints]
 workspace = true

@@ -217,14 +217,11 @@ pub fn fold(text: &str) -> String {
 /// Text with its spelling undone, case kept: compatibility-decomposed (a full-width letter is its
 /// ASCII one), with every combining mark, format character (`Cf`) and the tatweel dropped.
 fn spelled(text: &str) -> String {
-    use unicode_general_category::{GeneralCategory, get_general_category};
     use unicode_normalization::UnicodeNormalization as _;
     use unicode_normalization::char::is_combining_mark;
     text.nfkd()
         .filter(|c| {
-            !is_combining_mark(*c)
-                && get_general_category(*c) != GeneralCategory::Format
-                && *c != TATWEEL
+            !is_combining_mark(*c) && !crate::categories::FORMAT.contains(*c) && *c != TATWEEL
         })
         .collect()
 }
@@ -279,6 +276,11 @@ pub const PAIRS: usize = 16;
 
 /// The spelling escapes past which a file is opaque.
 pub const ESCAPES: usize = 16;
+
+/// The shortest run of hex digits after `=` read as one value, a commit id or a digest after a
+/// name (`rev=` and forty digits), and not as a quoted-printable escape of its first two digits.
+/// The hex rule still reads the run.
+pub const VALUE: usize = 40;
 
 /// A token of base64's alphabet, standard or URL-safe, padding included.
 static ALPHABET: LazyLock<Regex> =
@@ -517,6 +519,15 @@ impl Opaque {
             let (Some((c, quoted)), Some(whole)) = (named(&found), found.get(0)) else {
                 continue;
             };
+            if found.name("q").is_some()
+                && text[whole.start() + 1..]
+                    .bytes()
+                    .take_while(u8::is_ascii_hexdigit)
+                    .count()
+                    >= VALUE
+            {
+                continue;
+            }
             // Inside a word: a letter on both sides, as when an escape stands for one letter of a
             // term, never a value assigned to a name (`EPOCH=315532`).
             let inside_a_word = lettered(text[..whole.start()].chars().next_back())
@@ -1083,6 +1094,30 @@ mod tests {
         }
         assert_eq!(Opaque::of(b"a\0b"), Some(Opaque::Binary));
         assert_eq!(Opaque::of(&[0x66, 0x6f, 0xff]), Some(Opaque::Binary));
+    }
+
+    /// A run of [`VALUE`] or more hex digits after `=` is a value, such as the commit id of a lock's
+    /// git source, and no escape of its first two digits: the hex rule still reads it, and a
+    /// shorter run or an escape inside a word is read as before.
+    #[test]
+    fn a_commit_id_after_a_name_is_a_value() {
+        let id = |len: usize| -> String {
+            let mut id = String::from("42f");
+            id.extend(
+                (3..len).filter_map(|i| char::from_digit(u32::try_from(i * 7 % 16).ok()?, 16)),
+            );
+            id
+        };
+        let source = |id: &str| format!("source = \"git+https://example.test/x?rev={id}#{id}\"\n");
+        let spelled = hex::encode("a note about nobody, said in hex.");
+        for (text, opaque) in [
+            (source(&id(VALUE)), None),
+            (source(&id(VALUE - 1)), Some(Opaque::Escaped)),
+            (["pa", "=73", "sword\n"].concat(), Some(Opaque::Escaped)),
+            (format!("name={spelled}\n"), Some(Opaque::Encoded)),
+        ] {
+            assert_eq!(Opaque::of(text.as_bytes()), opaque, "{text}");
+        }
     }
 
     /// An integrity hash is exempt only as exactly itself: what follows one in the same token (a

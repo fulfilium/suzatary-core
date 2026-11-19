@@ -815,7 +815,7 @@ enum Run {
 
 impl Normal {
     fn of(source: &str) -> Self {
-        use unicode_general_category::{GeneralCategory, get_general_category};
+        use crate::categories::{DASH, DECIMAL, FORMAT};
         use unicode_normalization::UnicodeNormalization as _;
         let mut normal = Normal {
             text: String::with_capacity(source.len()),
@@ -830,15 +830,15 @@ impl Normal {
                 continue;
             }
             for c in std::iter::once(read).nfkc() {
-                let category = get_general_category(c);
-                if category == GeneralCategory::Format || ignorable(c) {
+                if FORMAT.contains(c) || ignorable(c) {
                     continue;
                 }
-                let c = match category {
-                    GeneralCategory::DashPunctuation => '-',
-                    GeneralCategory::DecimalNumber => digit(c),
-                    _ if c == '\u{2212}' => '-',
-                    _ => c,
+                let c = if DASH.contains(c) || c == '\u{2212}' {
+                    '-'
+                } else if DECIMAL.contains(c) {
+                    digit(c)
+                } else {
+                    c
                 };
                 run = normal.step(run, c, at);
             }
@@ -904,11 +904,8 @@ impl Normal {
 /// A decimal digit's ASCII digit: its distance from the start of its run, which Unicode lays out
 /// as tens from zero.
 fn digit(c: char) -> char {
-    use unicode_general_category::{GeneralCategory, get_general_category};
-    let decimal = |code: u32| {
-        char::from_u32(code)
-            .is_some_and(|c| get_general_category(c) == GeneralCategory::DecimalNumber)
-    };
+    let decimal =
+        |code: u32| char::from_u32(code).is_some_and(|c| crate::categories::DECIMAL.contains(c));
     let mut zero = u32::from(c);
     while zero > 0 && decimal(zero - 1) {
         zero -= 1;
