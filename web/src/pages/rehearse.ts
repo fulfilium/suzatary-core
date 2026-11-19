@@ -1,9 +1,8 @@
-// The rehearsal worker: handed the views module the page compiled, it drives each page's class through its rehearsal
-// (`Hosted::rehearsal`) as the painter drives it (`painter/run.ts`): constructed, its first paint, each input with its
-// effects, and freed. V8 compiles each wasm function on its first call, and compiled code is the module's, shared by every
-// thread that instantiates it, so the page's thread finds compiled every function a first visit calls, the class's
-// exports and its drop included. Whatever happens it then says it is done and closes: a rehearsal that fails costs the
-// page nothing but that warmth.
+// The rehearsal worker drives each page's class through its rehearsal (`Hosted::rehearsal`) as `painter/run.ts` does.
+// V8 compiles a wasm function at its first call, into the module every thread shares. No page is drawn before the
+// rehearsal ends (`program.module` awaits it), so a visit finds compiled what the rehearsal's inputs reach: each hold's
+// `Loading` before its answer, and a stream reading holding a store's window of blocks' HTML. What only a later reading
+// reaches compiles on the page's thread. It always says it is done and closes: a failed rehearsal costs only warmth.
 
 import deliver, { type Written, written } from "../painter/deliver"
 

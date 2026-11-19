@@ -1184,6 +1184,11 @@ export class Page {
     await this.command("ServiceWorker.stopAllWorkers", {});
   }
 
+  /** A full collection of the page's heap: a wasm module only documents it left held is freed, not handed to the next. */
+  async collectGarbage(): Promise<void> {
+    await this.command("HeapProfiler.collectGarbage", {});
+  }
+
   /** What the page's main thread allocates from now until the returned stop, sampled every `intervalBytes` by V8's heap
    * profiler (no CPU sampling), what was collected since included: each sampled allocation's size under the stack that
    * made it, as DevTools answers it. */

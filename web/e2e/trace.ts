@@ -8,6 +8,12 @@ import type { TraceEvent } from "./cdp";
 /** The thread an event ran on, as `pid:tid`. */
 export const threadKey = (e: TraceEvent): string => `${e.pid}:${e.tid}`;
 
+/** The thread of the dedicated worker whose script's URL ends with `script`, as `pid:tid`; "" when the trace saw none start. */
+export const workerThread = (events: readonly TraceEvent[], script: string): string => {
+  const started = events.find((e) => e.name === "TracingSessionIdForWorker" && String(e.args?.data?.["url"] ?? "").endsWith(script));
+  return started === undefined ? "" : `${started.pid}:${String(started.args?.data?.["workerThreadId"])}`;
+};
+
 /** The page's thread (the renderer's main thread that ran the most), and its events as complete ones: a B/E pair is
  * one X with its `dur`. */
 export const pageThread = (events: readonly TraceEvent[]): { readonly main: string; readonly complete: readonly TraceEvent[] } => {

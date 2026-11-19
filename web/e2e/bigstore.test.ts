@@ -28,8 +28,9 @@ import { writeFileSync } from "node:fs"
 
 import wait from "../src/wire/wait"
 import type { Recorded } from "./harness"
+import type { TraceEvent } from "./cdp"
 import { BULK, OBSERVE, placed, settle } from "./longtasks"
-import { layoutsOf, measured, pageThread, threadKey } from "./trace"
+import { layoutsOf, measured, pageThread, threadKey, workerThread } from "./trace"
 import { PHONE, REPLICA_ROWS, SIGNED_POST, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
@@ -135,22 +136,28 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
 // `slices::WORDS`, or one round alone) and what inserting them dirties around them. One of the store's rounds is 58;
 // two, the slice before words bounded it, were 91.
 const SLICE_OBJECTS = 70
-// The wasm functions the page's thread compiles on their first call while the stream draws, at most. The rehearsal
-// worker compiles the stream's and the todo list's it leaves (`web/src/pages/rehearse.ts`); before it reached them the
-// page's thread compiled 33. One standard B-tree step that the store's own row keys reach still compiles here.
-const COMPILED_ON_THE_PAGE = 2
+// The wasm functions the page's thread compiles on their first call while the stream draws, at most: the rehearsal
+// worker compiles every one the stream's first readings reach (`web/src/pages/rehearse.ts`).
+const COMPILED_ON_THE_PAGE = 0
 
 app.scene("a frame of the stream lays out one slice, and the rehearsal compiled the stream's functions before it draws", async () => {
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  // The earlier scenes' pages are gone, and with them the views module they compiled and ran: this page compiles its
+  // own, as a first visit does, so what the stream finds compiled is what the rehearsal compiled.
+  await app.page.collectGarbage()
   const unobserve = await app.page.beforeEveryDocument(OBSERVE)
   try {
+    const stop = await app.page.trace(["devtools.timeline", "disabled-by-default-devtools.timeline", "v8.wasm", "blink.user_timing"])
     await app.page.navigate(`${LINES_BASE}/?traced#/`)
     await settle(app.page, `document.querySelectorAll(".tree .row").length > 0`, STEP_MS)
-    const stop = await app.page.trace(["devtools.timeline", "disabled-by-default-devtools.timeline", "v8.wasm", "blink.user_timing"])
     await app.page.evaluate(`void (location.hash = "#/secretary")`)
     await settle(app.page, BULK, STEP_MS)
     const events = await stop()
     const { main, complete } = pageThread(events)
+    const lazy = (thread: string): readonly TraceEvent[] => events.filter((e) => e.name === "wasm.CompileLazy" && threadKey(e) === thread)
+    const rehearsed = lazy(workerThread(events, "/pagework.js")).length
+    const drawn = measured(events, "page:draw").find(([, , d]) => (JSON.parse(d) as { readonly page?: string } | null)?.page === "SecretaryPage")
+    assert.ok(drawn !== undefined, "the stream's page was drawn")
     const slices = measured(events, "painter:step").filter(([, , d]) => (JSON.parse(d) as { readonly step?: string } | null)?.step === `Answered {"type":"Slice"}`)
     // What each slice's patches dirtied: the layouts of its frame after its step. A layout inside the step lays out what
     // an earlier step left, read before the patches are applied.
@@ -159,8 +166,9 @@ app.scene("a frame of the stream lays out one slice, and the rehearsal compiled 
       const after = complete.filter((e) => task !== undefined && e.ts >= end && e.ts + (e.dur ?? 0) <= task.ts + (task.dur ?? 0))
       return layoutsOf(after).reduce((n, l) => n + l.dirty, 0)
     })
-    const compiled = events.filter((e) => e.name === "wasm.CompileLazy" && threadKey(e) === main).map((e) => e.args?.func_index ?? -1)
-    console.log(JSON.stringify({ sliceFrames: frames, compiledOnThePage: compiled }))
+    const compiled = lazy(main).filter((e) => e.ts >= drawn[0]).map((e) => e.args?.func_index ?? -1)
+    console.log(JSON.stringify({ sliceFrames: frames, rehearsed, compiledOnThePage: compiled }))
+    assert.ok(rehearsed > 0, "the rehearsal compiled nothing: the page was handed a views module an earlier page compiled and ran")
     // The first slice's frame also lays out what the page's own first step left, its topic bar among it.
     const later = frames.slice(1)
     assert.ok(later.length > 0, "the stream drew its rounds in slices")
