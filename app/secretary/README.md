@@ -9,10 +9,8 @@ A caller passes the role's record of effects, and the record decides what the tu
   names a peer, and its `compile_fail` doc tests pin that.
 - `secretary::Secretary` is the secretary's record. Its verbs propose, and only the owner's tap
   performs a proposal.
-- `stores` is the `stores!` table: every store the data tree keeps, its tier, hold and writer.
-  `asks` is the schema of the box's refusals of what a tab posted.
-- Under the `nothing` feature, each record has an inert `nothing()`, and `stores` has the stores
-  held in memory, for tests.
+- Under the `nothing` feature, each record has an inert `nothing()`, and `secretary::live_shape`
+  builds a memory of the live shape over `suzatary-stores`' stores held in memory, for tests.
 
 ## Develop
 

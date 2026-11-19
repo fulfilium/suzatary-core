@@ -9,7 +9,7 @@
 //! joins them.
 //!
 //! A consolidation is a remembering whose provenance is its sources' ([`Provenance`]). Law 11
-//! (`app/secretary/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
+//! (`app/stores/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
 //!
 //! 1. When every source stands, `live(h + C) = live(h) − from + {into}`, and the sources' words
 //!    are dead. One box refuses any other consolidation, under the memory's hold.

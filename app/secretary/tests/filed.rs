@@ -12,7 +12,7 @@ use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
 use suzatary_inbox::secretary::proposer::Proposer;
 use suzatary_inbox::secretary::responded;
 use suzatary_lines::secretary::transcript;
-use suzatary_secretary::stores::InMemory;
+use suzatary_stores::stores::InMemory;
 use suzatary_topics::secretary::filed::*;
 
 fn at(minute: u32) -> Datetime {
@@ -118,7 +118,7 @@ proptest::proptest! {
         shape in 0u8..3,
         percents in proptest::collection::vec(1u32..100, 1..12),
     ) {
-        let conversations = suzatary_secretary::stores::conversations::InMemory::default();
+        let conversations = suzatary_stores::stores::conversations::InMemory::default();
         let inbox = InMemory::<InboxEvent>::default();
         let cards = TriageCards::new(conversations.conversations(), &inbox);
         let mut first = None;
@@ -148,7 +148,7 @@ proptest::proptest! {
 /// is asked again, as a new card, on a source the answered card did not rest on.
 #[test]
 fn an_answered_request_comes_back_only_on_a_new_source() {
-    let conversations = suzatary_secretary::stores::conversations::InMemory::default();
+    let conversations = suzatary_stores::stores::conversations::InMemory::default();
     let inbox = InMemory::<InboxEvent>::default();
     let cards = TriageCards::new(conversations.conversations(), &inbox);
     let first = filed_triage(
@@ -202,7 +202,7 @@ fn an_answered_request_comes_back_only_on_a_new_source() {
 /// build card and the secretary's session filed at the same instant cannot both pass.
 #[test]
 fn two_filings_at_once_take_one_free_slot() {
-    let conversations = suzatary_secretary::stores::conversations::InMemory::default();
+    let conversations = suzatary_stores::stores::conversations::InMemory::default();
     let inbox = InMemory::<InboxEvent>::default();
     let (build, default) = (
         ConversationId::new("build").expect("a slug"),

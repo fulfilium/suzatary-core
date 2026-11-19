@@ -22,7 +22,7 @@ use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_record::record::TodoEvent;
-use suzatary_secretary::asks::AskEvent;
+use suzatary_stores::asks::AskEvent;
 use suzatary_todo::decisions::DecisionEvent;
 use suzatary_topics::secretary::topics::reading::{AliasEvent, MembershipEvent};
 

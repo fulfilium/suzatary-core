@@ -9,12 +9,11 @@ use prodrome_wasm_exports::Replica;
 use suzatary_api::wire::StorePayload;
 use suzatary_lines::secretary::object_stores;
 use suzatary_lines::wire::lines::ReceiptPayload;
-use suzatary_secretary::asks::{AskEvent, AskVocabulary};
-use suzatary_store::receipt;
 use suzatary_store::replica::held::Node as _;
 use suzatary_store::replica::objects::{self, Move, Object, Objects};
 use suzatary_store::replica::writes::{Answer, Refusal};
-use suzatary_store::snapshot;
+use suzatary_store::{receipt, snapshot};
+use suzatary_stores::asks::{AskEvent, AskVocabulary};
 use wasm_bindgen::JsError;
 
 use crate::line_rows::{Step, hashes, whole};
@@ -57,12 +56,7 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     /// `[<name>, …]`: the heads of what is held, landed and not.
     pub fn heads(&self) -> Result<String, JsError> {
         let heads = self.replica.rows().holding().replica().read().heads();
-        json(
-            &heads
-                .iter()
-                .map(prodrome_core::event::Hash::as_str)
-                .collect::<Vec<_>>(),
-        )
+        json(&heads.iter().map(Hash::as_str).collect::<Vec<_>>())
     }
 
     /// Whether the landed row has heard the box.
@@ -278,9 +272,8 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
 
     /// `f` done to the replica: whether the standing objects moved.
     fn moved<T>(&mut self, f: impl FnOnce(&mut Objects) -> T) -> (T, bool) {
-        let names = |r: &Objects| -> Vec<prodrome_core::event::Hash> {
-            read_objects(r).map(|o| o.name().clone()).collect()
-        };
+        let names =
+            |r: &Objects| -> Vec<Hash> { read_objects(r).map(|o| o.name().clone()).collect() };
         let was = names(&self.replica);
         let done = f(&mut self.replica);
         let moved = names(&self.replica) != was;
@@ -304,7 +297,7 @@ impl Store<AskEvent> {
     }
 }
 
-impl<E: suzatary_secretary::stores::Store<Vocabulary: Default>> Store<E> {
+impl<E: suzatary_stores::stores::Store<Vocabulary: Default>> Store<E> {
     /// The asks' refusals of what the tab wrote here, held as refused; none where none is new.
     pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
         let objects = asks.standing_envelopes();

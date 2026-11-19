@@ -769,6 +769,116 @@ The crates after PR 32, from `scripts/context.sh` at this branch's head, in thou
 | 22 | `api` | 66.3 | 19.0 | 16 | **621** |
 | 23 | `server` | 41.8 | 6.5 | 20 | **665** |
 
+**After row 32: the stores' table, one pull request.** `stores` and `asks` are the crate
+`suzatary-stores`, between `digest` and `cards`, and each keeps its path under the crate's name:
+`suzatary_stores::{stores, asks}`.
+- **Where the table sits is decided by what it names.** The rows name `TodoEvent` and `GENESIS`
+  (`record`), `Hold`, `Admission` and `Shared` (`store`), `DecisionEvent` (`todo`), `MemoryEvent`
+  (`memory`), `InboxEvent` (`inbox`), `LineEvent` and `LinesRule` (`lines`), `MembershipEvent`
+  and `AliasEvent` (`topics`), `DigestEvent` (`digest`) and the Prodrome's `Declared`.
+  `Database` adds `ChainName` (`base`), `Device` (`signatures`), `AttachmentId` and `Upload`
+  (`held`), the memory's texts and keys, `PluginName` (`health`), `TriageState` and `LocalState`
+  (`triage`), and the inbox's and the lines' `findings`. `asks` names `RefusalEvent` (`store`) and
+  `Kind`. The highest of these is `digest`, so the table sits directly above it, and nothing in it
+  names `cards`. The macro's impls are of the crate's own traits (`Store`, `Written`) and, through
+  `word_literal!`, for its own `Kind`, so the orphan rule allows each of them in this crate, aliases
+  of the Prodrome's generics (`Shared<MembershipEvent>`, `Declared`) among them.
+- **The secretary's shipped code names nothing of the table.** `Secretary` and `Agent` are built
+  over `store`'s `dyn Prodrome<E>`, `Doc` and `Lists`, never over `Store` or `Kind`. Only test
+  code reads it: `secretary::live_shape` (under `nothing`) and the unit tests of `mail_health`,
+  `review` and the `remembered` law. So the secretary depends on the crate only under `nothing`,
+  as an optional dependency, and `live_shape` stays at its path; nothing of the table stays above.
+- **A trial move first.** It compiled at the first try except for two ties no guard sees. The test
+  scene signs with the cast's keys (`connect`) and parses an instant (`chrono`), which the new
+  crate takes as optional dependencies under `nothing`. And `api`'s unit tests call
+  `cards::settings::overview::calendar`, a `nothing` item that only the secretary's `nothing` had
+  enabled for them, so `api` takes `cards` with `nothing` as a dev-dependency.
+- **Tests.** Of the secretary's 40 test files, the 26 that name the table and the crates below it,
+  and nothing of the secretary, are the new crate's `tests/all.rs`, with `digest.` and
+  `inbox.proptest-regressions` and the support the table's library includes (`in_memory`,
+  `conversations`, `scene`). The six that also name `cards` (`failing`, `fixes`, `lapsed`,
+  `noticed`, `settings_overview`, `undo`) test the cards' modules; `cards` and the table do not
+  depend on each other, so they are the cards crate's first `tests/all.rs`, over a dev-dependency
+  on the table. The eight that name the secretary's items stay (`calls`, `context_cost`, `filed`,
+  `held_values`, `model_port`, `surface`, `triage_cards`, `triage_memory`), with
+  `tags.proptest-regressions`, which no test file reads. `crate_reads` names the new crate for
+  `calendar_reading.rs`'s read of `app/plugin-ics/ics.schema`. `#[test]` functions: 2,239 on
+  master and here; `proptest!` blocks 164 on both.
+- **The browser no longer compiles the secretary crate.** `cargo tree -e normal` for both
+  `suzatary-wasm` and `suzatary-pages` is `api base cards connect conversations digest google
+  health held inbox lines mail memory record release services signatures store stores todo
+  topics triage`. What is left, and what pulls it in:
+  - `digest`, `health`, `triage`: the table's rows and `Database` (`DigestEvent`, `PluginName`,
+    `TriageState`), and `lines` and `inbox` name `health` and `triage` too. A `Database` of
+    `dyn` stores, split from the rows, would cut `health` and `triage` from the table, not from
+    the module.
+  - `cards`: `api`'s settings route and its wire (`settings::overview`, `OverviewLine`); the
+    overview's reading in a crate below `cards`, or in `api`, would cut it.
+  - `mail`, `services`, `google`, `connect`: `inbox` (the acts name accounts, drive paths,
+    calendar events and connections), `conversations`, `topics` and `api`'s wire. Cutting them
+    takes the acts' payloads out of `inbox` into crates of their own.
+  - The wire carries these of its own accord, and they stay: `MailMessage` and `MailRow`
+    (`mail`), `WatchesPayload` and `Gone` (`triage`), and `OverviewLine` (`cards`).
+- **Every list follows:** the workspace, `flake.nix`'s `library`, `LIBRARY_CRATES`, `live_reads`,
+  `crate_reads`, `context.toml` (a unit, and `depends` for the secretary, `api`, `server`, `io`,
+  the CLI and `wasm`), the two scripts and two documents that name the table's file or path.
+  `app-build.sh` and the gate's `fixture_tests` still enable `suzatary-secretary/nothing`, which
+  now carries `suzatary-stores/nothing`, the feature that owns the stores held in memory.
+- **Nothing widens.** Every item a dependent names was `pub` in the secretary.
+- **USE:** secretary 33.4k (35.7k on master), its `[ratchet.use]` row lowered to 33,374; the
+  table 2.4k. The reading set is 383 tokens under master's (2.1.179): the new manifest and root
+  cost about 830 and the cards' test manifest about 140, and an import-once pass over the
+  production code of the files the branch touches paid that back.
+
+Measured with `cargo check` on four cores, one line edited, the second run of each, master and
+branch interleaved on one target directory:
+
+| one-line edit in | master | branch |
+|---|---|---|
+| `--workspace --all-targets`, `lines` (`transcript.rs`) | 17.7, 16.2 s | 16.8, 15.4 s |
+| `--workspace --all-targets`, the secretary (`review.rs`) | 13.2, 13.3 s | 11.5, 12.1 s |
+| `--workspace --all-targets`, the table (`stores.rs`) | 14.7, 13.3 s | 13.1, 12.3 s |
+| `-p suzatary-secretary --all-targets`, `review.rs` | 3.3, 3.6 s | 3.0, 3.0 s |
+| `-p` secretary / `suzatary-stores --all-targets`, `stores.rs` | 3.3, 3.7 s | 1.4, 1.9 s |
+
+A cold `cargo build -p suzatary-wasm --target wasm32-unknown-unknown` took 76.1 s on master and
+72.1 s here, 141 units on both: the secretary's unit is gone and the table's has come, and no
+other crate leaves, since the rest is named by `inbox`, `lines`, `topics` and `api`'s wire.
+
+The browser's module, `prodrome_bg.wasm` on x86_64-linux by `nix build`, grew by 466 bytes after
+`wasm-opt` (4,839,778 to 4,840,244, at 2.1.179), and the pages' module shrank
+by 1,664 (3,601,163 to 3,599,499). No line of `web/wasm-budget` moves.
+
+The crates after this cut, from `scripts/context.sh` at this branch's head, in thousands of
+tokens:
+
+| # | Crate (`app/<name>`) | own | use | deps | DEVELOP |
+|---|---|---|---|---|---|
+| 1 | `base` | 58.2 | 24.6 | 0 | 242 |
+| 2 | `record` | 32.0 | 11.2 | 1 | 240 |
+| 3 | `release` | 13.4 | 6.7 | 1 | 208 |
+| 4 | `store` | 47.0 | 23.9 | 1 | 255 |
+| 5 | `signatures` | 49.0 | 23.6 | 3 | 292 |
+| 6 | `todo` | 74.7 | 24.9 | 4 | 342 |
+| 7 | `held` | 70.0 | 24.3 | 2 | 302 |
+| 8 | `memory` | 38.7 | 18.3 | 3 | 295 |
+| 9 | `mail` | 46.3 | 24.6 | 3 | 302 |
+| 10 | `health` | 17.2 | 8.5 | 3 | 274 |
+| 11 | `triage` | 41.2 | 22.8 | 4 | 322 |
+| 12 | `services` | 31.4 | 14.1 | 3 | 272 |
+| 13 | `google` | 33.3 | 14.6 | 5 | 329 |
+| 14 | `connect` | 57.6 | 24.1 | 7 | 363 |
+| 15 | `inbox` | 106.1 | **33.5** | 13 | **556** |
+| 16 | `conversations` | 65.5 | **27.3** | 7 | 407 |
+| 17 | `lines` | 134.7 | **40.9** | 12 | **592** |
+| 18 | `topics` | 63.2 | 20.5 | 14 | **576** |
+| 19 | `digest` | 74.0 | **28.4** | 11 | **542** |
+| 20 | `stores` | 6.0 | 2.4 | 15 | **546** |
+| 21 | `cards` | 49.5 | 13.3 | 15 | **569** |
+| 22 | `secretary` | 175.0 | **33.4** | 20 | **784** |
+| 23 | `api` | 66.3 | 19.0 | 16 | **604** |
+| 24 | `server` | 41.8 | 6.5 | 21 | **681** |
+
 Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

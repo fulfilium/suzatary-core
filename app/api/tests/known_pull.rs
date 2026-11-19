@@ -22,8 +22,8 @@ use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::words::Words;
-use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::store::{Counted, Doc as _, Prodrome as _, Reads as _};
+use suzatary_stores::stores::conversations::InMemory;
 
 const CONVERSATIONS: usize = 100;
 const LINES: usize = 7_000;

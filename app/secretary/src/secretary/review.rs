@@ -22,9 +22,8 @@ use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Decision, Entry, Outcome, Review, Stored};
 use suzatary_conversations::secretary::verb_name::Effect;
 use suzatary_inbox::secretary::changes::Changeset;
-use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::conversations::Conversations;
-use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_memory::secretary::words::Words;
 
 /// What one review pass came to.
@@ -467,7 +466,7 @@ mod tests {
     /// every other conversation's reviews, failures and outage read as they did without it.
     #[test]
     fn an_unreadable_conversation_is_named_and_costs_only_itself() {
-        let store = crate::stores::conversations::InMemory::default();
+        let store = suzatary_stores::stores::conversations::InMemory::default();
         let conversations = store.conversations();
         let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 11).expect("a day");
         let at =

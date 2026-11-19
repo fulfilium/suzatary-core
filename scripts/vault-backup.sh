@@ -42,7 +42,7 @@ snapshots() {
 # its epochs above every one it answered (`suzatary_signatures::epoch`), and a week-old count
 # would let tabs' replicas keep later words.
 #
-# The box-local stores (`suzatary_secretary::stores::Kind`); app/cli/tests/guards/lists.rs pins this list.
+# The box-local stores (`suzatary_stores::stores::Kind`); app/cli/tests/guards/lists.rs pins this list.
 VAULTED='secretary-lines-keys secretary-memory-texts secretary-digest-texts secretary-topics secretary-topic-aliases secretary-asks local secretary/attachments secretary/files'
 # Claude Code names a project's directory by its path with every `/` a `-`. A store's record of
 # its heads (`.heads`) stays out: the tar takes no store's lock, and a restored store derives it.

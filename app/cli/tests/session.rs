@@ -227,7 +227,7 @@ fn a_retraction_reopens_a_stored_session() {
     )
     .expect("the session line appends");
     let tap = suzatary_signatures::signatures::Tap::of(
-        &suzatary_secretary::stores::scene("ada"),
+        &suzatary_stores::stores::scene("ada"),
         &suzatary_signatures::signatures::ActHeaders {
             act: Some("1"),
             content_type: Some("application/json"),

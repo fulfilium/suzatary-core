@@ -30,9 +30,9 @@ use suzatary_memory::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };
 use suzatary_secretary::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
-use suzatary_secretary::stores::InMemory;
-use suzatary_secretary::stores::conversations::InMemory as Lines;
 use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
+use suzatary_stores::stores::InMemory;
+use suzatary_stores::stores::conversations::InMemory as Lines;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

@@ -44,9 +44,9 @@ use suzatary_memory::secretary::memory::{FactId, Kind as FactKind, Origin};
 use suzatary_memory::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_record::record::{MarkupSource, Record, TodoEvent, TodoVocabulary, mk_authored};
-use suzatary_secretary::asks::{AskEvent, AskVocabulary};
-use suzatary_secretary::stores::Kind;
 use suzatary_store::receipt::{Grounds, refused};
+use suzatary_stores::asks::{AskEvent, AskVocabulary};
+use suzatary_stores::stores::Kind;
 use suzatary_todo::decisions::{
     DecisionEvent, DecisionId, DecisionVocabulary, Statement, decided, revised, withdrawn,
 };

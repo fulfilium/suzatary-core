@@ -243,7 +243,7 @@ make it smaller by removing a capability that someone uses.
 
 - Rust: `stores::Database` uses three generic store shapes: `Prodrome<E>` for objects of a
   schema `E`, `Log<E>` for lines, and `Doc<K, V>` for values. A new store is one row of the
-  `stores!` list (`app/secretary/src/stores.rs`), its schema and a field of `Database`, not a
+  `stores!` list (`app/stores/src/stores.rs`), its schema and a field of `Database`, not a
   new trait. The row gives its name, tier, files and hold to every layer.
 - Rust: the Prodrome's `schema::headed::Event<B>` is the event of every schema whose events
   print as `Constructor(<key>, at, actor, <body>)`. A schema gives only its body, which

@@ -2366,7 +2366,7 @@ pub struct Fakes {
     /// The secretary's conversation store.
     pub conversations: Conversations,
     /// Every answer block an erasure emptied from the render cache, by source.
-    pub forgot: Arc<suzatary_secretary::stores::conversations::Forgot>,
+    pub forgot: Arc<suzatary_stores::stores::conversations::Forgot>,
     /// The secretary's memory, its history beside the conversations.
     pub memory:
         suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
@@ -2429,7 +2429,7 @@ impl Fakes {
             &phone().public(),
         )
         .expect("the phone is trusted at the terminal");
-        let forgot = Arc::new(suzatary_secretary::stores::conversations::Forgot::default());
+        let forgot = Arc::new(suzatary_stores::stores::conversations::Forgot::default());
         let topics = suzatary_io::topics::Topics::open(
             root.join("secretary-topics"),
             root.join("secretary-topic-aliases"),

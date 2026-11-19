@@ -16,9 +16,9 @@ use suzatary_mail::mail::mailbox::Query;
 use suzatary_record::record::TodoEvent;
 use suzatary_secretary::agent::Agent;
 use suzatary_secretary::secretary::Secretary;
-use suzatary_secretary::stores::InMemory;
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
+use suzatary_stores::stores::InMemory;
 use suzatary_topics::secretary::filed::TriageCards;
 use suzatary_triage::mail::corpus::{Corpus, CorpusError};
 
@@ -97,7 +97,7 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
     )]
     .into_iter()
     .collect();
-    let conversations = suzatary_secretary::stores::conversations::InMemory::default();
+    let conversations = suzatary_stores::stores::conversations::InMemory::default();
     let inbox = InMemory::<InboxEvent>::default();
     let cards = TriageCards::new(conversations.conversations(), &inbox);
     let deployment = deployment();
@@ -179,7 +179,7 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
 
 /// The owner's round in conversation `default`, in which the model has read a message that asks
 /// for a write.
-fn a_round_that_read_mail(lines: &suzatary_secretary::stores::conversations::InMemory) {
+fn a_round_that_read_mail(lines: &suzatary_stores::stores::conversations::InMemory) {
     use suzatary_base::conversation_id::DEFAULT;
     use suzatary_conversations::secretary::model::{ToolCall, Turn};
     use suzatary_conversations::secretary::store::Entry;
@@ -248,7 +248,7 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
 
     let chain = the_owners_chain();
     let before = chain.objects().expect("reads");
-    let lines = suzatary_secretary::stores::conversations::InMemory::default();
+    let lines = suzatary_stores::stores::conversations::InMemory::default();
     let inbox = InMemory::<InboxEvent>::default();
     a_round_that_read_mail(&lines);
     let policy = deployment()
@@ -397,7 +397,7 @@ fn the_agent_silences_no_sender_and_files_a_card_for_a_queued_one() {
     )]
     .into_iter()
     .collect();
-    let conversations = suzatary_secretary::stores::conversations::InMemory::default();
+    let conversations = suzatary_stores::stores::conversations::InMemory::default();
     let inbox = InMemory::<InboxEvent>::default();
     let cards = TriageCards::new(conversations.conversations(), &inbox);
     let deployment = deployment();

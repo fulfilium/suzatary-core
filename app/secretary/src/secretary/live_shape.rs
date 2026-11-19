@@ -8,8 +8,6 @@ use std::collections::BTreeSet;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
-use crate::stores::InMemory;
-use crate::stores::conversations::InMemory as Lines;
 use suzatary_base::capability::Entropy as _;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -29,6 +27,8 @@ use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_memory::secretary::words::Words;
 use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
+use suzatary_stores::stores::InMemory;
+use suzatary_stores::stores::conversations::InMemory as Lines;
 
 /// How large a memory to build.
 #[derive(Debug, Clone, Copy)]

@@ -23,9 +23,9 @@ use suzatary_lines::secretary::transcript;
 use suzatary_lines::wire::lines::Content;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::words::Words;
-use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc as _, Prodrome as _};
+use suzatary_stores::stores::conversations::InMemory;
 
 fn at(n: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, n / 60, n % 60, 0).expect("an instant")
@@ -132,7 +132,7 @@ impl Writer {
             } => {
                 let said = self.said(*conversation, *words);
                 // The other replica holds what this one does, and each writes a line from it.
-                let other = suzatary_secretary::stores::InMemory::<LineEvent>::default();
+                let other = suzatary_stores::stores::InMemory::<LineEvent>::default();
                 let held: Vec<(Hash, String)> = self
                     .lines
                     .lines

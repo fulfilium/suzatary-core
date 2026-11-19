@@ -22,10 +22,10 @@ use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_lines::secretary::own_line::OwnLine;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
-use suzatary_secretary::stores::conversations::InMemory;
 use suzatary_store::admission::Beside as _;
 use suzatary_store::replica::held::Node as _;
 use suzatary_store::store::{Doc as _, Gets as _, Prodrome as _, Reads as _};
+use suzatary_stores::stores::conversations::InMemory;
 
 /// The same bytes every time it is asked: two sealers drawing from two of these draw one key.
 struct Fixed(AtomicU8);
@@ -173,7 +173,7 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
         objects.iter().filter_map(|(_, o)| o.event()),
     );
     let trusting = suzatary_signatures::signatures::Trusting::held(
-        &[&suzatary_secretary::stores::phone_trusted(&["ada"])],
+        &[&suzatary_stores::stores::phone_trusted(&["ada"])],
         &suzatary_connect::cast::keys::root(),
     )
     .expect("reads");
@@ -211,9 +211,9 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
     let conversation = crate::known_pull::id(0);
     let mut tab = HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("pulled");
     let ada = Actor::new("ada").expect("an actor");
-    let chain = suzatary_secretary::stores::phone_trusted(&["ada"]);
-    let asks: suzatary_secretary::stores::InMemory<suzatary_secretary::asks::AskEvent> =
-        suzatary_secretary::stores::InMemory::default();
+    let chain = suzatary_stores::stores::phone_trusted(&["ada"]);
+    let asks: suzatary_stores::stores::InMemory<suzatary_stores::asks::AskEvent> =
+        suzatary_stores::stores::InMemory::default();
     let frontiers = Frontiers::remembered(KEPT);
     let mut took = Vec::new();
     let mut steps: Vec<suzatary_lines::parts::Parts> = Vec::new();
@@ -375,9 +375,9 @@ fn a_posted_key_never_opens_erased_words() {
         }
         Ok(())
     };
-    let chain = suzatary_secretary::stores::phone_trusted(&["ada"]);
-    let asks: suzatary_secretary::stores::InMemory<suzatary_secretary::asks::AskEvent> =
-        suzatary_secretary::stores::InMemory::default();
+    let chain = suzatary_stores::stores::phone_trusted(&["ada"]);
+    let asks: suzatary_stores::stores::InMemory<suzatary_stores::asks::AskEvent> =
+        suzatary_stores::stores::InMemory::default();
     let receipt = routes::receive_changes(
         &lines.lines,
         &routes::Posted {

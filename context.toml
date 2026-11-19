@@ -51,8 +51,8 @@ inbox = 33570
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
 io = 54058
 lines = 40905
-# 2026-11-18: core is the crate `suzatary-secretary` (row 30 of the core split), over the line; the plan names the further cut. At the tree merged with 2.1.169, whose `Holder` and `held` (#543) grew core by 363.
-secretary = 35705
+# 2026-11-19: the stores' table left the secretary for `suzatary-stores`, lowered by hand; still over the line, and the plan names the further cut (the triage agent).
+secretary = 33374
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.
@@ -321,6 +321,13 @@ depends = ["base", "connect", "conversations", "held", "inbox", "lines", "memory
 scripts = []
 
 [[unit]]
+name = "stores"
+path = "app/stores"
+shape = "crate"
+depends = ["base", "connect", "conversations", "digest", "health", "held", "inbox", "lines", "memory", "prodrome-core", "record", "signatures", "store", "todo", "topics", "triage"]
+scripts = []
+
+[[unit]]
 name = "cards"
 path = "app/cards"
 shape = "crate"
@@ -331,28 +338,28 @@ scripts = []
 name = "secretary"
 path = "app/secretary"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "services", "signatures", "store", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "held", "inbox", "lines", "mail", "prodrome-core", "record", "release", "secretary", "signatures", "store", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "held", "inbox", "lines", "mail", "prodrome-core", "record", "release", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
 name = "server"
 path = "app/server"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "secretary", "services", "signatures", "store", "todo", "topics"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "secretary", "services", "signatures", "store", "stores", "todo", "topics"]
 scripts = []
 
 [[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "prodrome-typst-wasm", "record", "secretary", "services", "signatures", "store", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "prodrome-typst-wasm", "record", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
@@ -366,14 +373,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["api", "base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "secretary", "signatures", "store", "todo", "topics"]
+depends = ["api", "base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "stores", "todo", "topics"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]

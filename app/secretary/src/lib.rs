@@ -6,10 +6,8 @@
 #![forbid(unsafe_code)]
 
 pub mod agent;
-pub mod asks;
 pub mod conversation;
 pub mod secretary;
-pub mod stores;
 pub mod verb;
 
 // The inert double's impls of this crate's ports: test support.

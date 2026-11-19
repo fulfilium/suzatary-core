@@ -30,12 +30,12 @@ use proptest::prelude::*;
 use proptest::test_runner::Config;
 
 use suzatary_io::objects::Objects;
-use suzatary_secretary::stores::Store;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::Held;
 use suzatary_store::replica::objects::Object;
 use suzatary_store::replica::word::Word;
 use suzatary_store::store::{Prodrome, Reads as _, StoreError, memoised};
+use suzatary_stores::stores::Store;
 
 use crate::script_law::{
     STEPS, a_decision_write, a_digest_write, a_membership_write, a_memory_write, a_todo_write,

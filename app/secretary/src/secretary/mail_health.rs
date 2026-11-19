@@ -236,15 +236,16 @@ mod tests {
     }
 
     struct Stores {
-        lines: crate::stores::conversations::InMemory,
-        inbox: crate::stores::InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
+        lines: suzatary_stores::stores::conversations::InMemory,
+        inbox:
+            suzatary_stores::stores::InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
         id: ConversationId,
     }
 
     fn stores() -> Stores {
         let stores = Stores {
-            lines: crate::stores::conversations::InMemory::default(),
-            inbox: crate::stores::InMemory::default(),
+            lines: suzatary_stores::stores::conversations::InMemory::default(),
+            inbox: suzatary_stores::stores::InMemory::default(),
             id: ConversationId::new("default").expect("a slug"),
         };
         suzatary_lines::secretary::transcript::start(

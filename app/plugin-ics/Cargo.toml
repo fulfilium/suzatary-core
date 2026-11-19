@@ -30,7 +30,7 @@ wit-bindgen.workspace = true
 [dev-dependencies]
 proptest.workspace = true
 # The host's own door for an item, so the tests ask the reader that stores it.
-suzatary-secretary = { workspace = true, features = ["nothing"] }
+suzatary-stores = { workspace = true, features = ["nothing"] }
 suzatary-health.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true

@@ -938,16 +938,22 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
     );
 }
 
-/// A throwaway workspace of four members (`suzatary-secretary`, `suzatary-io` on it, `suzatary`
-/// on that, `suzatary-wasm` on the secretary) and test files over two modules, written into `gate`.
+/// A throwaway workspace of five members (`suzatary-stores`, `suzatary-secretary` on it,
+/// `suzatary-io` on that, `suzatary` on `io`, `suzatary-wasm` on the stores) and test files over
+/// two modules, written into `gate`.
 /// As in a fresh checkout, the generated wire that `b.test.ts` and the app import is not on disk.
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"secretary\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
-        ("secretary", "suzatary-secretary", ""),
+        ("stores", "suzatary-stores", ""),
+        (
+            "secretary",
+            "suzatary-secretary",
+            "suzatary-stores = { path = \"../stores\" }\n",
+        ),
         (
             "io",
             "suzatary-io",
@@ -957,7 +963,7 @@ fn units_fixture(gate: &Gate) {
         (
             "wasm",
             "suzatary-wasm",
-            "suzatary-secretary = { path = \"../secretary\" }\n",
+            "suzatary-stores = { path = \"../stores\" }\n",
         ),
     ] {
         gate.write(
@@ -1028,7 +1034,7 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     assert_eq!(
         gate.units_ran()["test"],
         set(&["suzatary-io", "suzatary"]),
-        "the member and the member that depends on it, never the core or the wasm module"
+        "the member and the member that depends on it, never the stores, the secretary or the wasm module"
     );
     assert!(!gate.units_ran().contains_key("web-test"));
 
@@ -1073,7 +1079,7 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
 
     gate.write(
         "app/wasm/Cargo.toml",
-        "[package]\nname = \"suzatary-wasm\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-secretary = { path = \"../secretary\" }\n\n[features]\nmore = []\n",
+        "[package]\nname = \"suzatary-wasm\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-stores = { path = \"../stores\" }\n\n[features]\nmore = []\n",
     );
     gate.commit();
     assert!(gate.run(&[]).0);

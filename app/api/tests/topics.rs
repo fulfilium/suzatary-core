@@ -438,7 +438,7 @@ static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> 
     std::sync::LazyLock::new(|| {
         let actors: Vec<String> = (0..9).map(|n| format!("device{n}")).collect();
         let actors: Vec<&str> = actors.iter().map(String::as_str).collect();
-        trusting_of(&[&suzatary_secretary::stores::phone_trusted(&actors)])
+        trusting_of(&[&suzatary_stores::stores::phone_trusted(&actors)])
     });
 
 fn trusting_of(
@@ -841,7 +841,7 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
     let reasons: Vec<_> = lone.outcome.refused.into_iter().map(|r| r.reason).collect();
     assert_eq!(reasons, vec![Reason::Unaccompanied]);
 
-    let revoking = suzatary_secretary::stores::phone_trusted(&["device0"]);
+    let revoking = suzatary_stores::stores::phone_trusted(&["device0"]);
     suzatary_signatures::signatures::revoke(
         &revoking,
         &suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::ROOT),
@@ -849,7 +849,7 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
         &suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE).public(),
     )
     .expect("revokes");
-    let fine = suzatary_secretary::stores::phone_trusted(&["device0"]);
+    let fine = suzatary_stores::stores::phone_trusted(&["device0"]);
     let revoked = door.post(
         &[print(mine), print(&signature(mine))],
         &trusting_of(&[&fine, &revoking]),
@@ -919,7 +919,7 @@ fn law_writes_made_before_trust_are_taken_after_it() {
             .map(|o| o.literal().to_owned())
             .collect()
     };
-    let untrusted = trusting_of(&[&suzatary_secretary::stores::phone_trusted(&[])]);
+    let untrusted = trusting_of(&[&suzatary_stores::stores::phone_trusted(&[])]);
     let first = door.post(&posted(&tab), &untrusted);
     assert!(first.outcome.taken.is_empty());
     assert_eq!(first.outcome.refused.len(), 4);

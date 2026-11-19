@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use suzatary_base::chains::ChainName;
-use suzatary_secretary::stores::{Database, Kind};
+use suzatary_stores::stores::{Database, Kind};
 
 use super::store_at::StoreAt;
 use super::store_of;
@@ -19,8 +19,7 @@ use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
 use suzatary_lines::first_read;
 use suzatary_lines::secretary::prune;
-use suzatary_store::store::Prodrome;
-use suzatary_store::store::Reads as _;
+use suzatary_store::store::{Prodrome, Reads as _};
 
 /// What `suzatary verify` checks.
 #[derive(Debug, clap::Args)]

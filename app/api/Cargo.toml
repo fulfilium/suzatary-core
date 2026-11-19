@@ -28,7 +28,7 @@ suzatary-lines.workspace = true
 suzatary-topics.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
-suzatary-secretary.workspace = true
+suzatary-stores.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -43,7 +43,8 @@ suzatary-memory.workspace = true
 suzatary-health.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true
-suzatary-secretary = { workspace = true, features = ["nothing"] }
+suzatary-stores = { workspace = true, features = ["nothing"] }
+suzatary-cards = { workspace = true, features = ["nothing"] }
 # Not `suzatary-testkit`: the wire and the vectors build these from the core library alone.
 tempfile = "3"
 proptest.workspace = true

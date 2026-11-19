@@ -2,42 +2,32 @@
 //! that cannot name a capability cannot use it.
 
 use prodrome_core::dag::Dag;
-use prodrome_core::event::Actor;
-use prodrome_core::event::Hash;
-use prodrome_core::event::TodoId;
-use prodrome_core::event::canonical_envelope;
-use prodrome_core::event::parse_envelope;
+use prodrome_core::event::{Actor, Hash, TodoId, canonical_envelope, parse_envelope};
 use prodrome_core::schema::Schema;
-use prodrome_core::store::frontier::Frontiers;
-use prodrome_core::store::frontier::Reached;
-use prodrome_core::store::frontier::Since;
+use prodrome_core::store::frontier::{Frontiers, Reached, Since};
 use std::collections::BTreeMap;
 use suzatary_base::escape::Escaped;
 use suzatary_base::zone::Moment;
 use suzatary_held::mail_error::MailError;
-use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::{act_lines, conversations, line_event};
 use suzatary_release::release::{Plan, Reading, Released, binding};
-use suzatary_secretary::asks::AskEvent;
-use suzatary_secretary::stores;
-use suzatary_secretary::stores::Store;
-use suzatary_signatures::chain_set::NotAMember;
+use suzatary_signatures::chain_set::{ChainSet, NotAMember};
 use suzatary_signatures::epoch::Epochs;
 use suzatary_store::admission::Admission;
-use suzatary_store::store::Graph;
-use suzatary_store::store::StoreError;
+use suzatary_store::store::{Graph, Prodrome, StoreError};
+use suzatary_stores::asks::AskEvent;
+use suzatary_stores::stores;
+use suzatary_stores::stores::Store;
 use suzatary_triage::mail::gone::SAID;
 
-use prodrome_core::fpl;
 use prodrome_core::observe::Observation;
 use prodrome_core::policy::Untrusted;
+use prodrome_core::{event, fpl};
 use suzatary_record::record::{Node, TodoEvent};
 use suzatary_signatures::believed::{Believed, records};
 
-use suzatary_signatures::chain_set::ChainSet;
-
 use crate::query;
 use crate::wire;
-use prodrome_core::event;
 use prodrome_core::store::frontier;
 use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
@@ -59,13 +49,10 @@ use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_record::record;
 use suzatary_signatures::signatures;
 use suzatary_store::receipt;
-use suzatary_store::store::Prodrome;
 use suzatary_store::wire::store::SinceRead;
-use suzatary_todo::authoring;
-use suzatary_todo::reading;
 use suzatary_todo::render::Render;
-use suzatary_todo::view;
 use suzatary_todo::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
+use suzatary_todo::{authoring, reading, view};
 use suzatary_topics::secretary::readings;
 
 /// Every head, sorted, with none of them picked.
@@ -1038,8 +1025,6 @@ fn held_sizes(
 }
 
 use suzatary_lines::parts;
-use suzatary_lines::secretary::act_lines;
-use suzatary_lines::secretary::line_event;
 use suzatary_lines::secretary::line_form::sized_node as node_of;
 pub use suzatary_lines::secretary::line_form::skeleton_node;
 
@@ -1454,7 +1439,7 @@ fn record(
             asks.append(receipt::refused(
                 name.clone(),
                 at,
-                suzatary_secretary::asks::keeper(),
+                suzatary_stores::asks::keeper(),
                 (store, *grounds),
                 reason.said(),
             ))?;

@@ -45,13 +45,13 @@ use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_record::record::TodoEvent;
 use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_secretary::secretary::Secretary;
-use suzatary_secretary::stores::InMemory;
 use suzatary_server::secretary::routes::{self as secretary_routes, Cards};
 use suzatary_server::server::Server;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
+use suzatary_stores::stores::InMemory;
 use suzatary_todo::render::{Html, Render};
 use suzatary_topics::secretary::answers::{AnswerError, Answers};
 use suzatary_topics::secretary::readings;
@@ -298,7 +298,7 @@ impl WriteLock for NoLock {}
 /// every turn is scripted.
 struct Bundle {
     events: EventStore,
-    conversations: suzatary_secretary::stores::conversations::InMemory,
+    conversations: suzatary_stores::stores::conversations::InMemory,
     inbox: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     memory: InMemory<suzatary_memory::secretary::memory_event::MemoryEvent>,
     texts: InMemoryDoc<TextName, Text<Fact>>,
@@ -324,7 +324,7 @@ impl Bundle {
     fn over(events: EventStore, at: Datetime) -> Self {
         Self {
             events,
-            conversations: suzatary_secretary::stores::conversations::InMemory::default(),
+            conversations: suzatary_stores::stores::conversations::InMemory::default(),
             inbox: InMemory::default(),
             memory: InMemory::default(),
             texts: InMemoryDoc::default(),
@@ -1451,7 +1451,7 @@ struct Shipped {
     text: String,
 }
 
-fn shipped<E: suzatary_secretary::stores::Store>(store: &InMemory<E>) -> Vec<Shipped> {
+fn shipped<E: suzatary_stores::stores::Store>(store: &InMemory<E>) -> Vec<Shipped> {
     store
         .objects()
         .expect("an in-memory store reads")
@@ -1465,7 +1465,7 @@ fn shipped<E: suzatary_secretary::stores::Store>(store: &InMemory<E>) -> Vec<Shi
 
 /// Every key the conversations hold, by name, as the pull spells it.
 fn keys_of(
-    conversations: &suzatary_secretary::stores::conversations::InMemory,
+    conversations: &suzatary_stores::stores::conversations::InMemory,
 ) -> BTreeMap<String, String> {
     use suzatary_store::store::Gets as _;
     conversations
@@ -1501,7 +1501,7 @@ fn erase_the_first_answer(bundle: &Bundle, id: &ConversationId) {
 /// What a replica holding `keys` forgets of the conversations: every key an erasure names, with
 /// the answer keys of the blocks its words were rendered to, by the box's own sweep's reading.
 fn forgotten(
-    conversations: &suzatary_secretary::stores::conversations::InMemory,
+    conversations: &suzatary_stores::stores::conversations::InMemory,
     keys: &BTreeMap<String, String>,
 ) -> BTreeMap<String, Vec<String>> {
     use suzatary_memory::secretary::locked_text::KeyName;
@@ -2101,7 +2101,7 @@ fn the_answers_vector_holds_every_answer() {
     samples
         .add([routes::objects_since(&bundle, &policy, &nothing, books, at).expect("the objects")]);
     // The lines' pull: a conversation's objects and the key of every slot they name.
-    let lines = suzatary_secretary::stores::conversations::InMemory::default();
+    let lines = suzatary_stores::stores::conversations::InMemory::default();
     transcript::start(
         lines.conversations(),
         &ConversationId::new("pulled").expect("a slug"),
@@ -3019,7 +3019,7 @@ struct Device {
 impl Device {
     fn pull(
         &mut self,
-        lines: &suzatary_secretary::stores::conversations::InMemory,
+        lines: &suzatary_stores::stores::conversations::InMemory,
         books: routes::Books<'_>,
     ) {
         let answer = routes::lines_skeleton(
@@ -3051,10 +3051,10 @@ fn keys_conversation() -> ConversationId {
 /// The conversation opened and three turns, each sealed under `under`.
 fn three_turns(
     under: &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder,
-) -> suzatary_secretary::stores::conversations::InMemory {
+) -> suzatary_stores::stores::conversations::InMemory {
     use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_store::store::Doc as _;
-    let lines = suzatary_secretary::stores::conversations::InMemory::default();
+    let lines = suzatary_stores::stores::conversations::InMemory::default();
     let opened = ConversationEntry::Opened {
         at: now(),
         title: suzatary_memory::secretary::words::Words::kept("Keys".to_owned()),
@@ -3090,7 +3090,7 @@ fn three_turns(
 }
 
 /// The words of the conversation's line `at` erased, and swept.
-fn erase_line(lines: &suzatary_secretary::stores::conversations::InMemory, at: usize) {
+fn erase_line(lines: &suzatary_stores::stores::conversations::InMemory, at: usize) {
     let keys = transcript::read(lines.conversations(), &keys_conversation())
         .expect("reads")
         .lines()[at]
@@ -3112,19 +3112,19 @@ fn erase_line(lines: &suzatary_secretary::stores::conversations::InMemory, at: u
 }
 
 /// `migrate-scrub` run on the box: every stale slot sealed again, and swept.
-fn migrate(lines: &suzatary_secretary::stores::conversations::InMemory) {
+fn migrate(lines: &suzatary_stores::stores::conversations::InMemory) {
     let done = rescrub::run(lines.conversations(), later(now(), 30)).expect("migrated");
     assert!(done.resealed > 0, "the stale slots are sealed again");
 }
 
 /// Every reseal sealed again from its own seal, as a change to the rules would, then swept.
-fn migrate_again(lines: &suzatary_secretary::stores::conversations::InMemory) {
+fn migrate_again(lines: &suzatary_stores::stores::conversations::InMemory) {
     reseal_again(lines);
     transcript::sweep(lines.conversations()).expect("swept");
 }
 
 /// Every reseal sealed again from its own seal, with no sweep after: both reseals' keys held.
-fn reseal_again(lines: &suzatary_secretary::stores::conversations::InMemory) {
+fn reseal_again(lines: &suzatary_stores::stores::conversations::InMemory) {
     use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_lines::secretary::line_shape::LineShape;
     use suzatary_memory::secretary::line_words::LineWords;
@@ -3179,7 +3179,7 @@ enum Then {
 
 /// One step of a scenario, and what the device does after it.
 type Step<'a> = (
-    &'a dyn Fn(&suzatary_secretary::stores::conversations::InMemory),
+    &'a dyn Fn(&suzatary_stores::stores::conversations::InMemory),
     Then,
 );
 
@@ -3195,7 +3195,7 @@ fn fresh() -> Device {
 /// The box restored from a copy taken before the migration: the lines keep every reseal, and the
 /// keys are the copy's, so each first seal is back and no reseal's own key is held.
 fn restore_keys_from_before(
-    lines: &suzatary_secretary::stores::conversations::InMemory,
+    lines: &suzatary_stores::stores::conversations::InMemory,
     before: &[(
         suzatary_memory::secretary::locked_text::KeyName,
         suzatary_memory::secretary::locked_text::TextKey,
@@ -3212,7 +3212,7 @@ fn restore_keys_from_before(
 
 /// Every key the box holds, with its bytes.
 fn held_keys(
-    lines: &suzatary_secretary::stores::conversations::InMemory,
+    lines: &suzatary_stores::stores::conversations::InMemory,
 ) -> Vec<(
     suzatary_memory::secretary::locked_text::KeyName,
     suzatary_memory::secretary::locked_text::TextKey,
@@ -3231,7 +3231,7 @@ fn held_keys(
 
 /// An erasure that names a reseal's own key and not its slot's first key, which `erase` refuses:
 /// it would leave the first seal open on a device that never held the reseal's key.
-fn erase_a_reseal_s_key(lines: &suzatary_secretary::stores::conversations::InMemory) {
+fn erase_a_reseal_s_key(lines: &suzatary_stores::stores::conversations::InMemory) {
     use suzatary_lines::secretary::line_shape::LineShape;
     let objects = lines.lines.objects().expect("reads");
     let own = objects
@@ -3261,7 +3261,7 @@ fn erase_a_reseal_s_key(lines: &suzatary_secretary::stores::conversations::InMem
 /// skeleton it took (`Outlines::retired`, what a tab's core reads), given the keys it holds.
 fn converged(
     name: &str,
-    lines: &suzatary_secretary::stores::conversations::InMemory,
+    lines: &suzatary_stores::stores::conversations::InMemory,
     steps: &[Step<'_>],
 ) {
     use suzatary_lines::secretary::outlines;
@@ -3354,13 +3354,13 @@ fn converged(
 fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
     let (current, unversioned) = (ScrubbedUnder::current(()), ScrubbedUnder::Unversioned);
-    let migrate_twice = |lines: &suzatary_secretary::stores::conversations::InMemory| {
+    let migrate_twice = |lines: &suzatary_stores::stores::conversations::InMemory| {
         migrate(lines);
         migrate_again(lines);
     };
     let restored = three_turns(&unversioned);
     let before = held_keys(&restored);
-    let restore = |lines: &suzatary_secretary::stores::conversations::InMemory| {
+    let restore = |lines: &suzatary_stores::stores::conversations::InMemory| {
         restore_keys_from_before(lines, &before);
     };
     converged(
@@ -3484,7 +3484,7 @@ proptest::proptest! {
                 Move::Erase(at) => erased.insert(at),
             })
             .collect();
-        let run = |step: Move| -> Box<dyn Fn(&suzatary_secretary::stores::conversations::InMemory)> {
+        let run = |step: Move| -> Box<dyn Fn(&suzatary_stores::stores::conversations::InMemory)> {
             match step {
                 Move::Migrate => Box::new(migrate),
                 Move::SealAgain => Box::new(migrate_again),

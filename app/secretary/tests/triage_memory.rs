@@ -43,9 +43,9 @@ use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_secretary::agent::Agent;
 use suzatary_secretary::agent::TriageVerb;
 use suzatary_secretary::secretary::surface::SecretaryVerb;
-use suzatary_secretary::stores::InMemory;
-use suzatary_secretary::stores::conversations::InMemory as Lines;
 use suzatary_store::store::{Doc as _, InMemoryDoc, Only, Prodrome, Reads as _};
+use suzatary_stores::stores::InMemory;
+use suzatary_stores::stores::conversations::InMemory as Lines;
 use suzatary_topics::secretary::filed::{TriageCards, triage_conversation};
 
 /// Each salt the next number.
@@ -128,7 +128,7 @@ struct Filed {
     keys: BTreeSet<suzatary_memory::secretary::locked_text::KeyName>,
 }
 
-fn prints<E: suzatary_secretary::stores::Store>(store: &InMemory<E>) -> Vec<(Hash, String)> {
+fn prints<E: suzatary_stores::stores::Store>(store: &InMemory<E>) -> Vec<(Hash, String)> {
     store
         .objects()
         .expect("objects")

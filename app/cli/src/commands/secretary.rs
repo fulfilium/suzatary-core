@@ -14,66 +14,51 @@ use std::path::Path;
 use std::sync::Arc;
 use suzatary_base::capability::Clock;
 use suzatary_base::drive_path::DrivePath;
-use suzatary_base::reference::ProposalRef;
-use suzatary_base::reference::Reference;
-use suzatary_conversations::secretary::store::Kind;
-use suzatary_conversations::secretary::store::Line;
-use suzatary_conversations::secretary::store::Lines;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_conversations::secretary::store::{Entry, Kind, Line, Lines};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
-use suzatary_held::held_value::HeldFile;
+use suzatary_held::held_value::{Filled, HeldFile};
 use suzatary_io::blobs::Blobs;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::drive::ReadOnly;
-use suzatary_io::google::Grants;
-use suzatary_io::oauth::Pending;
-use suzatary_io::oauth::TokenStore;
+use suzatary_io::google::{Grants, Inserted};
+use suzatary_io::oauth::{Pending, TokenStore};
 use suzatary_io::objects::Objects;
-use suzatary_io::repos::Author;
-use suzatary_io::repos::Mirrors;
-use suzatary_io::repos::Stopped;
+use suzatary_io::repos::{Author, Mirrors, Stopped};
 use suzatary_io::state::Ledger;
 use suzatary_mail::mail::address::EmailAddress;
-use suzatary_mail::mail::oauth::Consent;
-use suzatary_mail::mail::oauth::Protocol;
+use suzatary_mail::mail::oauth::{Consent, Protocol};
 use suzatary_secretary::secretary;
-use suzatary_secretary::secretary::Answered;
-use suzatary_secretary::secretary::Asker;
-use suzatary_secretary::secretary::Bound;
-use suzatary_secretary::secretary::Saying;
 use suzatary_secretary::secretary::daily::Run;
 use suzatary_secretary::secretary::review::{Noticed, Pass};
+use suzatary_secretary::secretary::{Answered, Asker, Bound, Saying, Secretary};
 use suzatary_store::store::Prodrome;
 
 use anyhow::Context as _;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_held::excerpt::Excerpt;
-use suzatary_held::held_value::Filled;
 use suzatary_held::secretary::attached::Checked;
+use suzatary_inbox::secretary::acts::Act;
 use suzatary_inbox::secretary::proposal::Draft;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::send::{Composed, Outgoing};
 use suzatary_secretary::conversation::round::Ending;
-use suzatary_secretary::secretary::Secretary;
 use suzatary_server::secretary::routes::Post;
 
 use crate::instance::Instance;
 use suzatary_api::routes;
 use suzatary_base::capability;
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model;
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::store;
-use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::{model, store};
 use suzatary_google::google;
 use suzatary_held::file_read::FileRead;
-use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::stamp::stamp;
-use suzatary_io::google::Inserted;
-use suzatary_lines::secretary::conversations;
-use suzatary_lines::secretary::rescrub;
+use suzatary_inbox::secretary::{inbox, inbox_event, inbox_reading, proposer};
+use suzatary_lines::secretary::{conversations, prune, rescrub};
 use suzatary_mail::mail::account;
 use suzatary_memory::secretary::salted_text;
 use suzatary_services::web;
@@ -202,9 +187,9 @@ impl Publishing {
         id: &ConversationId,
         index: usize,
         proposer: &proposer::Proposer,
-        act: &suzatary_inbox::secretary::acts::Act,
+        act: &Act,
     ) -> Performed {
-        let suzatary_inbox::secretary::acts::Act::Patch {
+        let Act::Patch {
             repo,
             base,
             patch,
@@ -332,7 +317,7 @@ impl Acting {
     }
 
     /// A tapped noise card: its sender leaves the triage queue.
-    fn silenced(&self, sender: &str, act: &suzatary_inbox::secretary::acts::Act) -> Performed {
+    fn silenced(&self, sender: &str, act: &Act) -> Performed {
         let ledger = match self {
             Acting::NotYet => {
                 return Performed::Tried(Tried::NotSent {
@@ -405,12 +390,7 @@ impl Acting {
         }
     }
 
-    fn read_document(
-        &self,
-        id: &ConversationId,
-        path: &DrivePath,
-        act: &suzatary_inbox::secretary::acts::Act,
-    ) -> Performed {
+    fn read_document(&self, id: &ConversationId, path: &DrivePath, act: &Act) -> Performed {
         match self {
             Acting::NotYet => Performed::Tried(Tried::NotSent {
                 reason: format!("documents are not read by this build: {}", act.sentence()),
@@ -439,14 +419,14 @@ impl suzatary_server::secretary::routes::Perform for Acting {
         index: usize,
         object: &inbox::ProposalId,
         proposer: &proposer::Proposer,
-        act: &suzatary_inbox::secretary::acts::Act,
+        act: &Act,
         consent: Consent,
     ) -> Performed {
-        if let suzatary_inbox::secretary::acts::Act::SignIn { .. } = act {
+        if let Act::SignIn { .. } = act {
             return self.sign_in(object);
         }
         // A coding session spends the account's usage, so only the tap fires it.
-        if let suzatary_inbox::secretary::acts::Act::CodingSession { task } = act {
+        if let Act::CodingSession { task } = act {
             return match self {
                 Acting::NotYet => Performed::Tried(Tried::NotSent {
                     reason: format!(
@@ -459,7 +439,7 @@ impl suzatary_server::secretary::routes::Perform for Acting {
                 Acting::Recording { coder, .. } => coder.start(id, index, task),
             };
         }
-        if let suzatary_inbox::secretary::acts::Act::Patch { .. } = act {
+        if let Act::Patch { .. } = act {
             return match self {
                 Acting::NotYet => Performed::Tried(Tried::NotSent {
                     reason: format!("changes are not pushed by this build: {}", act.sentence()),
@@ -471,17 +451,17 @@ impl suzatary_server::secretary::routes::Perform for Acting {
                 }
             };
         }
-        if let suzatary_inbox::secretary::acts::Act::Noise { sender, .. } = act {
+        if let Act::Noise { sender, .. } = act {
             return self.silenced(sender, act);
         }
-        if let suzatary_inbox::secretary::acts::Act::CalendarEvent { account, event } = act {
+        if let Act::CalendarEvent { account, event } = act {
             return self.calendar_event(account, event);
         }
         // The allowed read's interpreter, so the document arrives redacted.
-        if let suzatary_inbox::secretary::acts::Act::DriveRead { path, .. } = act {
+        if let Act::DriveRead { path, .. } = act {
             return self.read_document(id, path, act);
         }
-        if let suzatary_inbox::secretary::acts::Act::Web { request, .. } = act {
+        if let Act::Web { request, .. } = act {
             return match self {
                 Acting::NotYet => Performed::Tried(Tried::NotSent {
                     reason: format!(
@@ -556,10 +536,9 @@ fn begin_real(
     (workers, ended): (&Arc<Workers>, &Arc<dyn Fn() + Send + Sync>),
     (id, index): (&ConversationId, usize),
     object: &inbox::ProposalId,
-    act: &suzatary_inbox::secretary::acts::Act,
+    act: &Act,
     consent: Consent,
 ) -> Performed {
-    use suzatary_inbox::secretary::acts::Act;
     use suzatary_mail::mail::oauth::{Imap, Smtp};
 
     let (account, sending) = match act {
@@ -783,7 +762,7 @@ fn web_turn(
         ),
     };
     let at = SystemClock.now();
-    if let Err(failed) = suzatary_lines::secretary::transcript::push(
+    if let Err(failed) = push(
         conversations.conversations(),
         id,
         &Entry::Said {
@@ -882,7 +861,7 @@ fn drive_turn(
         ),
     };
     let at = SystemClock.now();
-    if let Err(failed) = suzatary_lines::secretary::transcript::push(
+    if let Err(failed) = push(
         conversations.conversations(),
         id,
         &Entry::Said {
@@ -903,7 +882,7 @@ fn append_act_turn(
     at: capability::Datetime,
     text: String,
 ) {
-    if let Err(failed) = suzatary_lines::secretary::transcript::push(
+    if let Err(failed) = push(
         conversations.conversations(),
         id,
         &Entry::Said {
@@ -929,7 +908,7 @@ fn append_note(
     at: capability::Datetime,
     text: String,
 ) {
-    if let Err(failed) = suzatary_lines::secretary::transcript::push(
+    if let Err(failed) = push(
         conversations.conversations(),
         id,
         &Entry::noted(at, text, Vec::new()),
@@ -1017,9 +996,7 @@ fn append_completion(
             failed.message()
         );
     }
-    if let Err(failed) =
-        suzatary_lines::secretary::transcript::push(conversations.conversations(), id, line)
-    {
+    if let Err(failed) = push(conversations.conversations(), id, line) {
         tracing::warn!("secretary: could not append an act turn to conversation {id}: {failed}");
     }
 }
@@ -1030,10 +1007,8 @@ fn begin_recording(
     conversations: &ConversationStores,
     workers: &Arc<Workers>,
     (id, index): (&ConversationId, usize),
-    act: &suzatary_inbox::secretary::acts::Act,
+    act: &Act,
 ) -> Performed {
-    use suzatary_inbox::secretary::acts::Act;
-
     let (account, slot) = match act {
         Act::Auth { account } => (account, "imap"),
         Act::AuthSend { account } => (account, "smtp"),
@@ -1396,10 +1371,7 @@ enum BackfillRun {
 }
 
 use suzatary_connect::settings::Edits;
-use suzatary_inbox::secretary::inbox_event;
-use suzatary_inbox::secretary::inbox_reading;
-use suzatary_inbox::secretary::proposer;
-use suzatary_lines::secretary::prune;
+use suzatary_lines::secretary::transcript::push;
 pub(crate) use suzatary_secretary::secretary::briefs::BRIEF;
 use suzatary_services::web::WebAnswer;
 
@@ -2768,7 +2740,7 @@ mod sign_in_completion {
     use suzatary_conversations::secretary::taint;
     use suzatary_inbox::secretary::inbox::ProposalId;
     use suzatary_lines::secretary::transcript;
-    use suzatary_secretary::stores::InMemory;
+    use suzatary_stores::stores::InMemory;
 
     use super::{append_completion, completion};
 

@@ -511,8 +511,8 @@ fn agent(
         ..Agent::nothing()
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
-    let conversations = suzatary_secretary::stores::conversations::InMemory::default();
-    let inbox = suzatary_secretary::stores::InMemory::<
+    let conversations = suzatary_stores::stores::conversations::InMemory::default();
+    let inbox = suzatary_stores::stores::InMemory::<
         suzatary_inbox::secretary::inbox_event::InboxEvent,
     >::default();
     let cards =

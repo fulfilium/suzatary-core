@@ -18,8 +18,8 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 use suzatary_base::wire::base::ErrorPayload;
 use suzatary_cards::wire::cards::{AboutPayload, HeldTodo, Overview};
 use suzatary_lines::wire::lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
-use suzatary_secretary::stores;
 use suzatary_signatures::wire::signatures::{DevicePayload, FailedChain, Registering};
+use suzatary_stores::stores;
 use suzatary_todo::wire::todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use suzatary_topics::wire::topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
@@ -1111,7 +1111,7 @@ mod tests {
     /// The stores the tab hands its writes to are exactly the rows whose writer is `Tab`.
     #[test]
     fn the_written_names_are_the_rows_a_tab_writes() {
-        use suzatary_secretary::stores::Writer;
+        use suzatary_stores::stores::Writer;
         let rows: Vec<StoreName> = StoreName::ALL
             .into_iter()
             .filter(|store| store.kind().writer() == Writer::Tab)

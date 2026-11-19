@@ -285,7 +285,7 @@ fn begun(root: &Path) -> Objects<suzatary_inbox::secretary::inbox_event::InboxEv
 
 /// Begin `store` with a genesis labelled `label` and a nonce of zeros, so its names are pinned.
 fn rooted<
-    E: suzatary_secretary::stores::Store<Vocabulary: Clone>,
+    E: suzatary_stores::stores::Store<Vocabulary: Clone>,
     F: suzatary_io::object_files::ObjectFiles<E>,
 >(
     store: &Objects<E, F>,
@@ -681,14 +681,14 @@ fn topics(root: &Path) {
 
 /// The asks store: a refusal of a topic object a tab posted.
 fn asks(root: &Path) {
-    let asks: Objects<suzatary_secretary::asks::AskEvent> = Objects::open(root.join(ASKS));
+    let asks: Objects<suzatary_stores::asks::AskEvent> = Objects::open(root.join(ASKS));
     rooted(&asks, "asks");
     asks.append(suzatary_store::receipt::refused(
         Hash::new("ab".repeat(32)).expect("a name"),
         at(17, 0),
-        suzatary_secretary::asks::keeper(),
+        suzatary_stores::asks::keeper(),
         (
-            suzatary_secretary::stores::Kind::Topics,
+            suzatary_stores::stores::Kind::Topics,
             suzatary_store::receipt::Grounds::Final,
         ),
         "rests on cd…, which this box does not hold".to_owned(),
@@ -778,7 +778,7 @@ fn records_are_the_derived_heads(root: &Path) {
 
 /// The database's conversations, keys drawn as the pins were.
 fn conversations_of<'a>(
-    database: &suzatary_secretary::stores::Database<'a>,
+    database: &suzatary_stores::stores::Database<'a>,
 ) -> suzatary_lines::secretary::conversations::Conversations<'a> {
     suzatary_lines::secretary::conversations::Conversations {
         runs: &*suzatary_lines::nothing::RUNS,
@@ -816,7 +816,7 @@ fn copy_pins(root: &Path) -> PathBuf {
 fn reading_a_copy_of_every_store_writes_nothing() {
     use suzatary_base::chains::ChainName;
     use suzatary_held::attachment::AttachmentId;
-    use suzatary_secretary::stores::Database;
+    use suzatary_stores::stores::Database;
 
     let dir = suzatary_testkit::scratch("stores");
     let root = dir.path();
@@ -918,7 +918,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
 }
 
 /// Both decisions and the one topic still on its round read back.
-fn decisions_and_topics_read(database: &suzatary_secretary::stores::Database<'_>) {
+fn decisions_and_topics_read(database: &suzatary_stores::stores::Database<'_>) {
     let ledger = suzatary_todo::decisions::Decisions {
         store: database.decisions,
     }
@@ -935,13 +935,13 @@ fn decisions_and_topics_read(database: &suzatary_secretary::stores::Database<'_>
     let asks = database.asks.objects().expect("reads");
     let refused = suzatary_store::receipt::refusals(
         asks.iter().map(|(name, object)| (name, object)),
-        &suzatary_secretary::stores::Kind::Topics,
+        &suzatary_stores::stores::Kind::Topics,
     );
     assert_eq!(refused.len(), 1);
 }
 
 /// The triage's two documents read back through the key as one.
-fn triage_reads(database: &suzatary_secretary::stores::Database<'_>) {
+fn triage_reads(database: &suzatary_stores::stores::Database<'_>) {
     let known = Known {
         pushed: database
             .triage

@@ -3,6 +3,7 @@
 
 use suzatary_base::persona::Persona;
 use suzatary_io::objects::Objects;
+use suzatary_io::render::Typst;
 use suzatary_io::secrets::Declarations;
 use suzatary_record::record::TodoEvent;
 use suzatary_server::portal::Portal;
@@ -40,12 +41,11 @@ use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_base::chains::Chains;
-use suzatary_connect::connect::Channel;
-use suzatary_connect::connect::Reach;
+use suzatary_connect::connect::{self, Channel, Reach};
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::nonempty::NonEmpty;
-use suzatary_secretary::stores::Kind;
+use suzatary_stores::stores::Kind;
 
 /// The environment variable that names an instance file.
 pub const ENV: &str = "SUZATARY_INSTANCE";
@@ -123,8 +123,8 @@ impl Instance {
 
     /// Typst for answer blocks, cached under `[secretary] renders`.
     #[must_use]
-    pub fn answers(&self) -> suzatary_io::render::Typst {
-        suzatary_io::render::Typst::new(
+    pub fn answers(&self) -> Typst {
+        Typst::new(
             self.secretary.renders.join("blocks"),
             suzatary_io::typeset::Closed::this_binary(),
         )
@@ -174,8 +174,8 @@ impl Instance {
 
     /// The tables connections are read from.
     #[must_use]
-    pub fn declared(&self) -> suzatary_connect::connect::Declared {
-        suzatary_connect::connect::Declared {
+    pub fn declared(&self) -> connect::Declared {
+        connect::Declared {
             accounts: self.mail.accounts.accounts().to_vec(),
             plugins: self.plugins.manifests.clone(),
             drive: self.secretary.drive_allow.clone(),

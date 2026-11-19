@@ -8,10 +8,10 @@ use suzatary_api::{query, routes, wire};
 use suzatary_base::refusal::Refusal;
 use suzatary_lines::secretary::lines_rule::SlotKeys;
 use suzatary_lines::wire::lines::ReceiptPayload;
-use suzatary_secretary::asks::AskEvent;
 use suzatary_server::server::Server;
 use suzatary_store::admission::Beside;
 use suzatary_store::store::{Prodrome, StoreError};
+use suzatary_stores::asks::AskEvent;
 
 use super::Chained;
 use super::call::Call;

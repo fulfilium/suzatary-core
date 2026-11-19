@@ -132,7 +132,7 @@ decisions.
 
 ## 3. The stores
 
-Every store is one row of `stores!` in `app/secretary/src/stores.rs`, with its tier: PUSHED
+Every store is one row of `stores!` in `app/stores/src/stores.rs`, with its tier: PUSHED
 (committed to the data repository), LOCAL (on the box and in the vault, never pushed) or CACHE
 (on the box, rebuilt by syncing). A prodrome store has its own schema and its own hold.
 
@@ -168,7 +168,7 @@ change is wrong, not the mechanism.
   frozen. Held by `web/test/wasm.test.ts` and the Prodrome's conformance tests.
 - Low fulfillment is urgent. Never flip the renderer.
 - The inbox's phase only climbs, and `inbox::submit` under `submit.lock` is the only door that
-  performs a proposal. Held by `app/secretary/tests/inbox.rs` and `inbox_schema.rs`.
+  performs a proposal. Held by `app/stores/tests/inbox.rs` and `inbox_schema.rs`.
 - Every stored format is frozen once shipped; evolution adds kinds. Held by the stored
   vocabulary snapshots under `app/secretary/tests/` and `live.rs`.
 

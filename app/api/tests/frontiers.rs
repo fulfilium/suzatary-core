@@ -28,11 +28,11 @@ use suzatary_api::routes::{self, Books, Cut, Posted};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
 use suzatary_lines::wire::lines::Frontier;
-use suzatary_secretary::stores::InMemory;
 use suzatary_signatures::epoch::Epochs;
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
 use suzatary_store::wire::store::SinceRead;
+use suzatary_stores::stores::InMemory;
 use suzatary_topics::secretary::topics::reading::MembershipEvent;
 use suzatary_topics::secretary::topics::topic::Topic;
 
@@ -167,7 +167,7 @@ impl Device {
 /// The box: its store, its epochs and the frontiers it recorded, which it may lose, and every
 /// store it held after a post, to go back to.
 struct TheBox {
-    asks: InMemory<suzatary_secretary::asks::AskEvent>,
+    asks: InMemory<suzatary_stores::asks::AskEvent>,
     chain: InMemory<suzatary_record::record::TodoEvent>,
     store: InMemory<MembershipEvent>,
     epochs: Epochs,
@@ -181,7 +181,7 @@ impl TheBox {
         store.accept(&[genesis()]).expect("begun");
         Self {
             asks: InMemory::default(),
-            chain: suzatary_secretary::stores::phone_trusted(&["ada", "tab"]),
+            chain: suzatary_stores::stores::phone_trusted(&["ada", "tab"]),
             store,
             epochs: Epochs::remembered(),
             frontiers: Frontiers::remembered(prodrome_core::store::frontier::KEPT),

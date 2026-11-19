@@ -1,0 +1,53 @@
+[package]
+name = "suzatary-stores"
+description = "Every store Suzatary's data tree keeps, declared once, and the asks store's schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_stores"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-health.workspace = true
+suzatary-triage.workspace = true
+suzatary-inbox.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+suzatary-digest.workspace = true
+# The test support's alone (`nothing`).
+suzatary-conversations = { workspace = true, optional = true }
+suzatary-connect = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+
+[features]
+# The in-memory stores, test support; never in the shipped build.
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-inbox/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-digest/nothing", "suzatary-conversations/nothing", "suzatary-connect/nothing", "dep:chrono"]
+
+[dev-dependencies]
+suzatary-stores = { path = ".", features = ["nothing"] }
+suzatary-mail = { workspace = true, features = ["nothing"] }
+suzatary-google = { workspace = true, features = ["nothing"] }
+suzatary-testkit = { path = "../testkit" }
+proptest.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

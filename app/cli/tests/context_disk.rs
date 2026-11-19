@@ -20,7 +20,7 @@ use suzatary_secretary::secretary::live_shape::{self, Shape, Summaries};
 use suzatary_store::store::{Doc as _, Gets as _, Prodrome, Reads};
 
 /// Every object of `from` handed to `to`, as a replica hands its objects over.
-fn handed<E: suzatary_secretary::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
+fn handed<E: suzatary_stores::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
     let prints: Vec<(Hash, String)> = from
         .objects()
         .expect("the objects read")

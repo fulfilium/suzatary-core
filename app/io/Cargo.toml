@@ -32,6 +32,7 @@ suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
+suzatary-stores.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
@@ -86,7 +87,7 @@ workspace = true
 # THE TRIPWIRE IS FUZZED: `suspicious` answers every string and never panics.
 proptest.workspace = true
 # Inert effects a test fills a record from (a render cache that keeps nothing).
-suzatary-secretary = { workspace = true, features = ["nothing"] }
+suzatary-stores = { workspace = true, features = ["nothing"] }
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 # The Prodrome's law kit: law 68's script machine over each store's schema (`tests/script_law.rs`).

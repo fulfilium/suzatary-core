@@ -8,8 +8,7 @@ use crate::instance::InstanceEdits;
 use crate::instance::Mounts;
 use crate::instance::Plugins;
 use crate::stamp::Release;
-use prodrome_core::memo::Cache;
-use prodrome_core::memo::Lru;
+use prodrome_core::memo::{Cache, Lru};
 use prodrome_core::store::frontier::Frontiers;
 use suzatary_api::clienterror::Limiter;
 use suzatary_api::routes::Books;
@@ -17,25 +16,23 @@ use suzatary_base::capability;
 use suzatary_cards::secretary::noticed;
 use suzatary_cards::settings::overview;
 use suzatary_health::health;
-use suzatary_health::health::Register;
+use suzatary_health::health::{Reading, Register};
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
 use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::model_health::Answered;
 use suzatary_io::objects::Objects;
 use suzatary_io::requests::Requests;
-use suzatary_lines::parts::part;
+use suzatary_lines::parts::{Parts, part, scoped};
 use suzatary_lines::secretary::transcript::Retry;
-use suzatary_secretary::asks::AskEvent;
 use suzatary_secretary::secretary::Bound;
 use suzatary_server::gate::Door;
 use suzatary_server::portal::Portal;
-use suzatary_server::secretary::routes::Cards;
-use suzatary_server::secretary::routes::Perform;
-use suzatary_server::secretary::routes::Post;
+use suzatary_server::secretary::routes::{Cards, Perform, Post};
 use suzatary_signatures::chain_set;
 use suzatary_signatures::epoch::Epochs;
-use suzatary_signatures::signatures::BoxKeys;
+use suzatary_signatures::signatures::{BoxKeys, Pairings};
+use suzatary_stores::asks::AskEvent;
 pub(crate) mod asked;
 mod body;
 mod call;
@@ -90,7 +87,6 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_digest::secretary::memories::Texts;
 use suzatary_google::google::Endpoints;
-use suzatary_lines::parts::Parts;
 use suzatary_server::server::Server;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
@@ -104,14 +100,10 @@ use prodrome_core::fpl::instant_of;
 pub use settings::pushed_at;
 use suzatary_connect::connect::Reach;
 use suzatary_connect::secrets::Remembering;
-use suzatary_connect::settings::Declares;
-use suzatary_connect::settings::Settables;
-use suzatary_connect::settings::Verify;
-use suzatary_connect::settings::Writes;
+use suzatary_connect::settings::{Declares, Edits, Settables, Verify, Writes};
 use suzatary_conversations::secretary::model;
-use suzatary_health::health::Reading;
 use suzatary_inbox::secretary::sign_in;
-use suzatary_lines::parts::scoped;
+use suzatary_io::google::Google;
 use suzatary_lines::secretary::transcript;
 pub use world::World;
 
@@ -138,7 +130,7 @@ pub struct Settings {
     pub models: Arc<models::Models>,
     pub secrets: Arc<dyn Writes + Send + Sync>,
     pub declares: Arc<dyn Declares + Send + Sync>,
-    pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
+    pub edits: Arc<dyn Edits + Send + Sync>,
     pub data: Arc<std::path::PathBuf>,
 }
 
@@ -152,7 +144,7 @@ pub struct Performers {
 pub struct Signed {
     pub requests: Arc<Requests>,
     pub asks: Arc<Objects<AskEvent>>,
-    pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
+    pub pairings: Arc<dyn Pairings>,
 }
 
 /// Everything a handler reads.
@@ -177,7 +169,7 @@ pub struct Inner {
     /// Refuses undeclared names.
     pub declares: Arc<dyn Declares + Send + Sync>,
     /// Edits the instance file, by a tapped card.
-    pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
+    pub edits: Arc<dyn Edits + Send + Sync>,
     /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_mail::mail::cache::Forget + Send + Sync>,
     /// Reads a held value back for a tap; outside every record, so no agent verb can.
@@ -208,7 +200,7 @@ pub struct Inner {
     pub requests: Arc<Requests>,
     /// Written only by the acceptance of a tab's objects.
     pub asks: Arc<Objects<AskEvent>>,
-    pub pairings: Arc<dyn suzatary_signatures::signatures::Pairings>,
+    pub pairings: Arc<dyn Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
@@ -380,7 +372,7 @@ impl State {
             "",
         ));
         let consenting = Arc::new(google::Consenting::new(
-            suzatary_io::google::Google::new(Endpoints::google()),
+            Google::new(Endpoints::google()),
             Arc::new(Unresolved),
             Arc::clone(&edits),
             &deployment.app_url,
@@ -1036,7 +1028,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     )
     .with_sign_ins(serving.signing, serving.verify)
     .with_google(google::Consenting::new(
-        suzatary_io::google::Google::new(serving.google),
+        Google::new(serving.google),
         Arc::new(instance.secrets()),
         Arc::new(InstanceEdits::new(instance.path.clone())),
         &instance.deployment.app_url,

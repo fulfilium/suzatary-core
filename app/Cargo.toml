@@ -7,7 +7,7 @@
 # tests make: the programs they run and their scratch directories.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages"]
+members = ["base", "record", "release", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -45,6 +45,7 @@ suzatary-conversations = { path = "conversations" }
 suzatary-lines = { path = "lines" }
 suzatary-topics = { path = "topics" }
 suzatary-digest = { path = "digest" }
+suzatary-stores = { path = "stores" }
 suzatary-cards = { path = "cards" }
 suzatary-secretary = { path = "secretary" }
 suzatary-api = { path = "api" }

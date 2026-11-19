@@ -110,7 +110,7 @@ impl Posted {
 static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> =
     std::sync::LazyLock::new(|| {
         suzatary_signatures::signatures::Trusting::held(
-            &[&suzatary_secretary::stores::phone_trusted(&["device0"])],
+            &[&suzatary_stores::stores::phone_trusted(&["device0"])],
             &suzatary_connect::cast::keys::root(),
         )
         .expect("reads")

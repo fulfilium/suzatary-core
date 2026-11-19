@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
 
 [lib]
 name = "suzatary_cards"
@@ -40,7 +41,12 @@ nothing = ["dep:toml", "suzatary-base/nothing", "suzatary-record/nothing", "suza
 
 [dev-dependencies]
 suzatary-cards = { path = ".", features = ["nothing"] }
+suzatary-stores = { workspace = true, features = ["nothing"] }
 proptest.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

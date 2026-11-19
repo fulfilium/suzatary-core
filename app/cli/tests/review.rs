@@ -41,7 +41,7 @@ fn review(
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
 /// a store the review does not read, since the review reads cards from the inbox alone.
 fn three_cards(caps: &Fakes) -> [ProposalRef; 3] {
-    let lines = suzatary_secretary::stores::conversations::InMemory::default();
+    let lines = suzatary_stores::stores::conversations::InMemory::default();
     let cards = TriageCards::new(lines.conversations(), &caps.inbox);
     let file = |act: Act| {
         cards

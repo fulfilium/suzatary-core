@@ -4,41 +4,28 @@
 //! never a body.
 
 use crate::server::Server;
-use prodrome_core::event::Actor;
-use prodrome_core::event::Hash;
-use prodrome_core::sign::PublicKey;
-use prodrome_core::sign::Signed;
-use suzatary_api::wire::DrawnPayload;
-use suzatary_api::wire::Erasing;
-use suzatary_api::wire::RecordPayload;
-use suzatary_api::wire::SayPayload;
-use suzatary_api::wire::Yes;
-use suzatary_base::capability::Datetime;
-use suzatary_base::capability::Typeset;
+use prodrome_core::event::{Actor, Hash};
+use prodrome_core::sign::{PublicKey, Signed};
+use suzatary_api::wire::{DrawnPayload, Erasing, RecordPayload, SayPayload, Yes};
 use suzatary_base::capability::{Clock, Secret};
+use suzatary_base::capability::{Datetime, Typeset};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
 use suzatary_base::refusal::{Answered, Refusal};
 use suzatary_base::zone::Moment;
-use suzatary_cards::secretary::connections;
 use suzatary_cards::secretary::done_elsewhere::Seen;
-use suzatary_cards::secretary::google_sign_in;
+use suzatary_cards::secretary::{connections, google_sign_in};
 use suzatary_connect::connect;
-use suzatary_connect::connect::Connection;
-use suzatary_connect::connect::Reach;
-use suzatary_connect::connect::RoutineId;
-use suzatary_connect::connect::Table;
+use suzatary_connect::connect::{Connection, Reach, RoutineId, Table};
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::secrets::Secrets;
-use suzatary_connect::settings::Declaration;
-use suzatary_connect::settings::Help;
-use suzatary_connect::settings::Verify;
+use suzatary_connect::settings::{Declaration, Help, Verify};
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::Lines;
 use suzatary_conversations::secretary::store::{Entry, Kind, Stored};
-use suzatary_digest::secretary::memories::Memories;
+use suzatary_digest::secretary::memories::{Held, Memories};
 use suzatary_google::google::RedirectUri;
 use suzatary_google::google::ical::Linked;
 use suzatary_health::health::plugin::{Origin, PluginName};
@@ -48,34 +35,26 @@ use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
 use suzatary_held::secretary::attachment_source::AttachmentSource;
 use suzatary_inbox::secretary::acts::Act;
-use suzatary_inbox::secretary::changes;
 use suzatary_inbox::secretary::changes::Changeset;
-use suzatary_inbox::secretary::decide;
 use suzatary_inbox::secretary::fix::Fix;
-use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::{ProposalId, Response};
-use suzatary_inbox::secretary::proposal::Style;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal};
+use suzatary_inbox::secretary::proposal::{Reasons, Style};
 use suzatary_inbox::secretary::proposer::Proposer;
-use suzatary_inbox::secretary::responded;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
-use suzatary_inbox::secretary::sign_in::Sessions;
-use suzatary_inbox::secretary::sign_in::SignInUrl;
-use suzatary_inbox::secretary::stamp;
+use suzatary_inbox::secretary::sending::performs;
+use suzatary_inbox::secretary::sign_in::{Sessions, SignInUrl};
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_inbox::secretary::tapped::Tapped;
+use suzatary_inbox::secretary::{changes, decide, inbox, responded, stamp};
 use suzatary_lines::secretary::act_lines::ActLine;
-use suzatary_lines::secretary::conversations;
-use suzatary_lines::secretary::transcript;
+use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::lacking::Lacking;
 use suzatary_mail::mail::oauth::Consent;
 use suzatary_mail::mail::removal::Removal;
-use suzatary_memory::secretary::erasure;
-use suzatary_memory::secretary::locked_text;
-use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::provenance::Wrote;
-use suzatary_memory::secretary::salted_text;
+use suzatary_memory::secretary::{erasure, locked_text, memory, salted_text};
 use suzatary_secretary::secretary;
 use suzatary_secretary::secretary::Bound;
 use suzatary_secretary::secretary::opening::Opening;
@@ -83,14 +62,10 @@ use suzatary_secretary::secretary::read_holders::ReadHolders;
 use suzatary_services::plugin::Manifest;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures;
-use suzatary_signatures::signatures::Endorsement;
-use suzatary_signatures::signatures::Enrolling;
-use suzatary_signatures::signatures::Enrolment;
-use suzatary_signatures::signatures::Tap;
+use suzatary_signatures::signatures::{Endorsement, Enrolling, Enrolment, Tap};
 use suzatary_store::store::Prodrome;
-use suzatary_topics::secretary::build;
-use suzatary_topics::secretary::filed;
 use suzatary_topics::secretary::readings::{self, Draw, Dress, Window};
+use suzatary_topics::secretary::{build, filed};
 use suzatary_topics::wire::topics as wire;
 
 /// Sending a proposed message; in no capability bundle, so no verb can send.
@@ -728,14 +703,14 @@ enum Prepared<'p, 'c> {
     },
     /// Remember a card's words under the memory's hold, taken before the inbox's.
     Remember {
-        held: suzatary_digest::secretary::memories::Held<'c>,
+        held: Held<'c>,
         text: &'p salted_text::TextName,
         kind: memory::Kind,
         replaces: &'p memory::Replaces,
     },
     /// Retract a summary under the memory's hold, whose sweep deletes its words.
     Retract {
-        held: suzatary_digest::secretary::memories::Held<'c>,
+        held: Held<'c>,
         node: &'p Hash,
     },
     Decide(&'p suzatary_todo::decisions::Draft),
@@ -757,7 +732,7 @@ struct Preparing<'r, 'c> {
     settables: &'r Settables,
     enrolling: Option<Enrolling<'c>>,
     tap: &'r Tap,
-    hold: &'r dyn Fn() -> Result<suzatary_digest::secretary::memories::Held<'c>, Refusal>,
+    hold: &'r dyn Fn() -> Result<Held<'c>, Refusal>,
     /// The changes of the triage card a [`Act::Restore`] names.
     withdrawn: &'r dyn Fn(&ProposalRef) -> Result<Changeset, Refusal>,
 }
@@ -957,7 +932,7 @@ pub fn tap(
     let (id, index) = (&card.conversation, card.index);
     let stored = conversations::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
-    suzatary_inbox::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
+    performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
     let withdrawn =
         |card: &ProposalRef| suzatary_cards::secretary::undo::withdrawn(caps.secretary.inbox, card);
@@ -1171,7 +1146,7 @@ pub fn fix(
     let lacked = stored
         .standing(index, &inbox::fold(caps.secretary.inbox)?)?
         .object;
-    suzatary_inbox::secretary::sending::performs(tap, &lacked.asked.proposal)?;
+    performs(tap, &lacked.asked.proposal)?;
     let lacking = lacked
         .reading
         .shown()
@@ -1740,7 +1715,7 @@ pub fn ask_trust(caps: &Server<'_>, actor: &Actor, key: &PublicKey) -> Answered<
         conversation: stored.id.clone(),
         index: stored.proposals.len(),
     });
-    let reasons = suzatary_inbox::secretary::proposal::Reasons::new(
+    let reasons = Reasons::new(
         format!("a device asked to be trusted to write as {actor}"),
         vec![asked],
     )
@@ -2168,7 +2143,7 @@ fn signed_in(
 
 /// Remember a tapped card's words on its authority.
 fn remembered(
-    held: &suzatary_digest::secretary::memories::Held<'_>,
+    held: &Held<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
     index: usize,
@@ -2320,7 +2295,7 @@ pub fn build(
             conversation,
             proposer,
             proposal: Proposal::Act(Act::CodingSession { task }),
-            reasons: suzatary_inbox::secretary::proposal::Reasons::new(
+            reasons: Reasons::new(
                 format!("{} asked for {todo} to be built.", by.who().as_str()),
                 vec![Reference::Todo(todo.clone())],
             )
@@ -2935,7 +2910,7 @@ mod tests {
     /// The tap's own [`Tap`], minted as the gate mints it.
     fn tapped() -> Tap {
         Tap::of(
-            &suzatary_secretary::stores::scene("ada"),
+            &suzatary_stores::stores::scene("ada"),
             &suzatary_signatures::signatures::ActHeaders {
                 act: Some("1"),
                 client: Some(suzatary_signatures::signatures::CLIENT),
