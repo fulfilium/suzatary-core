@@ -36,7 +36,8 @@ allowance = 2000
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.163 for the box's order and reads (#539, +6,512: `sequence.rs`, `compare.rs` and its verb, the skeleton's `LineWriter`, the receipt's `left` and the `carried` check, less `causal`'s old body); accepted at the review of #539.
 # 2026-11-18: raised by hand to the figure of the tree merged with 2.1.166 for the claim (#543, +15,067 over #539's: `claim.rs` and its laws' generator, the transcript's claim step, join and guarded close, `began.rs`, the runs and their lock files, and `compare.rs`'s baseline); accepted at the review of #543.
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.172 for the Prodrome pin at 42f526f (#551, +1,641: `held`'s three category tables of Unicode 16.0.0, the leak guard's value rule, and the reprint law over every store); accepted at the review of #551, which left 32 tokens of the allowance.
-reading = 3060326
+# 2026-11-19: raised by hand to the figure of the tree merged with 2.1.177 (#557 +1,098, #558 +448, #560 −266, #561 +1,270: test files for the scratch directories, the script law over the stores and the cache's stub).
+reading = 3062408
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

@@ -27,6 +27,7 @@ if [ "$1 $2" = "workflow run" ]; then
   echo "dispatch $7 ${9#commit=}" >>"$TRAIN_PROBES.args"
   [ "$GH_CACHE" != down ] || { echo "error connecting to api.github.com" >&2; exit 1; }
   mkdir -p "$here/dispatched" && echo "${GH_CACHE:-success}" >"$here/dispatched/${9#commit=}"
+  [ "$GH_CACHE" != unanswered ] || exit 124
   exit 0
 fi
 if [ "$1 $2" = "run list" ]; then
@@ -36,9 +37,9 @@ if [ "$1 $2" = "run list" ]; then
   [ "$GH_CACHE" != down ] || { echo "error connecting to api.github.com" >&2; exit 1; }
   [ -e "$here/dispatched/$sha" ] || exit 0
   case "$(cat "$here/dispatched/$sha")" in
-    failure) echo "completed failure" ;;
-    running) echo "in_progress " ;;
-    *) echo "completed success" ;;
+    failure) echo "https://github.test/runs/pub-$sha completed failure" ;;
+    running) echo "https://github.test/runs/pub-$sha in_progress " ;;
+    *) echo "https://github.test/runs/pub-$sha completed success" ;;
   esac
   exit 0
 fi
@@ -1750,21 +1751,25 @@ fn train_gate_github_red_on_the_box_pushes_nothing() {
 }
 
 /// A publication run that failed, ran past the wait, or that GitHub would not start leaves the
-/// public tree's builds to the box, which says which and builds it after the wait, never beside
-/// it; the gate is green all the same, since the builds are the same either way. A run still
-/// going when the box stops waiting is cancelled.
+/// public tree's builds to the box, which says which, with the run's address and what the build
+/// costs, and builds it after the wait, never beside it; the gate is green all the same, since
+/// the builds are the same either way. A run still going when the box stops waiting is cancelled.
 #[test]
 fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
+    let cost = "the box builds the public tree itself, about 45 minutes of release build";
     for (how, said) in [
         (
             "failure",
-            "ended failure: the box builds the public tree itself",
+            ["ended failure (https://github.test/runs/pub-", cost],
         ),
         (
             "running",
-            "was still in_progress after 0s: the box builds the public tree itself",
+            [
+                "was still in_progress after 0s (https://github.test/runs/pub-",
+                cost,
+            ],
         ),
-        ("down", "could not start the publication run"),
+        ("down", ["could not start the publication run", cost]),
     ] {
         let t = Train::new(&format!("github-cache-{how}"));
         t.on_github();
@@ -1777,7 +1782,9 @@ fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
         );
         let stderr = text(&out.stderr);
         assert!(out.status.success(), "{how}: {stderr}");
-        assert!(stderr.contains(said), "{how}: {stderr}");
+        for said in said {
+            assert!(stderr.contains(said), "{how}: {said}: {stderr}");
+        }
         let args = t.gate_args();
         let asked = args.iter().position(|a| a.starts_with("dispatch master "));
         let built = args
@@ -1798,6 +1805,31 @@ fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
             t.github_calls()
         );
     }
+}
+
+/// A dispatch that started the run but whose answer never came (gh killed by its 60 s bound) is
+/// no failure to start: the train looks for the run and takes its builds from the cache.
+#[test]
+fn train_gate_github_looks_for_the_run_of_an_unanswered_dispatch() {
+    let t = Train::new("github-cache-unanswered");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+
+    let out = t.train_with(
+        &["gate", "--remote", "github"],
+        &[("GH_CACHE", "unanswered")],
+    );
+    let stderr = text(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("looking for the run all the same"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("succeeded: the box's builds come from the binary cache"),
+        "{stderr}"
+    );
 }
 
 /// The box's build of the public tree red, after the push: the half is red, no run of the gate is

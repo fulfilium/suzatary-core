@@ -201,11 +201,12 @@ elif [[ -z "$publications" ]]; then
 else
   say "waiting for the publication run of ${core:0:12} in $publications (at most ${cache_timeout}s)"
   run="$("$here/scripts/publication-run.sh" gh "$publications" push "$core" "$cache_appear" "$cache_timeout" "$cache_poll")"
+  read -r run run_url detail <<<"$run"
   case "$run" in
     success) say "the publication run of ${core:0:12} succeeded: its builds come from the binary cache" ;;
-    failed*) say "the publication run of ${core:0:12} ended ${run#failed }: building it here" ;;
+    failed) say "the publication run of ${core:0:12} ended $detail ($run_url): building it here" ;;
     none) say "no publication run of ${core:0:12} appeared within ${cache_appear}s: building it here" ;;
-    running*) say "the publication run of ${core:0:12} was still ${run#running } after ${cache_timeout}s: building it here" ;;
+    running) say "the publication run of ${core:0:12} was still $detail after ${cache_timeout}s ($run_url): building it here" ;;
     unasked) say "could not ask GitHub for the publication run of ${core:0:12} (gh's words above): building it here" ;;
   esac
 fi

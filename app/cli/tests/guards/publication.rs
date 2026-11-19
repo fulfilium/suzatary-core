@@ -282,9 +282,10 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// What a push adds is measured in the build job and again in the push job, over what was
-/// imported, and over 1 GB fails each before the push, so the push never runs; the push sends the
-/// measured list with master's cachix.
+/// What a push adds is measured by `scripts/cache-unserved.sh` in the build job and again in the
+/// push job, over what was imported, both against 1 GB and the same two caches; either fails
+/// before the push, so the push never runs. The push sends the second measure's list with
+/// master's cachix.
 #[test]
 fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
     let text = workflow("publication.yml");
@@ -297,22 +298,184 @@ fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
         push.find(again) < push.find(send),
         "measured before it is pushed"
     );
+    assert!(first.contains(
+        "        env: &measure\n          LIMIT: 1000000000\n          \
+         UPSTREAM: https://cache.nixos.org\n          CACHE: https://bmabsout.cachix.org\n"
+    ));
+    assert!(first.contains("\n          scripts/cache-unserved.sh closure closure.txt .\n"));
+    assert!(again.contains("        env: *measure\n"));
+    assert!(again.contains("run: scripts/cache-unserved.sh list publication/unserved.txt push\n"));
     for measure in [first, again] {
-        assert!(measure.contains("LIMIT: 1000000000\n"), "a limit of 1 GB");
-        assert!(
-            measure.contains("if ((bytes > LIMIT)); then") && measure.contains("exit 1\n"),
-            "fails over it"
-        );
-        assert!(measure.contains("echo \"the push adds "), "prints the size");
         assert!(!measure.contains("continue-on-error"));
     }
-    assert!(first.contains(">unserved.txt"));
-    assert!(again.contains("<publication/unserved.txt"));
     assert!(!send.contains("if:"));
     assert!(
-        send.contains("./cachix-bin/bin/cachix push bmabsout <publication/unserved.txt\n"),
+        send.contains("./cachix-bin/bin/cachix push bmabsout <push/unserved.txt\n"),
         "master's cachix pushes what was measured"
     );
+}
+
+/// Two stub caches (`file://` directories of narinfos) and a stub `nix path-info --size` over a
+/// table of sizes, for `scripts/cache-unserved.sh`.
+struct StubCaches {
+    scratch: Scratch,
+}
+
+impl StubCaches {
+    fn new(sizes: &[(&str, u64)]) -> Self {
+        let scratch = Scratch::new("cache-unserved");
+        for dir in ["upstream", "cache", "bin"] {
+            std::fs::create_dir_all(scratch.join(dir)).expect("a directory");
+        }
+        std::fs::write(
+            scratch.join("sizes"),
+            lines(sizes.iter().map(|(p, n)| format!("{p} {n}"))),
+        )
+        .expect("sizes");
+        let nix = scratch.join("bin/nix");
+        std::fs::write(
+            &nix,
+            "#!/bin/sh\n[ \"$1 $2\" = \"path-info --size\" ] || exit 64\nshift 2\n\
+             for p; do grep -F \"$p \" \"$SIZES\" || exit 1; done\n",
+        )
+        .expect("the stub nix");
+        std::fs::set_permissions(&nix, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("executable");
+        StubCaches { scratch }
+    }
+
+    /// `cache` (`upstream` or `cache`) answers the narinfo of `path` from now on.
+    fn serve(&self, cache: &str, path: &str) {
+        let hash = &path["/nix/store/".len()..][..32];
+        std::fs::write(self.scratch.join(format!("{cache}/{hash}.narinfo")), "")
+            .expect("a narinfo");
+    }
+
+    /// The script's exit code, what it printed, and the unserved list it wrote.
+    fn run(
+        &self,
+        mode: &str,
+        paths: &[&str],
+        out: &str,
+        limit: &str,
+    ) -> (Option<i32>, String, String) {
+        let input = self.scratch.join(format!("{out}.in"));
+        std::fs::write(&input, lines(paths.iter())).expect("the list");
+        let path = format!(
+            "{}:{}",
+            self.scratch.join("bin").display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let url = |cache: &str| format!("file://{}", self.scratch.join(cache).display());
+        let done = Command::new(repo().join("scripts/cache-unserved.sh"))
+            .args([
+                mode,
+                &input.to_string_lossy(),
+                &self.scratch.join(out).to_string_lossy(),
+            ])
+            .env("PATH", path)
+            .env("SIZES", self.scratch.join("sizes"))
+            .env("UPSTREAM", url("upstream"))
+            .env("CACHE", url("cache"))
+            .env("LIMIT", limit)
+            .output()
+            .expect("cache-unserved.sh runs");
+        let unserved = std::fs::read_to_string(self.scratch.join(out).join("unserved.txt"))
+            .unwrap_or_default();
+        (
+            done.status.code(),
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            unserved,
+        )
+    }
+}
+
+fn lines(items: impl Iterator<Item = impl std::fmt::Display>) -> String {
+    items.fold(String::new(), |mut text, item| {
+        use std::fmt::Write;
+        writeln!(text, "{item}").expect("a String takes a line");
+        text
+    })
+}
+
+/// `scripts/cache-unserved.sh` over stub caches, as two publication runs whose trees share a
+/// path meet them. The build job's measure lists what neither cache serves; a path the other run
+/// pushes before this run's push is skipped by the push job's measure, and the rest is pushed. A
+/// list naming a path upstream serves, or adding more than the limit, fails, naming why.
+#[test]
+fn cache_unserved_skips_what_another_run_pushed_and_refuses_the_rest() {
+    let path = |c: char, name: &str| format!("/nix/store/{}-{name}", c.to_string().repeat(32));
+    let (up, mine) = (path('0', "glibc"), path('1', "pushed-before"));
+    let (a, b, c) = (
+        path('2', "app"),
+        path('3', "cargo-package-shared"),
+        path('4', "web"),
+    );
+    let (a, b, c, up, mine) = (
+        a.as_str(),
+        b.as_str(),
+        c.as_str(),
+        up.as_str(),
+        mine.as_str(),
+    );
+    let caches = StubCaches::new(&[
+        (up, 5_000_000_000),
+        (mine, 5_000_000_000),
+        (a, 300_000_000),
+        (b, 300_000_000),
+        (c, 300_000_000),
+    ]);
+    caches.serve("upstream", up);
+    caches.serve("cache", mine);
+    let gigabyte = "1000000000";
+
+    let (code, said, listed) = caches.run("closure", &[up, mine, a, b, c], "build", gigabyte);
+    assert_eq!(code, Some(0), "{said}");
+    assert_eq!(listed, lines([a, b, c].iter()), "what neither cache serves");
+    assert!(said.contains("the push adds 3 paths"), "{said}");
+
+    // The other run pushes the shared path between this run's two measures.
+    caches.serve("cache", b);
+    let (code, said, pushed) = caches.run("list", &[a, b, c], "push", gigabyte);
+    assert_eq!(code, Some(0), "{said}");
+    assert_eq!(
+        pushed,
+        lines([a, c].iter()),
+        "the list less what was pushed since"
+    );
+    assert!(
+        said.contains(&format!("skipped, pushed since the list was taken: {b}")),
+        "{said}"
+    );
+    assert!(said.contains("the push adds 2 paths"), "{said}");
+
+    for (name, mode, paths, limit, why) in [
+        (
+            "upstream",
+            "list",
+            [a, up],
+            gigabyte,
+            "made it wrongly: nothing pushed",
+        ),
+        (
+            "over",
+            "list",
+            [a, c],
+            "500000000",
+            "over the 500 MB one publication may add",
+        ),
+        (
+            "over-build",
+            "closure",
+            [a, c],
+            "500000000",
+            "nothing pushed",
+        ),
+    ] {
+        let (code, said, _) = caches.run(mode, &paths, name, limit);
+        assert_eq!(code, Some(1), "{name}: {said}");
+        assert!(said.contains(why), "{name}: {said}");
+    }
 }
 
 /// `scripts/core-settings.sh` sets one ruleset under which only a repository administrator moves

@@ -554,6 +554,7 @@ cloud_hours=6
 # Seconds to wait for the publication run to appear, and to end (past its own 180 minutes).
 cache_appear=600
 cache_timeout="${SUZATARY_TRAIN_CACHE_TIMEOUT:-12000}"
+box_builds="the box builds the public tree itself, about 45 minutes of release build beside the app it serves"
 
 core_repo() {
   local url
@@ -615,31 +616,37 @@ gate_push() {
   echo "$pushed"
 }
 
-# Starts master's publication run of <pushed> (no gate branch's workflow holds the cache token).
+# Starts master's publication run of <pushed> (no gate branch's workflow holds the cache token). A
+# dispatch gh gave up on (124) may have started the run, so the train looks for it all the same.
 dispatched=""
 cloud_dispatch() {
-  local repo
+  local repo code=0
   repo="$(core_repo)"
-  if timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$1" >&2; then
-    dispatched="$1"
-  else
-    say "could not start the publication run of ${1:0:12} on $repo (above): the box builds the public tree itself"
-  fi
+  timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$1" >&2 || code=$?
+  case "$code" in
+    0) dispatched="$1" ;;
+    124)
+      dispatched="$1"
+      say "the dispatch of the publication run of ${1:0:12} on $repo got no answer within 60s: looking for the run all the same"
+      ;;
+    *) say "could not start the publication run of ${1:0:12} on $repo (above): $box_builds" ;;
+  esac
 }
 
 # The box's steps once the dispatched run of <pushed> ends: 0 when they pass, else recorded.
 cloud_after() {
-  local commit="$1" pushed="$2" repo run code=0
+  local commit="$1" pushed="$2" repo run url detail code=0
   repo="$(core_repo)"
   if [[ "$dispatched" == "$pushed" ]]; then
     say "waiting for the publication run of ${pushed:0:12} in $repo before the box builds the public tree (at most ${cache_timeout}s)"
     run="$("$scripts/publication-run.sh" "$gh" "$repo" workflow_dispatch "$pushed" "$cache_appear" "$cache_timeout" "${SUZATARY_TRAIN_POLL:-60}")"
+    read -r run url detail <<<"$run"
     case "$run" in
       success) say "the publication run of ${pushed:0:12} succeeded: the box's builds come from the binary cache" ;;
-      failed*) say "the publication run of ${pushed:0:12} ended ${run#failed }: the box builds the public tree itself" ;;
-      none) say "no publication run of ${pushed:0:12} appeared within ${cache_appear}s: the box builds the public tree itself" ;;
-      running*) say "the publication run of ${pushed:0:12} was still ${run#running } after ${cache_timeout}s: the box builds the public tree itself" ;;
-      unasked) say "could not ask GitHub for the publication run of ${pushed:0:12} (gh's words above): the box builds the public tree itself" ;;
+      failed) say "the publication run of ${pushed:0:12} ended $detail ($url): $box_builds" ;;
+      none) say "no publication run of ${pushed:0:12} appeared within ${cache_appear}s: $box_builds" ;;
+      running) say "the publication run of ${pushed:0:12} was still $detail after ${cache_timeout}s ($url): $box_builds" ;;
+      unasked) say "could not ask GitHub for the publication run of ${pushed:0:12} (gh's words above): $box_builds" ;;
     esac
   fi
   run_here tree "$commit" --steps "$box_after" || code=$?

@@ -42,9 +42,15 @@ Cachix. The box waits for that run before it runs `box_after`, so
 most 600 seconds for the run to appear and 12000 seconds
 (`SUZATARY_TRAIN_CACHE_TIMEOUT`) for it to end, past the run's own
 180-minute limit. Each question to GitHub has 60 seconds, and ten failed
-questions in a row end the wait. When the run failed, never appeared, ran
-past the wait, or could not be started or asked about, the train says which
-and the box builds the public tree itself, as before. Then the live half
+questions in a row end the wait. A dispatch whose answer did not come in its
+60 seconds may still have started the run, so the train looks for it as for
+any other. When the run failed, never appeared, ran past the wait, or could
+not be started or asked about, the train says which in one line, with the
+run's address where there is one, and the box builds the public tree itself,
+about 45 minutes of release build. Two publication runs whose trees share a
+path may push it in the same minutes; the push job skips a path the cache
+serves by the time it pushes (`scripts/cache-unserved.sh`), so neither fails
+the other. Then the live half
 runs on the box, and its `deploy-build` finds the same builds in the store.
 The `gate.yml` run is waited on beside it. The first job whose gate is red
 makes the tree half red at once. The train then stops the live half (its

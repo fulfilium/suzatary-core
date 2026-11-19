@@ -210,16 +210,16 @@ observe
 exit $status
 "#;
 
-/// `gh`: `run list …` answers the first line of `runs` as `<status> <conclusion>`, dropping it
-/// while another follows, so the last line stands; nothing where there is no `runs`, as GitHub
-/// answers for a commit no run built; and fails as an unreachable GitHub with `gh-down`.
+/// `gh`: `run list …` answers the first line of `runs` as `<url> <status> <conclusion>`,
+/// dropping it while another follows, so the last line stands; nothing where there is no `runs`,
+/// as GitHub answers for a commit no run built; and fails as an unreachable GitHub with `gh-down`.
 const GH: &str = r#"#!/usr/bin/env bash
 s="$DEPLOY_STATE"
 echo "gh $*" >>"$s/log"
 [ ! -f "$s/gh-down" ] || { echo "error connecting to api.github.com" >&2; exit 1; }
 [ "$1 $2" = "run list" ] || exit 64
 [ -s "$s/runs" ] || exit 0
-head -n 1 "$s/runs"
+echo "https://github.test/runs/7 $(head -n 1 "$s/runs")"
 [ "$(wc -l <"$s/runs")" -le 1 ] || sed -i 1d "$s/runs"
 "#;
 
@@ -1827,7 +1827,7 @@ const PUBLICATION_RUNS: [PublicationRun; 4] = [
         answers: Some("in_progress \ncompleted failure"),
         appear: "30",
         end: "40",
-        says: "ended failure: building it here",
+        says: "ended failure (https://github.test/runs/7): building it here",
     },
     PublicationRun {
         case: "cache-silence",
@@ -1841,7 +1841,7 @@ const PUBLICATION_RUNS: [PublicationRun; 4] = [
         answers: Some("in_progress "),
         appear: "1",
         end: "2",
-        says: "was still in_progress after 2s: building it here",
+        says: "was still in_progress after 2s (https://github.test/runs/7): building it here",
     },
 ];
 

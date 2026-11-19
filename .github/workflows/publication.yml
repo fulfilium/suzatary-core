@@ -27,7 +27,7 @@
 # runs on a fresh runner with master's checkout alone, builds master's cachix
 # before it reads anything the build job made, fetches the served references
 # with their signatures checked, imports the export, measures it again and
-# pushes the list. So a build that the tree compromises can choose what one
+# pushes what of the list the cache does not yet serve. So a build that the tree compromises can choose what one
 # push contains (at most 1 GB, in the paths the list names), and never holds
 # the token. Only master's copy of this file holds it: the environment admits
 # master alone (scripts/core-settings.sh), the jobs refuse any other ref and
@@ -160,26 +160,16 @@ jobs:
       # `bmabsout` cache holds 5 GB on Cachix's free plan and evicts the least
       # recently used past it, the Prodrome's builds among them, so a
       # publication that would add more than 1 GB fails here and pushes
-      # nothing; the deploy then builds on the box, and says so. A query that
-      # fails counts its path as unserved, so it errs toward failing.
+      # nothing; the deploy then builds on the box, and says so.
       - name: Measure what the push adds
-        env:
+        env: &measure
           LIMIT: 1000000000
+          UPSTREAM: https://cache.nixos.org
+          CACHE: https://bmabsout.cachix.org
         run: |
           set -euo pipefail
           nix path-info --recursive ./result-bin ./result-dist ./result-plugins ./result-live-* | sort -u >closure.txt
-          # A path is served when its cache answers its narinfo.
-          for cache in https://cache.nixos.org https://bmabsout.cachix.org; do
-            # shellcheck disable=SC2016
-            xargs -P 16 -I '{}' sh -c 'name="${1#/nix/store/}"; curl -sfI -o /dev/null "$0/${name%%-*}.narinfo" && echo "$1"' "$cache" '{}' <closure.txt || true
-          done | sort -u >served.txt
-          comm -23 closure.txt served.txt >unserved.txt
-          bytes="$(xargs -r nix path-info --size <unserved.txt | awk '{ sum += $2 } END { print sum + 0 }')"
-          echo "the push adds $(wc -l <unserved.txt) paths, $((bytes / 1000000)) MB uncompressed"
-          if ((bytes > LIMIT)); then
-            echo "::error::this publication would add $((bytes / 1000000)) MB to the bmabsout Cachix, over the $((LIMIT / 1000000)) MB one publication may add to its 5 GB: nothing pushed"
-            exit 1
-          fi
+          scripts/cache-unserved.sh closure closure.txt .
 
       # The unserved paths in the closures' order, each after what it refers
       # to, exported for the push job, with the served paths it fetches first.
@@ -252,25 +242,14 @@ jobs:
             nix-store --import <publication/export.nar >/dev/null
           fi
 
-      # The build job's measure again, over what was imported: each path the
-      # list names is in the store, neither cache serves it, and together
-      # they are at most 1 GB.
+      # The build job's measure again, over what was imported, at push time:
+      # the list less what the cache serves now, at most 1 GB. Another
+      # publication run may push a shared path between the two measures, and
+      # every run builds and pushes apart (a concurrency group would only
+      # cancel or delay a train's run), so a path pushed since is skipped.
       - name: Measure the push again
-        env:
-          LIMIT: 1000000000
-        run: |
-          set -euo pipefail
-          for cache in https://cache.nixos.org https://bmabsout.cachix.org; do
-            # shellcheck disable=SC2016
-            xargs -P 16 -I '{}' sh -c 'name="${1#/nix/store/}"; curl -sfI -o /dev/null "$0/${name%%-*}.narinfo" && echo "$1"' "$cache" '{}' <publication/unserved.txt || true
-          done | sort -u >served-now.txt
-          [[ ! -s served-now.txt ]] || { echo "::error::the list names paths a cache serves already"; exit 1; }
-          bytes="$(xargs -r nix path-info --size <publication/unserved.txt | awk '{ sum += $2 } END { print sum + 0 }')"
-          echo "the push adds $(wc -l <publication/unserved.txt) paths, $((bytes / 1000000)) MB uncompressed"
-          if ((bytes > LIMIT)); then
-            echo "::error::this publication would add $((bytes / 1000000)) MB to the bmabsout Cachix, over the $((LIMIT / 1000000)) MB one publication may add to its 5 GB: nothing pushed"
-            exit 1
-          fi
+        env: *measure
+        run: scripts/cache-unserved.sh list publication/unserved.txt push
 
       # Master's cachix pushes the paths measured above and nothing else.
       - name: Push the builds to the cache
@@ -278,5 +257,6 @@ jobs:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
           set -euo pipefail
-          ./cachix-bin/bin/cachix push bmabsout <publication/unserved.txt
-          echo "pushed $(wc -l <publication/unserved.txt) paths"
+          [[ -s push/unserved.txt ]] || { echo "nothing to push: the cache serves every path the list names"; exit 0; }
+          ./cachix-bin/bin/cachix push bmabsout <push/unserved.txt
+          echo "pushed $(wc -l <push/unserved.txt) paths"
