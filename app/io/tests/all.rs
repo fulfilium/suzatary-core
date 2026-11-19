@@ -10,14 +10,14 @@ mod drive_port;
 mod husked;
 #[path = "inbox_readings.rs"]
 mod inbox_readings;
-#[path = "inbox_round_trip.rs"]
-mod inbox_round_trip;
 #[path = "legacy_stores.rs"]
 mod legacy_stores;
 #[path = "model_port.rs"]
 mod model_port;
 #[path = "puller_port.rs"]
 mod puller_port;
+#[path = "round_trip.rs"]
+mod round_trip;
 #[path = "store_laws.rs"]
 mod store_laws;
 #[path = "stores.rs"]

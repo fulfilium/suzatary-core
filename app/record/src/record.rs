@@ -2,13 +2,14 @@
 //! `at` and `actor`, a decoration of a fulfillment curve. The database reads only two things
 //! from it: the spec it prices by and how many checklist items it holds.
 //!
-//! The stored bytes are frozen here: [`Record::KIND`] and [`Record::FIELDS`] are what an
-//! object's name is a hash of, so a field added to a shipped constructor would rename every
-//! stored object. Evolution is a new constructor, never a new field; `app/cli/tests/live.rs`
-//! is the guard.
+//! The stored bytes are frozen here: the name and fields of [`Record`]'s
+//! [`codec::Record::CONSTRUCTOR`] are what an object's name is a hash of, so a field added to a
+//! shipped constructor would rename every stored object. Evolution is a new constructor, never a
+//! new field; `app/cli/tests/live.rs` is the guard.
 
 use prodrome_core::event::Name;
 use prodrome_core::fpl::mk_absent;
+use prodrome_core::literal::codec::{self, Constructor, Literal};
 use prodrome_core::literal::{Call, Datetime, ProdromeError, Value};
 use prodrome_core::payload::{
     Payload, bool_field, datetime_field, expect_call, spec_field, string_field, string_or_empty,
@@ -548,72 +549,48 @@ impl Record {
     }
 }
 
-impl Payload for Record {
+impl codec::Record for Record {
     /// `Authored`, not `Record`: the constructor's name is in the bytes of every stored object.
-    const KIND: &'static str = "Authored";
+    const CONSTRUCTOR: Constructor = (
+        "Authored",
+        &[
+            "kind",
+            "created",
+            "body",
+            "spec",
+            "rationale",
+            "category",
+            "waiting_on",
+            "detail",
+            "source",
+            "subtodos",
+            "notes",
+            "note",
+        ],
+    );
 
-    const FIELDS: &'static [&'static str] = &[
-        "kind",
-        "created",
-        "body",
-        "spec",
-        "rationale",
-        "category",
-        "waiting_on",
-        "detail",
-        "source",
-        "subtodos",
-        "notes",
-        "note",
-    ];
-
-    const VOCABULARY: &'static [(&'static str, &'static [&'static str])] = &[
-        (
-            "Source",
-            &[
-                "sender",
-                "subject",
-                "date",
-                "hash",
-                "thread_id",
-                "message_id",
-            ],
-        ),
-        ("Note", &["on", "lines"]),
-        ("SubTodo", &["body", "done"]),
-    ];
-
-    fn fields(&self) -> Vec<(&'static str, Value)> {
+    fn values(&self) -> Vec<Value> {
         vec![
-            ("kind", text(self.kind.as_str())),
-            ("created", Value::Datetime(self.created)),
-            ("body", text(self.body.as_str())),
-            (
-                "spec",
-                if is_absent(&self.spec) {
-                    Value::None
-                } else {
-                    self.spec.to_value()
-                },
-            ),
-            (
-                "rationale",
-                tuple_of(&self.rationale, |line| text(line.clone())),
-            ),
-            ("category", optional_text(self.category.as_ref())),
-            ("waiting_on", text(self.waiting_on.as_str())),
-            ("detail", text(self.detail.as_str())),
-            (
-                "source",
-                self.source.as_ref().map_or(Value::None, Source::to_value),
-            ),
-            ("subtodos", tuple_of(&self.subtodos, SubTodo::to_value)),
-            ("notes", tuple_of(&self.notes, Note::to_value)),
-            ("note", text(self.note.clone())),
+            text(self.kind.as_str()),
+            Value::Datetime(self.created),
+            text(self.body.as_str()),
+            if is_absent(&self.spec) {
+                Value::None
+            } else {
+                self.spec.to_value()
+            },
+            tuple_of(&self.rationale, |line| text(line.clone())),
+            optional_text(self.category.as_ref()),
+            text(self.waiting_on.as_str()),
+            text(self.detail.as_str()),
+            self.source.as_ref().map_or(Value::None, Source::to_value),
+            tuple_of(&self.subtodos, SubTodo::to_value),
+            tuple_of(&self.notes, Note::to_value),
+            text(self.note.clone()),
         ]
     }
 
-    fn from_fields(call: &Call) -> Result<Record, ProdromeError> {
+    fn from_call(call: &Call) -> Result<Record, ProdromeError> {
         mk_record(
             &string_field(call, "kind")?,
             datetime_field(call, "created")?,
@@ -646,6 +623,40 @@ impl Payload for Record {
             &string_or_empty(call, "note")?,
         )
     }
+}
+
+impl Literal for Record {
+    fn to_value(&self) -> Value {
+        codec::record(
+            <Self as codec::Record>::CONSTRUCTOR,
+            codec::Record::values(self),
+        )
+    }
+
+    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
+        <Self as codec::Record>::from_call(codec::call_of(
+            value,
+            <Self as codec::Record>::CONSTRUCTOR.0,
+        )?)
+    }
+}
+
+impl Payload for Record {
+    const VOCABULARY: &'static [(&'static str, &'static [&'static str])] = &[
+        (
+            "Source",
+            &[
+                "sender",
+                "subject",
+                "date",
+                "hash",
+                "thread_id",
+                "message_id",
+            ],
+        ),
+        ("Note", &["on", "lines"]),
+        ("SubTodo", &["body", "done"]),
+    ];
 
     /// The database prices a record with no spec by its head, so `Absent` is none here.
     fn spec(&self) -> Option<&Term> {
@@ -810,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn fields_answers_with_fields_in_order() {
+    fn values_has_one_value_for_each_field() {
         let at = Datetime::new(2026, 9, 9, 7, 3, 0, 0).expect("a real instant");
         let record = mk_record(
             "todo",
@@ -827,8 +838,10 @@ mod tests {
             "",
         )
         .expect("valid");
-        let named: Vec<&str> = record.fields().into_iter().map(|(name, _)| name).collect();
-        assert_eq!(named, Record::FIELDS);
+        assert_eq!(
+            codec::Record::values(&record).len(),
+            <Record as codec::Record>::CONSTRUCTOR.1.len()
+        );
     }
 
     /// The parser's whitelist is the database's names union this payload's, so a reused name
@@ -850,6 +863,6 @@ mod tests {
                 "{name} is one of the database's names"
             );
         }
-        assert!(!core.contains(&Record::KIND));
+        assert!(!core.contains(&<Record as codec::Record>::CONSTRUCTOR.0));
     }
 }

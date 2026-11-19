@@ -49,7 +49,7 @@ fn golden() -> PathBuf {
 const CHANGES: [&str; 1] = ["events/"];
 
 /// The inbox at the proposal schema, pinned in `tests/stores-changes/` only.
-const INBOX: &str = "inbox";
+pub(crate) const INBOX: &str = "inbox";
 
 /// The conversations' lines at their schema, and the keys of their words, pinned in
 /// `tests/stores-changes/` only.
@@ -57,20 +57,20 @@ pub(crate) const LINES: &str = "secretary-lines";
 const LINE_KEYS: &str = "secretary-lines-keys";
 
 /// The memory's history at its schema, and its texts, pinned in `tests/stores-changes/` only.
-const MEMORY: &str = "memory";
+pub(crate) const MEMORY: &str = "memory";
 const MEMORY_TEXTS: &str = "secretary-memory-texts";
-const DIGESTS: &str = "digests";
+pub(crate) const DIGESTS: &str = "digests";
 const DIGEST_TEXTS: &str = "secretary-digest-texts";
 
 /// The calendar plugin's store, a cache-tier store, pinned in `tests/stores-changes/` only.
 const CALENDAR: &str = "cache/plugins/ics/store";
 
 /// The recorded decisions and the two topic stores, pinned in `tests/stores-changes/` only.
-const DECISIONS: &str = "decisions";
-const TOPICS: &str = "secretary-topics";
-const TOPIC_ALIASES: &str = "secretary-topic-aliases";
+pub(crate) const DECISIONS: &str = "decisions";
+pub(crate) const TOPICS: &str = "secretary-topics";
+pub(crate) const TOPIC_ALIASES: &str = "secretary-topic-aliases";
 /// The box's refusals of what a tab posted, pinned in `tests/stores-changes/` only.
-const ASKS: &str = "secretary-asks";
+pub(crate) const ASKS: &str = "secretary-asks";
 
 /// Every store pinned in `tests/stores-changes/` only.
 const CHANGED: [&str; 11] = [
