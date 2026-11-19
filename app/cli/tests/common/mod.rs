@@ -2166,6 +2166,28 @@ pub fn settled(base: &str, id: &str) -> serde_json::Value {
     poll_conversation(base, id, |read| read["state"] == "idle")
 }
 
+/// A conversation reading as a failure message can show it: its state, then one line per turn
+/// with its index, who said it, a verb's name and outcome, whether a person's turn is queued, and
+/// its text.
+#[must_use]
+pub fn told(read: &serde_json::Value) -> String {
+    let turns = read["turns"].as_array().map_or(&[][..], Vec::as_slice);
+    std::iter::once(format!("state {}", read["state"]))
+        .chain(turns.iter().map(|turn| {
+            let detail = match turn["who"].as_str() {
+                Some("verb") => format!(" {} {}", turn["verb"], turn["outcome"]["is"]),
+                Some("person") => format!(" queued {}", turn["queued"]),
+                _ => String::new(),
+            };
+            format!(
+                "#{} {}{detail}: {}",
+                turn["index"], turn["who"], turn["text"]
+            )
+        }))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A new conversation opened as a tab opens one: its opening line sealed as the poster's,
 /// signed by the owner's [`phone`] and handed to the lines with its key beside it; its id.
 ///

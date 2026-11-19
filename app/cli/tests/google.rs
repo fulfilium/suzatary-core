@@ -805,23 +805,14 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     assert_eq!(days[0].entries.len(), read.len());
 }
 
-/// A conversation opened and asked for the dentist, once the model's calendar card is its first.
+/// A conversation opened and asked for the dentist, once the round that filed the model's
+/// calendar card as its first has ended.
+///
+/// The card stands before the round's closing reply is written, and a line said in between joins
+/// that round (`Round::run` joins before every ask), so the wait is for `idle`, not for the card.
 fn event_proposed(base: &str) -> String {
     let id = common::opened(base, "The dentist");
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "put the dentist in my calendar"}),
-    );
-    assert_eq!(
-        common::status(&said),
-        202,
-        "the round goes on after the answer"
-    );
-    let proposed = common::poll_conversation(base, &id, |body| {
-        body["proposals"]
-            .as_array()
-            .is_some_and(|rows| !rows.is_empty())
-    });
+    let proposed = common::said(base, &id, "put the dentist in my calendar");
     assert_eq!(
         proposed["proposals"][0]["act"]["kind"], "calendar_event",
         "{proposed}"
@@ -1151,14 +1142,28 @@ fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
         "{dismissed}"
     );
 
-    let read = common::said(base, &id, "try those");
+    // The owner's dismissal wakes the second round, which tries the refusals. A reading whose last
+    // line is an act says `idle` before that round begins, so the wait is for a reply after the
+    // act that the reading calls `idle`.
+    let read = common::poll_conversation(base, &id, |read| {
+        let turns = read["turns"].as_array().map_or(&[][..], Vec::as_slice);
+        let act = turns.iter().rposition(|turn| turn["who"] == "act");
+        read["state"] == "idle"
+            && act.is_some_and(|act| act + 1 < turns.len())
+            && turns.last().is_some_and(|turn| turn["who"] == "model")
+    });
     let answers: Vec<&serde_json::Value> = read["turns"]
         .as_array()
         .expect("turns")
         .iter()
         .filter(|turn| turn["verb"] == "propose_act")
         .collect();
-    assert_eq!(answers.len(), 1 + refusals.len(), "{read}");
+    assert_eq!(
+        answers.len(),
+        1 + refusals.len(),
+        "one propose_act answer of the first round and one per refusal of the dismissal's:\n{}",
+        common::told(&read)
+    );
     for answer in &answers {
         assert!(!answer["text"].to_string().contains(MARKER), "{answer}");
     }
