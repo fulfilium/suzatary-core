@@ -1775,6 +1775,7 @@ pub(super) fn on_path(tool: &str) -> bool {
 
 /// A throwaway workspace of four members (`suzatary-secretary`, `suzatary-io` on it, `suzatary`
 /// on that, `suzatary-wasm` on the secretary) and test files over two modules, written into `gate`.
+/// As in a fresh checkout, the generated wire that `b.test.ts` and the app import is not on disk.
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
@@ -1805,9 +1806,10 @@ fn units_fixture(gate: &Gate) {
     gate.write("web/src/a.ts", "export const a = 1\n");
     gate.write("web/src/b.ts", "export const b = 2\n");
     // The app: a module it loads, a chunk it loads by a dynamic import, and the other bundles.
+    gate.write("web/src/wire/http.ts", "export const http = 1\n");
     gate.write(
         "web/src/main.ts",
-        "import { a } from \"./a\"\nconsole.log(a)\nvoid import(\"./later\").then(m => console.log(m.later))\n",
+        "import { a } from \"./a\"\nimport { decode } from \"./wire/generated/payload\"\nconsole.log(a, decode)\nvoid import(\"./later\").then(m => console.log(m.later))\n",
     );
     gate.write("web/src/later.ts", "export const later = 1\n");
     for bundle in ["boot", "sw", "typst/worker", "prodrome/worker"] {
@@ -1820,7 +1822,7 @@ fn units_fixture(gate: &Gate) {
     );
     gate.write(
         "web/test/b.test.ts",
-        "import { b } from \"../src/b\"\nconsole.log(b)\n",
+        "import { b } from \"../src/b\"\nimport { decode } from \"../src/wire/generated/payload\"\nconsole.log(b, decode)\n",
     );
     gate.write("web/e2e/harness.ts", "export const h = 1\n");
     gate.write(
@@ -1876,6 +1878,12 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
         "every scene drives the whole bundle"
     );
     assert!(!ran.contains_key("test"), "no Rust unit reads web/src");
+
+    gate.write("web/src/wire/http.ts", "export const http = 2\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    // b.test.ts imports the generated wire, so it reads all of web/src/wire.
+    assert_eq!(gate.units_ran()["web-test"], set(&["web/test/b.test.ts"]));
 
     gate.write(
         "web/e2e/two.test.ts",

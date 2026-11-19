@@ -250,7 +250,7 @@
         modelCrate = args: craneLib.buildPackage (modelArgs // { cargoArtifacts = suzatary-model-deps; } // args);
 
         # `nix build .#suzatary-bin`, the one binary: vendored from app/Cargo.lock, offline, no
-        # OpenSSL. `doCheck` is off: the laws are `checks.suzatary-test`, from the same artifacts.
+        # OpenSSL. `doCheck` is off: the laws are the merge gate's `test` step.
         #
         # IT DOES NOT READ THE RELEASE (`appSrc` lacks `app/release.toml`), so a release commit
         # recompiles nothing (scripts/release-free.sh is the gate's proof).
@@ -744,46 +744,14 @@
           '';
         };
 
-        # `nix flake check` runs THE APPLICATION'S suites and nothing else: the Prodrome's are its
-        # own CI's. The live chain's pins are `app/cli/tests/live.rs`, run by the merge gate's
-        # live half, since the sandbox has no `events/`.
+        # The NixOS module, evaluated into a host's configuration, and the facts a deploy rests on
+        # read off it (nix/module-check.nix); the merge gate's `nix-module` step builds it. The
+        # application's suites are the gate's cargo steps, which run in the shell they need.
         checks = {
-          # The NixOS module, evaluated into a host's configuration, and the
-          # facts a deploy rests on read off it (nix/module-check.nix).
           suzatary-module = import ./nix/module-check.nix {
             inherit nixpkgs system;
             module = self.nixosModules.default;
           };
-          # `cargo test` and clippy over the workspace, both from `cargoArtifacts`, so neither
-          # builds a dependency.
-          suzatary-test = craneLib.cargoTest (commonArgs // {
-            inherit cargoArtifacts;
-            pname = "suzatary-test";
-          });
-          suzatary-clippy = craneLib.cargoClippy (commonArgs // {
-            inherit cargoArtifacts;
-            pname = "suzatary-clippy";
-            cargoClippyExtraArgs = "--all-targets -- -D warnings";
-          });
-          # The plugin host's fences (`app/plugin/tests/fence.rs`), a `test =
-          # false` target run by name with the components it attacks with.
-          # Loopback only: the test's own server on 127.0.0.1, which the build
-          # sandbox has.
-          suzatary-plugin-fence = craneLib.cargoTest (commonArgs // {
-            inherit cargoArtifacts;
-            pname = "suzatary-plugin-fence";
-            cargoTestExtraArgs = "-p suzatary-plugin --test fence";
-            SUZATARY_FENCE_PLUGINS = suzatary-plugin-fence;
-            SUZATARY_PLUGINS = suzatary-plugins;
-          });
-          # `suzatary plugin sync` over a loopback feed, against the same
-          # reference components (`app/cli/tests/plugin.rs`), run by name.
-          suzatary-plugin-sync = craneLib.cargoTest (commonArgs // {
-            inherit cargoArtifacts;
-            pname = "suzatary-plugin-sync";
-            cargoTestExtraArgs = "-p suzatary --test plugin";
-            SUZATARY_PLUGINS = suzatary-plugins;
-          });
         };
 
         apps.apk-sign = {

@@ -1,6 +1,5 @@
-# The Android portal's release. Separate from tests.yml on purpose: that
-# workflow does not build an APK, and sharing one would spend the (large)
-# Android SDK cache on every docs commit.
+# The Android portal's release, on its own so that the (large) Android SDK
+# cache is spent only when the shell changed.
 name: Android APK
 
 # ON A RELEASE THAT CHANGES THE PORTAL, NOT ON EVERY TAG (the owner,
@@ -77,8 +76,7 @@ jobs:
       # most of this job's time. The primary key includes the app sources so a
       # hit means "this exact APK has been built before"; the restore prefix is
       # flake.lock alone, so a change to android/ still reuses the SDK it just
-      # cannot reuse the result. Its own key namespace, so a run here never
-      # evicts what tests.yml cached.
+      # cannot reuse the result. Its own key namespace, apart from quick.yml's.
       - name: Cache Nix store
         uses: nix-community/cache-nix-action@v7
         with:

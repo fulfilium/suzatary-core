@@ -15,7 +15,7 @@
 //
 // Any failure, an import under a --base path among them, exits nonzero, and the step runs whole.
 import { readFileSync } from "node:fs";
-import { relative, dirname } from "node:path";
+import { relative, dirname, join } from "node:path";
 
 const [mode, ...args] = process.argv.slice(2);
 const under = (path, dir) => path === dir || path.startsWith(dir + "/");
@@ -62,8 +62,11 @@ const units = (metafile, treeFile, entries, rest) => {
   const { scope = [], shared = [], base = [] } = flags(rest);
   const inputs = JSON.parse(readFileSync(metafile, "utf8")).inputs;
   const tree = treeOf(treeFile);
-  // The generated wire is outside the tree, so what it imports is read as all of web/src/wire.
+  // The generated wire is outside the tree and external to the graph, so a unit that imports it
+  // reads all of web/src/wire.
   const generated = "web/src/wire/generated";
+  const importsWire = p => (inputs[p]?.imports ?? []).some(({ path, external }) =>
+    external === true && under(join(dirname(p), path), generated));
   const roots = Object.keys(inputs).filter(p => dirname(p) === entries && p.endsWith(".test.ts"));
   if (roots.length === 0) fail(`no entry under ${entries} in ${metafile}`);
   return roots.sort().map(root => {
@@ -80,7 +83,7 @@ const units = (metafile, treeFile, entries, rest) => {
       const at = s.indexOf("=");
       return at < 0 ? [s] : s.slice(0, at) === root ? [s.slice(at + 1)] : [];
     });
-    const reads = [...closure, ...own, ...([...closure].some(p => under(p, generated)) ? ["web/src/wire"] : [])];
+    const reads = [...closure, ...own, ...([...closure].some(importsWire) ? ["web/src/wire"] : [])];
     const skips = tree.filter(p => scope.some(s => under(p, s)) && !reads.some(r => under(p, r)));
     return { root, closure, skips: [...base, ...skips] };
   });

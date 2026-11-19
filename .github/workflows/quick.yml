@@ -1,8 +1,7 @@
 name: Quick checks
 
 # THE PUSH-TIME OPINION, SIZED FOR A SMALL CHANGE (the owner, 2026-09-13: "what
-# would take us down to a minute for small changes?"). The release workflow
-# (tests.yml) proves the Nix derivations; this one checks every commit
+# would take us down to a minute for small changes?"). It checks every commit
 # message (`plan`) and runs `check` (fmt, clippy, docs) from `cargo` against
 # a restored dependency build. The suite and the browser are the merge
 # gate's (`scripts/merge-gate.sh`), which every train passes before it lands.

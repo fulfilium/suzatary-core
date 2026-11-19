@@ -269,6 +269,7 @@ run_step() {
     local -x SUZATARY_E2E_SHOTS="$SUZATARY_GATE_EVIDENCE/$name-$evidence_head"
     rm -rf "$SUZATARY_E2E_SHOTS"
   fi
+  [[ -z "${unread[i]:-}" ]] || of+=" (whole: its units could not be read)"
   if [[ -n "${todo_units[i]:-}" ]]; then
     local -x SUZATARY_GATE_UNITS="${todo_units[i]}"
     of+=" ($(wc -w <<<"${todo_units[i]}") of $(wc -w <<<"${units[i]}") units)"
@@ -644,38 +645,40 @@ for name in ${only//,/ }; do
   exit 64
 done
 
-# One `<unit>\t<the paths it skips>` line each, or a failure when the graph cannot be read. The
-# esbuild graph needs the generated wire, written below where the store holds this tree's.
+# One `<unit>\t<the paths it skips>` line each, or a failure, saying why on stderr, when the graph
+# cannot be read. It reads the tree alone: the generated wire, which no checkout holds before
+# web-inputs, is external (gate-units.mjs reads an import of it as all of web/src/wire).
+generated_wire=('--external:*/generated/wire' '--external:*/generated/payload' '--external:*/generated/pages')
 units_for() {
   local i="$1" dir
   case "${s_reads[i]}" in
     crates)
       cargo metadata --manifest-path app/Cargo.toml --no-deps --format-version 1 --offline \
-        >"$logs/metadata" 2>"$logs/metadata.err" &&
+        >"$logs/metadata" &&
         node scripts/gate-units.mjs crates "$logs/metadata" "$root" "$logs/tree" \
           --base ${unit_base[crates]} -- "${crate_reads[@]}"
       ;;
     files:web/e2e)
       # The app's metafile names its dynamically loaded chunks; the other bundles every page loads.
-      esbuild web/e2e/*.test.ts --bundle --platform=node --format=esm --log-level=silent \
+      esbuild web/e2e/*.test.ts --bundle --platform=node --format=esm --log-level=error "${generated_wire[@]}" \
         --external:./prodrome.js --external:./typst.js --metafile="$logs/web/e2e.meta" \
-        --outdir="$logs/web/e2e.bundle" >/dev/null 2>&1 &&
-        esbuild app=web/src/main.ts --bundle --splitting --format=esm --log-level=silent \
+        --outdir="$logs/web/e2e.bundle" >/dev/null &&
+        esbuild app=web/src/main.ts --bundle --splitting --format=esm --log-level=error "${generated_wire[@]}" \
           --external:./prodrome.js --external:./typst.js --external:./views.js --define:__DEV__=false \
-          --metafile="$logs/app.meta" --outdir="$logs/app.bundle" >/dev/null 2>&1 &&
+          --metafile="$logs/app.meta" --outdir="$logs/app.bundle" >/dev/null &&
         esbuild web/src/boot.ts web/src/sw.ts web/src/typst/worker.ts web/src/prodrome/worker.ts --outbase=web/src \
-          --bundle --format=esm --log-level=silent --external:./prodrome.js --external:./typst.js \
+          --bundle --format=esm --log-level=error "${generated_wire[@]}" --external:./prodrome.js --external:./typst.js \
           --define:__DEV__=false --define:__PRELOAD__='[]' --define:__CHUNKS__='[]' \
-          --metafile="$logs/static.meta" --outdir="$logs/static.bundle" >/dev/null 2>&1 &&
+          --metafile="$logs/static.meta" --outdir="$logs/static.bundle" >/dev/null &&
         node scripts/gate-units.mjs scenes "$logs/web/e2e.meta" "$logs/tree" web/e2e \
           --app "$logs/app.meta" --static "$logs/static.meta" --later "${scene_later[@]}" \
           --scope ${unit_scopes[web/e2e]} --shared ${unit_shared[web/e2e]} --base ${unit_base[files:web/e2e]}
       ;;
     files:*)
       dir="${s_reads[i]#files:}"
-      esbuild "$dir"/*.test.ts --bundle --platform=node --format=esm --log-level=silent \
+      esbuild "$dir"/*.test.ts --bundle --platform=node --format=esm --log-level=error "${generated_wire[@]}" \
         --external:./prodrome.js --external:./typst.js --metafile="$logs/$dir.meta" \
-        --outdir="$logs/$dir.bundle" >/dev/null 2>&1 &&
+        --outdir="$logs/$dir.bundle" >/dev/null &&
         node scripts/gate-units.mjs files "$logs/$dir.meta" "$logs/tree" "$dir" \
           --scope ${unit_scopes[$dir]} --shared ${unit_shared[$dir]:-} --base ${unit_base[${s_reads[i]}]}
       ;;
@@ -686,12 +689,14 @@ units_for() {
 plan_step() {
   local i="$1" lines unit skips path n=0 todo=0 k specs=() at reads narrowed
   if [[ "${s_reads[i]}" == crates || "${s_reads[i]}" == files:* ]]; then
-    if lines="$(units_for "$i")" && [[ -n "$lines" ]]; then
+    if lines="$(units_for "$i" 2>"$logs/${s_name[i]}.units")" && [[ -n "$lines" ]]; then
       while IFS=$'\t' read -r unit skips; do
         specs+=("$unit" "all-but:$skips")
       done <<<"$lines"
     else
-      echo "==> ${s_name[i]}: its units could not be read, so it runs whole" >&2
+      unread[i]=1
+      echo "==> ${s_name[i]}: its units could not be read, so it runs whole:" >&2
+      head -n 20 "$logs/${s_name[i]}.units" | sed 's/^/    /' >&2
     fi
   fi
   ((${#specs[@]})) || specs=("" "${unit_fallback[${s_reads[i]}]:-${s_reads[i]}}")
@@ -732,17 +737,12 @@ plan_step() {
 }
 
 # Decided once: a `together` partner runs whole when another runs; a unit step, its moved units.
-kept=() hit=() units=() todo_kept=() todo_units=()
+kept=() hit=() units=() todo_kept=() todo_units=() unread=()
 eligible() { [[ "${s_reads[$1]}" != unkept ]] && chosen "$1"; }
 if why="$(keeping)"; then
   head="$(git rev-parse HEAD)"
   snapshot || { echo "==> could not read HEAD's tree to name the steps' inputs: not starting" >&2; exit 75; }
   declare -A active=()
-  for i in "${!s_name[@]}"; do
-    if [[ "${s_reads[i]}" == files:* ]] && eligible "$i" && wire="$(nix_held suzatary-web-ts 2>/dev/null)"; then
-      SUZATARY_WIRE_TS="$wire" bash scripts/wire.sh >/dev/null && break
-    fi
-  done
   for i in "${!s_name[@]}"; do
     eligible "$i" || continue
     plan_step "$i" || { echo "==> could not name ${s_name[i]}'s inputs: not starting" >&2; exit 75; }

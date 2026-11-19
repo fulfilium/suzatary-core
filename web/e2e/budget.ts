@@ -11,8 +11,8 @@ import { availableParallelism, loadavg } from "node:os";
  * jobs. A number tuned for the first is a flake on the second, and a number
  * tuned for the second makes every local failure take a minute to report.
  *
- * So it is one environment variable, read once, and CI sets it higher
- * (`.github/workflows/tests.yml`). It is a BUDGET and not a delay: a wait that
+ * So it is one environment variable, read once, which a slow machine sets
+ * higher. It is a BUDGET and not a delay: a wait that
  * is satisfied in 40 ms still costs 40 ms whatever this says.
  *
  * A value that is not a positive number is the default, because a mistyped
