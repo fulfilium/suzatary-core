@@ -275,6 +275,7 @@ impl Onboarding {
             repo: self.repo.clone(),
             data: self.data.clone(),
             chains,
+            follows: Vec::new(),
             web,
             categories: self.categories.iter().cloned().zip(0..).collect(),
             mail,

@@ -137,8 +137,8 @@
         # The model crates, the application's library (`merge_gate.rs`'s `LIBRARY_CRATES`): each
         # fileset below names the part of each it reads, so a new crate is one word here.
         library = part: map (crate: ./app + "/${crate}${part}") [ "base" "record" "release" "store"
-          "signatures" "todo" "held" "memory" "mail" "health" "triage" "services" "google" "connect"
-          "inbox" "conversations" "lines" "topics" "digest" "stores" "cards" "secretary" "api" ];
+          "signatures" "todo" "plan" "held" "memory" "mail" "health" "triage" "services" "google"
+          "connect" "inbox" "conversations" "lines" "topics" "digest" "stores" "cards" "secretary" "api" ];
         # The test supports their libraries include, of the crates that have one.
         supports = lib.filter builtins.pathExists (library "/tests/support");
         # The other workspace members, but those in `except`: every build names each member's

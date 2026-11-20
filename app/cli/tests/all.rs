@@ -49,6 +49,8 @@ mod erase;
 #[cfg(feature = "fixture")]
 #[path = "fixture_live.rs"]
 mod fixture_live;
+#[path = "follows.rs"]
+mod follows;
 #[path = "forwarding.rs"]
 mod forwarding;
 #[path = "frontend.rs"]

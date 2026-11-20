@@ -36,6 +36,7 @@ suzatary-release.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-todo.workspace = true
+suzatary-plan.workspace = true
 suzatary-held.workspace = true
 suzatary-memory.workspace = true
 suzatary-mail.workspace = true

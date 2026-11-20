@@ -15,6 +15,7 @@ pub(crate) mod charter;
 mod connections;
 mod edits;
 mod file;
+mod followed;
 mod local;
 mod plugins;
 pub(crate) mod project;
@@ -26,6 +27,7 @@ pub use edits::{InstanceEdits, editing};
 pub(crate) use file::Signatures;
 pub(crate) use file::{Chain, File, Upkeep, Web};
 pub use file::{Mail, Secretary, Serving, Triage};
+pub use followed::{Copied, Followed, Since, Tree};
 pub use local::Local;
 pub use plugins::Plugins;
 use plugins::plugins_of;
@@ -91,6 +93,8 @@ pub struct Instance {
     pub roots: Roots,
     /// Every chain, in the file's order.
     pub chains: ChainDirs,
+    /// Every store it reads and never writes, in the file's order.
+    pub follows: Vec<Followed>,
     pub deployment: Deployment,
     pub serving: Serving,
     pub secretary: Secretary,
@@ -489,6 +493,7 @@ impl Instance {
         });
         let portal = Portal::of(notify.as_ref(), sender);
         let plugins = plugins_of(path, &data, file.cache.as_deref(), file.plugins)?;
+        let follows = Followed::of(path, &plugins.cache, file.follows, &chains)?;
         let secretary = file.secretary.rooted(&code, &data);
         let repos = match &coding {
             Some(coding) => secretary
@@ -535,6 +540,7 @@ impl Instance {
             run: env.run().map(str::to_owned),
             path: path.to_path_buf(),
             chains,
+            follows,
             paths,
             secretary,
             agent: file.agent,

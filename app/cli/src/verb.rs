@@ -5,9 +5,9 @@ use std::path::Path;
 use clap::Subcommand;
 
 use crate::commands::{
-    call, coding, context, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp,
-    notify, plugin, prodrome, ran, release, secretary, secretspec, serve, tap, todo, todos,
-    typeset, up, vault, verify, weather,
+    call, coding, context, decision, device, doctor, follow, heartbeat, init, instance, leaks,
+    mail, mcp, notify, plugin, prodrome, ran, release, secretary, secretspec, serve, tap, todo,
+    todos, typeset, up, vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -28,8 +28,10 @@ pub enum Verb {
     Mcp,
     /// Author, read and record todos on the chain (trusted).
     Todo(todo::Args),
-    /// Read the todo list off the chain.
+    /// The one list of every store the deployment reads, most urgent first.
     Todos(todos::Args),
+    /// Fetch the stores the deployment follows and never writes.
+    Follow(follow::Args),
     /// Record, revise, withdraw, list and view the recorded decisions (designs and plans).
     Decision(decision::Args),
     /// Begin a todo store at a path, such as a project's roadmap, with no instance file.
@@ -112,6 +114,7 @@ impl Verb {
             Verb::Mcp => mcp::run(path),
             Verb::Todo(args) => todo::run(path, args),
             Verb::Todos(args) => todos::run(path, &args),
+            Verb::Follow(args) => follow::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
             Verb::Prodrome(args) => prodrome::run(&args),
             Verb::Release(args) => release::run(path, &args),

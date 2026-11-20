@@ -396,10 +396,19 @@ proptest::proptest! {
             .replace(r#"untrusted = ["triage"]"#, "untrusted = []");
         std::fs::write(&instance, mounted).expect("writes");
 
-        let by_path = readings(
+        // A row names its store, `store` read by path and `life` mounted.
+        let by_path: Vec<(bool, Vec<u8>)> = readings(
             &root.join("no-instance.toml"),
             &["--store", &events.to_string_lossy()],
-        );
+        )
+        .into_iter()
+        .map(|(ok, out)| {
+            let named = String::from_utf8_lossy(&out)
+                .replace(r#""chain":"store""#, r#""chain":"life""#)
+                .replace("  store      ", "  life       ");
+            (ok, named.into_bytes())
+        })
+        .collect();
         proptest::prop_assert_eq!(&by_path, &readings(&instance, &[]));
         proptest::prop_assert!(by_path[0].0, "{}", String::from_utf8_lossy(&by_path[0].1));
     }

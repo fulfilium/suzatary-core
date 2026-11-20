@@ -88,7 +88,7 @@ parsing the instance file <file>: TOML parse error at line 8, column 3
   |
 8 | [[nothing]]
   |   ^^^^^^^
-unknown field `nothing`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
+unknown field `nothing`, expected one of `repo`, `data`, `chains`, `follows`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a chain name that is not a slug
@@ -331,7 +331,7 @@ parsing the instance file <file>: TOML parse error at line 104, column 3
     |
 104 | [[providers]]
     |   ^^^^^^^^^
-unknown field `providers`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
+unknown field `providers`, expected one of `repo`, `data`, `chains`, `follows`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a model order, a table the binary does not read
@@ -339,7 +339,7 @@ parsing the instance file <file>: TOML parse error at line 104, column 2
     |
 104 | [models]
     |  ^^^^^^
-unknown field `models`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
+unknown field `models`, expected one of `repo`, `data`, `chains`, `follows`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `upkeep`, `cache`, `plugins`, `signatures`
 
 
 ## a reserve over one

@@ -42,7 +42,8 @@ allowance = 2000
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.187 for localwrites stage 3 (c2) (#573, +16,647: the stop's halt by the runs its line ends, the chain law, an own line's ruling and words on a turn, a refusal's words taken back whole by one tab or kept on the page that began them, the box's clock and its bounds, the post's 413 and 422, and their laws; and, at its second review, +2,953: a refused topic by its opening, the one test of a line the rows hold, words placed before they are claimed, the composer's draft read, the device's lock bounded, and their laws); accepted at the reviews of #573.
 # 2026-11-20: set to the tree's figure at the fifth review of #573, as that review asked (+4,181 over the third to fifth reviews: the core alone answering which own records go, reading, settling and sealing under the device's lock, a line the rows hold taken, a let-go refusal never posted, a settle's reading kept apart from its cleanup, a seal tried again only where nothing was sealed, and their laws).
 # 2026-11-20: written as `scripts/context.sh record` writes it, by hand, on the tree merged with 2.1.189 for huskstoreup (-11,867: the second store and the husk types deleted), since `record` refuses while `lines` and `digest` stand above their USE ratchets there, as on origin/master; their lines stay.
-reading = 3136923
+# 2026-11-20: raised by hand to the figure of the tree merged with 2.1.190 for megaroadmap's one list (#576, +15,539 over 2.1.190's figure: the crate app/plan with the wait reading, the one list and their five laws, `[[follows]]` and `follow fetch`, `todos open`'s answer for a store it could not read, the reading of a store's believed waits, the copy's fence and fetch record, the law of the confirmed records' waits, and the binary-level tests of a followed store); accepted at the reviews of #576.
+reading = 3152462
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
@@ -242,6 +243,13 @@ depends = ["base", "prodrome-core", "record", "signatures", "store"]
 scripts = []
 
 [[unit]]
+name = "plan"
+path = "app/plan"
+shape = "crate"
+depends = ["base", "prodrome-core", "record", "signatures", "todo"]
+scripts = []
+
+[[unit]]
 name = "held"
 path = "app/held"
 shape = "crate"
@@ -385,7 +393,7 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]

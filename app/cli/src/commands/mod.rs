@@ -9,6 +9,7 @@ pub mod decision;
 pub mod device;
 pub mod doctor;
 pub mod door;
+pub mod follow;
 // The browser suite's fixtures: test support, compiled only under the `fixture` feature.
 #[cfg(feature = "fixture")]
 #[path = "../../tests/support/fixture.rs"]
@@ -98,6 +99,24 @@ pub fn chains_read(instance: &Instance) -> suzatary_signatures::chain_set::Read 
             store as &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
         )
     }))
+}
+
+/// [`chains_read`] with every store the instance follows beside the chains, each copy read
+/// whole: the one list's reading, and the reading of a followed store's todo. A copy no fetch
+/// has confirmed is not held, so the set answers it as absent.
+#[must_use]
+pub fn plan_read(instance: &Instance) -> suzatary_signatures::chain_set::Read {
+    use suzatary_store::store::Reads as _;
+    instance
+        .follows
+        .iter()
+        .filter(|followed| followed.copy().held())
+        .fold(chains_read(instance), |read, followed| {
+            let objects = followed
+                .reading()
+                .and_then(|reading| reading.objects().map_err(|failed| failed.to_string()));
+            read.with(followed.name.clone(), followed.untrusted.clone(), objects)
+        })
 }
 
 /// One chain as the triage agent reads it: under its own policy, and never written.

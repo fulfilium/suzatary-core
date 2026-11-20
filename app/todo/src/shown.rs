@@ -46,11 +46,17 @@ pub enum Priority {
 pub fn price(entry: &Entry) -> Priority {
     match entry.value() {
         Ok(Some(value)) => Priority::Percent {
-            percent: format!("{:.2}%", value * 100.0),
+            percent: percent(value),
         },
         Ok(None) => Priority::Absent,
         Err(_) => Priority::Unlinked,
     }
+}
+
+/// A fulfillment as a row prints it, `"12.34%"`.
+#[must_use]
+pub fn percent(value: f64) -> String {
+    format!("{:.2}%", value * 100.0)
 }
 
 /// Every open todo with content beside its record, ascending in fulfillment (low is urgent), ties
@@ -76,21 +82,27 @@ pub fn open<'a>(
 pub fn open_rows(entries: &[Entry], records: &BTreeMap<Hash, &Authored>) -> Vec<OpenRow> {
     open(entries, records)
         .into_iter()
-        .map(|(entry, record)| OpenRow {
-            id: entry.key.as_str().to_owned(),
-            priority: price(entry),
-            kind: record.payload.kind.as_str().to_owned(),
-            category: record.payload.category.as_ref().map_or_else(
-                || kind_category(record.payload.kind.as_str()).to_owned(),
-                |category| category.as_str().to_owned(),
-            ),
-            body: markup_text(record.payload.body.as_str()),
-            waiting_on: Some(string_text(record.payload.waiting_on.as_str()))
-                .filter(|text| !text.is_empty()),
-            authored_by: record.actor.as_str().to_owned(),
-            unconfirmed: entry.confidence.is_provisional(),
-        })
+        .map(|(entry, record)| open_row(entry, record))
         .collect()
+}
+
+/// One open todo beside its record, as a row.
+#[must_use]
+pub fn open_row(entry: &Entry, record: &Authored) -> OpenRow {
+    OpenRow {
+        id: entry.key.as_str().to_owned(),
+        priority: price(entry),
+        kind: record.payload.kind.as_str().to_owned(),
+        category: record.payload.category.as_ref().map_or_else(
+            || kind_category(record.payload.kind.as_str()).to_owned(),
+            |category| category.as_str().to_owned(),
+        ),
+        body: markup_text(record.payload.body.as_str()),
+        waiting_on: Some(string_text(record.payload.waiting_on.as_str()))
+            .filter(|text| !text.is_empty()),
+        authored_by: record.actor.as_str().to_owned(),
+        unconfirmed: entry.confidence.is_provisional(),
+    }
 }
 
 /// One todo whole, as `todo show` prints it and its page draws it.

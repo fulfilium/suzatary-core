@@ -1137,6 +1137,7 @@ fn instance_file(
             chain("life", "events"),
             chain("suzatary", "events-suzatary"),
         ],
+        follows: Vec::new(),
         web,
         categories: BTreeMap::from([
             ("work".to_owned(), 0),

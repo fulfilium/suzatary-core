@@ -80,6 +80,19 @@ impl Read {
         )
     }
 
+    /// This read beside one more chain, as its objects read or why they did not.
+    #[must_use]
+    pub fn with(
+        mut self,
+        name: ChainName,
+        untrusted: Untrusted,
+        objects: Result<Vec<(Hash, Envelope<TodoEvent>)>, String>,
+    ) -> Read {
+        self.0
+            .push(Arc::new(Chain::of(name, untrusted, None, objects)));
+        self
+    }
+
     /// Each store read once, under its chain's policy; a store that does not read is a chain
     /// held as that failure, never a refusal of the others.
     #[must_use]

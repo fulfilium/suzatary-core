@@ -1177,13 +1177,14 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
 
 /// The crates the core's library is cut into; a new one joins with its word in `flake.nix`'s
 /// `library`.
-const LIBRARY_CRATES: [&str; 23] = [
+const LIBRARY_CRATES: [&str; 24] = [
     "app/base",
     "app/record",
     "app/release",
     "app/store",
     "app/signatures",
     "app/todo",
+    "app/plan",
     "app/held",
     "app/memory",
     "app/mail",

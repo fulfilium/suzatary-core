@@ -34,6 +34,9 @@ pub(crate) struct File {
     #[serde(default = "here")]
     pub(crate) data: PathBuf,
     pub(crate) chains: Vec<Chain>,
+    /// The stores this deployment reads and never writes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) follows: Vec<super::followed::Follow>,
     pub(crate) web: Web,
     pub(crate) categories: BTreeMap<String, u32>,
     pub(crate) mail: Mail,
@@ -511,20 +514,20 @@ mod text {
     }
 }
 
-mod texts {
+pub(super) mod texts {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serializer};
 
     use super::Text;
 
-    pub(super) fn serialize<T: Text, S: Serializer>(
+    pub(in crate::instance) fn serialize<T: Text, S: Serializer>(
         values: &[T],
         out: S,
     ) -> Result<S::Ok, S::Error> {
         out.collect_seq(values.iter().map(Text::spelled))
     }
 
-    pub(super) fn deserialize<'de, T: Text, D: Deserializer<'de>>(
+    pub(in crate::instance) fn deserialize<'de, T: Text, D: Deserializer<'de>>(
         input: D,
     ) -> Result<Vec<T>, D::Error> {
         Vec::<String>::deserialize(input)?

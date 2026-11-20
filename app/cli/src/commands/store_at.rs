@@ -33,7 +33,8 @@ impl StoreAt {
     }
 
     /// Every chain read once, and the name of the one read: the instance's `chain` (else its
-    /// first) beside the others, or the path's store alone, believing every writer.
+    /// first) beside the others, a followed store's beside the chains, or the path's store
+    /// alone, believing every writer.
     pub(crate) fn todos(
         &self,
         path: &Path,
@@ -48,6 +49,13 @@ impl StoreAt {
                 by_path(dir)
             },
             |instance| {
+                if let Some(followed) = instance
+                    .follows
+                    .iter()
+                    .find(|followed| Some(followed.name.as_str()) == chain)
+                {
+                    return Ok((super::plan_read(&instance), followed.name.clone()));
+                }
                 let name = instance.chain(chain)?.policy.name.clone();
                 Ok((super::chains_read(&instance), name))
             },

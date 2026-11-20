@@ -4164,6 +4164,7 @@ dependencies = [
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
+ "suzatary-plan",
  "suzatary-plugin",
  "suzatary-record",
  "suzatary-release",
@@ -4592,6 +4593,19 @@ dependencies = [
  "ts-rs",
  "viewtree",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "suzatary-plan"
+version = "0.0.0"
+dependencies = [
+ "prodrome-core",
+ "proptest",
+ "serde",
+ "suzatary-base",
+ "suzatary-record",
+ "suzatary-signatures",
+ "suzatary-todo",
 ]
 
 [[package]]

@@ -1,0 +1,30 @@
+[package]
+name = "suzatary-plan"
+description = "Suzatary's plan: the work of every store a deployment reads, as one list"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_plan"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "all"
+path = "tests/all.rs"

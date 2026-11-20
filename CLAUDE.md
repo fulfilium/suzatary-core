@@ -385,7 +385,9 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **A record is shown as a block** (`suzatary_record::decoration`): `raise_block`
   prints it as `#kind(fields)[body]`, and typst is READ with typst's own parser
   only to check that a write renders as what was built.
-- `suzatary todos open` is the open list the briefing reads.
+- `suzatary todos open` is the one list of every chain and followed store, a
+  blocker never less urgent than what waits on it; `--chain life` is the
+  owner's list the briefing reads.
 - **The server is `app/`, in Rust** (`suzatary serve`, axum, default
   127.0.0.1:8787; the unit binds the tailnet via `scripts/serve-web.sh`).
   - Reads are GETs. The ONE chain write is `POST /api/objects`, a replica
