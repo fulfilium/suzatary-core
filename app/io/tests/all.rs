@@ -28,3 +28,5 @@ mod store_laws;
 mod stores;
 #[path = "templates.rs"]
 mod templates;
+#[path = "verify_law.rs"]
+mod verify_law;

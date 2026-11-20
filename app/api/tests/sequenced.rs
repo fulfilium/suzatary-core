@@ -304,6 +304,13 @@ fn written(steps: &[Step]) -> InMemory {
                     .iter()
                     .map(|i| held[i.index(held.len())].clone())
                     .collect();
+                // A tab writes over lines it holds as heads: none of them is beneath another.
+                let dag: prodrome_core::dag::Dag<LineEvent> = objects.iter().cloned().collect();
+                let beneath =
+                    dag.closure(parents.iter().flat_map(|parent| {
+                        prodrome_core::event::parents_of(&dag.objects()[parent])
+                    }));
+                parents.retain(|parent| !beneath.contains(parent));
                 parents.sort();
                 parents.dedup();
                 let (line, keys) = LineEvent::write(

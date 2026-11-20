@@ -20,7 +20,7 @@ pub fn scene(actor: &str) -> Trusted {
     let begun = prodrome_core::event::mk_completed(
         "scene",
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
-        actor.as_str(),
+        "scene",
         "",
     )
     .expect("an event");

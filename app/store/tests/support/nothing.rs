@@ -10,7 +10,8 @@ use crate::store::{Doc, Gets, Lists, Prodrome, Reads, StoreError, WriteLock};
 struct NoLock;
 impl WriteLock for NoLock {}
 
-/// Every store, inert: it holds no object, and an append is sealed and kept nowhere.
+/// Every store, inert: it holds no object, so `verify` finds nothing, and an append is sealed and
+/// kept nowhere.
 impl<E: Schema> Reads<E> for Nothing {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         Ok(Vec::new())

@@ -31,6 +31,7 @@ use suzatary_secretary::agent::Agent;
 use suzatary_secretary::secretary::{Bound, Secretary};
 use suzatary_services::repos::{Patch, RepoRow, Visibility};
 use suzatary_services::repositories::{RepoFailure, Repositories};
+use suzatary_signatures::signatures::findings_of;
 use suzatary_store::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 use suzatary_triage::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
 use suzatary_triage::mail::junk_folder::{Junk, JunkFailure};
@@ -70,6 +71,20 @@ struct Fixed {
 
 struct NoLock;
 impl WriteLock for NoLock {}
+
+/// What the store on disk reports of `objects` under `policy`, or why they could not be read.
+fn held_findings<E: prodrome_core::schema::Schema>(
+    objects: Result<Vec<(Hash, prodrome_core::event::Envelope<E>)>, StoreError>,
+    policy: &impl prodrome_core::policy::Policy<E>,
+) -> Vec<String> {
+    match objects {
+        Ok(objects) => findings_of(&objects.into_iter().collect(), policy)
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        Err(why) => vec![why.to_string()],
+    }
+}
 
 impl Fixed {
     fn new() -> Self {
@@ -120,7 +135,7 @@ impl Reads<TodoEvent> for Fixed {
         Ok(Vec::new())
     }
     fn verify(&self) -> Vec<String> {
-        Vec::new()
+        held_findings(Reads::<TodoEvent>::objects(self), &chain().untrusted)
     }
 }
 
@@ -186,7 +201,7 @@ impl Reads<LineEvent> for Fixed {
             .collect())
     }
     fn verify(&self) -> Vec<String> {
-        Vec::new()
+        held_findings(Reads::<LineEvent>::objects(self), &Untrusted::none())
     }
 }
 

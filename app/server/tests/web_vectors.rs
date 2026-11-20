@@ -51,7 +51,7 @@ use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::{
     InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
-use suzatary_stores::stores::InMemory;
+use suzatary_stores::stores::{Faulty, Health, Healthy, InMemory};
 use suzatary_todo::render::{Html, Render};
 use suzatary_topics::secretary::answers::{AnswerError, Answers};
 use suzatary_topics::secretary::readings;
@@ -296,10 +296,10 @@ impl WriteLock for NoLock {}
 ///
 /// `Render` and `Answers` echo, so no vector needs typst, and `Model` is never called because
 /// every turn is scripted.
-struct Bundle {
+struct Bundle<H: Health = Healthy> {
     events: EventStore,
     conversations: suzatary_stores::stores::conversations::InMemory,
-    inbox: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
+    inbox: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent, H>,
     memory: InMemory<suzatary_memory::secretary::memory_event::MemoryEvent>,
     texts: InMemoryDoc<TextName, Text<Fact>>,
     digests: InMemory<suzatary_digest::secretary::digest_event::DigestEvent>,
@@ -322,10 +322,21 @@ impl Entropy for Counting {
 
 impl Bundle {
     fn over(events: EventStore, at: Datetime) -> Self {
+        Self::holding(events, at, InMemory::default())
+    }
+}
+
+impl<H: Health> Bundle<H> {
+    /// A bundle over `events` at `at`, its inbox `inbox`.
+    fn holding(
+        events: EventStore,
+        at: Datetime,
+        inbox: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent, H>,
+    ) -> Self {
         Self {
             events,
             conversations: suzatary_stores::stores::conversations::InMemory::default(),
-            inbox: InMemory::default(),
+            inbox,
             memory: InMemory::default(),
             texts: InMemoryDoc::default(),
             digests: InMemory::default(),
@@ -422,7 +433,7 @@ impl Bundle {
 }
 
 /// The server's record, with this bundle behind every effect a route reads.
-fn server_of(bundle: &Bundle) -> Server<'_> {
+fn server_of<H: Health>(bundle: &Bundle<H>) -> Server<'_> {
     Server {
         secretary: suzatary_secretary::secretary::Secretary {
             chain: bundle,
@@ -438,7 +449,7 @@ fn server_of(bundle: &Bundle) -> Server<'_> {
     }
 }
 
-impl Reads<TodoEvent> for Bundle {
+impl<H: Health> Reads<TodoEvent> for Bundle<H> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         linearised(&self.events).map_err(|e| StoreError::unreadable("chain", e.to_string()))
     }
@@ -463,7 +474,7 @@ impl Reads<TodoEvent> for Bundle {
     }
 }
 
-impl Prodrome<TodoEvent> for Bundle {
+impl<H: Health> Prodrome<TodoEvent> for Bundle<H> {
     fn append(&self, event: suzatary_record::record::TodoEvent) -> Result<Hash, StoreError> {
         append_to(&self.events, suzatary_record::record::GENESIS, event)
             .map_err(|e| StoreError::not_appended("chain", e.to_string()))
@@ -481,14 +492,14 @@ impl Prodrome<TodoEvent> for Bundle {
     }
 }
 
-impl suzatary_base::capability::Typeset for Bundle {
+impl<H: Health> suzatary_base::capability::Typeset for Bundle<H> {
     fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
         suzatary_base::capability::parsed(source)
             .map(|()| "<!DOCTYPE html><html><body></body></html>".to_owned())
     }
 }
 
-impl Render for Bundle {
+impl<H: Health> Render for Bundle<H> {
     fn html(&self, markup: &Escaped) -> Result<Html, RenderError> {
         Ok(Html::from_render(markup.as_str()))
     }
@@ -506,13 +517,13 @@ impl Render for Bundle {
     }
 }
 
-impl Clock for Bundle {
+impl<H: Health> Clock for Bundle<H> {
     fn now(&self) -> Datetime {
         self.at
     }
 }
 
-impl Model for Bundle {
+impl<H: Health> Model for Bundle<H> {
     fn name(&self) -> String {
         "vectors-fixture".to_owned()
     }
@@ -528,7 +539,7 @@ impl Model for Bundle {
     }
 }
 
-impl Answers for Bundle {
+impl<H: Health> Answers for Bundle<H> {
     fn block(
         &self,
         _block: &suzatary_base::answer::Renderable,
@@ -1072,7 +1083,10 @@ fn every_stage(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
 
 /// Two proposals filed in conversation `id`, the first given a check over nothing past the door
 /// that would refuse it: the unreadable one's id, then the standing one's.
-fn with_an_unreadable_proposal(bundle: &Bundle, id: &ConversationId) -> (ProposalId, ProposalId) {
+fn with_an_unreadable_proposal(
+    bundle: &Bundle<Faulty>,
+    id: &ConversationId,
+) -> (ProposalId, ProposalId) {
     use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_inbox::secretary::responded::Responded;
@@ -1341,7 +1355,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
 #[test]
 fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable() {
     let root = scratch("unreadable");
-    let bundle = Bundle::over(six_todo_chain(&root), now());
+    let bundle = Bundle::holding(six_todo_chain(&root), now(), InMemory::faulty());
     let id = suzatary_base::conversation_id::DEFAULT.clone();
     let (bad_id, good_id) = with_an_unreadable_proposal(&bundle, &id);
     let deployment = deployment();
@@ -1679,7 +1693,8 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     ]
 }
 
-/// A digest history whose read left an object out: every sweep over it refuses.
+/// A digest history whose read left an object out: every sweep over it refuses. It holds no
+/// object, so `verify` has nothing to check.
 struct LeftOut;
 
 impl suzatary_store::store::Reads<suzatary_digest::secretary::digest_event::DigestEvent>

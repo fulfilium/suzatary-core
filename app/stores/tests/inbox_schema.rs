@@ -285,7 +285,7 @@ proptest! {
 fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
     use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
     use suzatary_store::store::Prodrome as _;
-    use suzatary_stores::stores::InMemory;
+    use suzatary_stores::stores::{Faulty, InMemory};
 
     let checked = responded(1, Responded::Checked(()));
 
@@ -299,7 +299,7 @@ fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
 
     let first = mk_sealed(None, event(0, Said::Asked(Box::new(asked()))));
     let second = mk_sealed(Some(seal_hash(&first)), checked);
-    let held = InMemory::<InboxEvent>::default();
+    let held = InMemory::<InboxEvent, Faulty>::faulty();
     held.accept(&[first, second].map(|object| (seal_hash(&object), canonical_envelope(&object))))
         .expect("taken in whole");
 
@@ -331,7 +331,7 @@ fn one_unreadable_proposal_leaves_every_other_tappable() {
     use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
     use suzatary_inbox::secretary::inbox::Unchecked;
     use suzatary_store::store::Prodrome as _;
-    use suzatary_stores::stores::InMemory;
+    use suzatary_stores::stores::{Faulty, InMemory};
 
     let other = Asked {
         proposal: Proposal::Email(Draft {
@@ -363,7 +363,7 @@ fn one_unreadable_proposal_leaves_every_other_tappable() {
         );
         objects.push((seal_hash(&object), canonical_envelope(&object)));
     }
-    let held = InMemory::<InboxEvent>::default();
+    let held = InMemory::<InboxEvent, Faulty>::faulty();
     held.accept(&objects).expect("taken in whole");
 
     let fold = inbox::fold(&held).expect("the inbox reads");

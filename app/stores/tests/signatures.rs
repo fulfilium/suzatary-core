@@ -11,7 +11,7 @@ use suzatary_record::record::TodoEvent;
 use suzatary_signatures::signatures::*;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Prodrome, Signing, sign};
-use suzatary_stores::stores::InMemory;
+use suzatary_stores::stores::{Health, InMemory};
 
 fn key(byte: char) -> Secret {
     Secret::new(&byte.to_string().repeat(64)).expect("a seed")
@@ -44,38 +44,37 @@ fn done(todo: &str, by: &str) -> TodoEvent {
     mk_completed(todo, at, by, "").expect("an event")
 }
 
-fn dag(store: &InMemory<TodoEvent>) -> Dag<TodoEvent> {
+fn dag<H: Health>(store: &InMemory<TodoEvent, H>) -> Dag<TodoEvent> {
     store.objects().expect("reads").into_iter().collect()
 }
 
-fn trust_of(store: &InMemory<TodoEvent>) -> Trust {
+fn trust_of<H: Health>(store: &InMemory<TodoEvent, H>) -> Trust {
     Trust::of(&dag(store), &roots())
 }
 
 /// `event` appended to `store` and signed by `by`, as a `Signing` store does it.
-fn signed(store: &InMemory<TodoEvent>, by: &Secret, event: TodoEvent) -> Hash {
+fn signed<H: Health>(store: &InMemory<TodoEvent, H>, by: &Secret, event: TodoEvent) -> Hash {
     let name = store.append(event).expect("appends");
     sign(store, by, &name).expect("signed");
     name
 }
 
 /// The registers' key of the store's one prodrome.
-fn home(store: &InMemory<TodoEvent>) -> prodrome_core::registers::Genesis {
+fn home<H: Health>(store: &InMemory<TodoEvent, H>) -> prodrome_core::registers::Genesis {
     let dag = dag(store);
     let genesis = dag.geneses().into_iter().next().expect("begun");
     dag.key(&genesis)
 }
 
-/// A store begun, with one write in it so its genesis exists.
-fn begun() -> InMemory<TodoEvent> {
-    let store = InMemory::default();
-    store.append(done("first", "ada")).expect("begins");
+/// `store` begun by a write of an actor who never holds a key, so its genesis exists.
+fn begun<H: Health>(store: InMemory<TodoEvent, H>) -> InMemory<TodoEvent, H> {
+    store.append(done("first", "scene")).expect("begins");
     store
 }
 
 #[test]
 fn a_key_the_root_registered_proves_what_it_signs() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
     let written = signed(&store, &phone, done("alpha", "ada"));
@@ -90,7 +89,7 @@ fn a_key_the_root_registered_proves_what_it_signs() {
 
 #[test]
 fn an_unsigned_object_is_unsigned_and_a_forged_one_forged() {
-    let store = begun();
+    let store = begun(InMemory::faulty());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
     let bare = store.append(done("alpha", "ada")).expect("appends");
@@ -111,7 +110,7 @@ fn an_unsigned_object_is_unsigned_and_a_forged_one_forged() {
 
 #[test]
 fn an_untrusted_key_proves_nothing_until_the_root_registers_it() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let phone = key('1');
     let written = signed(&store, &phone, done("alpha", "ada"));
     assert_eq!(
@@ -141,7 +140,7 @@ fn an_untrusted_key_proves_nothing_until_the_root_registers_it() {
 
 #[test]
 fn a_key_proves_only_for_the_actor_it_was_registered_to() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
     let theirs = signed(&store, &phone, done("alpha", "triage"));
@@ -153,7 +152,7 @@ fn a_key_proves_only_for_the_actor_it_was_registered_to() {
 
 #[test]
 fn a_revoked_key_proves_what_it_signed_before_and_nothing_after() {
-    let store = begun();
+    let store = begun(InMemory::faulty());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
     let before = signed(&store, &phone, done("alpha", "ada"));
@@ -180,7 +179,7 @@ fn a_revoked_key_proves_what_it_signed_before_and_nothing_after() {
 /// every other that still trusts it, and nothing is written where it already is.
 #[test]
 fn a_revocation_reaches_every_chain_or_is_completed() {
-    let (life, project) = (begun(), begun());
+    let (life, project) = (begun(InMemory::default()), begun(InMemory::default()));
     let phone = key('1');
     for chain in [&life, &project] {
         trust(chain, &root(), &actor("ada"), &phone.public()).expect("trusted");
@@ -212,7 +211,7 @@ fn a_revocation_reaches_every_chain_or_is_completed() {
 
 #[test]
 fn history_beneath_the_epoch_predates_signatures_and_nothing_after_it_does() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let earlier = store.append(done("alpha", "ada")).expect("appends");
     trust(&store, &root(), &actor("ada"), &root().public()).expect("registered");
     epoch(&store, &root()).expect("the epoch");
@@ -281,7 +280,7 @@ fn signer() -> impl Strategy<Value = Signer> {
     ]
 }
 
-fn held(store: &InMemory<TodoEvent>, object: &Envelope<TodoEvent>) {
+fn held<H: Health>(store: &InMemory<TodoEvent, H>, object: &Envelope<TodoEvent>) {
     store
         .accept(&[(
             prodrome_core::event::seal_hash(object),
@@ -300,7 +299,7 @@ proptest! {
     /// (here, the store's own and a reversed copy) answer alike.
     #[test]
     fn why_is_none_exactly_where_the_proof_proves(signers in proptest::collection::vec(signer(), 1..8)) {
-        let store = begun();
+        let store = begun(InMemory::faulty());
         let (registered, stranger, late) = (key('1'), key('2'), key('3'));
         trust(&store, &root(), &actor("ada"), &registered.public()).expect("registered");
         trust(&store, &root(), &actor("ada"), &late.public()).expect("registered");
@@ -348,7 +347,10 @@ proptest! {
 #[test]
 fn a_signing_store_writes_nothing_unsigned() {
     let phone = key('1');
-    let store = Signing::new(begun(), suzatary_store::store::Signer::Key(key('1').into()));
+    let store = Signing::new(
+        begun(InMemory::default()),
+        suzatary_store::store::Signer::Key(key('1').into()),
+    );
     trust(store.inner(), &root(), &actor("ada"), &phone.public()).expect("registered");
     let written = store.append(done("alpha", "ada")).expect("appends");
     let count = store.objects().expect("reads").len();
@@ -366,7 +368,7 @@ fn a_signing_store_writes_nothing_unsigned() {
 /// unsigned write after the epoch.
 #[test]
 fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_finding() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let earlier = store.append(done("alpha", "ada")).expect("appends");
     let keys = BoxKeys::of(
         &root().public(),
@@ -382,10 +384,7 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
         naming: suzatary_base::chains::Naming::AsActs,
     };
     adopt(&store, &keys, &chain).expect("adopted");
-    let findings = |store: &InMemory<TodoEvent>| {
-        let dag = dag(store);
-        since_epoch(&dag, dag.verify(&chain.untrusted))
-    };
+    let findings = |store: &InMemory<TodoEvent>| findings_of(&dag(store), &chain.untrusted);
     assert!(findings(&store).is_empty(), "{:?}", findings(&store));
     let reading = trust_of(&store);
     assert_eq!(reading.provenance(&earlier), Some(Provenance::Predates));
@@ -427,7 +426,7 @@ fn chain_trusting(untrusted: Untrusted) -> suzatary_base::chains::ChainPolicy {
 #[test]
 fn adoption_registers_each_actor_with_the_key_that_signs_its_writes() {
     for untrusted in [Untrusted::none(), Untrusted::of([actor("triage")])] {
-        let store = begun();
+        let store = begun(InMemory::faulty());
         let keys = box_keys();
         let chain = chain_trusting(untrusted);
         adopt(&store, &keys, &chain).expect("adopted");
@@ -455,7 +454,7 @@ fn adoption_registers_each_actor_with_the_key_that_signs_its_writes() {
                 key: keys.root().public()
             })
         );
-        let findings = since_epoch(&dag(&store), dag(&store).verify(&chain.untrusted));
+        let findings = findings_of(&dag(&store), &chain.untrusted);
         assert!(
             matches!(
                 findings.as_slice(),
@@ -486,7 +485,7 @@ fn a_writer_signs_as_each_actor_with_the_key_adoption_registered() {
 /// before stays proven. Revoked twice, it is revoked once.
 #[test]
 fn revoking_a_key_for_one_actor_leaves_its_other_actors_trusted() {
-    let store = begun();
+    let store = begun(InMemory::faulty());
     let keys = box_keys();
     for who in ["ada", "assistant", "triage"] {
         trust(&store, keys.root(), &actor(who), &keys.root().public()).expect("registered");
@@ -539,7 +538,7 @@ fn revoking_a_key_for_one_actor_leaves_its_other_actors_trusted() {
 /// asked again do nothing.
 #[test]
 fn adopting_again_and_repairing_converge_on_custody_and_then_do_nothing() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let keys = box_keys();
     let chain = chain_trusting(Untrusted::none());
     for who in &chain.roster {
@@ -613,12 +612,16 @@ fn numbered(n: u8) -> Secret {
 }
 
 /// `object` held in `store` and signed by `by`.
-fn written_by(store: &InMemory<TodoEvent>, by: &Secret, object: &Envelope<TodoEvent>) {
+fn written_by<H: Health>(
+    store: &InMemory<TodoEvent, H>,
+    by: &Secret,
+    object: &Envelope<TodoEvent>,
+) {
     held(store, object);
     sign(store, by, &prodrome_core::event::seal_hash(object)).expect("signed");
 }
 
-fn taken(store: &InMemory<TodoEvent>, step: Step, n: usize) {
+fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
     let genesis = home(store).expect("a prodrome begun with a genesis");
     match step {
         Step::Write(by) => {
@@ -689,7 +692,7 @@ proptest! {
         steps in proptest::collection::vec(step(), 1..24),
         capacity in prop_oneof![1..4_usize, Just(KEPT_CHECKS)],
     ) {
-        let store = begun();
+        let store = begun(InMemory::faulty());
         let warm = prodrome_core::sign::Checks::new(capacity);
         for (n, step) in steps.iter().enumerate() {
             taken(&store, *step, n);
@@ -717,7 +720,7 @@ proptest! {
 /// two asks is refused on the second, since the revocation is an object and moves the heads.
 #[test]
 fn a_key_revoked_between_two_asks_is_refused_on_the_second() {
-    let store = begun();
+    let store = begun(InMemory::default());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
     let request = phone.sign(&prodrome_core::memo::name(b"a request", []));

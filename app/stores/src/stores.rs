@@ -1,7 +1,6 @@
 //! Every store the data tree keeps, declared once in `stores!`: a new store is one row and its
 //! schema, and the interpreters, the fsck, the routes and the guards read the rows.
 
-// The conversations held in memory, beside the store they hold: test support, never production.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/conversations.rs"]
 pub mod conversations;
@@ -30,14 +29,13 @@ use suzatary_topics::secretary::topics::reading::{AliasEvent, MembershipEvent};
 
 pub use database::Database;
 #[cfg(any(test, feature = "nothing"))]
-pub use in_memory::InMemory;
+pub use in_memory::{Faulty, Health, Healthy, InMemory};
 #[cfg(any(test, feature = "nothing"))]
 pub use scene::{phone_trusted, scene};
 
 /// A store a tab writes, by its schema: the rule its row names, which the box takes a tab's post by
 /// after the rule every such store shares.
 pub trait Written: Store {
-    /// Its rule.
     type Rule: Admission<Schema = Self>;
 }
 
@@ -78,7 +76,6 @@ pub enum Writer {
 
 /// A schema kept as one of this application's prodromes: its row, its hold and its label.
 pub trait Store: Schema {
-    /// Its row.
     const KIND: Kind;
     /// What serialises its writers.
     const HOLD: Hold;
@@ -102,7 +99,6 @@ macro_rules! stores {
             /// Every store, in the order the fsck reports them.
             pub const ALL: &'static [Kind] = &[$(Kind::$variant),*];
 
-            /// Its name.
             #[must_use]
             pub const fn name(self) -> &'static str {
                 match self {
@@ -110,7 +106,6 @@ macro_rules! stores {
                 }
             }
 
-            /// Where its files go.
             #[must_use]
             pub const fn tier(self) -> Tier {
                 match self {
@@ -118,7 +113,6 @@ macro_rules! stores {
                 }
             }
 
-            /// What its directory holds.
             #[must_use]
             pub const fn files(self) -> Files {
                 match self {
@@ -126,7 +120,6 @@ macro_rules! stores {
                 }
             }
 
-            /// Who writes its objects.
             #[must_use]
             pub const fn writer(self) -> Writer {
                 match self {
