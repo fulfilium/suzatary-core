@@ -50,11 +50,17 @@ export namespace linesync {
     readonly lacking: (scope: lines.Scope) => number
     // Which blocks the device may keep, decided against every frame on it (`rendered.Admit`).
     readonly admit: rendered.Admit
-    // A move of what this tab wrote, its `delta` the device's record of those own lines: its moves heard.
+    // A move of what this tab wrote, its `delta` the device's record of those own lines, kept under the device's lock:
+    // its moves heard.
     readonly ownStepped: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
-    // The device's row of own lines read again into the core, after another tab of the device kept a line in it.
-    // The device's row read again, and whether it brought anything this tab did not hold.
+    // The same keep, by a caller that holds the device's lock (a seal).
+    readonly ownKeep: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
+    // The device's row read again into the core and settled, in this tab's lane, after another tab of the device
+    // kept a line in it: whether it brought anything this tab did not hold.
     readonly ownHeard: () => Promise<boolean>
+    // The row read into the core alone, its records then its acts, by a caller that holds the device's lock (a seal),
+    // outside this tab's lane: it waits for nothing the lane runs (a pull over a slow network), and settles nothing.
+    readonly ownNow: () => Promise<void>
   }
 
   const NAME = "lines"
@@ -243,48 +249,83 @@ export namespace linesync {
       setTimeout(() => void inTurn(purge), 0)
     }
 
-    type Taken = { hash: string; literal: string; line: boolean; free: boolean }
-    const TakenOf = d.obj<Taken>({ hash: d.str, literal: d.str, line: d.bool, free: d.bool })
-    const Took = d.json(
-      d.obj<{ moved: unknown; unread: string[]; taken: Taken[]; fresh: number }>({ moved: d.unknown, unread: d.arr(d.str), taken: d.arr(TakenOf), fresh: d.num }),
+    type Taken = { hash: string; literal: string; line: boolean }
+    const TakenOf = d.obj<Taken>({ hash: d.str, literal: d.str, line: d.bool })
+    const Took = d.json(d.obj<{ moved: unknown; unread: string[]; fresh: number }>({ moved: d.unknown, unread: d.arr(d.str), fresh: d.num }))
+    const Releasable = d.json(d.obj<{ free: string[]; refused: string[] }>({ free: d.arr(d.str), refused: d.arr(d.str) }))
+    // What a reading of the row moved, to publish once: the conversations its records and its acts moved, and whether
+    // it brought a record this tab did not hold, or an answer above the one it held.
+    type Reading = { readonly moved: readonly string[]; readonly fresh: boolean }
+    const NONE: Reading = { moved: [], fresh: false }
+    // This tab's core as the row sees it: the records taken, then the acts, in one turn.
+    const core: ownlines.Core<Reading> = {
+      take: (records, acted) => {
+        const moved: string[] = []
+        let fresh = false
+        if (records.length > 0) {
+          const said = Took(held.take_own(JSON.stringify(records)))
+          if (said.type === "Error") throw new CoreError(`own lines taken: unexpected shape (${said.e})`)
+          moved.push(JSON.stringify(said.v.moved))
+          fresh = said.v.fresh > 0
+          const unread = said.v.unread
+          if (unread.length > 0) fx.told(`own/${KEPT}`, replicasync.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
+        }
+        // The refusals the person acted on, on any tab of the device, whose words a reading no longer offers.
+        if (acted.size > 0) moved.push(held.acted(JSON.stringify([...acted])))
+        return { moved, fresh }
+      },
+      releasable: told => {
+        const released = Releasable(held.releasable(JSON.stringify([...told])))
+        if (released.type === "Error") throw new CoreError(`own lines to let go: unexpected shape (${released.e})`)
+        return { free: new Set(released.v.free), refused: released.v.refused }
+      },
+    }
+    // What is said of the acts' row and of a cleanup, each once per change, like a purge's failure.
+    const saying = (reader: string, left: (why: string) => excluded.Left) => {
+      let said: string | null = null
+      return (why: string | null): void => {
+        if (why === said) return
+        said = why
+        fx.told(reader, why === null ? excluded.NOTHING : left(why))
+      }
+    }
+    const actsUnread = saying("own/acted", why => replicasync.unread(NAME, `the refusals acted on, kept on this device, do not read (${why}); they are shown again until it does`))
+    const cleanupFailed = saying("own/settle", why =>
+      excluded.left(excluded.NONE, [], [{ chain: KEPT, why: `this device could not let go of the own lines it no longer needs (${why}); it tries again at the next sync`, cure: "None" }]),
     )
-    // Each own line the box took: its print kept as content, and its record let go once the landed rows hold its keys.
-    const settle = async (taken: readonly Taken[]): Promise<void> => {
-      if (taken.length === 0) return
-      await content.keepOwn(taken.filter(t => t.line))
-      const free = new Set(taken.filter(t => t.free).map(t => t.literal))
-      if (free.size > 0) await ownlines.settled(free)
+    // A reading's moves heard together; a row that does not read said, the records' and the acts' each.
+    const published = (reading: lo.Settled<ownlines.Reading<Reading>>): Reading => {
+      if (reading.type === "Error") {
+        fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${reading.e}); they stay on the device untouched`))
+        return NONE
+      }
+      actsUnread(reading.v.acts)
+      const all = reading.v.taken.moved.map(movedOf)
+      if (all.length > 0) fx.moved(all.some(m => m === "All") ? "All" : [...new Set(all.flatMap(m => (m === "All" ? [] : m)))])
+      return reading.v.taken
     }
-    // After a landing, which may bring a taken line's keys.
-    const settleLanded = async (): Promise<void> => {
-      if (!idb.available()) return
-      const taken = d.json(d.arr(TakenOf))(held.own_taken())
-      if (taken.type === "Val") await settle(taken.v)
-    }
-    // What this tab wrote and the box has not served back, read from the device's row of own lines into the core: on
-    // every load, whatever form the log was of, so no unsent line is dropped with it.
-    // The device's row of own lines read into the core: whether it brought a record this tab did not hold, or an answer
-    // above the one it held.
+    // The device's row of own lines read into the core and settled, whole under the device's lock: on every load,
+    // whatever form the log was of, so no unsent line is dropped with it; on a landing, which may bring a taken line's
+    // keys; and on another tab's wake. Its reading is published whatever the cleanup did, and a cleanup that failed is
+    // said, and done at the next settle. Whether it brought anything new.
     const ownRead = async (): Promise<boolean> => {
       if (!idb.available()) return false
-      const kept = await ownlines.kept()
-      if (kept.type === "Error") {
-        fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${kept.e}); they stay on the device untouched`))
-        return false
+      const keepTaken = async (): Promise<void> => {
+        const taken = d.json(d.arr(TakenOf))(held.own_taken())
+        if (taken.type === "Val") await content.keepOwn(taken.v.filter(t => t.line))
       }
-      if (kept.v.length === 0) return false
-      const took = held.take_own(JSON.stringify(kept.v))
-      const said = Took(took)
-      if (said.type === "Error") throw new CoreError(`own lines taken: unexpected shape (${said.e})`)
-      await settle(said.v.taken)
-      moved(JSON.stringify(said.v.moved))
-      const unread = said.v.unread
-      if (unread.length > 0) fx.told(`own/${KEPT}`, replicasync.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
-      return said.v.fresh > 0
+      const settled = await ownlines.settle(core, keepTaken)
+      cleanupFailed(settled.cleanup)
+      return published(settled.reading).fresh
+    }
+    // The row read into the core alone, by a seal under its lock.
+    const ownNow = async (): Promise<void> => {
+      if (!idb.available()) return
+      published(await ownlines.read(core))
     }
     // A move of the own lines kept on the device before it is heard: a write the device could not keep is said, since a
     // reload would forget it.
-    const ownStepped = async (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> => {
+    const ownKeep = async (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> => {
       const [delta, said] = [step.delta, step.moved]
       step.free()
       const records = ownlines.ofDelta(delta)
@@ -295,6 +336,8 @@ export namespace linesync {
       }
       moved(said)
     }
+    const ownStepped = (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> =>
+      ownlines.device(ownlines.LOCK, () => ownKeep(step))
 
     // One read of the device's log per page: the core loaded from it, before anything reads the lines.
     const restored = once.of(async (): Promise<void> => {
@@ -375,7 +418,7 @@ export namespace linesync {
               landing.done("Landed")
               await landedNow()
               await purge()
-              await settleLanded()
+              await ownRead()
             },
             held: () => [held.since(), held.heads()],
           })
@@ -457,7 +500,9 @@ export namespace linesync {
         behind: () => inTurn(caughtUp),
       },
       ownStepped,
+      ownKeep,
       ownHeard: () => inTurn(ownRead),
+      ownNow,
     }
   }
 }

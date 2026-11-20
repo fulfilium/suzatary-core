@@ -1224,8 +1224,12 @@ app.scene("a question whose page closed just after Send with no other tab open i
   // This tab runs no app now, so the only one is the one that sends and closes.
   await app.page.navigate("about:blank");
   const other = await app.tab();
+  await other.attachWorkers();
   await other.navigate(`${WRITE_BASE}/#/secretary/${id}`);
   await other.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  // The hand-over's posts fail, as offline, so it never reaches the box before the page closes: only the next load's
+  // can take the line. The reads still go, so nothing the seal waits on is held back.
+  await other.block(["*/api/stores/lines/objects*"]);
   await other.type(".composebox", said);
   await other.click(".composesend");
   await other.waitFor(`document.querySelector(".composebox").value === ""`, { timeout: 4000 });

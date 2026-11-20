@@ -844,12 +844,14 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
             &format!("{base}/api/stores/topics/objects"),
             &keyed
         )),
-        400
+        422,
+        "the post's own fault, in this build's word for it"
     );
 }
 
 /// Keys travel beside the lines they open and nothing else: a post whose `keys` names its
-/// signature object, not a line, is refused whole, and no key of it is kept.
+/// signature object, not a line, is refused whole (422, the post's own fault), and no key of it is
+/// kept.
 #[test]
 fn a_key_beside_anything_but_a_posted_line_is_refused() {
     let base = writing("stores-keys-beside");
@@ -878,7 +880,7 @@ fn a_key_beside_anything_but_a_posted_line_is_refused() {
     let mut answer = common::act(&format!("{base}/api/stores/lines/objects"), &body);
     let status = common::status(&answer);
     let said = common::body_json(&mut answer);
-    assert_eq!(status, 400, "{said}");
+    assert_eq!(status, 422, "{said}");
 }
 
 /// A post this box's build does not read is another build's, never the post's fault: a body of
@@ -906,4 +908,50 @@ fn a_post_of_another_build_names_the_build() {
     let said = common::body_json(&mut answer);
     assert_eq!(status, 409, "{said}");
     assert!(said.to_string().contains("another build"), "{said}");
+}
+
+/// No fault of a post to a store a tab writes is answered with a status the page's table
+/// (`written.failed`) reads as for later: a body over the cap is 413 and every other fault of the
+/// post 422, so the page refuses that piece for good and posts the ones behind it. A 400 would
+/// be read as another build's, and the piece posted again for ever.
+#[test]
+fn every_fault_of_a_post_is_413_or_422() {
+    let base = writing("stores-faults");
+    let url = format!("{base}/api/stores/lines/objects");
+    let objects = |n: usize| serde_json::json!(vec!["Change(junk)"; n]);
+    let faults = [
+        (
+            "over the cap",
+            serde_json::json!({ "objects": [ "x".repeat(suzatary_api::routes::MAX_POSTED_BYTES) ], "since": "", "keys": {} }),
+            413,
+        ),
+        ("an array", serde_json::json!([]), 422),
+        ("a string", serde_json::json!("post"), 422),
+        (
+            "a bad frontier",
+            serde_json::json!({ "objects": [], "since": "not a frontier", "keys": {} }),
+            422,
+        ),
+        (
+            "a key that is no key",
+            serde_json::json!({ "objects": [], "since": "", "keys": { "0".repeat(64): ["zz"] } }),
+            422,
+        ),
+        (
+            "a key beside no line",
+            serde_json::json!({ "objects": [], "since": "", "keys": { "0".repeat(64): ["0".repeat(64)] } }),
+            422,
+        ),
+        (
+            "too many objects",
+            serde_json::json!({ "objects": objects(suzatary_api::routes::MAX_POSTED + 1), "since": "", "keys": {} }),
+            422,
+        ),
+    ];
+    for (fault, body, status) in faults {
+        let mut answer = common::act(&url, &body);
+        let got = common::status(&answer);
+        let said = common::body_json(&mut answer);
+        assert_eq!(got, status, "{fault}: {said}");
+    }
 }

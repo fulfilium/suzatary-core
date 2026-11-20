@@ -80,6 +80,7 @@ fn an_act_runs_once_until_it_is_answered() {
             offsets: Vec::new(),
             wide: false,
             categories: vec!["home".to_owned(), "work".to_owned()],
+            clock: None,
         },
     });
     let pair = || Act::Pair {

@@ -158,6 +158,10 @@ proptest! {
         prop_assert_eq!(refused_now, taken_back);
     }
 
+    /// Every move is a join, so moves taken in any order and any number of times hold the same
+    /// writes; and a move already taken in is no news (`Writes::moves` is 0), which is all a tab
+    /// woken by another tab's keep reads before it hands over, so two tabs never wake each other
+    /// over one refused line for ever.
     #[test]
     fn law_the_moves_of_the_writes_are_joins(
         parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 10), 1..8),
@@ -181,6 +185,11 @@ proptest! {
         let held: BTreeMap<Hash, Answer> = made.iter().map(|o| (o.node.name.clone(), o.answer.clone())).collect();
         let again: BTreeMap<Hash, Answer> = shuffled.iter().map(|o| (o.node.name.clone(), o.answer.clone())).collect();
         prop_assert_eq!(held, again);
+        for m in &moves {
+            prop_assert_eq!(shuffled.moves(m), 0, "a move taken in already is no news");
+        }
+        let news = Writes::<Bare>::default().moves(&moves[0]);
+        prop_assert_eq!(news, moves[0].len(), "every write is news to a tab that holds none");
     }
 }
 

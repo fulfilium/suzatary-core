@@ -7,7 +7,7 @@
 // taken), so two tabs keeping their moves in either order keep the same row.
 
 import type { Rows } from "./objects"
-import { alterRow, holdRow, heldRow } from "./objects"
+import { alterRow, holdRow, heldRow, heldRows } from "./objects"
 import lo from "../algebra/lo"
 import idb from "../app/idb"
 import d from "../wire/decoder"
@@ -86,7 +86,7 @@ export namespace ownlines {
     return row.type === "Held" ? lo.val(row.v.records) : row.type === "Absent" ? lo.val([]) : lo.error(row.why)
   }
 
-  // The prints of the refused lines the person was told of, with their words: a row of its own beside the records, a
+  // The prints of the refused lines the person was told of: a row of its own beside the records, a
   // join of sets, so two tabs telling the same refusal keep it once.
   type Seen = { readonly literals: readonly string[] }
   const SEEN = "own/seen"
@@ -117,25 +117,116 @@ export namespace ownlines {
     return new Set(row.type === "Held" ? row.v.literals : [])
   }
 
-  // Every record the box answered for good let go once a load has read it back, as far as nothing is lost: a refused
-  // one only once the person was told of it with its words (`seen`), which until then the record alone keeps; a taken
-  // one only where `free` names its print, since its record holds its keys until the device's landed rows do. What may
-  // still be handed over stays.
+  // The names of the refused lines whose words the person acted on: dismissed, or taken back into the composer. A row
+  // of its own, a join of sets as `own/seen` is; telling a refusal is one view of it and acting is what lets it go.
+  const ACTED = "own/acted"
+
+  // The person acted on the refusals of the own lines `names`: a join of names, so two tabs acting on one refusal act
+  // once. A move wakes the other tabs as a keep does, so each reads the set. It keeps each line's name (64 hex digits),
+  // one for every refusal the person acted on, which a person makes a handful of, and is never trimmed: a tab still
+  // holding a record another tab let go reads its name to hide it. A write the device could not keep is answered.
+  export const acted = async (names: readonly string[]): Promise<lo.Settled<null>> => {
+    const done = await actedOn()
+    if (names.every(n => done.has(n))) return lo.val(null)
+    const kept = await holdRow(SEEN_ROWS, ACTED, { type: "Join", replica: { literals: [...names] } })
+    if (kept.type === "Error") return kept
+    channel()?.postMessage(null)
+    return lo.val(null)
+  }
+
+  // How long a tab waits for the device's lock before it goes on alone: a holder frozen (a tab put to sleep mid-seal)
+  // never lets it go, and a Send must not wait for it.
+  export const LOCK_MS = 2000
+
+  // `f` under the device's lock `name` where the browser has Web Locks (they reach workers). Where it has none, or the
+  // lock is not granted within `ms`, `f` runs alone, and what it orders is this tab's alone: two tabs may seal two lines
+  // that rest on nothing of each other. `f` waits for nothing but the device's rows, so the lock is never held across
+  // the network.
+  export const device = async <A>(name: string, f: () => Promise<A>, ms: number = LOCK_MS): Promise<A> => {
+    if (typeof navigator === "undefined" || !("locks" in navigator)) return f()
+    let ran = false
+    const run = (): Promise<A> => ((ran = true), f())
+    try {
+      return await navigator.locks.request(`suzatary/${name}`, { signal: AbortSignal.timeout(ms) }, run)
+    } catch (x: unknown) {
+      if (ran) throw x
+      return run()
+    }
+  }
+
+  // The names of every refused line the person acted on.
+  export const actedOn = async (): Promise<ReadonlySet<string>> => {
+    const row = await heldRow(SEEN_ROWS, ACTED)
+    return new Set(row.type === "Held" ? row.v.literals : [])
+  }
+
+  // What a tab's core is to the row: it takes the records and the acts the row holds, in that order and in one turn,
+  // answering what to publish (`R`), and it alone says which records may go (`Lines.releasable`), since it alone knows
+  // what rests on what: their prints, and the names of the refused ones among them, joined to the acted ones.
+  export type Released = { readonly free: ReadonlySet<string>; readonly refused: readonly string[] }
+  export type Core<R> = {
+    readonly take: (records: readonly Kept[], acted: ReadonlySet<string>) => R
+    readonly releasable: (told: ReadonlySet<string>) => Released
+  }
+
+  // The lock every read, decision and write of the row is made under.
+  export const LOCK = NAME
+
+  // A reading: what `core.take` answered, and why the acts' row does not read, if it does not (then no act is read).
+  export type Reading<R> = { readonly taken: R; readonly acts: string | null }
+
+  // READING: the row read into `core`, its records then the acts, or why the records do not read. The caller holds
+  // the lock: a seal reads under its own, and `settle` under its. Both rows in one transaction, so an act kept between
+  // two reads is never read without the records it was kept beside.
+  export const read = async <R>(core: Core<R>): Promise<lo.Settled<Reading<R>>> => {
+    const t0 = performance.now()
+    const [records, done] = await heldRows({ rows: ROWS, name: NAME }, { rows: SEEN_ROWS, name: ACTED })
+    if (records.type === "Unreadable") return lo.error(records.why)
+    const t1 = performance.now()
+    const taken = core.take(records.type === "Held" ? records.v.records : [], new Set(done.type === "Held" ? done.v.literals : []))
+    performance.measure("row:read", { start: t0, end: t1 })
+    performance.measure("row:take", { start: t1, end: performance.now() })
+    return lo.val({ taken, acts: done.type === "Unreadable" ? done.why : null })
+  }
+
+  // A settle: its reading, published whatever the cleanup did, and why the cleanup failed, if it did; what it did not let
+  // go is let go at the next settle.
+  export type Settling<R> = { readonly reading: lo.Settled<Reading<R>>; readonly cleanup: string | null }
+
+  // SETTLING, whole under the device's lock: the row read into `core`, then the cleanup: `before` (the taken lines'
+  // prints kept for reading), the refused names it lets go joined to the acted ones, and the records the core names let go. A
+  // record another tab kept is in the core before it decides, so nothing a kept line rests on goes.
+  export const settle = <R>(core: Core<R>, before: () => Promise<void>): Promise<Settling<R>> =>
+    device(LOCK, async () => {
+      const reading = await read(core)
+      if (reading.type === "Error") return { reading, cleanup: null }
+      const cleanup = await letGo(core, before).catch((e: unknown) => lo.reason(e))
+      return { reading, cleanup }
+    })
+
+  const letGo = async <R>(core: Core<R>, before: () => Promise<void>): Promise<string | null> => {
+    await before()
+    const released = core.releasable(await told())
+    if (released.refused.length > 0) {
+      const kept = await holdRow(SEEN_ROWS, ACTED, { type: "Join", replica: { literals: [...released.refused] } })
+      // Not let go unless joined to the acted ones: a tab still holding one unsent would post it again.
+      if (kept.type === "Error") return `the refusals it lets go were not joined to the acted ones (${kept.e})`
+    }
+    const gone = await settled(released.free)
+    return gone.type === "Error" ? gone.e : null
+  }
+
+  // The records `free` names let go, and the seen prints of records let go, which are read by nothing; nothing written
+  // when it names none.
   export const settled = async (free: ReadonlySet<string>): Promise<lo.Settled<null>> => {
-    const said = await told()
-    const done = await alterRow(ROWS, NAME, row => ({
-      records: row.records.filter(r => {
-        const climbed = rank(r.answer)
-        return climbed < 2 || (climbed === 2 && !said.has(r.literal)) || (climbed === 3 && !free.has(r.literal))
-      }),
-    }))
-    // The seen prints of records let go are read by nothing.
+    if (free.size === 0) return lo.val(null)
+    const trimmed = await alterRow(ROWS, NAME, row => ({ records: row.records.filter(r => !free.has(r.literal)) }))
     const held = await kept()
     if (held.type === "Val") {
       const left = new Set(held.v.map(r => r.literal))
       await alterRow(SEEN_ROWS, SEEN, row => ({ literals: row.literals.filter(l => left.has(printOf(l))) }))
     }
-    return done
+    return trimmed
   }
 
   // The records a move of the own lines answered (its `delta`, UTF-8 JSON).

@@ -28,6 +28,10 @@ pub struct Context {
     pub wide: bool,
     /// This deployment's categories, in its order.
     pub categories: Vec<String>,
+    /// How many seconds this device's clock reads ahead of the box's (behind where negative), as
+    /// the last answer said; none before any did.
+    #[ts(type = "number | null")]
+    pub clock: Option<i64>,
 }
 
 /// What a login that may not write is told where a box to write in would be.
@@ -92,7 +96,8 @@ pub enum Effect<H, A, S = Never> {
         #[ts(type = "unknown")]
         value: serde_json::Value,
     },
-    /// Each frame as `Input::Heard`, and each opening as `Input::Opened`.
+    /// Each frame as `Input::Heard`, each opening as `Input::Opened`, and its giving up as
+    /// `Input::Lost`.
     Listen {
         ask: S,
         path: String,
@@ -197,6 +202,9 @@ pub(crate) enum Core {
     /// A line sealed as this tab's and handed to the box (`Line`): answered `{name, conversation}`
     /// once the box holds a line that begins a conversation alone, and at once for every other.
     Line { line: Sealing },
+    /// The person acted on the refusals of these own lines, by name (`Acted`): the device lets
+    /// their words go.
+    Acted { lines: Vec<String> },
     /// A todo's thirty days at an instant (`Thirty`).
     Thirty {
         chain: String,
@@ -495,6 +503,9 @@ pub(crate) enum Local {
     Fold,
     /// What the box has not taken of this tab's open chain (`Unsent`).
     Unsent,
+    /// Each own line refused for good, with words the person has not acted on, of a topic this
+    /// device began that the box refused (`[Waiting]`).
+    Refused,
     /// The box's `WaitingPayload`, `null` before the shell heard it.
     Waiting,
     /// A register of this device's by its key, `null` before one is kept.
@@ -532,6 +543,7 @@ pub struct LocalAnswers {
     cards: suzatary_api::wire::DrawnPayload,
     fold: Option<crate::held::Folded>,
     unsent: crate::held::Unsents,
+    refused: Vec<suzatary_topics::wire::topics::Waiting>,
     waiting: Option<suzatary_api::wire::WaitingPayload>,
     #[ts(type = "unknown")]
     kept: serde_json::Value,
@@ -823,6 +835,10 @@ pub enum Input<H, A, S = Never, B = Text> {
     Opened {
         ask: S,
     },
+    /// The stream gave up after its tries, until the network may be back.
+    Lost {
+        ask: S,
+    },
 }
 
 impl<H, A, S> Input<H, A, S, Beside> {
@@ -852,6 +868,7 @@ impl<H, A, S> Input<H, A, S, Beside> {
             },
             Input::Heard { ask, frame } => Input::Heard { ask, frame },
             Input::Opened { ask } => Input::Opened { ask },
+            Input::Lost { ask } => Input::Lost { ask },
         }
     }
 }

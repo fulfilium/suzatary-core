@@ -1257,7 +1257,7 @@ impl Model {
                 Ok(k) => self.key(k),
                 Err(_) => Vec::new(),
             },
-            Input::Opened { ask: Listen::Keys } => Vec::new(),
+            Input::Opened { ask: Listen::Keys } | Input::Lost { ask: Listen::Keys } => Vec::new(),
         }
     }
 
@@ -2386,6 +2386,7 @@ mod tests {
                 offsets: Vec::new(),
                 wide: false,
                 categories: Vec::new(),
+                clock: None,
             },
             chain: "life".to_owned(),
             title: "Todos".to_owned(),

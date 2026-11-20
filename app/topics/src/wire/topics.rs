@@ -314,8 +314,10 @@ pub struct ConversationPayload {
     pub turns: Vec<TurnRow>,
     /// The name of each row of `turns`' line, in the same order: what an erasure names.
     pub lines: Vec<String>,
-    /// Of `lines`, each this device wrote that the box has not taken yet, beside why in the box's
-    /// words: a tab's own reading alone fills it, and the box's is empty.
+    /// Each line of this conversation this device wrote that the box does not hold, beside the
+    /// box's last ruling on it: a line of `lines` drawn on its turn, one refused for good beside
+    /// the transcript, which reads without it. A tab's own reading alone fills it, and the box's is
+    /// empty.
     pub waiting: Vec<Waiting>,
     /// Every proposal whose round was kept, never windowed.
     pub proposals: Vec<ProposalRow>,
@@ -330,11 +332,77 @@ pub struct ConversationPayload {
     pub again: Option<usize>,
 }
 
-/// An own line the box has not taken yet, and why in the box's words.
+/// An own line the box does not hold, by name, and the box's last ruling on it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Waiting {
     pub line: String,
-    pub why: String,
+    pub ruling: Ruling,
+}
+
+/// The box's last ruling on a line this device wrote and the box does not hold, as a page draws
+/// it: the line stays a fact on the device whatever the ruling, and its words are said from this.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Ruling {
+    /// Not answered yet: it goes with the next hand-over.
+    Unsent,
+    /// Refused until its signer is trusted.
+    Trust,
+    /// Not taken yet, in the rule's words: posted again.
+    Later { why: String },
+    /// Refused for good, in the box's words: the conversation reads without it, and its words stay
+    /// on the device until the person acts on them.
+    Refused { why: String, words: Given },
+}
+
+/// What a line refused for good gives the person back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Given {
+    /// A question whole, as the composer holds one: its words, the references it points at, each
+    /// file's row, and each file as the upload answered it, to seal again.
+    Question {
+        text: String,
+        references: Vec<String>,
+        files: Vec<AttachmentRow>,
+        #[ts(type = "unknown[]")]
+        attachments: Vec<serde_json::Value>,
+    },
+    /// A title, taken back where a title is edited.
+    Title { title: String },
+}
+
+impl Ruling {
+    /// The wire's form of the core's ruling.
+    #[must_use]
+    pub fn of(ruling: suzatary_lines::secretary::held_replica::Ruling) -> Self {
+        use suzatary_lines::secretary::held_replica::Ruling as Core;
+        use suzatary_lines::secretary::own_line::Words;
+        match ruling {
+            Core::Unsent => Ruling::Unsent,
+            Core::Trust => Ruling::Trust,
+            Core::Later { why } => Ruling::Later { why },
+            Core::Refused { why, words } => Ruling::Refused {
+                why,
+                words: match words {
+                    Words::Question {
+                        text,
+                        references,
+                        attachments,
+                    } => Given::Question {
+                        text,
+                        references: references.iter().map(ToString::to_string).collect(),
+                        files: attachments.iter().map(AttachmentRow::from).collect(),
+                        attachments: attachments
+                            .iter()
+                            .filter_map(|a| serde_json::to_value(a).ok())
+                            .collect(),
+                    },
+                    Words::Title(title) => Given::Title { title },
+                },
+            },
+        }
+    }
 }
 
 /// Drawn with why, and nothing acts on it.

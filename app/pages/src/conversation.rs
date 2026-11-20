@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use suzatary_api::wire::Frame;
 use suzatary_base::reference::Reference;
 use suzatary_conversations::secretary::store::ConversationState;
+use suzatary_lines::secretary::skew::Skew;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_topics::wire::topics::{
-    ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Speaker, TurnGone, TurnRow,
-    VerbOutcome,
+    ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Ruling, Speaker, TurnGone,
+    TurnRow, VerbOutcome,
 };
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
@@ -25,6 +26,7 @@ use crate::composer::{self, Composer};
 use crate::intents::{Intents, Shown};
 use crate::part::Who;
 use crate::places::Place;
+use crate::refused;
 use crate::runtime::{
     self, Act, Answer, Context, Local, Outcome, Question, Reach, Said, Scroll, Secret, Window,
     answered, read,
@@ -90,6 +92,8 @@ pub enum Ask {
     },
     Forget(u64),
     Erase,
+    /// The person acted on refused own lines' words.
+    Acted,
     Card(card::Asking),
     Composer(composer::Asking),
     Slice,
@@ -164,6 +168,9 @@ pub enum Windowed {
     NotHere { lines: u32, why: String },
     /// The device holds no line of it, and the box has not said whether it holds one.
     Unheard,
+    /// A topic this device began that the box refused, in its words: its words stand on the page
+    /// that begins topics.
+    Refused { why: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -212,6 +219,14 @@ impl Landing {
     }
 }
 
+/// Whether the box can be reached, as this page's stream last said: open or still trying, or
+/// given up until the network may be back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Connection {
+    Reaching,
+    Lost,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Anchor {
     Newest,
@@ -227,6 +242,8 @@ enum Held {
     Failed(String),
     NotHere(u32, String),
     Unheard,
+    /// A topic this device began that the box refused, in its words.
+    Refused(String),
     Loaded {
         grouped: Box<Grouped>,
         problem: Option<String>,
@@ -244,6 +261,7 @@ pub struct Model {
     asked: Window,
     keep: bool,
     landing: Landing,
+    connection: Connection,
     blocks: BTreeMap<String, Reading<String>>,
     anchor: Anchor,
     held_at: Option<usize>,
@@ -284,6 +302,8 @@ pub enum Msg {
     /// The rename asked with the field's words, or let go.
     Named(Option<String>),
     Copy(String),
+    /// The person let a refused own line's words go, by its name.
+    Dismissed(String),
     Chats(chats::Ev),
     Searched(String),
 }
@@ -350,7 +370,9 @@ fn writes(m: &Model) -> bool {
 fn payload(m: &Model) -> Option<&ConversationPayload> {
     match &m.held {
         Held::Loaded { grouped, .. } => Some(&grouped.payload),
-        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => None,
+        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard | Held::Refused(_) => {
+            None
+        }
     }
 }
 
@@ -413,6 +435,7 @@ impl Program for Conversation {
             },
             keep: false,
             landing: Landing::Done,
+            connection: Connection::Reaching,
             blocks: BTreeMap::new(),
             anchor: Anchor::Newest,
             held_at: None,
@@ -569,6 +592,7 @@ impl Program for Conversation {
             }
             Msg::Named(Some(title)) => vec![rename(m, title)],
             Msg::Copy(text) => vec![Effect::Copy { text }],
+            Msg::Dismissed(line) => vec![acted(vec![line])],
             Msg::Chats(ev) => {
                 m.chats.update(ev);
                 Vec::new()
@@ -696,6 +720,29 @@ fn stop(m: &Model) -> Vec<Effect> {
     }
 }
 
+/// Before Send, where this device's clock is outside the bounds the box takes a line by, what the
+/// rule will say of a question sent now, in the rule's words.
+fn clock_off(m: &Model) -> Option<Node<Msg>> {
+    let skew = m.context.clock.and_then(Skew::of)?;
+    writes(m).then(|| {
+        para(
+            "problem clockoff",
+            format!(
+                "Check this device's clock before you send: {}.",
+                skew.said()
+            ),
+        )
+    })
+}
+
+/// The device lets the words of the refused own lines `lines` go: the person acted on them.
+fn acted(lines: Vec<String>) -> Effect {
+    Effect::Core {
+        ask: Ask::Acted,
+        question: runtime::Core::Acted { lines },
+    }
+}
+
 fn regenerate(m: &Model) -> Effect {
     Effect::Act {
         ask: Ask::Round,
@@ -800,7 +847,7 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             ..
         } => {
             m.composer.held(reading);
-            Vec::new()
+            taken_back(m)
         }
         Input::Held {
             ask: Hold::Scroll,
@@ -827,13 +874,27 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             Vec::new()
         }
         Input::Heard { frame, .. } => heard(m, &frame),
-        // A stream that opens again may mean the box answers again.
-        Input::Opened { .. } => match m.held {
-            Held::NotHere(..) | Held::Unheard => vec![window(m)],
-            Held::Loading | Held::Failed(_) | Held::Loaded { .. } => Vec::new(),
-        },
+        Input::Opened { .. } => connected(m, Connection::Reaching),
+        Input::Lost { .. } => connected(m, Connection::Lost),
         Input::Answered { ask, answer } => asked(m, ask, answer),
     }
+}
+
+/// What the stream said of the box, kept for the words of the lines it does not hold. A stream that
+/// opens again may mean the box answers again, and takes what waits unsent.
+fn connected(m: &mut Model, now: Connection) -> Vec<Effect> {
+    let was = std::mem::replace(&mut m.connection, now);
+    let mut effects = match (now, &m.held) {
+        (Connection::Reaching, Held::NotHere(..) | Held::Unheard | Held::Refused(_)) => {
+            vec![window(m)]
+        }
+        (Connection::Reaching, Held::Loading | Held::Failed(_) | Held::Loaded { .. })
+        | (Connection::Lost, _) => Vec::new(),
+    };
+    if (was, now) == (Connection::Lost, Connection::Reaching) {
+        effects.push(Effect::Sync);
+    }
+    effects
 }
 
 fn heard(m: &mut Model, frame: &str) -> Vec<Effect> {
@@ -898,7 +959,11 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
         Reading::Error { e } => {
             match &mut m.held {
                 Held::Loaded { problem, .. } => *problem = Some(e),
-                Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => {
+                Held::Loading
+                | Held::Failed(_)
+                | Held::NotHere(..)
+                | Held::Unheard
+                | Held::Refused(_) => {
                     m.held = Held::Failed(e);
                 }
             }
@@ -910,7 +975,11 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
     match w {
         Windowed::NotHere { lines, why } => match &mut m.held {
             Held::Loaded { problem, .. } => *problem = Some(not_here(lines, &why)),
-            Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => {
+            Held::Loading
+            | Held::Failed(_)
+            | Held::NotHere(..)
+            | Held::Unheard
+            | Held::Refused(_) => {
                 m.held = Held::NotHere(lines, why);
             }
         },
@@ -919,6 +988,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
                 m.held = Held::Unheard;
             }
         }
+        Windowed::Refused { why } => m.held = Held::Refused(why),
         Windowed::Read {
             payload: Worn(payload),
         } => {
@@ -931,7 +1001,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
             if total(m) > payload.payload.total {
                 return Vec::new();
             }
-            let state = payload.payload.state;
+            let state = owed_by_the_box(&payload.payload);
             m.landing = std::mem::replace(&mut m.landing, Landing::Done).settle(state);
             if !matches!(m.landing, Landing::Streaming(..)) {
                 m.blocks.clear();
@@ -951,6 +1021,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
                 effects.push(window(m));
             }
             effects.extend(seen(m));
+            effects.extend(taken_back(m));
             // The question just sent is the last person turn the box holds once it holds it.
             if let Some(text) = m.sent.clone()
                 && let Some(turn) = payload_turn(m, &text)
@@ -989,7 +1060,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
 fn rounds_held(m: &Model) -> usize {
     match &m.held {
         Held::Loaded { grouped, .. } => grouped.rounds.len(),
-        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => 0,
+        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard | Held::Refused(_) => 0,
     }
 }
 
@@ -1009,7 +1080,7 @@ fn round_words(held: &Held, i: usize) -> usize {
                 .map(answer::words)
                 .sum()
         }),
-        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => 0,
+        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard | Held::Refused(_) => 0,
     }
 }
 
@@ -1117,6 +1188,7 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
         Ask::Stop => sealed(),
         Ask::Said(_)
         | Ask::Round
+        | Ask::Acted
         | Ask::Rename { .. }
         | Ask::Forget(_)
         | Ask::Erase
@@ -1127,7 +1199,7 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
     };
     match ask {
         Ask::Said(spoken) => answered_said(m, *spoken, refused),
-        Ask::Round | Ask::Stop | Ask::Erase => refused
+        Ask::Round | Ask::Stop | Ask::Erase | Ask::Acted => refused
             .map(|words| Effect::Toast { words })
             .into_iter()
             .collect(),
@@ -1179,7 +1251,9 @@ fn title(m: &Model) -> String {
         (Some(t), _) => t.to_owned(),
         (None, Held::Loaded { grouped, .. }) => chats::named(&grouped.payload.title).to_owned(),
         (None, Held::Failed(_)) => "Conversation".to_owned(),
-        (None, Held::Loading | Held::NotHere(..) | Held::Unheard) => String::new(),
+        (None, Held::Loading | Held::NotHere(..) | Held::Unheard | Held::Refused(_)) => {
+            String::new()
+        }
     }
 }
 
@@ -1219,7 +1293,9 @@ fn panel_header(m: &Model, about: &str) -> Node<Msg> {
             view! { Span [if about.is_empty() { String::new() } else { format!("About {about} · ") }] },
             view! { A {Href => "#/secretary/default"} ["Whole conversation →"] },
         ],
-        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard => Vec::new(),
+        Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard | Held::Refused(_) => {
+            Vec::new()
+        }
     };
     view! { Div "frameheader" [line] }
 }
@@ -1285,14 +1361,76 @@ fn line_of(m: &Model, index: usize) -> Option<String> {
     payload.lines.get(at).cloned()
 }
 
-/// Why the box has not taken the turn `t`'s line yet, in its words, where this device wrote it.
-fn waits(m: &Model, t: &TurnRow) -> Option<String> {
+/// The box's last ruling on the turn `t`'s line, where this device wrote it and the box does not
+/// hold it.
+fn ruling<'m>(m: &'m Model, t: &TurnRow) -> Option<&'m Ruling> {
     let line = line_of(m, t.index)?;
     payload(m)?
         .waiting
         .iter()
         .find(|w| w.line == line)
-        .map(|w| w.why.clone())
+        .map(|w| &w.ruling)
+}
+
+/// What a turn of this device's says of its line: a function of the box's last ruling on it and of
+/// whether the box can be reached. A line refused for good is no turn: it stands beside the
+/// transcript ([`refusals`]).
+fn own_words(ruling: &Ruling, connection: Connection) -> Option<String> {
+    match (ruling, connection) {
+        (Ruling::Unsent, Connection::Reaching) => Some("Sending…".to_owned()),
+        (Ruling::Unsent, Connection::Lost) => {
+            Some("Not sent: the box cannot be reached. It goes when it can.".to_owned())
+        }
+        (Ruling::Trust, _) => Some(
+            "Not sent: this device waits to be trusted. Tap its card on a trusted device."
+                .to_owned(),
+        ),
+        (Ruling::Later { why }, _) => Some(format!("Not taken yet: {why}")),
+        (Ruling::Refused { .. }, _) => None,
+    }
+}
+
+/// The conversation's state as the box holds it: a person's turn owed that the box does not hold
+/// yet (this device's, unsent or waiting) is no turn the box is answering, so the conversation
+/// reads idle while every person's turn queued is such a turn. Queued with no person's turn
+/// queued (an act the box owes a round) is the box's, and stays queued.
+fn owed_by_the_box(p: &ConversationPayload) -> ConversationState {
+    let own = |t: &&TurnRow| {
+        p.turns
+            .iter()
+            .position(|row| row.index == t.index)
+            .and_then(|at| p.lines.get(at))
+            .is_some_and(|line| p.waiting.iter().any(|w| w.line == *line))
+    };
+    let queued: Vec<&TurnRow> = p.turns.iter().filter(|t| queued(t)).collect();
+    match p.state {
+        ConversationState::Queued if !queued.is_empty() && queued.iter().all(own) => {
+            ConversationState::Idle
+        }
+        state => state,
+    }
+}
+
+/// The first refused question placed into the composer where it takes words back (its draft read,
+/// nothing typed or attached since), and acted on: the draft is the device's, so every tab reads
+/// the same words. A title stays on the refusal. Where the person has typed since, the question
+/// stays there too.
+fn taken_back(m: &mut Model) -> Vec<Effect> {
+    let Some((line, sent)) = payload(m).and_then(|p| refused::question(&p.waiting)) else {
+        return Vec::new();
+    };
+    let Some(outs) = m.composer.place(&sent) else {
+        return Vec::new();
+    };
+    let mut effects = composed(m, outs);
+    effects.push(acted(vec![line]));
+    effects
+}
+
+/// Each refusal the person has not acted on, with its words to copy or let go.
+fn refusals(m: &Model) -> Node<Msg> {
+    let waiting = payload(m).map_or(&[][..], |p| p.waiting.as_slice());
+    refused::view(waiting, Msg::Copy, Msg::Dismissed)
 }
 
 /// Whether `a` erases the turn `t` alone.
@@ -1392,7 +1530,9 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
     let menu = answer::more(items, !at_rest);
     let controls =
         (reply.is_some() || menu.is_some()).then(|| view! { Div "turncontrols" [reply, menu] });
-    let waits = waits(m, t).map(|why| para("turnwaits", format!("Not taken yet: {why}")));
+    let waits = ruling(m, t)
+        .and_then(|ruling| own_words(ruling, m.connection))
+        .map(|words| para("turnwaits", words));
     view! { Div {Class => class, Data("who") => Who::of(&t.who).name()} [
         view! { Div "turnwho" [speaker(t)] },
         body,
@@ -1644,6 +1784,15 @@ fn transcript(m: &Model) -> Node<Msg> {
         Held::Loading | Held::Unheard => (None, None, Vec::new(), false, None),
         Held::Failed(e) => (Some(e.clone()), None, Vec::new(), false, None),
         Held::NotHere(lines, why) => (None, Some(not_here(*lines, why)), Vec::new(), false, None),
+        Held::Refused(why) => (
+            Some(format!("The box refused this topic: {why}.")),
+            None,
+            vec![
+                view! { P "problem" [link("", Place::NewTopic, "Its words are on the New topic page.")] },
+            ],
+            false,
+            None,
+        ),
         Held::Loaded { grouped, problem } => {
             let p = &grouped.payload;
             let unplaced = p
@@ -1685,6 +1834,8 @@ fn transcript(m: &Model) -> Node<Msg> {
         view! { Button "earlierbtn" {Type => "button", Hidden => !earlier} @click(Msg::Earlier) ["Earlier…"] },
         view! { Div "turns" [
             rounds_node.unwrap_or_else(|| view! { Div "rounds" }),
+            refusals(m),
+            clock_off(m),
             place(m),
             view! { Div "answerroom" {Data("room") => if held { "held" } else { "free" }} },
         ] },
@@ -1796,16 +1947,21 @@ mod tests {
 
     /// [`window`], with `waiting` the payload's own lines the box has not taken yet.
     fn window_waiting(turns: usize, waiting: &serde_json::Value) -> Msg {
+        window_in(turns, waiting, "idle")
+    }
+
+    /// [`window_waiting`] in conversation state `state`, its last turn queued where it is not idle.
+    fn window_in(turns: usize, waiting: &serde_json::Value, state: &str) -> Msg {
         let rows: Vec<_> = (0..turns)
             .map(|i| json!({"index": i, "text": format!("t{i}"), "at": "", "attempt": "current", "gone": null,
-                "who": "person", "references": [], "attachments": [], "queued": false}))
+                "who": "person", "references": [], "attachments": [], "queued": state != "idle" && i + 1 == turns}))
             .collect();
         let rounds: Vec<_> = (0..turns)
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
         let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
             "lines": (0..turns).map(|i| format!("{i:064x}")).collect::<Vec<_>>(),
-            "proposals": [], "unplaced": [], "waiting": waiting, "state": "idle", "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
+            "proposals": [], "unplaced": [], "waiting": waiting, "state": state, "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Window,
             reading: Reading::Val {
@@ -1817,16 +1973,11 @@ mod tests {
         }))
     }
 
-    /// An own line the box has not taken yet draws on its turn why, in the box's words; a turn
-    /// whose line the box holds draws no such thing.
-    #[test]
-    fn a_line_the_box_has_not_taken_yet_says_why_on_its_turn() {
-        let mut rt = page();
-        let why = "it is dated 600 s ahead of the box's clock";
-        let msg = window_waiting(2, &json!([{"line": format!("{:064x}", 1), "why": why}]));
-        let mut patches = Vec::new();
-        let (drawn, mut effects) = rt.step(msg);
-        patches.extend(drawn);
+    /// `msg` stepped, and every slice the page asks for after it answered: what it drew, and the
+    /// effects of the last step.
+    fn drawn_whole(rt: &mut Runtime<Conversation>, msg: Msg) -> (String, Vec<Effect>) {
+        let (mut patches, mut effects) = rt.step(msg);
+        let mut all = effects.clone();
         while effects
             .iter()
             .any(|e| matches!(e, Effect::Frame { ask: Ask::Slice }))
@@ -1838,9 +1989,41 @@ mod tests {
                 },
             })));
             patches.extend(drawn);
+            all.extend(more.iter().cloned());
             effects = more;
         }
         let drawn = String::from_utf8_lossy(&viewtree::patch::encode(&patches)).into_owned();
+        (drawn, all)
+    }
+
+    fn acts(effects: &[Effect]) -> Vec<Vec<String>> {
+        effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Core {
+                    question: runtime::Core::Acted { lines },
+                    ..
+                } => Some(lines.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// An own line's words are a function of the box's last ruling on it and of whether the box
+    /// can be reached: never "queued" for a line the box does not hold, and a refusal's words
+    /// stay reachable until the person acts on them, in the composer where it is empty, else
+    /// beside the transcript until dismissed.
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one law's cases: each ruling, the connection, and a refusal's words"
+    )]
+    fn an_own_line_s_words_are_its_ruling_and_the_connection() {
+        let line = format!("{:064x}", 1);
+        let why = "it is dated 600 s ahead of the box's clock";
+        let mut rt = page();
+        let later = json!([{"line": line, "ruling": {"type": "Later", "why": why}}]);
+        let (drawn, _) = drawn_whole(&mut rt, window_waiting(2, &later));
         assert!(drawn.contains("t1"), "the turns are drawn: {}", drawn.len());
         assert!(drawn.contains(&format!("Not taken yet: {why}")), "{drawn}");
         assert_eq!(
@@ -1848,6 +2031,124 @@ mod tests {
             1,
             "on its own turn alone"
         );
+
+        let mut rt = page();
+        let unsent = json!([{"line": line, "ruling": {"type": "Unsent"}}]);
+        let (drawn, _) = drawn_whole(&mut rt, window_waiting(2, &unsent));
+        assert!(drawn.contains("Sending…"), "{drawn}");
+        let lost = Msg::Host(Box::new(Input::Lost {
+            ask: Stream::Conversation,
+        }));
+        let (drawn, _) = drawn_whole(&mut rt, lost);
+        assert!(drawn.contains("the box cannot be reached"), "{drawn}");
+        let opened = Msg::Host(Box::new(Input::Opened {
+            ask: Stream::Conversation,
+        }));
+        let (drawn, effects) = drawn_whole(&mut rt, opened);
+        assert!(drawn.contains("Sending…"), "{drawn}");
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::Sync)),
+            "back, it hands over"
+        );
+
+        // A queued turn the box holds thinks; one only this device holds reads idle.
+        let only_here = json!([{"line": format!("{:064x}", 1), "ruling": {"type": "Unsent"}}]);
+        for (waiting, thinks) in [(json!([]), true), (only_here, false)] {
+            let mut rt = page();
+            let (drawn, _) = drawn_whole(&mut rt, window_in(2, &waiting, "queued"));
+            assert_eq!(drawn.contains("Thinking"), thinks, "{waiting}: {drawn}");
+        }
+
+        let nine = format!("{:064x}", 9);
+        let question = json!({"type": "Question", "text": "Is the permit due?", "references": ["todo:life/permit"], "files": [], "attachments": []});
+        let refused = |words: &serde_json::Value| json!([{"line": nine, "ruling": {"type": "Refused", "why": "say something", "words": words}}]);
+        let read_draft = |rt: &mut Runtime<Conversation>| {
+            rt.step(Msg::Host(Box::new(Input::Held {
+                ask: Hold::Draft,
+                reading: Reading::Val {
+                    v: Answer::Done {
+                        body: Text::printed(&json!({"text": "", "others": []})),
+                    },
+                },
+                behind: None,
+            })))
+        };
+
+        // Not before the draft is read: an unread composer is no empty one.
+        let mut rt = page();
+        let (_, effects) = drawn_whole(&mut rt, window_waiting(2, &refused(&question)));
+        assert!(acts(&effects).is_empty(), "the draft is not read yet");
+        let (_, effects) = read_draft(&mut rt);
+        assert_eq!(
+            acts(&effects),
+            [vec![nine.clone()]],
+            "placed and acted on once the draft is read"
+        );
+
+        // Two pages over one draft both place the question and both act: the words stand in both
+        // composers, the same write to the device's draft twice, and acting is a join of names.
+        let keeps = |effects: &[Effect]| -> Vec<serde_json::Value> {
+            effects
+                .iter()
+                .filter_map(|e| match e {
+                    Effect::Keep { value, .. } => Some(value.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let pages: Vec<(String, Vec<Effect>)> = (0..2)
+            .map(|_| {
+                let mut rt = page();
+                read_draft(&mut rt);
+                drawn_whole(&mut rt, window_waiting(2, &refused(&question)))
+            })
+            .collect();
+        for (drawn, effects) in &pages {
+            assert!(
+                drawn.contains("Is the permit due?") && drawn.contains("todo:life/permit"),
+                "{drawn}"
+            );
+            assert_eq!(
+                acts(effects),
+                [vec![nine.clone()]],
+                "acted on once by each page"
+            );
+        }
+        assert_eq!(
+            keeps(&pages[0].1),
+            keeps(&pages[1].1),
+            "the same write to the device's draft"
+        );
+
+        // A title is never placed and never acted on without the person: it stays on the refusal.
+        let mut rt = page();
+        read_draft(&mut rt);
+        let title = json!({"type": "Title", "title": "Permits"});
+        let (drawn, effects) = drawn_whole(&mut rt, window_waiting(2, &refused(&title)));
+        assert!(acts(&effects).is_empty(), "no act without the person");
+        assert!(
+            rt.model().renaming.is_none() && rt.model().composer.takes_back(),
+            "placed nowhere"
+        );
+        assert!(drawn.contains("Permits"), "{drawn}");
+
+        // Where the person has typed since, the words stay on the refusal until dismissed.
+        let mut rt = page();
+        read_draft(&mut rt);
+        rt.step(Msg::Composer(composer::Ev::Typed(
+            "something else".to_owned(),
+        )));
+        let (drawn, effects) = drawn_whole(&mut rt, window_waiting(2, &refused(&question)));
+        assert!(
+            acts(&effects).is_empty(),
+            "the composer holds the person's words"
+        );
+        assert!(
+            drawn.contains("The box refused what you wrote: say something"),
+            "{drawn}"
+        );
+        let (_, effects) = drawn_whole(&mut rt, Msg::Dismissed(nine.clone()));
+        assert_eq!(acts(&effects), [vec![nine]], "dismissed is acted on");
     }
 
     fn scrolled(at: &str) -> Msg {
@@ -1896,6 +2197,7 @@ mod tests {
             offsets: Vec::new(),
             wide: false,
             categories: vec!["home".to_owned(), "work".to_owned()],
+            clock: None,
         };
         let at = At::Page {
             id: "c".to_owned(),

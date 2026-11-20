@@ -171,13 +171,21 @@ export interface Sealed extends LineStep {
  * store a tab writes is (`written`), each step of it the device's record of the own lines. */
 export interface Lines extends Written {
   /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once. */
-  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed;
+  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | undefined;
   /** The device's record of own lines taken: `{moved, unread, taken}`. */
   take_own: (records: string) => string;
   /** `[{hash, literal, line, free}]`: each own write the box took, and whether its record may be let go. */
   own_taken: () => string;
   /** The box's answer to an own line: `"Unsent"`, `{"Refused": {kind, reason}}` or `"Taken"`. */
   answer: (name: string) => string;
+  /** The person acted on the refusals of the own lines `[<name>]`: what it moved. */
+  acted: (names: string) => string;
+  /** `[<print>]`: every own record the device may let go, the told refusals `[<print>]` given. */
+  releasable: (told: string) => string;
+  /** The box's sentence where `id` is a topic this device began and the box refused. */
+  refused_topic: (id: string) => string | undefined;
+  /** `[{line, ruling}]`: own lines refused for good, with words, of topics the box refused. */
+  refused_elsewhere: () => string;
   hold: (add: string, drop: string) => void;
   /** `hold` of literals already checked against their names, so none is hashed again. */
   hold_admitted: (add: string, drop: string) => void;

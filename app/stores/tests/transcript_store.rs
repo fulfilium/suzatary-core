@@ -468,6 +468,30 @@ fn sealed_lines(
     )>,
     impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey>,
 ) {
+    let over: Vec<(&str, Entry, Vec<usize>)> = lines
+        .iter()
+        .enumerate()
+        .map(|(at, (writer, entry))| (*writer, entry.clone(), vec![at]))
+        .collect();
+    sealed_over(&over)
+}
+
+/// The lines `(writer, entry, parents)`, each over the lines at `parents` (the opening is 0, the
+/// first of `lines` 1), and what opens their words.
+#[expect(
+    clippy::type_complexity,
+    reason = "the lines and their opener, as a reader takes them"
+)]
+fn sealed_over(
+    lines: &[(&str, Entry, Vec<usize>)],
+) -> (
+    Vec<(
+        prodrome_core::event::Hash,
+        suzatary_lines::secretary::line_event::LineEvent,
+        Vec<prodrome_core::event::Hash>,
+    )>,
+    impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey> + use<>,
+) {
     use prodrome_core::event::Hash;
     use suzatary_lines::secretary::line_event::LineEvent;
     struct Fresh(std::sync::atomic::AtomicU8);
@@ -480,8 +504,8 @@ fn sealed_lines(
     let entropy = Fresh(std::sync::atomic::AtomicU8::new(1));
     let mut held: Vec<(Hash, LineEvent, Vec<Hash>)> = Vec::new();
     let mut keys = Vec::new();
-    let first = [("assistant", opened())];
-    for (writer, entry) in first.iter().chain(lines) {
+    let first = [("assistant", opened(), Vec::new())];
+    for (writer, entry, over) in first.iter().chain(lines) {
         let (line, sealed) = LineEvent::write(
             id("morning"),
             Actor::new(*writer).expect("an actor"),
@@ -490,11 +514,7 @@ fn sealed_lines(
             &entropy,
         )
         .expect("a line");
-        let parents: Vec<Hash> = held
-            .last()
-            .map(|(name, ..)| name.clone())
-            .into_iter()
-            .collect();
+        let parents: Vec<Hash> = over.iter().map(|&at| held[at].0.clone()).collect();
         let name = Hash::new(format!("{:064x}", held.len() + 1)).expect("a name");
         keys.extend(sealed);
         held.push((name, line, parents));
@@ -584,4 +604,72 @@ fn a_tab_s_turn_reads_tainted_until_every_claim_judged_it_clean() {
         Taint::Clean,
         "the box's own turn keeps its stamp"
     );
+}
+
+/// A stop ends exactly the rounds open before it in the transcript: the round whose claim was
+/// written before the stop was taken, whether or not the tab saw that claim, and never a round
+/// whose claim rests on the stop, which is what a round begun after the take writes. So the halt
+/// a stop pulls is a reading of its line, never "the round running now".
+#[test]
+fn a_stop_ends_the_rounds_before_it_and_none_begun_after_its_take() {
+    use suzatary_conversations::secretary::store::{Covered, RunId};
+    use suzatary_conversations::secretary::taint::Taint;
+    use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
+    let name =
+        |at: usize| prodrome_core::event::Hash::new(format!("{:064x}", at + 1)).expect("a name");
+    let asked = |second: u32| Entry::Said {
+        at: at(second),
+        turn: Turn::Person {
+            text: format!("question {second}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::device("device0"))),
+    };
+    let began = |second: u32, covers: usize, run: u8| Entry::Began {
+        at: at(second),
+        covers: vec![Covered {
+            line: name(covers),
+            taint: Taint::Clean,
+        }],
+        run: RunId::of([run; 16]),
+    };
+    let stopped = |second: u32| Entry::Stopped {
+        at: at(second),
+        by: "device0".to_owned(),
+    };
+    // 1: a question; 2: the first round's claim; 3: the tab's stop, over `saw`; 4: a question
+    // said after it; 5: the second round's claim, written over every line held, the stop among them.
+    // The stop's clock reads before the claim's and after it: no clock decides which rounds it ends.
+    let cases = [vec![1], vec![2]]
+        .into_iter()
+        .flat_map(|saw| [(saw.clone(), 1), (saw, 3)]);
+    for (saw, clock) in cases {
+        let lines = [
+            ("device0", asked(1), vec![0]),
+            ("assistant", began(2, 1, 1), vec![1]),
+            ("device0", stopped(clock), saw.clone()),
+            ("device0", asked(4), vec![3]),
+            ("assistant", began(5, 4, 2), vec![2, 4]),
+        ];
+        let (held, opens) = sealed_over(&lines);
+        let writes: Vec<Write<'_>> = held
+            .iter()
+            .map(|(name, line, parents)| Write {
+                name,
+                line,
+                parents,
+            })
+            .collect();
+        let read = Transcript::of(&id("morning"), &writes, &opens).expect("a conversation");
+        assert_eq!(
+            read.ended_by(&name(3)),
+            std::collections::BTreeSet::from([RunId::of([1; 16])]),
+            "a stop over {saw:?} at {clock} ends the first round alone"
+        );
+        assert!(
+            read.ended_by(&name(4)).is_empty(),
+            "a question ends no round"
+        );
+    }
 }

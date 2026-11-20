@@ -6,7 +6,11 @@
 //!   reads its turns as it read them before;
 //! - a node that arrives later, that nothing rests on and that is not the spine's, moves no other
 //!   node, and lands after the spine's last; one that is the spine's, written over every node
-//!   held as the box writes under its lock, moves no node at or before the spine's last.
+//!   held as the box writes under its lock, moves no node at or before the spine's last;
+//! - a writer's chain reads in its own order whatever its clock says, however it is posted and
+//!   whatever the box writes between its posts, so one tab's lines never change order. Only
+//!   lines that rest on nothing of each other (two tabs, two devices) are ordered by their clocks,
+//!   and only between the same two box lines.
 
 use proptest::prelude::*;
 use suzatary_lines::secretary::sequence::{Node, Order, causal, sequenced};
@@ -173,6 +177,51 @@ proptest! {
     }
 }
 
+proptest! {
+    /// Two writers each post a chain, each line over the one before, in pieces cut anywhere; after
+    /// each piece the box writes lines over everything it holds. Every reading, before and after
+    /// each move, reads each chain in its own order, whatever the clocks say.
+    #[test]
+    fn a_writer_s_chain_reads_in_its_order_however_the_box_interleaves(
+        a in proptest::collection::vec(0u8..4, 1..8),
+        b in proptest::collection::vec(0u8..4, 0..6),
+        cuts in proptest::collection::vec(any::<bool>(), 8),
+        boxed in proptest::collection::vec((0u8..3, 0u8..4), 8),
+    ) {
+        let mut held = vec![node(0, 0, &[], Writer::Spine)];
+        let mut next: u16 = 1;
+        let (mut chain_a, mut chain_b): (Vec<u16>, Vec<u16>) = (Vec::new(), Vec::new());
+        let in_order = |held: &[Generated], chain: &[u16]| -> bool {
+            let read: Vec<u16> = ordered(held).into_iter().filter(|n| chain.contains(n)).collect();
+            read == chain
+        };
+        let mut post = 0;
+        for (i, at) in a.iter().enumerate() {
+            let over = chain_a.last().copied().unwrap_or(0);
+            held.push(node(next, *at, &[over], Writer::Other));
+            chain_a.push(next);
+            next += 1;
+            if let Some(at) = b.get(i) {
+                let over = chain_b.last().copied().unwrap_or(0);
+                held.push(node(next, *at, &[over], Writer::Other));
+                chain_b.push(next);
+                next += 1;
+            }
+            prop_assert!(in_order(&held, &chain_a) && in_order(&held, &chain_b));
+            if cuts.get(i).copied().unwrap_or(true) {
+                let (writes, at) = boxed[post % boxed.len()];
+                post += 1;
+                for _ in 0..writes {
+                    let all: Vec<u16> = held.iter().map(|n| n.name).collect();
+                    held.push(node(next, at, &all, Writer::Spine));
+                    next += 1;
+                    prop_assert!(in_order(&held, &chain_a) && in_order(&held, &chain_b));
+                }
+            }
+        }
+    }
+}
+
 /// Two concurrent spine nodes, and a node of another writer resting on one of them: still one
 /// order, the spine's two in causal order, and the other node after the spine node it rests on.
 #[test]
@@ -257,10 +306,10 @@ fn node(name: u16, at: u8, parents: &[u16], writer: Writer) -> Generated {
     }
 }
 
-/// Two tabs' chains written before the box placed either line of them are not kept apart: §3.1
-/// orders the lines between two box lines by their writers' clocks, so A1 → A2 and B1 → B2,
-/// written in turn, read A1, B1, A2, B2. Each chain stays in its own order, as every linear
-/// extension keeps it; nothing promises a tab's lines stand together.
+/// Two writers' chains written before the box placed either line of them interleave by their
+/// clocks, as a messaging app orders two people typing at once: A1 → A2 and B1 → B2, written in
+/// turn, read A1, B1, A2, B2. Each chain stays in its own order, and no line stands before what it
+/// rests on; the clock orders nothing else.
 #[test]
 fn two_tabs_chains_before_the_box_read_by_their_clocks() {
     let nodes = [
@@ -273,12 +322,12 @@ fn two_tabs_chains_before_the_box_read_by_their_clocks() {
     assert_eq!(ordered(&nodes), [0, 10, 20, 11, 21]);
 }
 
-/// A pair after the box's last line is drawn provisionally: X and Y, read X, Y by their clocks,
-/// read Y, S, X once the box writes S over Y alone (it had not taken X when it wrote), since Y now
-/// stands before the box line that rests on it and X still after the box's last. A pair at or
-/// before the box's last line never flips (`a_later_line_moves_nothing_the_spine_placed`).
+/// Two lines that rest on nothing of each other, after the box's last line, read by their clocks
+/// until the box writes over one of them alone: X and Y read X, Y, then Y, S, X once the box writes
+/// S over Y (it did not hold X when it wrote). They are two writers' lines: one writer's lines are
+/// a chain, which never flips (`a_writer_s_chain_reads_in_its_order_however_the_box_interleaves`).
 #[test]
-fn a_pair_after_the_box_s_last_line_can_flip_when_the_box_writes_over_one() {
+fn two_writers_lines_can_change_order_when_the_box_writes_over_one() {
     let mut nodes = vec![
         node(0, 0, &[], Writer::Spine),
         node(1, 1, &[0], Writer::Other),

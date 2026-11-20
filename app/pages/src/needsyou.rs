@@ -143,9 +143,10 @@ impl Program for NeedsYou {
                         NeedsYou::draw(m);
                     }
                 }
-                Input::Answered { ask, .. } | Input::Heard { ask, .. } | Input::Opened { ask } => {
-                    match ask {}
-                }
+                Input::Answered { ask, .. }
+                | Input::Heard { ask, .. }
+                | Input::Opened { ask }
+                | Input::Lost { ask } => match ask {},
             },
             Msg::Close(k) => m.shown.retain(|s| *s != k),
         }

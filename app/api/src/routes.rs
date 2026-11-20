@@ -1226,6 +1226,17 @@ pub const MAX_POSTED: usize = 512;
 /// action line. A body over it is refused whole, so a writer cuts its posts under it.
 pub const MAX_POSTED_BYTES: usize = 4_194_304;
 
+/// Whether a post holds at most [`MAX_POSTED`] objects: past it, the post's own fault (422).
+fn counted(posted: &[String]) -> Result<(), Refusal> {
+    if posted.len() > MAX_POSTED {
+        return Err(Refusal::unprocessable(format!(
+            "at most {MAX_POSTED} objects per post, got {}",
+            posted.len()
+        )));
+    }
+    Ok(())
+}
+
 /// `POST /api/objects`: the one chain write path, decided under the write lock.
 pub fn receive_objects(
     store: &dyn Prodrome<TodoEvent>,
@@ -1239,12 +1250,7 @@ pub fn receive_objects(
         objects: posted,
         since,
     } = *posted;
-    if posted.len() > MAX_POSTED {
-        return Err(Refusal::bad_request(format!(
-            "at most {MAX_POSTED} objects per post, got {}",
-            posted.len()
-        )));
-    }
+    counted(posted)?;
     let _held = store.locked()?;
     let objects = store.objects()?;
     let outcome = crate::sync::receive(
@@ -1346,7 +1352,7 @@ pub struct Beside<'a, A: Admission> {
 /// each proven refusal recorded once in the asks under its own lock.
 ///
 /// # Errors
-/// More than `MAX_POSTED` objects, or a store not read or not written.
+/// More than `MAX_POSTED` objects (422), or a store not read or not written.
 pub fn receive_changes<E: stores::Written>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
@@ -1362,12 +1368,7 @@ where
         objects: posted,
         since,
     } = *posted;
-    if posted.len() > MAX_POSTED {
-        return Err(Refusal::bad_request(format!(
-            "at most {MAX_POSTED} objects per post, got {}",
-            posted.len()
-        )));
-    }
+    counted(posted)?;
     let (received, objects) = {
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.

@@ -265,7 +265,9 @@ impl Program for Settings {
                         }
                     }
                 }
-                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+                Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => {
+                    match ask {}
+                }
                 Input::Answered {
                     ask: Ask::Run(act),
                     answer,

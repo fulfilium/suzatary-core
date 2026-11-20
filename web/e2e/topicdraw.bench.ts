@@ -68,6 +68,15 @@ const WORKER_STEPS = `(() => {
   return steps
 })()`
 
+// The worker's measures of its latest seal, by part (`seal:*`, and the row's read as `row:*`), from its `seal:ready` on.
+const SEAL_STEPS = `(() => {
+  const all = performance.getEntriesByType("measure").filter((m) => m.name.startsWith("seal:") || m.name.startsWith("row:") || m.name === "write:seal")
+  const begun = all.filter((m) => m.name === "seal:ready").at(-1)?.startTime ?? 0
+  const steps = {}
+  for (const m of all) if (m.startTime >= begun && steps[m.name] === undefined) steps[m.name] = Math.round(m.duration)
+  return steps
+})()`
+
 const summary = (ms: readonly number[]): { readonly median: number; readonly slowest: number } => {
   const sorted = [...ms].sort((a, b) => a - b)
   return { median: Math.round(sorted[Math.floor(sorted.length / 2)] ?? 0), slowest: Math.round(sorted.at(-1) ?? 0) }
@@ -151,6 +160,7 @@ const sent = (said: string): string => `new Promise((done) => {
   const send = document.querySelector("#view .composesend")
   send.addEventListener("click", () => {
     const start = performance.now()
+    window.e2eTapped = start
     let question = null
     const look = () => {
       const now = performance.now()
@@ -165,6 +175,20 @@ const sent = (said: string): string => `new Promise((done) => {
   }, { once: true, capture: true })
 })`
 
+// In the page: every measure from Send's click to the question drawn, by name: how long each took in all, and when the
+// first began after the click. Where a first Send's time goes: to the worker and back (`write:line`), to the move heard
+// (`moved:batched`, `page:heard`), to the reading (`ask:*`) and to the draw (`painter:step`, `page:draw`).
+const sendSteps = (drawn: number): string => `(() => {
+  const from = window.e2eTapped, until = from + ${drawn}
+  const steps = {}
+  for (const m of performance.getEntriesByType("measure"))
+    if (m.startTime >= from && m.startTime <= until) {
+      steps[m.name] = Math.round((steps[m.name] ?? 0) + m.duration)
+      if (steps[m.name + "@"] === undefined) steps[m.name + "@"] = Math.round(m.startTime - from)
+    }
+  return steps
+})()`
+
 app.scene("measured: Send to the question drawn and to its answer drawn, over a slow network", async () => {
   await app.page.navigate(`${BULK}/#/secretary`)
   await app.page.waitFor(`document.querySelector(".streamround .streammeta a") !== null`, { timeout: 30 * 60_000 })
@@ -172,7 +196,7 @@ app.scene("measured: Send to the question drawn and to its answer drawn, over a 
   await app.page.navigate(`${BULK}/${href}`)
   await app.page.waitFor(`document.querySelector("#view .composebox") !== null`, { timeout: 60_000 })
   await app.page.network({ offline: false, latency: LATENCY_MS, downloadThroughput: THROUGHPUT, uploadThroughput: THROUGHPUT })
-  const runs: { question: number; answer: number }[] = []
+  const runs: { question: number; answer: number; seal: Steps; page: Steps }[] = []
   for (let n = 0; n < RUNS; n++) {
     const said = `measured send ${Date.now()} ${n}`
     await app.page.type("#view .composebox", said)
@@ -181,7 +205,7 @@ app.scene("measured: Send to the question drawn and to its answer drawn, over a 
     await app.page.click("#view .composesend")
     const run = await app.page.evaluate<{ question: number; answer: number }>(`window.e2eSent`, 90_000)
     assert.ok(run.question >= 0 && run.answer >= 0, `${said} was drawn and answered`)
-    runs.push(run)
+    runs.push({ ...run, seal: await app.page.inWorker<Steps>("prodromework", SEAL_STEPS), page: await app.page.evaluate<Steps>(sendSteps(run.question)) })
   }
   await app.page.network(null)
   const report = { latency: LATENCY_MS, questionDrawn: summary(runs.map(r => r.question)), answerDrawn: summary(runs.map(r => r.answer)), runs }

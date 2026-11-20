@@ -61,6 +61,8 @@ export namespace local {
   )
 
   const listed = reading.againOn(asked.question(() => storesync.list(laneOf({ type: "Conversations" }))), storesync.watch)
+  // Read again whenever the lines move, the own lines among them.
+  const refusedElsewhere = reading.againOn(asked.question(() => storesync.refused()), storesync.watch)
 
   type Search = Extract<Local, { type: "Search" }>
   const searches = asked.family((s: Search) => s.q, (s: Search) => storesync.search(s.q, laneOf(s)))
@@ -190,6 +192,7 @@ export namespace local {
     Route: () => printed(route),
     Fold: () => printed(folded),
     Unsent: () => printed(unsent),
+    Refused: () => reading.map(refusedElsewhere, (json: string) => text.said<Answer<"Refused">>(json)),
     Waiting: () => printed(waiting),
     Kept: l => printed(onDevice(l.key)),
   }

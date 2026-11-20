@@ -364,6 +364,21 @@ impl Transcript {
             .collect()
     }
 
+    /// The runs whose rounds the line named `line` ends: for a stop, every round open before it in
+    /// this order. A round whose first claim rests on the stop stands after it, so it is not one.
+    #[must_use]
+    pub fn ended_by(&self, line: &Hash) -> BTreeSet<RunId> {
+        let Some(at) = self.lines.iter().position(|written| written.name == *line) else {
+            return BTreeSet::new();
+        };
+        self.claims
+            .rounds()
+            .iter()
+            .filter(|round| round.end == crate::secretary::claim::End::Closed(at))
+            .map(|round| round.run.clone())
+            .collect()
+    }
+
     /// The claims' reading of these lines.
     #[must_use]
     pub(crate) fn claims(&self) -> &Claims<RunId> {

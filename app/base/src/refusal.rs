@@ -25,8 +25,12 @@ pub enum Status {
     /// The request contradicts the chain (an id already taken, a `base` this store never held).
     Conflict,
     /// The request named a real resource whose own content refuses (Typst that will not
-    /// compile); unlike [`Status::BadRequest`], the fault is not the request's.
+    /// compile); unlike [`Status::BadRequest`], the fault is not the request's. Also a post to a
+    /// store a tab writes that this build reads and refuses whole: the page refuses its lines for
+    /// good on this status alone, since a box of another build answers its own 400.
     UnprocessableEntity,
+    /// A body over the route's cap.
+    TooLarge,
     /// Past a per-login budget (a browser's error reports, `crate::clienterror`).
     TooManyRequests,
     /// A page whose build writes by a contract older than the box takes (`crate::signatures::CLIENT_MIN`):
@@ -55,6 +59,7 @@ impl Status {
             Status::MethodNotAllowed => 405,
             Status::Conflict | Status::OtherBuild => 409,
             Status::UnprocessableEntity => 422,
+            Status::TooLarge => 413,
             Status::TooManyRequests => 429,
             Status::UpgradeRequired => 426,
             Status::Wipe => 410,
@@ -115,6 +120,12 @@ impl Refusal {
     #[must_use]
     pub fn unprocessable(message: impl Into<String>) -> Self {
         Self::new(Status::UnprocessableEntity, message)
+    }
+
+    /// 413 — a body over the route's cap.
+    #[must_use]
+    pub fn too_large(message: impl Into<String>) -> Self {
+        Self::new(Status::TooLarge, message)
     }
 
     /// 429 — past a per-login budget.

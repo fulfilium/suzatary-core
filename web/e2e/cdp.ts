@@ -1276,6 +1276,15 @@ export class Page {
     );
   }
 
+  /** Every request whose URL matches one of `patterns` (`*` any run) failed, by the page and by every worker it runs, as
+   * a network that drops them would; none to let them through again. Call `attachWorkers` before the page loads, so its
+   * workers are attached. */
+  async block(patterns: readonly string[]): Promise<void> {
+    await this.command("Network.enable", {});
+    await this.command("Network.setBlockedURLs", { urls: patterns });
+    await Promise.all([...this.workers.keys()].map((w) => this.connection.send("Network.setBlockedURLs", { urls: patterns }, w)));
+  }
+
   /** A first visit, every time: no HTTP cache and no service worker between this page and the box. */
   async cold(on: boolean): Promise<void> {
     this.coldOn = on;

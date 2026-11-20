@@ -115,9 +115,10 @@ impl Program for About {
                     reading,
                     behind,
                 } => m.releases = Held::of(reading, behind),
-                Input::Answered { ask, .. } | Input::Heard { ask, .. } | Input::Opened { ask } => {
-                    match ask {}
-                }
+                Input::Answered { ask, .. }
+                | Input::Heard { ask, .. }
+                | Input::Opened { ask }
+                | Input::Lost { ask } => match ask {},
             },
             Msg::Retry => {
                 return [Question::About, Question::Releases]

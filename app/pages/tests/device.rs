@@ -14,6 +14,7 @@ fn model(signing: &serde_json::Value) -> Model {
             offsets: Vec::new(),
             wide: false,
             categories: vec!["home".to_owned(), "work".to_owned()],
+            clock: None,
         },
     });
     let held = |ask, body: serde_json::Value| {

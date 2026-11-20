@@ -23,9 +23,9 @@
 //! id, two lines under one key, two questions where the queue has room for one), the one taken is
 //! the one the box judges first, by arrival, and within one post by name. A writer's own lines,
 //! each resting on the one before, are taken alike however they are split.
-//! A line dated more than [`MAX_AHEAD_SECONDS`] past the box's clock is refused for now and posted
-//! again later; a device whose clock is far behind is not refused, and its questions come to the
-//! claims already past reach, so the box closes them unanswered.
+//! A line dated past the box's clock by more than the bound of [`crate::secretary::skew`] is
+//! refused for now and posted again later; a device whose clock is far behind is not refused, and
+//! its questions come to the claims already past reach, so the box closes them unanswered.
 //!
 //! By design, and not a gap:
 //! - a tab may say, stop or ask again in any conversation the store holds, the box's own kinds
@@ -56,6 +56,7 @@ use suzatary_store::admission::{Admission, Beside, Inadmissible, Post};
 use crate::secretary::claim::Standing;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::skew::Skew;
 use crate::secretary::transcript::{Transcript, Write};
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Rewind, Title};
@@ -251,23 +252,18 @@ fn written(line: &LineEvent) -> Result<(), Inadmissible> {
     }
 }
 
-/// How far ahead of the box's clock a tab's line may be dated: a device's clock a little fast is
-/// taken; one further ahead is posted again once the box's clock reaches it. A line dated in the
-/// past is taken as it is: an own line from an earlier visit is closed by the answer's bound, so a
-/// device whose clock is behind by more than that bound has every question it asks closed.
-pub const MAX_AHEAD_SECONDS: i64 = 300;
-
-/// Whether `line` is dated no further ahead of the box's clock than [`MAX_AHEAD_SECONDS`]: its
-/// instant orders it among concurrent lines and bounds when its question may be answered.
+/// Whether `line` is dated no further ahead of the box's clock than [`Skew`] allows: its instant
+/// orders it among concurrent lines and bounds when its question may be answered. A line
+/// dated in the past is taken as it is: an own line from an earlier visit is closed by the answer's
+/// bound, and so is every question of a device whose clock is behind by more than that bound
+/// ([`Skew::Behind`]).
 fn early(line: &LineEvent, world: &dyn World) -> Result<(), Inadmissible> {
     let ahead = micros(line.at())
         .zip(micros(world.now()))
         .map(|(at, now)| (at - now) / 1_000_000);
-    match ahead {
-        Some(seconds) if seconds > MAX_AHEAD_SECONDS => Err(Inadmissible::later(format!(
-            "it is dated {seconds} s ahead of the box's clock, more than {MAX_AHEAD_SECONDS} s: it is posted again then"
-        ))),
-        Some(_) | None => Ok(()),
+    match ahead.and_then(Skew::of) {
+        Some(skew @ Skew::Ahead { .. }) => Err(Inadmissible::later(skew.said())),
+        Some(Skew::Behind { .. }) | None => Ok(()),
     }
 }
 

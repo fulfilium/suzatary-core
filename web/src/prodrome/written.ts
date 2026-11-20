@@ -5,6 +5,7 @@ import type { Core, LineStep, ObjectStore, Written } from "./core"
 import { CoreError, signedObject } from "./core"
 import signer from "./signer"
 import type stores from "./stores"
+import clock from "../algebra/clock"
 import lo from "../algebra/lo"
 import d from "../wire/decoder"
 import http from "../wire/http"
@@ -50,10 +51,23 @@ export namespace written {
   }
   const refusalsIn = (store: Written): ReadonlyMap<string, Refused> => new Map(read("refusals", Refusals(store.refusals())).map(r => [r.hash, r]))
   // What the box has not taken yet, in its rule's words: a refusal for now, said once and posted again.
-  type Waits = { hash: string; reason: string; literal: string | null; words: string | null; signature: boolean }
+  type Waits = { hash: string; reason: string; literal: string | null; words: string | null; at: string | null; signature: boolean }
   const Waiting = d.json(
-    d.arr(d.obj<Waits>({ hash: d.str, reason: d.str, literal: d.nullable(d.str), words: d.nullable(d.str), signature: d.bool })),
+    d.arr(d.obj<Waits>({ hash: d.str, reason: d.str, literal: d.nullable(d.str), words: d.nullable(d.str), at: d.nullable(d.str), signature: d.bool })),
   )
+  // When a line dated ahead may be posted again, on this device's clock: once the box's clock reaches the line's own
+  // instant, which is past the rule's bound for it, by the skew the last answer said. A line dated in the box's past
+  // waits for something else (its parent, its signer's trust), so no instant moves it.
+  export const due = (waiting: readonly Waits[], ahead: number | null, now: number): clock.Next =>
+    clock.sooner(
+      ...waiting.map(w => {
+        const at = w.at === null ? NaN : Date.parse(w.at)
+        const on = at + (ahead ?? 0) * 1000
+        return Number.isNaN(at) || on <= now ? clock.never : clock.at(on)
+      }),
+    )
+  // The worker has no window: its own timers.
+  const TIMERS: clock.Timers = { now: () => Date.now(), set: (k, ms) => Number(setTimeout(k, ms)), clear: h => clearTimeout(h) }
   const waitingIn = (store: Written): ReadonlyMap<string, Waits> => new Map(read("waiting", Waiting(store.waiting())).map(w => [w.hash, w]))
   const waits = (noun: string, w: Waits): string =>
     `The box has not taken a ${noun} yet: ${w.reason}. It goes again with the next sync${w.words === null || w.words === "" ? "" : `. What you wrote: “${w.words}”`}`
@@ -61,30 +75,39 @@ export namespace written {
   const sentence = (noun: string, r: Refused): string =>
     `The box refused a ${noun}: ${r.reason}${r.words === null || r.words === "" ? "" : `. What you wrote: “${r.words}”`}`
 
-  // What an answer that is no receipt means for the post it answers. Total over every failure: the box gone or failing,
-  // or a refusal of who posts or how often, leaves the post for the next sync; a newer build waits for a reload; a box of
-  // another build (its own 409 naming it, or an older box's 404 for a store it does not keep) is a function of the builds,
-  // never of the post, and leaves it for later too; any other refusal is a function of the post alone, so posting it
-  // again gets the same answer, and its lines are refused for good as the rule refuses one. A 200 whose receipt does not
-  // decode is no `ApiError`, so it reads as no answer: the post goes again, which is safe whether or not the box took it.
-  // An older box's 400 for a body of another shape cannot be told from the post's own fault, and refuses its lines for
-  // good: a box older than its own 409 for another build is the one case read wrongly, accepted and left for later.
+  // What an answer that is no receipt means for the post it answers, one total table over its status:
+  // - no answer, or a 5xx: Unanswered. The post goes with the next sync, unsaid.
+  // - 426: Outdated. A newer box; reload.
+  // - 413, 422: Refused. A function of the post alone: this build's box answers a body over the cap 413 and every other
+  //   fault of a post 422 (`Literals::read`), so posting again gets the same answer: its lines are refused for good, as
+  //   the rule refuses one, and said with their words, and the pieces behind it go.
+  // - every other status: Later. Who posts or how often (401, 403, 429), or a box of another build: its own 409, an older
+  //   box's 404 for a store it does not keep, or its 400 for a body of another shape, which this build's box never
+  //   answers. None is a verdict on the post, so its lines stay unsent. A 200 whose receipt does not decode is no
+  //   `ApiError`, so it reads as no answer: the post goes again, which is safe whether or not the box took it.
   export type Failed =
     | { readonly type: "Unanswered" }
     | { readonly type: "Outdated" }
     | { readonly type: "Later"; readonly why: string }
     | { readonly type: "Refused"; readonly why: string }
-  const LATER: ReadonlySet<number> = new Set([0, 401, 403, 404, 408, 409, 410, 425, 429])
+  const REFUSED: ReadonlySet<number> = new Set([413, 422])
   export const failed = (x: unknown): Failed => {
     if (http.unanswered(x)) return { type: "Unanswered" }
     if (x instanceof http.ApiError && x.status === http.OUTDATED) return { type: "Outdated" }
     const why = lo.reason(x)
-    if (!(x instanceof http.ApiError) || LATER.has(x.status)) return { type: "Later", why }
-    return { type: "Refused", why }
+    return x instanceof http.ApiError && REFUSED.has(x.status) ? { type: "Refused", why } : { type: "Later", why }
   }
 
-  export const of = <N extends stores.Written>(core: Core, entries: Entries<N>, say: (why: string) => void): T<N> => {
+  export const of = <N extends stores.Written>(core: Core, entries: Entries<N>, say: (why: string) => void, timers: clock.Timers = TIMERS): T<N> => {
     const entry = (name: N): Entry => entries[name]
+    // One wake per store, armed again after each hand-over and load: its lines dated ahead are posted again when the box
+    // may take them.
+    const wakes = new Map<N, (n: clock.Next, k: () => void) => void>()
+    const retried = (name: N): void => {
+      const wake = wakes.get(name) ?? clock.pacer(timers)
+      wakes.set(name, wake)
+      wake(due([...waitingIn(entry(name).store).values()], http.ahead(), timers.now()), () => void handOver(name).catch(() => {}))
+    }
 
     // `step`, a move of a store this tab writes, kept; each newly refused object said once, in the box's words.
     const settled = async (e: Entry, step: () => LineStep | undefined): Promise<void> => {
@@ -125,6 +148,7 @@ export namespace written {
       const told = await e.told.told()
       await tell(e, [...refusalsIn(e.store).values()].filter(r => r.literal !== null && !told.has(r.literal)))
       await waited(e)
+      retried(name)
     }
 
     const sign = async (name: N): Promise<void> => {
@@ -140,7 +164,8 @@ export namespace written {
     // the hand-over, said once per tab; a refusal of the post refuses its lines for good, said with their words as a
     // rule's refusal is, and the hand-over goes on to the next piece, so one post can never hold back the rest.
     const shapes = new Set<string>()
-    const handOver = async (name: N): Promise<void> => {
+    const handOver = (name: N): Promise<void> => posted(name).finally(() => retried(name))
+    const posted = async (name: N): Promise<void> => {
       await sign(name)
       const e = entry(name)
       for (const posting of read("unsent", Unsent(e.store.unsent()))) {

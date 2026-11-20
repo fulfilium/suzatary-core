@@ -162,7 +162,9 @@ impl Program for Inbox {
                     let outs = m.cards.asked(ask, answer, |k| readings.card(k));
                     out(outs)
                 }
-                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+                Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => {
+                    match ask {}
+                }
             },
             Msg::Card(key, ev) => {
                 let rows = m.readings.rows();

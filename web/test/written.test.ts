@@ -27,7 +27,7 @@ const fake = (refusals: unknown[] = [], pieces = 1, waiting: unknown[] = []): Fa
 }
 
 test("an answer for later leaves every line unsent, refuses nothing, stops the hand-over, and is said once", async () => {
-  for (const status of [401, 403, 404, 408, 409, 410, 429]) {
+  for (const status of [400, 401, 403, 404, 405, 408, 409, 410, 415, 429]) {
     let posts = 0
     Object.assign(globalThis, { fetch: async () => (posts++, new Response(JSON.stringify({ error: `not yet (${status})` }), { status })) })
     const { store, calls } = fake([], 2)
@@ -42,7 +42,7 @@ test("an answer for later leaves every line unsent, refuses nothing, stops the h
 })
 
 test("a refusal of the post itself refuses its lines for good, as the rule's does, and the next piece goes", async () => {
-  for (const status of [400, 413, 415, 422]) {
+  for (const status of [413, 422]) {
     let posts = 0
     Object.assign(globalThis, { fetch: async () => (posts++, new Response(JSON.stringify({ error: `never (${status})` }), { status })) })
     const { store, calls } = fake([], 2)
@@ -53,16 +53,16 @@ test("a refusal of the post itself refuses its lines for good, as the rule's doe
   }
 })
 
-test("every failure is read as exactly one answer", () => {
+test("every status is read as exactly one answer, and only 413 and 422 refuse a post's lines for good", () => {
+  for (let status = 0; status < 600; status++) {
+    const read = written.failed(new http.ApiError(`status ${status}`, status)).type
+    const expected = status >= 500 ? "Unanswered" : status === http.OUTDATED ? "Outdated" : status === 413 || status === 422 ? "Refused" : "Later"
+    assert.equal(read, expected, `${status}`)
+  }
+})
+
+test("an answer that is no HTTP answer at all is no answer", () => {
   assert.equal(written.failed(new TypeError("offline")).type, "Unanswered")
-  assert.equal(written.failed(new http.ApiError("down", 503)).type, "Unanswered")
-  assert.equal(written.failed(new http.ApiError("newer", http.OUTDATED)).type, "Outdated")
-  assert.equal(written.failed(new http.ApiError("who", 401)).type, "Later")
-  assert.equal(written.failed(new http.ApiError("slow down", 429)).type, "Later")
-  assert.equal(written.failed(new http.ApiError("this box runs another build", 409)).type, "Later")
-  assert.equal(written.failed(new http.ApiError("no store named topics", 404)).type, "Later")
-  assert.equal(written.failed(new http.ApiError("keys beside no line", 400)).type, "Refused")
-  assert.equal(written.failed(new http.ApiError("too large", 413)).type, "Refused")
 })
 
 test("a refusal a load finds is said with the person's words, once, and marked seen", async () => {
@@ -105,7 +105,7 @@ test("a post the box did not answer leaves every line unsent and says nothing: t
 })
 
 test("a line the box has not taken yet is said once in its rule's words, and told apart from a refusal", async () => {
-  const waits = { hash: "c".repeat(64), reason: "it is dated 600 s ahead of the box's clock", literal: "Change(…ahead…)", words: "Is it due?", signature: false }
+  const waits = { hash: "c".repeat(64), reason: "it is dated 600 s ahead of the box's clock", literal: "Change(…ahead…)", words: "Is it due?", at: null, signature: false }
   const { store } = fake([], 1, [waits])
   const seen: string[] = []
   let told = new Set<string>()
@@ -135,8 +135,8 @@ test("a line the box has not taken yet is said once in its rule's words, and tol
 test("a signature refused or waiting with what it signs says nothing of its own: one sentence for one line", async () => {
   const line = { hash: "d".repeat(64), kind: "Final", reason: "say something", literal: "Change(…said…)", words: "Is it due?", signature: false }
   const signed = { hash: "e".repeat(64), kind: "Final", reason: "rests on dddddddddddd…, which this box refused", literal: "Signed(…)", words: null, signature: true }
-  const waits = { ...line, hash: "f".repeat(64), literal: "Change(…ahead…)", reason: "it is dated 600 s ahead of the box's clock" }
-  const waitsSigned = { ...signed, hash: "0".repeat(64), literal: "Signed(…ahead…)", reason: "rests on ffffffffffff…, which this box has not taken yet, and waits with it" }
+  const waits = { ...line, hash: "f".repeat(64), literal: "Change(…ahead…)", reason: "it is dated 600 s ahead of the box's clock", at: null }
+  const waitsSigned = { ...signed, hash: "0".repeat(64), literal: "Signed(…ahead…)", reason: "rests on ffffffffffff…, which this box has not taken yet, and waits with it", at: null }
   const { store } = fake([line, signed], 1, [waits, waitsSigned])
   const seen: string[] = []
   const said: string[] = []
@@ -160,4 +160,14 @@ test("a signature refused or waiting with what it signs says nothing of its own:
     [line.literal, signed.literal, waits.literal + ownlines.WAITS, waitsSigned.literal + ownlines.WAITS].sort(),
     "every record marked told, the signatures' too, so each may go",
   )
+})
+
+test("a line dated ahead is due again when the box's clock reaches its instant, and a line of the box's past never", () => {
+  const line = (at: string | null) => ({ hash: "d".repeat(64), reason: "ahead", literal: null, words: null, at, signature: false })
+  const now = Date.parse("2026-11-20T10:00:00Z")
+  for (const ahead of [null, 0, 90, -90]) {
+    const due = written.due([line("2026-11-20T10:10:00Z"), line("2026-11-20T10:20:00Z"), line("2026-11-20T09:00:00Z"), line(null)], ahead, now)
+    assert.deepEqual(due, { type: "At", ms: Date.parse("2026-11-20T10:10:00Z") + (ahead ?? 0) * 1000, exact: true }, `${ahead}`)
+  }
+  assert.deepEqual(written.due([line("2026-11-20T09:00:00Z")], 0, now), { type: "Never" })
 })

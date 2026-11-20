@@ -76,6 +76,7 @@ const context = (r: Rng): Context => {
     gate,
     reach: gate === "writes" ? { type: "Writes" } : { type: "Reads", said: "This device reads only.", settings: r.bool(), key: r.pick(["untrusted", "revoked", "not_the_key"] as const) },
     offsets: [{ from: 0, minutes: r.pick([0, 60, -300]) }],
+    clock: r.pick([null, 0, 4000, -4000]),
   };
 };
 

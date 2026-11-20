@@ -80,9 +80,10 @@ export namespace questions {
 
   export type Whole<A> = { readonly type: "Held"; readonly v: A } | NotHere
 
-  // `Absent` once a whole pull says the box holds no line of it either; `Unheard` until then.
+  // `Absent` once a whole pull says the box holds no line of it either; `Unheard` until then; `Refused` where it is a
+  // topic this device began and the box refused, in the box's words.
   export type Unheard = { readonly type: "Unheard" }
-  export type Unheld = { readonly type: "Absent" } | Unheard
+  export type Unheld = { readonly type: "Absent" } | Unheard | { readonly type: "Refused"; readonly why: string }
   const ABSENT: Unheld = { type: "Absent" }
   const UNHEARD: Unheard = { type: "Unheard" }
 
@@ -147,6 +148,8 @@ export namespace questions {
     Topic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: null }
     // Sealed as this tab's line, read at once and handed over behind the answer: its name and its conversation.
     Line: { q: { readonly line: lines.Sealing; readonly at: string; readonly actor: string }; a: lines.Sealed }
+    Acted: { q: { readonly lines: readonly string[] }; a: null }
+    Refused: { q: Readonly<Record<never, never>>; a: string }
   }
   export type Kind = keyof Table
   export type Question = { [k in Kind]: { readonly type: k } & Table[k]["q"] }[Kind]
@@ -267,9 +270,16 @@ export namespace questions {
     const conversation = async <A>(id: string, turn: Turn, read: () => Promise<A> | A): Promise<A | Unheld> => {
       await ready("All", turn)
       if (sync.holds(id)) return read()
+      // A held conversation is never read as refused; a refused topic is said before the box is asked of it.
+      const refused = (): Unheld | null => {
+        const why = held.refused_topic(id)
+        return why === undefined ? null : { type: "Refused", why }
+      }
+      const first = refused()
+      if (first !== null) return first
       const pulled = await stores.pull()
       await turn()
-      return sync.holds(id) ? read() : pulled ? ABSENT : UNHEARD
+      return sync.holds(id) ? read() : (refused() ?? (pulled ? ABSENT : UNHEARD))
     }
 
     // Read again only once the inbox, the chains held or the memory moved; until then an ask gets the first reading,
@@ -461,6 +471,10 @@ export namespace questions {
           return stores.write(q.write, q.at, q.actor).then(() => null)
         case "Line":
           return stores.seal(q.line, q.at, q.actor)
+        case "Acted":
+          return stores.acted(q.lines).then(() => null)
+        case "Refused":
+          return Promise.resolve(stores.refused())
       }
     }
   }

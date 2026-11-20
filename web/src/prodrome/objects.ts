@@ -132,6 +132,32 @@ export const heldRow = <A>(rows: Pick<Rows<A>, "parse">, name: string): Promise<
   idb.read(DB, keyFor(name), rows.parse).then((r): Read<A> => (r.type === "Unavailable" ? { type: "Unreadable", why: r.why } : r));
 
 /**
+ * Two rows read in one read-only transaction, so no write lands between the two reads: a reader of both waits for a
+ * write queued before it once, never for one that came between. Never throws, as `heldRow` does not.
+ */
+export const heldRows = <A, B>(
+  a: { readonly rows: Pick<Rows<A>, "parse">; readonly name: string },
+  b: { readonly rows: Pick<Rows<B>, "parse">; readonly name: string },
+): Promise<readonly [Read<A>, Read<B>]> => {
+  const readOf = <C>(rows: Pick<Rows<C>, "parse">, raw: unknown): Read<C> => {
+    if (raw === undefined) return { type: "Absent" };
+    const parsed = rows.parse(raw);
+    return parsed.type === "Val" ? { type: "Held", v: parsed.v } : { type: "Unreadable", why: parsed.e };
+  };
+  if (!idb.available()) return Promise.resolve([{ type: "Absent" }, { type: "Absent" }]);
+  return idb
+    .within(DB, "readonly", async (store): Promise<readonly [Read<A>, Read<B>]> => {
+      const first: unknown = await idb.done(store.get(keyFor(a.name)));
+      const second: unknown = await idb.done(store.get(keyFor(b.name)));
+      return [readOf(a.rows, first), readOf(b.rows, second)];
+    })
+    .catch((error: unknown): readonly [Read<A>, Read<B>] => {
+      const why = lo.reason(error);
+      return [{ type: "Unreadable", why }, { type: "Unreadable", why }];
+    });
+};
+
+/**
  * A write to a row: what a replica holds, joined in; or the one way down, a reset, which names every unsent object it
  * was shown to lose and the generation the reader holds, and says whether it may stand in for a row that does not read.
  */

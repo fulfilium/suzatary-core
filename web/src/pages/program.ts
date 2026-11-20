@@ -85,6 +85,7 @@ export namespace program {
       reach: w.reach.type === "Reads" ? { type: "Reads", said: w.reach.said, settings: w.reach.settings, key } : { type: w.reach.type },
       offsets: [...offsetsOf(a.zone)],
       categories: [...a.categories],
+      clock: http.ahead(),
     }
   }
 
@@ -163,6 +164,8 @@ export namespace program {
         return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), lane).then(r => r.answer)
       }      case "Line":
         return storesync.seal(q.line, time.moment()).then(sealed => text.printed(sealed))
+      case "Acted":
+        return storesync.acted(q.lines).then(() => text.printed(null))
     }
   }
 
@@ -270,7 +273,7 @@ export namespace program {
           case "Listen":
             return hold(
               e.ask,
-              stream.open(stream.of(e.path), { opened: () => send({ type: "Opened", ask: e.ask }), frame: frame => send({ type: "Heard", ask: e.ask, frame }) }, stream.browser),
+              stream.open(stream.of(e.path), { opened: () => send({ type: "Opened", ask: e.ask }), gaveUp: () => send({ type: "Lost", ask: e.ask }), frame: frame => send({ type: "Heard", ask: e.ask, frame }) }, stream.browser),
             )
           case "Again":
             return held(e.path).again()
@@ -353,10 +356,12 @@ export namespace program {
       const t3 = performance.now()
       performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
       const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
+      const unclocked = http.heardClock(() => running.send({ type: "Context", ...context() }))
       return {
         ...(around.absorbs === undefined ? {} : { absorb: around.absorbs }),
         destroy: () => {
           unheard()
+          unclocked()
           held_.forEach(stop => stop())
           timers.forEach(t => clearTimeout(t))
           frames.forEach(f => cancelAnimationFrame(f))

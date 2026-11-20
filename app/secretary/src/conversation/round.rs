@@ -270,6 +270,8 @@ impl Round {
     pub fn answer(rules: &Rules<'_>, at: &Transcript<'_>) -> Result<Option<Closed>, Refusal> {
         let held = at.conversations.runs.begin()?;
         let run = &held.run;
+        // Named before the claim, so a stop taken after the claim finds this round by its run.
+        rules.sink.halt.claims(run.clone());
         let now = at.clock.now();
         match transcript::claim(
             at.conversations,

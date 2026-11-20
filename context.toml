@@ -40,7 +40,9 @@ allowance = 2000
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.181 for typedtooling T1 (#567, +9,943: the crate app/tooling, which T2 to T4 pay back by deleting the shell it replaces; the plan restates the running total); accepted at the review of #567.
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.184 for the tab's own turns (#547, +35,592 over master's own measure of that tree: the lines' rule's question, stop and `Again` cases, the `Again` kind and its descent, the transcript's claim readings and taint join, the tab's seal of a question and a stop, the own lines' keys, and their laws, less the say and stop routes; and, at its review, +9,169: the refusal's record of what was said, the rule's clock and parents, the judged taint in the digest, and the scripts of the owed law over rounds; and, at its second, +3,520: each line read through what it rests on and the split law, the post cut by bytes, and a post refused for itself; and, at its third, +2,690: the post folded one line at a time in the shared layer and its laws, the box's `Later` and its sentence on a turn, and a post of another build named as such; and, at its fourth, +2,754: the one count of what a line makes owed, the post laws drawing regenerates, held ids, setups, shared keys and a moving clock, a line waiting with what it rests on, and a signature that says nothing of its own); accepted at the review of #547.
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.185 for typedtooling T2 (#569, +15,540 over 2.1.185's figure: publication in app/tooling, the one check before every push to core and its laws, less 269 lines of train.sh and five stub guards; the plan restates the running total); accepted at the review of #569.
-reading = 3125009
+# 2026-11-20: raised by hand to the figure of the tree merged with 2.1.187 for localwrites stage 3 (c2) (#573, +16,647: the stop's halt by the runs its line ends, the chain law, an own line's ruling and words on a turn, a refusal's words taken back whole by one tab or kept on the page that began them, the box's clock and its bounds, the post's 413 and 422, and their laws; and, at its second review, +2,953: a refused topic by its opening, the one test of a line the rows hold, words placed before they are claimed, the composer's draft read, the device's lock bounded, and their laws); accepted at the reviews of #573.
+# 2026-11-20: set to the tree's figure at the fifth review of #573, as that review asked (+4,181 over the third to fifth reviews: the core alone answering which own records go, reading, settling and sealing under the device's lock, a line the rows hold taken, a let-go refusal never posted, a settle's reading kept apart from its cleanup, a seal tried again only where nothing was sealed, and their laws).
+reading = 3148790
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
@@ -48,14 +50,16 @@ reading = 3125009
 cli = 81630
 # 2026-11-18: `inbox`, `conversations` and `lines` left core over the line (#538); the core split's plan names the further cut of each (rows 24 to 26). Core's figure is lowered by hand to the same tree's.
 # 2026-11-19: `conversations` raised by hand to the figure of #547's head merged with 2.1.174 (`Entry::Again`, `Aside`, `Stored::of_read`, and the claims' reading of `ConversationState`); accepted at the review of #547.
-conversations = 27791
+# 2026-11-20: `conversations` raised by hand to the figure of #573's head merged with 2.1.187 (the halt's run, `Halt::claims`); accepted at the review of #573.
+conversations = 27933
 # 2026-11-18: `digest` left core over the line; the core split's plan names its further cut (rows 27 to 29). Core's figure is lowered by hand to the same tree's.
 digest = 28369
 inbox = 33570
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
 io = 54058
 # 2026-11-19: `lines` raised by hand to the figure of #547's head (the rule's `World` and `Upload`, `Whole`, `Sealing::{Say, Stop}`, the transcript's `queued`, `state`, `turn_lines` and `Confirms`, `own_taken`; at its review the rule's clock and parents and `replies_to`; at its second the rule's view of a line and `whole`; at its third the fold's `take` and `Writes::waiting`), at its head merged with 2.1.181; accepted at the review of #547.
-lines = 44489
+# 2026-11-20: `lines` raised by hand to the figure of #573's head merged with 2.1.187 (`Transcript::ended_by`, `skew`, `Question` and `Sealing::Begin`, `Ruling`, `rulings`, `refused_elsewhere`, `acted`, and `OwnLine::{words, conversation, at}`); accepted at the review of #573.
+lines = 46260
 # 2026-11-19: the stores' table left the secretary for `suzatary-stores`, lowered by hand; still over the line, and the plan names the further cut (the triage agent).
 secretary = 33374
 

@@ -235,10 +235,12 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
     };
     let asked = |n: u8| Sealing::Say {
         conversation: roomy.clone(),
-        text: format!("is permit {n} due?"),
-        references: Vec::new(),
-        attachments: Vec::new(),
-        seat: suzatary_signatures::signatures::Seat::Device,
+        question: suzatary_lines::secretary::held_replica::Question {
+            text: format!("is permit {n} due?"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+            seat: suzatary_signatures::signatures::Seat::Device,
+        },
     };
     let kinds: [(&str, &dyn Fn(u8) -> Sealing); 2] = [("rename", &renamed), ("question", &asked)];
     for (kind, sealing) in kinds {
@@ -513,10 +515,12 @@ fn a_tab_s_question_reads_as_the_box_s_and_holds_no_number_it_was_typed_with() {
         .seal(
             Sealing::Say {
                 conversation: DEFAULT.clone(),
-                text: typed.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-                seat: suzatary_signatures::signatures::Seat::Device,
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: typed.to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                },
             },
             at(1),
             &ada,
@@ -630,10 +634,12 @@ fn an_own_turn_reads_its_words_after_the_skeleton_names_it() {
         .seal(
             Sealing::Say {
                 conversation: DEFAULT.clone(),
-                text: said.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-                seat: suzatary_signatures::signatures::Seat::Device,
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: said.to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                },
             },
             at(1),
             &ada,
@@ -697,10 +703,12 @@ fn a_taken_own_line_is_free_once_its_keys_land() {
         .seal(
             Sealing::Say {
                 conversation: DEFAULT.clone(),
-                text: "Is the zephyr permit due this week?".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-                seat: suzatary_signatures::signatures::Seat::Device,
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: "Is the zephyr permit due this week?".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                },
             },
             at(1),
             &ada,
@@ -760,10 +768,12 @@ fn an_own_line_erased_elsewhere_lets_its_key_go() {
         .seal(
             Sealing::Say {
                 conversation: DEFAULT.clone(),
-                text: "Is the zephyr permit due this week?".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-                seat: suzatary_signatures::signatures::Seat::Device,
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: "Is the zephyr permit due this week?".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                },
             },
             at(1),
             &ada,
@@ -891,8 +901,541 @@ fn the_box_s_acceptance_of_a_full_post_measured() {
 }
 
 /// A key seed of its own for each `n`.
+/// A question on the default conversation.
+fn say(text: &str) -> Sealing {
+    Sealing::Say {
+        conversation: DEFAULT.clone(),
+        question: suzatary_lines::secretary::held_replica::Question {
+            text: text.to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+            seat: suzatary_signatures::signatures::Seat::Device,
+        },
+    }
+}
+
 fn seed(n: u32) -> [u8; 32] {
     let mut bytes = [7u8; 32];
     bytes[..4].copy_from_slice(&n.to_be_bytes());
     bytes
+}
+
+/// A ruling is of a line the box does not hold: an own line whose post's answer was lost after the
+/// box took it reads `Unsent` until a pull lands it, and none after, whatever its answer says.
+#[test]
+fn a_line_the_rows_hold_has_no_ruling_whatever_its_answer() {
+    use suzatary_lines::secretary::held_replica::Ruling;
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let mut tab =
+        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let ada = Actor::new("ada").expect("an actor");
+    let (owned, name, _) = tab
+        .seal(
+            Sealing::Say {
+                conversation: DEFAULT.clone(),
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: "Is the zephyr permit due this week?".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                },
+            },
+            at(1),
+            &ada,
+            &Fixed(AtomicU8::new(23)),
+        )
+        .expect("sealed");
+    assert_eq!(tab.rulings(&DEFAULT), [(name.clone(), Ruling::Unsent)]);
+    // The box takes it, and its answer never reaches the tab.
+    handed_over(&lines, &owned[0].node, &ada);
+    tab.piece(
+        skeleton(&lines),
+        suzatary_memory::secretary::key_ring::KeyRing::default(),
+        1,
+    )
+    .expect("a piece");
+    let _ = tab.land();
+    assert_eq!(tab.rulings(&DEFAULT), [], "the landed rows hold it");
+}
+
+/// A refused topic is defined by what the device wrote: a conversation whose opening is one of its
+/// own lines refused for good. Its opening's title and the question resting on it are elsewhere; a
+/// refused question of a conversation the device holds is not, and is not after the rows start
+/// over either, when they lack it. A refused line the rows hold all the same has no ruling.
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one law over a refused topic, a held conversation, a reset and a line the rows took"
+)]
+fn a_refused_topic_is_one_whose_opening_this_device_wrote() {
+    use suzatary_lines::secretary::held_replica::Ruling;
+    use suzatary_store::replica::writes::{Answer, Refusal};
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let mut tab =
+        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let ada = Actor::new("ada").expect("an actor");
+    let question = |text: &str| suzatary_lines::secretary::held_replica::Question {
+        text: text.to_owned(),
+        references: Vec::new(),
+        attachments: Vec::new(),
+        seat: suzatary_signatures::signatures::Seat::Device,
+    };
+    let (begun, opening, _) = tab
+        .seal(
+            Sealing::Begin {
+                title: Some(Title::new("Permits").expect("a title")),
+                question: question("Is the permit due?"),
+            },
+            at(1),
+            &ada,
+            &Fixed(AtomicU8::new(31)),
+        )
+        .expect("sealed");
+    let (_, held_question, _) = tab
+        .seal(
+            Sealing::Say {
+                conversation: DEFAULT.clone(),
+                question: question("And the fee?"),
+            },
+            at(2),
+            &ada,
+            &Fixed(AtomicU8::new(41)),
+        )
+        .expect("sealed");
+    let never = |name: &prodrome_core::event::Hash| {
+        (
+            name.clone(),
+            Answer::Refused {
+                kind: Refusal::Final,
+                reason: "say something".to_owned(),
+            },
+        )
+    };
+    let _ = tab.answered(vec![never(&opening), never(&held_question)]);
+    let topic = begun
+        .iter()
+        .find_map(|own| own.node.conversation())
+        .expect("its conversation")
+        .to_owned();
+    let elsewhere = |tab: &HeldReplica| -> Vec<String> {
+        tab.refused_elsewhere()
+            .into_iter()
+            .map(|(_, ruling)| match ruling {
+                Ruling::Refused { words, .. } => words.quoted().to_owned(),
+                Ruling::Unsent | Ruling::Trust | Ruling::Later { .. } => String::new(),
+            })
+            .collect()
+    };
+    let mut found = elsewhere(&tab);
+    found.sort();
+    assert_eq!(
+        found,
+        ["Is the permit due?", "Permits"],
+        "the topic's title and question"
+    );
+    assert_eq!(
+        tab.refused_topics()
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        [topic],
+        "the held conversation's refused question is no refused topic"
+    );
+    let _ = tab.start_over();
+    assert_eq!(
+        elsewhere(&tab).len(),
+        2,
+        "nothing of a held conversation, after the rows start over"
+    );
+    let words: std::collections::BTreeSet<_> = tab
+        .refused_elsewhere()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    let _ = tab.acted(&words);
+    assert!(
+        tab.refused_topics().is_empty(),
+        "a refused topic whose words the person acted on whole is absent"
+    );
+
+    // Another tab's post took the held question all the same: the rows hold it, and it has no ruling.
+    let mut fresh =
+        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let (owned, name, _) = fresh
+        .seal(
+            Sealing::Say {
+                conversation: DEFAULT.clone(),
+                question: question("Is the deed signed?"),
+            },
+            at(3),
+            &ada,
+            &Fixed(AtomicU8::new(51)),
+        )
+        .expect("sealed");
+    let _ = fresh.answered(vec![never(&name)]);
+    assert_eq!(
+        fresh.rulings(&DEFAULT).len(),
+        1,
+        "refused, and the rows lack it"
+    );
+    handed_over(&lines, &owned[0].node, &ada);
+    fresh
+        .piece(
+            skeleton(&lines),
+            suzatary_memory::secretary::key_ring::KeyRing::default(),
+            1,
+        )
+        .expect("a piece");
+    let _ = fresh.land();
+    assert!(fresh.holds(&name));
+    assert!(
+        fresh.rulings(&DEFAULT).is_empty(),
+        "a line the rows hold has no ruling"
+    );
+}
+
+/// A tab that missed the wake of a let-go never posts the record again nor keeps it unsent: one tab
+/// is told of a refused question, the person acts on it, and the tab lets it go; another, which
+/// read the question from the row before its refusal, reads the act before it seals, so the
+/// question is refused for good to it too ([`suzatary_lines::secretary::held_replica::LET_GO`]):
+/// it posts nothing of it, and its new question rests on what the conversation holds instead.
+#[test]
+fn a_tab_that_missed_a_let_go_never_posts_it_again() {
+    use std::collections::BTreeSet;
+    use suzatary_store::replica::writes::{Answer, Fit, Refusal};
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let pulled =
+        || HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let ada = Actor::new("ada").expect("an actor");
+    let mut first = pulled();
+    let (_, refused, _) = first
+        .seal(
+            say("Is the permit due?"),
+            at(1),
+            &ada,
+            &Fixed(AtomicU8::new(81)),
+        )
+        .expect("sealed");
+    // The second tab reads the row before the box's refusal reaches it: to it the line is unsent.
+    let mut second = pulled();
+    let _ = second.take_own(&first.own().iter().cloned().collect::<Vec<_>>());
+    let _ = first.answered(vec![(
+        refused.clone(),
+        Answer::Refused {
+            kind: Refusal::Final,
+            reason: "never".to_owned(),
+        },
+    )]);
+    let acted: BTreeSet<_> = [refused.clone()].into();
+    let _ = first.acted(&acted);
+    let released = first.releasable(&BTreeSet::new());
+    assert_eq!(released.refused, acted, "let go as refused, by name");
+    // The second reads the row, which no longer holds it, and the acts, as a seal does.
+    let _ = second.acted(&acted);
+    let posts = |tab: &HeldReplica| -> Vec<prodrome_core::event::Hash> {
+        tab.unsent(
+            Fit {
+                most: 1000,
+                bytes: usize::MAX,
+            },
+            |_| 1,
+        )
+        .into_iter()
+        .flatten()
+        .map(|own| own.name().clone())
+        .collect()
+    };
+    assert!(!posts(&second).contains(&refused), "never posted again");
+    let (owned, asked, _) = second
+        .seal(say("And the fee?"), at(2), &ada, &Fixed(AtomicU8::new(91)))
+        .expect("sealed");
+    let new = owned
+        .iter()
+        .find(|own| *own.node.name() == asked)
+        .expect("the new line");
+    assert!(
+        !new.node.rests_on().contains(&refused),
+        "it rests on what the conversation holds"
+    );
+    assert!(
+        owned.iter().all(|own| *own.node.name() != refused),
+        "nothing of the refused question is kept again: {owned:?}"
+    );
+    assert!(posts(&second).contains(&asked));
+    assert!(!posts(&second).contains(&refused));
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(48))]
+
+    /// The core alone answers which own records the device may let go, and a reload of what the
+    /// device keeps after it let them go reads the same: for a topic begun with no name and the
+    /// three questions that rest on it in a chain, any of them refused, told of and acted on in any
+    /// measure, no record goes while a line resting on it is still held back, every refused line
+    /// that gives words back stays ruled until the person acts on it, and the reloaded tab, asked
+    /// again, lets go of nothing a line it keeps rests on.
+    #[test]
+    fn no_refused_record_goes_while_a_line_resting_on_it_is_held_back(
+        refused in proptest::collection::vec(proptest::prelude::any::<bool>(), 4),
+        told in proptest::collection::vec(proptest::prelude::any::<bool>(), 4),
+        acted in proptest::collection::vec(proptest::prelude::any::<bool>(), 4),
+    ) {
+        use std::collections::BTreeSet;
+        use suzatary_store::replica::writes::{Answer, Refusal};
+        let lines = InMemory::default();
+        let opened = Entry::Opened {
+            at: at(0),
+            title: Words::kept("Secretary".to_owned()),
+            model: "a-cli/small".to_owned(),
+            kind: Kind::Default,
+        };
+        transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+        let pulled = || HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+        let mut tab = pulled();
+        let ada = Actor::new("ada").expect("an actor");
+        let question = |n: usize| suzatary_lines::secretary::held_replica::Question {
+            text: format!("question {n}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+            seat: suzatary_signatures::signatures::Seat::Device,
+        };
+        // The opening (no name, so no words) and the chain of questions resting on it, in order.
+        let (begun, opening, _) = tab
+            .seal(Sealing::Begin { title: None, question: question(0) }, at(1), &ada, &Fixed(AtomicU8::new(61)))
+            .expect("sealed");
+        let topic = suzatary_base::conversation_id::ConversationId::new(
+            begun.iter().find_map(|own| own.node.conversation()).expect("its conversation"),
+        )
+        .expect("an id");
+        let questioned: Vec<_> = begun
+            .iter()
+            .map(|own| own.node.name().clone())
+            .filter(|name| *name != opening)
+            .collect();
+        let mut chain = vec![opening];
+        chain.extend(questioned);
+        // Four records deep on purpose: the opening, its question, and two questions over it.
+        for n in 1..3usize {
+            let (_, name, _) = tab
+                .seal(
+                    Sealing::Say { conversation: topic.clone(), question: question(n) },
+                    at(2 + u32::try_from(n).expect("small")),
+                    &ada,
+                    &Fixed(AtomicU8::new(70 + u8::try_from(n).expect("small"))),
+                )
+                .expect("sealed");
+            chain.push(name);
+        }
+        let never = Answer::Refused { kind: Refusal::Final, reason: "never".to_owned() };
+        let _ = tab.answered(
+            chain.iter().zip(&refused).filter(|(_, r)| **r).map(|(name, _)| (name.clone(), never.clone())).collect(),
+        );
+        let prints: BTreeMap<_, _> = tab.own().iter().map(|own| (own.node.name().clone(), own.node.print().to_owned())).collect();
+        let told: BTreeSet<String> = chain.iter().zip(&told).filter(|(_, t)| **t).map(|(name, _)| prints[name].clone()).collect();
+        let acted: BTreeSet<prodrome_core::event::Hash> = chain.iter().zip(&acted).filter(|(_, a)| **a).map(|(name, _)| name.clone()).collect();
+        let _ = tab.acted(&acted);
+        let going = tab.releasable(&told).prints;
+        let held_back: BTreeSet<_> = tab.own().refusals().into_iter().map(|(own, _, _)| own.name().clone()).collect();
+
+        // No record goes while a line still held back rests on it.
+        for own in tab.own().iter() {
+            if !held_back.contains(own.node.name()) || going.contains(own.node.print()) {
+                continue;
+            }
+            // A line rests on its genesis too, which is no own record.
+            for print in own.node.rests_on().iter().filter_map(|parent| prints.get(parent)) {
+                proptest::prop_assert!(!going.contains(print), "a parent of a line still held back goes");
+            }
+        }
+        // The device keeps what does not go, and a reload reads the same rulings.
+        let mut reloaded = pulled();
+        let kept: Vec<_> = tab.own().iter().filter(|own| !going.contains(own.node.print())).cloned().collect();
+        let _ = reloaded.take_own(&kept);
+        let _ = reloaded.acted(&acted);
+        // Ruled on the topic's page, or on the page that begins topics where its opening was refused.
+        let ruled: BTreeSet<_> = reloaded
+            .rulings(&topic)
+            .into_iter()
+            .chain(reloaded.refused_elsewhere())
+            .map(|(name, _)| name)
+            .collect();
+        for name in &chain {
+            let worded = name != &chain[0];
+            if held_back.contains(name) && worded && !acted.contains(name) {
+                proptest::prop_assert!(ruled.contains(name), "a refused question not acted on is ruled after a reload");
+                proptest::prop_assert!(!going.contains(&prints[name]));
+            }
+        }
+        // The reloaded tab asked again: what it keeps rests on nothing either answer let go.
+        let again = reloaded.releasable(&told).prints;
+        let gone: BTreeSet<&String> = going.iter().chain(&again).collect();
+        for own in reloaded.own().iter().filter(|own| !gone.contains(&own.node.print().to_owned())) {
+            for print in own.node.rests_on().iter().filter_map(|parent| prints.get(parent)) {
+                proptest::prop_assert!(!gone.contains(print), "a line kept rests on a record let go");
+            }
+        }
+    }
+}
+
+/// One step of two tabs over the device's row, as the tab's worker takes it.
+#[derive(Debug, Clone, Copy)]
+enum Step {
+    /// The row read into the tab's core and settled: its records, then its acts, then what the
+    /// core lets go removed, the refused ones kept as acted on.
+    Settle,
+    /// The row read, a question sealed over what the tab holds, and kept in the row.
+    Seal,
+    /// The box refuses the tab's first unsent question for good, and the tab keeps the answer; the
+    /// person acts on it at once (`true`), or not yet.
+    Refuse(bool),
+    /// The box takes the tab's first unsent question it can take; the answer reaches the tab, or
+    /// is lost (`true`).
+    Take(bool),
+    /// The tab lands what the box serves, with its keys.
+    Land,
+    /// The tab hands over what it holds unsent, after reading the row.
+    Post,
+    /// The person acts on every refusal with words the tab shows.
+    Act,
+}
+
+fn step() -> impl proptest::strategy::Strategy<Value = (usize, Step)> {
+    use proptest::prelude::*;
+    (
+        0usize..2,
+        prop_oneof![
+            Just(Step::Settle),
+            Just(Step::Seal),
+            any::<bool>().prop_map(Step::Refuse),
+            any::<bool>().prop_map(Step::Take),
+            Just(Step::Land),
+            Just(Step::Post),
+            Just(Step::Act),
+        ],
+    )
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
+
+    /// For any order of two tabs' reads, answers, acts and seals over one row: no record stays in
+    /// the row whose line the rows hold once its keys are held, whatever answer it carries; and no
+    /// record let go as refused is posted again by either tab.
+    #[test]
+    fn two_tabs_over_one_row_keep_no_taken_record_and_post_no_let_go_one(
+        steps in proptest::collection::vec(step(), 1..24),
+    ) {
+        use std::collections::BTreeSet;
+        use suzatary_store::replica::writes::{Answer, Fit, Refusal, Writes};
+        let lines = InMemory::default();
+        let opened = Entry::Opened {
+            at: at(0),
+            title: Words::kept("Secretary".to_owned()),
+            model: "a-cli/small".to_owned(),
+            kind: Kind::Default,
+        };
+        transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+        let pulled = || HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+        let ada = Actor::new("ada").expect("an actor");
+        let mut tabs = [pulled(), pulled()];
+        let mut row: Writes<OwnLine> = Writes::default();
+        let mut acted_row: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+        let mut told: BTreeSet<String> = BTreeSet::new();
+        let mut let_go: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+        let fit = Fit { most: 1000, bytes: usize::MAX };
+        let unsent_lines = |tab: &HeldReplica| -> Vec<OwnLine> {
+            tab.unsent(fit, |_| 1).into_iter().flatten().filter(|own| matches!(own, OwnLine::Line { .. })).cloned().collect()
+        };
+        let read = |tab: &mut HeldReplica, row: &Writes<OwnLine>, acted_row: &BTreeSet<prodrome_core::event::Hash>| {
+            let _ = tab.take_own(&row.iter().cloned().collect::<Vec<_>>());
+            let _ = tab.acted(acted_row);
+        };
+        for (n, (t, step)) in steps.into_iter().enumerate() {
+            let seq = u8::try_from(n).expect("few steps");
+            match step {
+                Step::Settle => {
+                    read(&mut tabs[t], &row, &acted_row);
+                    let released = tabs[t].releasable(&told);
+                    acted_row.extend(released.refused.iter().cloned());
+                    let_go.extend(released.refused);
+                    row = Writes::of(&row.iter().filter(|own| !released.prints.contains(own.node.print())).cloned().collect::<Vec<_>>());
+                    // Nothing whose line this tab's rows hold stays, whatever its answer: a landing
+                    // holds a line's keys beside its node.
+                    for own in row.iter() {
+                        proptest::prop_assert!(!tabs[t].holds(own.node.name()), "a record the rows hold stayed, answered {:?}", own.answer);
+                    }
+                }
+                Step::Seal => {
+                    read(&mut tabs[t], &row, &acted_row);
+                    if let Ok((owned, _, _)) = tabs[t].seal(say(&format!("question {n}")), at(1 + u32::from(seq)), &ada, &Fixed(AtomicU8::new(seq.wrapping_mul(7).wrapping_add(3)))) {
+                        row.apply(&owned);
+                    }
+                }
+                Step::Refuse(act) => {
+                    if let Some(line) = unsent_lines(&tabs[t]).first() {
+                        told.insert(line.print().to_owned());
+                        let (moved, _) = tabs[t].answered(vec![(line.name().clone(), Answer::Refused { kind: Refusal::Final, reason: "never".to_owned() })]);
+                        row.apply(&moved);
+                        if act {
+                            let names: BTreeSet<_> = [line.name().clone()].into();
+                            acted_row.extend(names.iter().cloned());
+                            let _ = tabs[t].acted(&names);
+                        }
+                    }
+                }
+                Step::Post => {
+                    // A hand-over reads the row first; what it posts is what the tab holds unsent.
+                    read(&mut tabs[t], &row, &acted_row);
+                    for line in unsent_lines(&tabs[t]) {
+                        proptest::prop_assert!(!let_go.contains(line.name()), "a record let go as refused is posted again");
+                    }
+                }
+                Step::Take(lost) => {
+                    read(&mut tabs[t], &row, &acted_row);
+                    let held: BTreeSet<_> = lines.lines.objects().expect("held").into_iter().map(|(n, _)| n).collect();
+                    let takeable = unsent_lines(&tabs[t]).into_iter().find(|line| line.rests_on().iter().all(|p| held.contains(p)));
+                    if let Some(line) = takeable {
+                        handed_over(&lines, &line, &ada);
+                        if !lost {
+                            let (moved, _) = tabs[t].answered(vec![(line.name().clone(), Answer::Taken)]);
+                            row.apply(&moved);
+                        }
+                    }
+                }
+                Step::Land => {
+                    let served = skeleton(&lines);
+                    let keys: BTreeMap<_, _> = served.keys.iter().map(|(n, k)| (suzatary_memory::secretary::locked_text::KeyName::new(n.clone()).expect("a name"), k.clone())).collect();
+                    tabs[t].piece(served, suzatary_memory::secretary::key_ring::KeyRing::of(&keys), u64::from(seq) + 1).expect("a piece");
+                    let _ = tabs[t].land();
+                }
+                Step::Act => {
+                    use suzatary_lines::secretary::held_replica::Ruling;
+                    let names: BTreeSet<_> = tabs[t].rulings(&DEFAULT).into_iter().filter(|(_, r)| matches!(r, Ruling::Refused { .. })).map(|(name, _)| name).collect();
+                    acted_row.extend(names.iter().cloned());
+                    let _ = tabs[t].acted(&names);
+                }
+            }
+        }
+    }
 }

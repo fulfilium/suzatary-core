@@ -315,16 +315,16 @@ impl<E: suzatary_stores::stores::Store<Vocabulary: Default>> Store<E> {
 }
 
 impl<E: suzatary_stores::stores::Written<Vocabulary: Default>> Store<E> {
-    /// `[{hash, reason, literal, words, signature}]`: what the box has not taken yet, in the rule's
-    /// words; `literal` and `words` are the lines' alone, and null here; a signature tells nothing
-    /// of its own, and is marked so.
+    /// `[{hash, reason, literal, words, at, signature}]`: what the box has not taken yet, in the
+    /// rule's words; `literal`, `words` and `at` are the lines' alone, and null here; a signature
+    /// tells nothing of its own, and is marked so.
     pub fn waiting(&self) -> Result<String, JsError> {
         json(
             &self
                 .replica
                 .waiting()
                 .iter()
-                .map(|(o, reason)| serde_json::json!({ "hash": o.name().as_str(), "reason": reason, "literal": null, "words": null, "signature": o.is_signature() }))
+                .map(|(o, reason)| serde_json::json!({ "hash": o.name().as_str(), "reason": reason, "literal": null, "words": null, "at": null, "signature": o.is_signature() }))
                 .collect::<Vec<_>>(),
         )
     }

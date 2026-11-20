@@ -210,9 +210,16 @@ pub enum ModelError {
     Halted,
 }
 
-/// A round's stop, set once by the actor who pulled it so the round records a person.
+/// A round's stop, set once by the actor who pulled it so the round records a person, beside the
+/// run its round drew, so a stop pulls the halt of a round it ends and of no other.
 #[derive(Debug, Clone, Default)]
-pub struct Halt(std::sync::Arc<std::sync::OnceLock<prodrome_core::event::Actor>>);
+pub struct Halt(std::sync::Arc<Pulled>);
+
+#[derive(Debug, Default)]
+struct Pulled {
+    by: std::sync::OnceLock<prodrome_core::event::Actor>,
+    run: std::sync::OnceLock<crate::secretary::store::RunId>,
+}
 
 impl Halt {
     /// A halt nobody has pulled.
@@ -223,19 +230,30 @@ impl Halt {
 
     /// Pull it, as `by`; only the first pull counts.
     pub fn stop(&self, by: prodrome_core::event::Actor) {
-        let _first = self.0.set(by);
+        let _first = self.0.by.set(by);
+    }
+
+    /// Its round drew `run`, before the round claims anything under it; only the first counts.
+    pub fn claims(&self, run: crate::secretary::store::RunId) {
+        let _first = self.0.run.set(run);
+    }
+
+    /// The run its round drew; none before the round has drawn one.
+    #[must_use]
+    pub fn run(&self) -> Option<&crate::secretary::store::RunId> {
+        self.0.run.get()
     }
 
     /// Who pulled it, if anyone has.
     #[must_use]
     pub fn by(&self) -> Option<&prodrome_core::event::Actor> {
-        self.0.get()
+        self.0.by.get()
     }
 
     /// Whether it has been pulled.
     #[must_use]
     pub fn halted(&self) -> bool {
-        self.0.get().is_some()
+        self.0.by.get().is_some()
     }
 }
 

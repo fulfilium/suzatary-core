@@ -19,6 +19,30 @@ use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 use suzatary_store::replica::held::Node;
 use suzatary_store::replica::writes::Role;
 
+/// What a line of the person's gives back when the box refuses it for good.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Words {
+    /// A question whole: its words, what it points at, and its files.
+    Question {
+        text: String,
+        references: Vec<suzatary_base::reference::Reference>,
+        attachments: Vec<suzatary_held::attachment::Attachment>,
+    },
+    /// A title: a rename's, or a topic's.
+    Title(String),
+}
+
+impl Words {
+    /// Its words as a sentence quotes them.
+    #[must_use]
+    pub fn quoted(&self) -> &str {
+        match self {
+            Words::Question { text, .. } => text,
+            Words::Title(title) => title,
+        }
+    }
+}
+
 /// One object a tab wrote to the lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnLine {
@@ -107,6 +131,77 @@ impl OwnLine {
                 .map(|(name, bytes)| (name.clone(), hex::encode(bytes)))
                 .collect(),
             OwnLine::Signature { .. } => BTreeMap::new(),
+        }
+    }
+
+    /// What the person wrote in it, opened with its own keys: a question whole, or a title (a
+    /// rename's, or a topic's it was opened under); none for a line that holds neither, or a
+    /// signature.
+    #[must_use]
+    pub fn words(&self) -> Option<Words> {
+        use suzatary_conversations::secretary::model::Turn;
+        use suzatary_conversations::secretary::store::{Entry, Title};
+        let OwnLine::Line { print, keys, .. } = self else {
+            return None;
+        };
+        let envelope = parse_envelope::<LineEvent>(&LineVocabulary, print).ok()?;
+        // A title is words only where it says something: a topic opened with none gives nothing back.
+        let title = |title: Option<&str>| {
+            title
+                .filter(|title| !title.is_empty())
+                .map(|title| Words::Title(title.to_owned()))
+        };
+        match envelope.event()?.entry(&|name: &KeyName| keys.key(name)) {
+            Entry::Said {
+                turn:
+                    Turn::Person {
+                        text,
+                        references,
+                        attachments,
+                    },
+                ..
+            } => Some(Words::Question {
+                text,
+                references,
+                attachments,
+            }),
+            Entry::Titled { title: words, .. } => title(words.get().map(Title::as_str)),
+            Entry::Opened { title: words, .. } => title(words.get().map(String::as_str)),
+            _ => None,
+        }
+    }
+
+    /// Whether it opens its conversation.
+    #[must_use]
+    pub fn opens(&self) -> bool {
+        matches!(
+            self,
+            OwnLine::Line { node, .. }
+                if matches!(&node.given().header, crate::wire::lines::NodeHeader::Line { step: crate::secretary::step::Step::Opened, .. })
+        )
+    }
+
+    /// The conversation it is a line of; none for a signature.
+    #[must_use]
+    pub fn conversation(&self) -> Option<&str> {
+        match self {
+            OwnLine::Line { node, .. } => match &node.given().header {
+                crate::wire::lines::NodeHeader::Line { conversation, .. } => Some(conversation),
+                crate::wire::lines::NodeHeader::Structure { .. } => None,
+            },
+            OwnLine::Signature { .. } => None,
+        }
+    }
+
+    /// Its writer's instant, as its node spells it; none for a signature.
+    #[must_use]
+    pub fn at(&self) -> Option<&str> {
+        match self {
+            OwnLine::Line { node, .. } => match &node.given().header {
+                crate::wire::lines::NodeHeader::Line { at, .. } => Some(at),
+                crate::wire::lines::NodeHeader::Structure { .. } => None,
+            },
+            OwnLine::Signature { .. } => None,
         }
     }
 

@@ -70,10 +70,12 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
         .seal(
             Sealing::Say {
                 conversation: id.clone(),
-                text: text.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-                seat: suzatary_signatures::signatures::Seat::Operator,
+                question: suzatary_lines::secretary::held_replica::Question {
+                    text: text.to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Operator,
+                },
             },
             at,
             operator.actor(),

@@ -135,8 +135,32 @@ export namespace http {
       headers: { accept: "application/json", ...(had === undefined ? {} : { "if-none-match": had.tag }) },
       signal,
     })
-    return [await fetch(path, init).catch(wait.waited(path)), had]
+    const sent = Date.now()
+    const response = await fetch(path, init).catch(wait.waited(path))
+    timed(response, sent)
+    return [response, had]
   }
+
+  // How many seconds this device's clock reads ahead of the box's (behind where negative), from the `Date` of the last
+  // answer no cache can have served (`no-store`, the API's default) against the middle of its round trip; null before any.
+  // An `immutable` answer may come from the browser's cache with the `Date` of its first fetch, so it tells no clock.
+  let skew: number | null = null
+  // Told when the reading moves by a minute or more: the bounds it is read against are minutes apart, and a corrected
+  // clock moves it by far more, so a listener is not told of every answer.
+  const SKEW_STEP_S = 60
+  let told: number | null = null
+  const hearing = new Set<() => void>()
+  export const heardClock = (k: () => void): (() => void) => (hearing.add(k), () => void hearing.delete(k))
+  const timed = (response: Response, sent: number): void => {
+    const date = response.headers.get("date")
+    const box = date === null ? NaN : Date.parse(date)
+    if (Number.isNaN(box) || !(response.headers.get("cache-control") ?? "").includes("no-store")) return
+    skew = Math.round(((sent + Date.now()) / 2 - box) / 1000)
+    if (told !== null && Math.abs(skew - told) < SKEW_STEP_S) return
+    told = skew
+    hearing.forEach(k => k())
+  }
+  export const ahead = (): number | null => skew
 
   // A read is signed too, so a device whose key was revoked is told to wipe itself however it next asks.
   export const get = <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<A> =>
@@ -257,11 +281,12 @@ export namespace http {
     const request = actRequest(body)
     const keepalive = lives === "Outlives" && typeof request.body === "string" && request.body.length <= OUTLIVES
     const [init, trace] = await signed(path, { ...request, keepalive })
-    const sent = performance.now()
+    const [sent, at] = [performance.now(), Date.now()]
     const response = await fetch(path, { ...init, signal: bound === undefined ? null : AbortSignal.timeout(bound) }).catch((e: unknown) => {
       said(path, trace, 0, performance.now() - sent)
       throw e
     })
+    timed(response, at)
     said(path, trace, response.status, performance.now() - sent)
     const answer = await response.text().catch(() => "null")
     if (response.status === GONE) gone()

@@ -96,7 +96,7 @@ export namespace dressed {
   }
 
   export const window = async (id: string, w: grouped.Asked, zone: time.Zone, lane: lanes.Lane): Promise<text.Text<Windowed>> => {
-    type At = Exclude<questions.Grouped, questions.Unheld> | questions.Unheard
+    type At = Exclude<questions.Grouped, { readonly type: "Absent" }>
     const at = (m: MemoryPayload | null, drawn: readonly questions.Drawn[] = drawnOf(id)): Promise<At> =>
       storesync.window(id, w, m, drawn, zone, lane).then((one): At => (one.type === "Absent" ? storesync.absent(id) : one))
     const bare = await at(null)

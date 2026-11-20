@@ -8,7 +8,7 @@ import type { StoredObject } from "../src/wire/generated/wire"
 import type { Replica } from "../src/prodrome/replica"
 import { NOTHING, appended, join, landed, losses } from "../src/prodrome/replica"
 import type { Write } from "../src/prodrome/objects"
-import { CHAIN, alterRow, heldRow, holdRow, keepRow } from "../src/prodrome/objects"
+import { CHAIN, alterRow, heldRow, heldRows, holdRow, keepRow } from "../src/prodrome/objects"
 import { replicaWith } from "./held"
 import door from "../src/app/idb"
 import ownlines from "../src/prodrome/ownlines"
@@ -305,21 +305,19 @@ test("a device from version 8 keeps this tab's own lines through the upgrade, as
   }
 })
 
-test("a load lets go of the own lines the box answered for good once nothing is lost, and keeps every one it may still take", async () => {
+test("a load lets go of exactly the own records the core names, and two tabs acting on one refusal act once", async () => {
   Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
   const records = ANSWERS.map((answer, n) => ({ literal: `Titled(… ${n})`, keys: {}, answer }))
   assert.equal((await ownlines.keep(records)).type, "Val")
-  assert.equal((await ownlines.settled(new Set(records.map(r => r.literal)))).type, "Val")
   const answers = async (): Promise<unknown> => {
     const kept = await ownlines.kept()
     return kept.type === "Val" ? kept.v.map(r => r.answer) : kept
   }
-  // A refused line keeps its words on the device until the person was told of the refusal with them.
-  assert.deepEqual(await answers(), [ANSWERS[0], ANSWERS[1], ANSWERS[2]])
-  await ownlines.seen([records[2]?.literal ?? ""])
-  assert.equal((await ownlines.settled(new Set())).type, "Val")
-  assert.deepEqual(await answers(), [ANSWERS[0], ANSWERS[1]])
-  assert.deepEqual([...(await ownlines.told())], [], "a seen print of a record let go is read by nothing")
+  assert.equal((await ownlines.settled(new Set([records[2]?.literal ?? "", records[3]?.literal ?? ""]))).type, "Val")
+  assert.deepEqual(await answers(), [ANSWERS[0], ANSWERS[1]], "the named records go, and only they")
+  await ownlines.acted(["2".repeat(64)])
+  await ownlines.acted(["2".repeat(64)])
+  assert.deepEqual([...(await ownlines.actedOn())], ["2".repeat(64)], "a join of names: acted once")
 })
 
 test("a load keeps a taken own line whose keys the landed rows do not hold yet", async () => {
@@ -345,4 +343,127 @@ test("the other tabs are woken only when a keep moved the row", async () => {
   } finally {
     listener.close()
   }
+})
+
+test("the device's lock is waited for a bound alone: a holder that never lets go leaves a tab to go on by itself", async () => {
+  type Request = (name: string, options: { signal: AbortSignal }, f: () => Promise<unknown>) => Promise<unknown>
+  const frozen: Request = (_, options) =>
+    new Promise((_, refuse) => options.signal.addEventListener("abort", () => refuse(new DOMException("timed out", "TimeoutError"))))
+  const granted: Request = (_, __, f) => f()
+  const was = Object.getOwnPropertyDescriptor(globalThis.navigator, "locks")
+  try {
+    for (const [request, held] of [[frozen, false], [granted, true]] as const) {
+      Object.defineProperty(globalThis.navigator, "locks", { value: { request }, configurable: true })
+      let ran = 0
+      const answer = await ownlines.device("own/lines", async () => (ran++, "sealed"), 20)
+      assert.equal(answer, "sealed", `held: ${held}`)
+      assert.equal(ran, 1, "it runs once, under the lock or alone")
+    }
+  } finally {
+    if (was === undefined) Reflect.deleteProperty(globalThis.navigator, "locks")
+    else Object.defineProperty(globalThis.navigator, "locks", was)
+  }
+})
+
+// A tab's core as the row sees it, at the cheapest level: records by print, each resting on the prints its `keys`
+// name, and what it lets go is what the core's `releasable` answers: a refused record the person acted on, unless a
+// record it holds that is not going rests on it. `log` says in which order the row met it.
+const NEVER = { Refused: { kind: "Final", reason: "never" } }
+const tab = (log: string[] = []) => {
+  const held = new Map<string, ownlines.Kept>()
+  const acted = new Set<string>()
+  const core: ownlines.Core<{ readonly acted: number }> = {
+    take: (records, done) => {
+      for (const r of records) held.set(r.literal, r)
+      for (const n of done) acted.add(n)
+      log.push(`take ${records.length} records, ${done.size} acts`)
+      return { acted: acted.size }
+    },
+    releasable: () => {
+      log.push("releasable")
+      const going = new Set([...held.values()].filter(r => JSON.stringify(r.answer) === JSON.stringify(NEVER) && acted.has(r.literal)).map(r => r.literal))
+      for (const r of held.values()) if (!going.has(r.literal)) for (const parent of Object.keys(r.keys)) going.delete(parent)
+      return { free: going, refused: [...going] }
+    },
+  }
+  return { core, held }
+}
+
+test("law: a line one tab keeps between another tab's landing and its settle is never orphaned", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const parent = { literal: "Said(… refused)", keys: {}, answer: NEVER }
+  assert.equal((await ownlines.keep([parent])).type, "Val")
+  assert.equal((await ownlines.acted([parent.literal])).type, "Val")
+  // The first tab landed, holding the refused record and the act.
+  const first = tab()
+  assert.equal((await ownlines.read(first.core)).type, "Val")
+  // The second keeps a line resting on it, under the device's lock.
+  const child = { literal: "Said(… over it)", keys: { [parent.literal]: "" }, answer: "Unsent" }
+  assert.equal((await ownlines.device(ownlines.LOCK, () => ownlines.keep([child]))).type, "Val")
+  assert.ok(first.core.releasable(new Set()).free.has(parent.literal), "deciding on what it held, the first would let it go")
+  // The first settles: the row read into its core, then decided.
+  assert.deepEqual((await ownlines.settle(first.core, async () => {})).cleanup, null)
+  const kept = await ownlines.kept()
+  assert.deepEqual(kept.type === "Val" ? kept.v.map(r => r.literal).sort() : kept, [child.literal, parent.literal].sort())
+})
+
+test("a settle reads the records and the acts before it decides, and answers its reading after the removal", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const refused = { literal: "Said(… dismissed)", keys: {}, answer: NEVER }
+  assert.equal((await ownlines.keep([refused])).type, "Val")
+  assert.equal((await ownlines.acted([refused.literal])).type, "Val")
+  const log: string[] = []
+  const settled = await ownlines.settle(tab(log).core, async () => void log.push("content kept"))
+  log.push("published")
+  assert.deepEqual(settled, { reading: { type: "Val", v: { taken: { acted: 1 }, acts: null } }, cleanup: null }, "the reading it answers holds the act")
+  assert.deepEqual(log, ["take 1 records, 1 acts", "content kept", "releasable", "published"])
+  const kept = await ownlines.kept()
+  assert.deepEqual(kept, { type: "Val", v: [] }, "the dismissed refusal went before the reading was published")
+})
+
+test("two rows read in one transaction say each what a read of it alone says", async () => {
+  const parse = (raw: unknown) => (typeof raw === "string" ? { type: "Val" as const, v: raw } : { type: "Error" as const, e: "not a string" })
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13, { "objects:a": "held", "objects:b": 7 }) })
+  const [a, b] = await heldRows({ rows: { parse }, name: "a" }, { rows: { parse }, name: "b" })
+  assert.deepEqual([a, b], [await heldRow({ parse }, "a"), await heldRow({ parse }, "b")])
+  assert.deepEqual([a.type, b.type], ["Held", "Unreadable"])
+  const [c] = await heldRows({ rows: { parse }, name: "c" }, { rows: { parse }, name: "a" })
+  assert.deepEqual(c, { type: "Absent" })
+})
+
+test("a settle whose cleanup fails answers its reading all the same, and why the cleanup failed", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const refused = { literal: "Said(… dismissed)", keys: {}, answer: NEVER }
+  assert.equal((await ownlines.keep([refused])).type, "Val")
+  assert.equal((await ownlines.acted([refused.literal])).type, "Val")
+  const settled = await ownlines.settle(tab().core, () => Promise.reject(new Error("the device is full")))
+  assert.deepEqual(settled.reading, { type: "Val", v: { taken: { acted: 1 }, acts: null } }, "the reading, published")
+  assert.match(settled.cleanup ?? "", /the device is full/)
+  const kept = await ownlines.kept()
+  assert.deepEqual(kept.type === "Val" ? kept.v.map(r => r.literal) : kept, [refused.literal], "let go at the next settle")
+  assert.deepEqual((await ownlines.settle(tab().core, async () => {})).cleanup, null)
+  assert.deepEqual(await ownlines.kept(), { type: "Val", v: [] })
+})
+
+test("a settle keeps the names it lets go as refused as acted on, and writes nothing where it lets nothing go", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const wordless = { literal: "Opened(… untitled)", keys: {}, answer: NEVER }
+  assert.equal((await ownlines.keep([wordless])).type, "Val")
+  const telling = tab()
+  const core: ownlines.Core<{ readonly acted: number }> = { ...telling.core, releasable: () => ({ free: new Set([wordless.literal]), refused: ["9".repeat(64)] }) }
+  assert.deepEqual((await ownlines.settle(core, async () => {})).cleanup, null)
+  assert.deepEqual([...(await ownlines.actedOn())], ["9".repeat(64)], "kept as acted on, so a tab holding it unsent never posts it")
+  assert.deepEqual(await ownlines.kept(), { type: "Val", v: [] })
+  const before = await ownlines.told()
+  assert.deepEqual(await ownlines.settled(new Set()), { type: "Val", v: null })
+  assert.deepEqual(await ownlines.told(), before)
+})
+
+test("an acts' row that does not read is said by the reading, and taken as no act", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13, { "objects:own/acted": 7 }) })
+  const reading = await ownlines.read(tab().core)
+  assert.equal(reading.type, "Val")
+  if (reading.type !== "Val") return
+  assert.deepEqual(reading.v.taken, { acted: 0 })
+  assert.notEqual(reading.v.acts, null)
 })

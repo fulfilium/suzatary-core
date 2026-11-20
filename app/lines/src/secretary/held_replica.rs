@@ -39,6 +39,26 @@ pub struct HeldReplica {
     outlines: Outlines,
     kept: LineReplica,
     own: Writes<OwnLine>,
+    /// The own lines refused for good whose refusal the person acted on (dismissed it, or took its
+    /// words back into the composer): a set that only grows, read from the device's row.
+    acted: BTreeSet<Hash>,
+}
+
+/// The box's last ruling on a line this device wrote and the box does not hold: the line stays a
+/// fact on the device whatever the ruling, and a page says its words from this.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ruling {
+    /// Not answered yet: it goes with the next hand-over.
+    Unsent,
+    /// Refused until its signer is trusted.
+    Trust,
+    /// Not taken yet, in the rule's words: posted again.
+    Later { why: String },
+    /// Refused for good, in the box's words, with what it gives the person back.
+    Refused {
+        why: String,
+        words: crate::secretary::own_line::Words,
+    },
 }
 
 /// A line a tab seals.
@@ -61,15 +81,43 @@ pub enum Sealing {
     /// A person's question in a conversation the tab reads, its own opening line among them.
     Say {
         conversation: ConversationId,
-        text: String,
-        references: Vec<suzatary_base::reference::Reference>,
-        /// Each file as the uploads hold it, named as the person named it.
-        attachments: Vec<suzatary_held::attachment::Attachment>,
-        /// Where the person asks from: a device, or the box's terminal.
-        seat: suzatary_signatures::signatures::Seat,
+        question: Question,
+    },
+    /// A topic opened under `title` (none leaves it for the title job) and its first question,
+    /// resting on the opening: one act of the person, so one move of the own writes.
+    Begin {
+        title: Option<Title>,
+        question: Question,
     },
     /// The answer of a conversation the tab reads stopped.
     Stop { conversation: ConversationId },
+}
+
+/// A person's question as a tab seals it.
+#[derive(Debug, Clone)]
+pub struct Question {
+    pub text: String,
+    pub references: Vec<suzatary_base::reference::Reference>,
+    /// Each file as the uploads hold it, named as the person named it.
+    pub attachments: Vec<suzatary_held::attachment::Attachment>,
+    /// Where the person asks from: a device, or the box's terminal.
+    pub seat: suzatary_signatures::signatures::Seat,
+}
+
+impl Question {
+    fn said(self, at: Datetime, actor: &Actor) -> Entry {
+        Entry::Said {
+            at,
+            turn: suzatary_conversations::secretary::model::Turn::Person {
+                text: self.text,
+                references: self.references,
+                attachments: self.attachments,
+            },
+            by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
+                suzatary_inbox::secretary::stamp::Speaker::at(actor.as_str(), self.seat),
+            )),
+        }
+    }
 }
 
 /// A conversation as a tab reads it: whole, or lacking lines its skeleton names.
@@ -112,6 +160,21 @@ pub enum Moved {
     All,
     /// These.
     These(BTreeSet<ConversationId>),
+}
+
+/// What a record raised by [`HeldReplica::acted`] is refused as: the box refused it for good, and
+/// another tab of the device told the person, who acted on it, or let it go.
+pub const LET_GO: &str = "the box refused it for good, and another tab of this device let it go";
+
+/// What the device may let go of its own records ([`HeldReplica::releasable`]): every record by
+/// its print, and the names of those let go as refused, which the device keeps as acted on, so a
+/// tab still holding one as unsent never posts it again.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Released {
+    /// Every record let go, by print.
+    pub prints: BTreeSet<String>,
+    /// Those let go as refused, by name.
+    pub refused: BTreeSet<Hash>,
 }
 
 /// A move of the rows: the frame that makes it, and what it moved.
@@ -179,13 +242,152 @@ impl HeldReplica {
         &self.own
     }
 
+    /// Whether the rows hold the line named `name`: the one test of a line the box took, whatever
+    /// answer its own record carries (a post's answer may be lost after the box took it). Such a
+    /// line has no ruling, and its record waits for nothing.
+    #[must_use]
+    pub fn holds(&self, name: &Hash) -> bool {
+        self.kept.rows.holding().replica().read().holds(name)
+    }
+
+    /// Each own line of conversation `id` the box does not hold ([`HeldReplica::holds`]), by name,
+    /// with the box's last ruling on it. A line refused for good, or resting on one, is ruled only
+    /// while it gives the person words back and they have not acted on them; one with none is told
+    /// and let go.
+    #[must_use]
+    pub fn rulings(&self, id: &ConversationId) -> Vec<(Hash, Ruling)> {
+        use suzatary_store::replica::writes::Refusal;
+        let held_back: BTreeMap<&Hash, String> = self
+            .own
+            .refusals()
+            .into_iter()
+            .map(|(own, _, reason)| (own.name(), reason))
+            .collect();
+        self.own
+            .iter()
+            .filter(|own| own.node.conversation() == Some(id.as_str()))
+            .filter(|own| !self.holds(own.node.name()))
+            .filter_map(|own| {
+                let name = own.node.name();
+                let ruling = match held_back.get(name) {
+                    Some(_) if self.acted.contains(name) => return None,
+                    Some(why) => Ruling::Refused {
+                        why: why.clone(),
+                        words: own.node.words()?,
+                    },
+                    None => match &own.answer {
+                        Answer::Taken => return None,
+                        Answer::Unsent => Ruling::Unsent,
+                        Answer::Refused { kind, reason } => match kind {
+                            Refusal::Trust => Ruling::Trust,
+                            Refusal::Later => Ruling::Later {
+                                why: reason.clone(),
+                            },
+                            // `Writes::refusals` holds every refusal for good: none reaches here.
+                            Refusal::Final | Refusal::Outdated => return None,
+                        },
+                    },
+                };
+                Some((name.clone(), ruling))
+            })
+            .collect()
+    }
+
+    /// The topics this device began that the box refused: each conversation whose opening is one
+    /// of this device's own lines refused for good, beside the box's sentence for it, while a line
+    /// of it still gives the person words back they have not acted on; one they acted on whole is
+    /// absent. Defined by what the device wrote, never by what the rows lack, which a reset or a
+    /// pull in progress also lacks.
+    #[must_use]
+    pub fn refused_topics(&self) -> BTreeMap<ConversationId, String> {
+        self.own
+            .refusals()
+            .into_iter()
+            .filter(|(own, _, _)| own.opens() && !self.holds(own.name()))
+            .filter_map(|(own, _, why)| {
+                let id = ConversationId::new(own.conversation()?).ok()?;
+                Some((id, why))
+            })
+            .filter(|(id, _)| {
+                self.rulings(id)
+                    .iter()
+                    .any(|(_, ruling)| matches!(ruling, Ruling::Refused { .. }))
+            })
+            .collect()
+    }
+
+    /// Each own line refused for good, with words the person has not acted on, of a topic this
+    /// device began that the box refused ([`HeldReplica::refused_topics`]): no conversation's
+    /// page draws it, so the page that begins topics does.
+    #[must_use]
+    pub fn refused_elsewhere(&self) -> Vec<(Hash, Ruling)> {
+        self.refused_topics()
+            .keys()
+            .flat_map(|id| self.rulings(id))
+            .filter(|(_, ruling)| matches!(ruling, Ruling::Refused { .. }))
+            .collect()
+    }
+
+    /// The person acted on the refusals of the own lines `names`, or the device let them go as
+    /// refused (the device's row keeps them by name): what it moved. Only a refusal for good is
+    /// acted on or let go as refused, so a record this tab still holds as unsent, or refused for
+    /// now, because it missed the wake that told it otherwise is raised to a refusal for good
+    /// ([`LET_GO`]): it is never posted again, and what rests on it is held back with it.
+    pub fn acted(&mut self, names: &BTreeSet<Hash>) -> Moved {
+        use suzatary_store::replica::writes::Refusal;
+        let mut touched = BTreeSet::new();
+        let mut raised = Vec::new();
+        for own in self.own.iter() {
+            let name = own.node.name();
+            if !names.contains(name) {
+                continue;
+            }
+            let behind = matches!(
+                own.answer,
+                Answer::Unsent
+                    | Answer::Refused {
+                        kind: Refusal::Trust | Refusal::Later,
+                        ..
+                    }
+            );
+            if self.acted.insert(name.clone()) || behind {
+                touched.extend(
+                    own.node
+                        .conversation()
+                        .and_then(|id| ConversationId::new(id).ok()),
+                );
+            }
+            if behind {
+                raised.push((
+                    name.clone(),
+                    Answer::Refused {
+                        kind: Refusal::Final,
+                        reason: LET_GO.to_owned(),
+                    },
+                ));
+            }
+        }
+        if raised.is_empty() {
+            return Moved::These(touched);
+        }
+        let _ = self.own.answered(raised);
+        match self.moving(|_| ()).1 {
+            Moved::All => Moved::All,
+            Moved::These(more) => {
+                touched.extend(more);
+                Moved::These(touched)
+            }
+        }
+    }
+
     /// `sealing` written by `actor` at `at`, its words sealed under keys drawn from `entropy`,
-    /// resting on the heads of its conversation among the lines read: the own line, held and read
-    /// at once, its name, and what it moved.
+    /// resting on the heads of its conversation among the lines read: its lines, held and read at
+    /// once in one move (a begun topic's opening and question together), the name of the first, and
+    /// what it moved.
     ///
     /// # Errors
     /// [`NotSealed`]: nothing pulled yet, a rename of a conversation not read here, or words the
-    /// door refuses.
+    /// door refuses; nothing is kept.
     pub fn seal(
         &mut self,
         sealing: Sealing,
@@ -202,17 +404,41 @@ impl HeldReplica {
             .word()
             .and_then(|word| word.geneses.first().cloned())
             .ok_or(NotSealed::Unpulled)?;
+        let own = |line: LineEvent,
+                   keys: Vec<suzatary_memory::secretary::locked_text::TextKey>,
+                   deps: Vec<Hash>|
+         -> Result<OwnLine, NotSealed> {
+            let change = prodrome_core::change::mk_change(genesis.clone(), deps, line)
+                .map_err(|e| NotSealed::Change(e.to_string()))?;
+            Ok(
+                OwnLine::sealed(&Envelope::Change(change), &keys).unwrap_or_else(|_| {
+                    unreachable!(
+                        "a line this tab sealed reads back with the keys it sealed it under"
+                    )
+                }),
+            )
+        };
         let onto = |conversation: ConversationId, entry: Entry| {
             let (deps, held) = self.heads(&conversation)?;
             let (line, keys) =
                 LineEvent::write(conversation, actor.clone(), held, &entry, entropy)?;
-            Ok::<_, NotSealed>((line, keys, deps))
+            own(line, keys, deps)
         };
-        let (line, keys, deps) = match sealing {
+        let opening = |title: Option<Title>| {
+            let entry = Entry::Opened {
+                at,
+                title: Words::kept(title.map_or_else(String::new, String::from)),
+                model: String::new(),
+                kind: Kind::Topic,
+            };
+            let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
+            Ok::<_, NotSealed>((line.begun_id(), own(line, keys, Vec::new())?))
+        };
+        let lines = match sealing {
             Sealing::Rename {
                 conversation,
                 title,
-            } => onto(
+            } => vec![onto(
                 conversation,
                 Entry::Titled {
                     at,
@@ -221,44 +447,27 @@ impl HeldReplica {
                         actor: actor.as_str().to_owned(),
                     },
                 },
-            )?,
+            )?],
             Sealing::Say {
                 conversation,
-                text,
-                references,
-                attachments,
-                seat,
-            } => onto(
-                conversation,
-                Entry::Said {
-                    at,
-                    turn: suzatary_conversations::secretary::model::Turn::Person {
-                        text,
-                        references,
-                        attachments,
-                    },
-                    by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
-                        suzatary_inbox::secretary::stamp::Speaker::at(actor.as_str(), seat),
-                    )),
-                },
-            )?,
-            Sealing::Stop { conversation } => onto(
+                question,
+            } => vec![onto(conversation, question.said(at, actor))?],
+            Sealing::Begin { title, question } => {
+                let (id, opened) = opening(title)?;
+                // The question is the new conversation's second line, over its opening alone.
+                let (line, keys) =
+                    LineEvent::write(id, actor.clone(), 1, &question.said(at, actor), entropy)?;
+                let said = own(line, keys, vec![opened.name().clone()])?;
+                vec![opened, said]
+            }
+            Sealing::Stop { conversation } => vec![onto(
                 conversation,
                 Entry::Stopped {
                     at,
                     by: actor.as_str().to_owned(),
                 },
-            )?,
-            Sealing::Open { title } => {
-                let entry = Entry::Opened {
-                    at,
-                    title: Words::kept(title.map_or_else(String::new, String::from)),
-                    model: String::new(),
-                    kind: Kind::Topic,
-                };
-                let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
-                (line, keys, Vec::new())
-            }
+            )?],
+            Sealing::Open { title } => vec![opening(title)?.1],
             Sealing::SetUp(template) => {
                 let entry = Entry::SetUp {
                     at,
@@ -266,21 +475,54 @@ impl HeldReplica {
                     template,
                 };
                 let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
-                (line, keys, Vec::new())
+                vec![own(line, keys, Vec::new())?]
             }
         };
-        let change = prodrome_core::change::mk_change(genesis, deps, line)
-            .map_err(|e| NotSealed::Change(e.to_string()))?;
-        let envelope = Envelope::Change(change);
-        let own = OwnLine::sealed(&envelope, &keys).unwrap_or_else(|_| {
-            unreachable!("a line this tab sealed reads back with the keys it sealed it under")
-        });
-        let name = own.name().clone();
-        self.lines
-            .hold(vec![(name.clone(), own.print().as_bytes().to_vec())], &[]);
-        let owned = self.own.write(vec![own]);
+        let name = lines[0].name().clone();
+        self.lines.hold(
+            lines
+                .iter()
+                .map(|own| (own.name().clone(), own.print().as_bytes().to_vec()))
+                .collect(),
+            &[],
+        );
+        let mut owned = self.own.write(lines);
+        owned.extend(self.rested_on(&owned));
         let moved = self.moving(|_| ()).1;
         Ok((owned, name, moved))
+    }
+
+    /// Every own write the box has not taken that `owned` rests on, near or far, as it is held: kept
+    /// again with the writes that rest on it, so a record another tab of the device let go before
+    /// this seal read the row is back beside its dependent, and no kept line rests on a record the
+    /// device no longer keeps. A record the box took, by its answer or by the rows, is not: the box
+    /// holds it. One let go as refused is kept as refused for good, since the seal read the acts
+    /// first ([`HeldReplica::acted`]), and so it is never posted again.
+    fn rested_on(&self, owned: &[Own<OwnLine>]) -> Vec<Own<OwnLine>> {
+        let by: BTreeMap<&Hash, &Own<OwnLine>> =
+            self.own.iter().map(|own| (own.node.name(), own)).collect();
+        let written: BTreeSet<&Hash> = owned.iter().map(|own| own.node.name()).collect();
+        // Taken, by its answer or by the rows, which hold a line whose answer was lost.
+        let taken =
+            |own: &&Own<OwnLine>| own.answer == Answer::Taken || self.holds(own.node.name());
+        let mut seen: BTreeSet<&Hash> = BTreeSet::new();
+        let mut next: Vec<&Hash> = owned
+            .iter()
+            .flat_map(|own| own.node.rests_on().iter())
+            .collect();
+        while let Some(name) = next.pop() {
+            if written.contains(name) || !seen.insert(name) {
+                continue;
+            }
+            if let Some(own) = by.get(name).filter(|own| !taken(own)) {
+                next.extend(own.node.rests_on().iter());
+            }
+        }
+        seen.into_iter()
+            .filter_map(|name| by.get(name))
+            .filter(|own| !taken(own))
+            .map(|own| (*own).clone())
+            .collect()
     }
 
     /// The heads of `conversation` among the lines read, own lines included, and how many lines
@@ -339,7 +581,9 @@ impl HeldReplica {
         (owned, moved)
     }
 
-    /// Each own write the box took, beside whether the device may let its own record of it go:
+    /// Each own write the box took, by its answer or because the rows hold it ([`HeldReplica::holds`],
+    /// the answer of a post that reached the box may be lost), beside whether the device may let
+    /// its own record of it go:
     /// once the landed rows hold every key of a line, or the box retired it, since its record is
     /// the one other place they are kept; a signature's at once.
     #[must_use]
@@ -350,7 +594,7 @@ impl HeldReplica {
         let retired = self.outlines.retired(&self.pending(), &|_| true);
         self.own
             .iter()
-            .filter(|own| own.answer == Answer::Taken)
+            .filter(|own| own.answer == Answer::Taken || self.holds(own.node.name()))
             .map(|own| {
                 let free = match &own.node {
                     OwnLine::Line { keys: opens, .. } => opens
@@ -361,6 +605,64 @@ impl HeldReplica {
                 (&own.node, free)
             })
             .collect()
+    }
+
+    /// Every own record the device may let go, by its print, `told` naming the refusals the person
+    /// was told of: a taken one whose keys the device holds elsewhere ([`HeldReplica::own_taken`]);
+    /// a refused one the rows hold all the same ([`HeldReplica::holds`]); a refused one that gives
+    /// the person words back once they acted on them, one that gives none once told, and any the
+    /// device let go as refused before ([`HeldReplica::acted`]). None of
+    /// these while an own record still held back rests on it, since what holds that one back is the
+    /// record it rests on: letting the parent go would leave the child posted for ever, its words
+    /// shown nowhere. The one owner of this answer; the device's row removes what it names.
+    #[must_use]
+    pub fn releasable(&self, told: &BTreeSet<String>) -> Released {
+        let refused: BTreeMap<&Hash, &OwnLine> = self
+            .own
+            .refusals()
+            .into_iter()
+            .map(|(own, _, _)| (own.name(), own))
+            .collect();
+        let mut going: BTreeSet<&Hash> = refused
+            .iter()
+            .filter(|(name, own)| {
+                self.holds(name)
+                    || self.acted.contains(*name)
+                    || (own.words().is_none() && told.contains(own.print()))
+            })
+            .map(|(name, _)| *name)
+            .collect();
+        loop {
+            let blocked: Vec<&Hash> = going
+                .iter()
+                .copied()
+                .filter(|parent| {
+                    refused.iter().any(|(child, own)| {
+                        !going.contains(child) && own.rests_on().contains(*parent)
+                    })
+                })
+                .collect();
+            if blocked.is_empty() {
+                break;
+            }
+            for name in blocked {
+                going.remove(name);
+            }
+        }
+        Released {
+            prints: self
+                .own_taken()
+                .into_iter()
+                .filter(|(_, free)| *free)
+                .map(|(own, _)| own.print().to_owned())
+                .chain(going.iter().map(|name| refused[name].print().to_owned()))
+                .collect(),
+            refused: going
+                .into_iter()
+                .filter(|name| !self.holds(name))
+                .cloned()
+                .collect(),
+        }
     }
 
     /// The own writes the box has not taken and may take, beside what is held, landed or not, in

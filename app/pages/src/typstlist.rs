@@ -157,7 +157,9 @@ impl Program for Typst {
                     }
                 }
                 Input::Answered { ask, answer } => return answered(m, ask, answer),
-                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+                Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => {
+                    match ask {}
+                }
             },
             Msg::Intent(words) => match Intent::of(&words, &m.chain) {
                 Some(Intent::Open(id)) => {

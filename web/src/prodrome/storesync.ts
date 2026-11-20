@@ -109,6 +109,12 @@ export namespace storesync {
     return sealed
   }
 
+  // The person acted on the refusals of the own lines named `lines`, by the worker, which lets their words go.
+  export const acted = (lines: readonly string[]): Promise<void> => inflight.held(remote.ask({ type: "Acted", lines }, "Page")).then(() => undefined)
+
+  // Each own line refused for good, with words, of a topic the box refused (`[Waiting]`, JSON).
+  export const refused = (): Promise<string> => remote.ask({ type: "Refused" }, "Page")
+
   // One conversation over its own lines, read as the whole store reads it; absent where they hold none of it.
   export type One = questions.One
 

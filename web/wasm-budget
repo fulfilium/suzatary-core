@@ -24,10 +24,20 @@
 # (the box's alone, nothing in the modules). Merged with 2.1.184, whose Prodrome pin set master's
 # x86_64 line at 4,850,000 (its figure 4,847,977), the merged tree's figures are prodrome 4,967,146
 # (this pull request's 119,169 over master's) and views 3,636,647 (31,695 over master's 3,604,952),
-# and the lines are set from them by the same rule.
-views_bg.wasm x86_64-linux 3640000
-prodrome_bg.wasm x86_64-linux 4970000
+# and the lines are set from them by the same rule. Its pull request (c2) set both lines again from
+# its own figures on the same master (prodrome 4,980,979, views 3,682,901), by the same rule: an own
+# line's ruling and its words, the device's acted refusals, a begun topic's one seal, the clock's
+# bounds and words, and the stream's `Lost` in every page's inputs. At its review, both lines were set
+# again from its figures (prodrome 4,992,615, views 3,704,090): a refusal's words as a sum, the
+# refusals of topics not held, the claim of a take-back, and the draft page's refusals. At its second
+# review, views' lines from its figure 3,712,201: words placed before they are claimed, a draft read
+# before a take-back, and a refused topic's page. At its third, from its figures (prodrome
+# 5,007,638, views 3,707,050): views down with the claim deleted, prodrome up with the one owner
+# of which own records may go moved into the core. At its fourth, prodrome from its figure
+# 5,015,176: a seal answers the own records its line rests on, kept again beside it.
+views_bg.wasm x86_64-linux 3710000
+prodrome_bg.wasm x86_64-linux 5020000
 typst_bg.wasm x86_64-linux 22020000
-views_bg.wasm aarch64-linux 3650000
-prodrome_bg.wasm aarch64-linux 4980000
+views_bg.wasm aarch64-linux 3720000
+prodrome_bg.wasm aarch64-linux 5030000
 typst_bg.wasm aarch64-linux 22090000

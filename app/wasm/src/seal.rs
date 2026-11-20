@@ -17,7 +17,7 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::store::Title;
-use suzatary_lines::secretary::held_replica::{Moved, Sealing};
+use suzatary_lines::secretary::held_replica::{Moved, NotSealed, Question, Sealing};
 use suzatary_lines::secretary::object_stores;
 use suzatary_lines::secretary::own_line::OwnLine;
 use suzatary_lines::wire::lines::{NodeHeader, ReceiptPayload};
@@ -74,9 +74,63 @@ enum Asked {
         references: Vec<String>,
         files: Vec<Filed>,
     },
+    /// A topic opened under `title` and its first question, sealed in one move.
+    Begin {
+        title: String,
+        say: Asking,
+    },
     Stop {
         conversation: String,
     },
+}
+
+/// A question as the page spells it.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Asking {
+    text: String,
+    references: Vec<String>,
+    files: Vec<Filed>,
+}
+
+impl Asking {
+    /// The question as the core seals it, from a device. A file on the box takes the person's
+    /// name for it; a private one is held as it was kept.
+    fn question(self) -> Result<Question, JsError> {
+        let Asking {
+            text,
+            references,
+            files,
+        } = self;
+        Ok(Question {
+            text,
+            references: references
+                .iter()
+                .map(|r| r.parse().map_err(|e| refused(format!("a reference: {e}"))))
+                .collect::<Result<_, _>>()?,
+            attachments: files
+                .into_iter()
+                .map(|Filed { attachment, name }| match attachment.private {
+                    Some(_) => Ok(attachment),
+                    None => attachment
+                        .named(&name)
+                        .map_err(|e| refused(format!("a file's name: {e}"))),
+                })
+                .collect::<Result<_, _>>()?,
+            seat: suzatary_signatures::signatures::Seat::Device,
+        })
+    }
+}
+
+/// A title as the page spells it: blank leaves it to the title job.
+fn titled(title: &str) -> Result<Option<Title>, JsError> {
+    if title.trim().is_empty() {
+        Ok(None)
+    } else {
+        Title::new(title)
+            .map(Some)
+            .map_err(|e| refused(e.to_string()))
+    }
 }
 
 /// A file of a question: the upload's answer, and the name the person gave it.
@@ -112,16 +166,19 @@ pub struct Sealed {
 #[wasm_bindgen]
 impl Lines {
     /// `asked` (`{type: "Rename", conversation, title}`, `{type: "Open", title}`,
-    /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}` or
-    /// `{type: "Stop", conversation}`) sealed by `actor` at `at` (ISO), its keys drawn from
-    /// `entropy`, bytes the worker drew: kept unsent and read at once.
+    /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}`,
+    /// `{type: "Begin", title, say: {text, references, files}}` or `{type: "Stop", conversation}`)
+    /// sealed by `actor` at `at` (ISO), its keys drawn from `entropy`, bytes the worker drew: kept
+    /// unsent and read at once, a begun topic's two lines in one move. `undefined` where nothing
+    /// was sealed for a cause a pull may cure (no lines pulled since a reset, or a conversation
+    /// not read here); any other refusal throws.
     pub fn seal(
         &mut self,
         asked: &str,
         at: &str,
         actor: &str,
         entropy: &[u8],
-    ) -> Result<Sealed, JsError> {
+    ) -> Result<Option<Sealed>, JsError> {
         let asked: Asked =
             serde_json::from_str(asked).map_err(|e| refused(format!("a seal: {e}")))?;
         let sealing = match asked {
@@ -133,9 +190,8 @@ impl Lines {
                     .map_err(|e| refused(e.to_string()))?,
                 title: Title::new(title).map_err(|e| refused(e.to_string()))?,
             },
-            Asked::Open { title } if title.trim().is_empty() => Sealing::Open { title: None },
             Asked::Open { title } => Sealing::Open {
-                title: Some(Title::new(title).map_err(|e| refused(e.to_string()))?),
+                title: titled(&title)?,
             },
             Asked::SetUp { template } => {
                 Sealing::SetUp(TemplateId::parse(&template).map_err(|e| refused(e.to_string()))?)
@@ -148,23 +204,16 @@ impl Lines {
             } => Sealing::Say {
                 conversation: ConversationId::new(conversation)
                     .map_err(|e| refused(e.to_string()))?,
-                text,
-                references: references
-                    .iter()
-                    .map(|r| r.parse().map_err(|e| refused(format!("a reference: {e}"))))
-                    .collect::<Result<_, _>>()?,
-                // A file on the box takes the person's name for it; a private one is held as
-                // it was kept.
-                attachments: files
-                    .into_iter()
-                    .map(|Filed { attachment, name }| match attachment.private {
-                        Some(_) => Ok(attachment),
-                        None => attachment
-                            .named(&name)
-                            .map_err(|e| refused(format!("a file's name: {e}"))),
-                    })
-                    .collect::<Result<_, _>>()?,
-                seat: suzatary_signatures::signatures::Seat::Device,
+                question: Asking {
+                    text,
+                    references,
+                    files,
+                }
+                .question()?,
+            },
+            Asked::Begin { title, say } => Sealing::Begin {
+                title: titled(&title)?,
+                question: say.question()?,
             },
             Asked::Stop { conversation } => Sealing::Stop {
                 conversation: ConversationId::new(conversation)
@@ -175,34 +224,55 @@ impl Lines {
             .map_err(|e| refused(format!("at: {e}")))?;
         let actor = Actor::new(actor).map_err(|e| refused(format!("actor: {e}")))?;
         let drawn = Drawn(Mutex::new(entropy.to_vec()));
-        let (owned, name, moved) = self
-            .0
-            .seal(sealing, at, &actor, &drawn)
-            .map_err(|e| refused(e.to_string()))?;
+        let (owned, name, moved) = match self.0.seal(sealing, at, &actor, &drawn) {
+            Ok(sealed) => sealed,
+            Err(NotSealed::Unpulled | NotSealed::Unknown(_)) => return Ok(None),
+            Err(e) => return Err(refused(e.to_string())),
+        };
         let conversation = owned
             .iter()
-            .find_map(|own| match &own.node {
-                OwnLine::Line { node, .. } => match &node.given().header {
-                    NodeHeader::Line { conversation, .. } => Some(conversation.clone()),
-                    NodeHeader::Structure { .. } => None,
-                },
-                OwnLine::Signature { .. } => None,
-            })
-            .unwrap_or_default();
-        Ok(Sealed {
+            .find_map(|own| own.node.conversation())
+            .unwrap_or_default()
+            .to_owned();
+        Ok(Some(Sealed {
             delta: records(&owned)?,
             moved: said(&moved)?,
             name: name.as_str().to_owned(),
             conversation,
-        })
+        }))
+    }
+
+    /// `{free: [<print>, …], refused: [<name>, …]}`: every own record the device may let go, and
+    /// the names of those it lets go as refused, which it keeps as acted on; `told`
+    /// (`[<print>, …]`) naming the refusals the person was told of ([`HeldReplica::releasable`]).
+    ///
+    /// [`HeldReplica::releasable`]: suzatary_lines::secretary::held_replica::HeldReplica::releasable
+    pub fn releasable(&self, told: &str) -> Result<String, JsError> {
+        let told: std::collections::BTreeSet<String> =
+            serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
+        let released = self.0.releasable(&told);
+        json(&serde_json::json!({
+            "free": released.prints,
+            "refused": released.refused.iter().map(Hash::as_str).collect::<Vec<_>>(),
+        }))
+    }
+
+    /// The person acted on the refusals of the own lines `names` (`[<name>, …]`): what it moved,
+    /// as a [`Step`]'s `moved` reads.
+    pub fn acted(&mut self, names: &str) -> Result<String, JsError> {
+        let names: Vec<String> =
+            serde_json::from_str(names).map_err(|e| refused(format!("acted: {e}")))?;
+        let names = names
+            .into_iter()
+            .map(|name| Hash::new(name).map_err(|e| refused(format!("acted: {e}"))))
+            .collect::<Result<_, _>>()?;
+        said(&self.0.acted(&names))
     }
 
     /// The device's record of own writes, `[{literal, keys, answer}]`, taken: what it kept, or
     /// another tab's. A record that does not read is passed over and named in the answer's
-    /// `unread`: `{moved, unread, taken, fresh}`, `fresh` how many records were new here or raised
-    /// an answer, `taken` each own write the box took as
-    /// `{hash, literal, line, free}`: a line's print is content the device keeps, and `free` says
-    /// its record may be let go, once the landed rows hold its keys.
+    /// `unread`: `{moved, unread, fresh}`, `fresh` how many records were new here or raised an
+    /// answer.
     pub fn take_own(&mut self, records: &str) -> Result<String, JsError> {
         let records: Vec<serde_json::Value> =
             serde_json::from_str(records).map_err(|e| refused(format!("own lines: {e}")))?;
@@ -226,12 +296,12 @@ impl Lines {
         json(&serde_json::json!({
             "moved": reading(&moved),
             "unread": unread,
-            "taken": self.taken(),
             "fresh": fresh,
         }))
     }
 
-    /// `[{hash, literal, line, free}]`: each own write the box took, as `take_own` answers it.
+    /// `[{hash, literal, line}]`: each own write the box took, by its answer or by the rows: a
+    /// line's print is content the device keeps.
     pub fn own_taken(&self) -> Result<String, JsError> {
         json(&self.taken())
     }
@@ -240,12 +310,11 @@ impl Lines {
         self.0
             .own_taken()
             .into_iter()
-            .map(|(own, free)| {
+            .map(|(own, _)| {
                 serde_json::json!({
                     "hash": own.name().as_str(),
                     "literal": own.print(),
                     "line": matches!(own, OwnLine::Line { .. }),
-                    "free": free,
                 })
             })
             .collect()
@@ -339,7 +408,7 @@ impl Lines {
                         "kind": kind,
                         "reason": reason,
                         "literal": own.print(),
-                        "words": words(own),
+                        "words": own.words().map(|words| words.quoted().to_owned()),
                         "signature": matches!(own.role(), suzatary_store::replica::writes::Role::Signs(_)),
                     })
                 })
@@ -347,9 +416,9 @@ impl Lines {
         )
     }
 
-    /// `[{hash, reason, literal, words, signature}]`: every own write the box has not taken yet,
-    /// in the rule's words, with its print and the words it says; a signature tells nothing of its
-    /// own, and is marked so.
+    /// `[{hash, reason, literal, words, at, signature}]`: every own write the box has not taken
+    /// yet, in the rule's words, with its print, the words it says and its writer's instant; a
+    /// signature tells nothing of its own, and is marked so.
     pub fn waiting(&self) -> Result<String, JsError> {
         json(
             &self
@@ -362,7 +431,8 @@ impl Lines {
                         "hash": own.name().as_str(),
                         "reason": reason,
                         "literal": own.print(),
-                        "words": words(own),
+                        "words": own.words().map(|words| words.quoted().to_owned()),
+                        "at": own.at(),
                         "signature": matches!(own.role(), suzatary_store::replica::writes::Role::Signs(_)),
                     })
                 })
@@ -444,30 +514,6 @@ fn reading(moved: &Moved) -> serde_json::Value {
         Moved::These(ids) => {
             serde_json::json!(ids.iter().map(ConversationId::as_str).collect::<Vec<_>>())
         }
-    }
-}
-
-/// What the person wrote in `own`, opened with its own keys: a question's words or a title.
-fn words(own: &OwnLine) -> Option<String> {
-    use suzatary_conversations::secretary::model::Turn;
-    use suzatary_conversations::secretary::store::Entry;
-    let OwnLine::Line { print, keys, .. } = own else {
-        return None;
-    };
-    let envelope =
-        prodrome_core::event::parse_envelope::<suzatary_lines::secretary::line_event::LineEvent>(
-            &suzatary_lines::secretary::line_event::LineVocabulary,
-            print,
-        )
-        .ok()?;
-    let line = envelope.event()?;
-    match line.entry(&|name: &KeyName| keys.key(name)) {
-        Entry::Said {
-            turn: Turn::Person { text, .. },
-            ..
-        } => Some(text),
-        Entry::Titled { title, .. } => title.get().map(|title| title.as_str().to_owned()),
-        _ => None,
     }
 }
 

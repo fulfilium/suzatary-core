@@ -86,6 +86,10 @@ export class Lines {
   refuse(names: string, reason: string): Step;
   refusals(): string;
   waiting(): string;
+  /** The person acted on the refusals of the own lines `[<name>]`: what it moved. */
+  acted(names: string): string;
+  /** `[<print>]`: every own record the device may let go, the told refusals `[<print>]` given. */
+  releasable(told: string): string;
   refused_in(asks: ObjectStore): Step | undefined;
   /** `[{hash, text}]` held, each hashed against its name, and `[<name>]` let go. */
   hold(add: string, drop: string): void;

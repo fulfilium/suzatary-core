@@ -6,7 +6,7 @@
 //! never across a firing, and a task leaves only under the lock [`Workers::nudge`] takes, so no
 //! nudge is lost.
 
-use prodrome_core::event::Actor;
+use prodrome_core::event::{Actor, Hash};
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
@@ -167,6 +167,26 @@ impl Stream {
     }
 }
 
+/// The rounds a stop ends, as its conversation read after the take.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ended {
+    /// Those of these runs.
+    Runs(std::collections::BTreeSet<suzatary_conversations::secretary::store::RunId>),
+    /// The conversation did not read: the round running, whatever its run.
+    Unread,
+}
+
+impl Ended {
+    /// What the stop `stop` ends, as `read` reads it.
+    #[must_use]
+    pub fn of<E>(read: &Result<Arc<transcript::Transcript>, E>, stop: &Hash) -> Self {
+        match read {
+            Ok(read) => Ended::Runs(read.ended_by(stop)),
+            Err(_) => Ended::Unread,
+        }
+    }
+}
+
 /// Every conversation currently being answered, so a `say` mid-round finds its task.
 ///
 /// Held on [`State`], never a static, because a test binary runs more than one server.
@@ -253,11 +273,34 @@ impl Workers {
         self.stream(id).turn();
     }
 
-    /// A tab's stop of conversation `id` was taken: the round running in it, if any, is told
-    /// to stop, as `by`. The stop's own line has closed the round, so nothing waits for it.
-    pub fn stopped(&self, id: &ConversationId, by: Actor) {
+    /// A tab's stop `stop` of conversation `id` was taken: the round running in it is told to stop,
+    /// as `by`, where the transcript reads it as one the stop ends ([`Workers::halt_ended`]). The
+    /// stop's line has closed that round already, so nothing waits for it; a round begun since the
+    /// take rests on the stop and runs on.
+    pub fn stopped(state: Arc<State>, id: &ConversationId, stop: Hash, by: Actor) {
+        let id = id.clone();
+        tokio::task::spawn_blocking(move || {
+            let read = transcript::read(state.first.caps.secretary.conversations, &id);
+            if let Err(failed) = &read {
+                tracing::warn!(
+                    "secretary: {id}'s stop was taken and its conversation did not read, so the round running is stopped: {failed}"
+                );
+            }
+            state.workers.halt_ended(&id, &Ended::of(&read, &stop), by);
+        });
+    }
+
+    /// The halt of the round running in `id` pulled, as `by`, where `ended` names its run, or
+    /// whatever runs where the conversation did not read: the person asked to stop.
+    pub fn halt_ended(&self, id: &ConversationId, ended: &Ended, by: Actor) {
         if let Some(halt) = super::locks::held(&self.halts).get(id) {
-            halt.stop(by);
+            let ends = match ended {
+                Ended::Runs(runs) => halt.run().is_some_and(|run| runs.contains(run)),
+                Ended::Unread => true,
+            };
+            if ends {
+                halt.stop(by);
+            }
         }
     }
 
@@ -646,6 +689,40 @@ mod tests {
                     whole
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod halts {
+    use super::*;
+    use suzatary_conversations::secretary::store::RunId;
+
+    /// A stop pulls the halt of the round it ends, never that of a round begun after its take,
+    /// and the round running when its conversation does not read (`Ended::of` an unread one).
+    #[test]
+    fn a_stop_halts_the_round_it_ends_and_none_begun_after() {
+        let id = ConversationId::new("2026-09-30-1").expect("an id");
+        let ada = Actor::new("ada").expect("an actor");
+        let (before, after) = (RunId::of([1; 16]), RunId::of([2; 16]));
+        let ended = Ended::Runs(std::collections::BTreeSet::from([before.clone()]));
+        for (run, read, halts) in [
+            (before.clone(), ended.clone(), true),
+            (after.clone(), ended.clone(), false),
+            (
+                after,
+                Ended::of(
+                    &Err::<Arc<transcript::Transcript>, _>("unread"),
+                    &Hash::new("0".repeat(64)).expect("a name"),
+                ),
+                true,
+            ),
+        ] {
+            let workers = Workers::new();
+            let halt = workers.halt(&id);
+            halt.claims(run.clone());
+            workers.halt_ended(&id, &read, ada.clone());
+            assert_eq!(halt.halted(), halts, "{run} under {read:?}");
         }
     }
 }

@@ -158,6 +158,15 @@ pub(crate) struct Composer {
     /// A question sent and not sealed yet: its words stay in the box until the tab has kept its
     /// line, so a page closed in between loses nothing ([`Composer::sealed`]).
     sealing: Option<String>,
+    drafted: Drafted,
+}
+
+/// Whether the draft the device keeps has been read into the box: until it is, an empty box is no
+/// empty composer, since the draft lands over whatever is put there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Drafted {
+    Unread,
+    Read,
 }
 
 fn register(draft: &str) -> Register {
@@ -188,6 +197,7 @@ impl Composer {
                 held: BTreeMap::new(),
                 others: Vec::new(),
                 sealing: None,
+                drafted: Drafted::Unread,
             },
             Local::Draft {
                 id: draft.to_owned(),
@@ -198,6 +208,33 @@ impl Composer {
     #[must_use]
     pub(crate) fn empty(&self) -> bool {
         self.text.is_empty() && self.files.is_empty()
+    }
+
+    /// Whether words handed back would land in an empty box: its draft read, and nothing typed,
+    /// attached or on its way, so they overwrite nothing the person did since.
+    #[must_use]
+    pub(crate) fn takes_back(&self) -> bool {
+        self.drafted == Drafted::Read
+            && self.empty()
+            && self.references.is_empty()
+            && self.sealing.is_none()
+    }
+
+    /// A refused question placed in the box where it takes words back ([`Composer::takes_back`]),
+    /// as it was sent; none where it does not. Nothing in flight (`sealing`) is touched.
+    pub(crate) fn place(&mut self, sent: &Sent) -> Option<Vec<Out>> {
+        if !self.takes_back() {
+            return None;
+        }
+        self.references.clone_from(&sent.references);
+        self.files.clone_from(&sent.files);
+        self.kept = sent
+            .attachments
+            .iter()
+            .filter_map(|a| Some((a.get("id")?.as_str()?.to_owned(), a.clone())))
+            .collect();
+        self.mode = sent.mode.clone();
+        Some(self.typed(sent.text.clone()))
     }
 
     #[must_use]
@@ -221,9 +258,14 @@ impl Composer {
     }
 
     pub(crate) fn held(&mut self, r: viewtree::kit::Reading<Answer>) {
-        if let viewtree::kit::Reading::Val { v } = read::<Read>(r) {
-            self.text = v.text;
-            self.others = v.others;
+        match read::<Read>(r) {
+            viewtree::kit::Reading::Val { v } => {
+                self.text = v.text;
+                self.others = v.others;
+                self.drafted = Drafted::Read;
+            }
+            viewtree::kit::Reading::Error { .. } => self.drafted = Drafted::Read,
+            viewtree::kit::Reading::Loading => {}
         }
     }
 

@@ -111,9 +111,10 @@ impl<V: View> Program for One<V> {
                     };
                     m.behind = behind;
                 }
-                Input::Answered { ask, .. } | Input::Heard { ask, .. } | Input::Opened { ask } => {
-                    match ask {}
-                }
+                Input::Answered { ask, .. }
+                | Input::Heard { ask, .. }
+                | Input::Opened { ask }
+                | Input::Lost { ask } => match ask {},
             },
             Msg::Back => {
                 return V::back(&m.at)

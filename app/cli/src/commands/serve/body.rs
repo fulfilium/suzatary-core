@@ -30,7 +30,9 @@ pub trait Body: Sized + Send + 'static {
         state: &State,
     ) -> impl Future<Output = Result<Self, Refusal>> + Send {
         async move {
-            let object = object(body, Self::CAP).await?;
+            let object = object(body, Self::CAP)
+                .await
+                .map_err(NotAnObject::refusal)?;
             let wire = serde_json::from_value(object)
                 .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
             Self::parse(wire, state)
@@ -57,22 +59,47 @@ impl Body for () {
     }
 }
 
+/// Why a body is no capped JSON object: each route says which status each answers with.
+#[derive(Debug)]
+pub(super) enum NotAnObject {
+    /// Over the cap, in bytes.
+    Over(usize),
+    NotJson,
+    /// JSON of another type, named.
+    Other(&'static str),
+}
+
+impl NotAnObject {
+    /// The sentence.
+    pub(super) fn said(&self) -> String {
+        match self {
+            NotAnObject::Over(cap) => format!("the body is capped at {cap} bytes"),
+            NotAnObject::NotJson => "the body must be JSON".to_owned(),
+            NotAnObject::Other(kind) => format!("the body must be a JSON object, got {kind}"),
+        }
+    }
+
+    /// A [`Refusal::bad_request`], as most routes answer it.
+    pub(super) fn refusal(self) -> Refusal {
+        Refusal::bad_request(self.said())
+    }
+}
+
 /// The body, capped and parsed as one JSON object.
 pub(super) async fn object(
     body: axum::body::Body,
     cap: usize,
-) -> Result<serde_json::Value, Refusal> {
+) -> Result<serde_json::Value, NotAnObject> {
     let bytes = axum::body::to_bytes(body, cap)
         .await
-        .map_err(|_| Refusal::bad_request(format!("the body is capped at {cap} bytes")))?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|_| Refusal::bad_request("the body must be JSON"))?;
+        .map_err(|_| NotAnObject::Over(cap))?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|_| NotAnObject::NotJson)?;
     if value.is_object() {
         Ok(value)
     } else {
-        Err(Refusal::bad_request(format!(
-            "the body must be a JSON object, got {}",
-            suzatary_base::refusal::json_type(&value)
+        Err(NotAnObject::Other(suzatary_base::refusal::json_type(
+            &value,
         )))
     }
 }

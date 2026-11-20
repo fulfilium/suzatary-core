@@ -34,6 +34,7 @@ export const written = (i: Written): In => {
     case "Context":
     case "Heard":
     case "Opened":
+    case "Lost":
       return i
   }
 }

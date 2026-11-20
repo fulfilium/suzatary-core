@@ -17,6 +17,7 @@ use suzatary_conversations::secretary::store::Stored;
 use suzatary_inbox::secretary::inbox::Fold;
 use suzatary_lines::secretary::held_lines::Admitted;
 use suzatary_lines::secretary::held_replica::HeldReplica;
+use suzatary_lines::secretary::held_replica::Ruling;
 use suzatary_lines::secretary::held_replica::Whole;
 use suzatary_lines::secretary::outlines::Scope;
 use suzatary_memory::secretary::key_ring::KeyRing;
@@ -220,34 +221,47 @@ impl Lines {
             ..Dress::BARE
         };
         let mut payload = readings::conversation(&read, &inbox.fold()?, &window, &dress);
-        // Its own lines the box has not taken yet, each with the rule's words: drawn on its turn.
-        let waiting: std::collections::BTreeMap<String, String> = self
+        // Its own lines the box does not hold, each with the box's last ruling: one of a turn drawn
+        // on it, one refused for good beside the transcript.
+        let drawn: BTreeSet<&str> = payload.lines.iter().map(String::as_str).collect();
+        let waiting = self
             .0
-            .own()
-            .waiting()
+            .rulings(&id)
             .into_iter()
-            .map(|(own, why)| {
-                (
-                    suzatary_store::replica::held::Node::name(own)
-                        .as_str()
-                        .to_owned(),
-                    why,
-                )
+            .filter(|(line, ruling)| {
+                matches!(ruling, Ruling::Refused { .. }) || drawn.contains(line.as_str())
+            })
+            .map(|(line, ruling)| suzatary_topics::wire::topics::Waiting {
+                line: line.as_str().to_owned(),
+                ruling: suzatary_topics::wire::topics::Ruling::of(ruling),
             })
             .collect();
-        payload.waiting = payload
-            .lines
-            .iter()
-            .filter_map(|line| {
-                waiting
-                    .get(line)
-                    .map(|why| suzatary_topics::wire::topics::Waiting {
-                        line: line.clone(),
-                        why: why.clone(),
-                    })
-            })
-            .collect();
+        payload.waiting = waiting;
         json(&payload)
+    }
+
+    /// The box's sentence where `id` is a topic this device began and the box refused, else
+    /// `undefined`: its page says so before it asks the box for the conversation.
+    #[must_use]
+    pub fn refused_topic(&self, id: &str) -> Option<String> {
+        let id = ConversationId::new(id).ok()?;
+        self.0.refused_topics().remove(&id)
+    }
+
+    /// `[{line, ruling}]`: each own line refused for good, with words the person has not acted on,
+    /// of a topic this device began that the box refused, which the page that begins topics draws.
+    pub fn refused_elsewhere(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .0
+                .refused_elsewhere()
+                .into_iter()
+                .map(|(line, ruling)| suzatary_topics::wire::topics::Waiting {
+                    line: line.as_str().to_owned(),
+                    ruling: suzatary_topics::wire::topics::Ruling::of(ruling),
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// `[{hash, parents, size, header}, …]`: the node, as it was given, of every line whose words

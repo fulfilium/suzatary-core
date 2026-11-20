@@ -106,7 +106,9 @@ impl Program for Memory {
                     reading,
                     behind,
                 } => m.record = Held::of(reading, behind),
-                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+                Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => {
+                    match ask {}
+                }
                 Input::Answered { ask, answer } => {
                     m.running.retain(|a| *a != ask);
                     // What was changed is read again; a refusal names the act.

@@ -455,7 +455,7 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             ask: Ask::Topic(w),
             answer,
         } => topic_answered(m, &w, answer),
-        Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+        Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => match ask {},
     }
 }
 

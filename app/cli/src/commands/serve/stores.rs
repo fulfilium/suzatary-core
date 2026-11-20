@@ -148,9 +148,11 @@ impl Params for Written {
     }
 }
 
-/// What a store a tab writes takes beside its objects, read at the door.
+/// What a store a tab writes takes beside its objects, read at the door. A post's own fault is
+/// answered 422, never 400: a 400 is what a box of another build answers a body it does not read,
+/// so the page holds those lines for later and refuses for good only on this build's word.
 fn beside<B: Beside>(literals: &Literals) -> Result<B, Refusal> {
-    B::parse(&literals.keys).map_err(Refusal::bad_request)
+    B::parse(&literals.keys).map_err(Refusal::unprocessable)
 }
 
 /// `POST /api/stores/<store>/objects`: a store a tab writes, each change taken only beside a
@@ -180,7 +182,7 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
             // with them, and only a taken line's are kept.
             let lines = posted_lines(&call.body.objects);
             if let Some(stray) = keys.names().find(|name| !lines.contains(*name)) {
-                return Err(Refusal::bad_request(format!(
+                return Err(Refusal::unprocessable(format!(
                     "keys are posted beside {stray}, which is no line of this post"
                 )));
             }
@@ -291,8 +293,8 @@ fn posted_lines(posted: &[String]) -> std::collections::BTreeSet<Hash> {
 }
 
 /// Each conversation a line the box took is in told to its worker, so what the line starts (a
-/// round for a question, a setup's opening note) is written; and for a stop the box took, the round
-/// running in its conversation told to stop, since the stop's line has closed it.
+/// round for a question, a setup's opening note) is written; and for a stop the box took, each
+/// round the stop's line ended told to stop.
 fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
     use prodrome_core::schema::Schema as _;
     let vocabulary = line_event::LineVocabulary;
@@ -310,9 +312,12 @@ fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
             continue;
         }
         if let suzatary_lines::secretary::line_shape::LineShape::Stopped { .. } = line.shape() {
-            state
-                .workers
-                .stopped(line.conversation(), line.actor().clone());
+            super::conversation_worker::Workers::stopped(
+                std::sync::Arc::new(state.clone()),
+                line.conversation(),
+                name.clone(),
+                line.actor().clone(),
+            );
         }
         conversations.insert(line.conversation().clone());
     }

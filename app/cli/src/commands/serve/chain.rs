@@ -124,10 +124,20 @@ impl Body for Literals {
 
     type Wire = wire::PostedObjects;
 
-    /// As every body is read, but a post whose shape this build does not read is another build's,
-    /// never the post's own fault: answered as such, so the page posts it again.
+    /// As every body is read, but answered in the page's table (`written.failed`): a post whose
+    /// shape this build does not read is another build's (409), posted again; a body over the cap
+    /// is 413, and every other fault of the body 422, so it is refused for good and no fault of a
+    /// post holds back the posts behind it. The stores' route (`stores::take`) answers every fault
+    /// of a post so, and no 400; a chain's (`take_objects`) still answers 400 for keys posted
+    /// beside its objects, which no page of this build posts.
     async fn read(body: axum::body::Body, state: &State) -> Result<Self, Refusal> {
-        let object = super::body::object(body, Self::CAP).await?;
+        use super::body::NotAnObject;
+        let object = super::body::object(body, Self::CAP)
+            .await
+            .map_err(|not| match not {
+                NotAnObject::Over(_) => Refusal::too_large(not.said()),
+                NotAnObject::NotJson | NotAnObject::Other(_) => Refusal::unprocessable(not.said()),
+            })?;
         let wire = serde_json::from_value(object).map_err(|failed| {
                 Refusal::other_build(format!(
                     "this box runs another build and does not read this post ({failed}): it goes again once the box and this page agree"
@@ -138,7 +148,8 @@ impl Body for Literals {
 
     fn parse(posted: wire::PostedObjects, _: &State) -> Result<Self, Refusal> {
         Ok(Self {
-            since: query::since(Some(&posted.since))?,
+            since: query::since(Some(&posted.since))
+                .map_err(|refused| Refusal::unprocessable(refused.message()))?,
             objects: posted.objects,
             keys: posted.keys,
         })

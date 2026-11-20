@@ -51,6 +51,7 @@ pub(crate) fn context(writes: bool) -> Context {
         ],
         wide: writes,
         categories: vec!["home".to_owned(), "work".to_owned()],
+        clock: None,
     }
 }
 
