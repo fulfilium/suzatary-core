@@ -111,10 +111,7 @@ impl Decision {
             "held" => Err(ProdromeError::invalid(
                 "a hold settles no object, and this one names some",
             )),
-            other => Err(prodrome_core::literal::codec::no_arm(
-                "a review's decision",
-                other,
-            )),
+            other => Err(prodrome_core::literal::codec::no_arm("Decision", other)),
         }
     }
 }

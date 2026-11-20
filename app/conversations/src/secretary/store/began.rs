@@ -102,7 +102,7 @@ impl Literal for Covered {
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, &[COVERED])?;
+        let fields = Fields::among(value, "Covered", &[COVERED])?;
         Ok(Self {
             line: fields.get("line")?,
             taint: fields.get("taint")?,

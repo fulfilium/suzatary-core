@@ -3,32 +3,34 @@
 //! through one cache of readings shared by the three ([`memoised`]), and a device's replica of
 //! each ([`Held`]).
 //!
-//! The steps that reach these layers are taken: an append, a partial sync in any order with
-//! duplicates, a sync, a sync of all, and a read through the cache. The rest (signatures, keys,
-//! refused receipts, snapshots, the core's own cache) are the core's, which `script_law.rs`
-//! checks. After every step:
+//! The machine runs each script over its own replicas; after every step its host check gives
+//! each actor's store on disk what that actor's replica holds, by RECEIVING the objects as a
+//! store takes another's files, and then checks:
 //!
 //! - each store's kept graph is what a handle that opens the store now reads;
+//! - a store that took every object its replica holds reads as that replica;
 //! - the reading the shared cache answers for each store is that store's fresh reading, though
 //!   the three share one cache and a key names a head set, never a store;
 //! - a device whose replica holds the objects of a store that another store's objects contain,
 //!   told the other store's heads, reads as behind (the tab's `Fetching`) or as the other
 //!   store whole, never as a whole that is wrong.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use prodrome_core::event::{Actor, Hash, canonical_envelope};
-use prodrome_core::fold::{Product as _, read};
-use prodrome_core::laws::script::{Script, Step, Who, a_script};
+use prodrome_core::laws::script::{self, Script, Who, a_script};
+use prodrome_core::laws::{Broken, Registers};
 use prodrome_core::memo::{Cache, Lru};
-use prodrome_core::policy::{Everything, Untrusted};
+use prodrome_core::policy::{Everything, Policy, Untrusted};
 use prodrome_core::registers::fold;
-use prodrome_core::store::EventStore;
+use prodrome_core::store::{EventStore, Held as Replicated};
 use proptest::prelude::*;
 use proptest::test_runner::Config;
 
+use suzatary_digest::secretary::digest_event::DigestEvent;
+use suzatary_digest::secretary::digest_policy::Owners;
 use suzatary_io::objects::Objects;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::Held;
@@ -48,32 +50,11 @@ const CASES: u32 = 8;
 /// How many readings the shared cache keeps: few, so that it evicts.
 const KEPT: usize = 4;
 
-/// Every entity's registers read whole, each as the names of the writes it reads: what a reading
-/// through the cache is compared by.
-type Registers = BTreeMap<String, Vec<BTreeSet<Hash>>>;
+/// The law number the host's checks fail under: the script law's own.
+const LAW: u32 = 68;
 
-fn registers<E: Store>(store: &Objects<E>) -> Result<Registers, StoreError>
-where
-    E::Key: std::fmt::Debug,
-{
-    let nodes = store.nodes()?;
-    Ok(fold(&nodes)
-        .entities()
-        .map(|(key, stream)| {
-            let read = read(stream, None, &Everything);
-            let each = read
-                .registers()
-                .into_iter()
-                .map(|register| {
-                    read.reading(register)
-                        .iter()
-                        .map(|stamp| stamp.name.clone())
-                        .collect()
-                })
-                .collect();
-            (format!("{key:?}"), each)
-        })
-        .collect())
+fn registers<E: Store>(store: &Objects<E>) -> Result<Registers<E>, StoreError> {
+    Ok(Registers::of(&fold(&store.nodes()?)))
 }
 
 /// Three stores of one prodrome on disk, opened by `open`, and the cache they share.
@@ -81,139 +62,125 @@ struct Layers<E: Store> {
     roots: [PathBuf; 3],
     stores: [Objects<E>; 3],
     open: fn(PathBuf) -> Objects<E>,
-    cache: Mutex<Cache<Registers, Lru>>,
+    cache: Mutex<Cache<Registers<E>, Lru>>,
 }
 
-impl<E: Store<Vocabulary: Default>> Layers<E>
-where
-    E::Key: std::fmt::Debug,
-{
-    fn new(dir: &Path, open: fn(PathBuf) -> Objects<E>) -> Result<Self, String> {
+fn broken(what: impl std::fmt::Display) -> Broken {
+    Broken {
+        law: LAW,
+        what: what.to_string(),
+    }
+}
+
+impl<E: Store<Vocabulary: Default>> Layers<E> {
+    fn new(dir: &Path, open: fn(PathBuf) -> Objects<E>) -> Self {
         let roots = [0, 1, 2].map(|n| dir.join(n.to_string()));
-        let stores = roots.clone().map(open);
-        stores[0].begin().map_err(|e| e.to_string())?;
-        let layers = Layers {
+        Layers {
+            stores: roots.clone().map(open),
             roots,
-            stores,
             open,
             cache: Mutex::new(Cache::new(Lru::new(KEPT))),
-        };
-        for to in [Who::Ben, Who::Cai] {
-            layers.give(Who::Ada, to, &[None])?;
         }
-        Ok(layers)
     }
 
     fn store(&self, who: Who) -> &Objects<E> {
         &self.stores[who.index()]
     }
 
-    /// `to` takes, for each of `chosen` in order, the object at that position among `from`'s
-    /// with what it rests on, or everything `from` holds for `None`. A receipt the store's door
-    /// refuses takes nothing, as the core's own law checks; it is passed over here.
-    fn give(&self, from: Who, to: Who, chosen: &[Option<usize>]) -> Result<(), String> {
-        let graph = self.store(from).graph().map_err(|e| e.to_string())?;
-        let names: Vec<&Hash> = graph.dag().objects().keys().collect();
-        for at in chosen {
-            let wanted: BTreeSet<Hash> = match at {
-                Some(at) => graph.dag().closure([names[at % names.len()].clone()]),
-                None => names.iter().map(|name| (*name).clone()).collect(),
-            };
-            let prints: Vec<(Hash, String)> = self
-                .store(from)
-                .objects()
-                .map_err(|e| e.to_string())?
-                .into_iter()
-                .filter(|(name, _)| wanted.contains(name))
-                .map(|(name, object)| (name, canonical_envelope(&object)))
-                .collect();
-            let _refused = self.store(to).accept(&prints);
+    /// `who`'s store takes every object `replica` holds that it lacks, in one receipt. A door
+    /// refuses a receipt whole, so then each object is offered alone, parents first, and a
+    /// refused one is passed over, as the core's own law checks a refused receipt.
+    fn mirror(&self, who: Who, replica: &Replicated<E>) -> Result<(), Broken> {
+        let store = self.store(who);
+        let held: BTreeSet<Hash> = store
+            .objects()
+            .map_err(broken)?
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        let order = replica.dag.linearise().map_err(broken)?;
+        let prints: Vec<(Hash, String)> = order
+            .iter()
+            .filter(|name| !held.contains(*name))
+            .filter_map(|name| {
+                let object = replica.dag.get(name)?;
+                Some((name.clone(), canonical_envelope(object)))
+            })
+            .collect();
+        if store.accept(&prints).is_err() {
+            for print in &prints {
+                let _refused = store.accept(std::slice::from_ref(print));
+            }
         }
         Ok(())
     }
 
-    fn step(&self, step: &Step<E>) -> Result<(), String> {
-        match step {
-            Step::Append { by, event, .. } => {
-                // An append the schema or the door refuses writes nothing (the core's law 20).
-                let _refused = self.store(*by).append(event.clone());
-                Ok(())
-            }
-            Step::Pick { from, to, chosen } => {
-                let chosen: Vec<Option<usize>> = chosen.iter().copied().map(Some).collect();
-                self.give(*from, *to, &chosen)
-            }
-            Step::Sync { from, to } => self.give(*from, *to, &[None]),
-            Step::SyncAll => {
-                for (from, to) in [
-                    (Who::Ben, Who::Ada),
-                    (Who::Cai, Who::Ada),
-                    (Who::Ada, Who::Ben),
-                    (Who::Ada, Who::Cai),
-                ] {
-                    self.give(from, to, &[None])?;
-                }
-                Ok(())
-            }
-            Step::Read { by, .. } => self.cached(*by).map(drop),
-            Step::Refuse { .. }
-            | Step::Rotate { .. }
-            | Step::Revoke { .. }
-            | Step::Record { .. }
-            | Step::Snapshot { .. }
-            | Step::Forget { .. }
-            | Step::Flush { .. } => Ok(()),
-        }
-    }
-
     /// `who`'s reading through the shared cache.
-    fn cached(&self, who: Who) -> Result<Registers, String> {
+    fn cached(&self, who: Who) -> Result<Registers<E>, StoreError> {
         memoised(
             &self.cache,
             b"script_law_layers registers",
             self.store(who),
             registers,
         )
-        .map_err(|e| e.to_string())
     }
 
-    /// Every invariant of the module's head, after a step.
-    fn check(&self) -> Result<(), String> {
+    /// The host check of `run_with`: `who`'s store mirrors its replica, and every invariant of
+    /// the module's head holds for it, and for every pair of stores once the last actor's has.
+    fn check(&self, who: Who, replica: &Replicated<E>) -> Result<(), Broken> {
+        self.mirror(who, replica)?;
+        let kept = self.store(who);
+        let fresh = (self.open)(self.roots[who.index()].clone());
+        let (kept_graph, fresh_graph) = (
+            kept.graph().map_err(broken)?,
+            fresh.graph().map_err(broken)?,
+        );
+        let names = |graph: &suzatary_store::store::Graph<E>| -> BTreeSet<Hash> {
+            graph.dag().objects().keys().cloned().collect()
+        };
+        if names(&kept_graph) != names(&fresh_graph) || kept_graph.heads() != fresh_graph.heads() {
+            return Err(broken(format!(
+                "{}'s kept graph is not its files'",
+                who.name()
+            )));
+        }
+        let now = registers(&fresh).map_err(broken)?;
+        let mirrored: BTreeSet<Hash> = replica.dag.objects().keys().cloned().collect();
+        if names(&fresh_graph) == mirrored
+            && let Some(difference) = now.differs(&Registers::of(&replica.folded))
+        {
+            return Err(broken(format!(
+                "{}'s store reads otherwise than its replica: {difference}",
+                who.name()
+            )));
+        }
+        if self.cached(who).map_err(broken)? != now {
+            return Err(broken(format!(
+                "the shared cache answers {} otherwise than a fresh fold",
+                who.name()
+            )));
+        }
+        match who {
+            Who::Cai => self.devices(),
+            Who::Ada | Who::Ben => Ok(()),
+        }
+    }
+
+    /// A device's replica of one store, holding another store's objects, reads as behind or as
+    /// the store whole.
+    fn devices(&self) -> Result<(), Broken> {
         let mut wholes = Vec::new();
         for who in Who::ALL {
-            let kept = self.store(who);
             let fresh = (self.open)(self.roots[who.index()].clone());
-            let (kept_graph, fresh_graph) = (
-                kept.graph().map_err(|e| e.to_string())?,
-                fresh.graph().map_err(|e| e.to_string())?,
-            );
-            let names = |graph: &suzatary_store::store::Graph<E>| -> BTreeSet<Hash> {
-                graph.dag().objects().keys().cloned().collect()
-            };
-            if names(&kept_graph) != names(&fresh_graph)
-                || kept_graph.heads() != fresh_graph.heads()
-            {
-                return Err(format!("{}'s kept graph is not its files'", who.name()));
-            }
-            let now = registers(&fresh).map_err(|e| e.to_string())?;
-            if self.cached(who)? != now {
-                return Err(format!(
-                    "the shared cache answers {} otherwise than a fresh fold",
-                    who.name()
-                ));
-            }
+            let graph = fresh.graph().map_err(broken)?;
             let prints: Vec<String> = fresh
                 .objects()
-                .map_err(|e| e.to_string())?
+                .map_err(broken)?
                 .iter()
                 .map(|(_, object)| canonical_envelope(object))
                 .collect();
-            wholes.push((
-                who,
-                names(&fresh_graph),
-                fresh_graph.heads().clone(),
-                prints,
-            ));
+            let names: BTreeSet<Hash> = graph.dag().objects().keys().cloned().collect();
+            wholes.push((who, names, graph.heads().clone(), prints));
         }
         for (box_, whole, heads, _) in &wholes {
             for (device, held, _, prints) in &wholes {
@@ -239,13 +206,13 @@ where
                     .map(|node| suzatary_store::replica::held::Node::name(node).clone())
                     .collect();
                 if !read.behind(heads) && reads != *whole {
-                    return Err(format!(
+                    return Err(broken(format!(
                         "{}'s replica of {}'s store is not behind and reads {} of its {} objects",
                         device.name(),
                         box_.name(),
                         reads.len(),
                         whole.len()
-                    ));
+                    )));
                 }
             }
         }
@@ -253,34 +220,36 @@ where
     }
 }
 
-/// `script` over three stores `open` opens, every invariant checked after every step.
-fn holds<E: Store<Vocabulary: Default>>(
+/// `script` over the machine's replicas under `policy`, the claimed reading the application's,
+/// with three stores `open` opens mirroring them, every invariant checked after every step.
+fn holds<E: Store<Vocabulary: Default>, P: Policy<E> + Clone>(
     open: fn(PathBuf) -> Objects<E>,
+    policy: &P,
     script: &Script<E>,
-) -> Result<(), TestCaseError>
-where
-    E::Key: std::fmt::Debug,
-{
+) -> Result<(), TestCaseError> {
     let dir = tempfile::tempdir().map_err(|e| TestCaseError::fail(e.to_string()))?;
-    let layers = Layers::new(dir.path(), open).map_err(TestCaseError::fail)?;
-    for (n, step) in script.steps.iter().enumerate() {
-        layers
-            .step(step)
-            .and_then(|()| layers.check())
-            .map_err(|what| TestCaseError::fail(format!("at step {n}: {what}")))?;
-    }
-    Ok(())
+    let layers = Layers::new(dir.path(), open);
+    script::run_with(&E::Vocabulary::default(), script, policy, |who, replica| {
+        layers.check(who, replica)
+    })
+    .map(drop)
+    .map_err(|broken| TestCaseError::fail(broken.to_string()))
+}
+
+fn triage() -> Untrusted {
+    Untrusted::of([Actor::new("triage").expect("an actor")])
 }
 
 fn chain(root: PathBuf) -> Objects<suzatary_record::record::TodoEvent> {
-    Objects::chain(EventStore::new(
-        root,
-        Untrusted::of([Actor::new("triage").expect("an actor")]),
-    ))
+    Objects::chain(EventStore::new(root, triage()))
 }
 
-fn digests(root: PathBuf) -> Objects<suzatary_digest::secretary::digest_event::DigestEvent> {
-    Objects::digests(root, [Who::Ada.actor()].into())
+fn owners() -> BTreeSet<Actor> {
+    [Who::Ada.actor()].into()
+}
+
+fn digests(root: PathBuf) -> Objects<DigestEvent> {
+    Objects::digests(root, owners())
 }
 
 proptest! {
@@ -288,41 +257,42 @@ proptest! {
 
     #[test]
     fn the_chain_s_layers_read_as_its_objects(script in a_script(a_todo_write, STEPS)) {
-        holds(chain, &script)?;
+        holds(chain, &triage(), &script)?;
     }
 
     #[test]
     fn the_decisions_layers_read_as_their_objects(script in a_script(a_decision_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 
     #[test]
     fn the_inbox_s_layers_read_as_its_objects(script in a_script(an_inbox_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 
     #[test]
     fn the_memory_s_layers_read_as_its_objects(script in a_script(a_memory_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 
     #[test]
     fn the_topics_layers_read_as_their_objects(script in a_script(a_membership_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 
     #[test]
     fn the_aliases_layers_read_as_their_objects(script in a_script(an_alias_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 
     #[test]
     fn the_digests_layers_read_as_their_objects(script in a_script(a_digest_write, STEPS)) {
-        holds(digests, &script)?;
+        let owners = owners();
+        holds(digests, &Owners(&owners), &script)?;
     }
 
     #[test]
     fn the_asks_layers_read_as_their_objects(script in a_script(an_ask_write, STEPS)) {
-        holds(Objects::open, &script)?;
+        holds(Objects::open, &Everything, &script)?;
     }
 }

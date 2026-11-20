@@ -205,7 +205,7 @@ impl Literal for AttachmentSource {
                     at: fields.get("at")?,
                 }
             }
-            other => return Err(no_arm("an attachment's source", other)),
+            other => return Err(no_arm("AttachmentSource", other)),
         })
     }
 }

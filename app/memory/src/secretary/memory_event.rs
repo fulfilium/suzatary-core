@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 
 use prodrome_core::event::Actor;
-use prodrome_core::fold::{Discrete, Frontier, RegisterType};
+use prodrome_core::fold::{Climb, Discrete, RegisterType};
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
 
 use prodrome_core::fold::sole::{One, Only, Sole};
@@ -149,6 +149,7 @@ pub type MemoryVocabulary = Constructors<Said>;
 
 // By hand: an event body of `schema::headed`, which the derive does not write.
 impl Body for Said {
+    const NAME: &'static str = "Said";
     type Key = FactId;
     type Register = Only;
     type Registers<'a> = One<'a, LifeRegister>;
@@ -227,10 +228,7 @@ impl Body for Said {
                 fields.get("round")?,
             ),
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(
-                    "a memory event",
-                    other,
-                ));
+                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
             }
         }
         .map_err(|failed| ProdromeError::invalid(failed.to_string()))
@@ -254,16 +252,9 @@ impl RegisterType<MemoryEvent> for LifeRegister {
     }
 }
 
-/// Inflationary: the store refuses a write below the life it supersedes.
 impl Sole for LifeRegister {
     type Schema = MemoryEvent;
-
-    fn grows(
-        frontier: &Frontier<'_, MemoryEvent>,
-        event: &MemoryEvent,
-    ) -> Result<(), ProdromeError> {
-        frontier.grows::<Self>(event)
-    }
+    type Held<'a> = Climb<'a, MemoryEvent>;
 }
 
 #[cfg(test)]

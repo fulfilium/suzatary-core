@@ -169,7 +169,7 @@ impl<'de> serde::Deserialize<'de> for Scopes {
 /// Where Google sends the owner back: the app's own origin and [`super::CALLBACK`], exactly,
 /// since Google compares it byte for byte with what the client lists (RFC 9700 §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Literal)]
-#[literal(new = RedirectUri::read)]
+#[literal(crate = prodrome_core, new = RedirectUri::read)]
 pub struct RedirectUri(String);
 
 impl RedirectUri {

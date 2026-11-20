@@ -2,9 +2,6 @@
 
 #![forbid(unsafe_code)]
 
-// The name `#[derive(Literal)]` gives the core.
-extern crate prodrome_core as prodrome;
-
 pub mod coding_report;
 pub mod secretary {
     //! A line's words, the keys that seal them, the stores that hold copies, and the memory's facts.

@@ -285,7 +285,7 @@ fn the_catalog_is_one_template_per_name() {
 /// Every constructor this crate stores, with its fields in print order.
 #[test]
 fn the_stored_names_are_pinned() {
-    suzatary_base::own::assert_pinned(
+    prodrome_core::literal::codec::assert_pinned(
         &[suzatary_connect::connect::CONNECTION],
         "Connection(template, params)",
     );

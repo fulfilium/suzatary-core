@@ -243,6 +243,7 @@ impl NoteSite {
 /// The message a todo came from. `date` is a day; the three identifiers are `""` when the
 /// writer did not record them.
 #[derive(Debug, Clone, PartialEq, Eq, Literal)]
+#[literal(crate = prodrome_core)]
 pub struct Source {
     /// Who it came from, as the header read.
     #[literal(with = stored_text)]
@@ -265,7 +266,7 @@ pub struct Source {
 
 /// A comment run attached to one field of a record.
 #[derive(Debug, Clone, PartialEq, Eq, Literal)]
-#[literal(new = mk_note)]
+#[literal(crate = prodrome_core, new = mk_note)]
 pub struct Note {
     /// Which field it is about.
     #[literal(with = codec::text_field)]
@@ -287,7 +288,7 @@ pub struct SubTodo {
 /// the database owns. Stored as `Authored`, not `Record`: the constructor's name is in the bytes
 /// of every stored object.
 #[derive(Debug, Clone, PartialEq, Literal)]
-#[literal(rename = "Authored", new = mk_record)]
+#[literal(crate = prodrome_core, rename = "Authored", new = mk_record)]
 pub struct Record {
     /// Which constructor renders it, one of `decoration::KINDS`.
     #[literal(with = codec::text_field)]
@@ -736,7 +737,7 @@ mod tests {
             price::RECUR_PRICE,
             price::PERIODIC_PRICE,
         ]);
-        suzatary_base::own::assert_pinned(
+        prodrome_core::literal::codec::assert_pinned(
             &stored,
             "
             Authored(kind, created, body, spec, rationale, category, waiting_on, detail, source, subtodos, notes, note)

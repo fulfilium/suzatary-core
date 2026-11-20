@@ -27,6 +27,7 @@ type Note = Event<Noted>;
 const NOTED: Constructor = ("Noted", &["key", "at", "actor", "text"]);
 
 impl Body for Noted {
+    const NAME: &'static str = "Noted";
     type Key = Hash;
     type Register = Only;
     type Registers<'a> = One<'a, Whole<Note>>;

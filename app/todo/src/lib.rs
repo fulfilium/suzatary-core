@@ -3,9 +3,6 @@
 
 #![forbid(unsafe_code)]
 
-// The name `#[derive(Literal)]` gives the core.
-extern crate prodrome_core as prodrome;
-
 pub mod authoring;
 pub mod decisions;
 pub mod pages;

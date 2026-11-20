@@ -1,8 +1,7 @@
 //! A proposal's registers: what it asks (discrete) and where its machine stands (a [`Phase`],
-//! inflationary). A product of two frontiers, so folding a proposal's events in any order is one
-//! value.
+//! inflationary), so folding a proposal's events in any order is one value.
 
-use prodrome_core::fold::{Discrete, Frontier, Product, Register, RegisterType};
+use prodrome_core::fold::{Climb, Discrete, Frontier, Product, Register, RegisterType};
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::registers::Stamp;
 
@@ -51,7 +50,7 @@ pub struct InboxRegisters<'a> {
     /// What was asked.
     pub content: Frontier<'a, InboxEvent>,
     /// What became of it.
-    pub state: Frontier<'a, InboxEvent>,
+    pub state: Climb<'a, InboxEvent>,
 }
 
 impl<'a> Product<'a> for InboxRegisters<'a> {
@@ -61,24 +60,17 @@ impl<'a> Product<'a> for InboxRegisters<'a> {
         vec![InboxRegister::Content, InboxRegister::State]
     }
 
-    fn join(&mut self, stamp: &'a Stamp<InboxEvent>) {
-        match stamp.event.said {
-            Said::Asked(_) => self.content.join(stamp),
-            Said::Responded(_) => self.state.join(stamp),
-        }
-    }
-
     fn frontier(&self, register: InboxRegister) -> &Frontier<'a, InboxEvent> {
         match register {
             InboxRegister::Content => &self.content,
-            InboxRegister::State => &self.state,
+            InboxRegister::State => self.state.frontier(),
         }
     }
 
-    fn frontier_mut(&mut self, register: InboxRegister) -> &mut Frontier<'a, InboxEvent> {
+    fn join_to(&mut self, register: InboxRegister, stamp: &'a Stamp<InboxEvent>) {
         match register {
-            InboxRegister::Content => &mut self.content,
-            InboxRegister::State => &mut self.state,
+            InboxRegister::Content => self.content.join(stamp),
+            InboxRegister::State => self.state.join::<StateRegister>(stamp),
         }
     }
 
@@ -89,8 +81,7 @@ impl<'a> Product<'a> for InboxRegisters<'a> {
         }
     }
 
-    /// The state is inflationary, and a response with a floor ([`Phase::floor`]) stands on it;
-    /// the content is discrete and grows nothing.
+    /// A response with a floor ([`Phase::floor`]) also stands on it.
     fn grows(&self, event: &InboxEvent) -> Result<(), ProdromeError> {
         self.state.grows::<StateRegister>(event)?;
         let reading: Vec<Phase> = self
@@ -105,5 +96,13 @@ impl<'a> Product<'a> for InboxRegisters<'a> {
             ))),
             _ => Ok(()),
         }
+    }
+
+    fn climbed(&self, earlier: &Self) -> Result<(), ProdromeError> {
+        self.state.climbed::<StateRegister>(&earlier.state)
+    }
+
+    fn climbing(&self) -> Vec<InboxRegister> {
+        vec![InboxRegister::State]
     }
 }

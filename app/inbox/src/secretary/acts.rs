@@ -542,7 +542,7 @@ impl Literal for Act {
             "Retract" => Act::Retract {
                 node: Fields::of(value, RETRACT)?.get("node")?,
             },
-            other => return Err(no_arm("an act the box performs", other)),
+            other => return Err(no_arm("Act", other)),
         })
     }
 }
@@ -607,7 +607,7 @@ fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
                 .map_err(ProdromeError::invalid)?,
             }
         }
-        other => return Err(no_arm("a Google act", other)),
+        other => return Err(no_arm("Act", other)),
     })
 }
 

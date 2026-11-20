@@ -462,16 +462,16 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 [[external]]
 name = "prodrome-core"
 source = "https://github.com/fulfilium/prodrome"
-rev = "42f526fb7d9d274d0a9668999f9c5506d024ddee"
+rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
 pinned_in = "app/Cargo.toml"
 path = "core"
 shape = "crate"
-use = 125022
+use = 130676
 
 [[external]]
 name = "prodrome-wasm-exports"
 source = "https://github.com/fulfilium/prodrome"
-rev = "42f526fb7d9d274d0a9668999f9c5506d024ddee"
+rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
 pinned_in = "app/Cargo.toml"
 path = "wasm/exports"
 shape = "crate"
@@ -480,7 +480,7 @@ use = 6478
 [[external]]
 name = "prodrome-typst-wasm"
 source = "https://github.com/fulfilium/prodrome"
-rev = "42f526fb7d9d274d0a9668999f9c5506d024ddee"
+rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
 pinned_in = "app/Cargo.toml"
 path = "typst-wasm"
 shape = "crate"

@@ -169,6 +169,7 @@ impl Kind {
     ts_rs::TS,
     Literal,
 )]
+#[literal(crate = prodrome_core)]
 pub struct FactId(
     // A fact's number stays far below the 2^53 a page's number holds exactly.
     #[ts(type = "number")] pub u64,
@@ -181,7 +182,7 @@ pub struct FactId(
     into = "std::collections::BTreeSet<FactId>"
 )]
 // A literal that reads no source is refused, as the serde form is.
-#[literal(new = Sources::stored)]
+#[literal(crate = prodrome_core, new = Sources::stored)]
 pub struct Sources(std::collections::BTreeSet<FactId>);
 
 impl Sources {
@@ -285,7 +286,7 @@ impl Literal for Origin {
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, &[TURN, TAPPED])?;
+        let fields = Fields::among(value, "Origin", &[TURN, TAPPED])?;
         let conversation = fields.get("conversation")?;
         Ok(match fields.name() {
             "Turn" => Origin::Turn {
@@ -296,7 +297,7 @@ impl Literal for Origin {
                 conversation,
                 proposal: fields.get("proposal")?,
             },
-            other => return Err(prodrome_core::literal::codec::no_arm("an origin", other)),
+            other => return Err(prodrome_core::literal::codec::no_arm("Origin", other)),
         })
     }
 }

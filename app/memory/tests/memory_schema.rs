@@ -463,7 +463,7 @@ fn two_consolidations_numbered_alike_keep_the_least_named() {
 fn the_stored_names_are_pinned() {
     use prodrome_core::schema::headed::Body;
     let stored = [<Said as Body>::EVENTS, <Said as Body>::NESTED].concat();
-    suzatary_base::own::assert_pinned(
+    prodrome_core::literal::codec::assert_pinned(
         &stored,
         "
         Remembered(fact, at, actor, text, kind, said)

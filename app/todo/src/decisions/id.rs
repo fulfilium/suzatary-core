@@ -7,7 +7,7 @@ use super::NotADecision;
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, prodrome_core::literal::codec::Literal,
 )]
-#[literal(new = DecisionId::stored)]
+#[literal(crate = prodrome_core, new = DecisionId::stored)]
 pub struct DecisionId(String);
 
 impl DecisionId {

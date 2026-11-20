@@ -165,6 +165,7 @@ fn stated(statement: &Statement, supersedes: &BTreeSet<DecisionId>) -> Vec<Value
 
 // By hand: an event body of `schema::headed`, which the derive does not write.
 impl Body for Said {
+    const NAME: &'static str = "Said";
     type Key = DecisionId;
     type Register = DecisionRegister;
     type Registers<'a> = DecisionRegisters<'a>;
@@ -229,10 +230,7 @@ impl Body for Said {
             "Revised" => revised(decision, at, actor, statement()?, fields.get("supersedes")?),
             "Withdrawn" => withdrawn(decision, at, actor, &fields.get::<String>("reason")?),
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(
-                    "a decision event",
-                    other,
-                ));
+                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
             }
         }
         .map_err(invalid)

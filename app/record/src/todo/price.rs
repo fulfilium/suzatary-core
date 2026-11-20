@@ -180,7 +180,7 @@ impl Literal for Price {
             }
             "RecurPrice" => Price::Recur(cycle_of(value, RECUR_PRICE)?),
             "PeriodicPrice" => Price::Periodic(cycle_of(value, PERIODIC_PRICE)?),
-            other => return Err(no_arm("a price", other)),
+            other => return Err(no_arm("Price", other)),
         })
     }
 }

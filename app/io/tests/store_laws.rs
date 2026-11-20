@@ -13,19 +13,24 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use prodrome_core::declared::Declared;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
+use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::store::{EventStore, Replica as _};
 use suzatary_digest::secretary::digest_event::DigestEvent;
-use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said as Inboxed};
+use suzatary_inbox::secretary::responded::{Responded, Tried};
 use suzatary_io::objects::Objects;
 use suzatary_lines::secretary::line_event::LineEvent;
-use suzatary_memory::secretary::memory_event::MemoryEvent;
-use suzatary_record::record::TodoEvent;
+use suzatary_memory::secretary::memory::{FactId, Kind as FactKind, Origin};
+use suzatary_memory::secretary::memory_event::{MemoryEvent, forgotten, remembered};
+use suzatary_memory::secretary::salted_text::TextName;
+use suzatary_record::record::{MarkupSource, TodoEvent};
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Hold, Prodrome};
 use suzatary_stores::stores::{Files, Kind, Store};
-use suzatary_todo::decisions::DecisionEvent;
+use suzatary_todo::decisions::{DecisionEvent, DecisionId, Statement, decided, revised, withdrawn};
 use suzatary_topics::secretary::topics::reading::AliasEvent;
 use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
@@ -209,4 +214,144 @@ fn every_prodrome_keeps_the_store_laws() {
         .filter(|kind| matches!(kind.files(), Files::Chain | Files::Objects))
         .collect();
     assert_eq!(covered, prodromes);
+}
+
+/// Each inflationary register's reading, by the names of its writes, of every entity: its
+/// frontier may move under a received write, and its reading may not.
+fn readings<E: Store>(store: &Objects<E>) -> Vec<Vec<Hash>> {
+    use prodrome_core::fold::Product as _;
+    let nodes = store.nodes().expect("reads");
+    prodrome_core::registers::fold(&nodes)
+        .entities()
+        .flat_map(|(_, stream)| {
+            let read = prodrome_core::fold::read(stream, None, &prodrome_core::policy::Everything);
+            read.climbing()
+                .into_iter()
+                .map(|register| {
+                    read.reading(register)
+                        .iter()
+                        .map(|s| s.name.clone())
+                        .collect()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// `honest` appended, then `below` built by hand as a change resting on every tip and RECEIVED,
+/// as a store takes another's files: the reading does not move, and `verify` names the write.
+fn received_below<E: Store<Vocabulary: Default>>(store: &str, honest: Vec<E>, below: E) {
+    let dir = suzatary_testkit::scratch("received-below");
+    let objects = Objects::<E>::open(dir.path().join(store));
+    objects.begin().expect("begins");
+    for event in honest {
+        objects.append(event).expect("an honest write");
+    }
+    assert!(
+        objects.append(below.clone()).is_err(),
+        "{store}: the append refuses the write below its reading"
+    );
+    let before = readings(&objects);
+    let genesis = objects
+        .objects()
+        .expect("reads")
+        .into_iter()
+        .find(|(_, object)| matches!(object, Envelope::Genesis(_)))
+        .map(|(name, _)| name)
+        .expect("a genesis");
+    let change = Envelope::Change(
+        prodrome_core::change::mk_change(genesis, objects.tips().expect("tips"), below)
+            .expect("a change"),
+    );
+    let name = seal_hash(&change);
+    objects
+        .accept(&[(name.clone(), canonical_envelope(&change))])
+        .expect("taken in");
+    assert_eq!(
+        readings(&objects),
+        before,
+        "{store}: the reading did not fall"
+    );
+    let found = objects.verify();
+    assert!(
+        matches!(found.as_slice(), [only] if only.contains(name.as_str())),
+        "{store}: verify names the write below, and nothing else: {found:?}"
+    );
+}
+
+/// Law 32 for every inflationary register this application keeps: the inbox's state, the
+/// memory's life and the decisions' life read the greatest of all their writes.
+#[test]
+fn a_write_below_its_reading_received_neither_lowers_it_nor_passes_verify() {
+    let at = |minute| Datetime::new(2026, 10, 1, 9, minute, 0, 0).expect("an instant");
+    let ada = || Actor::new("ada").expect("an actor");
+
+    let proposal = ProposalId::new("p0").expect("a proposal id");
+    let inboxed = |minute, said| InboxEvent {
+        proposal: proposal.clone(),
+        at: at(minute),
+        actor: ada(),
+        said,
+    };
+    received_below(
+        "inbox",
+        vec![
+            inboxed(0, Inboxed::Asked(Box::new(suzatary_inbox::drawn::asked()))),
+            inboxed(
+                1,
+                Inboxed::Responded(Responded::Dismissed {
+                    reason: "not this one".to_owned(),
+                }),
+            ),
+        ],
+        inboxed(
+            2,
+            Inboxed::Responded(Responded::Tried {
+                attempt: 1,
+                tried: Tried::NotSent {
+                    reason: "no grant".to_owned(),
+                },
+            }),
+        ),
+    );
+
+    let fact = FactId(1);
+    let remembering = |minute| {
+        remembered(
+            fact,
+            at(minute),
+            ada(),
+            TextName::new(format!("{:064x}", 1)).expect("a text name"),
+            FactKind::Person,
+            Origin::Turn {
+                conversation: suzatary_base::conversation_id::ConversationId::new("default")
+                    .expect("a conversation"),
+                turn: 0,
+            },
+        )
+        .expect("a memory event")
+    };
+    received_below(
+        "memory",
+        vec![
+            remembering(0),
+            forgotten(fact, at(1), ada(), 2).expect("a forgetting"),
+        ],
+        remembering(2),
+    );
+
+    let decision = DecisionId::new("onewriter").expect("a decision id");
+    let statement = || {
+        Statement::new("One writer", MarkupSource::escaped("What it says."), "Why.")
+            .expect("a statement")
+    };
+    received_below(
+        "decisions",
+        vec![
+            decided(decision.clone(), at(0), ada(), statement(), BTreeSet::new())
+                .expect("a decision"),
+            withdrawn(decision.clone(), at(1), ada(), "It no longer holds.").expect("a withdrawal"),
+        ],
+        revised(decision, at(2), ada(), statement(), BTreeSet::new()).expect("a revision"),
+    );
 }

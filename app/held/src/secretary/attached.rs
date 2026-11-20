@@ -279,7 +279,7 @@ mod tests {
         use crate::secretary::attachment_source::{
             FROM_DRIVE, FROM_KEPT, FROM_MAIL, FROM_REPO, FROM_UPLOAD,
         };
-        suzatary_base::own::assert_pinned(
+        prodrome_core::literal::codec::assert_pinned(
             &[
                 ATTACHED,
                 FROM_MAIL,

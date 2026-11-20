@@ -1,6 +1,7 @@
-use prodrome_core::fold::{Discrete, Frontier, GrowSet, Product, Register, RegisterType};
+use prodrome_core::fold::{Climb, Discrete, Frontier, GrowSet, Product, Register, RegisterType};
 use prodrome_core::literal::ProdromeError;
 use prodrome_core::registers::Stamp;
+use prodrome_core::schema::Schema as _;
 
 use super::{DecisionEvent, DecisionId, Life, Said, Statement};
 
@@ -41,14 +42,13 @@ impl RegisterType<DecisionEvent> for LifeRegister {
     }
 }
 
-/// One decision's registers: a product of two frontiers and a grow-only set, so folding its
-/// events in any order is one value.
+/// One decision's registers, so folding its events in any order is one value.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DecisionRegisters<'a> {
     /// What it says.
     pub content: Frontier<'a, DecisionEvent>,
     /// Whether it still stands.
-    pub life: Frontier<'a, DecisionEvent>,
+    pub life: Climb<'a, DecisionEvent>,
     /// Every decision any of its statements supersedes: the union, so a link once made stays.
     pub supersedes: GrowSet<&'a DecisionId>,
 }
@@ -61,26 +61,25 @@ impl<'a> Product<'a> for DecisionRegisters<'a> {
     }
 
     fn join(&mut self, stamp: &'a Stamp<DecisionEvent>) {
-        if let Some(links) = stamp.event.body().supersedes() {
-            self.content.join(stamp);
-            for link in links {
-                self.supersedes.join(link);
-            }
+        for link in stamp.event.body().supersedes().into_iter().flatten() {
+            self.supersedes.join(link);
         }
-        self.life.join(stamp);
+        for register in stamp.event.writes() {
+            self.join_to(register, stamp);
+        }
     }
 
     fn frontier(&self, register: DecisionRegister) -> &Frontier<'a, DecisionEvent> {
         match register {
             DecisionRegister::Content => &self.content,
-            DecisionRegister::Life => &self.life,
+            DecisionRegister::Life => self.life.frontier(),
         }
     }
 
-    fn frontier_mut(&mut self, register: DecisionRegister) -> &mut Frontier<'a, DecisionEvent> {
+    fn join_to(&mut self, register: DecisionRegister, stamp: &'a Stamp<DecisionEvent>) {
         match register {
-            DecisionRegister::Content => &mut self.content,
-            DecisionRegister::Life => &mut self.life,
+            DecisionRegister::Content => self.content.join(stamp),
+            DecisionRegister::Life => self.life.join::<LifeRegister>(stamp),
         }
     }
 
@@ -91,8 +90,15 @@ impl<'a> Product<'a> for DecisionRegisters<'a> {
         }
     }
 
-    /// The life is inflationary; the content is discrete and grows nothing.
     fn grows(&self, event: &DecisionEvent) -> Result<(), ProdromeError> {
         self.life.grows::<LifeRegister>(event)
+    }
+
+    fn climbed(&self, earlier: &Self) -> Result<(), ProdromeError> {
+        self.life.climbed::<LifeRegister>(&earlier.life)
+    }
+
+    fn climbing(&self) -> Vec<DecisionRegister> {
+        vec![DecisionRegister::Life]
     }
 }

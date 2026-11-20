@@ -10,26 +10,27 @@
 //! of four minutes, over three entities, so writes collide in one tick and arrive after readings
 //! at later minutes.
 //!
-//! The normal run draws [`CASES`] scripts of at most [`STEPS`] steps for each store, with faults
-//! and without. The nightly run, `cargo test -p suzatary-secretary --test all
+//! Each store's claimed reading is read under its own policy: the chain's `Untrusted{triage}`
+//! and the digests' owners. The normal run draws [`CASES`] scripts of at most [`STEPS`] steps for
+//! each store, with faults and without. The nightly run, `cargo test -p suzatary-secretary --test all
 //! script_law::a_long_run -- --ignored --nocapture`, draws 1024 scripts of twice as many steps
 //! for each store and prints scripts and steps per second.
 
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
 
 use prodrome_core::event::{
-    Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised, mk_tended,
+    Actor, Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised, mk_tended,
 };
 use prodrome_core::fpl;
+use prodrome_core::laws::Broken;
 use prodrome_core::laws::script::{self, Script, Who, a_script, an_honest_script};
 use prodrome_core::literal::Datetime;
+use prodrome_core::policy::{Everything, Policy, Untrusted};
 use prodrome_core::schema::Schema;
 use prodrome_core::tags::{alias, membership};
 use prodrome_core::term::Term;
 use proptest::prelude::*;
-use proptest::test_runner::{Config, TestCaseError, TestRunner};
+use proptest::test_runner::{Config, TestCaseError};
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
@@ -38,6 +39,7 @@ use suzatary_digest::model_name::ModelName;
 use suzatary_digest::secretary::compact_ask::Beside;
 use suzatary_digest::secretary::digest_event::{self, Attempt, DigestEvent, DigestVocabulary};
 use suzatary_digest::secretary::digest_line::Line;
+use suzatary_digest::secretary::digest_policy::Owners;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said as Inboxed};
 use suzatary_memory::secretary::memory::{FactId, Kind as FactKind, Origin};
@@ -341,17 +343,28 @@ pub(crate) fn an_ask_write(who: Who) -> impl Strategy<Value = AskEvent> {
 
 // --- the runs ----------------------------------------------------------------------------------
 
-fn runs<E: Schema>(
+fn runs<E: Schema, P: Policy<E> + Clone>(
     vocabulary: &E::Vocabulary,
+    policy: &P,
     script: &Script<E>,
-) -> Result<script::Ran, TestCaseError> {
-    script::run(vocabulary, script).map_err(|broken| TestCaseError::fail(broken.to_string()))
+) -> Result<script::Ran, Broken> {
+    script::run_with(vocabulary, script, policy, |_, _| Ok(()))
 }
 
-/// Each store's two laws: every invariant after every step of a script with faults, and of an
-/// honest one, which also verifies clean.
+/// The chain's own policy: the triage agent's writes claim and do not bind.
+fn triage() -> Untrusted {
+    Untrusted::of([Actor::new("triage").expect("an actor")])
+}
+
+/// The digests' owners, whose retractions alone bind.
+fn owners() -> BTreeSet<Actor> {
+    [Who::Ada.actor()].into()
+}
+
+/// Each store's two laws, its claimed reading under its own policy: every invariant after every
+/// step of a script with faults, and of an honest one, which also verifies clean.
 macro_rules! script_laws {
-    ($($store:ident: $vocabulary:expr, $writes:expr;)*) => {
+    ($($store:ident: $vocabulary:expr, $policy:expr, $writes:expr;)*) => {
         $(mod $store {
             use super::*;
 
@@ -362,70 +375,46 @@ macro_rules! script_laws {
                 fn every_step_of_a_script_keeps_every_invariant(
                     script in a_script($writes, STEPS),
                 ) {
-                    runs(&$vocabulary, &script)?;
+                    runs(&$vocabulary, &$policy, &script)
+                        .map_err(|broken| TestCaseError::fail(broken.to_string()))?;
                 }
 
                 #[test]
                 fn every_step_of_an_honest_script_verifies_clean(
                     script in an_honest_script($writes, STEPS),
                 ) {
-                    runs(&$vocabulary, &script)?;
+                    runs(&$vocabulary, &$policy, &script)
+                        .map_err(|broken| TestCaseError::fail(broken.to_string()))?;
                 }
             }
         })*
 
-        /// Law 68 over many more scripts for each store, for the nightly run; prints each
-        /// store's scripts and steps per second.
+        /// Law 68 over 1024 scripts of `2 * STEPS` steps with faults for each store, for the
+        /// nightly run; prints each store's rate, and panics at the first broken invariant with
+        /// its shrunk script.
         #[test]
         #[ignore = "the nightly run calls it"]
         fn a_long_run_of_every_store_keeps_every_invariant() {
-            $(long_run(stringify!($store), &$vocabulary, $writes);)*
+            $({
+                let rate = script::long_run(
+                    &a_script($writes, 2 * STEPS),
+                    Config::with_cases(1024),
+                    |script| runs(&$vocabulary, &$policy, script),
+                )
+                .unwrap_or_else(|failure| panic!("{}: {failure}", stringify!($store)));
+                println!("{}: {rate}", stringify!($store));
+            })*
         }
     };
 }
 
 script_laws! {
-    chain: TodoVocabulary::default(), a_todo_write;
-    decisions: DecisionVocabulary::default(), a_decision_write;
-    inbox: InboxVocabulary, an_inbox_write;
-    memory: MemoryVocabulary::default(), a_memory_write;
-    topics: MembershipVocabulary::default(), a_membership_write;
-    topic_aliases: AliasVocabulary::default(), an_alias_write;
-    digests: DigestVocabulary::default(), a_digest_write;
-    asks: AskVocabulary::default(), an_ask_write;
-}
-
-/// 1024 scripts of `2 * STEPS` steps over `vocabulary`, with faults; panics at the first broken
-/// invariant with its shrunk script.
-fn long_run<E, S>(
-    store: &str,
-    vocabulary: &E::Vocabulary,
-    writes: impl Fn(Who) -> S + Clone + 'static,
-) where
-    E: Schema,
-    S: Strategy<Value = E> + 'static,
-{
-    let mut runner = TestRunner::new(Config::with_cases(1024));
-    let started = Instant::now();
-    let (scripts, steps) = (AtomicUsize::new(0), AtomicUsize::new(0));
-    let result = runner.run(&a_script(writes, 2 * STEPS), |script| {
-        steps.fetch_add(runs(vocabulary, &script)?.steps, Ordering::Relaxed);
-        scripts.fetch_add(1, Ordering::Relaxed);
-        Ok(())
-    });
-    let seconds = started.elapsed().as_secs_f64();
-    let (scripts, steps) = (
-        scripts.load(Ordering::Relaxed),
-        steps.load(Ordering::Relaxed),
-    );
-    #[allow(clippy::cast_precision_loss)]
-    let rate = |n: usize| n as f64 / seconds;
-    println!(
-        "{store}: {scripts} scripts, {steps} steps in {seconds:.1} s: {:.1} scripts/s, {:.0} steps/s",
-        rate(scripts),
-        rate(steps),
-    );
-    if let Err(failure) = result {
-        panic!("{store}: {failure}");
-    }
+    chain: TodoVocabulary::default(), triage(), a_todo_write;
+    decisions: DecisionVocabulary::default(), Everything, a_decision_write;
+    inbox: InboxVocabulary, Everything, an_inbox_write;
+    memory: MemoryVocabulary::default(), Everything, a_memory_write;
+    topics: MembershipVocabulary::default(), Everything, a_membership_write;
+    topic_aliases: AliasVocabulary::default(), Everything, an_alias_write;
+    digests: DigestVocabulary::default(), Owners(&owners()), a_digest_write;
+    asks: AskVocabulary::default(), Everything, an_ask_write;
 }

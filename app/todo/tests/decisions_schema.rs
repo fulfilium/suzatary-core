@@ -445,7 +445,7 @@ fn the_stored_names_are_pinned() {
     use prodrome_core::schema::headed::Body;
     use suzatary_todo::decisions::{DECIDE, Said};
     let stored = [<Said as Body>::EVENTS, &[DECIDE]].concat();
-    suzatary_base::own::assert_pinned(
+    prodrome_core::literal::codec::assert_pinned(
         &stored,
         "
         Decided(decision, at, actor, title, body, rationale, supersedes)

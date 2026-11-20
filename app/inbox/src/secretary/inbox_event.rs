@@ -181,10 +181,7 @@ impl InboxEvent {
                     why: fields.get("why")?,
                 },
             ))),
-            other => Err(prodrome_core::literal::codec::no_arm(
-                "an inbox event",
-                other,
-            )),
+            other => Err(prodrome_core::literal::codec::no_arm("InboxEvent", other)),
         }
     }
 }
@@ -215,7 +212,7 @@ impl Schema for InboxEvent {
     }
 
     fn from_value(_: &InboxVocabulary, value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, SIGNATURES)?;
+        let fields = Fields::among(value, "InboxEvent", SIGNATURES)?;
         Ok(InboxEvent {
             proposal: fields.get("proposal")?,
             at: fields.get("at")?,

@@ -157,7 +157,7 @@ impl Asked {
                 PluginName::parse(&fields.get::<String>("plugin")?)
                     .map_err(|failed| invalid(failed.to_string()))?,
             ),
-            other => return Err(prodrome_core::literal::codec::no_arm("an asking", other)),
+            other => return Err(prodrome_core::literal::codec::no_arm("Asked", other)),
         };
         Ok(Asked {
             proposer,

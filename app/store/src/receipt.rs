@@ -83,6 +83,7 @@ impl<S> Body for Refused<S>
 where
     S: Literal + Clone + PartialEq + Debug + Send + Sync + 'static,
 {
+    const NAME: &'static str = "Refused";
     type Key = Hash;
     type Register = Only;
     type Registers<'a> = One<'a, Whole<RefusalEvent<S>>>;
@@ -109,7 +110,7 @@ where
         let grounds = match fields.name() {
             "Refused" => Grounds::Final,
             "Outdated" => Grounds::Outdated,
-            other => return Err(prodrome_core::literal::codec::no_arm("a refusal", other)),
+            other => return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other)),
         };
         Ok(refused(
             fields.get("request")?,

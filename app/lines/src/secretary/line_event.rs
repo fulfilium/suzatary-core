@@ -693,7 +693,7 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
             covers: fields.get("covers")?,
             run: fields.get("run")?,
         },
-        other => return Err(no_arm("a conversation line", other)),
+        other => return Err(no_arm("LineShape", other)),
     })
 }
 
@@ -759,7 +759,7 @@ impl Literal for SealedSlot {
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, &[SCRUBBED, LOCKED])?;
+        let fields = Fields::among(value, "SealedSlot", &[SCRUBBED, LOCKED])?;
         let sealed = base64::engine::general_purpose::STANDARD
             .decode(fields.get::<String>("box")?)
             .map_err(|failed| ProdromeError::invalid(format!("{}.box: {failed}", fields.name())))?;
@@ -1089,7 +1089,7 @@ fn line_of(
     value: &Value,
     words: impl FnOnce(Fields<'_>) -> Result<Vec<SealedSlot>, ProdromeError>,
 ) -> Result<LineEvent, ProdromeError> {
-    let fields = Fields::among(value, LINES)?;
+    let fields = Fields::among(value, "LineEvent", LINES)?;
     let shape = shape_of(fields)?;
     let words = if has_words(signature(&shape)) {
         words(fields)?
@@ -1175,7 +1175,7 @@ impl Literal for DroppedSlot {
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, &[DROPPED, DROPPED_LOCKED])?;
+        let fields = Fields::among(value, "DroppedSlot", &[DROPPED, DROPPED_LOCKED])?;
         let under = if fields.name() == DROPPED.0 {
             ScrubbedUnder::Version(fields.get("rules")?)
         } else {

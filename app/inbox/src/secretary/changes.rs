@@ -790,7 +790,7 @@ impl Literal for Act {
                     rationale: fields.get("rationale")?,
                 }
             }
-            other => return Err(no_arm("a chain act", other)),
+            other => return Err(no_arm("Act", other)),
         })
     }
 }

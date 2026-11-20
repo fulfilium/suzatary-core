@@ -78,7 +78,7 @@ test("law: an unparseable print and what rests on it change no reading of the re
 test("law: what was left out is exactly the print, in the parse's words, with what rests on it", () => {
   const left = reading(held, leftOf)
   assert.deepEqual(left.map(x => [x.name, x.resting]), [[unread.hash, [resting.hash]]])
-  assert.match(left[0]?.why ?? "", /^failed to parse: Asked\.act: Remember\(\.\.\.\) has no field text$/)
+  assert.match(left[0]?.why ?? "", /^failed to parse: Asked\.act: Remember\(\.\.\.\) is missing text$/)
   assert.equal(excluded.said(excluded.left(left)), "1 object on this device could not be read and was left out (1 resting on it)")
 })
 

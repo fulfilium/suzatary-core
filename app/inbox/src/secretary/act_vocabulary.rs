@@ -79,7 +79,7 @@ mod tests {
             &[crate::secretary::inbox::RECURRING],
         ]
         .concat();
-        suzatary_base::own::assert_pinned(
+        prodrome_core::literal::codec::assert_pinned(
             &stored,
             "
             Email(account, to, cc, subject, body, attachments)

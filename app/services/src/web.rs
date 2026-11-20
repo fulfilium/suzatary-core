@@ -496,7 +496,7 @@ impl prodrome_core::literal::codec::Literal for WebRequest {
             "Fetch" => WebRequest::Fetch {
                 url: Fields::of(value, FETCH)?.get("url")?,
             },
-            other => return Err(no_arm("a web request", other)),
+            other => return Err(no_arm("WebRequest", other)),
         })
     }
 }

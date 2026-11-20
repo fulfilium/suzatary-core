@@ -6,20 +6,6 @@ use prodrome_core::event::ENVELOPE_SIGNATURES;
 use prodrome_core::literal::Vocabulary as _;
 use prodrome_core::literal::codec::Constructor;
 
-/// Fails unless `constructors`, one `Name(field, …)` per line, spell `pinned`.
-pub fn assert_pinned(constructors: &[Constructor], pinned: &str) {
-    let spelled: Vec<String> = constructors
-        .iter()
-        .map(|(name, fields)| format!("{name}({})", fields.join(", ")))
-        .collect();
-    let pinned: Vec<&str> = pinned
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    assert_eq!(spelled, pinned);
-}
-
 /// Fails on the first of `constructors` that is an envelope's or a term's.
 pub fn assert_own(constructors: &[Constructor]) {
     for (name, _) in constructors {

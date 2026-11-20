@@ -224,6 +224,7 @@ const SIGNATURES: &[Constructor] = &[SUMMARIZED, SUMMARIZED_UNDER, UNFIT, ASKED,
 pub type DigestVocabulary = Constructors<Said>;
 
 impl Body for Said {
+    const NAME: &'static str = "Said";
     type Key = Hash;
     type Register = Only;
     type Registers<'a> = One<'a, Whole<DigestEvent>>;
@@ -321,10 +322,7 @@ impl Body for Said {
             },
             "Retracted" => Said::Retracted,
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(
-                    "a digest event",
-                    other,
-                ));
+                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
             }
         };
         Event::new(

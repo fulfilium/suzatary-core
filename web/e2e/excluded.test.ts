@@ -137,7 +137,7 @@ app.scene("a print this device cannot read is left out, the page draws, and one 
   await app.page.click("#excluded summary");
   const opened = await app.page.evaluate<string>(`document.querySelector("#excluded li").textContent`);
   assert.ok(opened.startsWith(name), `the line opens to the name, got ${opened}`);
-  assert.match(opened, /failed to parse: Asked\.act: Remember\(\.\.\.\) has no field text/);
+  assert.match(opened, /failed to parse: Asked\.act: Remember\(\.\.\.\) is missing text/);
   assert.equal(
     await app.page.evaluate<number>(`document.querySelectorAll(".secretarystream .problem").length`),
     0,
