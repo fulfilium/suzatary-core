@@ -3326,7 +3326,7 @@ impl Server {
         let consenting = serve::google::Consenting::new(
             suzatary_io::google::Google::new(self.google.endpoints.clone()),
             Arc::clone(&self.google.store),
-            Arc::clone(&self.settings.edits),
+            Arc::clone(&self.settings.edits) as _,
             &self.deploying.app_url,
         );
         let vault = Arc::new(FakeVault::default());

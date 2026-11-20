@@ -25,7 +25,7 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::{Chained, State};
 use prodrome_core::fpl::instant_of;
-use suzatary_connect::settings::Edits;
+use suzatary_connect::settings::{Configuration, Edits};
 use suzatary_google::google;
 use suzatary_server::gate::actor_of;
 
@@ -36,7 +36,7 @@ pub struct Consenting {
     open: Mutex<Open>,
     google: Google,
     store: Arc<dyn Resolves + Send + Sync>,
-    edits: Arc<dyn Edits + Send + Sync>,
+    configuration: Arc<dyn Configuration>,
     redirect: Option<RedirectUri>,
     entropy: Arc<dyn Entropy + Send + Sync>,
 }
@@ -46,14 +46,14 @@ impl Consenting {
     pub fn new(
         google: Google,
         store: Arc<dyn Resolves + Send + Sync>,
-        edits: Arc<dyn Edits + Send + Sync>,
+        configuration: Arc<dyn Configuration>,
         app_url: &str,
     ) -> Self {
         Self {
             open: Mutex::default(),
             google,
             store,
-            edits,
+            configuration,
             redirect: RedirectUri::of_app(app_url).ok(),
             entropy: Arc::new(suzatary_io::texts::SystemEntropy),
         }
@@ -72,7 +72,10 @@ impl Consenting {
 
     /// How `account` syncs its mail, or `None` for an account the instance does not declare.
     fn declared(&self, account: &EmailAddress) -> Result<Option<Strategy>, String> {
-        let declared = self.edits.declared().map_err(|failed| failed.to_string())?;
+        let declared = self
+            .configuration
+            .declared()
+            .map_err(|failed| failed.to_string())?;
         Ok(declared
             .accounts
             .iter()
@@ -221,7 +224,9 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
     let (card, performed) = match (&taken, &call.params) {
         (Taken::Yours(begun), Callback::Code { code, .. }) => (
             begun.card.clone(),
-            exchanged(state, &consenting.google, begun, code),
+            state.editing(by.as_str(), |edits| {
+                exchanged(state, edits, &consenting.google, begun, code)
+            }),
         ),
         (_, Callback::Refused { error, .. }) => {
             match google_sign_in::refused(&taken, Some(error)) {
@@ -292,7 +297,13 @@ const NOT_OPEN: &str = "this sign-in with Google is not open: it was finished al
                         Google on its card to begin again.";
 
 /// Trade `code` for the grant and keep its refresh token under the account's name.
-fn exchanged(state: &State, google: &Google, begun: &Begun, code: &google::Code) -> Performed {
+fn exchanged(
+    state: &State,
+    edits: &dyn Edits,
+    google: &Google,
+    begun: &Begun,
+    code: &google::Code,
+) -> Performed {
     let read = google.exchange(
         &begun.client,
         code,
@@ -352,9 +363,7 @@ fn exchanged(state: &State, google: &Google, begun: &Begun, code: &google::Code)
     )
     .map_err(|failed| failed.to_string())
     .and_then(|connection| {
-        state
-            .consenting
-            .edits
+        edits
             .add_connection(&connection)
             .map_err(|failed| failed.to_string())
     });

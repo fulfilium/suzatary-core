@@ -82,11 +82,14 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
                 &declared.accounts,
             ));
     let empty = SettingsFixture::empty();
+    let accounts = suzatary_mail::mail::account::Roster::new(declared.accounts.clone())
+        .expect("one account is a roster");
     let edits = Arc::new(EditsRecorder::declaring(declared));
     let checks = Arc::new(common::CheckRecorder::default());
     let settings = SettingsFixture {
         live: suzatary_cli::serve::Live {
             settables,
+            accounts,
             ..empty.live.clone()
         },
         secrets: Arc::clone(&secrets) as _,
@@ -1230,6 +1233,7 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
             .expect("the recorder reads")
             .accounts
     };
+    assert_eq!(said_of_ada(base), "Gmail, through lieer's own grant.");
     let unchanged = |case: &str| {
         assert_eq!(
             declared(),
@@ -1316,6 +1320,10 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
         1,
         "its calendars are read at once"
     );
+    // Read with no wait after the callback answered: the callback rereads the instance file
+    // before it answers, as a tap does, so the page that lands next reads the account moved.
+    let said = said_of_ada(base);
+    assert!(said.starts_with("Google: "), "{said}");
 }
 
 /// The sign-in card tapped again after it ended: its consent's link.
@@ -1331,4 +1339,20 @@ fn again(serving: &Serving) -> String {
     let (status, link) = redirected(&format!("{base}{path}"));
     assert_eq!(status, 303, "the box sends the browser on to Google");
     link
+}
+
+/// What `GET /api/overview` says of [`ADA`]'s mail line now.
+fn said_of_ada(base: &str) -> String {
+    let mut page = common::get(&format!("{base}/api/overview"));
+    assert_eq!(common::status(&page), 200);
+    let page = common::body_json(&mut page);
+    page["groups"]
+        .as_array()
+        .expect("a list")
+        .iter()
+        .filter(|group| group["group"] == "mail")
+        .flat_map(|group| group["lines"].as_array().cloned().unwrap_or_default())
+        .find(|line| line["key"] == format!("account:{ADA}"))
+        .and_then(|line| line["detail"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("no line for {ADA}: {page}"))
 }

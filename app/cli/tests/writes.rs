@@ -495,7 +495,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         editing,
         [
             "cli/src/commands/serve/google.rs",
-            "cli/src/commands/serve/proposals.rs",
+            "cli/src/commands/serve/noting.rs",
             "cli/tests/support/fixture.rs",
             "server/src/secretary/routes.rs",
         ],

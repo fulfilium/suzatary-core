@@ -53,6 +53,7 @@ mod locks;
 mod mail;
 pub mod mail_cache;
 pub mod models;
+mod noting;
 mod params;
 mod patches;
 mod proposals;
@@ -374,7 +375,7 @@ impl State {
         let consenting = Arc::new(google::Consenting::new(
             Google::new(Endpoints::google()),
             Arc::new(Unresolved),
-            Arc::clone(&edits),
+            Arc::clone(&edits) as _,
             &deployment.app_url,
         ));
         let mut chains = BTreeMap::new();
@@ -590,6 +591,17 @@ impl State {
         locks::read(&self.live).clone()
     }
 
+    /// `work` given the instance file's editor, and the file reread before this returns if
+    /// `work` moved it, so no request answered after it reads the declarations it replaced.
+    fn editing<T>(&self, who: &str, work: impl FnOnce(&noting::Noting<'_>) -> T) -> T {
+        let edits = noting::Noting::new(self.edits.as_ref());
+        let done = work(&edits);
+        if edits.moved() {
+            self.reconnected(who);
+        }
+        done
+    }
+
     /// Swap a reread [`live::Live`] in whole under the lock; a failure changes nothing.
     pub fn reconnected(&self, who: &str) {
         let mut live = locks::write(&self.live);
@@ -662,7 +674,6 @@ impl State {
         self
     }
 
-    /// Nudge this conversation's task and the compactor.
     /// Whether a round a lost run left may be claimed again: not while the model's last observed
     /// call failed, nor while its health does not read.
     pub fn retry(&self) -> Retry {

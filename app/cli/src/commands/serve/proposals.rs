@@ -6,7 +6,6 @@ use suzatary_api::wire::Tapping;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
-use suzatary_connect::settings::EditError;
 use suzatary_server::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_signatures::signatures::Endorsement;
 use suzatary_signatures::signatures::Tap;
@@ -19,9 +18,6 @@ use super::params::{Asked, Params};
 use super::secretary::conversation_named;
 use super::{Chained, State};
 use prodrome_core::sign;
-use suzatary_connect::connect::Connection;
-use suzatary_connect::settings::Edits;
-use suzatary_health::health::plugin;
 
 /// Proposals of one conversation, named by their indices.
 pub struct Drawn {
@@ -144,41 +140,47 @@ pub fn tap(
     let (id, index) = (&card.conversation, &card.index);
     let chains = state.chain_stores();
     let started = std::time::Instant::now();
-    let edits = Noting::new(state.edits.as_ref());
     let answered = state
-        .with_cards(|caps, cards| {
-            let effectors = Effectors {
-                post: state.postman.as_ref(),
-                reveal: state.reveal.as_ref(),
-                performer: state.acting.as_ref(),
-                secrets: state.secrets.as_ref(),
-                verify: state.verify.as_ref(),
-                checks: state.checks.as_ref(),
-                signing: state.signing.as_ref(),
-                edits: &edits,
-                forget: state.forget.as_ref(),
-                enrolling: state.keys.as_deref().map(|keys| {
-                    suzatary_signatures::signatures::Enrolling {
-                        chains: &chains,
-                        root: keys.root(),
+        .editing(call.guard.who().as_str(), |edits| {
+            state.with_cards(|caps, cards| {
+                let effectors = Effectors {
+                    post: state.postman.as_ref(),
+                    reveal: state.reveal.as_ref(),
+                    performer: state.acting.as_ref(),
+                    secrets: state.secrets.as_ref(),
+                    verify: state.verify.as_ref(),
+                    checks: state.checks.as_ref(),
+                    signing: state.signing.as_ref(),
+                    edits,
+                    forget: state.forget.as_ref(),
+                    enrolling: state.keys.as_deref().map(|keys| {
+                        suzatary_signatures::signatures::Enrolling {
+                            chains: &chains,
+                            root: keys.root(),
+                        }
+                    }),
+                    consents: state.consenting.as_ref(),
+                };
+                match &call.body {
+                    Answer::Tap { note, answer } => secretary_routes::tap(
+                        caps,
+                        &effectors,
+                        &call.guard,
+                        cards,
+                        card,
+                        note,
+                        answer,
+                    ),
+                    Answer::Fix => {
+                        secretary_routes::fix(caps, &effectors, &call.guard, cards, card)
                     }
-                }),
-                consents: state.consenting.as_ref(),
-            };
-            match &call.body {
-                Answer::Tap { note, answer } => {
-                    secretary_routes::tap(caps, &effectors, &call.guard, cards, card, note, answer)
                 }
-                Answer::Fix => secretary_routes::fix(caps, &effectors, &call.guard, cards, card),
-            }
+            })
         })
         .inspect(|after| {
             state.heard(id);
             if let Some(opened) = &after.opened {
                 state.heard(opened);
-            }
-            if edits.moved() {
-                state.reconnected(call.guard.who().as_str());
             }
             state.notice();
         });
@@ -197,64 +199,6 @@ pub fn tap(
         Err(refusal) => tracing::warn!(conversation = %id, index, ms, refused = %refusal, "tap"),
     }
     answered.map(|after| Json(after.conversation))
-}
-
-/// The instance file's editor, noting whether a tap moved the file.
-struct Noting<'a> {
-    edits: &'a dyn Edits,
-    moved: std::sync::atomic::AtomicBool,
-}
-
-impl<'a> Noting<'a> {
-    fn new(edits: &'a dyn Edits) -> Self {
-        Self {
-            edits,
-            moved: std::sync::atomic::AtomicBool::new(false),
-        }
-    }
-
-    fn moved(&self) -> bool {
-        self.moved.load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    fn noted<T>(&self, done: Result<T, EditError>) -> Result<T, EditError> {
-        if done.is_ok() {
-            self.moved.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-        done
-    }
-}
-
-impl Edits for Noting<'_> {
-    fn allow_web(&self, rule: &suzatary_services::web::AllowRule) -> Result<(), EditError> {
-        self.noted(self.edits.allow_web(rule))
-    }
-
-    fn allow_drive(&self, folder: &suzatary_base::drive_path::DrivePath) -> Result<(), EditError> {
-        self.noted(self.edits.allow_drive(folder))
-    }
-
-    fn add_connection(&self, connection: &Connection) -> Result<(), EditError> {
-        self.noted(self.edits.add_connection(connection))
-    }
-
-    fn remove_connection(&self, connection: &Connection) -> Result<(), EditError> {
-        self.noted(self.edits.remove_connection(connection))
-    }
-
-    fn add_origin(
-        &self,
-        plugin: &plugin::PluginName,
-        origin: &plugin::Origin,
-    ) -> Result<(), EditError> {
-        self.noted(self.edits.add_origin(plugin, origin))
-    }
-}
-
-impl suzatary_connect::settings::Configuration for Noting<'_> {
-    fn declared(&self) -> Result<suzatary_connect::connect::Declared, EditError> {
-        self.edits.declared()
-    }
 }
 
 /// `POST …/proposals/<n>/dismiss`: say no, and say why.
