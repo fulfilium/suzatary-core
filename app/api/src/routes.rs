@@ -1069,6 +1069,7 @@ fn weight(node: &SkeletonNode) -> usize {
                     | Step::Coding { .. }
                     | Step::Titled
                     | Step::Still => 0,
+                    Step::Again { question, .. } => question.as_str().len() + 10,
                 }
         }
     };
@@ -1221,6 +1222,10 @@ pub fn waiting(
 /// The most objects one post may carry; more is a refusal, never a silent truncation.
 pub const MAX_POSTED: usize = 512;
 
+/// The most bytes one post's body may hold: a replica's post is a whole chain segment, not one
+/// action line. A body over it is refused whole, so a writer cuts its posts under it.
+pub const MAX_POSTED_BYTES: usize = 4_194_304;
+
 /// `POST /api/objects`: the one chain write path, decided under the write lock.
 pub fn receive_objects(
     store: &dyn Prodrome<TodoEvent>,
@@ -1327,11 +1332,13 @@ pub struct Recording<'a> {
 
 /// What a post carries beside its objects for a store, parsed at the door, and what keeps it for
 /// the objects the store takes, under the store's lock and before they are taken.
-pub struct Beside<'a, B> {
+pub struct Beside<'a, A: Admission> {
     /// What travels beside the objects.
-    pub posted: &'a B,
+    pub posted: &'a A::Beside,
     /// Keeps it for the names taken; a failure takes nothing.
     pub keep: &'a dyn Fn(&[Hash]) -> Result<(), Refusal>,
+    /// What the store's rule reads beyond the store.
+    pub world: &'a A::World,
 }
 
 /// `POST /api/stores/<store>/objects`: decided under the store's lock by the shared rule and the
@@ -1343,7 +1350,7 @@ pub struct Beside<'a, B> {
 pub fn receive_changes<E: stores::Written>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
-    beside: &Beside<'_, <E::Rule as Admission>::Beside>,
+    beside: &Beside<'_, E::Rule>,
     frontiers: &Frontiers,
     writer: Writer<'_>,
     recording: Recording<'_>,
@@ -1368,21 +1375,22 @@ where
             signatures::Trusting::held(writer.chains, writer.root)
         })?;
         let objects = part("read", || store.objects())?;
-        let ruled = part("held", || {
-            <E::Rule as Admission>::held(objects.iter().filter_map(|(_, object)| object.event()))
-        });
         let names = objects.iter().map(|(name, _)| name.clone()).collect();
-        let held = crate::sync::Holding::<E::Rule> {
-            names: &names,
-            held: &ruled,
+        let received = {
+            let ruled = part("held", || <E::Rule as Admission>::held(&objects));
+            let held = crate::sync::Holding::<E::Rule> {
+                names: &names,
+                held: ruled,
+                world: beside.world,
+            };
+            crate::sync::receive_changes::<E::Rule>(
+                held,
+                posted,
+                beside.posted,
+                writer.actor,
+                &trusting,
+            )
         };
-        let received = crate::sync::receive_changes::<E::Rule>(
-            &held,
-            posted,
-            beside.posted,
-            writer.actor,
-            &trusting,
-        );
         let taken: Vec<_> = received
             .outcome
             .taken

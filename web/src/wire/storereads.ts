@@ -33,7 +33,7 @@ export namespace storereads {
   // the request was proven for. `keys` travel beside the objects, never in one: each slot's key by its line's name, the
   // lines' alone.
   export const post = (store: stores.Written, objects: readonly string[], since: string, keys: Readonly<Record<string, readonly string[]>> = {}): Promise<ReceiptPayload> =>
-    http.act(
+    http.handOver(
       `/api/stores/${store}/objects`,
       { objects: [...objects], since, keys: Object.fromEntries(Object.entries(keys).map(([name, k]) => [name, [...k]])) } satisfies PostedObjects,
       payload.ReceiptPayload,

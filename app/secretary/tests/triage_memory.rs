@@ -201,7 +201,7 @@ impl Stores {
         for (held, entry) in entries.iter().enumerate() {
             let (line, keys) = LineEvent::write(
                 id.clone(),
-                ada(),
+                suzatary_lines::secretary::transcript::writer(),
                 u32::try_from(held).expect("few lines"),
                 entry,
                 &self.lines.entropy,

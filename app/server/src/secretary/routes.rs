@@ -6,7 +6,7 @@
 use crate::server::Server;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::sign::{PublicKey, Signed};
-use suzatary_api::wire::{DrawnPayload, Erasing, RecordPayload, SayPayload, Yes};
+use suzatary_api::wire::{DrawnPayload, Erasing, RecordPayload, Yes};
 use suzatary_base::capability::{Clock, Secret};
 use suzatary_base::capability::{Datetime, Typeset};
 use suzatary_base::conversation_id::ConversationId;
@@ -22,9 +22,8 @@ use suzatary_connect::secrets::Secrets;
 use suzatary_connect::settings::{Declaration, Help, Verify};
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::Lines;
-use suzatary_conversations::secretary::store::{Entry, Kind, Stored};
+use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_digest::secretary::memories::{Held, Memories};
 use suzatary_google::google::RedirectUri;
 use suzatary_google::google::ical::Linked;
@@ -330,7 +329,7 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
 /// `POST …/<id>/erase`: erase turns, or all of it, behind the same [`Tap`] as a send.
 ///
 /// # Errors
-/// [`Refusal::not_found`] for a turn there is none of, and [`transcript::erase`]'s.
+/// [`Refusal::not_found`] for a line there is none of, and [`transcript::erase`]'s.
 pub fn erase(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -341,12 +340,14 @@ pub fn erase(
     let read = transcript::read(caps.secretary.conversations, id)?;
     let lines: Vec<usize> = match erasing {
         Erasing::Whole(Yes) => (0..read.lines().len()).collect(),
-        Erasing::Turns(turns) => turns
+        Erasing::Lines(names) => names
             .as_slice()
             .iter()
-            .map(|&turn| {
-                read.line_of(turn)
-                    .ok_or_else(|| Refusal::not_found(format!("{id} has no turn {turn}")))
+            .map(|name| {
+                read.lines()
+                    .iter()
+                    .position(|written| written.name == name.0)
+                    .ok_or_else(|| Refusal::not_found(format!("{id} has no line {}", name.0)))
             })
             .collect::<Result<_, _>>()?,
     };
@@ -386,11 +387,7 @@ pub fn newest(
     cards: &Cards<'_>,
     id: &ConversationId,
 ) -> Answered<wire::ConversationPayload> {
-    payload(
-        &conversations::read(caps.secretary.conversations, id)?,
-        caps,
-        cards,
-    )
+    payload(id, caps, cards)
 }
 
 /// `GET …/<id>/drawn?indices=<n>,…`: proposals drawn against the todo chains.
@@ -431,65 +428,7 @@ pub fn drawn(
     })
 }
 
-pub(crate) const MAX_ATTACHMENTS_PER_TURN: usize = 4;
-
-/// `POST …/<id>/say`: append the person's turn, stamped `by`; the model runs in the worker.
-///
-/// A question asked again once its line stands at or past `after` is that line.
-///
-/// # Errors
-/// The store's own, an empty turn, too many files, or [`Refusal::bad_request`] when the queue is
-/// full.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a turn's parts, its asker and what it saw, each its own field of the request"
-)]
-pub fn say(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    id: &ConversationId,
-    said: &str,
-    references: &[Reference],
-    attachments: &[Attachment],
-    by: Stamp,
-    after: Option<usize>,
-) -> Answered<SayPayload> {
-    let turn = question(said, references, attachments)?;
-    let before = conversations::read(caps.secretary.conversations, id)?;
-    if after.is_some_and(|after| asked(&before, after, &turn, &by)) {
-        return Ok(SayPayload {
-            conversation: payload(&before, caps, cards)?,
-        });
-    }
-    // Checked before appending: a turn the box will never get to must not join the transcript.
-    let pending = queue::pending(&before);
-    if pending >= queue::MAX_PENDING {
-        return Err(Refusal::bad_request(format!(
-            "{pending} lines are already waiting for the secretary; say it after they are answered"
-        )));
-    }
-    transcript::push(
-        caps.secretary.conversations,
-        id,
-        &Entry::Said {
-            at: caps.secretary.clock.now(),
-            turn,
-            by: Some(by),
-        },
-    )?;
-    let stored = conversations::read(caps.secretary.conversations, id)?;
-    Ok(SayPayload {
-        conversation: payload(&stored, caps, cards)?,
-    })
-}
-
-fn asked(stored: &Stored, after: usize, turn: &Turn, by: &Stamp) -> bool {
-    stored
-        .turns
-        .iter()
-        .skip(after)
-        .any(|said| &said.turn == turn && said.by.as_ref().and_then(Stamp::actor) == by.actor())
-}
+use suzatary_lines::secretary::lines_rule::MAX_ATTACHMENTS_PER_TURN;
 
 fn question(
     said: &str,
@@ -522,7 +461,7 @@ pub fn regenerate(
     by: &Actor,
 ) -> Answered<wire::ConversationPayload> {
     let stored = secretary::regenerate(caps.secretary.conversations, caps.secretary.clock, by, id)?;
-    payload(&stored, caps, cards)
+    payload(&stored.id, caps, cards)
 }
 
 /// `POST …/<id>/edit`: replace the last round's question, under `say`'s rules.
@@ -552,7 +491,7 @@ pub fn edit(
         id,
         turn,
     )?;
-    payload(&stored, caps, cards)
+    payload(&stored.id, caps, cards)
 }
 
 /// What a tap can act through.
@@ -983,11 +922,7 @@ pub fn tap(
         )?;
     }
     Ok(AfterTap {
-        conversation: payload(
-            &conversations::read(caps.secretary.conversations, id)?,
-            caps,
-            cards,
-        )?,
+        conversation: payload(id, caps, cards)?,
         opened,
     })
 }
@@ -1212,11 +1147,7 @@ pub fn fix(
         return Err(Refusal::conflict(why));
     }
     Ok(AfterTap {
-        conversation: payload(
-            &conversations::read(caps.secretary.conversations, id)?,
-            caps,
-            cards,
-        )?,
+        conversation: payload(id, caps, cards)?,
         opened: None,
     })
 }
@@ -2230,7 +2161,7 @@ pub fn dismiss(
         card,
         reason,
     )?;
-    payload(&after, caps, cards)
+    payload(&after.id, caps, cards)
 }
 
 /// `POST …/proposals/<n>/acknowledge`: the owner checked a send that may have gone.
@@ -2250,7 +2181,7 @@ pub fn acknowledge(
         by.who(),
         card,
     )?;
-    payload(&after, caps, cards)
+    payload(&after.id, caps, cards)
 }
 
 /// `POST …/todo/<id>/build`: file the card whose tap fires a coding session for `todo`, a todo of
@@ -2304,11 +2235,7 @@ pub fn build(
             revises: None,
         },
     )?;
-    payload(
-        &conversations::read(conversations, conversation)?,
-        caps,
-        cards,
-    )
+    payload(conversation, caps, cards)
 }
 
 /// `POST …/proposals/<n>/drop`: let a session go, with a reason.
@@ -2331,18 +2258,16 @@ pub fn drop_session(
         reason,
         caps.secretary.clock.now(),
     )?;
-    payload(
-        &conversations::read(caps.secretary.conversations, id)?,
-        caps,
-        cards,
-    )
+    payload(id, caps, cards)
 }
 
 fn payload(
-    stored: &Stored,
+    id: &ConversationId,
     caps: &Server<'_>,
     cards: &Cards<'_>,
 ) -> Answered<wire::ConversationPayload> {
+    let read = transcript::read(caps.secretary.conversations, id)?;
+    let stored = read.stored();
     let fold = inbox::fold(caps.secretary.inbox)?;
     let drawn = Drawn::of(
         &stored.lines(&fold),
@@ -2353,7 +2278,7 @@ fn payload(
     // A memory that will not read draws every receipt and every card's words as unread.
     let memory = memory(caps.secretary.memories).ok();
     Ok(readings::conversation(
-        stored,
+        &read,
         &fold,
         &Window::newest(),
         &Dress {

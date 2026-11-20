@@ -397,7 +397,7 @@ pub struct PostedObjects {
     pub keys: std::collections::BTreeMap<String, Vec<String>>,
 }
 
-/// `POST …/say` and `…/edit`.
+/// `POST …/edit`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Saying {
@@ -409,10 +409,6 @@ pub struct Saying {
     #[serde(default)]
     #[ts(as = "Option<Vec<PickedFile>>", optional)]
     pub attachments: Vec<PickedFile>,
-    /// How many turns the asker saw; absent, a question is always a new line.
-    #[serde(default)]
-    #[ts(optional)]
-    pub after: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -581,12 +577,25 @@ impl<'de> Deserialize<'de> for Yes {
     }
 }
 
-/// `POST …/erase`'s body: `{"turns": [<index>, …]}` or `{"whole": true}`.
+/// A line's name as a request spells it, parsed where it is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineName(pub prodrome_core::event::Hash);
+
+impl<'de> Deserialize<'de> for LineName {
+    fn deserialize<D: serde::Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
+        prodrome_core::event::Hash::new(String::deserialize(from)?)
+            .map(Self)
+            .map_err(|_| serde::de::Error::custom("a line is named by its 64-hex object name"))
+    }
+}
+
+/// `POST …/erase`'s body: `{"lines": [<name>, …]}` or `{"whole": true}`. A line is named, never
+/// a turn's index, which another writer's line can move.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Erasing {
-    /// These turns' words, by index.
-    Turns(#[ts(as = "Vec<u32>")] NonEmpty<usize>),
+    /// These lines' words, by name.
+    Lines(#[ts(as = "Vec<String>")] NonEmpty<LineName>),
     /// Every line's words, the name included.
     Whole(Yes),
 }
@@ -661,14 +670,15 @@ pub struct AuthoredPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Uploaded {
+    /// `attachment` is the file as a person's turn holds it, which a tab seals into its turn and
+    /// the lines' rule checks against the uploads.
     Kept {
         file: AttachmentRow,
+        #[ts(type = "unknown")]
+        attachment: suzatary_held::attachment::Attachment,
     },
     /// Names an identity number: the owner's Drive or nowhere, on his say.
-    Sensitive {
-        why: String,
-        folder: String,
-    },
+    Sensitive { why: String, folder: String },
 }
 
 /// `GET /api/secretary/record`: the summaries a session opening is told.
@@ -739,11 +749,6 @@ pub struct BlockRender {
     pub html: String,
     /// [`suzatary_todo::template::Template::key`] of the answer template at the block.
     pub key: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct SayPayload {
-    pub conversation: ConversationPayload,
 }
 
 /// `GET /api/calendar/{date}`.
@@ -1005,11 +1010,11 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<AttachmentRow>();
     visit.visit::<Uploaded>();
     visit.visit::<RevealPayload>();
+    visit.visit::<ConversationPayload>();
     visit.visit::<ConversationsPayload>();
     visit.visit::<SearchPayload>();
     visit.visit::<StreamPayload>();
     visit.visit::<TopicsPayload>();
-    visit.visit::<SayPayload>();
     visit.visit::<Overview>();
     visit.visit::<ErrorPayload>();
     visit.visit::<suzatary_inbox::secretary::phase::Phase>();
@@ -1175,7 +1180,7 @@ mod tests {
             "body": "b", "category": "home", "rationale": "r",
             "priority": {"how": "flat", "percent": 75},
         }}));
-        reads::<Saying>(&serde_json::json!({"say": "s", "after": 2}));
+        reads::<Saying>(&serde_json::json!({"say": "s"}));
         reads::<PickedFile>(&serde_json::json!({"id": hash}));
         reads::<Uploading>(&serde_json::json!({"file": "AAAA", "private": true}));
         reads::<Tapping>(&serde_json::json!({"note": "n", "always": true}));
@@ -1188,22 +1193,25 @@ mod tests {
         reads::<crate::clienterror::Sent>(&serde_json::json!({"kind": "error", "message": "m"}));
     }
 
-    /// An erasure names its turns, at least one, or says yes to the whole.
+    /// An erasure names its lines, at least one, or says yes to the whole; never a turn's index.
     #[test]
-    fn an_erasure_is_some_turns_or_the_whole() {
+    fn an_erasure_is_some_lines_or_the_whole() {
         let read = |body: serde_json::Value| serde_json::from_value::<Erasing>(body);
+        let name = "a".repeat(64);
         assert!(matches!(
-            read(serde_json::json!({"turns": [0, 2]})),
-            Ok(Erasing::Turns(_))
+            read(serde_json::json!({"lines": [name]})),
+            Ok(Erasing::Lines(_))
         ));
         assert_eq!(
             read(serde_json::json!({"whole": true})).expect("the whole"),
             Erasing::Whole(Yes)
         );
         for refused in [
-            serde_json::json!({"turns": []}),
+            serde_json::json!({"lines": []}),
+            serde_json::json!({"lines": ["not a name"]}),
+            serde_json::json!({"turns": [0]}),
             serde_json::json!({"whole": false}),
-            serde_json::json!({"turns": [0], "whole": true}),
+            serde_json::json!({"lines": [name], "whole": true}),
             serde_json::json!({}),
         ] {
             assert!(read(refused.clone()).is_err(), "{refused}");

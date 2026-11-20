@@ -154,6 +154,13 @@ pub struct Shape {
 struct KeptShape(Option<Result<Arc<Shape>, Cycle>>);
 
 impl Shape {
+    /// The node of the tree named `name`: a leaf is named by its line, unless the line was
+    /// carried or words of it erased.
+    #[must_use]
+    pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
+        self.tree.as_ref()?.node(name)
+    }
+
     /// The shape over the lines `gathered` holds, built on the first ask and kept with them.
     ///
     /// # Errors
@@ -533,9 +540,27 @@ fn taints<'l>(
                     )
                     .collect::<Vec<_>>(),
             );
+            // Each turn read with the stamp its claims judged, as the transcript reads it: a
+            // tab's turn no claim judged clean is tainted here too.
+            let judgments = suzatary_lines::secretary::transcript::judgments(
+                said.iter().map(|(_, entry)| *entry),
+            );
+            let read: Vec<Entry> = said
+                .iter()
+                .map(|&((name, line, _), entry)| {
+                    let mut entry = entry.clone();
+                    suzatary_lines::secretary::transcript::judge(
+                        name,
+                        line.actor(),
+                        &mut entry,
+                        &judgments,
+                    );
+                    entry
+                })
+                .collect();
             let taints = suzatary_conversations::secretary::taint::rounds(
                 id,
-                order.iter().map(|(at, _)| said[*at].1),
+                order.iter().map(|(at, _)| &read[*at]),
             );
             order
                 .into_iter()

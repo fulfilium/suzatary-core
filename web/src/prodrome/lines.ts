@@ -12,12 +12,22 @@ export namespace lines {
     | { readonly type: "Objects"; readonly names: readonly string[] }
     | { readonly type: "Naming"; readonly keys: readonly string[] }
 
-  // A line a page asks this tab to seal (`Lines.seal`): a rename, an opening under a title (empty leaves it to the title
-  // job), or a setup of a template by its name.
+  // A question as a tab seals it: its words, what it points at, and each file as the upload answered it, named as the
+  // person named it.
+  export type Asking = {
+    readonly text: string
+    readonly references: readonly string[]
+    readonly files: readonly { readonly attachment: unknown; readonly name: string }[]
+  }
+
+  // A line a page asks this tab to seal (`Lines.seal`): a rename, a setup of a template by its name, a question, a topic
+  // opened under a title (empty leaves it to the title job) with its first question, or a stop.
   export type Sealing =
     | { readonly type: "Rename"; readonly conversation: string; readonly title: string }
-    | { readonly type: "Open"; readonly title: string }
     | { readonly type: "SetUp"; readonly template: string }
+    | ({ readonly type: "Say"; readonly conversation: string } & Asking)
+    | { readonly type: "Begin"; readonly title: string; readonly say: Asking }
+    | { readonly type: "Stop"; readonly conversation: string }
 
   // A line sealed: its name, and its conversation, a new one's the id of its opening line.
   export type Sealed = { readonly name: string; readonly conversation: string }

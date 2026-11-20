@@ -117,6 +117,12 @@ pub enum LineShape {
     },
     /// A round claimed.
     Began { covers: Vec<Covered>, run: RunId },
+    /// A question asked again, by its line's name.
+    Again {
+        question: prodrome_core::event::Hash,
+        how: suzatary_conversations::secretary::store::Rewind,
+        by: String,
+    },
 }
 
 /// A coding session without its words.
@@ -173,7 +179,8 @@ impl LineShape {
             | LineShape::Scoped { .. }
             | LineShape::Coding { .. }
             | LineShape::Erased { .. }
-            | LineShape::Began { .. } => 0,
+            | LineShape::Began { .. }
+            | LineShape::Again { .. } => 0,
         }
     }
 
@@ -199,6 +206,7 @@ impl LineShape {
             LineShape::Erased { .. } => "Erased",
             LineShape::Resealed { .. } => "Resealed",
             LineShape::Began { .. } => "Began",
+            LineShape::Again { .. } => "Again",
         }
     }
 }
@@ -363,6 +371,16 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
             LineShape::Began {
                 covers: covers.clone(),
                 run: run.clone(),
+            },
+            Some(Vec::new()),
+        ),
+        Entry::Again {
+            question, how, by, ..
+        } => (
+            LineShape::Again {
+                question: question.clone(),
+                how: *how,
+                by: by.clone(),
             },
             Some(Vec::new()),
         ),
@@ -558,6 +576,12 @@ pub fn join(
         LineShape::Erased { keys, erasure } => Entry::Erased { at, keys, erasure },
         LineShape::Resealed { of, from } => Entry::Resealed { at, of, from },
         LineShape::Began { covers, run } => Entry::Began { at, covers, run },
+        LineShape::Again { question, how, by } => Entry::Again {
+            at,
+            question,
+            how,
+            by,
+        },
     }
 }
 

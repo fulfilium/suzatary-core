@@ -49,7 +49,7 @@ fn the_owner_erases_one_turn_and_its_neighbours_stand() {
     let (_, base, id) = one_round("erase-turn", "the spare key is in the blue folder");
     let mut erased = common::act(
         &format!("{base}/api/secretary/conversations/{id}/erase"),
-        &serde_json::json!({"turns": [0]}),
+        &common::erasing(&base, &id, &[0]),
     );
     assert_eq!(common::status(&erased), 200);
     let erased = common::body_json(&mut erased);
@@ -59,12 +59,12 @@ fn the_owner_erases_one_turn_and_its_neighbours_stand() {
 
     let nowhere = common::act(
         &format!("{base}/api/secretary/conversations/{id}/erase"),
-        &serde_json::json!({"turns": [9]}),
+        &serde_json::json!({"lines": ["f".repeat(64)]}),
     );
     assert_eq!(common::status(&nowhere), 404);
     let empty = common::act(
         &format!("{base}/api/secretary/conversations/{id}/erase"),
-        &serde_json::json!({"turns": []}),
+        &serde_json::json!({"lines": []}),
     );
     assert_eq!(common::status(&empty), 400);
 }
@@ -112,7 +112,7 @@ fn an_erasure_deletes_the_conversation_s_model_session() {
     );
     let erased = common::act(
         &format!("{base}/api/secretary/conversations/{id}/erase"),
-        &serde_json::json!({"turns": [0]}),
+        &common::erasing(&base, &id, &[0]),
     );
     assert_eq!(common::status(&erased), 200);
     let opened = fakes.model.opened();

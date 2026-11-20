@@ -428,7 +428,8 @@ fn retired<'n>(
             | Step::Coding { .. }
             | Step::Titled
             | Step::Still
-            | Step::Began { .. } => {}
+            | Step::Began { .. }
+            | Step::Again { .. } => {}
         }
     }
     let mut out = BTreeSet::new();

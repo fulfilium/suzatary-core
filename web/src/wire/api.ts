@@ -1,7 +1,7 @@
 // Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, SayPayload, Saying, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, Saying, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
@@ -88,20 +88,10 @@ const proposalPath = (id: string, index: number, verb: string): string =>
   conversationPath(id, `/proposals/${index}/${verb}`);
 
 /** The owner's tap: the words are destroyed on the box and, at their next pull, on every device. */
-export const eraseTurns = (id: string, turns: readonly number[]): Promise<ConversationPayload> =>
-  http.act(conversationPath(id, "/erase"), { turns: [...turns] } satisfies Erasing, payload.ConversationPayload);
+export const eraseLines = (id: string, lines: readonly string[]): Promise<ConversationPayload> =>
+  http.act(conversationPath(id, "/erase"), { lines: [...lines] } satisfies Erasing, payload.ConversationPayload);
 
-/** 202 with the person's turn; the model runs behind it. `after` is how many turns the asker saw. */
-export const say = (
-  id: string,
-  text: string,
-  references: readonly Reference[] = [],
-  attachments: readonly AttachmentRow[] = [],
-  after?: number,
-): Promise<SayPayload> =>
-  http.act(conversationPath(id, "/say"), { ...asked(text, references, attachments), ...(after === undefined ? {} : { after }) } satisfies Saying, payload.SayPayload);
-
-/** `say`'s body; the old question and all after it are set aside first. */
+/** A question replacing the last: the old question and all after it are set aside first. */
 export const editQuestion = (
   id: string,
   text: string,
@@ -115,10 +105,6 @@ const asked = (text: string, references: readonly Reference[], attachments: read
   references: references.map(print),
   attachments: attachments.map(({ id, name }) => ({ id, name })),
 });
-
-/** A 409 in the box's words when nothing runs or waits. */
-export const stopAnswer = (id: string): Promise<ConversationPayload> =>
-  http.act(conversationPath(id, "/stop"), {}, payload.ConversationPayload);
 
 export const regenerate = (id: string): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/regenerate"), {}, payload.ConversationPayload);

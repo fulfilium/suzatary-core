@@ -612,6 +612,9 @@ fn shape_fields(shape: &LineShape) -> Vec<Value> {
         LineShape::Erased { keys, erasure } => vec![keys.to_value(), json(erasure)],
         LineShape::Resealed { of, from } => vec![of.to_value(), from.to_value()],
         LineShape::Began { covers, run } => vec![covers.to_value(), run.to_value()],
+        LineShape::Again { question, how, by } => {
+            vec![question.to_value(), how.to_value(), by.to_value()]
+        }
     }
 }
 
@@ -693,6 +696,11 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
             covers: fields.get("covers")?,
             run: fields.get("run")?,
         },
+        "Again" => LineShape::Again {
+            question: fields.get("question")?,
+            how: fields.get("how")?,
+            by: fields.get("by")?,
+        },
         other => return Err(no_arm("LineShape", other)),
     })
 }
@@ -718,6 +726,7 @@ fn signature(shape: &LineShape) -> Constructor {
         LineShape::Erased { .. } => ERASED,
         LineShape::Resealed { .. } => RESEALED,
         LineShape::Began { .. } => BEGAN,
+        LineShape::Again { .. } => AGAIN,
     }
 }
 
@@ -997,6 +1006,21 @@ const BEGAN: Constructor = (
     ],
 );
 
+/// `Again(conversation, at, actor, held, carried, question, how, by)`.
+const AGAIN: Constructor = (
+    "Again",
+    &[
+        "conversation",
+        "at",
+        "actor",
+        "held",
+        "carried",
+        "question",
+        "how",
+        "by",
+    ],
+);
+
 /// The lines' constructors, in print order.
 const LINES: &[Constructor] = &[
     OPENED,
@@ -1017,6 +1041,7 @@ const LINES: &[Constructor] = &[
     RESEALED,
     SET_UP,
     BEGAN,
+    AGAIN,
 ];
 
 /// The lines' whitelist: their constructors, `Scrubbed`, `Locked` and a claim's `Covered`,

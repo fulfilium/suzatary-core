@@ -147,7 +147,15 @@ proptest! {
             .filter(|n| !taken_back.contains(n) && !lost.contains(n))
             .collect();
         prop_assert_eq!(names(never.standing(in_rows, &gone)), standing);
-        prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _, _)| n)), f);
+        // Every write held back is said: those refused, and each resting on one.
+        prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _, _)| n)), taken_back.clone());
+        // And each holds that answer itself, so its record goes once said, as a refused one does.
+        let refused_now: BTreeSet<Hash> = refused
+            .iter()
+            .filter(|o| matches!(&o.answer, Answer::Refused { kind: Refusal::Final | Refusal::Outdated, .. }))
+            .map(|o| o.node.name.clone())
+            .collect();
+        prop_assert_eq!(refused_now, taken_back);
     }
 
     #[test]
@@ -174,4 +182,64 @@ proptest! {
         let again: BTreeMap<Hash, Answer> = shuffled.iter().map(|o| (o.node.name.clone(), o.answer.clone())).collect();
         prop_assert_eq!(held, again);
     }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// THE FIT LAW: the pieces of the unsent writes hold each of them once, in the order
+    /// [`Writes::unsent`] gives, and no piece goes over the post's count or bytes unless one write
+    /// alone does, so the box never answers a post too large for what its rule would take.
+    #[test]
+    fn law_every_piece_fits_a_post(
+        parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 12), 1..12),
+        weights in prop::collection::vec(1usize..400, 12),
+        most in 1usize..6,
+        bytes in 1usize..900,
+    ) {
+        use suzatary_store::replica::writes::{Fit, Role};
+        let all = dag(&parents);
+        let mut made = Writes::default();
+        let _ = made.write(all.clone());
+        let weight = |n: &Bare| weights[n.name.as_str().chars().last().and_then(|c| c.to_digit(16)).unwrap_or(0) as usize % weights.len()];
+        let fit = Fit { most, bytes };
+        let pieces = made.pieces(|_| false, |_| Role::Change, fit, weight);
+        let flat: Vec<&Hash> = pieces.iter().flatten().map(|n| &n.name).collect();
+        let unsent: Vec<&Hash> = made.unsent(|_| false).into_iter().map(|n| &n.name).collect();
+        prop_assert_eq!(flat, unsent);
+        for piece in &pieces {
+            let heavy: usize = piece.iter().map(|n| weight(n)).sum();
+            prop_assert!(piece.len() <= most || piece.len() == 1, "{} over {most}", piece.len());
+            prop_assert!(heavy <= bytes || piece.len() == 1, "{heavy} bytes over {bytes}");
+        }
+    }
+}
+
+/// A write the box has not taken yet in its rule's words is waiting, with that sentence: posted
+/// again, never a refusal, and let go of nothing.
+#[test]
+fn a_write_answered_later_waits_and_goes_again() {
+    use suzatary_store::replica::writes::Refusal;
+    let all = dag(&[vec![], vec![true]]);
+    let mut made = Writes::default();
+    let _ = made.write(all.clone());
+    let later = Answer::Refused {
+        kind: Refusal::Later,
+        reason: "it is dated 600 s ahead of the box's clock".to_owned(),
+    };
+    let _ = made.answered([(all[0].name.clone(), later)]);
+    let waiting: Vec<(Hash, String)> = made
+        .waiting()
+        .into_iter()
+        .map(|(n, why)| (n.name.clone(), why))
+        .collect();
+    assert_eq!(
+        waiting,
+        vec![(
+            all[0].name.clone(),
+            "it is dated 600 s ahead of the box's clock".to_owned()
+        )]
+    );
+    assert!(made.refusals().is_empty(), "no refusal for good");
+    assert_eq!(names(made.unsent(|_| false)), names(&all), "both go again");
 }

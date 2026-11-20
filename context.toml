@@ -38,20 +38,23 @@ allowance = 2000
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.172 for the Prodrome pin at 42f526f (#551, +1,641: `held`'s three category tables of Unicode 16.0.0, the leak guard's value rule, and the reprint law over every store); accepted at the review of #551, which left 32 tokens of the allowance.
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.177 (#557 +1,098, #558 +448, #560 −266, #561 +1,270: test files for the scratch directories, the script law over the stores and the cache's stub).
 # 2026-11-19: raised by hand to the figure of the tree merged with 2.1.181 for typedtooling T1 (#567, +9,943: the crate app/tooling, which T2 to T4 pay back by deleting the shell it replaces; the plan restates the running total); accepted at the review of #567.
-reading = 3073933
+# 2026-11-19: raised by hand to the figure of the tree merged with 2.1.184 for the tab's own turns (#547, +35,592 over master's own measure of that tree: the lines' rule's question, stop and `Again` cases, the `Again` kind and its descent, the transcript's claim readings and taint join, the tab's seal of a question and a stop, the own lines' keys, and their laws, less the say and stop routes; and, at its review, +9,169: the refusal's record of what was said, the rule's clock and parents, the judged taint in the digest, and the scripts of the owed law over rounds; and, at its second, +3,520: each line read through what it rests on and the split law, the post cut by bytes, and a post refused for itself; and, at its third, +2,690: the post folded one line at a time in the shared layer and its laws, the box's `Later` and its sentence on a turn, and a post of another build named as such; and, at its fourth, +2,754: the one count of what a line makes owed, the post laws drawing regenerates, held ids, setups, shared keys and a moving clock, a line waiting with what it rests on, and a signature that says nothing of its own); accepted at the review of #547.
+reading = 3109469
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
 cli = 81630
 # 2026-11-18: `inbox`, `conversations` and `lines` left core over the line (#538); the core split's plan names the further cut of each (rows 24 to 26). Core's figure is lowered by hand to the same tree's.
-conversations = 26661
+# 2026-11-19: `conversations` raised by hand to the figure of #547's head merged with 2.1.174 (`Entry::Again`, `Aside`, `Stored::of_read`, and the claims' reading of `ConversationState`); accepted at the review of #547.
+conversations = 27791
 # 2026-11-18: `digest` left core over the line; the core split's plan names its further cut (rows 27 to 29). Core's figure is lowered by hand to the same tree's.
 digest = 28369
 inbox = 33570
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
 io = 54058
-lines = 40905
+# 2026-11-19: `lines` raised by hand to the figure of #547's head (the rule's `World` and `Upload`, `Whole`, `Sealing::{Say, Stop}`, the transcript's `queued`, `state`, `turn_lines` and `Confirms`, `own_taken`; at its review the rule's clock and parents and `replies_to`; at its second the rule's view of a line and `whole`; at its third the fold's `take` and `Writes::waiting`), at its head merged with 2.1.181; accepted at the review of #547.
+lines = 44489
 # 2026-11-19: the stores' table left the secretary for `suzatary-stores`, lowered by hand; still over the line, and the plan names the further cut (the triage agent).
 secretary = 33374
 

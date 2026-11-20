@@ -47,6 +47,16 @@ impl Listening {
         }
     }
 
+    /// Whether another machine reaches it: https on an address other than loopback. A fixture
+    /// runs only where nothing else reaches it, so on loopback over http or https alike.
+    #[must_use]
+    pub fn reachable(&self) -> bool {
+        match self {
+            Listening::Loopback(_) => false,
+            Listening::Tls { at, .. } => !at.ip().is_loopback(),
+        }
+    }
+
     #[must_use]
     pub fn at(&self) -> SocketAddr {
         match self {
@@ -65,6 +75,35 @@ mod tests {
 
     fn pair() -> (PathBuf, PathBuf) {
         (PathBuf::from("cert.pem"), PathBuf::from("key.pem"))
+    }
+
+    #[test]
+    fn only_https_off_loopback_is_reachable() {
+        assert!(
+            !Listening::new(at("127.0.0.1:8787"), None)
+                .expect("listens")
+                .reachable()
+        );
+        assert!(
+            !Listening::new(at("127.0.0.1:8787"), Some(pair()))
+                .expect("listens")
+                .reachable()
+        );
+        assert!(
+            !Listening::new(at("[::1]:8787"), Some(pair()))
+                .expect("listens")
+                .reachable()
+        );
+        assert!(
+            Listening::new(at("100.64.0.9:443"), Some(pair()))
+                .expect("listens")
+                .reachable()
+        );
+        assert!(
+            Listening::new(at("0.0.0.0:8787"), Some(pair()))
+                .expect("listens")
+                .reachable()
+        );
     }
 
     #[test]

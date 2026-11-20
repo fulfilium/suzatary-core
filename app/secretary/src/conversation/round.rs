@@ -57,6 +57,9 @@ pub struct Rules<'a> {
     pub load: &'a Load<'a>,
     /// Whether a round a lost run left may be claimed again: not while the model is failing.
     pub retry: Retry,
+    /// Whether the todos a turn names are confirmed, as the chains read when a claim judges
+    /// another writer's turn.
+    pub confirms: &'a transcript::Confirms<'a>,
 }
 
 /// Runs one call of a verb the round's surface lists, read whole.
@@ -268,9 +271,15 @@ impl Round {
         let held = at.conversations.runs.begin()?;
         let run = &held.run;
         let now = at.clock.now();
-        match transcript::claim(at.conversations, at.id, run, now, rules.retry, |stored| {
-            closing(stored, now, &Why::Unanswered)
-        })? {
+        match transcript::claim(
+            at.conversations,
+            at.id,
+            run,
+            now,
+            rules.retry,
+            rules.confirms,
+            |stored| closing(stored, now, &Why::Unanswered),
+        )? {
             transcript::Claimed::Nothing => return Ok(None),
             transcript::Claimed::Closed => {
                 return Ok(Some(Closed {
@@ -300,7 +309,7 @@ impl Round {
         let tools = rules.verbs.tools();
         loop {
             // A turn said since the last ask joins the round before the model reads it.
-            transcript::join(at.conversations, at.id, run, at.clock.now())
+            transcript::join(at.conversations, at.id, run, at.clock.now(), rules.confirms)
                 .map_err(Refusal::from)?;
             let read = transcript::read(at.conversations, at.id).map_err(Refusal::from)?;
             let stored = read.stored();

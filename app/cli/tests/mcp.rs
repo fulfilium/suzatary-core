@@ -543,7 +543,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
     {
         let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::write(
             id.clone(),
-            Actor::new("ada").expect("an actor"),
+            suzatary_lines::secretary::transcript::writer(),
             u32::try_from(held).expect("two lines"),
             entry,
             lines.entropy,

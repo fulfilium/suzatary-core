@@ -669,6 +669,13 @@ a.chipbtn,
   overflow-wrap: anywhere;
 }
 
+/* An own line the box has not taken yet, and why in its words. */
+.turnwaits {
+  color: var(--ink-muted);
+  font-size: var(--t-tiny);
+  overflow-wrap: anywhere;
+}
+
 .count {
   display: flex;
   flex-wrap: wrap;

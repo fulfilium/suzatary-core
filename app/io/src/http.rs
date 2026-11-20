@@ -208,6 +208,36 @@ impl Ureq {
         }
     }
 
+    /// An agent that follows redirects and trusts the certificates in `pem` alone: a server
+    /// this machine runs with a certificate no public root signs, such as a test fixture's.
+    ///
+    /// # Errors
+    /// `pem` holding no certificate, in words.
+    pub fn trusting(pem: &[u8]) -> Result<Self, String> {
+        let certificates = ureq::tls::parse_pem(pem)
+            .filter_map(|item| match item {
+                Ok(ureq::tls::PemItem::Certificate(certificate)) => Some(Ok(certificate)),
+                Ok(_) => None,
+                Err(failed) => Some(Err(failed.to_string())),
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if certificates.is_empty() {
+            return Err("no certificate to trust".to_owned());
+        }
+        let tls = ureq::tls::TlsConfig::builder()
+            .root_certs(ureq::tls::RootCerts::Specific(std::sync::Arc::new(
+                certificates,
+            )))
+            .build();
+        Ok(Self {
+            agent: ureq::Agent::config_builder()
+                .http_status_as_error(false)
+                .tls_config(tls)
+                .build()
+                .into(),
+        })
+    }
+
     /// An agent for addresses a model chose: no redirects, and every name must resolve only to
     /// public addresses, checked inside the resolution so nothing changes between check and
     /// connect. No proxy from the environment: the resolver would check the proxy's address.

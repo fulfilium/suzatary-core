@@ -190,6 +190,7 @@ fn a_conversation_s_first_read_measured() {
                     &run.run,
                     Datetime::new(2026, 9, 30, 4, 0, 0, 0).expect("an instant"),
                     suzatary_lines::secretary::transcript::Retry::Allowed,
+                    &|_| true,
                     |_| Vec::new(),
                 )
                 .expect("claims");

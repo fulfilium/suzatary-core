@@ -264,8 +264,9 @@ impl Guarded for Reporter {
     }
 }
 
-/// A replica posting objects as its actor: each object's signature is held to the door one by
-/// one, so the request needs none of its own.
+/// A replica posting objects as its actor, a peer's mapped actor or the operator's at the box's
+/// terminal: each object's signature is held to the door one by one, by a key the chains trust
+/// for that actor, so the request needs none of its own.
 pub struct Poster(pub Actor);
 
 impl Guarded for Poster {
@@ -278,7 +279,7 @@ impl Guarded for Poster {
         _: &ActHeaders<'_>,
         (): &(),
     ) -> Result<Self, Refusal> {
-        actor_of(&state.deployment, admitted).map(Poster)
+        suzatary_server::gate::writer_of(&state.deployment, admitted).map(Poster)
     }
 }
 

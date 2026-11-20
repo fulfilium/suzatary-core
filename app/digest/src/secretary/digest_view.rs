@@ -306,7 +306,7 @@ pub fn whole(entry: &Entry) -> String {
         ),
         Entry::ReviewFailed { reason, .. } => format!("A review could not run: {reason}"),
         Entry::Stopped { .. } => "The owner stopped the answer.".to_owned(),
-        Entry::Rewound { .. } => "The owner asked again.".to_owned(),
+        Entry::Rewound { .. } | Entry::Again { .. } => "The owner asked again.".to_owned(),
         Entry::MemorySeen { .. } => "The secretary was told the memory.".to_owned(),
         Entry::Session { .. } | Entry::Kept { .. } => "A model session opened.".to_owned(),
         Entry::Scoped { scope, .. } => format!("The model is asked over its {}.", scope.as_str()),

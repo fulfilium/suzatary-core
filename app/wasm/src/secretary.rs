@@ -17,6 +17,7 @@ use suzatary_conversations::secretary::store::Stored;
 use suzatary_inbox::secretary::inbox::Fold;
 use suzatary_lines::secretary::held_lines::Admitted;
 use suzatary_lines::secretary::held_replica::HeldReplica;
+use suzatary_lines::secretary::held_replica::Whole;
 use suzatary_lines::secretary::outlines::Scope;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -202,22 +203,51 @@ impl Lines {
             about: query::about(about.as_deref()).map_err(|r| said(&r))?,
         };
         let memory = memory_of(memory)?;
-        let stored = self
+        let read = match self
             .0
-            .lines
-            .conversation(&id)
+            .transcript(&id)
             .ok_or_else(|| refused(format!("no conversation named {id}")))?
-            .map_err(|e| refused(e.to_string()))?;
+        {
+            Whole::Read(read) => read.map_err(|e| refused(e.to_string()))?,
+            Whole::Lacking(lacking) => {
+                return Err(refused(format!(
+                    "{id} lacks {lacking} of its lines here: a reading asks for them first"
+                )));
+            }
+        };
         let dress = Dress {
             memory: memory.as_ref(),
             ..Dress::BARE
         };
-        json(&readings::conversation(
-            &stored,
-            &inbox.fold()?,
-            &window,
-            &dress,
-        ))
+        let mut payload = readings::conversation(&read, &inbox.fold()?, &window, &dress);
+        // Its own lines the box has not taken yet, each with the rule's words: drawn on its turn.
+        let waiting: std::collections::BTreeMap<String, String> = self
+            .0
+            .own()
+            .waiting()
+            .into_iter()
+            .map(|(own, why)| {
+                (
+                    suzatary_store::replica::held::Node::name(own)
+                        .as_str()
+                        .to_owned(),
+                    why,
+                )
+            })
+            .collect();
+        payload.waiting = payload
+            .lines
+            .iter()
+            .filter_map(|line| {
+                waiting
+                    .get(line)
+                    .map(|why| suzatary_topics::wire::topics::Waiting {
+                        line: line.clone(),
+                        why: why.clone(),
+                    })
+            })
+            .collect();
+        json(&payload)
     }
 
     /// `[{hash, parents, size, header}, …]`: the node, as it was given, of every line whose words

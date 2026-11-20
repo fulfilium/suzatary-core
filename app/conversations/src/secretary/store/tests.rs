@@ -347,7 +347,6 @@ fn a_stop_is_an_act_and_ends_the_session() {
         }
     );
     assert_eq!(last.by, Some("ada".into()));
-    assert_eq!(state(&stored), ConversationState::Idle);
 }
 
 fn said_by(at: &str, turn: Turn) -> Entry {
@@ -436,7 +435,6 @@ fn a_regenerate_leaves_the_question_pending_on_the_live_path() {
             .collect::<Vec<_>>(),
         vec![0]
     );
-    assert_eq!(state(&after), ConversationState::Queued);
     assert_eq!(
         crate::secretary::queue::delta(&after)
             .iter()
@@ -502,14 +500,6 @@ fn a_round_stopped_in_one_line_may_be_asked_again() {
     let stored = Stored::of(&id(), &entries).expect("a conversation");
     assert_eq!(stored.rewind(Rewind::Regenerate), Ok(1));
     assert_eq!(stored.rewind(Rewind::Edit), Ok(0));
-    let mut again = entries.clone();
-    again.push(rewound(1));
-    let again = Stored::of(&id(), &again).expect("a conversation");
-    assert_eq!(
-        state(&again),
-        ConversationState::Queued,
-        "the question is asked again"
-    );
 }
 
 /// A stopped round may be asked again: the stop is not a write.
@@ -651,8 +641,6 @@ proptest::proptest! {
                         if how == Rewind::Edit {
                             entries.push(said_by(&at, question("q again")));
                         }
-                        let after = Stored::of(&id(), &entries).expect("a conversation");
-                        proptest::prop_assert_eq!(state(&after), ConversationState::Queued);
                     }
                 }
             }

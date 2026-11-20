@@ -430,7 +430,7 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   # `--connections lapsed` writes a sign-in into the state directory: point it at the server's.
   local chain_env=(env)
   if [[ " $* " == *" --connections lapsed "* ]]; then chain_env+=("XDG_STATE_HOME=$work/$name/state"); fi
-  "${chain_env[@]}" "$fixture_bin" fixture-chain --root "$work/$name" --port "$port" --repo "$(pwd)" "$@" \
+  "${chain_env[@]}" "$fixture_bin" fixture-chain --root "$work/$name" --port "$port" --repo "$(pwd)" --tls "$tls" "$@" \
     >"$work/$name.json" 2>"$work/$name.log"
   local login; login="$(node -p "require('$work/$name.json').login")"
   # Every server has its own state directory: writing into this box's would move the live epochs.
@@ -477,7 +477,7 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
 # source until then, so this waits for file-permit's `rich.body`.
 ready() { # name base
   local name=$1 base=$2 waited=0 started=$SECONDS
-  until curl -fsS "$base/api/todo/file-permit" 2>/dev/null \
+  until curl -fsS --cacert "$tls/ca.pem" "$base/api/todo/file-permit" 2>/dev/null \
     | node -e '
 let data = "";
 process.stdin.on("data", chunk => { data += chunk; });
@@ -498,7 +498,7 @@ process.stdin.on("end", () => {
       {
         echo "web-e2e.sh: $name ($base) never served warm markup in $((SECONDS - started)) s"
         if kill -0 "$pid" 2>/dev/null; then echo "  its server, pid $pid, is running"; else echo "  its server, pid $pid, has exited"; fi
-        echo "  the last answer to /api/todo/file-permit: $(curl -sS -o /dev/null -w '%{http_code} in %{time_total} s' "$base/api/todo/file-permit" 2>&1)"
+        echo "  the last answer to /api/todo/file-permit: $(curl -sS --cacert "$tls/ca.pem" -o /dev/null -w '%{http_code} in %{time_total} s' "$base/api/todo/file-permit" 2>&1)"
         echo "  the last 40 lines of $name.log:"
         tail -n 40 "$work/$name.log" | sed 's/^/    /'
       } >&2
@@ -526,7 +526,10 @@ run_scenes() {
     --out-extension:.js=.mjs \
     --outdir="$out"
   echo "==> chromium $(chromium --version 2>/dev/null || echo '(not on PATH)')"
-  env "${e2e_env[@]}" SUZATARY_E2E_SHOTS="$shots" \
+  # The fixture's certificate, trusted by Chromium (its key) and by Node (its CA).
+  local trust=()
+  if [[ -n "${spki:-}" ]]; then trust=("SUZATARY_E2E_SPKI=$spki" "NODE_EXTRA_CA_CERTS=$tls/ca.pem"); fi
+  env "${e2e_env[@]}" "${trust[@]}" SUZATARY_E2E_SHOTS="$shots" \
     node --test --test-concurrency=1 --test-timeout="${SUZATARY_E2E_SCENE_MS:-300000}" ${SUZATARY_E2E_SCENES:+"--test-name-pattern=$SUZATARY_E2E_SCENES"} "$out"/*.mjs
 }
 names_given=("$@")
@@ -566,6 +569,27 @@ if [[ -n "${SUZATARY_E2E_LIVE:-}" ]]; then
 fi
 
 echo "==> fixture servers"
+# Each speaks https, and so `h2`, as the deployment always does: over plain http a browser holds
+# six connections to a host across every tab, and two live tabs' streams take all six. The pair is
+# minted for this run and dies with it: a CA, and a certificate for 127.0.0.1 it signs, served as
+# that certificate and then the CA. Chromium trusts the certificate's key alone
+# (`--ignore-certificate-errors-spki-list`, web/e2e/cdp.ts); curl and Node trust the CA, and the
+# terminal's operator trusts what the server serves (`commands::call`, the fixture build alone).
+tls="$work/tls"
+mkdir -p "$tls"
+(
+  cd "$tls"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 \
+    -subj "/CN=Suzatary e2e CA" -keyout ca.key -out ca.pem \
+    -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign" 2>/dev/null
+  openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+    -subj "/CN=127.0.0.1" -keyout key.pem -out leaf.csr 2>/dev/null
+  printf 'subjectAltName=IP:127.0.0.1\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\n' >leaf.ext
+  openssl x509 -req -in leaf.csr -CA ca.pem -CAkey ca.key -set_serial 1 -days 2 \
+    -extfile leaf.ext -out leaf.pem 2>/dev/null
+  cat leaf.pem ca.pem >cert.pem
+)
+spki="$(openssl x509 -in "$tls/leaf.pem" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64)"
 # Started together: each compiles the chain's markup before it listens.
 read_base="$(start read --login e2e-reader@example.invalid --settings)"
 # Only this one has a review, so reviewed and unreviewed are two servers' states.

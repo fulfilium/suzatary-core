@@ -43,7 +43,8 @@ test("a post's receipt is guarded like every other payload", () => {
   );
   // Whether to post it again is the box's to say: a refusal with no kind, or another, is no answer this build reads.
   assert.equal(d.is(payload.ReceiptPayload)({ ...receipt, refused: [{ hash: "cd", reason: "unsigned" }] }), false);
-  assert.equal(d.is(payload.ReceiptPayload)({ ...receipt, refused: [{ hash: "cd", reason: "unsigned", kind: "later" }] }), false);
+  assert.equal(d.is(payload.ReceiptPayload)({ ...receipt, refused: [{ hash: "cd", reason: "unsigned", kind: "someday" }] }), false);
+  assert.equal(d.is(payload.ReceiptPayload)({ ...receipt, refused: [{ hash: "cd", reason: "rests on … not held yet", kind: "later" }] }), true);
   // A refusal with no reason is a refusal that says nothing, which is the one
   // thing this app must never render.
   assert.equal(d.is(payload.ReceiptPayload)({ ...receipt, refused: [{ hash: "cd" }] }), false);

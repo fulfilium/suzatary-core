@@ -52,6 +52,9 @@ export namespace linesync {
     readonly admit: rendered.Admit
     // A move of what this tab wrote, its `delta` the device's record of those own lines: its moves heard.
     readonly ownStepped: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
+    // The device's row of own lines read again into the core, after another tab of the device kept a line in it.
+    // The device's row read again, and whether it brought anything this tab did not hold.
+    readonly ownHeard: () => Promise<boolean>
   }
 
   const NAME = "lines"
@@ -240,21 +243,44 @@ export namespace linesync {
       setTimeout(() => void inTurn(purge), 0)
     }
 
-    const Took = d.json(d.obj<{ moved: unknown; unread: string[] }>({ moved: d.unknown, unread: d.arr(d.str) }))
+    type Taken = { hash: string; literal: string; line: boolean; free: boolean }
+    const TakenOf = d.obj<Taken>({ hash: d.str, literal: d.str, line: d.bool, free: d.bool })
+    const Took = d.json(
+      d.obj<{ moved: unknown; unread: string[]; taken: Taken[]; fresh: number }>({ moved: d.unknown, unread: d.arr(d.str), taken: d.arr(TakenOf), fresh: d.num }),
+    )
+    // Each own line the box took: its print kept as content, and its record let go once the landed rows hold its keys.
+    const settle = async (taken: readonly Taken[]): Promise<void> => {
+      if (taken.length === 0) return
+      await content.keepOwn(taken.filter(t => t.line))
+      const free = new Set(taken.filter(t => t.free).map(t => t.literal))
+      if (free.size > 0) await ownlines.settled(free)
+    }
+    // After a landing, which may bring a taken line's keys.
+    const settleLanded = async (): Promise<void> => {
+      if (!idb.available()) return
+      const taken = d.json(d.arr(TakenOf))(held.own_taken())
+      if (taken.type === "Val") await settle(taken.v)
+    }
     // What this tab wrote and the box has not served back, read from the device's row of own lines into the core: on
     // every load, whatever form the log was of, so no unsent line is dropped with it.
-    const ownRead = async (): Promise<void> => {
-      if (!idb.available()) return
+    // The device's row of own lines read into the core: whether it brought a record this tab did not hold, or an answer
+    // above the one it held.
+    const ownRead = async (): Promise<boolean> => {
+      if (!idb.available()) return false
       const kept = await ownlines.kept()
-      if (kept.type === "Error") return fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${kept.e}); they stay on the device untouched`))
-      if (kept.v.length === 0) return
+      if (kept.type === "Error") {
+        fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${kept.e}); they stay on the device untouched`))
+        return false
+      }
+      if (kept.v.length === 0) return false
       const took = held.take_own(JSON.stringify(kept.v))
-      void ownlines.settled()
       const said = Took(took)
       if (said.type === "Error") throw new CoreError(`own lines taken: unexpected shape (${said.e})`)
+      await settle(said.v.taken)
       moved(JSON.stringify(said.v.moved))
       const unread = said.v.unread
       if (unread.length > 0) fx.told(`own/${KEPT}`, replicasync.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
+      return said.v.fresh > 0
     }
     // A move of the own lines kept on the device before it is heard: a write the device could not keep is said, since a
     // reload would forget it.
@@ -349,6 +375,7 @@ export namespace linesync {
               landing.done("Landed")
               await landedNow()
               await purge()
+              await settleLanded()
             },
             held: () => [held.since(), held.heads()],
           })
@@ -430,6 +457,7 @@ export namespace linesync {
         behind: () => inTurn(caughtUp),
       },
       ownStepped,
+      ownHeard: () => inTurn(ownRead),
     }
   }
 }

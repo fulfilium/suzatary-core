@@ -1804,9 +1804,9 @@ fn the_replicas_vector_is_what_the_box_answers() {
     let printed = |value: &dyn erased::Printed| value.printed();
     let mut windows = windows_of(&bundle, &deed, &trains);
     let memory = memory_of(&bundle, &trains);
-    let stored = conversations::read(bundle.conversations.conversations(), &trains).expect("reads");
     let remembered = readings::conversation(
-        &stored,
+        &suzatary_lines::secretary::transcript::read(bundle.conversations.conversations(), &trains)
+            .expect("reads"),
         &inbox::fold(&bundle.inbox).expect("the inbox reads"),
         &readings::Window::newest(),
         &readings::Dress {
@@ -1823,7 +1823,11 @@ fn the_replicas_vector_is_what_the_box_answers() {
         answer: printed(&remembered),
     });
     let lags = readings::conversation(
-        &conversations::read(bundle.conversations.conversations(), &lagging).expect("reads"),
+        &suzatary_lines::secretary::transcript::read(
+            bundle.conversations.conversations(),
+            &lagging,
+        )
+        .expect("reads"),
         &inbox::fold(&bundle.inbox).expect("the inbox reads"),
         &readings::Window::newest(),
         &readings::Dress::BARE,
@@ -1932,7 +1936,8 @@ fn windows_of(bundle: &Bundle, deed: &ConversationId, trains: &ConversationId) -
         (trains, None, Some(1), None),
     ] {
         let window = readings::conversation(
-            &conversations::read(bundle.conversations.conversations(), id).expect("reads"),
+            &suzatary_lines::secretary::transcript::read(bundle.conversations.conversations(), id)
+                .expect("reads"),
             &inbox::fold(&bundle.inbox).expect("the inbox reads"),
             &readings::Window {
                 before,
@@ -2519,12 +2524,7 @@ fn the_answers_vector_holds_every_answer() {
         };
         proposal.card.files = files;
     }
-    samples.add(
-        conversations
-            .into_iter()
-            .chain([attaching])
-            .map(|conversation| suzatary_api::wire::SayPayload { conversation }),
-    );
+    samples.add(conversations.into_iter().chain([attaching]));
     samples.add([wire::MemoryPayload {
         facts: vec![
             wire::FactRow {
@@ -2627,7 +2627,13 @@ fn the_answers_vector_holds_every_answer() {
         suzatary_api::wire::RevealPayload::NotKept,
     ]);
     samples.add([
-        suzatary_api::wire::Uploaded::Kept { file: row(2) },
+        suzatary_api::wire::Uploaded::Kept {
+            file: row(2),
+            attachment: suzatary_held::attachment::Attachment::accept(&[
+                0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F', 0x00,
+            ])
+            .expect("a photo"),
+        },
         suzatary_api::wire::Uploaded::Sensitive {
             why: "it names a tax number".to_owned(),
             folder: "Private".to_owned(),

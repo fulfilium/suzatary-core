@@ -65,15 +65,7 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
         ]),
     );
     let id = open(&base);
-    assert_eq!(
-        post(
-            &base,
-            &id,
-            "say",
-            &serde_json::json!({"say": "what changed"})
-        ),
-        202
-    );
+    let _ = common::say(&base, &id, "what changed");
     assert_eq!(
         common::settled(&base, &id)["again"],
         0,
@@ -141,15 +133,7 @@ fn a_round_that_remembered_is_refused() {
         ]),
     );
     let id = open(&base);
-    assert_eq!(
-        post(
-            &base,
-            &id,
-            "say",
-            &serde_json::json!({"say": "I moved to Oslo, remember that"})
-        ),
-        202
-    );
+    let _ = common::say(&base, &id, "I moved to Oslo, remember that");
     common::settled(&base, &id);
     let mut refused = common::act(
         &format!("{base}/api/secretary/conversations/{id}/regenerate"),

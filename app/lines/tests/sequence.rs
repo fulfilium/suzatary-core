@@ -247,3 +247,44 @@ fn a_tab_s_line_stands_before_the_box_line_that_rests_on_it() {
     assert_eq!(names(&nodes, &causal(&view(&nodes))), [0, 4, 2, 1, 3]);
     assert_eq!(ordered(&nodes), [0, 2, 1, 3, 4]);
 }
+
+fn node(name: u16, at: u8, parents: &[u16], writer: Writer) -> Generated {
+    Generated {
+        name,
+        at,
+        parents: parents.to_vec(),
+        writer,
+    }
+}
+
+/// Two tabs' chains written before the box placed either line of them are not kept apart: §3.1
+/// orders the lines between two box lines by their writers' clocks, so A1 → A2 and B1 → B2,
+/// written in turn, read A1, B1, A2, B2. Each chain stays in its own order, as every linear
+/// extension keeps it; nothing promises a tab's lines stand together.
+#[test]
+fn two_tabs_chains_before_the_box_read_by_their_clocks() {
+    let nodes = [
+        node(0, 0, &[], Writer::Spine),
+        node(10, 1, &[0], Writer::Other),
+        node(20, 2, &[0], Writer::Other),
+        node(11, 3, &[10], Writer::Other),
+        node(21, 4, &[20], Writer::Other),
+    ];
+    assert_eq!(ordered(&nodes), [0, 10, 20, 11, 21]);
+}
+
+/// A pair after the box's last line is drawn provisionally: X and Y, read X, Y by their clocks,
+/// read Y, S, X once the box writes S over Y alone (it had not taken X when it wrote), since Y now
+/// stands before the box line that rests on it and X still after the box's last. A pair at or
+/// before the box's last line never flips (`a_later_line_moves_nothing_the_spine_placed`).
+#[test]
+fn a_pair_after_the_box_s_last_line_can_flip_when_the_box_writes_over_one() {
+    let mut nodes = vec![
+        node(0, 0, &[], Writer::Spine),
+        node(1, 1, &[0], Writer::Other),
+        node(2, 2, &[0], Writer::Other),
+    ];
+    assert_eq!(ordered(&nodes), [0, 1, 2]);
+    nodes.push(node(3, 3, &[2], Writer::Spine));
+    assert_eq!(ordered(&nodes), [0, 2, 3, 1]);
+}

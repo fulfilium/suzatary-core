@@ -453,7 +453,7 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     }
     let erased = common::act(
         &format!("{base}/api/secretary/conversations/{id}/erase"),
-        &serde_json::json!({"turns": [0]}),
+        &common::erasing(&base, &id, &[0]),
     );
     assert_eq!(common::status(&erased), 200);
     let after = skeleton(&base);
@@ -640,7 +640,7 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     let orphan = added(&genesis, vec![unheld], "ada");
     let posted = serde_json::json!({ "objects": signed_by(&orphan, &phone()) });
     let mut waits = common::act(&url, &posted);
-    assert_eq!(common::body_json(&mut waits)["refused"][0]["kind"], "trust");
+    assert_eq!(common::body_json(&mut waits)["refused"][0]["kind"], "later");
     assert_eq!(recorded(&base), Vec::<String>::new());
 
     let triage = added(&genesis, Vec::new(), "triage");
@@ -764,7 +764,7 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
             .expect("the lines began"),
     )
     .expect("a name");
-    let at = prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant");
     let entropy = Counting(std::sync::atomic::AtomicU8::new(7));
     let change = |line: LineEvent| {
         prodrome_core::event::Envelope::Change(
@@ -846,4 +846,64 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
         )),
         400
     );
+}
+
+/// Keys travel beside the lines they open and nothing else: a post whose `keys` names its
+/// signature object, not a line, is refused whole, and no key of it is kept.
+#[test]
+fn a_key_beside_anything_but_a_posted_line_is_refused() {
+    let base = writing("stores-keys-beside");
+    let id = common::opened(&base, "keys beside");
+    let posted = common::sealed(
+        &base,
+        &id,
+        &common::question(&base, "is it due?", Vec::new(), Vec::new()),
+    );
+    let objects = posted.body["objects"].as_array().expect("objects").clone();
+    let signature = objects
+        .iter()
+        .filter_map(|o| o.as_str())
+        .find(|o| o.starts_with("Signed("))
+        .expect("a signature");
+    let signature_name = prodrome_core::event::seal_hash(
+        &prodrome_core::event::parse_envelope::<suzatary_lines::secretary::line_event::LineEvent>(
+            &suzatary_lines::secretary::line_event::LineVocabulary,
+            signature,
+        )
+        .expect("parses"),
+    );
+    let junk = hex::encode([0x5a_u8; 32]);
+    let mut body = posted.body.clone();
+    body["keys"][signature_name.as_str()] = serde_json::json!([junk]);
+    let mut answer = common::act(&format!("{base}/api/stores/lines/objects"), &body);
+    let status = common::status(&answer);
+    let said = common::body_json(&mut answer);
+    assert_eq!(status, 400, "{said}");
+}
+
+/// A post this box's build does not read is another build's, never the post's fault: a body of
+/// another shape, and a store the box does not keep, are each answered 409 naming another build,
+/// which the page posts again; a post the box reads and refuses whole stays a 400.
+#[test]
+fn a_post_of_another_build_names_the_build() {
+    let base = writing("stores-another-build");
+    let id = common::opened(&base, "another build");
+    let posted = common::sealed(
+        &base,
+        &id,
+        &common::question(&base, "is it due?", Vec::new(), Vec::new()),
+    );
+    let mut shaped = posted.body.clone();
+    shaped["asked_by"] = serde_json::json!("a field this build does not know");
+    let mut answer = common::act(&format!("{base}/api/stores/lines/objects"), &shaped);
+    let status = common::status(&answer);
+    let said = common::body_json(&mut answer);
+    assert_eq!(status, 409, "{said}");
+    assert!(said.to_string().contains("another build"), "{said}");
+
+    let mut answer = common::act(&format!("{base}/api/stores/notes/objects"), &posted.body);
+    let status = common::status(&answer);
+    let said = common::body_json(&mut answer);
+    assert_eq!(status, 409, "{said}");
+    assert!(said.to_string().contains("another build"), "{said}");
 }

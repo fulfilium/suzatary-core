@@ -275,8 +275,9 @@ pub struct OpenedLine {
 }
 
 /// What a conversation's node folds its opened lines to, and what the store's node gathers of
-/// them: a tab folds to [`Stored`] and gathers nothing ([`Replica`]); the box folds to a
-/// [`Transcript`] and gathers every line's entry ([`TheBox`]), which a tab never pays for.
+/// them: each folds a conversation to its [`Transcript`], the same reading on both sides; a tab
+/// gathers nothing ([`Replica`]), and the box gathers every line's entry ([`TheBox`]), which a tab
+/// never pays for.
 pub trait Folds: std::fmt::Debug + Clone + Eq {
     /// A conversation's lines, closed.
     type Closed: Clone + std::fmt::Debug + Eq;
@@ -288,39 +289,50 @@ pub trait Folds: std::fmt::Debug + Clone + Eq {
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed;
     /// What the store gathers of its conversations.
     fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered;
+    /// The conversation's transcript, or why its lines are none.
+    fn read(closed: Self::Closed) -> Result<Arc<Transcript>, NotAConversation>;
+
     /// The conversation's fold, or why its lines are none.
-    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation>;
+    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
+        Self::read(closed).map(|read| Arc::clone(read.shared()))
+    }
 }
 
-/// A tab's fold: each conversation to its [`Stored`].
+/// A conversation's opened lines, in any order, read as its transcript.
+fn transcript_of(
+    id: &ConversationId,
+    lines: &[Arc<OpenedLine>],
+) -> Result<Arc<Transcript>, NotAConversation> {
+    let written: Vec<_> = lines
+        .iter()
+        .map(|line| {
+            let write = Write {
+                name: &line.object,
+                line: &line.line,
+                parents: &line.parents,
+            };
+            (write, line.entry.clone())
+        })
+        .collect();
+    Transcript::read(id, &written).map(Arc::new)
+}
+
+/// A tab's fold: each conversation to its [`Transcript`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Replica {}
 
 impl Folds for Replica {
-    type Closed = Result<Arc<Stored>, NotAConversation>;
+    type Closed = Result<Arc<Transcript>, NotAConversation>;
     type Gathered = ();
-    const NAME: &'static str = "a conversation to its fold";
+    const NAME: &'static str = "a conversation to its transcript";
 
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
-        let order = transcript::sequenced(
-            &lines
-                .iter()
-                .map(|line| crate::secretary::sequence::Node {
-                    name: &line.object,
-                    at: line.line.at(),
-                    parents: &line.parents,
-                    writer: crate::wire::lines::LineWriter::of(
-                        prodrome_core::schema::Schema::actor(&*line.line),
-                    ),
-                })
-                .collect::<Vec<_>>(),
-        );
-        Stored::of_lines(id, order.iter().map(|(at, _)| &lines[*at].entry)).map(Arc::new)
+        transcript_of(id, &lines)
     }
 
     fn gather(_: &BTreeMap<ConversationId, Self::Closed>) {}
 
-    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
+    fn read(closed: Self::Closed) -> Result<Arc<Transcript>, NotAConversation> {
         closed
     }
 }
@@ -397,18 +409,7 @@ impl Folds for TheBox {
         "a conversation to its transcript, the store to every line and the digest's shape";
 
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
-        let written: Vec<_> = lines
-            .iter()
-            .map(|line| {
-                let write = Write {
-                    name: &line.object,
-                    line: &line.line,
-                    parents: &line.parents,
-                };
-                (write, line.entry.clone())
-            })
-            .collect();
-        let read = Transcript::read(id, &written).map(Arc::new);
+        let read = transcript_of(id, &lines);
         Closed { lines, read }
     }
 
@@ -428,8 +429,8 @@ impl Folds for TheBox {
         })
     }
 
-    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
-        closed.read.map(|read| Arc::clone(read.shared()))
+    fn read(closed: Self::Closed) -> Result<Arc<Transcript>, NotAConversation> {
+        closed.read
     }
 }
 
@@ -987,6 +988,15 @@ impl<F: Folds> HeldLines<F> {
         self.closed(id).map(F::stored)
     }
 
+    /// Conversation `id` read as its transcript, claims and all, or why its lines are none; none
+    /// for a conversation not held.
+    pub fn transcript(
+        &mut self,
+        id: &ConversationId,
+    ) -> Option<Result<Arc<Transcript>, NotAConversation>> {
+        self.closed(id).map(F::read)
+    }
+
     /// Conversation `id`'s node folded and closed.
     fn closed(&mut self, id: &ConversationId) -> Option<F::Closed> {
         let node = self.built(id)?;
@@ -1318,15 +1328,6 @@ impl HeldLines<TheBox> {
     /// derive from them.
     pub fn gathered(&mut self) -> Arc<Gathered> {
         self.store().0.gathered
-    }
-
-    /// Conversation `id`'s transcript, or why its lines are none; `None` where the history holds
-    /// no line of it.
-    pub fn transcript(
-        &mut self,
-        id: &ConversationId,
-    ) -> Option<Result<Arc<Transcript>, NotAConversation>> {
-        Some(self.closed(id)?.read)
     }
 }
 

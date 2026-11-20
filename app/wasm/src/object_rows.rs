@@ -137,7 +137,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         json(
             &self
                 .replica
-                .unsent_pieces::<E>(&E::Vocabulary::default(), suzatary_api::routes::MAX_POSTED)
+                .unsent_pieces::<E>(&E::Vocabulary::default(), crate::seal::POST_FITS, |o| {
+                    serde_json::to_string(o.literal()).map_or(usize::MAX, |s| s.len() + 1)
+                })
                 .iter()
                 .map(|piece| {
                     piece
@@ -168,14 +170,16 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         )
     }
 
-    /// `[{hash, kind, reason}]`: what the box refused for good, `kind` `Final` or `Outdated`.
+    /// `[{hash, kind, reason, literal, words, signature}]`: what the box refused for good, `kind`
+    /// `Final` or `Outdated`; `literal` and `words` are the lines' alone, and null here; a
+    /// signature tells nothing of its own, and is marked so.
     pub fn refusals(&self) -> Result<String, JsError> {
         json(
             &self
                 .replica
                 .refusals()
                 .iter()
-                .map(|(o, kind, reason)| serde_json::json!({ "hash": o.name().as_str(), "kind": kind, "reason": reason }))
+                .map(|(o, kind, reason)| serde_json::json!({ "hash": o.name().as_str(), "kind": kind, "reason": reason, "literal": null, "words": null, "signature": o.is_signature() }))
                 .collect::<Vec<_>>(),
         )
     }
@@ -310,6 +314,22 @@ impl<E: suzatary_stores::stores::Store<Vocabulary: Default>> Store<E> {
     }
 }
 
+impl<E: suzatary_stores::stores::Written<Vocabulary: Default>> Store<E> {
+    /// `[{hash, reason, literal, words, signature}]`: what the box has not taken yet, in the rule's
+    /// words; `literal` and `words` are the lines' alone, and null here; a signature tells nothing
+    /// of its own, and is marked so.
+    pub fn waiting(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .replica
+                .waiting()
+                .iter()
+                .map(|(o, reason)| serde_json::json!({ "hash": o.name().as_str(), "reason": reason, "literal": null, "words": null, "signature": o.is_signature() }))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
 /// Every standing object but a signature, which asserts no event, so a signing keeps the reading.
 fn read_objects(replica: &Objects) -> impl Iterator<Item = &Object> {
     replica.standing().into_iter().filter(|o| !o.is_signature())
@@ -332,11 +352,37 @@ struct Text {
 
 /// A store's exports at one schema: the class `$name` over a [`Store`]. A macro because
 /// `#[wasm_bindgen]` exports no generic item; each method is one call of the store's. A store
-/// `unread` exports no register readings, which only a schema with a JSON view answers.
+/// `unread` exports no register readings, which only a schema with a JSON view answers. Only a
+/// store the stores' table says a tab writes (`Written`) exports what the box has not taken yet:
+/// `written` names it, and the table holds either way: `waiting` asks for `Written`, and a store
+/// not named so is asserted the box's alone.
 macro_rules! objects_store {
+    ($name:ident = $schema:ty, written) => {
+        $crate::object_rows::objects_store!(@base $name = $schema);
+        $crate::object_rows::objects_store!(@readings $name);
+
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        impl $name {
+            pub fn waiting(&self) -> Result<String, wasm_bindgen::JsError> {
+                self.0.waiting()
+            }
+        }
+    };
     ($name:ident = $schema:ty) => {
         $crate::object_rows::objects_store!($name = $schema, unread);
-
+        $crate::object_rows::objects_store!(@readings $name);
+    };
+    ($name:ident = $schema:ty, unread) => {
+        $crate::object_rows::objects_store!(@base $name = $schema);
+        const _: () = assert!(
+            matches!(
+                <$schema as suzatary_stores::stores::Store>::KIND.writer(),
+                suzatary_stores::stores::Writer::Box
+            ),
+            "a store a tab writes is `written`"
+        );
+    };
+    (@readings $name:ident) => {
         #[wasm_bindgen::prelude::wasm_bindgen]
         impl $name {
             /// Every entity's registers at `at` (ISO, or `null`) under `untrusted`.
@@ -353,7 +399,7 @@ macro_rules! objects_store {
             }
         }
     };
-    ($name:ident = $schema:ty, unread) => {
+    (@base $name:ident = $schema:ty) => {
         #[doc = concat!("The store of objects at `", stringify!($schema), "` the tab holds.")]
         #[wasm_bindgen::prelude::wasm_bindgen]
         #[derive(Default)]

@@ -300,7 +300,7 @@ fn read_binding_holds() {
         .expect("the message was shown");
     let erased = common::act(
         &format!("{}/api/secretary/conversations/{id}/erase", running.base),
-        &serde_json::json!({ "turns": [shown] }),
+        &common::erasing(&running.base, id, &[shown]),
     );
     assert_eq!(common::status(&erased), 200);
     let after = tap(&running.base, id);

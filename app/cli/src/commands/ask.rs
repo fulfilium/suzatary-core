@@ -1,20 +1,21 @@
-//! `suzatary secretary ask <conversation|new> <text>`: the operator's question, said through the
-//! say route as a device says one, and the round's answer as its stream sends it.
+//! `suzatary secretary ask <conversation|new> <text>`: the operator's question, sealed as a tab
+//! seals one and signed by the root key, and the round's answer as its stream sends it.
 
 use std::ops::ControlFlow;
+
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use suzatary_store::replica::held::Node as _;
 
 use anyhow::{Context, bail};
 use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::ConversationState;
-use suzatary_inbox::secretary::stamp::Stamp;
 
 use super::call::Operator;
-use super::serve::route::Method;
+use suzatary_lines::secretary::held_replica::Sealing;
 
 /// The conversation a question goes into.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,8 +42,8 @@ impl FromStr for Conversation {
 #[derive(Debug)]
 pub struct Asked {
     pub conversation: ConversationId,
-    /// The name the box keeps the question's record under, which names the root key.
-    pub request: prodrome_core::event::Hash,
+    /// The question's line, which the root key signs.
+    pub line: prodrome_core::event::Hash,
     /// The secretary's words in the round, as the stored lines hold them.
     pub answer: String,
 }
@@ -63,17 +64,28 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
     frames
         .recv_timeout(Duration::from_secs(30))
         .context("the conversation's stream sent nothing")?;
-    let saying = wire::Saying {
-        say: text.to_owned(),
-        references: Vec::new(),
-        attachments: Vec::new(),
-        after: None,
-    };
-    let said = operator.request(
-        Method::Post,
-        &format!("/api/secretary/conversations/{id}/say"),
-        &serde_json::to_vec(&saying)?,
-    )?;
+    let mut replica = operator.lines(&id)?;
+    let at = operator.now()?;
+    let (owned, name, _) = replica
+        .seal(
+            Sealing::Say {
+                conversation: id.clone(),
+                text: text.to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+                seat: suzatary_signatures::signatures::Seat::Operator,
+            },
+            at,
+            operator.actor(),
+            &suzatary_io::texts::SystemEntropy,
+        )
+        .map_err(|e| anyhow::anyhow!("the question was not sealed: {e}"))?;
+    let own = owned
+        .iter()
+        .map(|own| &own.node)
+        .find(|own| own.name() == &name)
+        .context("the sealed line")?;
+    operator.hand_over(own)?;
     let deadline = Instant::now() + ROUND;
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
@@ -87,9 +99,19 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
             }
         })?;
         match frame {
+            // An idle frame may describe the conversation before this question landed, or after
+            // an earlier round closed with it still owed: the lines say whether it was answered.
             wire::Frame::State {
                 state: ConversationState::Idle,
-            } => break,
+            } => {
+                if let Some(answer) = answered(operator, &id, &name)? {
+                    return Ok(Asked {
+                        conversation: id,
+                        line: name,
+                        answer,
+                    });
+                }
+            }
             wire::Frame::State {
                 state:
                     ConversationState::Queued
@@ -102,39 +124,45 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
             | wire::Frame::Block { .. } => {}
         }
     }
-    let answer = answered(operator, &id)?;
-    Ok(Asked {
-        conversation: id,
-        request: said.request,
-        answer,
-    })
 }
 
-/// The secretary's words since the conversation's last line of the owner's, as a replica of the
-/// lines reads them: the first exchange of a session streams no delta, so the stream cannot say.
-fn answered(operator: &Operator, id: &ConversationId) -> anyhow::Result<String> {
+/// The secretary's words in reply to the line `line`, once the claims read it settled: the model's
+/// turns of the round that covered it, as a replica of the lines reads them (the first exchange of
+/// a session streams no delta, so the stream cannot say). Position is not the reply: an earlier
+/// round's closing reply can stand after this line. None while the line is not held yet or still
+/// owed; a stopped question is answered with nothing.
+fn answered(
+    operator: &Operator,
+    id: &ConversationId,
+    line: &prodrome_core::event::Hash,
+) -> anyhow::Result<Option<String>> {
     let mut replica = operator.lines(id)?;
-    let Some(read) = replica.lines.conversation(id) else {
+    let Some(read) = replica.lines.transcript(id) else {
         bail!("the lines hold no conversation {id}");
     };
-    let stored = read.map_err(|failed| anyhow::anyhow!("the lines do not read: {failed}"))?;
-    let since = stored
-        .turns
-        .iter()
-        .rposition(|said| Stamp::owners(said.by.as_ref()))
-        .map_or(0, |at| at + 1);
-    Ok(stored.turns[since..]
-        .iter()
-        .filter_map(|said| match &said.turn {
-            Turn::Model { text, .. } if !text.is_empty() => Some(text.as_str()),
-            Turn::Model { .. }
-            | Turn::Person { .. }
-            | Turn::Tool { .. }
-            | Turn::Act { .. }
-            | Turn::Erased { .. } => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n"))
+    let read = read.map_err(|failed| anyhow::anyhow!("the lines do not read: {failed}"))?;
+    let Some(asked) = read.turn_lines().iter().position(|name| *name == line) else {
+        return Ok(None);
+    };
+    if read.owed().iter().any(|(turn, _)| *turn == asked) {
+        return Ok(None);
+    }
+    let turns = &read.stored().turns;
+    Ok(Some(
+        read.replies_to(asked)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|at| match &turns[at].turn {
+                Turn::Model { text, .. } if !text.is_empty() => Some(text.as_str()),
+                Turn::Model { .. }
+                | Turn::Person { .. }
+                | Turn::Tool { .. }
+                | Turn::Act { .. }
+                | Turn::Erased { .. } => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+    ))
 }
 
 /// The frames of `id`'s stream, read on a thread of their own until the receiver is dropped.

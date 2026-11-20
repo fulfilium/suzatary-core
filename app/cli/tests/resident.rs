@@ -188,6 +188,97 @@ fn pulled(base: &str, path: &str) -> Vec<String> {
     }
 }
 
+/// A tab's question in conversation `id`, sealed over its heads and signed by `key`, as the post
+/// that hands it to the lines.
+fn question(
+    base: &str,
+    key: &prodrome_core::sign::Secret,
+    id: &str,
+    round: usize,
+) -> serde_json::Value {
+    use suzatary_lines::secretary::line_event::LineEvent;
+    let (mut nodes, mut genesis, mut since) = (Vec::new(), None, String::new());
+    loop {
+        let query = if since.is_empty() {
+            String::new()
+        } else {
+            format!("?since={since}")
+        };
+        let piece = get(base, &format!("/api/stores/lines/skeleton{query}"));
+        genesis = genesis.or_else(|| piece["geneses"][0].as_str().map(str::to_owned));
+        nodes.extend(piece["nodes"].as_array().into_iter().flatten().cloned());
+        piece["frontier"]["digest"]
+            .as_str()
+            .unwrap_or("")
+            .clone_into(&mut since);
+        if piece["rest"].as_u64().unwrap_or(0) == 0 {
+            break;
+        }
+    }
+    let ours: Vec<&serde_json::Value> = nodes
+        .iter()
+        .filter(|n| n["header"]["conversation"] == id)
+        .collect();
+    let under: std::collections::BTreeSet<&str> = ours
+        .iter()
+        .flat_map(|n| n["parents"].as_array().into_iter().flatten())
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let heads = ours
+        .iter()
+        .filter_map(|n| n["hash"].as_str())
+        .filter(|n| !under.contains(n))
+        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .collect();
+    let actor = get(base, "/api/me")["actor"]
+        .as_str()
+        .expect("an actor")
+        .to_owned();
+    let entry = suzatary_conversations::secretary::store::Entry::Said {
+        at: prodrome_core::literal::Datetime::new(
+            2026,
+            11,
+            17,
+            9,
+            0,
+            0,
+            u32::try_from(round).unwrap_or(0),
+        )
+        .expect("an instant"),
+        turn: suzatary_conversations::secretary::model::Turn::Person {
+            text: format!("one more, round {round}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
+            suzatary_inbox::secretary::stamp::Speaker::device(&actor),
+        )),
+    };
+    let (line, keys) = LineEvent::write(
+        suzatary_base::conversation_id::ConversationId::new(id).expect("an id"),
+        prodrome_core::event::Actor::new(&actor).expect("an actor"),
+        u32::try_from(ours.len()).expect("a count"),
+        &entry,
+        &suzatary_io::texts::SystemEntropy,
+    )
+    .expect("a line");
+    let genesis =
+        prodrome_core::event::Hash::new(genesis.expect("the lines began")).expect("a name");
+    let change = prodrome_core::event::Envelope::Change(
+        prodrome_core::change::mk_change(genesis, heads, line).expect("a change"),
+    );
+    let name = prodrome_core::event::seal_hash(&change);
+    let signature: prodrome_core::event::Envelope<LineEvent> =
+        prodrome_core::event::Envelope::Signed(key.sign(&name));
+    serde_json::json!({
+        "objects": [
+            prodrome_core::event::canonical_envelope(&change),
+            prodrome_core::event::canonical_envelope(&signature),
+        ],
+        "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
+    })
+}
+
 /// One round of the page's request mix; `round` picks the conversation and the window of lines.
 fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
     for path in [
@@ -220,8 +311,8 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
             &format!("/api/stores/lines/content?hashes={}", joined.join(",")),
         );
     }
-    let said = format!("/api/secretary/conversations/bulk-{}/say", round % 20);
-    let body = serde_json::to_vec(&serde_json::json!({"say": format!("one more, round {round}")}))
+    let said = "/api/stores/lines/objects".to_owned();
+    let body = serde_json::to_vec(&question(base, key, &format!("bulk-{}", round % 20), round))
         .expect("JSON prints");
     let at = chrono::Utc::now()
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")

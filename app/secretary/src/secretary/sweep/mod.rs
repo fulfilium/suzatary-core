@@ -202,6 +202,7 @@ fn sweep(
             sink: &Sink::quiet(&halt),
             load: crate::conversation::round::LOAD_NOTHING,
             retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+            confirms: &super::confirming(chains, caps.clock),
         },
     )?;
     if let Some(answered) = &answered {

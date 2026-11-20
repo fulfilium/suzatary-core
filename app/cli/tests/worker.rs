@@ -42,17 +42,14 @@ fn open(base: &str) -> String {
     common::opened(base, "A morning")
 }
 
-fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
-    common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": text}),
-    )
+fn say(base: &str, id: &str, text: &str) {
+    let _ = common::say(base, id, text);
 }
 
-/// Whether `say`'s own answer shows the person turn `text` as queued: the answer is built before
-/// the worker is nudged, so this reads no race.
-fn queued(answer: &mut ureq::http::Response<ureq::Body>, text: &str) -> bool {
-    common::body_json(answer)["conversation"]["turns"]
+/// Whether the tab's reading of conversation `id` shows the person turn `text` as queued: owed a
+/// round that no round covers yet.
+fn queued(base: &str, id: &str, text: &str) -> bool {
+    common::reading(base, id, &[])["turns"]
         .as_array()
         .expect("turns")
         .iter()
@@ -62,8 +59,8 @@ fn queued(answer: &mut ureq::http::Response<ureq::Body>, text: &str) -> bool {
 /// A `say` while the model writes its answer to the first is not settled by that answer, which
 /// the model wrote without it: the next exchange answers it.
 ///
-/// `wait_until_entered` blocks until the fake has registered the call, since a 202 says nothing
-/// about whether the worker had reached the model yet.
+/// `wait_until_entered` blocks until the fake has registered the call, since a taken line says
+/// nothing about whether the worker had reached the model yet.
 #[test]
 fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     let gate = Gate::new();
@@ -77,28 +74,20 @@ fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     );
     let id = open(&base);
 
-    let mut first = say(&base, &id, "first");
-    assert_eq!(common::status(&first), 202);
-    assert!(
-        queued(&mut first, "first"),
-        "the turn just appended is queued in its own answer"
-    );
+    say(&base, &id, "first");
     gate.wait_until_entered();
-
-    let mut second = say(&base, &id, "second");
-    assert_eq!(
-        common::status(&second),
-        202,
-        "the worker is nudged, not raced"
-    );
     assert!(
-        queued(&mut second, "second"),
-        "sent before the first settles, and queued too"
+        !queued(&base, &id, "first"),
+        "the round has claimed the first, so it is no longer queued"
+    );
+
+    say(&base, &id, "second");
+    assert!(
+        queued(&base, &id, "second"),
+        "said while the first is asked, and queued until a round claims it"
     );
     gate.release();
 
-    // The page reads the queue by position until a tab folds the claim, so it is not asked
-    // whether it is idle between the two rounds: the second answer is waited for.
     let payload = common::poll_conversation(&base, &id, |payload| {
         payload["turns"]
             .as_array()
@@ -128,8 +117,8 @@ fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     );
 }
 
-/// With the gate held so no round can complete, `MAX_PENDING` says all succeed and the next is
-/// refused with the exact sentence, before it is appended.
+/// With the gate held so no round can complete, `MAX_PENDING` turns are taken and the next is
+/// refused by the lines' rule with the exact sentence, before it is appended.
 #[test]
 fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     let gate = Gate::new();
@@ -139,26 +128,22 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     );
     let id = open(&base);
 
-    let first = say(&base, &id, "line 0");
-    assert_eq!(common::status(&first), 202);
+    say(&base, &id, "line 0");
     gate.wait_until_entered();
 
     for n in 1..queue::MAX_PENDING {
-        let response = say(&base, &id, &format!("line {n}"));
-        assert_eq!(
-            common::status(&response),
-            202,
-            "line {n} should still queue"
-        );
+        say(&base, &id, &format!("line {n}"));
     }
 
-    let mut refused = say(&base, &id, "one too many");
-    assert_eq!(common::status(&refused), 400);
-    let body = common::body_json(&mut refused);
+    let refused = common::sealed(
+        &base,
+        &id,
+        &common::question(&base, "one too many", Vec::new(), Vec::new()),
+    );
     assert_eq!(
-        body["error"],
+        common::refused_line(&base, &refused),
         format!(
-            "{} lines are already waiting for the secretary; say it after they are answered",
+            "{} lines already wait for the secretary; say it after they are answered",
             queue::MAX_PENDING
         )
     );
@@ -187,8 +172,7 @@ fn an_idle_worker_drops_out_of_the_table() {
     );
     let id = open(&base);
 
-    let response = say(&base, &id, "hello");
-    assert_eq!(common::status(&response), 202);
+    say(&base, &id, "hello");
     common::settled(&base, &id);
 
     let id = suzatary_base::conversation_id::ConversationId::new(id).expect("a slug");
@@ -222,7 +206,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
         .start()
         .base;
     let id = open(&base);
-    assert_eq!(common::status(&say(&base, &id, "hello")), 202);
+    say(&base, &id, "hello");
     common::settled(&base, &id);
     assert_eq!(asks(&first.model), 1);
 
@@ -236,7 +220,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
         .base;
     // A write the engine hears, on a reading whose rules are all discharged.
     common::renamed(&base, &id, "A renamed morning");
-    assert_eq!(common::status(&say(&base, &id, "and now?")), 202);
+    say(&base, &id, "and now?");
     let payload = common::settled(&base, &id);
     assert_eq!(
         asks(&second.model),
@@ -257,9 +241,154 @@ fn a_round_that_ends_with_no_close_is_retried_by_its_conversation() {
         FakeModel::saying(["{\"say\": \"after the retry\"}"]).panicking(1),
     );
     let id = open(&base);
-    assert_eq!(common::status(&say(&base, &id, "is it Friday?")), 202);
+    say(&base, &id, "is it Friday?");
     let payload = common::settled(&base, &id);
     let turns = payload["turns"].as_array().expect("turns");
     assert_eq!(turns.len(), 2, "{turns:?}");
     assert_eq!(turns[1]["text"], "after the retry");
+}
+
+/// A holder outside the server (a brief, a sweep) that dies with its round open leaves that round
+/// to the next write of its conversation. A tab's question is such a write: the lines' acceptance
+/// of it wakes the conversation's task, which retries the lost round with a new run and then
+/// answers the question, with no other write.
+#[test]
+fn a_tab_s_question_after_a_holder_died_is_answered_without_another_write() {
+    use suzatary_lines::secretary::transcript;
+    let whois = common::FakeWhois::new().naming(common::v4(), ada());
+    let fakes = Arc::new(
+        Fakes::new("worker-dead-holder")
+            .whois(whois)
+            .model(FakeModel::saying([
+                "{\"say\": \"the lost one, answered\"}",
+                "{\"say\": \"the new one, answered\"}",
+            ])),
+    );
+    let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
+    let base = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
+        .start()
+        .base;
+    let id = open(&base);
+    let conversation =
+        suzatary_base::conversation_id::ConversationId::new(&id).expect("a conversation id");
+    let conversations = fakes.conversations.conversations();
+    // Written with no nudge, as another process writes, then claimed by that process's run.
+    transcript::push(
+        conversations,
+        &conversation,
+        &suzatary_conversations::secretary::store::Entry::Said {
+            at: common::now(),
+            turn: suzatary_conversations::secretary::model::Turn::Person {
+                text: "the lost question".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: None,
+        },
+    )
+    .expect("the question appends");
+    {
+        let holder = conversations.runs.begin().expect("the other holder's run");
+        assert_eq!(
+            transcript::claim(
+                conversations,
+                &conversation,
+                &holder.run,
+                common::now(),
+                transcript::Retry::Allowed,
+                &|_| true,
+                |_| Vec::new(),
+            )
+            .expect("claims"),
+            transcript::Claimed::Began
+        );
+        // The holder dies here: its run's lock goes with it.
+    }
+
+    say(&base, &id, "and the new one?");
+    let payload = common::settled(&base, &id);
+    let texts: Vec<&str> = payload["turns"]
+        .as_array()
+        .expect("turns")
+        .iter()
+        .map(|turn| turn["text"].as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            "the lost question",
+            "and the new one?",
+            "the lost one, answered",
+            "the new one, answered"
+        ],
+        "{payload}"
+    );
+    assert!(
+        transcript::read(conversations, &conversation)
+            .expect("reads")
+            .owed()
+            .is_empty()
+    );
+}
+
+/// The person's view when the box was down at Send: a question sealed then and handed over once
+/// the box is up is answered while it is within the bound, and closed by the box, its model never
+/// asked, once it is past it; each is drawn once, as its one turn.
+#[test]
+fn a_question_handed_over_late_is_answered_within_the_bound_and_closed_past_it() {
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::store::Entry;
+    let whois = common::FakeWhois::new().naming(common::v4(), ada());
+    let fakes = Arc::new(
+        Fakes::new("worker-late")
+            .whois(whois)
+            .model(FakeModel::saying(["{\"say\": \"answered, late\"}"])),
+    );
+    let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
+    let base = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
+        .start()
+        .base;
+    let sealed_at = |hour: u32, minute: u32, text: &str| Entry::Said {
+        at: prodrome_core::literal::Datetime::new(2026, 9, 2, hour, minute, 0, 0)
+            .expect("an instant"),
+        turn: Turn::Person {
+            text: text.to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
+            suzatary_inbox::secretary::stamp::Speaker::device(common::CAST.owner.actor),
+        )),
+    };
+    let texts = |payload: &serde_json::Value| -> Vec<String> {
+        payload["turns"]
+            .as_array()
+            .expect("turns")
+            .iter()
+            .map(|turn| turn["text"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    };
+
+    let within = open(&base);
+    let late = common::sealed(&base, &within, &sealed_at(11, 30, "sent half an hour ago"));
+    let _ = common::post_lines(&base, &late.body);
+    let payload = common::settled(&base, &within);
+    assert_eq!(texts(&payload), ["sent half an hour ago", "answered, late"]);
+
+    let past = open(&base);
+    let old = common::sealed(&base, &past, &sealed_at(10, 0, "sent two hours ago"));
+    let _ = common::post_lines(&base, &old.body);
+    let payload = common::settled(&base, &past);
+    assert_eq!(
+        texts(&payload),
+        [
+            "sent two hours ago",
+            "This was not answered in time; ask again."
+        ]
+    );
+    assert_eq!(
+        fakes.model.asked().len(),
+        1,
+        "the late question asked nothing"
+    );
 }

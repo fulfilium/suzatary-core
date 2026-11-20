@@ -238,6 +238,7 @@ impl TheBox {
             &routes::Beside {
                 posted: &(),
                 keep: &|_| Ok(()),
+                world: &(),
             },
             &self.frontiers,
             routes::Writer {

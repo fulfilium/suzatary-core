@@ -510,9 +510,10 @@ fn posted<E: Schema<Vocabulary: Default>>(
         .cloned()
         .collect();
     let received = suzatary_api::sync::receive_changes::<Shared<E>>(
-        &Holding {
+        Holding {
             names: &held,
-            held: &(),
+            held: (),
+            world: &(),
         },
         &mine,
         &(),
@@ -585,9 +586,10 @@ impl Door {
         trusting: &suzatary_signatures::signatures::Trusting,
     ) -> suzatary_api::sync::Received {
         suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
-            &Holding {
+            Holding {
                 names: &self.held,
-                held: &(),
+                held: (),
+                world: &(),
             },
             prints,
             &(),
@@ -689,9 +691,10 @@ fn the_box_door_takes_only_the_posters_changes() {
         .chain([seal_hash(&door.theirs)])
         .collect();
     let again = suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
-        &Holding {
+        Holding {
             names: &held,
-            held: &(),
+            held: (),
+            world: &(),
         },
         &[print(&door.theirs)],
         &(),
@@ -712,16 +715,23 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
     impl Admission for Roots {
         type Schema = MembershipEvent;
         type Beside = ();
-        type Held = ();
-        fn held<'e>(_: impl Iterator<Item = &'e MembershipEvent>) {}
+        type Held<'e> = ();
+        type World = ();
+        fn held(_: &[(prodrome_core::event::Hash, Envelope<MembershipEvent>)]) {}
         fn refuses(
             change: &prodrome_core::change::Change<MembershipEvent>,
-            _: &suzatary_store::admission::Post<'_, Self>,
+            _: &suzatary_store::admission::Post<'_, '_, Self>,
         ) -> Option<Inadmissible> {
             (!change.deps.is_empty()).then(|| Inadmissible {
-                grounds: Grounds::Final,
+                grounds: suzatary_store::admission::Ruling::Final,
                 reason: "only a first write is taken here".to_owned(),
             })
+        }
+        fn take(
+            (): &mut (),
+            _: &prodrome_core::event::Hash,
+            _: &prodrome_core::change::Change<MembershipEvent>,
+        ) {
         }
     }
     let door = Door::new();
@@ -738,9 +748,10 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         "the shared rule takes all four"
     );
     let ruled = suzatary_api::sync::receive_changes::<Roots>(
-        &Holding {
+        Holding {
             names: &door.held,
-            held: &(),
+            held: (),
+            world: &(),
         },
         &prints,
         &(),
@@ -763,7 +774,7 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
     assert!(refused.contains(&(
         Some(seal_hash(child)),
         Reason::Inadmissible(Inadmissible {
-            grounds: Grounds::Final,
+            grounds: suzatary_store::admission::Ruling::Final,
             reason: "only a first write is taken here".to_owned(),
         })
     )));
@@ -829,9 +840,10 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
     let held: BTreeSet<prodrome_core::event::Hash> =
         door.held.iter().cloned().chain([seal_hash(mine)]).collect();
     let lone = suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
-        &Holding {
+        Holding {
             names: &held,
-            held: &(),
+            held: (),
+            world: &(),
         },
         &[print(&signature(mine))],
         &(),
@@ -913,11 +925,18 @@ fn law_writes_made_before_trust_are_taken_after_it() {
         .collect(),
     );
     let posted = |tab: &Objects| -> Vec<String> {
-        tab.unsent_pieces::<MembershipEvent>(&schema, 512)
-            .concat()
-            .iter()
-            .map(|o| o.literal().to_owned())
-            .collect()
+        tab.unsent_pieces::<MembershipEvent>(
+            &schema,
+            suzatary_store::replica::writes::Fit {
+                most: 512,
+                bytes: usize::MAX,
+            },
+            |o| o.literal().len(),
+        )
+        .concat()
+        .iter()
+        .map(|o| o.literal().to_owned())
+        .collect()
     };
     let untrusted = trusting_of(&[&suzatary_stores::stores::phone_trusted(&[])]);
     let first = door.post(&posted(&tab), &untrusted);

@@ -69,11 +69,7 @@ fn writing(tag: &str) -> (String, Arc<Recorder>) {
 fn exchange(base: &str, said: &str) -> serde_json::Value {
     let id = common::opened(base, "A morning");
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": said}),
-    );
-    assert_eq!(common::status(&said), 202, "a model turn answers 202");
+    let _ = common::say(base, &id, said);
 
     let payload = common::settled(base, &id);
     assert!(
@@ -86,8 +82,8 @@ fn exchange(base: &str, said: &str) -> serde_json::Value {
     payload
 }
 
-/// A question names the turns its asker saw, so asking it again after its answer was lost is the
-/// line already standing, and the same words asked later, having seen it, are a new line.
+/// A question is its line: posting the same bytes again after its answer was lost is the line
+/// already standing, and the same words asked later, having seen it, are a new line.
 #[test]
 fn a_question_asked_twice_is_asked_once() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -102,24 +98,65 @@ fn a_question_asked_twice_is_asked_once() {
         .start()
         .base;
     let id = common::opened(&base, "asked once");
-    let say = |after: u64| {
-        let response = common::act(
-            &format!("{base}/api/secretary/conversations/{id}/say"),
-            &serde_json::json!({"say": "yes", "after": after}),
-        );
-        assert_eq!(common::status(&response), 202);
-        common::settled(&base, &id)
-    };
-    assert_eq!(say(0)["total"], 2, "the question and its answer");
-    assert_eq!(
-        say(0)["total"],
-        2,
-        "the same question, seen from the same turn, is that line"
+    let first = common::sealed(
+        &base,
+        &id,
+        &common::question(&base, "yes", Vec::new(), Vec::new()),
     );
+    let _ = common::post_lines(&base, &first.body);
     assert_eq!(
-        say(2)["total"],
+        common::settled(&base, &id)["total"],
+        2,
+        "the question and its answer"
+    );
+    let again = common::post_lines(&base, &first.body);
+    assert!(
+        again["already"]
+            .as_array()
+            .is_some_and(|already| already.iter().any(|n| n == first.name.as_str())),
+        "the same bytes are that line: {again}"
+    );
+    assert_eq!(common::settled(&base, &id)["total"], 2);
+    let _ = common::say(&base, &id, "yes");
+    assert_eq!(
+        common::settled(&base, &id)["total"],
         4,
         "having seen it, the same words are a new question"
+    );
+}
+
+/// A tab's second question keeps its words once the first is answered: the box reads each turn
+/// with the key posted beside it, however soon after an answer it comes.
+#[test]
+fn a_second_question_keeps_its_words() {
+    let whois = common::FakeWhois::new().naming(common::v4(), ada());
+    let fakes = Fakes::new("secretary-second-question")
+        .whois(whois)
+        .model(FakeModel::saying([
+            r#"{"say": "one"}"#,
+            r#"{"say": "two"}"#,
+        ]));
+    let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
+    let base = common::Server::new(Arc::new(fakes), deployment, Vec::new())
+        .start()
+        .base;
+    let id = common::opened(&base, "second question");
+    let _ = common::say(&base, &id, "the first question");
+    assert_eq!(common::settled(&base, &id)["total"], 2);
+    let _ = common::say(&base, &id, "the second question");
+    let payload = common::settled(&base, &id);
+    assert_eq!(payload["total"], 4);
+    let said: Vec<&str> = payload["turns"]
+        .as_array()
+        .expect("turns")
+        .iter()
+        .filter(|turn| turn["who"] == "person")
+        .filter_map(|turn| turn["text"].as_str())
+        .collect();
+    assert_eq!(
+        said,
+        ["the first question", "the second question"],
+        "{payload}"
     );
 }
 
@@ -476,8 +513,9 @@ fn a_dismissal_answers_a_proposal_and_the_transcript_says_so() {
         after["proposals"][0]["outcome"],
         "wrong person, this goes to Mira"
     );
-    // The dismissal answers with the transcript as it stood before the round it starts.
-    assert_eq!(after["state"], "idle");
+    // The dismissal answers with the transcript as it stood before the round it starts: its act
+    // is owed a round that no claim covers yet.
+    assert_eq!(after["state"], "queued");
 
     let turns = after["turns"].as_array().expect("turns");
     let act = turns.last().expect("a last turn");
@@ -816,14 +854,6 @@ fn a_viewer_may_read_the_conversations_and_tap_nothing() {
 
     for (path, body) in [
         (
-            "/api/secretary/conversations/anything/say",
-            serde_json::json!({"say": "hello"}),
-        ),
-        (
-            "/api/secretary/conversations/anything/stop",
-            serde_json::json!({}),
-        ),
-        (
             "/api/secretary/conversations/anything/proposals/0/tap",
             serde_json::json!({}),
         ),
@@ -851,23 +881,13 @@ fn a_turn_carries_what_it_points_at_and_the_box_loads_it() {
     let (base, _) = writing("secretary-references");
     let id = common::opened(&base, "A morning");
 
-    let refused = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({
-            "say": "look at this",
-            "references": ["todo:../../etc/passwd"],
-        }),
+    let _ = common::say_with(
+        &base,
+        &id,
+        "is this still worth doing?",
+        vec!["todo:life/permitfiling".parse().expect("a reference")],
+        Vec::new(),
     );
-    assert_eq!(common::status(&refused), 400);
-
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({
-            "say": "is this still worth doing?",
-            "references": ["todo:life/permitfiling"],
-        }),
-    );
-    assert_eq!(common::status(&said), 202);
     let payload = common::settled(&base, &id);
 
     let turns = payload["turns"].as_array().expect("turns");
@@ -921,23 +941,25 @@ fn loopback_may_neither_tap_nor_dismiss() {
     }
 }
 
-/// An empty turn is refused, and an unopened conversation is a 404.
+/// An empty turn is refused, and so is a turn of a conversation the box does not hold.
 #[test]
-fn the_two_refusals_a_say_can_earn() {
+fn the_two_refusals_a_question_can_earn() {
     let (base, _) = writing("secretary-refusals");
     let id = common::opened(&base, "A morning");
 
-    let blank = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "   "}),
+    let blank = common::sealed(
+        &base,
+        &id,
+        &common::question(&base, "   ", Vec::new(), Vec::new()),
     );
-    assert_eq!(common::status(&blank), 400);
+    assert_eq!(common::refused_line(&base, &blank), "say something");
 
-    let nowhere = common::act(
-        &format!("{base}/api/secretary/conversations/nosuchthing/say"),
-        &serde_json::json!({"say": "hello"}),
+    let nowhere = common::sealed(
+        &base,
+        "nosuchthing",
+        &common::question(&base, "hello", Vec::new(), Vec::new()),
     );
-    assert_eq!(common::status(&nowhere), 404);
+    assert!(common::refused_line(&base, &nowhere).contains("no conversation nosuchthing"));
 
     let traversal = common::get(&format!(
         "{base}/api/secretary/conversations/..%2Fetc/blocks/{}",
@@ -1709,9 +1731,9 @@ fn a_photo_is_kept_served_as_an_image_and_named_by_a_turn() {
         &serde_json::json!({"file": "/9j/4A=="}),
     );
     assert_eq!(common::status(&stored), 200);
-    let stored = common::body_json(&mut stored);
-    assert_eq!(stored["kind"], "kept");
-    let stored = &stored["file"];
+    let answer = common::body_json(&mut stored);
+    assert_eq!(answer["kind"], "kept");
+    let stored = &answer["file"];
     assert_eq!(stored["media_type"], "image/jpeg");
     assert_eq!(stored["name"], "", "a photo has no name");
     assert_eq!(stored["private"], "", "on the box");
@@ -1734,11 +1756,9 @@ fn a_photo_is_kept_served_as_an_image_and_named_by_a_turn() {
     assert_eq!(bytes, [0xFF, 0xD8, 0xFF, 0xE0]);
 
     let conversation = common::opened(&base, "A photo");
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{conversation}/say"),
-        &serde_json::json!({"say": "", "attachments": [{"id": id}]}),
-    );
-    assert_eq!(common::status(&said), 202, "a photo alone is a turn");
+    let photo: suzatary_held::attachment::Attachment =
+        serde_json::from_value(answer["attachment"].clone()).expect("the file as a turn holds it");
+    let _ = common::say_with(&base, &conversation, "", Vec::new(), vec![photo]);
 }
 
 /// A PDF naming an SSN is held for the owner, then kept in his Drive on his say: the first
@@ -1797,14 +1817,28 @@ fn a_pdf_naming_an_ssn_is_held_then_kept_privately_in_the_drive() {
     assert_eq!(common::status(&served), 404, "a private file is not served");
 
     let conversation = common::opened(&base, "Taxes");
-    let mut said = common::act(
-        &format!("{base}/api/secretary/conversations/{conversation}/say"),
-        &serde_json::json!({"say": "send this to the accountant", "attachments": [{"id": id, "name": "renamed.pdf"}]}),
+    let private: suzatary_held::attachment::Attachment =
+        serde_json::from_value(kept["attachment"].clone()).expect("the file as a turn holds it");
+    let renamed = private.clone().named("renamed.pdf").expect("a name");
+    let refused = common::sealed(
+        &base,
+        &conversation,
+        &common::question(&base, "send this", Vec::new(), vec![renamed]),
     );
-    assert_eq!(common::status(&said), 202);
-    let said = common::body_json(&mut said);
-    let turns = said["conversation"]["turns"].as_array().expect("turns");
-    let on_turn = &turns.last().expect("the turn")["attachments"][0];
+    assert!(
+        common::refused_line(&base, &refused).contains("not as the box holds it"),
+        "a private file is named when it was kept, never by the page"
+    );
+    let _ = common::say_with(
+        &base,
+        &conversation,
+        "send this to the accountant",
+        Vec::new(),
+        vec![private],
+    );
+    let said = common::settled(&base, &conversation);
+    let turns = said["turns"].as_array().expect("turns");
+    let on_turn = &turns[0]["attachments"][0];
     assert_eq!(on_turn["name"], "w2.pdf", "named when it was kept");
     assert_eq!(on_turn["private"], file["private"]);
 }
@@ -1821,22 +1855,37 @@ fn uploaded(base: &str, bytes: &[u8], name: &str, private: bool) -> serde_json::
         }),
     );
     assert_eq!(common::status(&answered), 200);
-    common::body_json(&mut answered)
+    let answered = common::body_json(&mut answered);
+    if let Some(id) = answered["file"]["id"].as_str() {
+        KEPT.with(|kept| {
+            kept.borrow_mut()
+                .insert(id.to_owned(), answered["attachment"].clone())
+        });
+    }
+    answered
+}
+
+thread_local! {
+    /// Each upload's answer, as a turn holds the file, by the file's id.
+    static KEPT: std::cell::RefCell<std::collections::BTreeMap<String, serde_json::Value>> =
+        std::cell::RefCell::default();
 }
 
 /// Say `say` in conversation `id` with these uploads, and wait for the round to settle.
 fn sending(base: &str, id: &str, say: &str, files: &[(&str, &str)]) -> serde_json::Value {
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({
-            "say": say,
-            "attachments": files
-                .iter()
-                .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
-                .collect::<Vec<_>>(),
-        }),
-    );
-    assert_eq!(common::status(&said), 202);
+    let attachments = files
+        .iter()
+        .map(|(file, name)| {
+            let kept = KEPT.with(|kept| kept.borrow()[*file].clone());
+            let attachment: suzatary_held::attachment::Attachment =
+                serde_json::from_value(kept).expect("the file as a turn holds it");
+            match attachment.private {
+                Some(_) => attachment,
+                None => attachment.named(name).expect("a name"),
+            }
+        })
+        .collect();
+    let _ = common::say_with(base, id, say, Vec::new(), attachments);
     common::settled(base, id)
 }
 
@@ -2009,7 +2058,7 @@ fn erasing_the_turn_that_sent_a_file_takes_it_out_of_the_index() {
     assert!(entry.exists(), "the lease's words are in the index");
     let erased = common::act(
         &format!("{base}/api/secretary/conversations/{sent_in}/erase"),
-        &serde_json::json!({"turns": [0]}),
+        &common::erasing(&base, &sent_in, &[0]),
     );
     assert_eq!(common::status(&erased), 200);
     assert!(
@@ -2145,11 +2194,17 @@ fn what_is_not_a_stored_photo_is_refused() {
     assert_eq!(common::status(&svg), 400);
 
     let conversation = common::opened(&base, "No photo");
-    let unknown = common::act(
-        &format!("{base}/api/secretary/conversations/{conversation}/say"),
-        &serde_json::json!({"say": "look", "attachments": [{"id": "a".repeat(64)}]}),
+    let nobody_stored = suzatary_held::attachment::Attachment::accept(&[0xFF, 0xD8, 0xFF, 0xE0, 7])
+        .expect("a photo");
+    let unknown = common::sealed(
+        &base,
+        &conversation,
+        &common::question(&base, "look", Vec::new(), vec![nobody_stored]),
     );
-    assert_eq!(common::status(&unknown), 400, "a photo nobody stored");
+    assert!(
+        common::refused_line(&base, &unknown).contains("no upload"),
+        "a photo nobody stored"
+    );
 
     let path = common::get(&format!("{base}/api/secretary/attachments/..%2F..%2Fetc"));
     assert_eq!(

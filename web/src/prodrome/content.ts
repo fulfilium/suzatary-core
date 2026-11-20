@@ -286,6 +286,13 @@ export namespace content {
     return { fetch, wake: pump }
   }
 
+  // The prints of lines this device wrote and the box took, kept as a fetch of them would have kept them: the device
+  // holds them already, so nothing fetches them, and a later load reads them from here once its own record is let go.
+  export const keepOwn = async (rows: readonly { readonly hash: string; readonly literal: string }[]): Promise<void> => {
+    if (!idb.available() || rows.length === 0) return
+    await idb.within(CONTENT, "readwrite", s => Promise.all(rows.map(r => idb.done(s.put(r.literal, r.hash)))))
+  }
+
   // Every row no name in `named` holds dropped, on the device and by the reader, of those it holds (`held`, let go by
   // `letGo`): content of an object the skeleton no longer names is read by nothing.
   export const keepOnly = async (named: ReadonlySet<string>, held: readonly string[], letGo: (names: readonly string[]) => Promise<void>): Promise<lo.Settled<null>> => {

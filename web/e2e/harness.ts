@@ -27,7 +27,7 @@ import assert from "node:assert/strict";
 import { after } from "node:test";
 import { test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, join, normalize } from "node:path";
 
@@ -312,6 +312,21 @@ export function atTheTerminal(args: readonly string[], instance = process.env["E
     const printed = ["stdout", "stderr"].map((stream) => (stream in error ? String(Reflect.get(error, stream) ?? "") : "")).join("");
     throw new Error(`\`suzatary ${args.join(" ")}\` did not end in ${Date.now() - started} ms (bound ${STEP_MS}) and was killed\n  it printed: ${printed}`);
   }
+}
+
+/** `text` asked in conversation `id` at the box's terminal (`suzatary secretary ask`), as another writer than this tab:
+ * the operator's line, sealed and signed by the root key. It runs beside the scene, so a page goes on drawing while the
+ * round runs; it settles once the round has ended. */
+export function askAtTheTerminal(id: string, text: string, instance = process.env["E2E_TRIAGE_INSTANCE"]): Promise<string> {
+  const bin = process.env["E2E_TRIAGE_BIN"];
+  if (bin === undefined || instance === undefined) {
+    return Promise.reject(new Error("E2E_TRIAGE_BIN/E2E_TRIAGE_INSTANCE are unset — scripts/web-e2e.sh sets them"));
+  }
+  return new Promise((asked, refused) =>
+    execFile(bin, ["--instance", instance, "secretary", "ask", id, text], { encoding: "utf8", timeout: STEP_MS }, (error, stdout, stderr) =>
+      error === null ? asked(stdout) : refused(new Error(`\`suzatary secretary ask ${id}\`: ${error.message}\n  it printed: ${stdout}${stderr}`)),
+    ),
+  );
 }
 
 /**

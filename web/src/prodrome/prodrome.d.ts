@@ -76,6 +76,7 @@ export class Lines {
   seal(asked: string, at: string, actor: string, entropy: Uint8Array): Step & { readonly name: string; readonly conversation: string };
   /** The device's record of own lines, `[{literal, keys, answer}]`, taken: `{moved, unread}`. */
   take_own(records: string): string;
+  own_taken(): string;
   answer(name: string): string;
   /** `[[{hash, literal, keys}]]`: the own lines and signatures the box may take, in posts. */
   unsent(): string;
@@ -84,6 +85,7 @@ export class Lines {
   answered(receipt: string): Step;
   refuse(names: string, reason: string): Step;
   refusals(): string;
+  waiting(): string;
   refused_in(asks: ObjectStore): Step | undefined;
   /** `[{hash, text}]` held, each hashed against its name, and `[<name>]` let go. */
   hold(add: string, drop: string): void;

@@ -187,9 +187,15 @@ impl Objects {
         self.own.unsent(|name| reading.holds(name))
     }
 
+    /// What the box has not taken yet of this replica's writes, in the rule's words.
+    #[must_use]
+    pub fn waiting(&self) -> Vec<(&Object, String)> {
+        self.own.waiting()
+    }
+
     /// What the box refused for good of this replica's writes, of which kind, with its sentence.
     #[must_use]
-    pub fn refusals(&self) -> Vec<(&Object, crate::replica::writes::Refusal, &str)> {
+    pub fn refusals(&self) -> Vec<(&Object, crate::replica::writes::Refusal, String)> {
         self.own.refusals()
     }
 
@@ -203,17 +209,23 @@ impl Objects {
             .unsigned(|name| reading.holds(name), |o| role::<E>(schema, o))
     }
 
-    /// [`Objects::unsent`] in posts of at most `most`, each change beside its signatures.
+    /// [`Objects::unsent`] in posts that each fit `fit` by the bytes `weight` gives an object, each
+    /// change beside its signatures.
     #[must_use]
     pub fn unsent_pieces<E: Schema>(
         &self,
         schema: &E::Vocabulary,
-        most: usize,
+        fit: crate::replica::writes::Fit,
+        weight: impl Fn(&Object) -> usize,
     ) -> Vec<Vec<&Object>> {
         let holding = self.rows.holding();
         let reading = holding.replica().read();
-        self.own
-            .pieces(|name| reading.holds(name), |o| role::<E>(schema, o), most)
+        self.own.pieces(
+            |name| reading.holds(name),
+            |o| role::<E>(schema, o),
+            fit,
+            weight,
+        )
     }
 }
 

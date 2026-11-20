@@ -366,6 +366,12 @@ app.scene("a conversation the device prefetched reads with no network, and one i
     `Promise.all([${linesOf([kept, lacked])}, ${contentNames}]).then(([lines, held]) => lines.length > 0 && lines.every((h) => held.includes(h)))`,
     { timeout: 20000 },
   )
+  // The device keeps each line it wrote as content alone once the box took it and its keys landed: its own record of
+  // one is let go then, so content is what a device that did not prefetch the second lacks.
+  await app.page.waitFor(
+    `${rowsOf("suzatary", "chain")}.then((rows) => (rows.find(([k]) => k === "objects:own/lines")?.[1].records ?? []).every((r) => r.answer !== "Taken"))`,
+    { timeout: 20000 },
+  )
   // A device that did not prefetch the second: its lines' content gone, its skeleton kept.
   const dropped = await app.page.evaluate<string[]>(linesOf([lacked]))
   await write("suzatary", "content", `(s) => ${JSON.stringify(dropped)}.forEach((h) => s.delete(h))`)

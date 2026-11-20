@@ -545,6 +545,195 @@ fn a_conversation_that_does_not_fold_is_a_finding() {
     );
 }
 
+/// One thing written into a conversation the box answers through claims.
+#[derive(Debug, Clone, Copy)]
+enum RoundStep {
+    /// A person's question.
+    Ask,
+    /// An act line: the owner's (a dismissal), which wakes a model, or the box's, which rides
+    /// along.
+    Act { owners: bool },
+    /// A claim step with a run of its own.
+    Claim,
+    /// The open round's join.
+    Join,
+    /// The open round's model asks for a call.
+    Call,
+    /// The open round's model answers, which closes it.
+    Answer,
+    /// The owner's stop.
+    Stop,
+}
+
+fn rounds() -> impl Strategy<Value = Vec<RoundStep>> {
+    proptest::collection::vec(
+        prop_oneof![
+            4 => Just(RoundStep::Ask),
+            2 => any::<bool>().prop_map(|owners| RoundStep::Act { owners }),
+            3 => Just(RoundStep::Claim),
+            2 => Just(RoundStep::Join),
+            2 => Just(RoundStep::Call),
+            3 => Just(RoundStep::Answer),
+            1 => Just(RoundStep::Stop),
+        ],
+        0..40,
+    )
+}
+
+/// What a script of rounds leaves, by turn index, read from what each step meant and never from
+/// where a line stands.
+#[derive(Debug, Default)]
+struct Rounds {
+    /// Each request no round covers yet, and whether it wakes a model.
+    queued: Vec<(usize, bool)>,
+    /// What the open round covers and the answers it wrote, if one is open.
+    open: Option<Vec<usize>>,
+}
+
+impl Rounds {
+    fn state(&self) -> suzatary_conversations::secretary::store::ConversationState {
+        use suzatary_conversations::secretary::store::ConversationState;
+        if self.open.is_some() {
+            ConversationState::Thinking
+        } else if self.queued.iter().any(|(_, wakes)| *wakes) {
+            ConversationState::Queued
+        } else {
+            ConversationState::Idle
+        }
+    }
+}
+
+/// An act line at `second`: the owner's, stamped by the gate, or the box's.
+fn act(second: u32, owners: bool) -> Entry {
+    use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
+    Entry::Said {
+        at: at(second),
+        turn: Turn::Act {
+            text: format!("{} dismissed a proposal", CAST.owner.name),
+            references: Vec::new(),
+        },
+        by: owners.then(|| {
+            Stamp::Actor(Speaker::at(
+                CAST.owner.actor,
+                suzatary_signatures::signatures::Seat::Operator,
+            ))
+        }),
+    }
+}
+
+/// A model's turn at `second`: one asking for a call, or an answer, which closes its round.
+fn answer(second: u32, calling: bool) -> Entry {
+    let calls = if calling {
+        vec![ToolCall {
+            verb: "todo_show".into(),
+            args: [("id".to_owned(), serde_json::json!("permit"))].into(),
+        }]
+    } else {
+        Vec::new()
+    };
+    said(
+        second,
+        Turn::Model {
+            text: if calling { "" } else { "done" }.to_owned(),
+            calls,
+        },
+    )
+}
+
+/// Every step of `script` written as the box writes it, through the claim, the join and the
+/// pushes of an open round, and the model of the rounds it comes to.
+fn answered_by_rounds(script: &[RoundStep]) -> (std::sync::Arc<Transcript>, Rounds) {
+    use suzatary_lines::secretary::run::Runs as _;
+    let memory = Memory::default();
+    let store = memory.conversations();
+    transcript::start(store, &id(), &opened()).expect("started");
+    // Every claim is made at the hour's last second, so every request is still within reach.
+    let now = at(3599);
+    let mut model = Rounds::default();
+    let mut turns = 0usize;
+    let mut run = None;
+    for (n, step) in script.iter().enumerate() {
+        let second = u32::try_from(n).expect("a count");
+        match step {
+            RoundStep::Ask => {
+                transcript::push(store, &id(), &said(second, person(0))).expect("pushed");
+                model.queued.push((turns, true));
+                turns += 1;
+            }
+            RoundStep::Act { owners } => {
+                transcript::push(store, &id(), &act(second, *owners)).expect("pushed");
+                model.queued.push((turns, *owners));
+                turns += 1;
+            }
+            RoundStep::Claim => {
+                if model.open.is_some() {
+                    continue;
+                }
+                let fresh = memory.runs.begin().expect("a run").run;
+                let claimed = transcript::claim(
+                    store,
+                    &id(),
+                    &fresh,
+                    now,
+                    transcript::Retry::Allowed,
+                    &|_| true,
+                    |_| panic!("every request is within reach"),
+                )
+                .expect("claims");
+                let wakes = model.queued.iter().any(|(_, wakes)| *wakes);
+                assert_eq!(
+                    claimed,
+                    if wakes {
+                        transcript::Claimed::Began
+                    } else {
+                        transcript::Claimed::Nothing
+                    },
+                    "a claim begins a round exactly when a request that wakes a model is queued"
+                );
+                if wakes {
+                    model.open = Some(model.queued.drain(..).map(|(turn, _)| turn).collect());
+                    run = Some(fresh);
+                }
+            }
+            RoundStep::Join => {
+                let (Some(open), Some(run)) = (&mut model.open, &run) else {
+                    continue;
+                };
+                transcript::join(store, &id(), run, now, &|_| true).expect("joins");
+                open.extend(model.queued.drain(..).map(|(turn, _)| turn));
+            }
+            RoundStep::Call | RoundStep::Answer => {
+                let (Some(open), Some(running)) = (&mut model.open, &run) else {
+                    continue;
+                };
+                let calling = matches!(step, RoundStep::Call);
+                let written =
+                    transcript::push_open(store, &id(), running, &[answer(second, calling)])
+                        .expect("pushed");
+                assert_eq!(written, transcript::Answering::Written, "the round is open");
+                if matches!(step, RoundStep::Answer) {
+                    model.open = None;
+                    run = None;
+                } else {
+                    open.push(turns);
+                }
+                turns += 1;
+            }
+            RoundStep::Stop => {
+                let stop = Entry::Stopped {
+                    at: at(second),
+                    by: CAST.owner.actor.to_owned(),
+                };
+                transcript::push(store, &id(), &stop).expect("pushed");
+                model = Rounds::default();
+                run = None;
+                turns += 1;
+            }
+        }
+    }
+    (transcript::read(store, &id()).expect("read"), model)
+}
+
 proptest! {
     /// A line is its shape and its words: joining what `split` takes apart, every slot kept,
     /// gives the line back, and a slot gone joins as words gone, never as the line.
@@ -675,9 +864,28 @@ proptest! {
         prop_assert_eq!(read, whole);
     }
 
-    /// The owed register is the queue: every turn `queue::delta` would send, and nothing else.
+    /// THE OWED LAW OVER ROUNDS: in a conversation the box answers through claims (a claim, its
+    /// joins, its answers pushed while it is open, a person's and the owner's turns between them,
+    /// a stop), the owed register is what this script left unanswered, read by a model of the
+    /// rounds that knows nothing of position: a request is owed until a round that covered it
+    /// closes or a stop rests on it, and a round's own answers until it closes. So a question said
+    /// after a round's last join and before its closing reply stays owed, and the state reads it.
     #[test]
-    fn owed_is_the_queue(script in steps()) {
+    fn owed_is_the_queue(script in rounds()) {
+        let (read, model) = answered_by_rounds(&script);
+        let owed: Vec<usize> = read.owed().into_iter().map(|(turn, _)| turn).collect();
+        let mut expected: Vec<usize> = model.queued.iter().map(|(turn, _)| *turn).chain(model.open.iter().flatten().copied()).collect();
+        expected.sort_unstable();
+        prop_assert_eq!(owed, expected, "{:?}", script);
+        let queued: Vec<usize> = read.queued().into_iter().collect();
+        prop_assert_eq!(queued, model.queued.iter().map(|(turn, _)| *turn).collect::<Vec<_>>());
+        prop_assert_eq!(read.state(), model.state());
+    }
+
+    /// With no claim written, every close settles everything beneath it, as before claims: the
+    /// owed register is then every turn `queue::delta` would send, and nothing else.
+    #[test]
+    fn without_claims_owed_is_the_positional_queue(script in steps()) {
         let lines = conversation(&script);
         let (_, read) = written(&lines);
         let file = Stored::of(&id(), &through_the_door(&lines)).expect("folds");

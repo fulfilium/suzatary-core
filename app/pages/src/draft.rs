@@ -1,5 +1,6 @@
-//! A topic not asked anything yet: the first send opens the conversation under the typed name,
-//! so the box keeps no conversation nobody spoke in; every send waits on the one open.
+//! A topic not asked anything yet: the first send seals the conversation's opening under the
+//! typed name and the question resting on it, handed to the box in one post, so the box keeps no
+//! conversation nobody spoke in; a send made meanwhile waits for the opening's seal.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -9,9 +10,7 @@ use viewtree::{Node, Program, view};
 use crate::chrome::{self, Chrome, Masthead, Shape, Status};
 use crate::composer::{self, Composer};
 use crate::places::Place;
-use crate::runtime::{
-    self, Act, Context, Outcome, Question, Questioning, Reach, Said, Secret, answered,
-};
+use crate::runtime::{self, Context, Reach, answered};
 
 /// The composer's key for the draft, a name no conversation can have.
 const DRAFT: &str = "new";
@@ -67,21 +66,15 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Draft {}
 
-fn say(id: &str, sent: composer::Sent) -> Effect {
-    Effect::Act {
+fn say(id: &str, sent: &composer::Sent) -> Effect {
+    Effect::Core {
         ask: Ask::Said(id.to_owned()),
-        act: Act::Question {
-            kind: Questioning::Say,
-            question: Question {
+        question: runtime::Core::Line {
+            line: runtime::Sealing::Say {
                 conversation: id.to_owned(),
-                after: 0,
-                text: sent.text,
-                references: sent.references,
-                files: sent.files,
+                question: runtime::Asking::of(sent),
             },
         },
-        secret: Secret::None,
-        told: runtime::Told::Held,
     }
 }
 
@@ -92,18 +85,19 @@ fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
             continue;
         };
         match &mut m.opened {
-            Opened::Yes(id) => effects.push(say(id, sent)),
+            Opened::Yes(id) => effects.push(say(id, &sent)),
             Opened::Opening(waiting) => waiting.push(sent),
             Opened::No => {
-                m.opened = Opened::Opening(vec![sent]);
                 effects.push(Effect::Core {
                     ask: Ask::Open,
                     question: runtime::Core::Line {
-                        line: runtime::Sealing::Open {
+                        line: runtime::Sealing::Begin {
                             title: m.name.clone(),
+                            say: runtime::Asking::of(&sent),
                         },
                     },
                 });
+                m.opened = Opened::Opening(vec![sent]);
             }
         }
     }
@@ -164,8 +158,14 @@ impl Program for Draft {
                         Opened::No | Opened::Yes(_) => Vec::new(),
                     };
                     match answered::<runtime::Sealed>(answer) {
+                        // The first send went with the opening; the rest rest on it.
                         Ok(runtime::Sealed { conversation: id }) => {
-                            let effects = waiting.into_iter().map(|s| say(&id, s)).collect();
+                            let outs = m.composer.sealed();
+                            let mut effects = composed(m, outs);
+                            effects.extend(waiting.iter().skip(1).map(|s| say(&id, s)));
+                            effects.push(Effect::Replace {
+                                href: Place::conversation(&id).href(),
+                            });
                             m.opened = Opened::Yes(id);
                             effects
                         }
@@ -181,23 +181,17 @@ impl Program for Draft {
                     }
                 }
                 Input::Answered {
-                    ask: Ask::Said(id),
+                    ask: Ask::Said(_),
                     answer,
-                } => match answered::<Outcome>(answer) {
-                    Ok(
-                        Outcome::Answered {
-                            answer: Said::Taken,
-                            ..
-                        }
-                        | Outcome::Already,
-                    ) => vec![Effect::Replace {
-                        href: Place::conversation(&id).href(),
-                    }],
-                    Ok(Outcome::Answered {
-                        answer: Said::Refused { e } | Said::Lost { e },
-                        ..
-                    })
-                    | Err(e) => vec![Effect::Toast { words: e }],
+                } => match answered::<runtime::Sealed>(answer) {
+                    Ok(_) => {
+                        let outs = m.composer.sealed();
+                        composed(m, outs)
+                    }
+                    Err(words) => {
+                        m.composer.released();
+                        vec![Effect::Toast { words }]
+                    }
                 },
                 Input::Answered {
                     ask: Ask::Composer(c),

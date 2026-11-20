@@ -10,14 +10,25 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 use prodrome_core::change::Change;
-use prodrome_core::event::Hash;
+use prodrome_core::event::{Envelope, Hash};
 use prodrome_core::schema::Schema;
+
+/// On which grounds a store's own rule refuses a change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ruling {
+    /// Never taken as it is: held back, with everything resting on it.
+    Final,
+    /// Sealed under rules older than the keeper's, so a newer writer seals it again.
+    Outdated,
+    /// Not yet: posted again later, as it is, and taken then if the rule takes it.
+    Later,
+}
 
 /// A change a store's own rule refuses: why it is held back, in the rule's words.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inadmissible {
     /// On which grounds.
-    pub grounds: crate::receipt::Grounds,
+    pub grounds: Ruling,
     /// The rule's sentence.
     pub reason: String,
 }
@@ -27,7 +38,16 @@ impl Inadmissible {
     #[must_use]
     pub fn finally(reason: impl Into<String>) -> Self {
         Self {
-            grounds: crate::receipt::Grounds::Final,
+            grounds: Ruling::Final,
+            reason: reason.into(),
+        }
+    }
+
+    /// Refused for now, in `reason`: the writer posts it again later.
+    #[must_use]
+    pub fn later(reason: impl Into<String>) -> Self {
+        Self {
+            grounds: Ruling::Later,
             reason: reason.into(),
         }
     }
@@ -54,17 +74,21 @@ impl Beside for () {
     }
 }
 
-/// What a rule reads of the post a change came in: its name, what the post carries beside it,
-/// what the rule read of the store it rules, and every change the post holds, this one included.
-pub struct Post<'a, A: Admission + ?Sized> {
+/// What a rule reads of the post a change came in: its name, what the post carries beside it, and
+/// what the rule read of the store it rules, with every change of the post taken before this one,
+/// and of the world beyond it. Never the rest of the post: a post is judged one change at a time.
+pub struct Post<'a, 'e, A: Admission + ?Sized> {
     /// The change's name.
     pub name: &'a Hash,
     /// What the post carries beside its objects.
     pub beside: &'a A::Beside,
-    /// What the rule read of the store, once for the post ([`Admission::held`]).
-    pub held: &'a A::Held,
-    /// Every change of the post.
-    pub changes: &'a [&'a Change<A::Schema>],
+    /// What the rule read of the store, once for the post ([`Admission::held`]), and each change
+    /// of the post taken before this one ([`Admission::take`]).
+    pub held: &'a A::Held<'e>,
+    /// What the rule reads beyond its own store.
+    pub world: &'a A::World,
+    /// The keys the post's signatures of this change name; the shared rule proves them.
+    pub signers: &'a [prodrome_core::sign::PublicKey],
 }
 
 /// A store's own rule for what a tab posts to it.
@@ -75,16 +99,24 @@ pub trait Admission {
     /// What a post carries beside its objects for this store.
     type Beside: Beside;
 
-    /// What the rule reads of the store it rules.
-    type Held;
-
-    /// That reading, of every event the store holds, made once per post under the store's lock.
-    fn held<'e>(events: impl Iterator<Item = &'e Self::Schema>) -> Self::Held
+    /// What the rule reads of the store it rules, borrowing the objects read.
+    type Held<'e>
     where
         Self::Schema: 'e;
 
+    /// What the rule reads beyond its own store, as the box holds it now.
+    type World: ?Sized;
+
+    /// That reading, of every object the store holds beside its name, made once per post under
+    /// the store's lock.
+    fn held(objects: &[(Hash, Envelope<Self::Schema>)]) -> Self::Held<'_>;
+
     /// Why the box refuses `change` beyond the shared rule, in its own words; none to take it.
-    fn refuses(change: &Change<Self::Schema>, post: &Post<'_, Self>) -> Option<Inadmissible>;
+    fn refuses(change: &Change<Self::Schema>, post: &Post<'_, '_, Self>) -> Option<Inadmissible>;
+
+    /// `held` with `change`, named `name`, taken in: what the next change of the post is judged
+    /// against.
+    fn take(held: &mut Self::Held<'_>, name: &Hash, change: &Change<Self::Schema>);
 }
 
 /// The shared rule alone, for a store whose writes need nothing more.
@@ -94,15 +126,17 @@ pub struct Shared<E>(PhantomData<E>);
 impl<E: Schema> Admission for Shared<E> {
     type Schema = E;
     type Beside = ();
-    type Held = ();
-
-    fn held<'e>(_: impl Iterator<Item = &'e E>) -> Self::Held
+    type Held<'e>
+        = ()
     where
-        E: 'e,
-    {
-    }
+        E: 'e;
+    type World = ();
 
-    fn refuses(_: &Change<E>, _: &Post<'_, Self>) -> Option<Inadmissible> {
+    fn held(_: &[(Hash, Envelope<E>)]) {}
+
+    fn refuses(_: &Change<E>, _: &Post<'_, '_, Self>) -> Option<Inadmissible> {
         None
     }
+
+    fn take((): &mut (), _: &Hash, _: &Change<E>) {}
 }

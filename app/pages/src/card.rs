@@ -1115,8 +1115,8 @@ pub(crate) fn effects<H, A, S>(
             Out::Act(key, act, secret, then) => {
                 let signed = match &act {
                     Act::Answer { at, .. } => at.from.clone(),
-                    Act::Question { .. }
-                    | Act::Round { .. }
+                    Act::Edit { .. }
+                    | Act::Regenerate { .. }
                     | Act::Rename { .. }
                     | Act::Forget { .. }
                     | Act::Erase { .. }

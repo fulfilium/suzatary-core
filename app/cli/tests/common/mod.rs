@@ -2156,7 +2156,7 @@ pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Ent
     use suzatary_lines::secretary::line_event::LineEvent;
     let (line, keys) = LineEvent::begin(poster(base), first, &Drawing).expect("a line");
     let id = line.conversation().as_str().to_owned();
-    handed(base, line, &keys, Vec::new());
+    let _ = handed(base, line, &keys, Vec::new());
     id
 }
 
@@ -2167,6 +2167,170 @@ pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Ent
 /// If the box serves no line of `id`, or does not take the rename.
 pub fn renamed(base: &str, id: &str, title: &str) {
     use suzatary_conversations::secretary::store::{Entry, Namer, Title};
+    let by = poster(base);
+    line_written(
+        base,
+        id,
+        &Entry::Titled {
+            at: next_instant(),
+            title: suzatary_memory::secretary::words::Words::kept(
+                Title::new(title).expect("a title"),
+            ),
+            by: Namer::Person {
+                actor: by.as_str().to_owned(),
+            },
+        },
+    );
+}
+
+/// `text` said in conversation `id` as a tab says it: a person's turn stamped as the poster on a
+/// device, over the conversation's heads, handed to the lines. Its line's name.
+///
+/// # Panics
+/// If the box serves no line of `id`, or does not take the turn.
+pub fn say(base: &str, id: &str, text: &str) -> prodrome_core::event::Hash {
+    say_with(base, id, text, Vec::new(), Vec::new())
+}
+
+/// [`say`] with what the turn points at and the files it names, each as the upload answered it.
+pub fn say_with(
+    base: &str,
+    id: &str,
+    text: &str,
+    references: Vec<suzatary_base::reference::Reference>,
+    attachments: Vec<suzatary_held::attachment::Attachment>,
+) -> prodrome_core::event::Hash {
+    let posted = sealed(base, id, &question(base, text, references, attachments));
+    let name = posted.name.clone();
+    let receipt = post_lines(base, &posted.body);
+    assert!(
+        receipt["adopted"]
+            .as_array()
+            .is_some_and(|adopted| adopted.iter().any(|n| n == name.as_str())),
+        "the box took the line: {receipt}"
+    );
+    name
+}
+
+/// A person's turn as the poster on a device says it.
+#[must_use]
+pub fn question(
+    base: &str,
+    text: &str,
+    references: Vec<suzatary_base::reference::Reference>,
+    attachments: Vec<suzatary_held::attachment::Attachment>,
+) -> suzatary_conversations::secretary::store::Entry {
+    let by = poster(base);
+    suzatary_conversations::secretary::store::Entry::Said {
+        at: next_instant(),
+        turn: suzatary_conversations::secretary::model::Turn::Person {
+            text: text.to_owned(),
+            references,
+            attachments,
+        },
+        by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
+            suzatary_inbox::secretary::stamp::Speaker::device(by.as_str()),
+        )),
+    }
+}
+
+/// A line sealed by the poster: its name, and the body of its post to the lines.
+pub struct Sealed {
+    pub name: prodrome_core::event::Hash,
+    pub body: serde_json::Value,
+}
+
+/// `entry` sealed into conversation `id` by the poster over the heads the box serves, signed by
+/// the owner's phone, as a post's body; nothing is posted.
+#[must_use]
+pub fn sealed(
+    base: &str,
+    id: &str,
+    entry: &suzatary_conversations::secretary::store::Entry,
+) -> Sealed {
+    use suzatary_lines::secretary::line_event::LineEvent;
+    let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
+    let skeleton = body_json(&mut answer);
+    let nodes: Vec<&serde_json::Value> = skeleton["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .filter(|n| n["header"]["conversation"] == id)
+        .collect();
+    let under: std::collections::BTreeSet<&str> = nodes
+        .iter()
+        .flat_map(|n| n["parents"].as_array().expect("parents").iter())
+        .filter_map(|p| p.as_str())
+        .collect();
+    let heads = nodes
+        .iter()
+        .filter_map(|n| n["hash"].as_str())
+        .filter(|n| !under.contains(n))
+        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .collect();
+    let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
+    let count = u32::try_from(nodes.len()).expect("a count");
+    let (line, keys) =
+        LineEvent::write(conversation, poster(base), count, entry, &Drawing).expect("a line");
+    let genesis = lines_genesis(base);
+    let change = prodrome_core::event::Envelope::Change(
+        prodrome_core::change::mk_change(genesis, heads, line).expect("a change"),
+    );
+    let name = prodrome_core::event::seal_hash(&change);
+    let signature: prodrome_core::event::Envelope<LineEvent> =
+        prodrome_core::event::Envelope::Signed(phone().sign(&name));
+    let body = serde_json::json!({
+        "objects": [
+            prodrome_core::event::canonical_envelope(&change),
+            prodrome_core::event::canonical_envelope(&signature),
+        ],
+        "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
+    });
+    Sealed { name, body }
+}
+
+/// `body` posted to the lines: the box's receipt.
+pub fn post_lines(base: &str, body: &serde_json::Value) -> serde_json::Value {
+    let mut taken = act(&format!("{base}/api/stores/lines/objects"), body);
+    body_json(&mut taken)
+}
+
+/// Why the box refused the line `sealed` names, once posted.
+pub fn refused_line(base: &str, sealed: &Sealed) -> String {
+    let receipt = post_lines(base, &sealed.body);
+    receipt["refused"]
+        .as_array()
+        .and_then(|refused| refused.iter().find(|r| r["hash"] == sealed.name.as_str()))
+        .and_then(|r| r["reason"].as_str())
+        .unwrap_or_else(|| panic!("the box refused {}: {receipt}", sealed.name))
+        .to_owned()
+}
+
+/// Conversation `id`'s answer stopped as a tab stops it: a `Stopped` line by the poster over the
+/// conversation's heads, handed to the lines.
+///
+/// # Panics
+/// If the box serves no line of `id`, or does not take the stop.
+pub fn stop(base: &str, id: &str) -> prodrome_core::event::Hash {
+    use suzatary_conversations::secretary::store::Entry;
+    let by = poster(base);
+    line_written(
+        base,
+        id,
+        &Entry::Stopped {
+            at: next_instant(),
+            by: by.as_str().to_owned(),
+        },
+    )
+}
+
+/// `entry` written to conversation `id` by the poster, over the heads of the conversation the
+/// box serves, and handed to the lines: its line's name.
+fn line_written(
+    base: &str,
+    id: &str,
+    entry: &suzatary_conversations::secretary::store::Entry,
+) -> prodrome_core::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
     let skeleton = body_json(&mut answer);
@@ -2188,18 +2352,11 @@ pub fn renamed(base: &str, id: &str, title: &str) {
         .filter(|n| !under.contains(n))
         .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
         .collect();
-    let by = poster(base);
-    let entry = Entry::Titled {
-        at: next_instant(),
-        title: suzatary_memory::secretary::words::Words::kept(Title::new(title).expect("a title")),
-        by: Namer::Person {
-            actor: by.as_str().to_owned(),
-        },
-    };
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
     let count = u32::try_from(nodes.len()).expect("a count");
-    let (line, keys) = LineEvent::write(conversation, by, count, &entry, &Drawing).expect("a line");
-    handed(base, line, &keys, heads);
+    let (line, keys) =
+        LineEvent::write(conversation, poster(base), count, entry, &Drawing).expect("a line");
+    handed(base, line, &keys, heads)
 }
 
 /// The actor `base` maps this test's peer to.
@@ -2219,7 +2376,7 @@ fn handed(
     line: suzatary_lines::secretary::line_event::LineEvent,
     keys: &[suzatary_memory::secretary::locked_text::TextKey],
     deps: Vec<prodrome_core::event::Hash>,
-) {
+) -> prodrome_core::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let genesis = lines_genesis(base);
     let change = prodrome_core::event::Envelope::Change(
@@ -2243,6 +2400,7 @@ fn handed(
             .is_some_and(|adopted| adopted.iter().any(|n| n == name.as_str())),
         "the box took the line: {receipt}"
     );
+    name
 }
 
 /// The lines' genesis, once the box has begun the lines.
@@ -2267,7 +2425,9 @@ fn lines_genesis(base: &str) -> prodrome_core::event::Hash {
 pub fn next_instant() -> prodrome_core::literal::Datetime {
     static DRAWN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = DRAWN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    prodrome_core::literal::Datetime::new(2026, 11, 17, 9, n / 60 % 60, n % 60, n / 3600)
+    // In the minute before the box's clock (`now`), a millisecond apart: a tab's line is dated
+    // by its own clock, which the box takes up to a little ahead of its own.
+    prodrome_core::literal::Datetime::new(2026, 9, 2, 11, 59, n / 1000 % 60, n % 1000 * 1000)
         .expect("an instant")
 }
 
@@ -2286,16 +2446,12 @@ impl suzatary_base::capability::Entropy for Drawing {
     }
 }
 
-/// `text` said in conversation `id`, read once its round has ended.
+/// `text` said in conversation `id` as a tab says it, read once its round has ended.
 ///
 /// # Panics
-/// If the box does not take the turn with 202, or the round does not end in time.
+/// If the box does not take the turn, or the round does not end in time.
 pub fn said(base: &str, id: &str, text: &str) -> serde_json::Value {
-    let answer = act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": text }),
-    );
-    assert_eq!(status(&answer), 202);
+    let _ = say(base, id, text);
     settled(base, id)
 }
 
@@ -4220,16 +4376,18 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
         .expect("a limit"),
         about: suzatary_api::query::about(asked("about")).expect("an about"),
     };
-    let (inbox, conversations) = replicas(base);
-    let stored = conversations
-        .iter()
-        .find(|stored| stored.id.as_str() == id)
-        .unwrap_or_else(|| panic!("no conversation named {id}"));
+    let mut lines = held_lines(base);
+    let inbox = suzatary_inbox::secretary::inbox::Fold::of(&pulled(base, "inbox"));
+    let stored = lines
+        .lines
+        .transcript(&suzatary_base::conversation_id::ConversationId::new(id).expect("an id"))
+        .unwrap_or_else(|| panic!("no conversation named {id}"))
+        .expect("the conversation reads");
     let mut memory = get(&format!("{base}/api/secretary/memory"));
     let memory: Option<suzatary_topics::wire::topics::MemoryPayload> =
         (status(&memory) == 200).then(|| memory.body_mut().read_json().expect("a memory"));
     let read = suzatary_topics::secretary::readings::conversation(
-        stored,
+        &stored,
         &inbox,
         &window,
         &suzatary_topics::secretary::readings::Dress {
@@ -4538,4 +4696,22 @@ pub fn a_plan_store(root: &std::path::Path) -> PathBuf {
         "base = 1\n\n[[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n",
     );
     dir
+}
+
+/// The body of an erasure of turns `turns` of conversation `id`, each named by its line as the
+/// tab's reading names it.
+pub fn erasing(base: &str, id: &str, turns: &[usize]) -> serde_json::Value {
+    let read = reading(base, id, &[]);
+    let rows = read["turns"].as_array().expect("turns");
+    let lines: Vec<serde_json::Value> = turns
+        .iter()
+        .map(|turn| {
+            let at = rows
+                .iter()
+                .position(|row| row["index"] == *turn)
+                .unwrap_or_else(|| panic!("no turn {turn} drawn"));
+            read["lines"][at].clone()
+        })
+        .collect();
+    serde_json::json!({ "lines": lines })
 }

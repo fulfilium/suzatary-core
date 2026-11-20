@@ -64,9 +64,6 @@ impl Literals {
     }
 }
 
-/// A replica's post is a whole chain segment, not one action line.
-const MAX_OBJECTS_BYTES: usize = 4_194_304;
-
 fn moment(asked: &Asked, chain: &Chained) -> Result<Datetime, Refusal> {
     query::moment("t", asked.query("t"), chain.caps.secretary.clock.now())
 }
@@ -123,9 +120,21 @@ impl Params for Wanted {
 }
 
 impl Body for Literals {
-    const CAP: usize = MAX_OBJECTS_BYTES;
+    const CAP: usize = suzatary_api::routes::MAX_POSTED_BYTES;
 
     type Wire = wire::PostedObjects;
+
+    /// As every body is read, but a post whose shape this build does not read is another build's,
+    /// never the post's own fault: answered as such, so the page posts it again.
+    async fn read(body: axum::body::Body, state: &State) -> Result<Self, Refusal> {
+        let object = super::body::object(body, Self::CAP).await?;
+        let wire = serde_json::from_value(object).map_err(|failed| {
+                Refusal::other_build(format!(
+                    "this box runs another build and does not read this post ({failed}): it goes again once the box and this page agree"
+                ))
+            })?;
+        Self::parse(wire, state)
+    }
 
     fn parse(posted: wire::PostedObjects, _: &State) -> Result<Self, Refusal> {
         Ok(Self {

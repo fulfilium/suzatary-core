@@ -26,12 +26,15 @@ const vectors: [string, Sample, d.Decoder<unknown>][] = Object.entries(read.v).f
 
 type At = { path: Path; value: unknown }
 
-// Every value and where it is, except inside a term's JSON, which is open: walked generically, kept whole.
+// The fields whose JSON is open, kept whole by the decoder: a term's, and an upload's file as a turn holds it.
+const OPEN: ReadonlySet<string | number | undefined> = new Set(["spec", "attachment"])
+
+// Every value and where it is, except inside an open field: walked generically, kept whole.
 const everywhere = (u: unknown, path: Path = []): At[] => [
   { path, value: u },
   ...(Array.isArray(u)
     ? u.flatMap((x, i) => everywhere(x, [...path, i]))
-    : typeof u === "object" && u !== null && path.at(-1) !== "spec"
+    : typeof u === "object" && u !== null && !OPEN.has(path.at(-1))
       ? Object.entries(u).flatMap(([k, x]) => everywhere(x, [...path, k]))
       : []),
 ]
@@ -52,7 +55,7 @@ const at = (u: unknown, [k, ...rest]: Path, f: (u: unknown) => unknown | undefin
 const fields = (s: Sample) =>
   everywhere(s.value).filter(({ path }) => typeof path.at(-1) === "string" && !isMap(s, path.slice(0, -1)))
 const objects = (s: Sample) =>
-  everywhere(s.value).filter(({ value, path }) => isObject(value) && path.at(-1) !== "spec" && !isMap(s, path))
+  everywhere(s.value).filter(({ value, path }) => isObject(value) && !OPEN.has(path.at(-1)) && !isMap(s, path))
 const leaves = (s: Sample) => fields(s).filter(({ value }) => ["string", "number", "boolean"].includes(typeof value))
 const retyped = (u: unknown): unknown => (typeof u === "boolean" ? "yes" : true)
 

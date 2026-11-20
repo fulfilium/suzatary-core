@@ -63,6 +63,9 @@ pub(crate) struct Sent {
     pub(crate) references: Vec<String>,
     /// Kept on the box.
     pub(crate) files: Vec<AttachmentRow>,
+    /// Each file the box answered an upload with, as a turn holds it, in `files`' order: what a
+    /// tab seals into its turn.
+    pub(crate) attachments: Vec<serde_json::Value>,
     pub(crate) mode: Mode,
 }
 
@@ -144,12 +147,17 @@ pub(crate) struct Composer {
     text: String,
     references: Vec<String>,
     files: Vec<AttachmentRow>,
+    /// The upload's answer for each file, by its id ([`Sent::attachments`]).
+    kept: BTreeMap<String, serde_json::Value>,
     mode: Mode,
     picks: u32,
     uploading: Vec<(u32, Picked)>,
     /// By the number each was picked with, so an answer reaches only its own file.
     held: BTreeMap<u32, Held>,
     others: Vec<String>,
+    /// A question sent and not sealed yet: its words stay in the box until the tab has kept its
+    /// line, so a page closed in between loses nothing ([`Composer::sealed`]).
+    sealing: Option<String>,
 }
 
 fn register(draft: &str) -> Register {
@@ -173,11 +181,13 @@ impl Composer {
                 text: String::new(),
                 references,
                 files: Vec::new(),
+                kept: BTreeMap::new(),
                 mode: Mode::Asking,
                 picks: 0,
                 uploading: Vec::new(),
                 held: BTreeMap::new(),
                 others: Vec::new(),
+                sealing: None,
             },
             Local::Draft {
                 id: draft.to_owned(),
@@ -260,11 +270,37 @@ impl Composer {
         out
     }
 
+    /// The question sent is the device's: the box empties, or, where the person typed past it
+    /// meanwhile, keeps what they typed and lets the chips and files go with the question.
+    pub(crate) fn sealed(&mut self) -> Vec<Out> {
+        match self.sealing.take() {
+            Some(sent) if self.text.trim() == sent => self.emptied(),
+            Some(_) => {
+                self.references.clear();
+                self.files.clear();
+                self.kept.clear();
+                vec![self.keep("Settled")]
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// The question sent was refused before it was kept: its words are still in the box.
+    pub(crate) fn released(&mut self) {
+        self.sealing = None;
+    }
+
     pub(crate) fn failed(&mut self, sent: Sent) -> Vec<Out> {
+        self.sealing = None;
         if !self.empty() || !self.references.is_empty() {
             return Vec::new();
         }
         self.references = sent.references;
+        self.kept = sent
+            .attachments
+            .into_iter()
+            .filter_map(|a| Some((a.get("id")?.as_str()?.to_owned(), a)))
+            .collect();
         self.files = sent.files;
         self.mode = sent.mode;
         self.typed(sent.text)
@@ -295,6 +331,7 @@ impl Composer {
             }
             Ev::Unfiled(id) => {
                 self.files.retain(|f| f.id != id);
+                self.kept.remove(&id);
                 Vec::new()
             }
             Ev::KeepPrivate(id) => match self.held.get_mut(&id) {
@@ -338,6 +375,7 @@ impl Composer {
     fn emptied(&mut self) -> Vec<Out> {
         self.references.clear();
         self.files.clear();
+        self.kept.clear();
         self.uploading.clear();
         self.held.clear();
         self.mode = Mode::Asking;
@@ -345,7 +383,7 @@ impl Composer {
     }
 
     fn send(&mut self) -> Vec<Out> {
-        if self.text.trim().is_empty() && self.files.is_empty() {
+        if self.text.trim().is_empty() && self.files.is_empty() || self.sealing.is_some() {
             return Vec::new();
         }
         if !self.uploading.is_empty() {
@@ -358,8 +396,19 @@ impl Composer {
             text: self.text.trim().to_owned(),
             references: self.references.clone(),
             files: self.files.clone(),
+            attachments: self
+                .files
+                .iter()
+                .filter_map(|f| self.kept.get(&f.id).cloned())
+                .collect(),
             mode: self.mode.clone(),
         };
+        // A question is sealed in the tab: its words stay until it is kept. An edit is the box's
+        // act, and empties the box at once.
+        if self.mode == Mode::Asking {
+            self.sealing = Some(sent.text.clone());
+            return vec![Out::Send(sent)];
+        }
         let mut out = self.emptied();
         out.insert(0, Out::Send(sent));
         out
@@ -379,10 +428,13 @@ impl Composer {
                 };
                 match answered::<Uploaded>(a) {
                     // The box keeps a file's bytes, not its name: the turn names it as it was picked.
-                    Ok(Uploaded::Kept { file }) => self.filed(AttachmentRow {
-                        name: picked.name,
-                        ..file
-                    }),
+                    Ok(Uploaded::Kept { file, attachment }) => self.filed(
+                        AttachmentRow {
+                            name: picked.name,
+                            ..file
+                        },
+                        &attachment,
+                    ),
                     Ok(Uploaded::Sensitive { why, folder }) => {
                         self.held.insert(
                             id,
@@ -401,7 +453,7 @@ impl Composer {
             // A file the owner dropped, or one whose question was cancelled, is no longer held:
             // its answer attaches nothing.
             Asking::Keep(id) => match (self.held.remove(&id), answered::<Uploaded>(a)) {
-                (Some(_), Ok(Uploaded::Kept { file })) => self.filed(file),
+                (Some(_), Ok(Uploaded::Kept { file, attachment })) => self.filed(file, &attachment),
                 (None, _) | (Some(_), Ok(Uploaded::Sensitive { .. })) => Vec::new(),
                 (Some(Held::Asking(w) | Held::Keeping(w)), Err(e)) => {
                     self.held.insert(id, Held::Asking(w));
@@ -411,8 +463,11 @@ impl Composer {
         }
     }
 
-    fn filed(&mut self, file: AttachmentRow) -> Vec<Out> {
+    fn filed(&mut self, file: AttachmentRow, attachment: &impl Serialize) -> Vec<Out> {
         if !self.files.iter().any(|f| f.id == file.id) {
+            if let Ok(attachment) = serde_json::to_value(attachment) {
+                self.kept.insert(file.id.clone(), attachment);
+            }
             self.files.push(file);
         }
         Vec::new()
@@ -609,6 +664,7 @@ mod tests {
             .into_iter()
             .find_map(|o| if let Out::Send(s) = o { Some(s) } else { None });
         let sent = sent.expect("a written box sends");
+        c.sealed();
         assert!(c.empty());
         c.update(Ev::Typed("next".to_owned()));
         c.failed(sent.clone());
@@ -619,5 +675,26 @@ mod tests {
         c.update(Ev::Typed(String::new()));
         c.failed(sent);
         assert_eq!(c.text, "first", "into an empty box it comes back");
+    }
+
+    /// A question's words stay in the box until the tab has kept its line, so a page closed just
+    /// after Send loses nothing; a second Send meanwhile sends nothing, and what is typed past the
+    /// question meanwhile stays when it is kept.
+    #[test]
+    fn a_question_stays_in_the_box_until_it_is_kept() {
+        let sends = |outs: Vec<Out>| outs.iter().filter(|o| matches!(o, Out::Send(_))).count();
+        let (mut c, _) = Composer::of("c", &[]);
+        c.update(Ev::Typed("first".to_owned()));
+        assert_eq!(sends(c.update(Ev::Send)), 1);
+        assert_eq!(c.text, "first", "not kept yet");
+        assert_eq!(sends(c.update(Ev::Send)), 0, "one question, sent once");
+        c.sealed();
+        assert!(c.empty(), "kept, the box empties");
+
+        c.update(Ev::Typed("second".to_owned()));
+        assert_eq!(sends(c.update(Ev::Send)), 1);
+        c.update(Ev::Typed("second, and a third".to_owned()));
+        c.sealed();
+        assert_eq!(c.text, "second, and a third", "what was typed since stays");
     }
 }

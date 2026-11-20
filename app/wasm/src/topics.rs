@@ -20,8 +20,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
 
-crate::object_rows::objects_store!(Memberships = MembershipEvent);
-crate::object_rows::objects_store!(TopicAliases = AliasEvent);
+crate::object_rows::objects_store!(Memberships = MembershipEvent, written);
+crate::object_rows::objects_store!(TopicAliases = AliasEvent, written);
 
 /// The topics both classes' objects read as, read once.
 #[wasm_bindgen]

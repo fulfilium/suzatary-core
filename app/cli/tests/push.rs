@@ -27,11 +27,8 @@ fn open(base: &str) -> String {
     common::opened(base, "A morning")
 }
 
-fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
-    common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": text}),
-    )
+fn say(base: &str, id: &str, text: &str) {
+    let _ = common::say(base, id, text);
 }
 
 /// Poll for the push, not just for idle: the worker writes the final turn and only then pushes,
@@ -58,7 +55,7 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     );
     let id = open(&base);
 
-    assert_eq!(common::status(&say(&base, &id, "What changed?")), 202);
+    say(&base, &id, "What changed?");
     common::settled(&base, &id);
 
     let pushed = pushed(&fakes);
@@ -100,7 +97,7 @@ fn a_connected_subscriber_gets_no_push_at_all() {
     // Held for the whole scene: dropping `response` would close the subscription.
     let _held = response;
 
-    assert_eq!(common::status(&say(&base, &id, "What changed?")), 202);
+    say(&base, &id, "What changed?");
     common::settled(&base, &id);
 
     assert_eq!(

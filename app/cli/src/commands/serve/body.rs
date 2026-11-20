@@ -58,7 +58,10 @@ impl Body for () {
 }
 
 /// The body, capped and parsed as one JSON object.
-async fn object(body: axum::body::Body, cap: usize) -> Result<serde_json::Value, Refusal> {
+pub(super) async fn object(
+    body: axum::body::Body,
+    cap: usize,
+) -> Result<serde_json::Value, Refusal> {
     let bytes = axum::body::to_bytes(body, cap)
         .await
         .map_err(|_| Refusal::bad_request(format!("the body is capped at {cap} bytes")))?;

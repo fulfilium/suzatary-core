@@ -61,6 +61,13 @@
       ]
     }
   ],
+  "lines": [
+    "cbc23509b1201a83ddd03c815d37c00ff50a551bbeedfc4767b8174249deaf13",
+    "2929a192f5c4488e0bc8fbdc829e771fa1f67e69cd0ce4b391ffd5b3b8eb33b5",
+    "2c5f73f623b7eeb2cf4bba2de78e689961e511d34c7a02051fc55bfe46619032",
+    "75025ff13a7aa06a035825233c408e8b274a3fb42c0dfd68e0bc18b132b22a3d"
+  ],
+  "waiting": [],
   "proposals": [
     {
       "index": 0,

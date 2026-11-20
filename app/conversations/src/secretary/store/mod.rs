@@ -50,7 +50,7 @@ pub use said::Said;
 pub use scope::Scope;
 pub use standing::{Revised, Standing, refused};
 pub use start::{Begun, Start};
-pub use state::{ConversationState, state};
+pub use state::ConversationState;
 pub use stored::{NotAConversation, Stored, heading, stopped_by};
 pub use title::{NotATitle, Title};
 

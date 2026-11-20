@@ -51,7 +51,8 @@ impl Said {
             | Entry::Coding { .. }
             | Entry::Erased { .. }
             | Entry::Resealed { .. }
-            | Entry::Began { .. } => None,
+            | Entry::Began { .. }
+            | Entry::Again { .. } => None,
         }
     }
 }

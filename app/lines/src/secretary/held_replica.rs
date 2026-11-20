@@ -58,6 +58,32 @@ pub enum Sealing {
     },
     /// A conversation set up from a template, titled by it.
     SetUp(TemplateId),
+    /// A person's question in a conversation the tab reads, its own opening line among them.
+    Say {
+        conversation: ConversationId,
+        text: String,
+        references: Vec<suzatary_base::reference::Reference>,
+        /// Each file as the uploads hold it, named as the person named it.
+        attachments: Vec<suzatary_held::attachment::Attachment>,
+        /// Where the person asks from: a device, or the box's terminal.
+        seat: suzatary_signatures::signatures::Seat,
+    },
+    /// The answer of a conversation the tab reads stopped.
+    Stop { conversation: ConversationId },
+}
+
+/// A conversation as a tab reads it: whole, or lacking lines its skeleton names.
+#[derive(Debug, Clone)]
+pub enum Whole {
+    /// Read from every line, or why its lines are no conversation.
+    Read(
+        Result<
+            std::sync::Arc<crate::secretary::transcript::Transcript>,
+            suzatary_conversations::secretary::store::NotAConversation,
+        >,
+    ),
+    /// This many of its lines are not held yet: a reading asks for them first.
+    Lacking(usize),
 }
 
 /// Why a tab cannot seal a line now.
@@ -176,44 +202,53 @@ impl HeldReplica {
             .word()
             .and_then(|word| word.geneses.first().cloned())
             .ok_or(NotSealed::Unpulled)?;
+        let onto = |conversation: ConversationId, entry: Entry| {
+            let (deps, held) = self.heads(&conversation)?;
+            let (line, keys) =
+                LineEvent::write(conversation, actor.clone(), held, &entry, entropy)?;
+            Ok::<_, NotSealed>((line, keys, deps))
+        };
         let (line, keys, deps) = match sealing {
             Sealing::Rename {
                 conversation,
                 title,
-            } => {
-                let lines: Vec<&crate::wire::lines::SkeletonNode> = self
-                    .outlines
-                    .given()
-                    .filter(|node| {
-                        matches!(&node.header, crate::wire::lines::NodeHeader::Line {
-                            conversation: of, ..
-                        } if of == conversation.as_str())
-                    })
-                    .collect();
-                if lines.is_empty() {
-                    return Err(NotSealed::Unknown(conversation));
-                }
-                let under: BTreeSet<&str> = lines
-                    .iter()
-                    .flat_map(|node| node.parents.iter().map(String::as_str))
-                    .collect();
-                let deps: Vec<Hash> = lines
-                    .iter()
-                    .filter(|node| !under.contains(node.hash.as_str()))
-                    .filter_map(|node| Hash::new(node.hash.clone()).ok())
-                    .collect();
-                let entry = Entry::Titled {
+            } => onto(
+                conversation,
+                Entry::Titled {
                     at,
                     title: Words::kept(title),
                     by: Namer::Person {
                         actor: actor.as_str().to_owned(),
                     },
-                };
-                let held = u32::try_from(lines.len()).unwrap_or(u32::MAX);
-                let (line, keys) =
-                    LineEvent::write(conversation, actor.clone(), held, &entry, entropy)?;
-                (line, keys, deps)
-            }
+                },
+            )?,
+            Sealing::Say {
+                conversation,
+                text,
+                references,
+                attachments,
+                seat,
+            } => onto(
+                conversation,
+                Entry::Said {
+                    at,
+                    turn: suzatary_conversations::secretary::model::Turn::Person {
+                        text,
+                        references,
+                        attachments,
+                    },
+                    by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
+                        suzatary_inbox::secretary::stamp::Speaker::at(actor.as_str(), seat),
+                    )),
+                },
+            )?,
+            Sealing::Stop { conversation } => onto(
+                conversation,
+                Entry::Stopped {
+                    at,
+                    by: actor.as_str().to_owned(),
+                },
+            )?,
             Sealing::Open { title } => {
                 let entry = Entry::Opened {
                     at,
@@ -248,9 +283,37 @@ impl HeldReplica {
         Ok((owned, name, moved))
     }
 
+    /// The heads of `conversation` among the lines read, own lines included, and how many lines
+    /// it holds.
+    fn heads(&self, conversation: &ConversationId) -> Result<(Vec<Hash>, u32), NotSealed> {
+        let lines: Vec<&crate::wire::lines::SkeletonNode> = self
+            .outlines
+            .given()
+            .filter(|node| {
+                matches!(&node.header, crate::wire::lines::NodeHeader::Line {
+                    conversation: of, ..
+                } if of == conversation.as_str())
+            })
+            .collect();
+        if lines.is_empty() {
+            return Err(NotSealed::Unknown(conversation.clone()));
+        }
+        let under: BTreeSet<&str> = lines
+            .iter()
+            .flat_map(|node| node.parents.iter().map(String::as_str))
+            .collect();
+        let deps = lines
+            .iter()
+            .filter(|node| !under.contains(node.hash.as_str()))
+            .filter_map(|node| Hash::new(node.hash.clone()).ok())
+            .collect();
+        Ok((deps, u32::try_from(lines.len()).unwrap_or(u32::MAX)))
+    }
+
     /// `owned` taken, whoever made it: another tab's writes, or the device's own read back; each
-    /// line's print held.
-    pub fn take_own(&mut self, owned: &[Own<OwnLine>]) -> Moved {
+    /// line's print held. What moved, and how many of `owned` were new here or raised an answer.
+    pub fn take_own(&mut self, owned: &[Own<OwnLine>]) -> (Moved, usize) {
+        let fresh = self.own.moves(owned);
         let prints: Vec<(Hash, Vec<u8>)> = owned
             .iter()
             .filter(|own| matches!(own.node, OwnLine::Line { .. }))
@@ -263,7 +326,7 @@ impl HeldReplica {
             .collect();
         self.lines.hold(prints, &[]);
         self.own.apply(owned);
-        self.moving(|_| ()).1
+        (self.moving(|_| ()).1, fresh)
     }
 
     /// A move of the own writes made by `step`: what it joined in, and what it moved.
@@ -276,14 +339,42 @@ impl HeldReplica {
         (owned, moved)
     }
 
-    /// The own writes the box has not taken and may take, beside what is held, landed or not, in
-    /// posts of at most `most`, each line beside its signatures.
+    /// Each own write the box took, beside whether the device may let its own record of it go:
+    /// once the landed rows hold every key of a line, or the box retired it, since its record is
+    /// the one other place they are kept; a signature's at once.
     #[must_use]
-    pub fn unsent(&self, most: usize) -> Vec<Vec<&OwnLine>> {
+    pub fn own_taken(&self) -> Vec<(&OwnLine, bool)> {
+        let landed = self.kept.rows.landed();
+        let keys = landed.keys();
+        // A key an erasure or a reseal retired is never served again: its record need not wait.
+        let retired = self.outlines.retired(&self.pending(), &|_| true);
+        self.own
+            .iter()
+            .filter(|own| own.answer == Answer::Taken)
+            .map(|own| {
+                let free = match &own.node {
+                    OwnLine::Line { keys: opens, .. } => opens
+                        .iter()
+                        .all(|(name, _)| keys.holds(name) || retired.contains(name)),
+                    OwnLine::Signature { .. } => true,
+                };
+                (&own.node, free)
+            })
+            .collect()
+    }
+
+    /// The own writes the box has not taken and may take, beside what is held, landed or not, in
+    /// posts that each fit `fit` by the bytes `weight` gives a line, each line beside its signatures.
+    #[must_use]
+    pub fn unsent(
+        &self,
+        fit: suzatary_store::replica::writes::Fit,
+        weight: impl Fn(&OwnLine) -> usize,
+    ) -> Vec<Vec<&OwnLine>> {
         let holding = self.kept.rows.holding();
         let reading = holding.replica().read();
         self.own
-            .pieces(|name| reading.holds(name), OwnLine::role, most)
+            .pieces(|name| reading.holds(name), OwnLine::role, fit, weight)
     }
 
     /// The own lines no signature written here covers.
@@ -379,7 +470,7 @@ impl HeldReplica {
     #[must_use]
     pub fn bare(&self) -> BTreeSet<Hash> {
         let holding = self.kept.rows.holding();
-        let ring = holding.keys();
+        let ring = holding.keys().clone().union(&self.own_keys(holding.keys()));
         let pending: BTreeSet<Hash> = self.pending().iter().map(|n| n.name().clone()).collect();
         self.lines
             .bare(|key| ring.holds(key))
@@ -545,6 +636,36 @@ impl HeldReplica {
         }
     }
 
+    /// The keys of every own line that `held` lacks, less each a line held kills (an erasure, a
+    /// reseal), as a landed key is let go. An own line's keys open its words after the box took
+    /// it too: the tab holds its print, so it never fetches the line's content, nor a key the box
+    /// would hand beside it, and the rows may never hold the key.
+    fn own_keys(&self, held: &KeyRing) -> KeyRing {
+        let mut keys = KeyRing::default();
+        for written in self.own.iter() {
+            if let OwnLine::Line { keys: opens, .. } = &written.node {
+                keys = keys.union(opens);
+            }
+        }
+        let already: BTreeSet<KeyName> = keys
+            .iter()
+            .map(|(name, _)| name.clone())
+            .filter(|name| held.holds(name))
+            .collect();
+        let keys = keys.without(&already);
+        if keys.is_empty() {
+            return keys;
+        }
+        // What a line held kills, and what the box's rule retires over the skeleton the tab
+        // holds, an erasure whose content it never fetched included.
+        let mut dead = self.lines.dead(&|name| keys.holds(name));
+        dead.extend(
+            self.outlines
+                .retired(&self.pending(), &|name| keys.holds(name)),
+        );
+        keys.without(&dead)
+    }
+
     /// `step` taken, and the readings told the landed row it leaves.
     fn moving<A>(&mut self, step: impl FnOnce(&mut LinePulling) -> A) -> (A, Moved) {
         let landed = self.kept.rows.landed();
@@ -552,18 +673,13 @@ impl HeldReplica {
         let taken = step(&mut self.kept.rows);
         let landed = self.kept.rows.landed();
         let reading = landed.replica().read();
-        let mut keys = landed.keys().clone();
         let mut own: BTreeMap<&Hash, &Parsed> = BTreeMap::new();
         for line in self
             .own
             .standing(|name| reading.holds(name), reading.gone())
         {
-            if let OwnLine::Line {
-                node, keys: opens, ..
-            } = line
-            {
+            if let OwnLine::Line { node, .. } = line {
                 own.insert(node.name(), node);
-                keys = keys.union(opens);
             }
         }
         let came: Vec<Parsed> = reading
@@ -583,6 +699,8 @@ impl HeldReplica {
         } else {
             self.outlines.hold(came, &went)
         };
+        // After the outline holds what landed, so an erasure that came retires an own line's key.
+        let keys = landed.keys().clone().union(&self.own_keys(landed.keys()));
         let rekeyed = self.lines.rekey(keys);
         touched.extend(self.outlines.naming(&rekeyed));
         let moved = if (landed.generation(), landed.replica().epoch()) == was {
@@ -656,6 +774,20 @@ impl HeldReplica {
             erased.entry(name).or_default();
         }
         erased
+    }
+
+    /// Conversation `id` read as its transcript, from every line its skeleton names: the order of
+    /// its turns, what is queued and the claims are readings of the conversation whole, so a tab
+    /// that holds a window of it reads nothing and is told how many lines it lacks. `None` for a
+    /// conversation the tab does not hold.
+    pub fn transcript(&mut self, id: &ConversationId) -> Option<Whole> {
+        let lacking = self
+            .lacking(&Scope::Conversations(BTreeSet::from([id.clone()])))
+            .len();
+        if lacking > 0 {
+            return Some(Whole::Lacking(lacking));
+        }
+        self.lines.transcript(id).map(Whole::Read)
     }
 
     /// The nodes a pull's pieces read that the landed row's readings do not hold.

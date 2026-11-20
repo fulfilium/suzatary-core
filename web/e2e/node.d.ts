@@ -54,6 +54,13 @@ declare module "node:child_process" {
     args: readonly string[],
     options: { readonly encoding: "utf8"; readonly env?: Record<string, string | undefined>; readonly timeout?: number },
   ): string;
+  /** The same, beside the caller: `done` is told how it ended. */
+  export function execFile(
+    command: string,
+    args: readonly string[],
+    options: { readonly encoding: "utf8"; readonly timeout?: number },
+    done: (error: Error | null, stdout: string, stderr: string) => void,
+  ): ChildProcess;
 }
 
 declare module "node:fs" {

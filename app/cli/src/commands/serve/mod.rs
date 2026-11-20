@@ -1270,7 +1270,7 @@ fn tls(
     (cert.is_file() && key.is_file()).then_some((cert, key))
 }
 
-/// Refused for plain http anywhere but loopback, and for a fixture flag behind a certificate.
+/// Refused for plain http anywhere but loopback, and for a fixture flag anywhere but loopback.
 fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     #[cfg(feature = "fixture")]
     let (whois_fixture, model_fixture, smtp_fixture, build_fixture, google_fixture) = (
@@ -1281,19 +1281,21 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         args.google_fixture,
     );
     let tls = tls(args.cert, args.key, &instance.serving.tls_dir);
-    #[cfg(feature = "fixture")]
-    let secure = tls.is_some();
     let (listening, door) = listening_of(instance, args.host, args.port, tls)?;
+    // A fixture runs only where no other machine reaches it: loopback, over http or https.
     #[cfg(feature = "fixture")]
-    let stamp = stamp_of(build_fixture, secure)?;
+    let reachable = listening.reachable();
+    #[cfg(feature = "fixture")]
+    let stamp = stamp_of(build_fixture, reachable)?;
     #[cfg(not(feature = "fixture"))]
     let stamp = Stamp::Compiled;
     #[cfg(feature = "fixture")]
     let google = match google_fixture {
         None => Endpoints::google(),
-        // A fixture behind a real certificate is reachable.
-        Some(_) if secure => {
-            anyhow::bail!("--google-fixture is test-only and refuses to run with a certificate")
+        Some(_) if reachable => {
+            anyhow::bail!(
+                "--google-fixture is test-only and refuses to run where another machine reaches it"
+            )
         }
         Some(base) => Endpoints::at(&base),
     };
@@ -1312,8 +1314,10 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     let peers = match whois_fixture {
         None => daemon_peers(&instance.paths.whois_socket),
         Some(login) => {
-            if secure {
-                anyhow::bail!("--whois-fixture is test-only and refuses to run with a certificate");
+            if reachable {
+                anyhow::bail!(
+                    "--whois-fixture is test-only and refuses to run where another machine reaches it"
+                );
             }
             tracing::warn!("serve: --whois-fixture {login} — every peer is this login");
             Peers::Fixture(capability::Login::from_whois(login))
@@ -1333,8 +1337,12 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     #[cfg(not(feature = "fixture"))]
     let titler = real_brain(instance, &answered);
     #[cfg(feature = "fixture")]
-    let (brain, postman) =
-        fixture_talking(instance, &answered, (model_fixture, smtp_fixture), secure)?;
+    let (brain, postman) = fixture_talking(
+        instance,
+        &answered,
+        (model_fixture, smtp_fixture),
+        reachable,
+    )?;
     #[cfg(not(feature = "fixture"))]
     let (brain, postman) = (real_brain(instance, &answered), real_postman(instance));
     let (acting, signing, verify) = performers(
@@ -1401,19 +1409,21 @@ fn quiet(instance: &Instance, fixture: bool) -> Compacting {
     }
 }
 
-/// Fixtures only; never behind a certificate.
+/// Fixtures only; never where another machine reaches them.
 #[cfg(feature = "fixture")]
 fn fixture_talking(
     instance: &Instance,
     answered: &Answered,
     (model_fixture, smtp_fixture): (Option<PathBuf>, Option<PathBuf>),
-    certified: bool,
+    reachable: bool,
 ) -> anyhow::Result<(Brain, Postman)> {
     Ok(match (model_fixture, smtp_fixture) {
         (None, None) => (real_brain(instance, answered), real_postman(instance)),
         (script, recording) => {
-            if certified {
-                anyhow::bail!("the model and smtp fixtures refuse to run with a certificate");
+            if reachable {
+                anyhow::bail!(
+                    "the model and smtp fixtures refuse to run where another machine reaches them"
+                );
             }
             (
                 match script {
@@ -1477,14 +1487,16 @@ fn performers(
     )
 }
 
-/// `--build-fixture`; refused behind a certificate.
+/// `--build-fixture`; refused where another machine reaches it.
 #[cfg(feature = "fixture")]
-fn stamp_of(build_fixture: Option<PathBuf>, tls: bool) -> anyhow::Result<Stamp> {
+fn stamp_of(build_fixture: Option<PathBuf>, reachable: bool) -> anyhow::Result<Stamp> {
     let Some(path) = build_fixture else {
         return Ok(Stamp::Compiled);
     };
-    if tls {
-        anyhow::bail!("--build-fixture is test-only and refuses to run with a certificate");
+    if reachable {
+        anyhow::bail!(
+            "--build-fixture is test-only and refuses to run where another machine reaches it"
+        );
     }
     tracing::warn!(
         "serve: --build-fixture {} — the build is that file's",

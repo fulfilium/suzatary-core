@@ -305,11 +305,44 @@ test("a device from version 8 keeps this tab's own lines through the upgrade, as
   }
 })
 
-test("a load lets go of the own lines the box answered for good, and keeps every one it may still take", async () => {
+test("a load lets go of the own lines the box answered for good once nothing is lost, and keeps every one it may still take", async () => {
   Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
   const records = ANSWERS.map((answer, n) => ({ literal: `Titled(… ${n})`, keys: {}, answer }))
   assert.equal((await ownlines.keep(records)).type, "Val")
-  assert.equal((await ownlines.settled()).type, "Val")
+  assert.equal((await ownlines.settled(new Set(records.map(r => r.literal)))).type, "Val")
+  const answers = async (): Promise<unknown> => {
+    const kept = await ownlines.kept()
+    return kept.type === "Val" ? kept.v.map(r => r.answer) : kept
+  }
+  // A refused line keeps its words on the device until the person was told of the refusal with them.
+  assert.deepEqual(await answers(), [ANSWERS[0], ANSWERS[1], ANSWERS[2]])
+  await ownlines.seen([records[2]?.literal ?? ""])
+  assert.equal((await ownlines.settled(new Set())).type, "Val")
+  assert.deepEqual(await answers(), [ANSWERS[0], ANSWERS[1]])
+  assert.deepEqual([...(await ownlines.told())], [], "a seen print of a record let go is read by nothing")
+})
+
+test("a load keeps a taken own line whose keys the landed rows do not hold yet", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const records = ANSWERS.map((answer, n) => ({ literal: `Titled(… ${n})`, keys: {}, answer }))
+  assert.equal((await ownlines.keep(records)).type, "Val")
+  assert.equal((await ownlines.settled(new Set())).type, "Val")
   const kept = await ownlines.kept()
-  assert.deepEqual(kept.type === "Val" ? kept.v.map(r => r.answer) : kept, [ANSWERS[0], ANSWERS[1]])
+  assert.deepEqual(kept.type === "Val" ? kept.v.map(r => r.answer) : kept, [ANSWERS[0], ANSWERS[1], ANSWERS[2], "Taken"])
+})
+
+test("the other tabs are woken only when a keep moved the row", async () => {
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13) })
+  const heard: number[] = []
+  const listener = new BroadcastChannel("rows/own/lines")
+  listener.onmessage = () => heard.push(1)
+  try {
+    const records = [{ literal: "Titled(… once)", keys: {}, answer: { Refused: { kind: "Trust", reason: "a key" } } }]
+    assert.equal((await ownlines.keep(records)).type, "Val")
+    assert.equal((await ownlines.keep(records)).type, "Val")
+    await new Promise(done => setTimeout(done, 50))
+    assert.equal(heard.length, 1, "the same records kept again wake no tab")
+  } finally {
+    listener.close()
+  }
 })

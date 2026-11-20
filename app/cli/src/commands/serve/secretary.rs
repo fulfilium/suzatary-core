@@ -42,8 +42,6 @@ pub struct Said {
     say: String,
     references: Vec<Reference>,
     attachments: Vec<Attachment>,
-    /// Turns the asker saw; `None` makes a question a new line.
-    after: Option<usize>,
 }
 
 /// A photo or PDF, decoded.
@@ -62,8 +60,6 @@ enum Keep {
 
 /// Upload bytes, served so they never read as a page.
 pub struct Served(Attachment, Vec<u8>);
-
-const MAX_SAY_BYTES: usize = 32_768;
 
 /// The largest PDF as base64, plus JSON room.
 const MAX_UPLOAD_BYTES: usize = suzatary_held::file_read::MAX_PDF / 3 * 4 + 65_536;
@@ -131,7 +127,7 @@ impl Body for Erasing {
 }
 
 impl Body for Said {
-    const CAP: usize = MAX_SAY_BYTES;
+    const CAP: usize = suzatary_lines::secretary::lines_rule::MAX_SAID_BYTES;
 
     type Wire = Saying;
 
@@ -141,7 +137,6 @@ impl Body for Said {
             say,
             references,
             attachments,
-            after,
         } = saying;
         let attachments = if attachments.is_empty() {
             Vec::new()
@@ -171,7 +166,6 @@ impl Body for Said {
             say,
             references,
             attachments,
-            after,
         })
     }
 }
@@ -359,26 +353,6 @@ fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
     }
 }
 
-/// `POST …/say`: 202, so a phone that gives up never retries into a second turn.
-pub fn say(
-    call: &Call<Actor, ConversationId, Said>,
-) -> Result<Accepted<suzatary_api::wire::SayPayload>, Refusal> {
-    let Said {
-        say,
-        references,
-        attachments,
-        after,
-    } = &call.body;
-    let id = &call.params;
-    let by = stamped(call, references);
-    call.state
-        .with_cards(|caps, cards| {
-            secretary_routes::say(caps, cards, id, say, references, attachments, by, *after)
-        })
-        .inspect(|_| call.state.heard(id))
-        .map(Accepted)
-}
-
 /// `POST …/regenerate`: 409 if the round wrote or runs.
 pub fn regenerate(
     call: &Call<Actor, ConversationId, ()>,
@@ -419,19 +393,6 @@ pub fn edit(
         .map(Accepted)
 }
 
-/// `POST …/stop`: 409 with no round running, never a halt left pending.
-pub fn stop(
-    call: &Call<Actor, ConversationId, ()>,
-) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
-    let id = &call.params;
-    call.state
-        .workers
-        .stop(call.state.first.caps, id, call.guard.clone())?;
-    call.state
-        .with_cards(|caps, cards| secretary_routes::newest(caps, cards, id))
-        .map(Accepted)
-}
-
 /// `POST …/attachments`.
 pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<Uploaded>, Refusal> {
     let uploads = uploads(&call.state)?;
@@ -445,6 +406,7 @@ pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<Uploaded>, Refusal
     match kept {
         Ok(file) => Ok(Json(Uploaded::Kept {
             file: wire::AttachmentRow::from(&file),
+            attachment: file,
         })),
         // Held back; the owner may keep it in his Drive.
         Err(UploadError::Withheld(why @ (Withheld::HeldNumber | Withheld::Form))) => {

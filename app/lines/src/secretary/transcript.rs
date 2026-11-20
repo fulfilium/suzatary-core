@@ -27,10 +27,13 @@ use crate::secretary::sequence;
 use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::SessionId;
+use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{
-    Covered, Entry, NotAConversation, RunId, Said, Stored,
+    ConversationState, Covered, Entry, NotAConversation, RunId, Said, Stored,
 };
+use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_conversations::secretary::turn_shape::TurnShape;
+use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::holder::Holder;
 use suzatary_memory::secretary::line_words::LineWords;
@@ -121,7 +124,7 @@ impl Transcript {
                 })
                 .collect::<Vec<_>>(),
         );
-        let lines: Vec<Written> = order
+        let mut lines: Vec<Written> = order
             .into_iter()
             .map(|(at, rests_on)| Written {
                 name: writes[at].0.name.clone(),
@@ -130,7 +133,7 @@ impl Transcript {
                 rests_on,
             })
             .collect();
-        let stored = Stored::of_lines(id, lines.iter().map(|w| &w.entry))?;
+        judged(&mut lines);
         // The fold makes a turn of each said line and each stop, and of nothing else.
         let turns: Vec<usize> = lines
             .iter()
@@ -139,6 +142,13 @@ impl Transcript {
             .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
             .map(|(at, _)| at)
             .collect();
+        let stored = Stored::of_read(
+            id,
+            lines
+                .iter()
+                .enumerate()
+                .map(|(at, w)| (&w.entry, set_aside(&lines, &turns, at))),
+        )?;
         let marks = marks(&lines, &stored, &turns);
         let claims = Claims::of(
             &marks
@@ -170,6 +180,49 @@ impl Transcript {
             }
         }
         found
+    }
+
+    /// The positions of the lines named `names` and of every line they rest on, directly or not:
+    /// what a line resting on `names` saw of this conversation.
+    #[must_use]
+    pub(crate) fn beneath_names(&self, names: &[Hash]) -> BTreeSet<usize> {
+        let mut found = BTreeSet::new();
+        let mut pending: Vec<usize> = self
+            .lines
+            .iter()
+            .enumerate()
+            .filter(|(_, written)| names.contains(&written.name))
+            .map(|(at, _)| at)
+            .collect();
+        while let Some(at) = pending.pop() {
+            if found.insert(at) {
+                pending.extend(&self.lines[at].rests_on);
+            }
+        }
+        found
+    }
+
+    /// The positions of every line that descends from the line at `from`, that line left out.
+    #[must_use]
+    pub(crate) fn descending(&self, from: usize) -> BTreeSet<usize> {
+        let mut found = BTreeSet::from([from]);
+        for at in from + 1..self.lines.len() {
+            if self.lines[at]
+                .rests_on
+                .iter()
+                .any(|parent| found.contains(parent))
+            {
+                found.insert(at);
+            }
+        }
+        found.remove(&from);
+        found
+    }
+
+    /// The turn the line at `line` says, by its index; none for a line that says no turn.
+    #[must_use]
+    pub(crate) fn turn_of(&self, line: usize) -> Option<usize> {
+        self.turns.iter().position(|&at| at == line)
     }
 
     /// Every line, in causal order.
@@ -233,6 +286,84 @@ impl Transcript {
             .any(|(_, said)| suzatary_conversations::secretary::queue::wakes(said))
     }
 
+    /// Each live turn owed a round that no round covers yet, by index: what the page draws as
+    /// queued.
+    #[must_use]
+    pub fn queued(&self) -> BTreeSet<usize> {
+        self.stored
+            .live()
+            .into_iter()
+            .filter(|(turn, _)| {
+                let line = self.turns[*turn];
+                matches!(self.marks[line], Mark::Request)
+                    && self.claims.standing(line) == Standing::Queued
+            })
+            .map(|(turn, _)| turn)
+            .collect()
+    }
+
+    /// The model's turns that answered turn `turn`, by index, in order: those the last round to
+    /// cover it wrote while it was open, read off the claims. None while no round covered it. A
+    /// round's reply is not whatever stands after the turn: a question said after a round's last
+    /// join stands before that round's closing reply and is not answered by it.
+    #[must_use]
+    pub fn replies_to(&self, turn: usize) -> Option<Vec<usize>> {
+        let line = *self.turns.get(turn)?;
+        let round = self
+            .claims
+            .rounds()
+            .iter()
+            .rev()
+            .find(|round| round.covers.contains(&line))?;
+        let closing = match round.end {
+            crate::secretary::claim::End::Closed(at) => Some(at),
+            crate::secretary::claim::End::Open | crate::secretary::claim::End::Withdrawn => None,
+        };
+        Some(
+            round
+                .covers
+                .iter()
+                .copied()
+                .chain(closing)
+                .filter_map(|at| self.turn_of(at))
+                .filter(|&at| matches!(self.stored.turns[at].turn, Turn::Model { .. }))
+                .collect(),
+        )
+    }
+
+    /// The conversation's answering state, read off the claims: thinking while a round is open,
+    /// queued while a turn that wakes a model is owed and no round covers it, idle otherwise. A
+    /// round whose run is gone reads thinking until the box's close settles it, since a tab
+    /// cannot tell a lost run from a running one.
+    #[must_use]
+    pub fn state(&self) -> ConversationState {
+        let open = self
+            .claims
+            .rounds()
+            .iter()
+            .any(|round| round.end == crate::secretary::claim::End::Open);
+        let waiting = self
+            .queued()
+            .into_iter()
+            .any(|turn| suzatary_conversations::secretary::queue::wakes(&self.stored.turns[turn]));
+        if open {
+            ConversationState::Thinking
+        } else if waiting {
+            ConversationState::Queued
+        } else {
+            ConversationState::Idle
+        }
+    }
+
+    /// The name of the line of each turn, by index.
+    #[must_use]
+    pub fn turn_lines(&self) -> Vec<&Hash> {
+        self.turns
+            .iter()
+            .map(|&line| &self.lines[line].name)
+            .collect()
+    }
+
     /// The claims' reading of these lines.
     #[must_use]
     pub(crate) fn claims(&self) -> &Claims<RunId> {
@@ -240,23 +371,36 @@ impl Transcript {
     }
 
     /// Every live request (a person's or an act's turn, or a model's or a verb's) as a claim step
-    /// at `now` reads it.
+    /// at `now` reads it. A question a live `Again` asked afresh was asked when that line was.
     #[must_use]
     pub(crate) fn asked(&self, now: Datetime) -> Vec<Asked> {
         let now = prodrome_core::fpl::instant_of(now);
+        let mut afresh: BTreeMap<&Hash, Datetime> = BTreeMap::new();
+        for written in &self.lines {
+            if let Entry::Again { at, question, .. } = &written.entry {
+                let latest = afresh.entry(question).or_insert(*at);
+                *latest = (*latest).max(*at);
+            }
+        }
         self.stored
             .live()
             .into_iter()
             .map(|(turn, said)| (self.turns[turn], said))
             .filter(|(line, _)| matches!(self.marks[*line], Mark::Request | Mark::Answer))
-            .map(|(at, said)| Asked {
+            .map(|(at, said)| {
+                let asked = afresh
+                    .get(&self.lines[at].name)
+                    .map_or(said.at, |again| said.at.max(*again));
+                (at, said, asked)
+            })
+            .map(|(at, said, asked)| Asked {
                 at,
                 wakes: if suzatary_conversations::secretary::queue::wakes(said) {
                     Wakes::Model
                 } else {
                     Wakes::RidesAlong
                 },
-                bound: if now - prodrome_core::fpl::instant_of(said.at) <= ANSWERED_WITHIN {
+                bound: if now - prodrome_core::fpl::instant_of(asked) <= ANSWERED_WITHIN {
                     Bound::Within
                 } else {
                     Bound::Past
@@ -312,6 +456,10 @@ pub fn push_open(
     Ok(Answering::Written)
 }
 
+/// Whether every todo some references name is one a trusted actor confirmed, as the chains read
+/// now: what a claim judges another writer's turn by.
+pub type Confirms<'a> = dyn Fn(&[suzatary_base::reference::Reference]) -> bool + 'a;
+
 /// How long after a request is made a round may still claim it: past it, the box closes it
 /// unanswered, and asking again is the person's.
 pub const ANSWERED_WITHIN: chrono::Duration = chrono::Duration::hours(1);
@@ -341,6 +489,7 @@ pub fn claim(
     run: &RunId,
     now: Datetime,
     retry: Retry,
+    confirms: &Confirms<'_>,
     close: impl FnOnce(&Stored) -> Vec<Entry>,
 ) -> Result<Claimed, StoreError> {
     let _held = conversations.lines.locked()?;
@@ -360,7 +509,12 @@ pub fn claim(
                 return Ok(Claimed::Closed);
             }
         };
-    write(conversations, id, held, &read.began(&covers, run, now))?;
+    write(
+        conversations,
+        id,
+        held,
+        &read.began(&covers, run, now, confirms),
+    )?;
     Ok(Claimed::Began)
 }
 
@@ -374,6 +528,7 @@ pub fn join(
     id: &ConversationId,
     run: &RunId,
     now: Datetime,
+    confirms: &Confirms<'_>,
 ) -> Result<(), StoreError> {
     let _held = conversations.lines.locked()?;
     let read = read(conversations, id)?;
@@ -385,7 +540,7 @@ pub fn join(
         conversations,
         id,
         read.lines().len(),
-        &read.began(&covers, run, now),
+        &read.began(&covers, run, now, confirms),
     )
 }
 
@@ -419,9 +574,46 @@ impl Transcript {
         }
     }
 
-    /// The claim of `run` over the lines at `covers`, each judged as the box reads it now.
-    fn began(&self, covers: &[usize], run: &RunId, now: Datetime) -> Entry {
+    /// The claim of `run` over the lines at `covers`, each judged as the box reads it now: the
+    /// box's own turn by its stamp, another writer's by the stamp it was written with, made
+    /// `Unconfirmed` where `confirms` says a todo it names is not confirmed.
+    fn began(
+        &self,
+        covers: &[usize],
+        run: &RunId,
+        now: Datetime,
+        confirms: &Confirms<'_>,
+    ) -> Entry {
         let turn_of = |line: usize| self.turns.iter().position(|&at| at == line);
+        let judged = |line: usize| -> Option<Taint> {
+            let said = &self.stored.turns[turn_of(line)?];
+            let written = &self.lines[line];
+            let LineShape::Said {
+                by: Some(Stamp::Actor(speaker)),
+                ..
+            } = written.line.shape()
+            else {
+                return Some(taint::turn(said));
+            };
+            if by_the_box(written.line.actor()) {
+                return Some(taint::turn(said));
+            }
+            let references = match &said.turn {
+                Turn::Person { references, .. } => references.as_slice(),
+                Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => {
+                    &[]
+                }
+            };
+            let by = if confirms(references) {
+                Stamp::Actor(speaker.clone())
+            } else {
+                Stamp::Unconfirmed(speaker.clone())
+            };
+            Some(taint::turn(&Said {
+                by: Some(by),
+                ..said.clone()
+            }))
+        };
         Entry::Began {
             at: now,
             covers: covers
@@ -429,9 +621,7 @@ impl Transcript {
                 .filter_map(|&line| {
                     Some(Covered {
                         line: self.lines[line].name.clone(),
-                        taint: suzatary_conversations::secretary::taint::turn(
-                            &self.stored.turns[turn_of(line)?],
-                        ),
+                        taint: judged(line)?,
                     })
                 })
                 .collect(),
@@ -512,8 +702,27 @@ fn marks(lines: &[Written], stored: &Stored, turns: &[usize]) -> Vec<Mark<RunId>
             | LineShape::Scoped { .. }
             | LineShape::Coding { .. }
             | LineShape::Erased { .. }
-            | LineShape::Resealed { .. } => Mark::Other,
+            | LineShape::Resealed { .. }
+            | LineShape::Again { .. } => Mark::Other,
         })
+        .collect()
+}
+
+/// The turns the line at `at` sets aside, by index, where it is an `Again` whose question is a
+/// line here: read over descent ([`crate::secretary::again::aside`]); none for any other line.
+fn set_aside(lines: &[Written], turns: &[usize], at: usize) -> Vec<usize> {
+    let Entry::Again { question, how, .. } = &lines[at].entry else {
+        return Vec::new();
+    };
+    let Some(question) = lines.iter().position(|written| written.name == *question) else {
+        return Vec::new();
+    };
+    let aside = crate::secretary::again::aside(|line| &lines[line].rests_on, question, at, *how);
+    turns
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| aside.contains(line))
+        .map(|(turn, _)| turn)
         .collect()
 }
 
@@ -1371,3 +1580,57 @@ fn write(
 mod plain_reading;
 #[cfg(any(test, feature = "nothing"))]
 pub use plain_reading::{ReadFailed, of_objects, opened};
+
+/// Each turn another writer wrote, read with the stamp its claims judged it to carry: as written
+/// where every claim covering it judged it clean, and `Unconfirmed`, which every reader reads as
+/// tainted, where one judged it tainted or none covers it yet. The box's own lines read as they
+/// were written.
+fn judged(lines: &mut [Written]) {
+    let judgments = judgments(lines.iter().map(|written| &written.entry));
+    for written in lines.iter_mut() {
+        judge(
+            &written.name,
+            written.line.actor(),
+            &mut written.entry,
+            &judgments,
+        );
+    }
+}
+
+/// What the claims among `entries` judged of each line they cover: the join of every judgment.
+#[must_use]
+pub fn judgments<'e>(entries: impl IntoIterator<Item = &'e Entry>) -> BTreeMap<Hash, Taint> {
+    let mut judgments: BTreeMap<Hash, Taint> = BTreeMap::new();
+    for entry in entries {
+        if let Entry::Began { covers, .. } = entry {
+            for covered in covers {
+                let taint = judgments.entry(covered.line.clone()).or_default();
+                *taint = taint.join(covered.taint);
+            }
+        }
+    }
+    judgments
+}
+
+/// `entry`, the line `name` that `actor` wrote, read with the stamp `judgments` give it: every
+/// reader of a turn's taint reads it so, the transcript and the digest alike.
+pub fn judge(
+    name: &Hash,
+    actor: &prodrome_core::event::Actor,
+    entry: &mut Entry,
+    judgments: &BTreeMap<Hash, Taint>,
+) {
+    if by_the_box(actor) {
+        return;
+    }
+    let judgment = judgments.get(name).copied();
+    if let Entry::Said {
+        by: Some(by @ Stamp::Actor(_)),
+        ..
+    } = entry
+        && judgment != Some(Taint::Clean)
+        && let Stamp::Actor(speaker) = by.clone()
+    {
+        *by = Stamp::Unconfirmed(speaker);
+    }
+}

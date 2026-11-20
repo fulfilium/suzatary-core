@@ -4,6 +4,7 @@
 import type { Core, Lines, ObjectStore, Proposals, TopicReading, TopicStore } from "./core"
 import type excluded from "./excluded"
 import type heads from "./heads"
+import ownlines from "./ownlines"
 import linesync from "./linesync"
 import type sealing from "./lines"
 import type progress from "./progress"
@@ -60,12 +61,12 @@ export namespace storeset {
   // where they were typed.
   export const OUTDATED = "This page is older than the box: reload to send it. Your words stay here."
   const UNANSWERED = "The box did not answer: your words stay here, and the line goes with the next sync."
-  type Kind = "Trust" | "Final" | "Outdated"
+  type Kind = "Trust" | "Later" | "Final" | "Outdated"
   type Refused = { Refused: { kind: Kind; reason: string } }
   const Answered = d.json(
     d.alt(
       d.alt(d.lit("Unsent"), d.lit("Taken")),
-      d.obj<Refused>({ Refused: d.obj<Refused["Refused"]>({ kind: d.oneOf<Kind>({ Trust: null, Final: null, Outdated: null }), reason: d.str }) }),
+      d.obj<Refused>({ Refused: d.obj<Refused["Refused"]>({ kind: d.oneOf<Kind>({ Trust: null, Later: null, Final: null, Outdated: null }), reason: d.str }) }),
     ),
   )
   // The bytes a seal draws its keys from: one key of 32 for each slot, and a line this tab writes holds one.
@@ -131,12 +132,23 @@ export namespace storeset {
     const entry = (name: topics.Store): written.Entry => ({ noun: NOUNS[name], store: topicStores[name].store, stepped: step => topicStores[name].sync.stepped(step) })
     const writes = written.of(
       core,
-      { topics: entry("topics"), "topic-aliases": entry("topic-aliases"), lines: { noun: LINE, store: held, stepped: lines.ownStepped } },
+      {
+        topics: entry("topics"),
+        "topic-aliases": entry("topic-aliases"),
+        lines: { noun: LINE, store: held, stepped: lines.ownStepped, told: { seen: ownlines.seen, told: ownlines.told } },
+      },
       why => say({ type: "Refused", why }),
     )
     // A hand-over that failed is said, and the next sync tries it again.
     const failed = (name: stores.Written) => (e: unknown): void =>
       say({ type: "Refused", why: `This tab's ${name === "lines" ? LINE : NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
+    // A line another tab of the device kept is taken and handed over here too: the box answers `already` to the second.
+    // Only when the row brought something new: a wake over a line this tab already holds, refused as another tab saw it
+    // refused, hands nothing over again.
+    ownlines.heard(() => void lines.ownHeard().then(fresh => (fresh ? writes.handOver("lines") : undefined)).catch(failed("lines")))
+    // Every other hand-over of the lines reads the device's row first, so a line another tab kept and whose wake this tab
+    // missed goes with it, not at the next load.
+    const handOverLines = (): Promise<void> => lines.ownHeard().then(() => writes.handOver("lines"))
 
     // Which stores a reading has asked for so far: a reconnect pulls those alone.
     let wanted: "None" | Scope = "None"
@@ -155,11 +167,17 @@ export namespace storeset {
         ),
       )
       const asked = topicPulls.then(ts => asks.sync.want().then(a => ts.every(t => t) && a))
+      // The row was read as the lines were restored, so the hand-over takes what it holds. A refusal the load found that
+      // the person was not told of yet is said once the lines are pulled, their words with it.
       const linesPulled = lines.engine.sync.restored
         .get()
         .then(() => writes.handOver("lines"))
         .catch(failed("lines"))
         .then(() => lines.engine.want())
+        .then(pulled => {
+          void writes.said("lines").catch(failed("lines"))
+          return pulled
+        })
       return linesPulled.then(l => inbox.sync.want().then(i => asked.then(t => l && i && t)))
     }
     // The inbox alone; a move pulls the rest too once a reading asked for all.
@@ -203,22 +221,36 @@ export namespace storeset {
       void writes.handOver(name).catch(failed(name))
     }
 
-    // Sealed in the worker, its keys drawn here: the first seal compiles the scrub's patterns, paid off the page's thread.
-    // A rename is answered at once and handed over behind the answer. A line that begins a conversation is answered once
-    // the box holds it, since what a page does next (a question, the note of a setup) is the box's own.
-    const seal = async (line: sealing.Sealing, at: string, actor: string): Promise<sealing.Sealed> => {
-      const start = performance.now()
-      await readies.All.get()
+    // One line sealed in the worker, its keys drawn here, kept on the device and read at once.
+    const sealOne = async (line: unknown, at: string, actor: string): Promise<sealing.Sealed> => {
       const sealed = held.seal(JSON.stringify(line), at, actor, crypto.getRandomValues(new Uint8Array(ENTROPY)))
       const answer = { name: sealed.name, conversation: sealed.conversation }
       await lines.ownStepped(sealed)
+      return answer
+    }
+
+    // Sealed in the worker: the first seal compiles the scrub's patterns, paid off the page's thread. A rename, a question,
+    // a stop and a topic begun with its question are answered at once and handed over behind the answer, all a seal made
+    // in one post. A setup is answered once the box holds it, since what a page does next (the setup's note) is the box's.
+    const seal = async (line: sealing.Sealing, at: string, actor: string): Promise<sealing.Sealed> => {
+      const start = performance.now()
+      await readies.All.get()
+      // A line rests on its conversation's heads: one the tab does not hold yet (opened a moment ago, or by another
+      // device) is pulled first.
+      if ((line.type === "Say" || line.type === "Stop") && !lines.holds(line.conversation)) await lines.engine.want()
+      const answer =
+        line.type === "Begin"
+          ? await sealOne({ type: "Open", title: line.title }, at, actor).then(opened =>
+              sealOne({ type: "Say", conversation: opened.conversation, ...line.say }, at, actor).then(() => opened),
+            )
+          : await sealOne(line, at, actor)
       measure("write:seal", start, { store: "lines" })
       await writes.sign("lines")
-      if (line.type === "Rename") {
-        void writes.handOver("lines").catch(failed("lines"))
+      if (line.type !== "SetUp") {
+        void handOverLines().catch(failed("lines"))
         return answer
       }
-      await writes.handOver("lines")
+      await handOverLines()
       const said = Answered(held.answer(answer.name))
       if (said.type === "Error") throw new Error(`the box's answer to a line: ${said.e}`)
       const v = said.v

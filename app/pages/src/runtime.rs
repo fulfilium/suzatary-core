@@ -195,7 +195,7 @@ pub(crate) enum Core {
         by: String,
     },
     /// A line sealed as this tab's and handed to the box (`Line`): answered `{name, conversation}`
-    /// once the box holds a line that begins a conversation, and at once for a rename.
+    /// once the box holds a line that begins a conversation alone, and at once for every other.
     Line { line: Sealing },
     /// A todo's thirty days at an instant (`Thirty`).
     Thirty {
@@ -210,10 +210,59 @@ pub(crate) enum Core {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Sealing {
-    /// A topic opened under `title`; empty leaves it to the title job.
-    Open { title: String },
     /// A conversation set up from the template named `template`.
     SetUp { template: String },
+    /// A person's question in `conversation`.
+    Say {
+        conversation: String,
+        #[serde(flatten)]
+        question: Asking,
+    },
+    /// A topic opened under `title` and its first question, sealed together and handed over in
+    /// one post.
+    Begin { title: String, say: Asking },
+    /// The answer of `conversation` stopped.
+    Stop { conversation: String },
+}
+
+/// A question as a tab seals it: its words, what it points at, and each file as the upload
+/// answered it with the name the person gave it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub(crate) struct Asking {
+    pub(crate) text: String,
+    pub(crate) references: Vec<String>,
+    pub(crate) files: Vec<Filed>,
+}
+
+/// A file of a question.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub(crate) struct Filed {
+    #[ts(type = "unknown")]
+    pub(crate) attachment: serde_json::Value,
+    pub(crate) name: String,
+}
+
+impl Asking {
+    /// What `sent` asks: each file the upload answered, named as its row is.
+    pub(crate) fn of(sent: &crate::composer::Sent) -> Self {
+        let files = sent
+            .attachments
+            .iter()
+            .filter_map(|attachment| {
+                let id = attachment.get("id")?.as_str()?;
+                let row = sent.files.iter().find(|row| row.id == id)?;
+                Some(Filed {
+                    attachment: attachment.clone(),
+                    name: row.name.clone(),
+                })
+            })
+            .collect();
+        Self {
+            text: sent.text.clone(),
+            references: sent.references.clone(),
+            files,
+        }
+    }
 }
 
 /// A line sealed: its conversation, a new one's the id of its opening line.
@@ -559,12 +608,12 @@ pub(crate) enum Act {
         at: Asked,
         answer: Answering,
     },
-    Question {
-        kind: Questioning,
+    /// The last question replaced (`POST …/edit`).
+    Edit {
         question: Question,
     },
-    Round {
-        kind: Rounding,
+    /// The last round asked again (`POST …/regenerate`).
+    Regenerate {
         conversation: String,
         after: u32,
     },
@@ -575,9 +624,10 @@ pub(crate) enum Act {
     Forget {
         fact: suzatary_memory::secretary::memory::FactId,
     },
+    /// The words of these lines, by name.
     Erase {
         conversation: String,
-        turns: Vec<u32>,
+        lines: Vec<String>,
     },
     /// An event the box printed (`POST …/author`), sealed onto a chain's replica.
     Seal {
@@ -639,18 +689,6 @@ pub(crate) enum Answering {
 pub(crate) struct Endorsement {
     pub(crate) key: String,
     pub(crate) signature: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub(crate) enum Questioning {
-    Say,
-    Edit,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub(crate) enum Rounding {
-    Stop,
-    Regenerate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

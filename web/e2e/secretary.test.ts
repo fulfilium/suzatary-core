@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, suite, topicRounds, WRITE_BASE, opened } from "./harness";
+import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, askAtTheTerminal, suite, topicRounds, WRITE_BASE, opened } from "./harness";
 import cast from "../test/cast";
 
 const { owner, counsel } = cast.world;
@@ -99,12 +99,7 @@ app.scene("dismissing a proposal drops it from the Inbox and shows the reason", 
   const other = await app.page.evaluate<string>(
     opened("Untitled"),
   );
-  assert.equal(
-    await app.page.evaluate<number>(
-      `${SIGNED_POST}("/api/secretary/conversations/${other}/say", JSON.stringify({say: "propose another reply meanwhile"})).then((r) => r.status)`,
-    ),
-    202,
-  );
+  await askAtTheTerminal(other, "propose another reply meanwhile");
 
   await app.page.navigate(`${WRITE_BASE}/${conversation}`);
   await app.page.waitFor(`document.querySelector(".proposal .act-dismiss") !== null`, {
@@ -441,9 +436,7 @@ app.scene("streaming never scrolls a drifted-up box", async () => {
   await app.page.waitFor(`${scroller}.scrollTop === 0`);
   await app.page.scrollSettled();
   const before = await app.page.evaluate<number>(`${scroller}.scrollTop`);
-  await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations/${id}/say", JSON.stringify({say: "give me a rendered answer"})).then((r) => String(r.status))`,
-  );
+  void askAtTheTerminal(id, "give me a rendered answer");
   await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === 7`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<number>(`${scroller}.scrollTop`), before, "the box did not move");
   // The answer is placed in the frame after it is drawn, and the pill with it.
@@ -485,9 +478,7 @@ app.scene("content drawn above a held question keeps it held, and the reader's s
   // scroll offset: a bar above that comes or goes moves the offset, and the browser's anchoring keeps the view still.
   const shown = `document.querySelectorAll(".round")[2].getBoundingClientRect().top`;
   const before = await app.page.evaluate<number>(shown);
-  await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations/${id}/say", JSON.stringify({say: "give me a rendered answer"})).then((r) => String(r.status))`,
-  );
+  void askAtTheTerminal(id, "give me a rendered answer");
   await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === 4`, { timeout: 20000 });
   await app.page.waitFor(`document.querySelector(".newanswerpill").hidden === false`, { timeout: 8000 });
   // Within a pixel: the scroll offset is whole pixels, the layout is not.
@@ -521,9 +512,7 @@ app.scene("a reader's scroll up from a held question is read against what the bo
   const above = await app.page.evaluate<number>(shows);
   const height = await app.page.evaluate<number>("innerHeight");
   assert.ok(above > 0 && above <= height, `the reader is within a screen of what the box shows (${above} of ${height})`);
-  await app.page.evaluate<string>(
-    `${SIGNED_POST}("/api/secretary/conversations/${id}/say", JSON.stringify({say: "give me a rendered answer"})).then((r) => String(r.status))`,
-  );
+  void askAtTheTerminal(id, "give me a rendered answer");
   // The pill is drawn in the same step that reads the window, so it is decided once the answer is on the page.
   await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === 4`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".newanswerpill").hidden`), true, "no pill: the reader is with the newest");
@@ -601,7 +590,7 @@ app.scene("the next question typed before a send settles stays in the box, and b
   await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
   await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
   const box = `document.querySelector(".composebox").value`;
-  const release = await app.page.holdRequests([`${id}/say`]);
+  const release = await app.page.holdRequests(["/api/stores/lines/objects"]);
   await app.page.type(".composebox", "give me a rendered answer");
   await app.page.click(".composesend");
   await app.page.waitFor(`${box} === ""`, { timeout: 4000 });
@@ -722,10 +711,29 @@ app.scene("a photo sent in the chat is drawn on its turn", async () => {
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg"));
     const photo = btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));
     const stored = await (await post("/api/secretary/attachments", JSON.stringify({ file: photo }))).json();
-    await post("/api/secretary/conversations/" + opened.id + "/say", JSON.stringify({ say: "what is in this photo", attachments: [{ id: stored.file.id }] }));
+    if (stored.kind !== "kept") throw new Error("the photo was not kept");
     return opened.id;
   })()`);
   await app.page.evaluate(`location.hash = "#/secretary/${conversation}"`);
+  await app.page.waitFor(`document.querySelector(".compose input[type=file]") !== null`, { timeout: 8000 });
+  // Picked as a person picks it, so the tab seals the turn with the file as the upload answered it.
+  await app.page.evaluate(`(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 8;
+    canvas.height = 8;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "red";
+    context.fillRect(0, 0, 8, 8);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg"));
+    const picked = new DataTransfer();
+    picked.items.add(new File([blob], "photo.jpg", { type: "image/jpeg" }));
+    const input = document.querySelector(".compose input[type=file]");
+    input.files = picked.files;
+    input.dispatchEvent(new Event("change"));
+  })()`);
+  await app.page.waitFor(`document.querySelector(".compose .turnphoto") !== null`, { timeout: 8000 });
+  await app.page.type(".composebox", "what is in this photo");
+  await app.page.click(".composesend");
   await app.page.waitFor(
     `[...document.querySelectorAll(".turnphoto")].some((img) => img.complete && img.naturalWidth === 8)`,
     { timeout: 20000 },
@@ -828,12 +836,8 @@ app.scene("a PDF naming an SSN waits for the owner, then goes to the Drive", asy
 app.scene("a new request pops up in an open app and Open lands on its row", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
   await app.page.waitFor(`document.querySelector(".tree .row, .todospane .empty:not([hidden])") !== null`, { timeout: 15000 });
-  await app.page.evaluate(`(async () => {
-    const post = ${SIGNED_POST};
-    const opened = { id: await ${opened("The deposit page")} };
-    await post("/api/secretary/conversations/" + opened.id + "/say", JSON.stringify({ say: "look up the deposit page" }));
-    return opened.id;
-  })()`);
+  const deposit = await app.page.evaluate<string>(opened("The deposit page"));
+  void askAtTheTerminal(deposit, "look up the deposit page").catch(() => undefined);
   await app.page.waitFor(`document.querySelector(".needsyou") !== null`, { timeout: 30000 });
   await app.page.click(".needsyouopen");
   await app.page.waitFor(`location.hash.startsWith("#/inbox?open=")`, { timeout: 15000 });
@@ -886,30 +890,6 @@ app.scene("a blank new topic is named after its first answer, and renamed in pla
 });
 
 /**
- * A TOPIC THE BOX REFUSES IS SAID, AND LEAVES THE ROUND: the sheet closes at the tap, the post is answered with the
- * box's 403 and its sentence, the owner is told in those words, and the refused write leaves the round and never goes
- * again.
- */
-app.scene("a topic write the box refuses is said in words and leaves no chip", async () => {
-  await app.resize(PHONE);
-  await topicRounds(app.page);
-  await app.page.navigate(`${WRITE_BASE}/#/secretary?topics=garden%2Cinvoices`);
-  const shown = `[...document.querySelectorAll(".streamrounds .streamround")].map((r) => [...r.querySelectorAll(".roundtopic")].map((c) => c.textContent).join(" "))`;
-  await app.page.waitFor(`${shown}.join("|") === "garden invoices"`, { timeout: 15000 });
-  const trips = `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.includes("'trip'")).length)`;
-  const before = await app.page.evaluate<number>(trips);
-  await app.page.refuseRequests(["/api/stores/topics/objects"], "this device is not trusted to write topics");
-  await app.page.click(".streamround .roundtopicadd");
-  await app.page.waitFor(`document.querySelector(".topicsheet .topicoffers") !== null`, { timeout: 8000 });
-  await app.page.evaluate(`[...document.querySelectorAll(".topicsheet .topicoffers .chipbtn")].find((b) => b.textContent === "trip").click()`);
-  await app.page.waitFor(`document.querySelector(".topicsheet") === null`, { timeout: 8000 });
-  await app.page.waitFor(`document.getElementById("toast")?.textContent.includes("The box refused a topic: this device is not trusted to write topics") === true`, { timeout: 15000 });
-  await app.page.waitFor(`${shown}.join("|") === "garden invoices"`, { timeout: 8000 });
-  await app.page.resumeRequests();
-  assert.equal(await app.page.evaluate<number>(trips), before, "the box holds no new write");
-});
-
-/**
  * THE TOPIC BAR (docs/TOPICS-PLAN-2026-10-21.md §0): two chips tapped show the rounds that carry both, the filter is
  * the address, so Back moves it, and a topic added to a round by tap is checked by the type before it is written and
  * reaches the box's topic store.
@@ -950,6 +930,31 @@ app.scene("two topics chosen show the rounds holding both, and a topic added by 
     `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.includes("'trip'")).length === 2)`,
     { timeout: 15000 },
   );
+});
+
+/**
+ * A WHOLE POST THE BOX WILL NOT TAKE REFUSES NOTHING: only the rule's own refusal, in a receipt, is final. A topic
+ * written while the box answers the post 403 is said once in the box's words, stays on its round unsent, and lands
+ * when the box takes posts again. It runs after the scene above and writes on the round holding trip alone.
+ */
+app.scene("a topic post the box will not take is said in words, stays, and lands once the box takes posts", async () => {
+  await app.resize(PHONE);
+  await app.page.navigate(`${WRITE_BASE}/#/secretary?topics=trip`);
+  const alone = `[...document.querySelectorAll(".streamrounds .streamround")].find((r) => [...r.querySelectorAll(".roundtopic")].map((c) => c.textContent).join(" ") === "trip")`;
+  await app.page.waitFor(`${alone} !== undefined`, { timeout: 15000 });
+  const gardens = `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.includes("'garden'")).length)`;
+  const before = await app.page.evaluate<number>(gardens);
+  await app.page.refuseRequests(["/api/stores/topics/objects"], "this device is not trusted to write topics");
+  await app.page.evaluate(`${alone}.querySelector(".roundtopicadd").click()`);
+  await app.page.waitFor(`document.querySelector(".topicsheet .topicoffers") !== null`, { timeout: 8000 });
+  await app.page.evaluate(`[...document.querySelectorAll(".topicsheet .topicoffers .chipbtn")].find((b) => b.textContent === "garden").click()`);
+  await app.page.waitFor(`document.querySelector(".topicsheet") === null`, { timeout: 8000 });
+  await app.page.waitFor(`document.getElementById("toast")?.textContent.includes("The box did not take a post of this tab's writes yet: this device is not trusted to write topics") === true`, { timeout: 15000 });
+  assert.match(await app.page.evaluate<string>(`[...document.querySelectorAll(".streamrounds .streamround")].map((r) => [...r.querySelectorAll(".roundtopic")].map((c) => c.textContent).join(" ")).join("|")`), /garden trip|trip garden/, "the topic stays on its round");
+  await app.page.resumeRequests();
+  // A load hands over what it holds unsent.
+  await app.page.reload();
+  await app.page.waitFor(`${gardens}.then((n) => n === ${before} + 1)`, { timeout: 15000 });
 });
 
 /**
@@ -1158,4 +1163,74 @@ app.scene("a round the box asked reads as its title and answer, its prompt a tap
   await app.page.evaluate(`${sweep}.scrollIntoView()`);
   await app.page.click(`.streamround:has(.streamtitle a[href*="-sweep"]) .streamprompt summary`);
   await app.page.waitFor(`${sweep}.querySelector(".streamprompt").open && ${shown}(${sweep}).includes("candidate mail:3f2a")`, { timeout: 8000 });
+});
+
+/** How many person bubbles of the page draw `said`. */
+const bubbles = (said: string): string =>
+  `[...document.querySelectorAll(".turn-person .turntext")].filter((t) => t.textContent === ${JSON.stringify(said)}).length`;
+
+/**
+ * ONE QUESTION, ONE BUBBLE, IN EVERY TAB (§7.1 of the stage's note): the question a tab seals is drawn once in that tab
+ * from the moment of Send, and once in a second tab of the device, through the question's answer.
+ */
+app.scene("a question sent in one tab is one bubble in both tabs, through its answer", async () => {
+  const said = "give me a rendered answer";
+  const id = await freshConversation(WRITE_BASE);
+  const other = await app.tab();
+  try {
+    await other.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+    await other.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+    await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+    await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+    await app.page.type(".composebox", said);
+    await app.page.click(".composesend");
+    await app.page.waitFor(`${bubbles(said)} === 1`, { timeout: 4000 });
+    await app.page.waitFor(`document.querySelector(".turnanswer") !== null`, { timeout: 20000 });
+    await other.waitFor(`document.querySelector(".turnanswer") !== null`, { timeout: 20000 });
+    assert.equal(await app.page.evaluate<number>(bubbles(said)), 1, "the sending tab draws it once");
+    assert.equal(await other.evaluate<number>(bubbles(said)), 1, "the other tab draws it once");
+  } finally {
+    await other.close();
+  }
+});
+
+/**
+ * A PAGE CLOSED JUST AFTER SEND LOSES NOTHING (§7.1, §9): the line is the device's once Send empties the composer, and
+ * its hand-over outlives the page; the question is answered and drawn once in the tab still open.
+ */
+app.scene("a question whose page closed just after Send is answered and drawn once", async () => {
+  const said = "give me a rendered answer";
+  const id = await freshConversation(WRITE_BASE);
+  await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  const other = await app.tab();
+  await other.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await other.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  await other.type(".composebox", said);
+  await other.click(".composesend");
+  await other.waitFor(`document.querySelector(".composebox").value === ""`, { timeout: 4000 });
+  await other.close();
+  await app.page.waitFor(`document.querySelector(".turnanswer") !== null`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<number>(bubbles(said)), 1, "asked once, drawn once");
+});
+
+/**
+ * A PAGE CLOSED JUST AFTER SEND WITH NO OTHER TAB LOSES NOTHING (§7.1): no tab of the device is left to hear the row, so
+ * the line goes by the hand-over that outlives the page, or else by the next load's; asked once either way.
+ */
+app.scene("a question whose page closed just after Send with no other tab open is asked once", async () => {
+  const said = "give me a rendered answer";
+  const id = await freshConversation(WRITE_BASE);
+  // This tab runs no app now, so the only one is the one that sends and closes.
+  await app.page.navigate("about:blank");
+  const other = await app.tab();
+  await other.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await other.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  await other.type(".composebox", said);
+  await other.click(".composesend");
+  await other.waitFor(`document.querySelector(".composebox").value === ""`, { timeout: 4000 });
+  await other.close();
+  await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await app.page.waitFor(`document.querySelector(".turnanswer") !== null`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<number>(bubbles(said)), 1, "asked once, drawn once");
 });

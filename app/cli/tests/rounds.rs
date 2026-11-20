@@ -5,6 +5,7 @@
 //! `review.rs`.
 
 use crate::common;
+use suzatary_conversations::secretary::store::ConversationState;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;
@@ -225,6 +226,7 @@ fn round_under(
             sink: &Sink::quiet(halt),
             load,
             retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+            confirms: &|_| true,
         },
         &Transcript {
             conversations: caps.conversations.conversations(),
@@ -682,6 +684,7 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
                 sink: &Sink::quiet(&Halt::new()),
                 load: LOAD_NOTHING,
                 retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+                confirms: &|_| true,
             },
             &Transcript {
                 conversations: caps.conversations.conversations(),
@@ -702,10 +705,21 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
         })
         .collect();
     assert_eq!(owed, ["and is it the same office?"]);
+    let state = || {
+        transcript::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .state()
+    };
+    assert_eq!(
+        state(),
+        ConversationState::Queued,
+        "between the first answer and the round the late question starts, the page reads it queued, never idle"
+    );
     assert_eq!(
         answered().expect("a second round ran").ending,
         Ending::Answered
     );
+    assert_eq!(state(), ConversationState::Idle);
     let sent = caps.model.asked();
     assert!(
         sent[1].turns.iter().any(|turn| matches!(
@@ -766,6 +780,7 @@ fn round_over(
                 sink: &Sink::quiet(&Halt::new()),
                 load: LOAD_NOTHING,
                 retry: suzatary_lines::secretary::transcript::Retry::Allowed,
+                confirms: &|_| true,
             },
             &Transcript {
                 conversations: caps.conversations.conversations(),
@@ -1023,6 +1038,7 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
                     &other.run,
                     common::now(),
                     suzatary_lines::secretary::transcript::Retry::Allowed,
+                    &|_| true,
                     |_| Vec::new(),
                 )
                 .expect("reads"),

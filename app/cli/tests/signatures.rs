@@ -759,10 +759,10 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     let r = replaying("signatures-replay");
     // A card the secretary proposed, tapped with the key's value.
     let carded = r.open("A key");
-    r.twice(
-        &format!("/api/secretary/conversations/{carded}/say"),
-        &serde_json::json!({ "say": "the notifications topic is missing" }),
-        202,
+    let _ = common::say(
+        &r.running.base,
+        &carded,
+        "the notifications topic is missing",
     );
     assert_eq!(r.settled(&carded)["proposals"][0]["act"]["kind"], "secret");
     r.twice(
@@ -776,14 +776,10 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
         "the tapped secret was set exactly once"
     );
 
-    // A turn said, a round asked again, an edit: each once.
+    // A round asked again and an edit: each once. A turn a tab says is its line, taken once.
     let asked = r.open("A morning");
     let path = |verb: &str| format!("/api/secretary/conversations/{asked}/{verb}");
-    r.twice(
-        &path("say"),
-        &serde_json::json!({ "say": "what changed" }),
-        202,
-    );
+    let _ = common::say(&r.running.base, &asked, "what changed");
     r.settled(&asked);
     let sessions = r.fakes.model.opened().len();
     r.twice(&path("regenerate"), &serde_json::json!({}), 202);
@@ -829,27 +825,50 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     );
 }
 
-/// The same request sent many times AT ONCE is performed once: each copy is answered by the
-/// performance, from its record, or refused while it runs, and the turn is said once.
+/// The same line handed over many times AT ONCE is taken once: each copy's receipt adopts it or
+/// names it already held, and the turn is said once.
 #[test]
-fn a_request_sent_many_times_at_once_is_performed_once() {
+fn a_line_handed_over_many_times_at_once_is_taken_once() {
     let r = replaying("signatures-race");
     let id = r.open("At once");
-    let url = r.url(&format!("/api/secretary/conversations/{id}/say"));
-    let body = serde_json::json!({ "say": "only once" });
-    let statuses: Vec<u16> = std::thread::scope(|scope| {
+    let base = &r.running.base;
+    let sealed = common::sealed(
+        base,
+        &id,
+        &common::question(base, "only once", Vec::new(), Vec::new()),
+    );
+    let receipts: Vec<serde_json::Value> = std::thread::scope(|scope| {
         let copies: Vec<_> = (0..8)
-            .map(|_| scope.spawn(|| common::status(&common::act_signed(&url, &body, &r.phone))))
+            .map(|_| scope.spawn(|| common::post_lines(base, &sealed.body)))
             .collect();
         copies
             .into_iter()
             .map(|copy| copy.join().expect("a copy"))
             .collect()
     });
-    assert!(
-        statuses.iter().all(|status| [202, 409].contains(status)),
-        "{statuses:?}"
+    let statuses: Vec<&str> = receipts
+        .iter()
+        .map(|receipt| {
+            let has = |list: &str| {
+                receipt[list]
+                    .as_array()
+                    .is_some_and(|names| names.iter().any(|n| n == sealed.name.as_str()))
+            };
+            if has("adopted") {
+                "adopted"
+            } else if has("already") {
+                "already"
+            } else {
+                "refused"
+            }
+        })
+        .collect();
+    assert_eq!(
+        statuses.iter().filter(|s| **s == "adopted").count(),
+        1,
+        "{receipts:?}"
     );
+    assert!(!statuses.contains(&"refused"), "{receipts:?}");
     let reading = r.settled(&id);
     let said = reading["turns"]
         .as_array()
@@ -935,9 +954,10 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
                 "name": MARKER,
             })
         }
-        "secretary/conversations/{conversation}/erase" => serde_json::json!({ "turns": [0] }),
-        "secretary/conversations/{conversation}/say"
-        | "secretary/conversations/{conversation}/edit" => serde_json::json!({ "say": MARKER }),
+        "secretary/conversations/{conversation}/erase" => {
+            serde_json::json!({ "lines": ["a".repeat(64)] })
+        }
+        "secretary/conversations/{conversation}/edit" => serde_json::json!({ "say": MARKER }),
         "secretary/conversations/{conversation}/proposals/{index}/tap" => {
             serde_json::json!({ "value": SECRET })
         }
@@ -1023,19 +1043,13 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
     let r = replaying_with("signatures-private", private_model());
     let mut sent = Sent::default();
     let remembered = r.open("Remember");
-    sent.send(
-        &r,
-        &format!("/api/secretary/conversations/{remembered}/say"),
-        &serde_json::json!({ "say": "remember both" }),
-        &r.phone,
-    );
+    let _ = common::say(&r.running.base, &remembered, "remember both");
     r.settled(&remembered);
     let carded = r.open("A key");
-    sent.send(
-        &r,
-        &format!("/api/secretary/conversations/{carded}/say"),
-        &serde_json::json!({ "say": "the notifications topic is missing" }),
-        &r.phone,
+    let _ = common::say(
+        &r.running.base,
+        &carded,
+        "the notifications topic is missing",
     );
     r.settled(&carded);
     let (status, forgot) = sent.send(
@@ -1092,7 +1106,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
         assert_ne!(status, 400, "{path}: {said}");
     }
 
-    assert!(listed > 20, "the route list was read: {listed}");
+    assert!(listed > 15, "the route list was read: {listed}");
     for ((path, status, name), digest) in sent.requests.iter().zip(&sent.digests) {
         let record = r
             .running

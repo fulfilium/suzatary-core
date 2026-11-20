@@ -26,8 +26,8 @@ use crate::intents::{Intents, Shown};
 use crate::part::Who;
 use crate::places::Place;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Outcome, Question, Questioning, Reach, Rounding, Said,
-    Scroll, Secret, Window, answered, read,
+    self, Act, Answer, Context, Local, Outcome, Question, Reach, Said, Scroll, Secret, Window,
+    answered, read,
 };
 use crate::slices::Slices;
 use crate::zone;
@@ -81,8 +81,13 @@ pub enum Hold {
 #[ts(rename = "ConversationAsk")]
 pub enum Ask {
     Said(Box<Spoken>),
+    /// A regenerate.
     Round,
-    Rename { title: String },
+    /// A stop sealed in the tab.
+    Stop,
+    Rename {
+        title: String,
+    },
     Forget(u64),
     Erase,
     Card(card::Asking),
@@ -505,7 +510,7 @@ impl Program for Conversation {
                 vec![Effect::Scroll { to: Scroll::End }]
             }
             Msg::Stop => stop(m),
-            Msg::Regenerate => vec![round(m, Rounding::Regenerate)],
+            Msg::Regenerate => vec![regenerate(m)],
             Msg::Edit => match again(m).cloned() {
                 Some(q) => {
                     let outs = m.composer.edit(&q);
@@ -519,15 +524,18 @@ impl Program for Conversation {
             }
             Msg::Erase(turn) => {
                 m.erasing = None;
-                vec![Effect::Act {
-                    ask: Ask::Erase,
-                    act: Act::Erase {
-                        conversation: m.id.clone(),
-                        turns: vec![u32::try_from(turn).unwrap_or(u32::MAX)],
-                    },
-                    secret: Secret::None,
-                    told: runtime::Told::Held,
-                }]
+                line_of(m, turn)
+                    .map(|line| Effect::Act {
+                        ask: Ask::Erase,
+                        act: Act::Erase {
+                            conversation: m.id.clone(),
+                            lines: vec![line],
+                        },
+                        secret: Secret::None,
+                        told: runtime::Told::Held,
+                    })
+                    .into_iter()
+                    .collect()
             }
             Msg::Forget(fact) => vec![Effect::Act {
                 ask: Ask::Forget(fact),
@@ -645,14 +653,21 @@ fn say(m: &mut Model, sent: composer::Sent) -> Vec<Effect> {
         edit,
     };
     m.sent = Some(sent.text.clone());
+    if !edit {
+        // Sealed in the tab and drawn at once; the box's acceptance of the line is its answer.
+        return vec![Effect::Core {
+            ask: Ask::Said(Box::new(spoken)),
+            question: runtime::Core::Line {
+                line: runtime::Sealing::Say {
+                    conversation: m.id.clone(),
+                    question: runtime::Asking::of(&sent),
+                },
+            },
+        }];
+    }
     vec![Effect::Act {
         ask: Ask::Said(Box::new(spoken)),
-        act: Act::Question {
-            kind: if edit {
-                Questioning::Edit
-            } else {
-                Questioning::Say
-            },
+        act: Act::Edit {
             question: Question {
                 conversation: m.id.clone(),
                 after: u32::try_from(total(m)).unwrap_or(u32::MAX),
@@ -668,17 +683,23 @@ fn say(m: &mut Model, sent: composer::Sent) -> Vec<Effect> {
 
 fn stop(m: &Model) -> Vec<Effect> {
     if writes(m) && running(m) {
-        vec![round(m, Rounding::Stop)]
+        vec![Effect::Core {
+            ask: Ask::Stop,
+            question: runtime::Core::Line {
+                line: runtime::Sealing::Stop {
+                    conversation: m.id.clone(),
+                },
+            },
+        }]
     } else {
         Vec::new()
     }
 }
 
-fn round(m: &Model, kind: Rounding) -> Effect {
+fn regenerate(m: &Model) -> Effect {
     Effect::Act {
         ask: Ask::Round,
-        act: Act::Round {
-            kind,
+        act: Act::Regenerate {
             conversation: m.id.clone(),
             after: u32::try_from(total(m)).unwrap_or(u32::MAX),
         },
@@ -1074,6 +1095,8 @@ fn tell(m: &mut Model) -> Vec<Effect> {
 }
 
 fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
+    // A line sealed in the tab is answered with what it sealed, an act with how the box took it.
+    let sealed = || answered::<runtime::Sealed>(a.clone()).err();
     let said = answered::<Outcome>(a.clone());
     let refused = match &said {
         Ok(Outcome::Answered {
@@ -1089,39 +1112,22 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
             | Outcome::Already,
         ) => None,
     };
+    let refused = match &ask {
+        Ask::Said(spoken) if !spoken.edit => sealed(),
+        Ask::Stop => sealed(),
+        Ask::Said(_)
+        | Ask::Round
+        | Ask::Rename { .. }
+        | Ask::Forget(_)
+        | Ask::Erase
+        | Ask::Card(_)
+        | Ask::Composer(_)
+        | Ask::Slice
+        | Ask::Search(_) => refused,
+    };
     match ask {
-        Ask::Said(spoken) => match refused {
-            Some(e) => {
-                m.sent = None;
-                m.anchor = match m.anchor {
-                    Anchor::Asking(n) if n > 1 => Anchor::Asking(n - 1),
-                    Anchor::Asking(_) => Anchor::Newest,
-                    a @ (Anchor::Newest | Anchor::Question(_) | Anchor::Drifted) => a,
-                };
-                let files = Vec::new();
-                let outs = m.composer.failed(composer::Sent {
-                    text: spoken.text,
-                    references: spoken.references,
-                    files,
-                    mode: if spoken.edit {
-                        composer::Mode::Editing
-                    } else {
-                        composer::Mode::Asking
-                    },
-                });
-                let mut effects = composed(m, outs);
-                effects.push(Effect::Toast { words: e });
-                effects
-            }
-            None => match payload_turn(m, &spoken.text) {
-                Some(turn) if m.sent.as_deref() == Some(&spoken.text) => {
-                    m.sent = None;
-                    sent(m, turn)
-                }
-                Some(_) | None => Vec::new(),
-            },
-        },
-        Ask::Round | Ask::Erase => refused
+        Ask::Said(spoken) => answered_said(m, *spoken, refused),
+        Ask::Round | Ask::Stop | Ask::Erase => refused
             .map(|words| Effect::Toast { words })
             .into_iter()
             .collect(),
@@ -1272,13 +1278,31 @@ fn silent(t: &TurnRow) -> bool {
     matches!(t.who, Speaker::Model { .. }) && t.text.is_empty() && t.gone.is_none()
 }
 
+/// The name of the line of the turn at `index`, as the payload names it.
+fn line_of(m: &Model, index: usize) -> Option<String> {
+    let payload = payload(m)?;
+    let at = payload.turns.iter().position(|t| t.index == index)?;
+    payload.lines.get(at).cloned()
+}
+
+/// Why the box has not taken the turn `t`'s line yet, in its words, where this device wrote it.
+fn waits(m: &Model, t: &TurnRow) -> Option<String> {
+    let line = line_of(m, t.index)?;
+    payload(m)?
+        .waiting
+        .iter()
+        .find(|w| w.line == line)
+        .map(|w| w.why.clone())
+}
+
+/// Whether `a` erases the turn `t` alone.
+fn erases(m: &Model, a: &Act, t: &TurnRow) -> bool {
+    matches!(a, Act::Erase { conversation, lines } if *conversation == m.id && line_of(m, t.index).is_some_and(|line| lines == &vec![line]))
+}
+
 /// The turn is drawn erased once the replica holds the box's erasure.
 fn erase(m: &Model, t: &TurnRow) -> Node<Msg> {
-    let turn = u32::try_from(t.index).unwrap_or(u32::MAX);
-    let shown = m.intents.about(
-        |a| matches!(a, Act::Erase { conversation, turns } if *conversation == m.id && turns == &vec![turn]),
-        |_| t.gone.is_some(),
-    );
+    let shown = m.intents.about(|a| erases(m, a, t), |_| t.gone.is_some());
     let idle = || view! { Button "act act-erase" {Type => "button"} @click(Msg::Erasing(Some(t.index))) ["Erase"] };
     let parts = match shown {
         Shown::Pending | Shown::Taken => vec![chrome::inline_wait()],
@@ -1357,10 +1381,7 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
     let erasable = writes(m) && t.gone.is_none() && !queued(t);
     let at_rest = !erasable
         || (m.erasing != Some(t.index)
-            && {
-                let turn = u32::try_from(t.index).unwrap_or(u32::MAX);
-                m.intents.about(|a| matches!(a, Act::Erase { conversation, turns } if *conversation == m.id && turns == &vec![turn]), |_| t.gone.is_some()) == Shown::Absent
-            });
+            && m.intents.about(|a| erases(m, a, t), |_| t.gone.is_some()) == Shown::Absent);
     let mut items = rich
         .map(|b| answer::copies(&t.text, b, Msg::Copy))
         .unwrap_or_default();
@@ -1371,11 +1392,13 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
     let menu = answer::more(items, !at_rest);
     let controls =
         (reply.is_some() || menu.is_some()).then(|| view! { Div "turncontrols" [reply, menu] });
+    let waits = waits(m, t).map(|why| para("turnwaits", format!("Not taken yet: {why}")));
     view! { Div {Class => class, Data("who") => Who::of(&t.who).name()} [
         view! { Div "turnwho" [speaker(t)] },
         body,
         photos,
         refs,
+        waits,
         controls,
     ] }
 }
@@ -1669,6 +1692,48 @@ fn transcript(m: &Model) -> Node<Msg> {
     ] }
 }
 
+/// The answer to a question said: its line kept in the tab (or the box's act taken), or refused
+/// with why, its words back where none were typed since.
+fn answered_said(m: &mut Model, spoken: Spoken, refused: Option<String>) -> Vec<Effect> {
+    if let Some(e) = refused {
+        m.sent = None;
+        m.anchor = match m.anchor {
+            Anchor::Asking(n) if n > 1 => Anchor::Asking(n - 1),
+            Anchor::Asking(_) => Anchor::Newest,
+            a @ (Anchor::Newest | Anchor::Question(_) | Anchor::Drifted) => a,
+        };
+        let outs = m.composer.failed(composer::Sent {
+            text: spoken.text,
+            references: spoken.references,
+            files: Vec::new(),
+            attachments: Vec::new(),
+            mode: if spoken.edit {
+                composer::Mode::Editing
+            } else {
+                composer::Mode::Asking
+            },
+        });
+        let mut effects = composed(m, outs);
+        effects.push(Effect::Toast { words: e });
+        return effects;
+    }
+    // A question kept in the tab: its words leave the box now.
+    let outs = if spoken.edit {
+        Vec::new()
+    } else {
+        m.composer.sealed()
+    };
+    let mut effects = composed(m, outs);
+    match payload_turn(m, &spoken.text) {
+        Some(turn) if m.sent.as_deref() == Some(&spoken.text) => {
+            m.sent = None;
+            effects.extend(sent(m, turn));
+        }
+        Some(_) | None => {}
+    }
+    effects
+}
+
 #[cfg(test)]
 mod tests {
     use crate::runtime::Text;
@@ -1726,6 +1791,11 @@ mod tests {
     }
 
     fn window(turns: usize) -> Msg {
+        window_waiting(turns, &json!([]))
+    }
+
+    /// [`window`], with `waiting` the payload's own lines the box has not taken yet.
+    fn window_waiting(turns: usize, waiting: &serde_json::Value) -> Msg {
         let rows: Vec<_> = (0..turns)
             .map(|i| json!({"index": i, "text": format!("t{i}"), "at": "", "attempt": "current", "gone": null,
                 "who": "person", "references": [], "attachments": [], "queued": false}))
@@ -1734,7 +1804,8 @@ mod tests {
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
         let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
-            "proposals": [], "unplaced": [], "state": "idle", "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
+            "lines": (0..turns).map(|i| format!("{i:064x}")).collect::<Vec<_>>(),
+            "proposals": [], "unplaced": [], "waiting": waiting, "state": "idle", "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Window,
             reading: Reading::Val {
@@ -1744,6 +1815,39 @@ mod tests {
             },
             behind: None,
         }))
+    }
+
+    /// An own line the box has not taken yet draws on its turn why, in the box's words; a turn
+    /// whose line the box holds draws no such thing.
+    #[test]
+    fn a_line_the_box_has_not_taken_yet_says_why_on_its_turn() {
+        let mut rt = page();
+        let why = "it is dated 600 s ahead of the box's clock";
+        let msg = window_waiting(2, &json!([{"line": format!("{:064x}", 1), "why": why}]));
+        let mut patches = Vec::new();
+        let (drawn, mut effects) = rt.step(msg);
+        patches.extend(drawn);
+        while effects
+            .iter()
+            .any(|e| matches!(e, Effect::Frame { ask: Ask::Slice }))
+        {
+            let (drawn, more) = rt.step(Msg::Host(Box::new(Input::Answered {
+                ask: Ask::Slice,
+                answer: Answer::Done {
+                    body: Text::printed(&serde_json::Value::Null),
+                },
+            })));
+            patches.extend(drawn);
+            effects = more;
+        }
+        let drawn = String::from_utf8_lossy(&viewtree::patch::encode(&patches)).into_owned();
+        assert!(drawn.contains("t1"), "the turns are drawn: {}", drawn.len());
+        assert!(drawn.contains(&format!("Not taken yet: {why}")), "{drawn}");
+        assert_eq!(
+            drawn.matches("Not taken yet").count(),
+            1,
+            "on its own turn alone"
+        );
     }
 
     fn scrolled(at: &str) -> Msg {

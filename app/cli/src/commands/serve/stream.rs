@@ -129,9 +129,9 @@ pub async fn conversation(AxumState(state): AxumState<State>, raw: RawPathParams
 async fn transcript_state(state: &State, id: ConversationId) -> ConversationState {
     let caps = state.first.caps;
     blocking(move || {
-        Ok::<_, Refusal>(suzatary_conversations::secretary::store::state(
-            &suzatary_lines::secretary::conversations::read(caps.secretary.conversations, &id)?,
-        ))
+        Ok::<_, Refusal>(
+            suzatary_lines::secretary::transcript::read(caps.secretary.conversations, &id)?.state(),
+        )
     })
     .await
     .unwrap_or(ConversationState::Idle)

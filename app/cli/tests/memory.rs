@@ -32,11 +32,7 @@ fn served(tag: &str, model: FakeModel) -> (Arc<Fakes>, String) {
 /// Say something in a fresh conversation and wait for the round to end.
 fn said(base: &str, words: &str) -> (String, serde_json::Value) {
     let id = common::opened(base, "Memory");
-    let say = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": words}),
-    );
-    assert_eq!(common::status(&say), 202);
+    let _ = common::say(base, &id, words);
     (id.clone(), common::settled(base, &id))
 }
 

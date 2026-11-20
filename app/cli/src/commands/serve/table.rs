@@ -115,16 +115,6 @@ pub fn table() -> Vec<Route> {
             get(stream::conversation),
         ),
         Route::post(
-            "/api/secretary/conversations/{conversation}/say",
-            Scope::Box,
-            secretary::say,
-        ),
-        Route::post(
-            "/api/secretary/conversations/{conversation}/stop",
-            Scope::Box,
-            secretary::stop,
-        ),
-        Route::post(
             "/api/secretary/conversations/{conversation}/regenerate",
             Scope::Box,
             secretary::regenerate,

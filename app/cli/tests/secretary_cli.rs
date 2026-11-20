@@ -92,11 +92,7 @@ fn proposed(instance: &Instance) -> ConversationId {
         .start()
         .base;
     let id = common::opened(&base, "Morning");
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "draft the reply to counsel"}),
-    );
-    assert_eq!(common::status(&said), 202);
+    let _ = common::say(&base, &id, "draft the reply to counsel");
     common::poll_conversation(&base, &id, |payload| {
         payload["state"] == "idle"
             && payload["proposals"]

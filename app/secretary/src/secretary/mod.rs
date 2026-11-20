@@ -188,6 +188,7 @@ pub fn answer<'p>(
     }
     let pick = pick();
     let load = || load_references(caps, deployment, settables, chains, id);
+    let confirms = confirming(chains, caps.clock);
     let run =
         |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
     // A lost session is asked statelessly of the same model, never of a second pick.
@@ -220,34 +221,30 @@ pub fn answer<'p>(
             sink,
             load: &load,
             retry,
+            confirms: &confirms,
         },
     )
 }
 
-/// Stop what waits before any round has started on it, as `by`.
-///
-/// # Errors
-/// [`Refusal::conflict`] when nothing waits; the store's failures.
-pub fn stop_waiting(
-    conversations: Conversations<'_>,
-    clock: &dyn Clock,
-    id: &ConversationId,
-    by: &Actor,
-) -> Result<(), Refusal> {
-    if !transcript::read(conversations, id)?.owes_a_round() {
-        return Err(Refusal::conflict(format!(
-            "nothing is being answered in {id}, so there is nothing to stop"
-        )));
+/// Whether every todo some references name is confirmed, as `chains` read when asked.
+pub(crate) fn confirming<'c>(
+    chains: &'c [Bound<'_>],
+    clock: &'c dyn Clock,
+) -> impl Fn(&[suzatary_base::reference::Reference]) -> bool + 'c {
+    move |references| {
+        !references
+            .iter()
+            .any(|reference| matches!(reference, suzatary_base::reference::Reference::Todo(_)))
+            || {
+                let read = chains_read(chains);
+                let set = read.set(clock.now());
+                let speaker = suzatary_inbox::secretary::stamp::Speaker::device("");
+                matches!(
+                    suzatary_inbox::secretary::stamp::pointing(speaker, references, &set),
+                    suzatary_inbox::secretary::stamp::Stamp::Actor(_)
+                )
+            }
     }
-    transcript::push(
-        conversations,
-        id,
-        &Entry::Stopped {
-            at: clock.now(),
-            by: by.as_str().to_owned(),
-        },
-    )?;
-    Ok(())
 }
 
 /// One [`Round`] under `rules`, and the conversation as it leaves it.

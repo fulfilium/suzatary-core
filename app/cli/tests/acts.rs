@@ -307,8 +307,8 @@ fn a_note_on_an_unconfirmed_agent_todo_makes_remember_a_card() {
     assert_eq!(taint, Taint::Clean);
 }
 
-/// The owner's turn that points at a todo is stamped by what it points at, where the say route
-/// writes it: unconfirmed for the agent's todo, his own for one he wrote.
+/// The owner's turn that points at a todo is read by what it points at, as the claim judged it
+/// from the chains: unconfirmed for the agent's todo, his own for one he wrote.
 #[test]
 fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
     let (base, fakes) = writing(
@@ -317,11 +317,14 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
     );
     let id = common::opened(&base, "Pointing");
     let stamped = |todo: &str| {
-        let say = common::act(
-            &format!("{base}/api/secretary/conversations/{id}/say"),
-            &serde_json::json!({"say": "this one", "references": [format!("todo:life/{todo}")]}),
+        let _ = common::say_with(
+            &base,
+            &id,
+            "this one",
+            vec![format!("todo:life/{todo}").parse().expect("a reference")],
+            Vec::new(),
         );
-        assert_eq!(common::status(&say), 202);
+        common::settled(&base, &id);
         let stored = conversations::read(
             fakes.conversations.conversations(),
             &suzatary_base::conversation_id::ConversationId::new(id.clone()).expect("a slug"),
@@ -373,11 +376,7 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         [r#"{"say": "Seen."}"#, r#"{"say": "Seen again."}"#],
     );
     let id = common::opened(&base, "Editing");
-    let say = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "this one"}),
-    );
-    assert_eq!(common::status(&say), 202);
+    let _ = common::say(&base, &id, "this one");
     common::poll_conversation(&base, &id, |payload| {
         payload["state"] == "idle"
             && payload["turns"]

@@ -1848,7 +1848,7 @@ fn a_session_is_told_the_facts_then_the_record() {
     // The tree's cuts follow the lines' names, so how many come before the tool answer is chosen
     // for a tree whose parts all fit the budget, one of them a summary and one the hidden part that
     // holds the tool answer; a change to a line's stored print (its rules' name too) moves them.
-    let turns = turns(&[[0u8; 35].as_slice(), &[3], &[0; 12]].concat())
+    let turns = turns(&[[0u8; 34].as_slice(), &[3], &[0; 12]].concat())
         .into_iter()
         .map(|turn| match turn {
             Turn::Person {
@@ -2261,7 +2261,7 @@ fn write_line(
     let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::written_under(
         &fixture_rules(),
         conversation,
-        ada(),
+        suzatary_lines::secretary::transcript::writer(),
         held,
         entry,
         &lines.entropy,
@@ -2753,7 +2753,7 @@ mod recompacting {
     const PINNED_OWNERS: &str = "773eaab228f5f5b1c3dc163194f9d5865a3c2cc6bbfb4790dfc4ff7d3184c03a";
     const PINNED_CLEAN: &str = "b8a7a013284e8568d344cc6b6dce8bcaf28ce7161dd65b8627f4628d0b960d01";
     const PINNED_QUESTIONS: &str =
-        "2810625a492f421b540aa12a9c9c5fd0a65ad92e652011925850c0c8dee690cd";
+        "f93873a4fef96c096732f2341b017246131420ee667472d445c4eb86be7c40d0";
 }
 
 /// Law (a privacy boundary): the box's kept reading of the history holds a summary's words only

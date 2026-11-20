@@ -469,8 +469,9 @@ proptest! {
     /// asks store refuses, the replica's standing objects (the row's joined with the writes')
     /// with F refused are its standing objects had it never written F or anything resting on F.
     /// A refusal of another store's object, or of an object the replica did not write, moves
-    /// nothing, and the replica's refusals name F exactly. The writes alone, with prodromes the
-    /// rows no longer hold, are `app/store/tests/writes.rs`.
+    /// nothing, and the replica's refusals name everything taken back, F and what rests on it, so
+    /// no write goes unsaid. The writes alone, with prodromes the rows no longer hold, are
+    /// `app/store/tests/writes.rs`.
     #[test]
     fn law_a_refusal_in_the_asks_takes_back_what_rests_on_it(
         n in 1usize..9,
@@ -535,6 +536,6 @@ proptest! {
             .collect();
         prop_assert_eq!(names(&refused), joined, "the landed row stands whole beside every write not taken back");
         let told: BTreeSet<Hash> = refused.refusals().iter().map(|(o, _, _)| o.name().clone()).collect();
-        prop_assert_eq!(told, f);
+        prop_assert_eq!(told, gone.iter().map(|n| (*n).clone()).collect::<BTreeSet<Hash>>(), "every write taken back is said, F and what rests on it");
     }
 }

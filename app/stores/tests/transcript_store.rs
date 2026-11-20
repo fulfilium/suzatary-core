@@ -158,6 +158,7 @@ fn a_question_is_answered_once_by_the_round_that_claimed_it() {
             &run.run,
             at(2),
             Retry::Allowed,
+            &|_| true,
             |_| panic!("nothing is closed by the box"),
         )
         .expect("reads")
@@ -415,4 +416,172 @@ proptest::proptest! {
             dead = now;
         }
     }
+}
+
+/// One conversation's lines as a tab and the box wrote them, each over the last: an opening by
+/// the box, then each `(writer, entry)` in turn, read with the keys they were sealed under.
+fn written(lines: &[(&str, Entry)]) -> Transcript {
+    let (held, opens) = sealed_lines(lines);
+    let writes: Vec<Write<'_>> = held
+        .iter()
+        .map(|(name, line, parents)| Write {
+            name,
+            line,
+            parents,
+        })
+        .collect();
+    Transcript::of(&id("morning"), &writes, &opens).expect("a conversation")
+}
+
+/// The digest's reading of the same lines: the taint of the leaf of the line `[writer, …]`
+/// places second, the first after the opening.
+fn digest_taint(lines: &[(&str, Entry)]) -> suzatary_conversations::secretary::taint::Taint {
+    let (held, opens) = sealed_lines(lines);
+    let opened: std::collections::BTreeMap<prodrome_core::event::Hash, Entry> = held
+        .iter()
+        .map(|(name, line, _)| (name.clone(), line.entry(&opens)))
+        .collect();
+    let placed: Vec<suzatary_digest::secretary::digest::Placed<'_>> = held
+        .iter()
+        .map(|(name, line, parents)| (name, line, parents.as_slice()))
+        .collect();
+    let shape = suzatary_digest::secretary::digest::Shape::of(&placed, &opened).expect("a shape");
+    shape
+        .node(&held[1].0)
+        .expect("the line's leaf")
+        .measure()
+        .taint
+}
+
+/// The lines [`written`] reads, each over the last, and what opens their words.
+#[expect(
+    clippy::type_complexity,
+    reason = "the lines and their opener, as a reader takes them"
+)]
+fn sealed_lines(
+    lines: &[(&str, Entry)],
+) -> (
+    Vec<(
+        prodrome_core::event::Hash,
+        suzatary_lines::secretary::line_event::LineEvent,
+        Vec<prodrome_core::event::Hash>,
+    )>,
+    impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey>,
+) {
+    use prodrome_core::event::Hash;
+    use suzatary_lines::secretary::line_event::LineEvent;
+    struct Fresh(std::sync::atomic::AtomicU8);
+    impl suzatary_base::capability::Entropy for Fresh {
+        fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
+            bytes.fill(self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+            Ok(())
+        }
+    }
+    let entropy = Fresh(std::sync::atomic::AtomicU8::new(1));
+    let mut held: Vec<(Hash, LineEvent, Vec<Hash>)> = Vec::new();
+    let mut keys = Vec::new();
+    let first = [("assistant", opened())];
+    for (writer, entry) in first.iter().chain(lines) {
+        let (line, sealed) = LineEvent::write(
+            id("morning"),
+            Actor::new(*writer).expect("an actor"),
+            0,
+            entry,
+            &entropy,
+        )
+        .expect("a line");
+        let parents: Vec<Hash> = held
+            .last()
+            .map(|(name, ..)| name.clone())
+            .into_iter()
+            .collect();
+        let name = Hash::new(format!("{:064x}", held.len() + 1)).expect("a name");
+        keys.extend(sealed);
+        held.push((name, line, parents));
+    }
+    let opens = move |name: &KeyName| -> Words<suzatary_memory::secretary::locked_text::TextKey> {
+        keys.iter()
+            .find(|key| key.name() == *name)
+            .and_then(|key| {
+                suzatary_memory::secretary::locked_text::TextKey::parse(name, key.bytes())
+            })
+            .map_or_else(|| Gone::Missing.into(), Words::kept)
+    };
+    (held, opens)
+}
+
+/// Law 10: a turn another writer wrote reads tainted to every reader until a claim judges it,
+/// and as the join of every judgment after: tainted when any claim judged it so. The transcript
+/// and the digest's leaf read it alike.
+#[test]
+fn a_tab_s_turn_reads_tainted_until_every_claim_judged_it_clean() {
+    use suzatary_conversations::secretary::store::{Covered, RunId};
+    use suzatary_conversations::secretary::taint::{Taint, turn};
+    use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
+    let asked = Entry::Said {
+        at: at(1),
+        turn: Turn::Person {
+            text: "Is the permit due?".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::device("device0"))),
+    };
+    let question = prodrome_core::event::Hash::new(format!("{:064x}", 2)).expect("a name");
+    let judged = |taint: Taint, second: u32| {
+        (
+            "assistant",
+            Entry::Began {
+                at: at(second),
+                covers: vec![Covered {
+                    line: question.clone(),
+                    taint,
+                }],
+                run: RunId::of([u8::try_from(second).expect("a byte"); 16]),
+            },
+        )
+    };
+    let taint_of = |read: &Transcript| turn(&read.stored().turns[0]);
+
+    let unjudged = written(&[("device0", asked.clone())]);
+    assert_eq!(
+        taint_of(&unjudged),
+        Taint::Tainted,
+        "no claim judged it yet"
+    );
+    assert_eq!(
+        digest_taint(&[("device0", asked.clone())]),
+        Taint::Tainted,
+        "the digest's leaf too"
+    );
+
+    let clean = written(&[("device0", asked.clone()), judged(Taint::Clean, 2)]);
+    assert_eq!(taint_of(&clean), Taint::Clean);
+    assert_eq!(
+        digest_taint(&[("device0", asked.clone()), judged(Taint::Clean, 2)]),
+        Taint::Clean
+    );
+
+    let both = written(&[
+        ("device0", asked.clone()),
+        judged(Taint::Clean, 2),
+        judged(Taint::Tainted, 3),
+    ]);
+    assert_eq!(taint_of(&both), Taint::Tainted, "the join of the judgments");
+    assert_eq!(
+        digest_taint(&[
+            ("device0", asked.clone()),
+            judged(Taint::Clean, 2),
+            judged(Taint::Tainted, 3),
+        ]),
+        Taint::Tainted,
+        "the digest's leaf reads the join"
+    );
+
+    let boxed = written(&[("assistant", asked)]);
+    assert_eq!(
+        taint_of(&boxed),
+        Taint::Clean,
+        "the box's own turn keeps its stamp"
+    );
 }

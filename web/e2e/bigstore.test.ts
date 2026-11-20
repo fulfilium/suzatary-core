@@ -31,7 +31,7 @@ import type { Recorded } from "./harness"
 import type { TraceEvent } from "./cdp"
 import { BULK, OBSERVE, placed, settle } from "./longtasks"
 import { layoutsOf, measured, pageThread, threadKey, workerThread } from "./trace"
-import { PHONE, REPLICA_ROWS, SIGNED_POST, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
+import { PHONE, REPLICA_ROWS, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, askAtTheTerminal, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
 // The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
@@ -101,11 +101,9 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
     const before = await app.page.evaluate<number>(`document.querySelectorAll(".turns .turn-model").length`)
     const was = await app.page.evaluate<number>(placed)
     const since = await app.page.evaluate<number>(`performance.now()`)
-    const status = await app.page.evaluate<number>(
-      `${SIGNED_POST}("/api/secretary/conversations/bulk-0/say", JSON.stringify({say: "one more question"})).then((r) => r.status)`,
-    )
-    assert.ok(status < 300, `the box took the line (${status})`)
+    const asked = askAtTheTerminal("bulk-0", "one more question", LINES_INSTANCE)
     const line = await phase(`document.querySelectorAll(".turns .turn-model").length > ${before} && ${placed} > ${was}`, since)
+    await asked
     const warm = await visit("warm")
     const measured = {
       ...SHAPE,

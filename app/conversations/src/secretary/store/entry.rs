@@ -239,6 +239,21 @@ pub enum Entry {
         /// The key of the seal it was sealed again from, which it supersedes.
         from: locked_text::KeyName,
     },
+    /// A person asked again: every live turn beneath this line that descends from `question` is
+    /// set aside, and `question` too for an edit, each named by descent and never by index, so a
+    /// line concurrent with it is never set aside. A regenerate leaves `question` asked afresh.
+    Again {
+        /// When.
+        #[serde(serialize_with = "stamped")]
+        at: Datetime,
+        /// The question asked again, by its line's name.
+        #[serde(serialize_with = "line_name")]
+        question: prodrome_core::event::Hash,
+        /// What it keeps of the question.
+        how: super::Rewind,
+        /// Who asked again: the line's writer.
+        by: String,
+    },
     /// The box claims a round: run `run` covers these turns, each with the taint the box judged
     /// it to carry. It says nothing of its own, so no turn's index moves.
     Began {
@@ -274,7 +289,8 @@ impl Entry {
             | Entry::Coding { .. }
             | Entry::Erased { .. }
             | Entry::Resealed { .. }
-            | Entry::Began { .. } => None,
+            | Entry::Began { .. }
+            | Entry::Again { .. } => None,
         }
     }
 
@@ -299,7 +315,8 @@ impl Entry {
             | Entry::Coding { at, .. }
             | Entry::Erased { at, .. }
             | Entry::Resealed { at, .. }
-            | Entry::Began { at, .. } => *at,
+            | Entry::Began { at, .. }
+            | Entry::Again { at, .. } => *at,
         }
     }
 }
@@ -346,7 +363,8 @@ impl Entry {
             | Entry::Coding { .. }
             | Entry::Erased { .. }
             | Entry::Resealed { .. }
-            | Entry::Began { .. } => None,
+            | Entry::Began { .. }
+            | Entry::Again { .. } => None,
         }
     }
 
@@ -400,4 +418,12 @@ fn template_name<S: serde::Serializer>(template: &TemplateId, to: S) -> Result<S
 /// A naming's title, as the conversation holds it.
 pub(super) fn named(title: &Words<Title>) -> Words<String> {
     title.clone().map(String::from)
+}
+
+/// A line's name as its text.
+fn line_name<S: serde::Serializer>(
+    name: &prodrome_core::event::Hash,
+    to: S,
+) -> Result<S::Ok, S::Error> {
+    to.serialize_str(name.as_str())
 }

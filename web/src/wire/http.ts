@@ -27,7 +27,7 @@ export namespace http {
 
   // The write contract this build keeps: a page reloads when the box's `gate::CLIENT_MIN` passes this number.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 14
+  export const CLIENT = 15
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."
@@ -231,10 +231,18 @@ export namespace http {
 
   // `bound` is how long, in ms, an act waits for its answer; a caller that sets one asks the box what happened instead of waiting forever.
   export const act = <A>(path: string, body: unknown, decoder: d.Decoder<A>, bound?: number): Promise<A> =>
-    inflight.held(acting(path, body, bound)).then(t => decoded(path, decoder, JSON.parse(t)))
+    inflight.held(acting(path, body, bound, "Page")).then(t => decoded(path, decoder, JSON.parse(t)))
+
+  // A post the browser still delivers once the page is gone (`keepalive`), within its 64 KiB for such requests: a larger
+  // one goes as `act` does, and what it carried is posted again at the next load.
+  export const handOver = <A>(path: string, body: unknown, decoder: d.Decoder<A>): Promise<A> =>
+    inflight.held(acting(path, body, undefined, "Outlives")).then(t => decoded(path, decoder, JSON.parse(t)))
+
+  // The most bytes a post that outlives its page carries, under the browser's 64 KiB for every such post in flight.
+  const OUTLIVES = 60_000
 
   // The box's answer as it came, for a reader that parses it itself.
-  export const acted = (path: string, body: unknown, bound?: number): Promise<text.Text<unknown>> => inflight.held(acting(path, body, bound)).then(text.said)
+  export const acted = (path: string, body: unknown, bound?: number): Promise<text.Text<unknown>> => inflight.held(acting(path, body, bound, "Page")).then(text.said)
 
   // A refusal's body, whose error the box words, or null where it is not JSON.
   const parsedOrNull = (body: string): unknown => {
@@ -245,8 +253,10 @@ export namespace http {
     }
   }
 
-  const acting = async (path: string, body: unknown, bound?: number): Promise<string> => {
-    const [init, trace] = await signed(path, actRequest(body))
+  const acting = async (path: string, body: unknown, bound: number | undefined, lives: "Page" | "Outlives"): Promise<string> => {
+    const request = actRequest(body)
+    const keepalive = lives === "Outlives" && typeof request.body === "string" && request.body.length <= OUTLIVES
+    const [init, trace] = await signed(path, { ...request, keepalive })
     const sent = performance.now()
     const response = await fetch(path, { ...init, signal: bound === undefined ? null : AbortSignal.timeout(bound) }).catch((e: unknown) => {
       said(path, trace, 0, performance.now() - sent)

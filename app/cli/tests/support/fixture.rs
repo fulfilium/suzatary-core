@@ -91,6 +91,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         model,
         connected,
         connections,
+        tls,
         bulk,
     } = args;
     let lapsed = *connections == Connections::Lapsed;
@@ -99,6 +100,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     let no_model = *model == Model::Unanswered;
     std::fs::create_dir_all(root)?;
     std::fs::create_dir_all(root.join("briefings"))?;
+    let scheme = served(root, tls.as_deref())?;
     fake_drive(root)?;
     let tip = build_chain(root)?;
     build_project_chain(root)?;
@@ -108,7 +110,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     // The same typed writer `suzatary init` uses, so fixture and deployment cannot drift.
     instance_file(
         root,
-        port,
+        (scheme, port),
         repo,
         mail_config.clone(),
         settings,
@@ -163,7 +165,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     println!(
         "{}",
         serde_json::json!({
-            "base": format!("http://{HOST}:{port}"),
+            "base": format!("{scheme}://{HOST}:{port}"),
             "root": root.display().to_string(),
             "instance": root.join("instance.toml").display().to_string(),
             "login": login,
@@ -189,6 +191,19 @@ const MAIL_SUBDIR: &str = "her";
 
 /// The fixture's maildir root made absolute, because notmuch resolves a relative
 /// `database.path` against `$HOME`, which is the live store.
+/// The scheme the fixture serves: https with the pair in `tls`, copied into the instance's
+/// `tls_dir` where `serve` finds it, or plain http on loopback.
+fn served(root: &Path, tls: Option<&Path>) -> anyhow::Result<&'static str> {
+    let Some(pair) = tls else {
+        return Ok("http");
+    };
+    std::fs::create_dir_all(root.join("tls"))?;
+    for pem in ["cert.pem", "key.pem"] {
+        std::fs::copy(pair.join(pem), root.join("tls").join(pem))?;
+    }
+    Ok("https")
+}
+
 fn fixture_mail_root(root: &Path) -> anyhow::Result<PathBuf> {
     let root = std::path::absolute(root)
         .with_context(|| format!("making the fixture root {} absolute", root.display()))?;
@@ -1069,7 +1084,7 @@ const FIXTURE_HEADER: &str = "\
 /// never touch the live chains or the box's mail.
 fn instance_file(
     root: &Path,
-    port: u16,
+    (scheme, port): (&str, u16),
     repo: &Path,
     mail_config: Option<PathBuf>,
     settings: bool,
@@ -1095,7 +1110,7 @@ fn instance_file(
             Login::from_whois(WRITER_LOGIN),
             Login::from_whois(READER_LOGIN),
         ],
-        app_url: format!("http://{HOST}:{port}"),
+        app_url: format!("{scheme}://{HOST}:{port}"),
         act_as: BTreeMap::from([(Login::from_whois(WRITER_LOGIN), actor(WRITER_ACTOR))]),
         serving: Serving {
             host: HOST.to_owned(),
@@ -1203,6 +1218,11 @@ pub struct Args {
     #[arg(long, value_enum, default_value_t = Connections::Fresh, requires = "settings")]
     connections: Connections,
     /// The generated stores, for measuring a tab that holds large ones.
+    /// A directory holding `cert.pem` and `key.pem` for the fixture's address: copied into the
+    /// instance's `tls_dir`, where `serve` finds them, so the fixture speaks https (and `h2`, as
+    /// the deployment does), and its base and `app_url` name https.
+    #[arg(long)]
+    tls: Option<PathBuf>,
     #[command(flatten)]
     bulk: Bulk,
 }

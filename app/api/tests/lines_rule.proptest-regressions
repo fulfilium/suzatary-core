@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 905589de18f7372e69e1ed07b979b2dd1fb7981bc838a41ae305c118520f6bd9 # shrinks to drawn = [20]
+cc 60b70e812eb6673b8dcd10b26d8cf67b7c34de80cfc2bbcc2f7fd1cf9bbff335 # shrinks to owed = 0, script = [Ask, Stop, Ask], cuts = [Index(9223372036854775808), Index(4611686018427387904)], order = Index(6148914691236517206), shuffle = 0
+cc bec3e7d371413b051336ba93df050d92b0859aac162aafefd310c311af4e0757 # shrinks to owed = 0, script = [Ask, Ask, Ask, Ask, Ask, Stop, Ask, Ask], cuts = [Index(2049638230412172402)], order = Index(9223372036854775808), shuffle = 0
+cc 5dd5a28de88c81b4d99986286b7c008be3a50ef27f8f648724b89ffae838f62a # shrinks to owed = 0, script = [AskTopic { on: 0 }], cuts = [], turn = Index(0)
+cc b7c38b5dbec6e6181dbc7708bfce9413dcb624d59dc6666944fd1b8deb3e5b08 # shrinks to owed = 14, script = [Ask { on: 406273665054648607, key: None }, Regenerate { on: 3748081067030169346 }, Ask { on: 10088776640592340475, key: None }], cuts = [], turn = Index(0)

@@ -31,9 +31,9 @@ fn running(tag: &str, model: FakeModel) -> (Arc<Fakes>, common::Running) {
     (fakes, running)
 }
 
-/// A question in a fresh topic is said through the say route and lands as the owner's own line,
-/// stamped as asked at the box's terminal, and the box records the request under the root key,
-/// so both tell it from a device's.
+/// A question in a fresh topic is sealed at the terminal and lands as the owner's own line,
+/// stamped as asked at the box's terminal and signed by the root key, so both tell it from a
+/// device's.
 #[test]
 fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     let (fakes, running) = running(
@@ -68,13 +68,89 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     );
     assert!(Stamp::owners(said.by.as_ref()), "the owner's words");
     assert!(!suzatary_conversations::secretary::taint::tainted(&stored));
-    let record = running
-        .requests
-        .get(&asked.request)
-        .expect("the records read")
-        .expect("the question is recorded");
-    assert_eq!(record.key, common::cast_keys().root().public().as_str());
-    assert_eq!(record.actor, CAST.owner.actor);
+    let signers: Vec<String> =
+        suzatary_store::store::Reads::objects(fakes.conversations.conversations().lines)
+            .expect("the lines read")
+            .into_iter()
+            .filter_map(|(_, object)| match object {
+                prodrome_core::event::Envelope::Signed(signed) if signed.object == asked.line => {
+                    Some(signed.key.as_str().to_owned())
+                }
+                _ => None,
+            })
+            .collect();
+    assert_eq!(
+        signers,
+        [common::cast_keys().root().public().as_str().to_owned()],
+        "the root key signs the question's line"
+    );
+}
+
+/// A question that lands while an earlier round is answering, after that round last took what was
+/// owed, is answered by a round of its own, and `ask` returns that round's words: never the earlier
+/// round's reply, which lands after the question and so may be read after it.
+#[test]
+fn a_question_said_while_a_round_answers_gets_its_own_reply() {
+    let gate = common::Gate::new();
+    let (fakes, running) = running(
+        "operator-ask-window",
+        FakeModel::saying([
+            r#"{"say": "The permit is due Friday."}"#,
+            r#"{"say": "The garden invoice is paid."}"#,
+        ])
+        .gated(gate.clone()),
+    );
+    let id = common::topic(fakes.conversations.conversations());
+    let first = {
+        let base = running.base.clone();
+        let id = id.clone();
+        std::thread::spawn(move || {
+            ask::ask(&common::operator(&base), &id, "when is the permit due")
+        })
+    };
+    gate.wait_until_entered();
+    // The first round holds its model; the second question is let go once the box holds it.
+    let held = gate.clone();
+    let holding = Arc::clone(&fakes);
+    let asked = id.clone();
+    let releaser = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while std::time::Instant::now() < deadline {
+            let stored = suzatary_lines::secretary::conversations::read(
+                holding.conversations.conversations(),
+                &asked,
+            )
+            .expect("reads");
+            let questions = stored
+                .turns
+                .iter()
+                .filter(|said| {
+                    matches!(
+                        said.turn,
+                        suzatary_conversations::secretary::model::Turn::Person { .. }
+                    )
+                })
+                .count();
+            if questions >= 2 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        held.release();
+    });
+    let second = ask::ask(
+        &common::operator(&running.base),
+        &id,
+        "is the garden invoice paid",
+    )
+    .expect("the second question is answered");
+    releaser.join().expect("the releaser ends");
+    let first = first
+        .join()
+        .expect("the first ask ends")
+        .expect("the first question is answered");
+    assert_eq!(first.answer, "The permit is due Friday.");
+    assert_eq!(second.answer, "The garden invoice is paid.");
 }
 
 /// The operator's tap on a card that sends mail is refused with the reason, and the transport is

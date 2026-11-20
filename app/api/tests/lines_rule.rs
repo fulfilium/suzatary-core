@@ -9,7 +9,13 @@
 //! - a rename of a conversation neither held nor begun in the post, so no tab names an id the
 //!   box mints first;
 //! - a line carried from another store;
-//! - any shape the box alone writes.
+//! - a slot sealed under a key a held line names, or another slot of the same post names;
+//! - any shape the box alone writes;
+//! - a person's turn not stamped as its poster where the post came from, naming an upload the
+//!   box does not hold, or past a full queue;
+//! - a stop of a conversation with nothing being answered;
+//! - an `Again` that does not rest on every live line descending from its question, asks again
+//!   of a question a running round covers, or regenerates a question with no answer yet.
 //!
 //! The same object posted again is answered `already` and changes nothing.
 
@@ -23,9 +29,12 @@ use suzatary_api::sync::{Holding, Received};
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
+use suzatary_conversations::secretary::store::{Covered, Entry, Kind, Namer, Rewind, RunId, Title};
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_held::redact::Rules;
+use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::line_shape::LineShape;
 use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
@@ -74,9 +83,11 @@ fn titled(second: u32, by: &str, title: &str) -> Entry {
 struct Door {
     genesis: Hash,
     names: BTreeSet<Hash>,
-    /// Every line the store holds: `default`'s opening, and what it took.
-    lines: Vec<LineEvent>,
+    /// Every object of a line the store holds: `default`'s opening, and what it took.
+    lines: Vec<(Hash, Envelope<LineEvent>)>,
     entropy: Counting,
+    /// What the box reads beyond the lines: its clock among it.
+    world: &'static dyn suzatary_lines::secretary::lines_rule::World,
 }
 
 /// One line posted: its object, its signature by the device's key, and its slots' keys.
@@ -135,16 +146,25 @@ impl Door {
             &entropy,
         )
         .expect("a line");
+        let default = stored(&genesis, default, Vec::new());
         Self {
-            names: [genesis.clone()].into(),
+            names: [genesis.clone(), default.0.clone()].into(),
             genesis,
             lines: vec![default],
             entropy,
+            world: &OnADevice,
         }
     }
 
+    /// `line` as a tab seals it: a line of `default` rests on its opening, as a tab's line rests on
+    /// its conversation's heads.
     fn change(&self, line: LineEvent, keys: Vec<TextKey>) -> Posted {
-        let change = mk_change(self.genesis.clone(), Vec::new(), line).expect("a change");
+        let deps = if line.conversation().as_str() == "default" {
+            vec![self.default_opening()]
+        } else {
+            Vec::new()
+        };
+        let change = mk_change(self.genesis.clone(), deps, line).expect("a change");
         Posted {
             change: Envelope::Change(change),
             keys,
@@ -155,6 +175,76 @@ impl Door {
     fn opening(&self, entry: &Entry) -> Posted {
         let (line, keys) = LineEvent::begin(ada(), entry, &self.entropy).expect("a line");
         self.change(line, keys)
+    }
+
+    /// A line of `conversation` as a tab seals it, resting on `deps`.
+    fn line_on(&self, conversation: &str, entry: &Entry, deps: &[&Hash]) -> Posted {
+        let id = ConversationId::new(conversation).expect("a slug");
+        let (line, keys) = LineEvent::write(id, ada(), 0, entry, &self.entropy).expect("a line");
+        let deps = deps.iter().map(|dep| (*dep).clone()).collect();
+        let change = mk_change(self.genesis.clone(), deps, line).expect("a change");
+        Posted {
+            change: Envelope::Change(change),
+            keys,
+        }
+    }
+
+    /// A line the box wrote to `default`, resting on `deps`: its name.
+    fn box_wrote(&mut self, entry: &Entry, deps: &[&Hash]) -> Hash {
+        let (line, _) = LineEvent::write(
+            ConversationId::new("default").expect("a slug"),
+            Actor::new("assistant").expect("an actor"),
+            0,
+            entry,
+            &self.entropy,
+        )
+        .expect("a line");
+        let held = stored(
+            &self.genesis,
+            line,
+            deps.iter().map(|dep| (*dep).clone()).collect(),
+        );
+        let name = held.0.clone();
+        self.names.insert(name.clone());
+        self.lines.push(held);
+        name
+    }
+
+    /// A line of `default` as a tab seals it, under the shared key `key` (one of four; the first
+    /// is a held line's), resting on `on`.
+    fn sealed_under(&self, entry: &Entry, key: u8, on: Hash) -> Posted {
+        let (line, keys) = LineEvent::write(
+            ConversationId::new("default").expect("a slug"),
+            ada(),
+            0,
+            entry,
+            &Given([200 + key; 32]),
+        )
+        .expect("a line");
+        Posted {
+            change: Envelope::Change(
+                mk_change(self.genesis.clone(), vec![on], line).expect("a change"),
+            ),
+            keys,
+        }
+    }
+
+    /// `line` held as the store holds a line, resting on `deps`: its name.
+    fn hold(&mut self, line: LineEvent, deps: &[&Hash]) -> Hash {
+        let held = stored(
+            &self.genesis,
+            line,
+            deps.iter().map(|dep| (*dep).clone()).collect(),
+        );
+        let name = held.0.clone();
+        self.names.insert(name.clone());
+        self.lines.push(held);
+        name
+    }
+
+    /// The name of `default`'s opening.
+    fn default_opening(&self) -> Hash {
+        self.lines[0].0.clone()
     }
 
     /// A line of `conversation` as a tab seals it.
@@ -172,11 +262,43 @@ impl Door {
             .map(|p| (p.name().as_str().to_owned(), p.hex()))
             .collect();
         let keys = SlotKeys::parse(&keys).expect("the keys parse");
-        let held = <LinesRule as suzatary_store::admission::Admission>::held(self.lines.iter());
+        let held = <LinesRule as suzatary_store::admission::Admission>::held(&self.lines);
         suzatary_api::sync::receive_changes::<LinesRule>(
-            &Holding {
+            Holding {
                 names: &self.names,
-                held: &held,
+                held,
+                world: self.world,
+            },
+            &prints,
+            &keys,
+            &ada(),
+            &TRUSTING,
+        )
+    }
+
+    /// `posted` handed over beside the extra objects `beside`, read by `world`.
+    fn post_in(
+        &self,
+        posted: &[&Posted],
+        beside: &[String],
+        world: &'static dyn suzatary_lines::secretary::lines_rule::World,
+    ) -> Received {
+        let prints: Vec<String> = posted
+            .iter()
+            .flat_map(|p| p.prints())
+            .chain(beside.iter().cloned())
+            .collect();
+        let keys: BTreeMap<String, Vec<String>> = posted
+            .iter()
+            .map(|p| (p.name().as_str().to_owned(), p.hex()))
+            .collect();
+        let keys = SlotKeys::parse(&keys).expect("the keys parse");
+        let held = <LinesRule as suzatary_store::admission::Admission>::held(&self.lines);
+        suzatary_api::sync::receive_changes::<LinesRule>(
+            Holding {
+                names: &self.names,
+                held,
+                world,
             },
             &prints,
             &keys,
@@ -194,8 +316,8 @@ impl Door {
                 print,
             )
             .expect("parses");
-            if let Some(event) = envelope.into_event() {
-                self.lines.push(event);
+            if matches!(envelope, Envelope::Change(_)) {
+                self.lines.push((name.clone(), envelope));
             }
         }
     }
@@ -231,9 +353,10 @@ fn a_tab_s_lines_sealed_as_the_box_seals_them_are_taken_once() {
     let mut door = Door::new();
     let open = door.opening(&opened(1));
     let conversation = open.change.event().expect("a line").conversation().clone();
-    let rename = door.line(
+    let rename = door.line_on(
         conversation.as_str(),
         &titled(2, "device0", "The zephyr filing"),
+        &[&open.name()],
     );
     let setup = door.opening(&Entry::SetUp {
         at: at(3),
@@ -361,9 +484,23 @@ fn the_rule_refuses_what_the_signer_does_not_prove_and_words_the_box_would_not_s
     });
     assert!(refused_finally(&door.post(&[&review]), &review).contains("a tab opens a topic"));
 
-    // A shape the box alone writes.
+    // A person's turn the signer does not stamp: a tab's turn names its poster.
     let spoken = door.line("default", &unscrubbed);
-    assert!(refused_finally(&door.post(&[&spoken]), &spoken).contains("the box alone writes"));
+    assert!(refused_finally(&door.post(&[&spoken]), &spoken).contains("stamped as its poster"));
+
+    // A shape the box alone writes: the model's turn.
+    let answered = door.line(
+        "default",
+        &Entry::Said {
+            at: at(5),
+            turn: Turn::Model {
+                text: "Done.".to_owned(),
+                calls: Vec::new(),
+            },
+            by: None,
+        },
+    );
+    assert!(refused_finally(&door.post(&[&answered]), &answered).contains("the box alone writes"));
 }
 
 /// Only the box claims a round, so no tab can say a turn of its own was answered or judged: a
@@ -507,6 +644,7 @@ fn a_key_a_held_line_names_is_never_taken_again() {
         &Given(key),
     )
     .expect("a line");
+    let held = stored(&door.genesis, held, Vec::new());
     let door = Door {
         lines: [door.lines.clone(), vec![held]].concat(),
         ..door
@@ -521,6 +659,100 @@ fn a_key_a_held_line_names_is_never_taken_again() {
     .expect("a line");
     let reused = door.change(line, keys);
     assert!(refused_finally(&door.post(&[&reused]), &reused).contains("a key of its own"));
+}
+
+/// No two lines the box takes share a key: of a new topic's opening and its first question sealed
+/// under one key, the opening is judged first and taken, and the question is refused for good as
+/// naming a key a held line names; a line whose own two slots share one is refused, whatever its
+/// shape.
+#[test]
+fn no_two_slots_of_one_post_share_a_key() {
+    let door = Door::new();
+    let (opening, keys) = LineEvent::begin(ada(), &opened(40), &Given([9; 32])).expect("a line");
+    let id = opening.conversation().clone();
+    let opening = door.change(opening, keys);
+    let (first, keys) = LineEvent::write(
+        id,
+        ada(),
+        1,
+        &question(41, "Is the permit due?"),
+        &Given([9; 32]),
+    )
+    .expect("a line");
+    let first = Posted {
+        change: Envelope::Change(
+            mk_change(door.genesis.clone(), vec![opening.name()], first).expect("a change"),
+        ),
+        keys,
+    };
+    let received = door.post(&[&opening, &first]);
+    assert_eq!(said(&received, &opening), Ok(()));
+    assert!(refused_finally(&received, &first).contains("already names"));
+
+    let (called, keys) = LineEvent::write(
+        ConversationId::new("default").expect("a slug"),
+        ada(),
+        0,
+        &Entry::Said {
+            at: at(42),
+            turn: Turn::Model {
+                text: "Looking.".to_owned(),
+                calls: vec![suzatary_conversations::secretary::model::ToolCall {
+                    verb: suzatary_conversations::secretary::tool_name::ToolName::Memory,
+                    args: BTreeMap::new(),
+                }],
+            },
+            by: None,
+        },
+        &Given([11; 32]),
+    )
+    .expect("a line");
+    let called = door.change(called, keys);
+    assert!(refused_finally(&door.post(&[&called]), &called).contains("two of its slots"));
+}
+
+proptest::proptest! {
+    /// Over a generated post of renames, each sealed under a key drawn from a small pool: of the
+    /// lines under one key, the one judged first (the least name, since all are ready together) is
+    /// taken, and every other is refused for good as naming a key a held line names.
+    #[test]
+    fn a_line_is_refused_for_a_shared_key_exactly_when_another_names_it(
+        drawn in proptest::collection::vec(20u8..24, 1..6),
+    ) {
+        let door = Door::new();
+        let lines: Vec<Posted> = drawn
+            .iter()
+            .zip(0u32..)
+            .map(|(byte, n)| {
+                let (line, keys) = LineEvent::write(
+                    ConversationId::new("default").expect("a slug"),
+                    ada(),
+                    0,
+                    &titled(50 + n, "device0", "Garden"),
+                    &Given([*byte; 32]),
+                )
+                .expect("a line");
+                door.change(line, keys)
+            })
+            .collect();
+        let received = door.post(&lines.iter().collect::<Vec<_>>());
+        for (posted, byte) in lines.iter().zip(&drawn) {
+            let first = lines
+                .iter()
+                .zip(&drawn)
+                .filter(|(_, other)| *other == byte)
+                .map(|(one, _)| one.name())
+                .min()
+                .expect("itself");
+            match said(&received, posted) {
+                Ok(()) => proptest::prop_assert_eq!(posted.name(), first),
+                Err((RefusalKind::Final, why)) => {
+                    proptest::prop_assert!(posted.name() != first && why.contains("already names"), "{why}");
+                }
+                Err(other) => proptest::prop_assert!(false, "{other:?}"),
+            }
+        }
+    }
 }
 
 /// The same bytes every time.
@@ -568,5 +800,1048 @@ fn a_tab_s_line_carried_from_elsewhere_is_refused() {
         assert!(
             refused_finally(&door.post(&[&posted]), &posted).contains("carried from another store")
         );
+    }
+}
+
+/// `line` as the store holds it: a change over `deps`, beside its name.
+fn stored(genesis: &Hash, line: LineEvent, deps: Vec<Hash>) -> (Hash, Envelope<LineEvent>) {
+    let change = Envelope::Change(mk_change(genesis.clone(), deps, line).expect("a change"));
+    (seal_hash(&change), change)
+}
+
+/// A post from a device, of a box that keeps no uploads, once the box's clock has moved past
+/// every line the laws date ahead.
+struct Moved;
+
+impl suzatary_lines::secretary::lines_rule::World for Moved {
+    fn now(&self) -> prodrome_core::literal::Datetime {
+        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 20, 0, 0).expect("an instant")
+    }
+
+    fn seat(&self, key: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+        OnADevice.seat(key)
+    }
+
+    fn upload(
+        &self,
+        id: &suzatary_held::attachment::AttachmentId,
+    ) -> Result<Option<suzatary_lines::secretary::lines_rule::Upload>, String> {
+        OnADevice.upload(id)
+    }
+}
+
+/// A post from a device, of a box that keeps no uploads.
+struct OnADevice;
+
+impl suzatary_lines::secretary::lines_rule::World for OnADevice {
+    fn now(&self) -> prodrome_core::literal::Datetime {
+        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
+    }
+
+    fn seat(&self, _: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+        suzatary_signatures::signatures::Seat::Device
+    }
+
+    fn upload(
+        &self,
+        _: &suzatary_held::attachment::AttachmentId,
+    ) -> Result<Option<suzatary_lines::secretary::lines_rule::Upload>, String> {
+        Ok(None)
+    }
+}
+
+fn question(second: u32, text: &str) -> Entry {
+    Entry::Said {
+        at: at(second),
+        turn: Turn::Person {
+            text: text.to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::device("device0"))),
+    }
+}
+
+fn answer(second: u32) -> Entry {
+    Entry::Said {
+        at: at(second),
+        turn: Turn::Model {
+            text: "Here it is.".to_owned(),
+            calls: Vec::new(),
+        },
+        by: None,
+    }
+}
+
+fn claim(second: u32, covers: &Hash) -> Entry {
+    Entry::Began {
+        at: at(second),
+        covers: vec![Covered {
+            line: covers.clone(),
+            taint: Taint::Clean,
+        }],
+        run: RunId::of([3; 16]),
+    }
+}
+
+fn again(second: u32, question: &Hash, how: Rewind) -> Entry {
+    Entry::Again {
+        at: at(second),
+        question: question.clone(),
+        how,
+        by: "device0".to_owned(),
+    }
+}
+
+/// A tab's question stamped as its poster is taken; one past a full queue, or naming an upload
+/// the box does not hold, is refused for good.
+#[test]
+fn a_tab_s_question_is_taken_within_the_queue_and_with_held_uploads() {
+    let mut door = Door::new();
+    let opening = door.default_opening();
+    let asked = door.line_on("default", &question(1, "Is the permit due?"), &[&opening]);
+    let received = door.post(&[&asked]);
+    assert_eq!(said(&received, &asked), Ok(()));
+    door.take(&received);
+
+    let mut last = asked.name();
+    for n in 0..15 {
+        let more = door.line_on("default", &question(2 + n, "and this?"), &[&last]);
+        let received = door.post(&[&more]);
+        assert_eq!(said(&received, &more), Ok(()), "turn {n}");
+        door.take(&received);
+        last = more.name();
+    }
+    let seventeenth = door.line_on("default", &question(20, "one more"), &[&last]);
+    assert!(refused_finally(&door.post(&[&seventeenth]), &seventeenth).contains("already wait"));
+
+    let photo = suzatary_held::attachment::Attachment::accept(PNG).expect("a photo");
+    let pictured = door.line_on(
+        "default",
+        &Entry::Said {
+            at: at(21),
+            turn: Turn::Person {
+                text: String::new(),
+                references: Vec::new(),
+                attachments: vec![photo],
+            },
+            by: Some(Stamp::Actor(Speaker::device("device0"))),
+        },
+        &[&opening],
+    );
+    assert!(refused_finally(&door.post(&[&pictured]), &pictured).contains("no upload"));
+}
+
+/// A stop is taken only where something beneath it is being answered.
+#[test]
+fn a_stop_stops_only_what_is_being_answered() {
+    let mut door = Door::new();
+    let opening = door.default_opening();
+    let idle = door.line_on(
+        "default",
+        &Entry::Stopped {
+            at: at(1),
+            by: "device0".to_owned(),
+        },
+        &[&opening],
+    );
+    assert!(refused_finally(&door.post(&[&idle]), &idle).contains("nothing stops"));
+
+    let asked = door.line_on("default", &question(2, "Is the permit due?"), &[&opening]);
+    let received = door.post(&[&asked]);
+    door.take(&received);
+    let stop = door.line_on(
+        "default",
+        &Entry::Stopped {
+            at: at(3),
+            by: "device0".to_owned(),
+        },
+        &[&asked.name()],
+    );
+    assert_eq!(said(&door.post(&[&stop]), &stop), Ok(()));
+
+    let forged = door.line_on(
+        "default",
+        &Entry::Stopped {
+            at: at(4),
+            by: "bob".to_owned(),
+        },
+        &[&asked.name()],
+    );
+    assert!(refused_finally(&door.post(&[&forged]), &forged).contains("someone else"));
+}
+
+/// Law 11: an `Again` is taken only when it rests on every live line descending from its
+/// question, and refused while a running round covers its question; a regenerate asks again
+/// only of an answered question.
+#[test]
+fn an_again_is_refused_unless_it_saw_the_whole_answer_and_no_round_runs() {
+    let mut door = Door::new();
+    let opening = door.default_opening();
+    let asked = door.line_on("default", &question(1, "Is the permit due?"), &[&opening]);
+    let received = door.post(&[&asked]);
+    door.take(&received);
+    let q = asked.name();
+
+    let early = door.line_on("default", &again(2, &q, Rewind::Regenerate), &[&q]);
+    let why = refused_finally(&door.post(&[&early]), &early);
+    assert!(why.contains("no answer yet"), "{why}");
+
+    let began = door.box_wrote(&claim(3, &q), &[&q]);
+    let running = door.line_on("default", &again(4, &q, Rewind::Edit), &[&began]);
+    assert!(refused_finally(&door.post(&[&running]), &running).contains("stop it first"));
+
+    let answered = door.box_wrote(&answer(5), &[&began]);
+    let unseen = door.line_on("default", &again(6, &q, Rewind::Regenerate), &[&began]);
+    assert!(refused_finally(&door.post(&[&unseen]), &unseen).contains("moved on"));
+
+    for how in [Rewind::Regenerate, Rewind::Edit] {
+        let seen = door.line_on("default", &again(7, &q, how), &[&answered]);
+        assert_eq!(said(&door.post(&[&seen]), &seen), Ok(()), "{how:?}");
+    }
+
+    let answer_line = door.line_on("default", &again(8, &answered, Rewind::Edit), &[&answered]);
+    assert!(refused_finally(&door.post(&[&answer_line]), &answer_line).contains("live question"));
+}
+
+/// A regenerate makes its answered question owed again, so it asks the queue's bound as a
+/// question does: beside fifteen owed questions, asked beside it, it is taken; beside sixteen it
+/// is refused.
+#[test]
+fn an_again_that_makes_a_question_owed_asks_the_queue() {
+    for (owed, taken) in [(15, true), (16, false)] {
+        let mut door = Door::new();
+        let opening = door.default_opening();
+        let asked = door.line_on("default", &question(1, "Is the permit due?"), &[&opening]);
+        let received = door.post(&[&asked]);
+        door.take(&received);
+        let q = asked.name();
+        let began = door.box_wrote(&claim(2, &q), &[&q]);
+        let answered = door.box_wrote(&answer(3), &[&began]);
+        let mut last = opening.clone();
+        for n in 0..owed {
+            let more = door.line_on("default", &question(4 + n, "and this?"), &[&last]);
+            let received = door.post(&[&more]);
+            assert_eq!(said(&received, &more), Ok(()), "question {n}");
+            door.take(&received);
+            last = more.name();
+        }
+        let regenerate = door.line_on(
+            "default",
+            &again(30, &q, Rewind::Regenerate),
+            &[&answered, &last],
+        );
+        let received = door.post(&[&regenerate]);
+        if taken {
+            assert_eq!(said(&received, &regenerate), Ok(()), "beside {owed} owed");
+        } else {
+            let why = refused_finally(&received, &regenerate);
+            assert!(why.contains("already wait"), "beside {owed} owed: {why}");
+        }
+    }
+}
+
+/// The smallest PNG: one transparent pixel.
+const PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+];
+
+/// The box's seats by key: the root key is the operator's, any other a device's.
+struct ByKey;
+
+impl suzatary_lines::secretary::lines_rule::World for ByKey {
+    fn now(&self) -> prodrome_core::literal::Datetime {
+        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
+    }
+
+    fn seat(&self, key: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+        if *key == suzatary_connect::cast::keys::root() {
+            suzatary_signatures::signatures::Seat::Operator
+        } else {
+            suzatary_signatures::signatures::Seat::Device
+        }
+    }
+
+    fn upload(
+        &self,
+        _: &suzatary_held::attachment::AttachmentId,
+    ) -> Result<Option<suzatary_lines::secretary::lines_rule::Upload>, String> {
+        Ok(None)
+    }
+}
+
+/// A seat is proven by a signature the trust admits, never by one merely posted: a device's
+/// question stamped at the operator's seat, beside a worthless signature naming the root key, is
+/// refused for good, and the same question at the device's seat is taken.
+#[test]
+fn a_seat_is_proven_only_by_an_admitted_signature() {
+    let door = Door::new();
+    let opening = door.default_opening();
+    let at_seat = |seat, second| Entry::Said {
+        at: at(second),
+        turn: Turn::Person {
+            text: "Is the permit due?".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::at("device0", seat))),
+    };
+    let claimed = door.line_on(
+        "default",
+        &at_seat(suzatary_signatures::signatures::Seat::Operator, 1),
+        &[&opening],
+    );
+    // A signature that names the root key over the line, made with another key: it never verifies.
+    let phone = suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE);
+    let mut worthless = phone.sign(&claimed.name());
+    worthless.key = suzatary_connect::cast::keys::root();
+    let worthless: Envelope<LineEvent> = Envelope::Signed(worthless);
+    let received = door.post_in(&[&claimed], &[canonical_envelope(&worthless)], &ByKey);
+    assert!(
+        refused_finally(&received, &claimed).contains("where the post came from"),
+        "{:?}",
+        received.outcome
+    );
+
+    let honest = door.line_on(
+        "default",
+        &at_seat(suzatary_signatures::signatures::Seat::Device, 2),
+        &[&opening],
+    );
+    assert_eq!(
+        said(&door.post_in(&[&honest], &[], &ByKey), &honest),
+        Ok(())
+    );
+}
+
+/// The queue's bound counts what a question rests on, held or posted beneath it: of a tab's
+/// seventeen questions, each resting on the one before, sixteen are taken and the seventeenth is
+/// refused for good, whether they come in one post or in two.
+#[test]
+fn the_queue_counts_what_a_question_rests_on() {
+    let door = Door::new();
+    let chain = asked_in_a_row(&door, 17);
+    let taken = |posts: &[&[Posted]]| -> Vec<bool> {
+        let mut door = Door::new();
+        let mut verdicts = BTreeMap::new();
+        for post in posts {
+            let received = door.post(&post.iter().collect::<Vec<_>>());
+            for q in *post {
+                verdicts.insert(q.name(), said(&received, q).is_ok());
+            }
+            door.take(&received);
+        }
+        chain.iter().map(|q| verdicts[&q.name()]).collect()
+    };
+    let expected: Vec<bool> = (0..17).map(|k| k < 16).collect();
+    assert_eq!(taken(&[&chain]), expected, "one post");
+    assert_eq!(
+        taken(&[&chain[..16], &chain[16..]]),
+        expected,
+        "sixteen, then one"
+    );
+    let held = Door::new();
+    let mut door = held;
+    door.take(&door.post(&chain[..16].iter().collect::<Vec<_>>()));
+    assert!(refused_finally(&door.post(&[&chain[16]]), &chain[16]).contains("already wait"));
+}
+
+/// `n` questions of `default` a tab seals one after another, each resting on the one before.
+fn asked_in_a_row(door: &Door, n: u32) -> Vec<Posted> {
+    let mut head = door.default_opening();
+    (0..n)
+        .map(|k| {
+            let q = door.line_on(
+                "default",
+                &question(30 + k, &format!("question {k}")),
+                &[&head],
+            );
+            head = q.name();
+            q
+        })
+        .collect()
+}
+
+/// One line a tab writes in `default`, for the split law.
+#[derive(Debug, Clone, Copy)]
+enum Written {
+    Ask,
+    /// A question with no words, which the rule refuses for good.
+    Empty,
+    Stop,
+}
+
+/// The lines a tab writes, each resting on the one before it, over a store holding `owed` of the
+/// box's questions in `default`: the door that holds them, and the lines.
+fn written_in_a_row(owed: u32, script: &[Written]) -> (Door, Vec<Posted>) {
+    let mut door = Door::new();
+    let mut head = door.default_opening();
+    for k in 0..owed {
+        head = door.box_wrote(&question(10 + k, "asked before"), &[&head]);
+    }
+    let mut lines = Vec::new();
+    for (k, written) in script.iter().enumerate() {
+        let second = 30 + u32::try_from(k).expect("few lines");
+        let entry = match written {
+            Written::Ask => question(second, "Is the permit due?"),
+            Written::Empty => question(second, " "),
+            Written::Stop => Entry::Stopped {
+                at: at(second),
+                by: "device0".to_owned(),
+            },
+        };
+        let line = door.line_on("default", &entry, &[&head]);
+        head = line.name();
+        lines.push(line);
+    }
+    (door, lines)
+}
+
+/// The names of `lines` taken by a door holding what `written_in_a_row` held, posted in `posts`
+/// (each a list of indices into `lines`), as a tab hands them over: what the box holds back for
+/// now (a line whose parent it does not hold yet) goes again with the next post, and once more at
+/// the end until nothing moves.
+fn taken_in(
+    owed: u32,
+    script: &[Written],
+    lines: &[Posted],
+    posts: &[Vec<usize>],
+) -> BTreeSet<Hash> {
+    let (mut door, _) = written_in_a_row(owed, script);
+    let mut taken = BTreeSet::new();
+    let mut again: Vec<usize> = Vec::new();
+    let mut hand = |door: &mut Door, these: Vec<usize>| -> Vec<usize> {
+        if these.is_empty() {
+            return these;
+        }
+        let received = door.post(&these.iter().map(|&k| &lines[k]).collect::<Vec<_>>());
+        door.take(&received);
+        these
+            .into_iter()
+            .filter(|&k| match said(&received, &lines[k]) {
+                Ok(()) => {
+                    taken.insert(lines[k].name());
+                    false
+                }
+                Err((RefusalKind::Final | RefusalKind::Outdated, _)) => false,
+                Err(_) => true,
+            })
+            .collect()
+    };
+    for post in posts {
+        let these: Vec<usize> = again.iter().copied().chain(post.iter().copied()).collect();
+        again = hand(&mut door, these);
+    }
+    while !again.is_empty() {
+        let before = again.len();
+        again = hand(&mut door, again);
+        if again.len() == before {
+            break;
+        }
+    }
+    taken
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(96))]
+
+    /// THE SPLIT LAW: the lines the box takes of what a tab writes are the same however the tab
+    /// splits them across posts and orders them within each and among the posts. A line's verdict
+    /// reads the store and what the line rests on, never what else its post carries.
+    #[test]
+    fn the_lines_taken_do_not_depend_on_how_they_are_posted(
+        owed in 0u32..18,
+        script in proptest::collection::vec(
+            proptest::prop_oneof![
+                4 => proptest::strategy::Just(Written::Ask),
+                1 => proptest::strategy::Just(Written::Empty),
+                2 => proptest::strategy::Just(Written::Stop),
+            ],
+            1..12,
+        ),
+        cuts in proptest::collection::vec(proptest::prelude::any::<proptest::sample::Index>(), 0..4),
+        order in proptest::prelude::any::<proptest::sample::Index>(),
+        shuffle in proptest::prelude::any::<u64>(),
+    ) {
+        let (_, lines) = written_in_a_row(owed, &script);
+        let whole = taken_in(owed, &script, &lines, &[(0..lines.len()).collect()]);
+        // The lines cut into pieces, each piece shuffled, and the pieces turned.
+        let mut at: Vec<usize> = cuts.iter().map(|cut| cut.index(lines.len() + 1)).collect();
+        at.extend([0, lines.len()]);
+        at.sort_unstable();
+        at.dedup();
+        let mut posts: Vec<Vec<usize>> = at.windows(2).map(|w| (w[0]..w[1]).collect()).collect();
+        let mut seed = shuffle;
+        for post in &mut posts {
+            for k in (1..post.len()).rev() {
+                seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                post.swap(k, usize::try_from(seed >> 33).expect("fits") % (k + 1));
+            }
+        }
+        let turn = order.index(posts.len());
+        posts.rotate_left(turn);
+        let split = taken_in(owed, &script, &lines, &posts);
+        proptest::prop_assert_eq!(whole, split, "posts {:?}", posts);
+    }
+}
+
+/// A tab's line rests on its conversation's opening, held or posted beside it: a question resting
+/// on nothing is refused for good, and so is one beside an opening the box refused, and one resting
+/// on an opening this post's rule refuses is refused with it.
+#[test]
+fn a_tab_s_line_rests_on_its_conversation_s_opening() {
+    let door = Door::new();
+    let loose = door.line_on("default", &question(40, "Is the permit due?"), &[]);
+    assert!(refused_finally(&door.post(&[&loose]), &loose).contains("opening"));
+
+    // An opening the box refuses (it names a model), and a question of it resting on nothing.
+    let refused_opening = door.opening(&Entry::Opened {
+        at: at(41),
+        title: Words::kept("The garden".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Topic,
+    });
+    let LineShape::Opened { .. } = refused_opening_shape(&refused_opening) else {
+        panic!("an opening")
+    };
+    let id = conversation_of(&refused_opening);
+    let orphan = door.line(&id, &question(42, "and this?"));
+    let received = door.post(&[&refused_opening, &orphan]);
+    assert!(refused_finally(&received, &refused_opening).contains("names no model"));
+    assert!(said(&received, &orphan).is_err(), "{:?}", received.outcome);
+
+    let resting = door.line_on(&id, &question(43, "and on it?"), &[&refused_opening.name()]);
+    let received = door.post(&[&refused_opening, &resting]);
+    assert!(refused_finally(&received, &refused_opening).contains("names no model"));
+    let why = refused_finally(&received, &resting);
+    assert!(why.contains("which this box refused"), "{why}");
+}
+
+/// A stop posted with the question it stops, as a tab sends both while the box is away, stops it.
+#[test]
+fn a_stop_posted_with_its_question_is_taken() {
+    let door = Door::new();
+    let opening = door.default_opening();
+    let asked = door.line_on("default", &question(50, "Is the permit due?"), &[&opening]);
+    let stop = door.line_on(
+        "default",
+        &Entry::Stopped {
+            at: at(51),
+            by: "device0".to_owned(),
+        },
+        &[&asked.name()],
+    );
+    let received = door.post(&[&asked, &stop]);
+    assert_eq!(said(&received, &asked), Ok(()));
+    assert_eq!(said(&received, &stop), Ok(()), "{:?}", received.outcome);
+}
+
+fn refused_opening_shape(posted: &Posted) -> LineShape {
+    match &posted.change {
+        Envelope::Change(change) => change.event.shape().clone(),
+        _ => panic!("a change"),
+    }
+}
+
+fn conversation_of(posted: &Posted) -> String {
+    match &posted.change {
+        Envelope::Change(change) => change.event.conversation().as_str().to_owned(),
+        _ => panic!("a change"),
+    }
+}
+
+/// A tab's line dated more than `MAX_AHEAD_SECONDS` ahead of the box's clock is refused for now,
+/// to be posted again then, never for good; one a little ahead is taken.
+#[test]
+fn a_line_dated_ahead_of_the_box_is_posted_again_later() {
+    let door = Door::new();
+    let opening = door.default_opening();
+    // The box's clock reads 09:01:00 (`OnADevice`).
+    let dated = |minute: u32| Entry::Said {
+        at: Datetime::new(2026, 11, 17, 9, minute, 0, 0).expect("an instant"),
+        turn: Turn::Person {
+            text: format!("asked at {minute}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::device("device0"))),
+    };
+    let far = door.line_on("default", &dated(11), &[&opening]);
+    match said(&door.post(&[&far]), &far) {
+        Err((RefusalKind::Later, why)) => {
+            assert!(why.contains("ahead of the box's clock"), "{why}");
+        }
+        other => panic!("refused for now, got {other:?}"),
+    }
+    let near = door.line_on("default", &dated(5), &[&opening]);
+    assert_eq!(said(&door.post(&[&near]), &near), Ok(()));
+
+    // A line resting on one that waits waits with it, and says so: never "refused".
+    let after = door.line_on("default", &question(50, "and then?"), &[&far.name()]);
+    match said(&door.post(&[&far, &after]), &after) {
+        Err((RefusalKind::Later, why)) => {
+            assert!(
+                why.contains("has not taken yet, and waits with it"),
+                "{why}"
+            );
+            assert!(!why.contains("refused"), "{why}");
+        }
+        other => panic!("waiting with what it rests on, got {other:?}"),
+    }
+}
+
+/// A conversation is opened once however its openings arrive: two openings of one id in one post
+/// open it once, as two posts of one opening each do.
+#[test]
+fn a_conversation_is_opened_once_in_one_post_too() {
+    let door = Door::new();
+    let first = door.opening(&opened(12));
+    let (line, keys) = LineEvent::begin(ada(), &opened(12), &door.entropy).expect("a line");
+    let twin = door.change(line, keys);
+    assert_eq!(conversation_of(&first), conversation_of(&twin), "one id");
+    let received = door.post(&[&first, &twin]);
+    let taken = [&first, &twin]
+        .iter()
+        .filter(|posted| said(&received, posted).is_ok())
+        .count();
+    assert_eq!(taken, 1, "{:?}", received.outcome);
+}
+
+/// The queue's bound holds over a post of questions that rest on one head beside each other: of
+/// the box's fifteen owed and twenty more posted at once, one is taken, and of five hundred
+/// resting on the opening alone, sixteen.
+#[test]
+fn sibling_questions_never_pass_the_queue() {
+    let (door, _) = written_in_a_row(15, &[]);
+    let head = door.lines.last().expect("a held line").0.clone();
+    let siblings: Vec<Posted> = (0..20)
+        .map(|k| {
+            door.line_on(
+                "default",
+                &question(30 + k, &format!("beside {k}")),
+                &[&head],
+            )
+        })
+        .collect();
+    let received = door.post(&siblings.iter().collect::<Vec<_>>());
+    let taken = siblings
+        .iter()
+        .filter(|q| said(&received, q).is_ok())
+        .count();
+    assert_eq!(taken, 1, "{:?}", received.outcome.refused.first());
+
+    let door = Door::new();
+    let opening = door.default_opening();
+    let many: Vec<Posted> = (0..500)
+        .map(|k| {
+            door.line_on(
+                "default",
+                &question(k % 59, &format!("many {k}")),
+                &[&opening],
+            )
+        })
+        .collect();
+    let received = door.post(&many.iter().collect::<Vec<_>>());
+    let taken = many.iter().filter(|q| said(&received, q).is_ok()).count();
+    assert_eq!(taken, suzatary_conversations::secretary::queue::MAX_PENDING);
+}
+
+/// One line a tab writes, for the post laws: where each rests is an index into what came before
+/// it (the store's own lines first), read modulo how many there are.
+#[derive(Debug, Clone, Copy)]
+enum Wrote {
+    /// A question, sealed under one of the renames' four keys where `key` says so (the first is
+    /// a held line's).
+    Ask {
+        on: usize,
+        key: Option<u8>,
+    },
+    Stop {
+        on: usize,
+    },
+    /// An edit, or a regenerate, which makes an answered question owed again.
+    Again {
+        of: usize,
+        on: usize,
+        regenerate: bool,
+    },
+    /// A rename sealed under one of four keys, so lines share them.
+    Rename {
+        key: u8,
+        on: usize,
+    },
+    /// An opening of the one topic every opening here names, in one of two forms.
+    Open {
+        form: bool,
+    },
+    AskTopic {
+        on: usize,
+    },
+    /// A question dated ten minutes past the box's clock.
+    Ahead {
+        on: usize,
+    },
+    /// A question resting on a line no one holds.
+    Orphan,
+    /// An opening of the topic the store already holds, in one of two forms.
+    Reopen {
+        form: bool,
+    },
+    /// A setup's opening: every one here names one id.
+    SetUp,
+    /// A regenerate of the store's answered question, resting on its answer and on another line.
+    Regenerate {
+        on: usize,
+    },
+}
+
+fn wrote() -> impl proptest::strategy::Strategy<Value = Wrote> {
+    use proptest::prelude::*;
+    prop_oneof![
+        4 => (any::<usize>(), proptest::option::of(0u8..4)).prop_map(|(on, key)| Wrote::Ask { on, key }),
+        2 => any::<usize>().prop_map(|on| Wrote::Stop { on }),
+        2 => (any::<usize>(), any::<usize>(), any::<bool>())
+            .prop_map(|(of, on, regenerate)| Wrote::Again { of, on, regenerate }),
+        2 => (0u8..4, any::<usize>()).prop_map(|(key, on)| Wrote::Rename { key, on }),
+        2 => any::<bool>().prop_map(|form| Wrote::Open { form }),
+        2 => any::<usize>().prop_map(|on| Wrote::AskTopic { on }),
+        1 => any::<usize>().prop_map(|on| Wrote::Ahead { on }),
+        1 => Just(Wrote::Orphan),
+        1 => any::<bool>().prop_map(|form| Wrote::Reopen { form }),
+        1 => Just(Wrote::SetUp),
+        2 => any::<usize>().prop_map(|on| Wrote::Regenerate { on }),
+    ]
+}
+
+/// The lines `script` writes over [`law_store`]: its door, and the lines, siblings and chains
+/// alike.
+fn written_beside(owed: u32, script: &[Wrote]) -> (Door, Vec<Posted>) {
+    let (door, asked, answered) = law_store(owed);
+    let mut default: Vec<Hash> = door.lines.iter().map(|(name, _)| name.clone()).collect();
+    let mut questions: Vec<Hash> = door
+        .lines
+        .iter()
+        .skip(1)
+        .map(|(name, _)| name.clone())
+        .collect();
+    let mut topic: Vec<Hash> = Vec::new();
+    let mut lines = Vec::new();
+    for (k, wrote) in script.iter().enumerate() {
+        let second = 30 + u32::try_from(k).expect("few lines");
+        let pick = |from: &[Hash], at: usize| from[at % from.len()].clone();
+        let line = match *wrote {
+            Wrote::Ask { on, key: None } => door.line_on(
+                "default",
+                &question(second, "asked"),
+                &[&pick(&default, on)],
+            ),
+            Wrote::Ask { on, key: Some(key) } => door.sealed_under(
+                &question(second, "asked under a shared key"),
+                key,
+                pick(&default, on),
+            ),
+            Wrote::Stop { on } => door.line_on(
+                "default",
+                &Entry::Stopped {
+                    at: at(second),
+                    by: "device0".to_owned(),
+                },
+                &[&pick(&default, on)],
+            ),
+            Wrote::Again { of, on, regenerate } if !questions.is_empty() => door.line_on(
+                "default",
+                &again(
+                    second,
+                    &pick(&questions, of),
+                    [Rewind::Edit, Rewind::Regenerate][usize::from(regenerate)],
+                ),
+                &[&pick(&default, on)],
+            ),
+            Wrote::Again { .. } => continue,
+            Wrote::Rename { key, on } => door.sealed_under(
+                &titled(second, "device0", "Garden"),
+                key,
+                pick(&default, on),
+            ),
+            Wrote::Open { form } => door.opening(&topic_opening(form)),
+            Wrote::AskTopic { .. } if topic.is_empty() => continue,
+            Wrote::AskTopic { on } => {
+                let id = topic_id(&door);
+                door.line_on(
+                    &id,
+                    &question(second, "and the trip?"),
+                    &[&pick(&topic, on)],
+                )
+            }
+            Wrote::Ahead { on } => door.line_on("default", &ahead(), &[&pick(&default, on)]),
+            Wrote::Orphan => door.line_on(
+                "default",
+                &question(second, "on nothing held"),
+                &[&Hash::new("f".repeat(64)).expect("a name")],
+            ),
+            Wrote::Reopen { form } => door.opening(&held_topic(form)),
+            Wrote::Regenerate { on } => {
+                let beside = pick(&default, on);
+                let deps: Vec<&Hash> = if beside == answered {
+                    vec![&answered]
+                } else {
+                    vec![&answered, &beside]
+                };
+                door.line_on("default", &again(second, &asked, Rewind::Regenerate), &deps)
+            }
+            Wrote::SetUp => door.opening(&gmail_setup()),
+        };
+        let name = line.name();
+        match wrote {
+            Wrote::Open { .. } | Wrote::AskTopic { .. } => topic.push(name),
+            Wrote::Ask { .. } | Wrote::Ahead { .. } => {
+                questions.push(name.clone());
+                default.push(name);
+            }
+            Wrote::Stop { .. }
+            | Wrote::Again { .. }
+            | Wrote::Regenerate { .. }
+            | Wrote::Rename { .. }
+            | Wrote::Orphan => {
+                default.push(name);
+            }
+            Wrote::Reopen { .. } | Wrote::SetUp => {}
+        }
+        lines.push(line);
+    }
+    (door, lines)
+}
+
+/// The store the post laws write over: `owed` of the box's questions in `default`, an answered
+/// question beside them sealed under the renames' first key, and a tab's topic. The door, the
+/// answered question, and its answer.
+fn law_store(owed: u32) -> (Door, Hash, Hash) {
+    let (mut door, _) = written_in_a_row(owed, &[]);
+    let opening = door.default_opening();
+    let (asked, _) = LineEvent::write(
+        ConversationId::new("default").expect("a slug"),
+        Actor::new("assistant").expect("an actor"),
+        0,
+        &question(8, "answered before"),
+        &Given([200; 32]),
+    )
+    .expect("a line");
+    let asked = door.hold(asked, &[&opening]);
+    let began = door.box_wrote(&claim(8, &asked), &[&asked]);
+    let answered = door.box_wrote(&answer(9), &[&began]);
+    let (topic, _) = LineEvent::begin(ada(), &held_topic(true), &door.entropy).expect("a line");
+    door.hold(topic, &[]);
+    (door, asked, answered)
+}
+
+/// A question dated ten minutes past the box's clock.
+fn ahead() -> Entry {
+    Entry::Said {
+        at: Datetime::new(2026, 11, 17, 9, 11, 0, 0).expect("an instant"),
+        turn: Turn::Person {
+            text: "ahead".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(Stamp::Actor(Speaker::device("device0"))),
+    }
+}
+
+/// An opening of the one topic every such opening of [`written_beside`] names, in one of two
+/// forms.
+fn topic_opening(form: bool) -> Entry {
+    Entry::Opened {
+        at: at(5),
+        title: Words::kept(if form { "The garden" } else { "The trip" }.to_owned()),
+        model: String::new(),
+        kind: Kind::Topic,
+    }
+}
+
+/// A Gmail setup's opening: every one of them at one instant names one id.
+fn gmail_setup() -> Entry {
+    use suzatary_connect::connect::TemplateId;
+    Entry::SetUp {
+        at: at(6),
+        title: Words::kept(TemplateId::Gmail.template().called()),
+        template: TemplateId::Gmail,
+    }
+}
+
+/// The opening of the topic [`written_beside`]'s store holds, in one of two forms: one id.
+fn held_topic(form: bool) -> Entry {
+    Entry::Opened {
+        at: at(7),
+        title: Words::kept(if form { "The permit" } else { "The lease" }.to_owned()),
+        model: String::new(),
+        kind: Kind::Topic,
+    }
+}
+
+/// The id every opening of [`written_beside`] names.
+fn topic_id(door: &Door) -> String {
+    let (line, _) = LineEvent::begin(ada(), &opened(5), &Given([1; 32])).expect("a line");
+    let _ = door;
+    line.conversation().as_str().to_owned()
+}
+
+/// `lines` in the order the box judges one post of them: parents first, ties by name.
+fn canonical_order(lines: &[Posted]) -> Vec<usize> {
+    let names: Vec<Hash> = lines.iter().map(Posted::name).collect();
+    let parents = |k: usize| -> Vec<usize> {
+        let Envelope::Change(change) = &lines[k].change else {
+            return Vec::new();
+        };
+        change
+            .deps
+            .iter()
+            .filter_map(|dep| names.iter().position(|n| n == dep))
+            .collect()
+    };
+    let mut done: Vec<usize> = Vec::new();
+    while done.len() < lines.len() {
+        let next = (0..lines.len())
+            .filter(|k| !done.contains(k) && parents(*k).iter().all(|p| done.contains(p)))
+            .min_by_key(|k| names[*k].clone())
+            .expect("a dag");
+        done.push(next);
+    }
+    done
+}
+
+/// What a door holding `owed` of the box's questions takes of `lines` handed over in `posts`, as
+/// a tab does: what is held back for now goes again with the next post and at the end. The door
+/// after, and the names taken.
+fn handed_over(
+    owed: u32,
+    script: &[Wrote],
+    lines: &[Posted],
+    posts: &[Vec<usize>],
+) -> (Door, BTreeSet<Hash>) {
+    let (mut door, _) = written_beside(owed, script);
+    let mut taken = BTreeSet::new();
+    let mut again: Vec<usize> = Vec::new();
+    let mut hand = |door: &mut Door, these: Vec<usize>| -> Vec<usize> {
+        if these.is_empty() {
+            return these;
+        }
+        let received = door.post(&these.iter().map(|&k| &lines[k]).collect::<Vec<_>>());
+        door.take(&received);
+        these
+            .into_iter()
+            .filter(|&k| match said(&received, &lines[k]) {
+                Ok(()) => {
+                    taken.insert(lines[k].name());
+                    false
+                }
+                Err((RefusalKind::Final | RefusalKind::Outdated, _)) => false,
+                Err(_) => true,
+            })
+            .collect()
+    };
+    for post in posts {
+        let these: Vec<usize> = again.iter().copied().chain(post.iter().copied()).collect();
+        again = hand(&mut door, these);
+    }
+    // The box's clock moves past the lines dated ahead, and what waited goes again.
+    door.world = &Moved;
+    loop {
+        let before = again.len();
+        again = hand(&mut door, again);
+        if again.is_empty() || again.len() == before {
+            break;
+        }
+    }
+    (door, taken)
+}
+
+/// The store's invariants: each conversation opened once, no key named by two lines, and no
+/// conversation owing more than the bound, or than the box owed before (`owed`).
+fn invariants(door: &Door, owed: u32) -> Result<(), String> {
+    let mut openings: BTreeMap<String, usize> = BTreeMap::new();
+    let mut keys: BTreeSet<suzatary_memory::secretary::locked_text::KeyName> = BTreeSet::new();
+    for (_, object) in &door.lines {
+        let Envelope::Change(change) = object else {
+            continue;
+        };
+        if matches!(
+            change.event.shape(),
+            LineShape::Opened { .. } | LineShape::SetUp { .. }
+        ) {
+            *openings
+                .entry(change.event.conversation().as_str().to_owned())
+                .or_default() += 1;
+        }
+        for key in change.event.keys() {
+            if !keys.insert(key.clone()) {
+                return Err(format!("the key {key:?} is named twice"));
+            }
+        }
+    }
+    if let Some((id, n)) = openings.iter().find(|(_, n)| **n > 1) {
+        return Err(format!("{id} is opened {n} times"));
+    }
+    let keyless = |_: &suzatary_memory::secretary::locked_text::KeyName| -> Words<TextKey> {
+        suzatary_memory::secretary::words::Gone::Missing.into()
+    };
+    let genesis: Envelope<LineEvent> =
+        Envelope::Genesis(mk_genesis("lines", &"0".repeat(32)).expect("a genesis"));
+    let objects = door
+        .lines
+        .iter()
+        .cloned()
+        .chain([(seal_hash(&genesis), genesis)]);
+    let read = suzatary_lines::secretary::transcript::of_objects(objects, &keyless)
+        .map_err(|failed| failed.to_string())?;
+    let bound = suzatary_conversations::secretary::queue::MAX_PENDING
+        .max(usize::try_from(owed).expect("few"));
+    for (id, transcript) in &read {
+        let now = transcript.owed().len();
+        if now > bound {
+            return Err(format!("{id} owes {now}, past {bound}"));
+        }
+    }
+    Ok(())
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(96))]
+
+    /// THE POST LAWS, over generated posts of siblings and chains, openings of one id and of an id
+    /// the store holds, setups, stops, edits and regenerates, renames and questions under a shared
+    /// key and under a held line's, lines dated ahead (taken once the box's clock moves) and lines
+    /// resting on nothing held: (i) a post takes exactly what its lines posted one by one in the
+    /// box's order take; (ii) however they are cut into posts and the posts ordered, the store
+    /// keeps its invariants. (iii), a writer's own chain taken the same however it is split, is
+    /// [`the_lines_taken_do_not_depend_on_how_they_are_posted`]: over these siblings it does not
+    /// hold, since of two conflicting lines the one judged first is taken.
+    #[test]
+    fn a_post_is_its_lines_one_at_a_time(
+        owed in 0u32..18,
+        script in proptest::collection::vec(wrote(), 1..14),
+        cuts in proptest::collection::vec(proptest::prelude::any::<proptest::sample::Index>(), 0..4),
+        turn in proptest::prelude::any::<proptest::sample::Index>(),
+    ) {
+        let (_, lines) = written_beside(owed, &script);
+        proptest::prop_assume!(!lines.is_empty());
+        let whole = handed_over(owed, &script, &lines, &[(0..lines.len()).collect()]);
+        let one_by_one: Vec<Vec<usize>> = canonical_order(&lines).into_iter().map(|k| vec![k]).collect();
+        let single = handed_over(owed, &script, &lines, &one_by_one);
+        proptest::prop_assert_eq!(&whole.1, &single.1, "(i)");
+        proptest::prop_assert_eq!(invariants(&whole.0, owed), Ok(()), "(ii) in one post");
+
+        let mut at: Vec<usize> = cuts.iter().map(|cut| cut.index(lines.len() + 1)).collect();
+        at.extend([0, lines.len()]);
+        at.sort_unstable();
+        at.dedup();
+        let mut posts: Vec<Vec<usize>> = at.windows(2).map(|w| (w[0]..w[1]).rev().collect()).collect();
+        let first = turn.index(posts.len());
+        posts.rotate_left(first);
+        let (door, _) = handed_over(owed, &script, &lines, &posts);
+        proptest::prop_assert_eq!(invariants(&door, owed), Ok(()), "(ii) in {:?}", posts);
     }
 }

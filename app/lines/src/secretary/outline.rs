@@ -87,6 +87,7 @@ impl Voices {
             | Step::Asks
             | Step::Answers
             | Step::Rewound { .. }
+            | Step::Again { .. }
             | Step::Proposed
             | Step::Coding { .. }
             | Step::Titled
@@ -176,20 +177,23 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
             })
             .collect::<Vec<_>>(),
     );
-    let mut ordered = order.iter().map(|(at, _)| &lines[*at]);
-    let mut title = match ordered.next() {
+    let mut ordered = order.iter().map(|(at, _)| &lines[*at]).enumerate();
+    let mut title = match ordered.next().map(|(_, line)| line) {
         Some(first) if *first.step == Step::Opened => first.name,
         Some(_) | None => return Err(NotAConversation::Unopened(id.clone())),
     };
     // Each turn's instant, its step and its line; the spans set aside; how many proposals.
     let mut turns: Vec<(Datetime, &Step, &Hash)> = Vec::new();
-    let mut aside: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut aside: BTreeSet<usize> = BTreeSet::new();
+    // Each line's turn, by its place in the order.
+    let mut turn_at: Vec<Option<usize>> = vec![None; order.len()];
     let mut proposals = 0;
     let mut reseals: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     let mut erasures: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
-    for line in ordered {
+    for (place, line) in ordered {
         match line.step {
             Step::Asks | Step::Noted | Step::Answers => {
+                turn_at[place] = Some(turns.len());
                 turns.push((line.at, line.step, line.name));
             }
             Step::Rewound { to } if *to > turns.len() => {
@@ -198,7 +202,15 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
                     to: *to,
                 });
             }
-            Step::Rewound { to } => aside.push(*to..turns.len()),
+            Step::Rewound { to } => aside.extend(*to..turns.len()),
+            Step::Again { question, how } => {
+                if let Some(question) = order.iter().position(|(at, _)| lines[*at].name == question)
+                {
+                    let set =
+                        crate::secretary::again::aside(|at| &order[at].1, question, place, *how);
+                    aside.extend(set.into_iter().filter_map(|at| turn_at[at]));
+                }
+            }
             Step::Proposed => proposals += 1,
             Step::Coding { proposal } if *proposal >= proposals => {
                 return Err(NotAConversation::Phantom {
@@ -227,7 +239,7 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
     let live = turns
         .iter()
         .enumerate()
-        .filter(|(turn, _)| !aside.iter().any(|span| span.contains(turn)));
+        .filter(|(turn, _)| !aside.contains(turn));
     let mut rounds: Vec<Round> = Vec::new();
     for (count, (turn, &(at, step, line))) in live.enumerate() {
         match rounds.last_mut() {

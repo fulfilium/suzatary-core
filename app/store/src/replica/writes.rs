@@ -17,8 +17,10 @@ use crate::replica::held::Node;
 /// Why the box refused a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Refusal {
-    /// May be taken later: posted again.
+    /// May be taken later: posted again, once its device is trusted.
     Trust,
+    /// May be taken later, in the rule's words: posted again, and said once.
+    Later,
     /// Never taken as it is: held back, with everything resting on it.
     Final,
     /// Sealed under rules the box no longer seals by: held back as a final refusal is.
@@ -30,7 +32,7 @@ impl Refusal {
     fn holds_back(self) -> bool {
         match self {
             Refusal::Final | Refusal::Outdated => true,
-            Refusal::Trust => false,
+            Refusal::Trust | Refusal::Later => false,
         }
     }
 }
@@ -89,6 +91,15 @@ pub enum Role {
     Other,
 }
 
+/// How much one post may carry: how many objects, and how many bytes of body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fit {
+    /// The most objects.
+    pub most: usize,
+    /// The most bytes of the posted objects, as the post's body prints them.
+    pub bytes: usize,
+}
+
 /// Every node this replica wrote, by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Writes<N>(BTreeMap<Hash, Own<N>>);
@@ -123,6 +134,8 @@ impl<N: Node> Writes<N> {
             })
             .collect();
         self.apply(&owned);
+        let mut owned = owned;
+        owned.extend(self.held_back());
         owned
     }
 
@@ -138,7 +151,30 @@ impl<N: Node> Writes<N> {
             })
             .collect();
         self.apply(&owned);
+        let mut owned = owned;
+        owned.extend(self.held_back());
         owned
+    }
+
+    /// Each write the box has not taken that rests on one refused for good, refused for good
+    /// itself as resting on it, so its record goes once it is said as a refused one does: the
+    /// move, joined in.
+    fn held_back(&mut self) -> Vec<Own<N>> {
+        let moved: Vec<Own<N>> = self
+            .refusals()
+            .into_iter()
+            .filter(|(node, _, _)| {
+                self.0
+                    .get(node.name())
+                    .is_some_and(|own| !own.answer.is_final())
+            })
+            .map(|(node, kind, reason)| Own {
+                node: node.clone(),
+                answer: Answer::Refused { kind, reason },
+            })
+            .collect();
+        self.apply(&moved);
+        moved
     }
 
     /// Refusals for good in the keeper's words, each of its kind, joined in where they name a
@@ -156,6 +192,20 @@ impl<N: Node> Writes<N> {
             })
             .collect();
         self.answered(answers)
+    }
+
+    /// How many of `owned` [`Writes::apply`] would move: a write not held, or an answer above
+    /// the one held.
+    #[must_use]
+    pub fn moves(&self, owned: &[Own<N>]) -> usize {
+        owned
+            .iter()
+            .filter(|own| {
+                self.0
+                    .get(own.node.name())
+                    .is_none_or(|held| own.answer > held.answer)
+            })
+            .count()
     }
 
     /// `owned` taken, whoever made it: a new write kept, an answer raised.
@@ -201,15 +251,58 @@ impl<N: Node> Writes<N> {
             .collect()
     }
 
-    /// What the box refused for good of these writes, of which kind, with its sentence.
+    /// Every write a refusal for good holds back, of which kind, with its sentence: each the box
+    /// refused for good, and each the box has not taken that rests on one, said as resting on it,
+    /// so no write is held back unsaid.
     #[must_use]
-    pub fn refusals(&self) -> Vec<(&N, Refusal, &str)> {
-        self.0
+    pub fn refusals(&self) -> Vec<(&N, Refusal, String)> {
+        let mut back: BTreeMap<&Hash, (&N, Refusal, String)> = self
+            .0
             .values()
             .filter_map(|own| match &own.answer {
                 Answer::Refused { kind, reason } if kind.holds_back() => {
-                    Some((&own.node, *kind, reason.as_str()))
+                    Some((own.node.name(), (&own.node, *kind, reason.clone())))
                 }
+                Answer::Unsent | Answer::Refused { .. } | Answer::Taken => None,
+            })
+            .collect();
+        loop {
+            let more: Vec<(&Hash, (&N, Refusal, String))> = self
+                .0
+                .values()
+                .filter(|own| own.answer != Answer::Taken && !back.contains_key(own.node.name()))
+                .filter_map(|own| {
+                    let rests_on = own.node.rests_on();
+                    let parent = rests_on.iter().find(|parent| back.contains_key(parent))?;
+                    let (_, kind, reason) = &back[parent];
+                    Some((
+                        own.node.name(),
+                        (
+                            &own.node,
+                            *kind,
+                            format!("it rests on {parent}, which the box refused: {reason}"),
+                        ),
+                    ))
+                })
+                .collect();
+            if more.is_empty() {
+                return back.into_values().collect();
+            }
+            back.extend(more);
+        }
+    }
+
+    /// Every write the box has not taken yet in the rule's words ([`Refusal::Later`]), with its
+    /// sentence: what the person is told once, and what its turn shows.
+    #[must_use]
+    pub fn waiting(&self) -> Vec<(&N, String)> {
+        self.0
+            .values()
+            .filter_map(|own| match &own.answer {
+                Answer::Refused {
+                    kind: Refusal::Later,
+                    reason,
+                } => Some((&own.node, reason.clone())),
                 Answer::Unsent | Answer::Refused { .. } | Answer::Taken => None,
             })
             .collect()
@@ -233,13 +326,16 @@ impl<N: Node> Writes<N> {
             .collect()
     }
 
-    /// [`Writes::unsent`] in posts of at most `most`, each node beside its signatures. A node
-    /// posted before its parent's post waits, and the next exchange posts it again.
+    /// [`Writes::unsent`] in posts that each fit `fit` by count and by the bytes `weight` gives
+    /// each node, each node beside its signatures. A node posted before its parent's post waits,
+    /// and the next exchange posts it again. A node and its signatures heavier than a whole post
+    /// go alone.
     pub fn pieces(
         &self,
         held: impl Fn(&Hash) -> bool,
         role: impl Fn(&N) -> Role,
-        most: usize,
+        fit: Fit,
+        weight: impl Fn(&N) -> usize,
     ) -> Vec<Vec<&N>> {
         let unsent = self.unsent(held);
         let names: BTreeSet<&Hash> = unsent.iter().map(|n| n.name()).collect();
@@ -253,16 +349,22 @@ impl<N: Node> Writes<N> {
                 Role::Signs(_) | Role::Change | Role::Other => rest.push(n),
             }
         }
-        let mut pieces: Vec<Vec<&N>> = Vec::new();
+        let mut pieces: Vec<(Vec<&N>, usize)> = Vec::new();
         for n in rest {
             let mut group = vec![n];
             group.extend(signatures.remove(n.name()).unwrap_or_default());
+            let heavy: usize = group.iter().map(|n| weight(n)).sum();
             match pieces.last_mut() {
-                Some(piece) if piece.len() + group.len() <= most => piece.extend(group),
-                Some(_) | None => pieces.push(group),
+                Some((piece, bytes))
+                    if piece.len() + group.len() <= fit.most && *bytes + heavy <= fit.bytes =>
+                {
+                    piece.extend(group);
+                    *bytes += heavy;
+                }
+                Some(_) | None => pieces.push((group, heavy)),
             }
         }
-        pieces
+        pieces.into_iter().map(|(piece, _)| piece).collect()
     }
 
     /// The writes `held` does not hold.

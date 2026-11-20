@@ -125,7 +125,18 @@ pub struct Written(WrittenName);
 
 impl Params for Written {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
-        let store = named(asked.segment("store")?)?;
+        // A page posts only to a store its build writes: one this box does not keep is another
+        // build's, and the page posts it again once they agree.
+        let store = named(asked.segment("store")?).map_err(|refused| {
+            if refused.status() == refusal::Status::NotFound {
+                Refusal::other_build(format!(
+                    "this box runs another build: {}; it goes again once the box and this page agree",
+                    refused.message()
+                ))
+            } else {
+                refused
+            }
+        })?;
         WrittenName::named(store.kind().name())
             .map(Self)
             .ok_or_else(|| {
@@ -165,17 +176,31 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
         WrittenName::Lines => {
             let conversations = caps.secretary.conversations;
             let keys = beside::<SlotKeys>(&call.body)?;
+            // Keys travel beside the post's lines and nothing else: the rule opens a line's slots
+            // with them, and only a taken line's are kept.
+            let lines = posted_lines(&call.body.objects);
+            if let Some(stray) = keys.names().find(|name| !lines.contains(*name)) {
+                return Err(Refusal::bad_request(format!(
+                    "keys are posted beside {stray}, which is no line of this post"
+                )));
+            }
             let keep = |taken: &[Hash]| -> Result<(), Refusal> {
-                for name in taken {
+                for name in taken.iter().filter(|name| lines.contains(*name)) {
                     for key in keys.of(name) {
                         conversations.keys.set(&key.name(), key)?;
                     }
                 }
                 Ok(())
             };
+            let world: &dyn suzatary_lines::secretary::lines_rule::World = &Beyond {
+                root: call.chain.policy.root.clone(),
+                uploads: call.state.uploads.clone(),
+                now: caps.secretary.clock.now(),
+            };
             let beside = routes::Beside {
                 posted: &keys,
                 keep: &keep,
+                world,
             };
             let lines = conversations.lines;
             let receipt =
@@ -187,6 +212,7 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
             let shared = routes::Beside {
                 posted: &keyless()?,
                 keep: &nothing,
+                world: &(),
             };
             let memberships = topics.memberships;
             routes::receive_changes(memberships, posted, &shared, frontiers, writer, recording)
@@ -195,6 +221,7 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
             let shared = routes::Beside {
                 posted: &keyless()?,
                 keep: &nothing,
+                world: &(),
             };
             let aliases = topics.aliases;
             routes::receive_changes(aliases, posted, &shared, frontiers, writer, recording)
@@ -203,20 +230,92 @@ pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayloa
     .map(Json)
 }
 
-/// Each conversation a line the box took is in told to its worker, so what the line starts (a
-/// setup's opening note) is written.
-fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
-    let vocabulary = line_event::LineVocabulary;
-    let conversations: std::collections::BTreeSet<_> = posted
+/// What the lines' rule reads beyond the lines: the deployment's root key, whose lines are the
+/// operator's, and the uploads a person's turn names.
+struct Beyond {
+    root: prodrome_core::sign::PublicKey,
+    uploads: Option<std::sync::Arc<super::Uploads>>,
+    /// The box's clock as the post came.
+    now: prodrome_core::literal::Datetime,
+}
+
+impl suzatary_lines::secretary::lines_rule::World for Beyond {
+    fn now(&self) -> prodrome_core::literal::Datetime {
+        self.now
+    }
+
+    fn seat(
+        &self,
+        signer: &prodrome_core::sign::PublicKey,
+    ) -> suzatary_signatures::signatures::Seat {
+        if *signer == self.root {
+            suzatary_signatures::signatures::Seat::Operator
+        } else {
+            suzatary_signatures::signatures::Seat::Device
+        }
+    }
+
+    fn upload(
+        &self,
+        id: &suzatary_held::attachment::AttachmentId,
+    ) -> Result<Option<suzatary_lines::secretary::lines_rule::Upload>, String> {
+        use suzatary_io::attachments::Stored;
+        use suzatary_lines::secretary::lines_rule::Upload;
+        let Some(uploads) = &self.uploads else {
+            return Ok(None);
+        };
+        Ok(uploads
+            .store
+            .attachment(id)
+            .map_err(|failed| failed.to_string())?
+            .map(|stored| match stored {
+                Stored::Here { attachment, .. } => Upload::Here(attachment),
+                Stored::Private { attachment, .. } => Upload::Private(attachment),
+            }))
+    }
+}
+
+/// The name of every line `posted` holds, a `Change` of the lines; never a signature.
+fn posted_lines(posted: &[String]) -> std::collections::BTreeSet<Hash> {
+    posted
         .iter()
         .filter_map(|literal| {
-            let envelope =
-                event::parse_envelope::<line_event::LineEvent>(&vocabulary, literal).ok()?;
-            let name = event::seal_hash(&envelope);
-            let taken = receipt.adopted.iter().any(|n| n == name.as_str());
-            taken.then(|| envelope.event().map(|line| line.conversation().clone()))?
+            let envelope = event::parse_envelope::<line_event::LineEvent>(
+                &line_event::LineVocabulary,
+                literal,
+            )
+            .ok()?;
+            matches!(envelope, event::Envelope::Change(_)).then(|| event::seal_hash(&envelope))
         })
-        .collect();
+        .collect()
+}
+
+/// Each conversation a line the box took is in told to its worker, so what the line starts (a
+/// round for a question, a setup's opening note) is written; and for a stop the box took, the round
+/// running in its conversation told to stop, since the stop's line has closed it.
+fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
+    use prodrome_core::schema::Schema as _;
+    let vocabulary = line_event::LineVocabulary;
+    let mut conversations = std::collections::BTreeSet::new();
+    for literal in posted {
+        let Ok(envelope) = event::parse_envelope::<line_event::LineEvent>(&vocabulary, literal)
+        else {
+            continue;
+        };
+        let name = event::seal_hash(&envelope);
+        let Some(line) = envelope.event() else {
+            continue;
+        };
+        if !receipt.adopted.iter().any(|n| n == name.as_str()) {
+            continue;
+        }
+        if let suzatary_lines::secretary::line_shape::LineShape::Stopped { .. } = line.shape() {
+            state
+                .workers
+                .stopped(line.conversation(), line.actor().clone());
+        }
+        conversations.insert(line.conversation().clone());
+    }
     for id in &conversations {
         state.heard(id);
     }

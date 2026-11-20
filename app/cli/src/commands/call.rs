@@ -15,6 +15,7 @@ use suzatary_io::http::{Http as _, Method, Req, Ureq};
 use suzatary_lines::wire::lines as wire;
 use suzatary_server::gate::OPERATOR_HEADER;
 use suzatary_signatures::signatures::{Signers, body_digest, request_name};
+use suzatary_store::replica::held::Node as _;
 
 use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
 use super::serve::{route, table};
@@ -128,11 +129,26 @@ impl Operator {
             Signers::Held(keys) => keys,
             Signers::Missing(why) => bail!("the operator signs with the box's root key: {why}"),
         };
-        Ok(Self::new(
+        let operator = Self::new(
             &instance.deployment.app_url,
             Arc::clone(keys.root()),
             instance.chains.first().owner.clone(),
-        ))
+        );
+        #[cfg(feature = "fixture")]
+        let operator = Self {
+            http: fixture_trust(instance)?.unwrap_or(operator.http),
+            ..operator
+        };
+        Ok(operator)
+    }
+
+    /// The operator's clock as it dates a line: the instant its requests are stamped with.
+    ///
+    /// # Errors
+    /// A clock that reads no year the lines can hold.
+    pub fn now(&self) -> anyhow::Result<prodrome_core::literal::Datetime> {
+        prodrome_core::fpl::datetime_of((self.wall)().naive_utc())
+            .map_err(|failed| anyhow::anyhow!("the operator's clock: {failed}"))
     }
 
     #[must_use]
@@ -211,6 +227,36 @@ impl Operator {
     ///
     /// # Errors
     /// A route's refusal, or an answer that does not read.
+    /// `own`, a line the operator sealed, handed to the lines beside its signature by the root
+    /// key and its slots' keys, once the box took the line.
+    ///
+    /// # Errors
+    /// A refusal of the request, or of the line, in the box's words.
+    pub fn hand_over(
+        &self,
+        own: &suzatary_lines::secretary::own_line::OwnLine,
+    ) -> anyhow::Result<()> {
+        let name = own.name();
+        let signature: prodrome_core::event::Envelope<
+            suzatary_lines::secretary::line_event::LineEvent,
+        > = prodrome_core::event::Envelope::Signed(self.key.sign(name));
+        let posted = serde_json::json!({
+            "objects": [own.print(), prodrome_core::event::canonical_envelope(&signature)],
+            "keys": { name.as_str(): own.keys().into_values().collect::<Vec<_>>() },
+        });
+        let answered = self.request(
+            route::Method::Post,
+            "/api/stores/lines/objects",
+            &serde_json::to_vec(&posted)?,
+        )?;
+        let receipt: suzatary_lines::wire::lines::ReceiptPayload =
+            serde_json::from_slice(&answered.body).context("the lines' receipt")?;
+        if let Some(refused) = receipt.refused.iter().find(|r| r.hash == name.as_str()) {
+            bail!("the box refused the line: {}", refused.reason);
+        }
+        Ok(())
+    }
+
     pub fn lines(
         &self,
         id: &suzatary_base::conversation_id::ConversationId,
@@ -350,6 +396,25 @@ fn answers(pattern: &str, path: &str) -> bool {
         }
     }
     asked.next().is_none()
+}
+
+/// A fixture's operator on loopback trusts the chain its server serves, `cert.pem` in the
+/// instance's `tls_dir` (the e2e fixture's certificate and the CA that signed it), and nothing
+/// else; none where the app is not https on loopback.
+#[cfg(feature = "fixture")]
+fn fixture_trust(instance: &Instance) -> anyhow::Result<Option<Ureq>> {
+    let url = &instance.deployment.app_url;
+    let loopback = ["https://127.0.0.1:", "https://[::1]:", "https://localhost:"]
+        .iter()
+        .any(|at| url.starts_with(at));
+    let cert = instance.serving.tls_dir.join("cert.pem");
+    if !loopback || !cert.is_file() {
+        return Ok(None);
+    }
+    let pem = std::fs::read(&cert).with_context(|| format!("reading {}", cert.display()))?;
+    Ok(Some(Ureq::trusting(&pem).map_err(|why| {
+        anyhow::anyhow!("{}: {why}", cert.display())
+    })?))
 }
 
 #[cfg(test)]

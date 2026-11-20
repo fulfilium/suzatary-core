@@ -13,7 +13,6 @@ use std::time::Duration;
 
 use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::model::{Halt, Sessions, Turn};
 use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_lines::secretary::transcript;
@@ -31,8 +30,8 @@ const FRAMES: usize = 256;
 /// How long an idle worker waits for a nudge before it drops itself.
 const IDLE: Duration = Duration::from_secs(30);
 
-/// How long a stop waits for its round to write the stop; a verb already running is not
-/// interrupted, so a round can take longer, and then the stop answers with what stands.
+/// How long an erasure waits for the round it stops to end; a verb already running is not
+/// interrupted, so a round can take longer, and then the erasure goes on.
 const STOP_WAIT: Duration = Duration::from_secs(15);
 
 /// One conversation's channel: a nudge, never a payload, since the next step is reread
@@ -179,7 +178,7 @@ pub struct Workers {
     /// The halt of each round running now, removed when it ends so a late stop cannot
     /// stop the next round.
     halts: Mutex<HashMap<ConversationId, Halt>>,
-    /// Told whenever a round's halt is removed, so a stop answers once its round has ended.
+    /// Told whenever a round's halt is removed, so an erasure goes on once its round has ended.
     ended: Condvar,
     /// The conversation's rules and every firing made, shared by every task.
     engine: Mutex<Engine<Conversational>>,
@@ -254,34 +253,16 @@ impl Workers {
         self.stream(id).turn();
     }
 
-    /// Stop the round running in this conversation, as `by`, and wait (at most `STOP_WAIT`)
-    /// for it to end. A question not yet taken by a round is stopped by its line alone, written
-    /// while the halts are held, so no round starts on it in between.
-    ///
-    /// Blocks: a route calls it off the async workers.
-    ///
-    /// # Errors
-    /// [`Refusal::conflict`] when nothing is running or waiting, so a halt never outlives its
-    /// round; the store's failures.
-    pub fn stop(
-        &self,
-        caps: &suzatary_server::server::Server<'_>,
-        id: &ConversationId,
-        by: Actor,
-    ) -> Result<(), Refusal> {
-        let halts = super::locks::held(&self.halts);
-        if halts.contains_key(id) {
-            self.wait_out(halts, id, by);
-            return Ok(());
+    /// A tab's stop of conversation `id` was taken: the round running in it, if any, is told
+    /// to stop, as `by`. The stop's own line has closed the round, so nothing waits for it.
+    pub fn stopped(&self, id: &ConversationId, by: Actor) {
+        if let Some(halt) = super::locks::held(&self.halts).get(id) {
+            halt.stop(by);
         }
-        secretary::stop_waiting(caps.secretary.conversations, caps.secretary.clock, id, &by)?;
-        drop(halts);
-        self.announce(id);
-        Ok(())
     }
 
-    /// [`Workers::stop`] of a running round alone, so its CLI writes no more to a session an
-    /// erasure then deletes.
+    /// The running round stopped, waiting (at most `STOP_WAIT`) for it to end, so its CLI writes
+    /// no more to a session an erasure then deletes.
     pub(crate) fn halt_round(&self, id: &ConversationId, by: Actor) {
         self.wait_out(super::locks::held(&self.halts), id, by);
     }
@@ -584,15 +565,13 @@ fn maybe_push(
     });
 }
 
-/// [`secretary::state`] over a fresh read, mapped to the wire; unreadable reads `idle`.
+/// The claims' state over a fresh read; unreadable reads `idle`.
 async fn current_state(id: &ConversationId, state: &Arc<State>) -> ConversationState {
     let caps = state.first.caps;
     let id = id.clone();
     tokio::task::spawn_blocking(move || {
-        suzatary_lines::secretary::conversations::read(caps.secretary.conversations, &id)
-            .map_or(ConversationState::Idle, |stored| {
-                suzatary_conversations::secretary::store::state(&stored)
-            })
+        transcript::read(caps.secretary.conversations, &id)
+            .map_or(ConversationState::Idle, |read| read.state())
     })
     .await
     .unwrap_or(ConversationState::Idle)

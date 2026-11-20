@@ -137,6 +137,9 @@ function flags(profile: string): string[] {
     // 0: the kernel picks, and DevToolsActivePort in the profile says which —
     // a fixed port is a collision between two runs on one box.
     "--remote-debugging-port=0",
+    // The fixture servers speak https with the repository's test certificate (scripts/web-e2e.sh):
+    // trusted by the hash of its key alone, so any other certificate still fails as it would.
+    ...((process.env["SUZATARY_E2E_SPKI"] ?? "") === "" ? [] : [`--ignore-certificate-errors-spki-list=${process.env["SUZATARY_E2E_SPKI"]}`]),
     // V8's own switches for a measurement (`--no-wasm-lazy-compilation`, say); no scene sets it.
     ...((process.env["SUZATARY_E2E_JS_FLAGS"] ?? "") === "" ? [] : [`--js-flags=${process.env["SUZATARY_E2E_JS_FLAGS"]}`]),
     "about:blank",

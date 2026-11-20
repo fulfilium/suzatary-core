@@ -58,9 +58,33 @@ impl Entropy for Drawn {
 #[derive(serde::Deserialize)]
 #[serde(tag = "type", deny_unknown_fields)]
 enum Asked {
-    Rename { conversation: String, title: String },
-    Open { title: String },
-    SetUp { template: String },
+    Rename {
+        conversation: String,
+        title: String,
+    },
+    Open {
+        title: String,
+    },
+    SetUp {
+        template: String,
+    },
+    Say {
+        conversation: String,
+        text: String,
+        references: Vec<String>,
+        files: Vec<Filed>,
+    },
+    Stop {
+        conversation: String,
+    },
+}
+
+/// A file of a question: the upload's answer, and the name the person gave it.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Filed {
+    attachment: suzatary_held::attachment::Attachment,
+    name: String,
 }
 
 /// One own write as the device keeps it.
@@ -87,8 +111,9 @@ pub struct Sealed {
 
 #[wasm_bindgen]
 impl Lines {
-    /// `asked` (`{type: "Rename", conversation, title}`, `{type: "Open", title}` or
-    /// `{type: "SetUp", template}`) sealed by `actor` at `at` (ISO), its keys drawn from
+    /// `asked` (`{type: "Rename", conversation, title}`, `{type: "Open", title}`,
+    /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}` or
+    /// `{type: "Stop", conversation}`) sealed by `actor` at `at` (ISO), its keys drawn from
     /// `entropy`, bytes the worker drew: kept unsent and read at once.
     pub fn seal(
         &mut self,
@@ -115,6 +140,36 @@ impl Lines {
             Asked::SetUp { template } => {
                 Sealing::SetUp(TemplateId::parse(&template).map_err(|e| refused(e.to_string()))?)
             }
+            Asked::Say {
+                conversation,
+                text,
+                references,
+                files,
+            } => Sealing::Say {
+                conversation: ConversationId::new(conversation)
+                    .map_err(|e| refused(e.to_string()))?,
+                text,
+                references: references
+                    .iter()
+                    .map(|r| r.parse().map_err(|e| refused(format!("a reference: {e}"))))
+                    .collect::<Result<_, _>>()?,
+                // A file on the box takes the person's name for it; a private one is held as
+                // it was kept.
+                attachments: files
+                    .into_iter()
+                    .map(|Filed { attachment, name }| match attachment.private {
+                        Some(_) => Ok(attachment),
+                        None => attachment
+                            .named(&name)
+                            .map_err(|e| refused(format!("a file's name: {e}"))),
+                    })
+                    .collect::<Result<_, _>>()?,
+                seat: suzatary_signatures::signatures::Seat::Device,
+            },
+            Asked::Stop { conversation } => Sealing::Stop {
+                conversation: ConversationId::new(conversation)
+                    .map_err(|e| refused(e.to_string()))?,
+            },
         };
         let at = datetime_of(parse_instant("at", at).map_err(refused)?)
             .map_err(|e| refused(format!("at: {e}")))?;
@@ -144,7 +199,10 @@ impl Lines {
 
     /// The device's record of own writes, `[{literal, keys, answer}]`, taken: what it kept, or
     /// another tab's. A record that does not read is passed over and named in the answer's
-    /// `unread`: `{moved, unread}`.
+    /// `unread`: `{moved, unread, taken, fresh}`, `fresh` how many records were new here or raised
+    /// an answer, `taken` each own write the box took as
+    /// `{hash, literal, line, free}`: a line's print is content the device keeps, and `free` says
+    /// its record may be let go, once the landed rows hold its keys.
     pub fn take_own(&mut self, records: &str) -> Result<String, JsError> {
         let records: Vec<serde_json::Value> =
             serde_json::from_str(records).map_err(|e| refused(format!("own lines: {e}")))?;
@@ -164,8 +222,33 @@ impl Lines {
                 Err(why) => unread.push(why),
             }
         }
-        let moved = self.0.take_own(&owned);
-        json(&serde_json::json!({ "moved": said(&moved)?, "unread": unread }))
+        let (moved, fresh) = self.0.take_own(&owned);
+        json(&serde_json::json!({
+            "moved": reading(&moved),
+            "unread": unread,
+            "taken": self.taken(),
+            "fresh": fresh,
+        }))
+    }
+
+    /// `[{hash, literal, line, free}]`: each own write the box took, as `take_own` answers it.
+    pub fn own_taken(&self) -> Result<String, JsError> {
+        json(&self.taken())
+    }
+
+    fn taken(&self) -> Vec<serde_json::Value> {
+        self.0
+            .own_taken()
+            .into_iter()
+            .map(|(own, free)| {
+                serde_json::json!({
+                    "hash": own.name().as_str(),
+                    "literal": own.print(),
+                    "line": matches!(own, OwnLine::Line { .. }),
+                    "free": free,
+                })
+            })
+            .collect()
     }
 
     /// `[[{hash, literal, keys}]]`: the own writes the box may take, in posts it takes whole,
@@ -174,7 +257,7 @@ impl Lines {
         json(
             &self
                 .0
-                .unsent(suzatary_api::routes::MAX_POSTED)
+                .unsent(POST_FITS, |own| posted(own).to_string().len() + 1)
                 .iter()
                 .map(|piece| piece.iter().map(|own| posted(own)).collect::<Vec<_>>())
                 .collect::<Vec<_>>(),
@@ -239,8 +322,10 @@ impl Lines {
         json(&answer)
     }
 
-    /// `[{hash, kind, reason}]`: what the box refused for good of the own writes, `kind` `Final`
-    /// or `Outdated`.
+    /// `[{hash, kind, reason, literal, words, signature}]`: every own write a refusal for good
+    /// holds back, `kind` `Final` or `Outdated`, `literal` its print as the device's row keeps it,
+    /// `words` what the person wrote in it, so they can copy them once the box refused them, and
+    /// whether it is a signature, which tells nothing of its own.
     pub fn refusals(&self) -> Result<String, JsError> {
         json(
             &self
@@ -249,7 +334,37 @@ impl Lines {
                 .refusals()
                 .iter()
                 .map(|(own, kind, reason)| {
-                    serde_json::json!({ "hash": own.name().as_str(), "kind": kind, "reason": reason })
+                    serde_json::json!({
+                        "hash": own.name().as_str(),
+                        "kind": kind,
+                        "reason": reason,
+                        "literal": own.print(),
+                        "words": words(own),
+                        "signature": matches!(own.role(), suzatary_store::replica::writes::Role::Signs(_)),
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// `[{hash, reason, literal, words, signature}]`: every own write the box has not taken yet,
+    /// in the rule's words, with its print and the words it says; a signature tells nothing of its
+    /// own, and is marked so.
+    pub fn waiting(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .0
+                .own()
+                .waiting()
+                .iter()
+                .map(|(own, reason)| {
+                    serde_json::json!({
+                        "hash": own.name().as_str(),
+                        "reason": reason,
+                        "literal": own.print(),
+                        "words": words(own),
+                        "signature": matches!(own.role(), suzatary_store::replica::writes::Role::Signs(_)),
+                    })
                 })
                 .collect::<Vec<_>>(),
         )
@@ -292,6 +407,14 @@ fn posted(own: &OwnLine) -> serde_json::Value {
     serde_json::json!({ "hash": own.name().as_str(), "literal": own.print(), "keys": in_order })
 }
 
+/// What one post of a tab's writes may carry: the route's count, and its body's bytes less room
+/// for what a post holds beside its objects (its `since`, its brackets, each key's name).
+pub(crate) const POST_FITS: suzatary_store::replica::writes::Fit =
+    suzatary_store::replica::writes::Fit {
+        most: suzatary_api::routes::MAX_POSTED,
+        bytes: suzatary_api::routes::MAX_POSTED_BYTES / 2,
+    };
+
 /// A move of the own writes: the device's record of what it joined in, and what it moved.
 fn own_step(owned: &[Own<OwnLine>], moved: &Moved) -> Result<Step, JsError> {
     Ok(Step::of(records(owned)?, said(moved)?))
@@ -311,8 +434,53 @@ fn records(owned: &[Own<OwnLine>]) -> Result<Vec<u8>, JsError> {
 }
 
 fn said(moved: &Moved) -> Result<String, JsError> {
+    json(&reading(moved))
+}
+
+/// What `moved` moved, as a JSON value: `"All"`, or the conversations' ids.
+fn reading(moved: &Moved) -> serde_json::Value {
     match moved {
-        Moved::All => json(&"All"),
-        Moved::These(ids) => json(&ids.iter().map(ConversationId::as_str).collect::<Vec<_>>()),
+        Moved::All => serde_json::json!("All"),
+        Moved::These(ids) => {
+            serde_json::json!(ids.iter().map(ConversationId::as_str).collect::<Vec<_>>())
+        }
+    }
+}
+
+/// What the person wrote in `own`, opened with its own keys: a question's words or a title.
+fn words(own: &OwnLine) -> Option<String> {
+    use suzatary_conversations::secretary::model::Turn;
+    use suzatary_conversations::secretary::store::Entry;
+    let OwnLine::Line { print, keys, .. } = own else {
+        return None;
+    };
+    let envelope =
+        prodrome_core::event::parse_envelope::<suzatary_lines::secretary::line_event::LineEvent>(
+            &suzatary_lines::secretary::line_event::LineVocabulary,
+            print,
+        )
+        .ok()?;
+    let line = envelope.event()?;
+    match line.entry(&|name: &KeyName| keys.key(name)) {
+        Entry::Said {
+            turn: Turn::Person { text, .. },
+            ..
+        } => Some(text),
+        Entry::Titled { title, .. } => title.get().map(|title| title.as_str().to_owned()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What a move moved is a JSON value inside an answer, never a JSON string of one: the tab
+    /// reads `"All"` or the ids, and a string of them failed its decoder.
+    #[test]
+    fn a_move_reads_as_a_value() {
+        let ids = std::collections::BTreeSet::from([ConversationId::new("garden").expect("an id")]);
+        assert_eq!(reading(&Moved::These(ids)), serde_json::json!(["garden"]));
+        assert_eq!(reading(&Moved::All), serde_json::json!("All"));
     }
 }

@@ -29,11 +29,8 @@ fn open(base: &str) -> String {
     common::opened(base, "A morning")
 }
 
-fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
-    common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": text}),
-    )
+fn say(base: &str, id: &str, text: &str) {
+    let _ = common::say(base, id, text);
 }
 
 /// Subscribe synchronously: `.call()` returns once the headers arrive, which for
@@ -80,7 +77,7 @@ fn first_round(base: &str, id: &str) -> mpsc::Receiver<String> {
         serde_json::json!({"kind": "state", "state": "idle"}),
         "the connect-time frame, before anything is asked"
     );
-    assert_eq!(common::status(&say(base, id, "first")), 202);
+    say(base, id, "first");
     assert_eq!(
         next(&rx),
         serde_json::json!({"kind": "state", "state": "thinking"})
@@ -107,7 +104,7 @@ fn a_connected_subscriber_sees_the_round_frame_by_frame() {
     // The first round opens the session, so it is the second, a resume, that streams.
     let rx = first_round(&base, &id);
 
-    assert_eq!(common::status(&say(&base, &id, "second")), 202);
+    say(&base, &id, "second");
 
     assert_eq!(
         next(&rx),
@@ -153,10 +150,10 @@ fn a_late_subscriber_receives_the_accumulated_partial_first() {
     );
     let id = open(&base);
 
-    assert_eq!(common::status(&say(&base, &id, "first")), 202);
+    say(&base, &id, "first");
     common::settled(&base, &id);
 
-    assert_eq!(common::status(&say(&base, &id, "second")), 202);
+    say(&base, &id, "second");
     // The mid-stream gate holds after "Hel" is sent, so the partial is "Hel" and the round is
     // still running while this connects.
     mid.wait_until_entered();
@@ -211,10 +208,7 @@ fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
         "the connect-time frame, before anything is asked"
     );
 
-    assert_eq!(
-        common::status(&say(&base, &id, "what should I check?")),
-        202
-    );
+    say(&base, &id, "what should I check?");
 
     assert_eq!(
         next(&rx),
@@ -263,7 +257,7 @@ fn a_closed_block_streams_by_its_sha_and_renders_by_it_alone() {
     );
     let id = open(&base);
     let rx = first_round(&base, &id);
-    assert_eq!(common::status(&say(&base, &id, "second")), 202);
+    say(&base, &id, "second");
     assert_eq!(
         next(&rx),
         serde_json::json!({"kind": "state", "state": "thinking"})
@@ -315,9 +309,9 @@ fn a_streaming_block_renders_by_its_sha() {
         .mid_stream(mid.clone()),
     );
     let id = open(&base);
-    assert_eq!(common::status(&say(&base, &id, "first")), 202);
+    say(&base, &id, "first");
     common::settled(&base, &id);
-    assert_eq!(common::status(&say(&base, &id, "second")), 202);
+    say(&base, &id, "second");
     mid.wait_until_entered();
 
     let sha = suzatary_base::answer::sha("*Due* Friday.\n\n");
@@ -363,7 +357,7 @@ fn a_question_said_while_the_answer_streams_gets_a_turn_of_its_own() {
     let id = open(&base);
     let rx = first_round(&base, &id);
 
-    assert_eq!(common::status(&say(&base, &id, "what is due?")), 202);
+    say(&base, &id, "what is due?");
     assert_eq!(
         next(&rx),
         serde_json::json!({"kind": "state", "state": "thinking"})
@@ -373,11 +367,8 @@ fn a_question_said_while_the_answer_streams_gets_a_turn_of_its_own() {
         serde_json::json!({"kind": "delta", "text": "fir"})
     );
     mid.wait_until_entered();
-    assert_eq!(
-        common::status(&say(&base, &id, "and when?")),
-        202,
-        "said during the last ask"
-    );
+    // Said during the last ask.
+    say(&base, &id, "and when?");
     mid.release();
 
     let mut frames = Vec::new();

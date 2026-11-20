@@ -152,8 +152,10 @@ impl Reason {
     #[must_use]
     pub fn kind(&self) -> suzatary_signatures::wire::signatures::RefusalKind {
         match self {
-            Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. })
-            | Reason::NotYetHeld(_) => suzatary_signatures::wire::signatures::RefusalKind::Trust,
+            Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. }) => {
+                suzatary_signatures::wire::signatures::RefusalKind::Trust
+            }
+            Reason::NotYetHeld(_) => suzatary_signatures::wire::signatures::RefusalKind::Later,
             Reason::RestsOn { kind, .. } => *kind,
             Reason::NotAnObject(_)
             | Reason::MissingParent(_)
@@ -164,11 +166,15 @@ impl Reason {
             | Reason::NotAChange(_)
             | Reason::Unaccompanied => suzatary_signatures::wire::signatures::RefusalKind::Final,
             Reason::Inadmissible(why) => match why.grounds {
-                suzatary_store::receipt::Grounds::Final => {
+                suzatary_store::admission::Ruling::Final => {
                     suzatary_signatures::wire::signatures::RefusalKind::Final
                 }
-                suzatary_store::receipt::Grounds::Outdated => {
+                suzatary_store::admission::Ruling::Outdated => {
                     suzatary_signatures::wire::signatures::RefusalKind::Outdated
+                }
+                // Posted again later, and said in the rule's words; never recorded.
+                suzatary_store::admission::Ruling::Later => {
+                    suzatary_signatures::wire::signatures::RefusalKind::Later
                 }
             },
         }
@@ -201,8 +207,20 @@ impl Reason {
                 "rests on {}…, which this box does not hold yet",
                 short(parent)
             ),
-            Reason::RestsOn { parent, .. } => {
-                format!("rests on {}…, which this box refused", short(parent))
+            Reason::RestsOn { parent, kind } => {
+                use suzatary_signatures::wire::signatures::RefusalKind;
+                let parent = short(parent);
+                match kind {
+                    RefusalKind::Final | RefusalKind::Outdated => {
+                        format!("rests on {parent}…, which this box refused")
+                    }
+                    RefusalKind::Later => format!(
+                        "rests on {parent}…, which this box has not taken yet, and waits with it"
+                    ),
+                    RefusalKind::Trust => format!(
+                        "rests on {parent}…, which waits for its signer to be trusted, and waits with it"
+                    ),
+                }
             }
         }
     }
@@ -395,21 +413,27 @@ struct Settled<E> {
 }
 
 /// What a store holds, as a post to it is read: every object's name, and what its rule read of
-/// it ([`Admission::held`]).
-pub struct Holding<'a, A: Admission> {
+/// it ([`Admission::held`]), which takes in each change of the post the box takes.
+pub struct Holding<'a, 'e, A: Admission> {
     /// Every object's name.
     pub names: &'a BTreeSet<Hash>,
     /// The rule's reading.
-    pub held: &'a A::Held,
+    pub held: A::Held<'e>,
+    /// What the rule reads beyond its store.
+    pub world: &'a A::World,
 }
 
-/// What a post to a store a tab writes means: a `Change` as `writer` is taken only beside a
-/// posted `Signed` of it whose key every chain trusts for `writer` ([`Trusting::admits`]), and
-/// only where its store's own rule takes it ([`Admission`]), reading what the post carries
-/// `beside` its objects.
+/// What a post to a store a tab writes means: its changes one at a time, as if each were posted
+/// alone, in one canonical order (parents first, ties by name). A `Change` as `writer` is taken
+/// only beside a posted `Signed` of it whose key every chain trusts for `writer`
+/// ([`Trusting::admits`]), only where its parents are held or taken before it, and only where its
+/// store's own rule takes it ([`Admission`]) against what is held with every change taken before
+/// it; a taken change is taken in before the next is judged. So a post takes exactly what its
+/// changes posted one by one in that order take, and every invariant the rule keeps for one
+/// change holds for any post.
 #[must_use]
 pub fn receive_changes<A: Admission>(
-    held: &Holding<'_, A>,
+    held: Holding<'_, '_, A>,
     posted: &[String],
     beside: &A::Beside,
     writer: &Actor,
@@ -419,73 +443,93 @@ where
     <A::Schema as prodrome_core::schema::Schema>::Vocabulary: Default,
 {
     use prodrome_core::event::Envelope as E;
-    let vocabulary = <A::Schema as prodrome_core::schema::Schema>::Vocabulary::default();
-    let mut parsed: BTreeMap<Hash, prodrome_core::event::Envelope<A::Schema>> = BTreeMap::new();
-    let mut fresh: Vec<(Hash, String)> = Vec::new();
-    let mut refused: Vec<Refused> = Vec::new();
-    let mut already: Vec<Hash> = Vec::new();
-    for literal in posted {
-        match named_at::<A::Schema>(&vocabulary, literal) {
-            Err(reason) => refused.push(Refused { name: None, reason }),
-            Ok((name, _, _)) if held.names.contains(&name) => already.push(name),
-            Ok((name, canonical, envelope)) => {
-                parsed.insert(name.clone(), envelope);
-                fresh.push((name, canonical));
-            }
-        }
-    }
-    let changes: Vec<&prodrome_core::change::Change<A::Schema>> = fresh
-        .iter()
-        .filter_map(|(name, _)| {
-            if let Some(E::Change(change)) = parsed.get(name) {
-                Some(change)
-            } else {
+    let Holding {
+        names,
+        held: mut ruled,
+        world,
+    } = held;
+    let Read {
+        parsed,
+        prints,
+        mut refused,
+        already,
+    } = read_post::<A::Schema>(names, posted);
+    let signers = admitted(&parsed, writer, trusting);
+    let mut kinds: BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind> =
+        BTreeMap::new();
+    let mut changes: Vec<&Hash> = Vec::new();
+    for (name, envelope) in &parsed {
+        let reason = match envelope {
+            E::Change(change) if change.event.actor() == writer => {
+                changes.push(name);
                 None
             }
-        })
-        .collect();
-    let mut candidates = Vec::new();
-    for (name, canonical) in fresh {
-        let envelope = parsed[&name].clone();
-        let reason = match &envelope {
-            E::Change(change) if change.event.actor() == writer => {
-                let post = suzatary_store::admission::Post::<A> {
-                    name: &name,
-                    beside,
-                    held: held.held,
-                    changes: &changes,
-                };
-                part("rule", || A::refuses(change, &post)).map(Reason::Inadmissible)
-            }
-            E::Signed(_) => None,
             E::Change(change) => Some(Reason::ForeignActor {
                 named: change.event.actor().as_str().to_owned(),
                 poster: writer.as_str().to_owned(),
             }),
+            E::Signed(_) => None,
             E::Genesis(_) | E::KeyAdded(_) | E::KeyRevoked(_) | E::Snapshot(_) => {
                 Some(Reason::BoxOnly)
             }
             other @ (E::Sealed { .. } | E::Woven { .. }) => Some(Reason::NotAChange(other.name())),
         };
-        match reason {
-            Some(reason) => refused.push(Refused {
-                name: Some(name),
-                reason,
-            }),
-            None => candidates.push((name, canonical, envelope)),
+        if let Some(reason) = reason {
+            refuse(&mut refused, &mut kinds, name, reason);
         }
     }
-    let Settled {
-        taken,
-        taking,
-        refused: unplaced,
-    } = settled(candidates, &|name| held.names.contains(name));
-    let unplaced = waiting(&parsed, &refused, &unplaced);
-    refused.extend(unplaced);
-    let (taken, unproven) = part("signatures", || {
-        signed_by_their_writers(taken, &taking, writer, trusting)
-    });
-    refused.extend(unproven);
+    let mut taken: Vec<(Hash, String)> = Vec::new();
+    let mut taking: BTreeSet<Hash> = BTreeSet::new();
+    for name in canonical(&changes, &parsed) {
+        let E::Change(change) = &parsed[name] else {
+            continue;
+        };
+        let parents = rests_on(&parsed[name]);
+        let why = resting(parents.clone(), &kinds)
+            .or_else(|| {
+                parents
+                    .iter()
+                    .find(|parent| !names.contains(*parent) && !taking.contains(*parent))
+                    .map(|parent| Reason::NotYetHeld(parent.clone()))
+            })
+            .or_else(|| proof(name, &parsed, writer, trusting).map(Reason::Unproven))
+            .or_else(|| {
+                let post = suzatary_store::admission::Post::<A> {
+                    name,
+                    beside,
+                    held: &ruled,
+                    world,
+                    signers: signers.get(name).map_or(&[], Vec::as_slice),
+                };
+                part("rule", || A::refuses(change, &post)).map(Reason::Inadmissible)
+            });
+        if let Some(reason) = why {
+            refuse(&mut refused, &mut kinds, name, reason);
+        } else {
+            part("take", || A::take(&mut ruled, name, change));
+            taking.insert(name.clone());
+            taken.push((name.clone(), prints[name].clone()));
+            // Each admitted signature of it goes with it.
+            for (signature, envelope) in &parsed {
+                if let E::Signed(signed) = envelope
+                    && signed.object == *name
+                    && trusting.admits(writer, signed).is_ok()
+                {
+                    taken.push((signature.clone(), prints[signature].clone()));
+                }
+            }
+        }
+    }
+    unaccompanied(
+        &parsed,
+        &taken,
+        &taking,
+        names,
+        writer,
+        trusting,
+        &mut refused,
+        &mut kinds,
+    );
     let recorded = recorded(&parsed, &refused, trusting);
     Received {
         outcome: Outcome {
@@ -497,6 +541,151 @@ where
     }
 }
 
+/// Each signature of `parsed` not taken with its change, refused: of a taken change it proves
+/// nothing; of a held one it came without what it signs; of a refused one it rests on that; else
+/// it waits for it.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the fold's state, read and extended once"
+)]
+fn unaccompanied<E: prodrome_core::schema::Schema>(
+    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    taken: &[(Hash, String)],
+    taking: &BTreeSet<Hash>,
+    names: &BTreeSet<Hash>,
+    writer: &Actor,
+    trusting: &Trusting,
+    refused: &mut Vec<Refused>,
+    kinds: &mut BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind>,
+) {
+    use prodrome_core::event::Envelope as E;
+    for (name, envelope) in parsed {
+        if let E::Signed(signed) = envelope
+            && !taken.iter().any(|(one, _)| one == name)
+        {
+            let reason = if taking.contains(&signed.object) {
+                trusting.admits(writer, signed).err().map(Reason::Unproven)
+            } else if names.contains(&signed.object) {
+                Some(Reason::Unaccompanied)
+            } else {
+                resting(vec![signed.object.clone()], kinds)
+                    .or_else(|| Some(Reason::NotYetHeld(signed.object.clone())))
+            };
+            if let Some(reason) = reason {
+                refuse(refused, kinds, name, reason);
+            }
+        }
+    }
+}
+
+/// A post's literals read: each object new to the store by name, beside its print; each the store
+/// holds already; and each that is no object, refused.
+struct Read<E> {
+    parsed: BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    prints: BTreeMap<Hash, String>,
+    refused: Vec<Refused>,
+    already: Vec<Hash>,
+}
+
+/// `posted` read at the schema `E`, against the store's `names`.
+fn read_post<E: prodrome_core::schema::Schema>(names: &BTreeSet<Hash>, posted: &[String]) -> Read<E>
+where
+    E::Vocabulary: Default,
+{
+    let vocabulary = E::Vocabulary::default();
+    let mut read = Read {
+        parsed: BTreeMap::new(),
+        prints: BTreeMap::new(),
+        refused: Vec::new(),
+        already: Vec::new(),
+    };
+    for literal in posted {
+        match named_at::<E>(&vocabulary, literal) {
+            Err(reason) => read.refused.push(Refused { name: None, reason }),
+            Ok((name, _, _)) if names.contains(&name) => read.already.push(name),
+            Ok((name, canonical, envelope)) => {
+                read.prints.insert(name.clone(), canonical);
+                read.parsed.insert(name, envelope);
+            }
+        }
+    }
+    read
+}
+
+/// The keys of each posted object's signatures the trust admits for `writer`: only such a
+/// signature proves its key, and so its seat; one merely posted beside the line, naming a key it
+/// was not made with, proves nothing.
+fn admitted<'p, E>(
+    parsed: &'p BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    writer: &Actor,
+    trusting: &Trusting,
+) -> BTreeMap<&'p Hash, Vec<prodrome_core::sign::PublicKey>> {
+    let mut signers: BTreeMap<&Hash, Vec<prodrome_core::sign::PublicKey>> = BTreeMap::new();
+    for envelope in parsed.values() {
+        if let prodrome_core::event::Envelope::Signed(signed) = envelope
+            && trusting.admits(writer, signed).is_ok()
+        {
+            signers
+                .entry(&signed.object)
+                .or_default()
+                .push(signed.key.clone());
+        }
+    }
+    signers
+}
+
+/// `name` refused for `reason`, its kind kept for what rests on it.
+fn refuse(
+    refused: &mut Vec<Refused>,
+    kinds: &mut BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind>,
+    name: &Hash,
+    reason: Reason,
+) {
+    kinds.insert(name.clone(), reason.kind());
+    refused.push(Refused {
+        name: Some(name.clone()),
+        reason,
+    });
+}
+
+/// `changes` in the order a post is judged in: each after every parent it has in the post, and
+/// of those ready together the least name first.
+fn canonical<'n, E>(
+    changes: &[&'n Hash],
+    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+) -> Vec<&'n Hash> {
+    let posted: BTreeSet<&Hash> = changes.iter().copied().collect();
+    let mut waits: BTreeMap<&Hash, usize> = BTreeMap::new();
+    let mut children: BTreeMap<Hash, Vec<&'n Hash>> = BTreeMap::new();
+    for &name in changes {
+        let parents: BTreeSet<Hash> = rests_on(&parsed[name])
+            .into_iter()
+            .filter(|parent| posted.contains(parent))
+            .collect();
+        waits.insert(name, parents.len());
+        for parent in parents {
+            children.entry(parent).or_default().push(name);
+        }
+    }
+    let mut ready: BTreeSet<&'n Hash> = changes
+        .iter()
+        .copied()
+        .filter(|name| waits[name] == 0)
+        .collect();
+    let mut order = Vec::with_capacity(changes.len());
+    while let Some(name) = ready.pop_first() {
+        order.push(name);
+        for &child in children.get(name).map_or(&[][..], Vec::as_slice) {
+            let left = waits.get_mut(child).expect("a posted change");
+            *left -= 1;
+            if *left == 0 {
+                ready.insert(child);
+            }
+        }
+    }
+    order
+}
+
 /// A post to a store a tab writes, and the refusals to record.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Received {
@@ -505,46 +694,6 @@ pub struct Received {
     /// Each refusal for good (final or outdated) a trusted key's posted signature proves, so an untrusted poster
     /// cannot fill the asks.
     pub recorded: Vec<(Hash, suzatary_store::receipt::Grounds, Reason)>,
-}
-
-/// `taken`, each change kept only with an admitted signature, each signature only with its
-/// change, and nothing resting on something refused.
-fn signed_by_their_writers<E>(
-    taken: Vec<(Hash, String)>,
-    taking: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
-    writer: &Actor,
-    trusting: &Trusting,
-) -> (Vec<(Hash, String)>, Vec<Refused>) {
-    let mut kept: Vec<(Hash, String)> = Vec::new();
-    let mut refused: Vec<Refused> = Vec::new();
-    let mut kinds: BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind> =
-        BTreeMap::new();
-    for (name, print) in taken {
-        let why = match &taking[&name] {
-            prodrome_core::event::Envelope::Signed(signed) => {
-                if kept.iter().any(|(one, _)| *one == signed.object) {
-                    trusting.admits(writer, signed).err().map(Reason::Unproven)
-                } else if kinds.contains_key(&signed.object) {
-                    None
-                } else {
-                    Some(Reason::Unaccompanied)
-                }
-            }
-            _ => proof(&name, taking, writer, trusting).map(Reason::Unproven),
-        };
-        let reason = why.or_else(|| resting(rests_on(&taking[&name]), &kinds));
-        match reason {
-            Some(reason) => {
-                kinds.insert(name.clone(), reason.kind());
-                refused.push(Refused {
-                    name: Some(name),
-                    reason,
-                });
-            }
-            None => kept.push((name, print)),
-        }
-    }
-    (kept, refused)
 }
 
 /// Of `parents`, the refused one an object is refused with: a final refusal first, then an
@@ -560,56 +709,13 @@ fn resting(
     found.sort_by_key(|(_, kind)| match kind {
         suzatary_signatures::wire::signatures::RefusalKind::Final => 0,
         suzatary_signatures::wire::signatures::RefusalKind::Outdated => 1,
-        suzatary_signatures::wire::signatures::RefusalKind::Trust => 2,
+        suzatary_signatures::wire::signatures::RefusalKind::Later => 2,
+        suzatary_signatures::wire::signatures::RefusalKind::Trust => 3,
     });
     found
         .into_iter()
         .next()
         .map(|(parent, kind)| Reason::RestsOn { parent, kind })
-}
-
-/// `unplaced` (a parent neither held nor taken) said again: as the refused object of this post
-/// it rests on, else waiting. Each pass settles one more level, so `len` passes settle all.
-fn waiting<E>(
-    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
-    refused: &[Refused],
-    unplaced: &[Refused],
-) -> Vec<Refused> {
-    let base: BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind> = refused
-        .iter()
-        .filter_map(|one| Some((one.name.clone()?, one.reason.kind())))
-        .collect();
-    let again = |said: &[Refused]| -> Vec<Refused> {
-        let mut kinds = base.clone();
-        kinds.extend(
-            said.iter()
-                .filter_map(|one| Some((one.name.clone()?, one.reason.kind()))),
-        );
-        unplaced
-            .iter()
-            .map(|one| {
-                let parents = one
-                    .name
-                    .as_ref()
-                    .and_then(|name| parsed.get(name))
-                    .map(rests_on)
-                    .unwrap_or_default();
-                let reason = resting(parents, &kinds).unwrap_or_else(|| match &one.reason {
-                    Reason::MissingParent(parent) => Reason::NotYetHeld(parent.clone()),
-                    other => other.clone(),
-                });
-                Refused {
-                    name: one.name.clone(),
-                    reason,
-                }
-            })
-            .collect()
-    };
-    let mut said = again(&[]);
-    for _ in 0..unplaced.len() {
-        said = again(&said);
-    }
-    said
 }
 
 /// Why no signature of `name` among `signed` proves it for `actor`; a revocation wins.
@@ -649,7 +755,7 @@ fn recorded<E: prodrome_core::schema::Schema>(
             let grounds = match one.reason.kind() {
                 RefusalKind::Final => Grounds::Final,
                 RefusalKind::Outdated => Grounds::Outdated,
-                RefusalKind::Trust => return None,
+                RefusalKind::Trust | RefusalKind::Later => return None,
             };
             Some((one.name.as_ref()?, (grounds, &one.reason)))
         })

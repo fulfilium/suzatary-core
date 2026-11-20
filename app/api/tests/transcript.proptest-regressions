@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 8c53282c410a48aade36ce40de557e8f5ede8d3c4be3099f6df89e54c9ce648f # shrinks to script = [], broken = 0, order = Index(0), erased = Some(Index(12297829382473034411)), stale = true
+cc bdde2e1cc01c044961e1bd23cc4ac073472df327095dcaeda84369e678e6a8c7 # shrinks to script = [Ask, Claim, Ask, Answer]

@@ -1467,7 +1467,7 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
             let asked = crate::commands::ask::ask(&operator, &id, text)?;
             println!("{}", asked.answer);
             eprintln!("conversation: {}", asked.conversation);
-            eprintln!("request: {}", asked.request.as_str());
+            eprintln!("line: {}", asked.line.as_str());
             Ok(())
         }
         Action::Brief {

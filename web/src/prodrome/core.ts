@@ -33,7 +33,7 @@ export interface Core {
   Memberships: new () => TopicStore;
   TopicAliases: new () => TopicStore;
   Asks: new () => ObjectStore;
-  TopicReading: new (memberships: TopicStore, aliases: TopicStore) => TopicReading;
+  TopicReading: new (memberships: ObjectStore, aliases: ObjectStore) => TopicReading;
   Chains: new () => Chains;
   /** `undefined` where the term reads `∅`. */
   fulfillment: (term: string, now: string, env: string) => number | undefined;
@@ -74,8 +74,8 @@ export interface Todos {
   free: () => void;
 }
 
-/** What a store this tab writes answers its hand-over (`written`). */
-export interface Written {
+/** What a store of objects answers a hand-over (`written`), the box's alone as a tab's. */
+export interface Posted {
   since: () => string;
   /** `[[{hash, literal, keys}]]`: what the tab wrote and may post, in posts the box takes whole; `keys` each slot's. */
   unsent: () => string;
@@ -92,8 +92,14 @@ export interface Written {
   refused_in: (asks: ObjectStore) => LineStep | undefined;
 }
 
+/** A store this tab writes, as the stores' table says (`Written`): what the box has not taken yet too. */
+export interface Written extends Posted {
+  /** `[{hash, reason, literal, words}]`: what the box has not taken yet, in its rule's words. */
+  waiting: () => string;
+}
+
 /** A store of objects the core holds (`object_rows::Store`); each move answers its frame. */
-export interface ObjectStore extends Written {
+export interface ObjectStore extends Posted {
   heads: () => string;
   heard: () => boolean;
   behind: (heads: string) => boolean;
@@ -166,8 +172,10 @@ export interface Sealed extends LineStep {
 export interface Lines extends Written {
   /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once. */
   seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed;
-  /** The device's record of own lines taken: `{moved, unread}`. */
+  /** The device's record of own lines taken: `{moved, unread, taken}`. */
   take_own: (records: string) => string;
+  /** `[{hash, literal, line, free}]`: each own write the box took, and whether its record may be let go. */
+  own_taken: () => string;
   /** The box's answer to an own line: `"Unsent"`, `{"Refused": {kind, reason}}` or `"Taken"`. */
   answer: (name: string) => string;
   hold: (add: string, drop: string) => void;
@@ -225,7 +233,7 @@ export interface Lines extends Written {
   free: () => void;
 }
 
-export type TopicStore = ObjectStore;
+export type TopicStore = ObjectStore & Written;
 
 /** The topics both replicas read as, and their planned events. */
 /** A reading printed whole for a page, and beside it the little the worker reads of it (`said`, JSON). */

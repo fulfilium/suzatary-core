@@ -120,19 +120,37 @@ impl Stored {
         id: &ConversationId,
         entries: impl IntoIterator<Item = &'e Entry>,
     ) -> Result<Self, NotAConversation> {
-        let mut entries = entries.into_iter();
-        let mut stored = Self::opened(id, entries.next())?;
-        for entry in entries {
-            stored.fold(entry)?;
+        Self::of_read(id, entries.into_iter().map(|entry| (entry, Vec::new())))
+    }
+
+    /// [`Stored::of`] over lines in order, each beside the turns it sets aside when it is an
+    /// [`Entry::Again`](super::Entry::Again), which only a reader holding the lines' descent can
+    /// say; empty for every other line.
+    ///
+    /// # Errors
+    /// As [`Stored::of`].
+    pub fn of_read<'e>(
+        id: &ConversationId,
+        lines: impl IntoIterator<Item = (&'e Entry, Vec<usize>)>,
+    ) -> Result<Self, NotAConversation> {
+        let mut lines = lines.into_iter();
+        let mut stored = Self::opened(id, lines.next().map(|(entry, _)| entry))?;
+        for (entry, aside) in lines {
+            stored.fold_read(entry, aside)?;
         }
         Ok(stored)
     }
 
-    /// Fold one more line in: what [`Stored::of`] does to every line after the opening.
+    /// Fold one more line in: what [`Stored::of`] does to every line after the opening. An
+    /// [`Entry::Again`](super::Entry::Again) folded here sets nothing aside ([`Stored::of_read`]).
     ///
     /// # Errors
     /// [`NotAConversation`] for a coding line no proposal asked for, or a rewind past the end.
     pub fn fold(&mut self, entry: &Entry) -> Result<(), NotAConversation> {
+        self.fold_read(entry, Vec::new())
+    }
+
+    fn fold_read(&mut self, entry: &Entry, aside: Vec<usize>) -> Result<(), NotAConversation> {
         match entry {
             // A second opening line is ignored, not refused: the first is the fact, and one
             // stray line must not cost a whole transcript. An erasure's slots were read as gone
@@ -185,6 +203,14 @@ impl Stored {
                 self.session = None;
             }
             Entry::Rewound { to, at, by } => rewound(self, *to, *at, by)?,
+            Entry::Again { at, by, .. } => {
+                self.aside.push(Aside {
+                    turns: aside.into_iter().collect(),
+                    at: *at,
+                    by: by.clone(),
+                });
+                self.session = None;
+            }
             // The last session line wins: one writer, so overwriting is the register's reading.
             Entry::Session {
                 at,
@@ -273,10 +299,7 @@ impl Stored {
     /// Whether turn `index` is on the live path: no rewind set it aside.
     #[must_use]
     pub fn is_live(&self, index: usize) -> bool {
-        !self
-            .aside
-            .iter()
-            .any(|aside| (aside.from..aside.until).contains(&index))
+        !self.aside.iter().any(|aside| aside.turns.contains(&index))
     }
 
     /// Whether turn `index` closes the question before it: a model turn with no calls answers it,
@@ -520,8 +543,7 @@ fn rewound(stored: &mut Stored, to: usize, at: Datetime, by: &str) -> Result<(),
         });
     }
     stored.aside.push(Aside {
-        from: to,
-        until: stored.turns.len(),
+        turns: (to..stored.turns.len()).collect(),
         at,
         by: by.to_owned(),
     });

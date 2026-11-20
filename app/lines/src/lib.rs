@@ -6,6 +6,7 @@ pub mod first_read;
 pub mod parts;
 pub mod secretary {
     pub mod act_lines;
+    pub(crate) mod again;
     pub(crate) mod claim;
     pub mod compare;
     #[cfg(feature = "wasm")]

@@ -32,6 +32,11 @@ pub enum Status {
     /// A page whose build writes by a contract older than the box takes (`crate::signatures::CLIENT_MIN`):
     /// nothing is performed, and the page offers the box's build, to be sent again after Reload.
     UpgradeRequired,
+    /// A post this box's build does not read (a body of another shape, a store it does not keep):
+    /// a function of which builds the box and the page run, never of the post, so the page posts
+    /// it again once they agree. The sibling of [`Status::UpgradeRequired`] for a box whose build
+    /// is not the page's.
+    OtherBuild,
     /// A request signed by a device key its history revoked: the device deletes what it holds
     /// (the tab's `wipe`), and asks again as a new device if its person wants it back.
     Wipe,
@@ -48,7 +53,7 @@ impl Status {
             Status::Forbidden => 403,
             Status::NotFound => 404,
             Status::MethodNotAllowed => 405,
-            Status::Conflict => 409,
+            Status::Conflict | Status::OtherBuild => 409,
             Status::UnprocessableEntity => 422,
             Status::TooManyRequests => 429,
             Status::UpgradeRequired => 426,
@@ -122,6 +127,12 @@ impl Refusal {
     #[must_use]
     pub fn wipe(message: impl Into<String>) -> Self {
         Self::new(Status::Wipe, message)
+    }
+
+    /// 409 — this box's build does not read what was posted; the page posts it again later.
+    #[must_use]
+    pub fn other_build(message: impl Into<String>) -> Self {
+        Self::new(Status::OtherBuild, message)
     }
 
     /// 500 — this application failed.

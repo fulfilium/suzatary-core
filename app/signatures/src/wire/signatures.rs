@@ -29,8 +29,12 @@ pub struct Registering {
 pub enum RefusalKind {
     /// Held and named, and everything resting on it with it.
     Final,
-    /// Taken once its device is trusted and it is signed.
+    /// Not yet: posted again, and taken once its device is trusted and it is signed.
     Trust,
+    /// Not yet, in the rule's words: posted again, and taken once what it waits for comes (the
+    /// box's clock reaching the instant it is dated, a parent the box does not hold yet). The
+    /// person is told once, in those words.
+    Later,
     /// Sealed under redaction rules older than the box's: held and named like a final refusal,
     /// never posted again, its words kept where they were typed until a reload seals them anew.
     Outdated,

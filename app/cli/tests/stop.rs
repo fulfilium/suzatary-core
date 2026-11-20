@@ -1,6 +1,6 @@
-//! Stop over a real server: `POST /api/secretary/conversations/<id>/stop` pulls the running
-//! round's halt; the round ends its model process and writes the act, which closes the question
-//! in that one write, and the stop answers once it is written.
+//! Stop over a real server: a tab's `Stopped` line, handed to the lines, closes what it rests on
+//! in that one line; its acceptance pulls the running round's halt, so the round ends its model
+//! process and writes nothing more.
 
 use crate::common;
 
@@ -17,15 +17,21 @@ fn open(base: &str) -> String {
     common::opened(base, "A morning")
 }
 
-fn stop(base: &str, id: &str) -> ureq::http::Response<ureq::Body> {
-    common::act(
-        &format!("{base}/api/secretary/conversations/{id}/stop"),
-        &serde_json::json!({}),
-    )
+/// Why the box refused a tab's stop of conversation `id`.
+fn refused_stop(base: &str, id: &str) -> String {
+    let stop = common::sealed(
+        base,
+        id,
+        &store::Entry::Stopped {
+            at: common::next_instant(),
+            by: common::CAST.owner.actor.to_owned(),
+        },
+    );
+    common::refused_line(base, &stop)
 }
 
-/// Nothing running is nothing to stop: a 409, and no halt left standing to
-/// stop the next question instead.
+/// Nothing running is nothing to stop: the lines refuse the stop, and no halt is left standing
+/// to stop the next question instead.
 #[test]
 fn a_stop_with_no_round_running_is_refused_and_stops_nothing_later() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -37,7 +43,7 @@ fn a_stop_with_no_round_running_is_refused_and_stops_nothing_later() {
         .start()
         .base;
     let id = open(&base);
-    assert_eq!(common::status(&stop(&base, &id)), 409);
+    assert!(refused_stop(&base, &id).contains("nothing stops"));
 
     let payload = common::said(&base, &id, "still there?");
     let last = payload["turns"]
@@ -68,8 +74,8 @@ fn shape(payload: &serde_json::Value) -> Vec<(String, String, bool)> {
 }
 
 /// A stop mid-round ends it: the answer never lands, the act names who stopped it and closes the
-/// question by itself, with no empty answer after it. From the stop's own answer on, there is no
-/// reading in which the stopped question is queued: the 202 is given once the act is written.
+/// question by itself, with no empty answer after it. Once the box holds the stop, no reading
+/// shows the stopped question queued or working.
 #[test]
 fn a_stop_mid_round_ends_it_in_the_act() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -85,18 +91,16 @@ fn a_stop_mid_round_ends_it_in_the_act() {
         .start()
         .base;
     let id = open(&base);
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "read every thread"}),
-    );
-    assert_eq!(common::status(&said), 202);
+    let _ = common::say(&base, &id, "read every thread");
     gate.wait_until_entered();
 
-    // Held in the model: the round has written nothing, and the question is owed to it.
+    // Held in the model: the round has claimed the question and written nothing more, so the
+    // question is the round's and no longer queued.
     let held = common::reading(&base, &id, &[]);
+    assert_eq!(held["state"], "thinking", "{held}");
     assert_eq!(
         shape(&held),
-        [("person".to_owned(), "read every thread".to_owned(), true)],
+        [("person".to_owned(), "read every thread".to_owned(), false)],
         "{held}"
     );
 
@@ -105,19 +109,17 @@ fn a_stop_mid_round_ends_it_in_the_act() {
         ("person".to_owned(), "read every thread".to_owned(), false),
         ("act".to_owned(), stopped_by, false),
     ];
-    let mut stopped = stop(&base, &id);
-    assert_eq!(common::status(&stopped), 202);
-    // The stop's own answer is the first reading after it: the act is written and closes the
-    // question, before the worker has done anything after its round.
-    let stopped = common::body_json(&mut stopped);
-    assert_eq!(shape(&stopped), expected, "the stop's answer: {stopped}");
+    let _ = common::stop(&base, &id);
+    // The first reading after the stop is taken: its line closes the question, whatever the
+    // round has done since.
+    let stopped = common::reading(&base, &id, &[]);
+    assert_eq!(shape(&stopped), expected, "read after the stop: {stopped}");
     assert_eq!(stopped["state"], "idle", "{stopped}");
 
     let payload = common::settled(&base, &id);
     assert_eq!(shape(&payload), expected, "read again: {payload}");
-    assert_eq!(
-        common::status(&stop(&base, &id)),
-        409,
+    assert!(
+        refused_stop(&base, &id).contains("nothing stops"),
         "a stopped round is over"
     );
 }
@@ -157,9 +159,8 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
     )
     .expect("the question appends");
 
-    let mut stopped = stop(&base, &id);
-    assert_eq!(common::status(&stopped), 202);
-    let stopped = common::body_json(&mut stopped);
+    let _ = common::stop(&base, &id);
+    let stopped = common::settled(&base, &id);
     let stopped_by = store::stopped_by(common::CAST.owner.actor);
     assert_eq!(
         shape(&stopped),
@@ -167,13 +168,12 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
             ("person".to_owned(), "read every thread".to_owned(), false),
             ("act".to_owned(), stopped_by, false),
         ],
-        "the stop's answer: {stopped}"
+        "read after the stop: {stopped}"
     );
     assert_eq!(stopped["state"], "idle", "{stopped}");
     assert!(fakes.model.asked().is_empty(), "no model was asked");
-    assert_eq!(
-        common::status(&stop(&base, &id)),
-        409,
+    assert!(
+        refused_stop(&base, &id).contains("nothing stops"),
         "what was stopped is not stopped twice"
     );
 

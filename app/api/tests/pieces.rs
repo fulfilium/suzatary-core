@@ -1274,3 +1274,48 @@ proptest! {
         prop_assert_eq!(hashes(&since), less);
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    /// A CONVERSATION IS READ WHOLE OR NOT AT ALL: the order of its turns, what is queued and the
+    /// claim are readings of every line its skeleton names. A tab holding all of it but one line
+    /// reads nothing and says what it lacks; holding all of it, it reads them as the box does.
+    #[test]
+    fn law_a_tab_reads_a_conversation_only_whole(
+        script in prop::collection::vec(write(), 1..24),
+    ) {
+        use suzatary_lines::secretary::held_replica::Whole;
+        let mut store = Writer::new();
+        for write in &script {
+            store.apply(write);
+        }
+        let conversations = store.lines.conversations();
+        let mut whole = replica_of(&store, |sizes| fetched(conversations, sizes), false);
+        for id in transcript::keys(conversations).expect("keys") {
+            let boxed = transcript::read(conversations, &id).expect("the box reads it");
+            let Some(Whole::Read(Ok(tab))) = whole.transcript(&id) else {
+                panic!("a tab holding every line reads {id}");
+            };
+            prop_assert_eq!(tab.turn_lines(), boxed.turn_lines());
+            prop_assert_eq!(tab.queued(), boxed.queued());
+            prop_assert_eq!(tab.state(), boxed.state());
+
+            let last = boxed.lines().last().expect("a line").name.as_str().to_owned();
+            let mut window = replica_of(
+                &store,
+                |sizes| {
+                    let mut fetched = fetched(conversations, sizes);
+                    fetched.remove(&last);
+                    fetched
+                },
+                false,
+            );
+            prop_assert!(
+                matches!(window.transcript(&id), Some(Whole::Lacking(1))),
+                "a window of {} reads nothing",
+                id
+            );
+        }
+    }
+}

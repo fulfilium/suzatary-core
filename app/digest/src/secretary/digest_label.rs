@@ -104,7 +104,7 @@ impl Kind {
             Entry::Reviewed { .. } => Kind::Reviewed,
             Entry::ReviewFailed { .. } => Kind::ReviewFailed,
             Entry::Stopped { .. } => Kind::Stopped,
-            Entry::Rewound { .. } => Kind::Rewound,
+            Entry::Rewound { .. } | Entry::Again { .. } => Kind::Rewound,
             Entry::MemorySeen { .. } => Kind::MemorySeen,
             Entry::Session { .. }
             | Entry::Kept { .. }

@@ -56,6 +56,14 @@ pub enum Step {
     },
     /// Moves no turn and holds no words a round reads.
     Still,
+    /// Asks `question` again: sets aside what descends from it beneath this line, and it too for
+    /// an edit.
+    Again {
+        #[ts(as = "String")]
+        #[serde(with = "name")]
+        question: Hash,
+        how: suzatary_conversations::secretary::store::Rewind,
+    },
     /// Claims a round: run `run` covers the turns of these lines.
     Began {
         #[ts(as = "Vec<String>")]
@@ -96,11 +104,29 @@ impl Step {
             | LineShape::Unheard { .. }
             | LineShape::Kept { .. }
             | LineShape::Scoped { .. } => Step::Still,
+            LineShape::Again { question, how, .. } => Step::Again {
+                question: question.clone(),
+                how: *how,
+            },
             LineShape::Began { covers, run } => Step::Began {
                 covers: covers.iter().map(|covered| covered.line.clone()).collect(),
                 run: run.clone(),
             },
         }
+    }
+}
+
+/// A line name as its text.
+mod name {
+    use prodrome_core::event::Hash;
+    use serde::{Deserialize as _, Deserializer, Serializer};
+
+    pub(super) fn serialize<S: Serializer>(name: &Hash, to: S) -> Result<S::Ok, S::Error> {
+        to.serialize_str(name.as_str())
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(from: D) -> Result<Hash, D::Error> {
+        Hash::new(String::deserialize(from)?).map_err(serde::de::Error::custom)
     }
 }
 

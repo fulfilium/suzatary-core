@@ -316,21 +316,19 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
 }
 
 /// One window of a conversation; a line the inbox cannot place goes in `unplaced`, never dropped.
+/// What is queued and the state are the claims' reading, the same on the box and in a tab.
 #[must_use]
 pub fn conversation(
-    stored: &Stored,
+    read: &suzatary_lines::secretary::transcript::Transcript,
     inbox: &inbox::Fold,
     window: &Window,
     dress: &Dress<'_>,
 ) -> wire::ConversationPayload {
+    let stored = read.stored();
     let lines = stored.lines(inbox);
     let total_turns = stored.turns.len();
-    // Not a suffix of `stored.turns`, since a rewind can set a turn aside.
-    let queued: std::collections::BTreeSet<usize> =
-        suzatary_conversations::secretary::queue::delta(stored)
-            .into_iter()
-            .map(|(index, _)| index)
-            .collect();
+    let queued = read.queued();
+    let turn_lines = read.turn_lines();
     let spans = about::round_spans(&stored.turns);
     let touched: Vec<bool> = window.about.as_ref().map_or_else(
         || vec![true; spans.len()],
@@ -349,6 +347,10 @@ pub fn conversation(
         title: stored.heading().into_owned(),
         model: stored.model.clone(),
         opened: stamp(stored.opened),
+        lines: selected
+            .iter()
+            .filter_map(|&index| turn_lines.get(index).map(|line| line.as_str().to_owned()))
+            .collect(),
         turns: selected
             .iter()
             .map(|&index| {
@@ -387,7 +389,8 @@ pub fn conversation(
             })
             .collect(),
         unplaced: unplaced(&lines),
-        state: suzatary_conversations::secretary::store::state(stored),
+        waiting: Vec::new(),
+        state: read.state(),
         first,
         total,
         again: stored

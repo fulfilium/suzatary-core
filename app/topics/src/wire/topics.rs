@@ -312,6 +312,11 @@ pub struct ConversationPayload {
     pub model: String,
     pub opened: String,
     pub turns: Vec<TurnRow>,
+    /// The name of each row of `turns`' line, in the same order: what an erasure names.
+    pub lines: Vec<String>,
+    /// Of `lines`, each this device wrote that the box has not taken yet, beside why in the box's
+    /// words: a tab's own reading alone fills it, and the box's is empty.
+    pub waiting: Vec<Waiting>,
     /// Every proposal whose round was kept, never windowed.
     pub proposals: Vec<ProposalRow>,
     /// Never windowed.
@@ -323,6 +328,13 @@ pub struct ConversationPayload {
     pub total: usize,
     /// As `Stored::rewind` would take it.
     pub again: Option<usize>,
+}
+
+/// An own line the box has not taken yet, and why in the box's words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Waiting {
+    pub line: String,
+    pub why: String,
 }
 
 /// Drawn with why, and nothing acts on it.

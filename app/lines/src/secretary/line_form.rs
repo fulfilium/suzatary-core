@@ -131,6 +131,7 @@ enum StepForm {
     Erased { keys: Vec<Name> },
     Still,
     Began { covers: Vec<Name>, run: String },
+    Again { question: Name, how: String },
 }
 
 impl snapshot::Held for LineReplica {
@@ -318,6 +319,10 @@ fn step_form(step: &Step) -> StepForm {
             keys: keys.iter().map(|k| bytes(k.as_str())).collect(),
         },
         Step::Still => StepForm::Still,
+        Step::Again { question, how } => StepForm::Again {
+            question: bytes(question.as_str()),
+            how: how.as_str().to_owned(),
+        },
         Step::Began { covers, run } => StepForm::Began {
             covers: covers.iter().map(|line| bytes(line.as_str())).collect(),
             run: run.as_str().to_owned(),
@@ -344,6 +349,13 @@ fn step_of(form: StepForm) -> Result<Step, String> {
             keys: keys.iter().map(name).collect::<Result<_, _>>()?,
         },
         StepForm::Still => Step::Still,
+        StepForm::Again { question, how } => Step::Again {
+            question: hash(&question)?,
+            how: suzatary_conversations::secretary::store::Rewind::ALL
+                .into_iter()
+                .find(|known| known.as_str() == how)
+                .ok_or("an again's how is no rewind")?,
+        },
         StepForm::Began { covers, run } => Step::Began {
             covers: covers.iter().map(hash).collect::<Result<_, _>>()?,
             run: RunId::parse(&run).ok_or("a claim's run is no run")?,
