@@ -1,9 +1,15 @@
 //! What `train` was asked to do, parsed once from its arguments.
 
+use crate::gate_branch::GateBranch;
+use crate::repo_path::RepoPath;
 use crate::{Ended, Error, Half, Scope, Seen};
 
 pub const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--full]
-       train table write <half> <commit> <status> [--full]";
+       train table write <half> <commit> <status> [--full]
+       train publish [--skip <sha>]... [--admit <path>]... [<rev>]
+       train publishable <commit>
+       train push-gate <commit> gate/<name> <subject> <trailer>
+       train published <rev>";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -17,6 +23,24 @@ pub enum Command {
         ended: Ended,
         scope: Scope,
     },
+    /// Core's master gains the public tree of each landed commit up to `rev`, origin's master
+    /// where it is `None`.
+    Publish {
+        skips: Vec<String>,
+        admits: Vec<RepoPath>,
+        rev: Option<String>,
+    },
+    /// Whether the commit's public tree may go to a gate branch.
+    Publishable { commit: String },
+    /// The commit's public tree, if publishable, pushed to a gate branch.
+    PushGate {
+        commit: String,
+        branch: GateBranch,
+        subject: String,
+        trailer: String,
+    },
+    /// The row of core's master that publishes `rev`, or nothing.
+    Published { rev: String },
 }
 
 /// What a reading answers for: one half, or the train, whose verdict weighs both.
@@ -26,27 +50,51 @@ pub enum Of {
     Train,
 }
 
+fn usage(why: &str) -> Error {
+    Error::Usage(format!("{why}\n{USAGE}"))
+}
+
 impl Command {
     pub fn parse(args: &[String]) -> Result<Command, Error> {
-        let usage = |why: &str| Error::Usage(format!("{why}\n{USAGE}"));
         let words: Vec<&str> = args.iter().map(String::as_str).collect();
-        let (full, words): (Vec<&str>, Vec<&str>) = words.into_iter().partition(|w| *w == "--full");
+        match words[..] {
+            ["table", ref rest @ ..] => Command::table(rest),
+            ["publish", ref rest @ ..] => Command::publish(rest),
+            ["publishable", commit] => Ok(Command::Publishable {
+                commit: commit.to_owned(),
+            }),
+            ["push-gate", commit, branch, subject, trailer] => Ok(Command::PushGate {
+                commit: commit.to_owned(),
+                branch: GateBranch::parse(branch)?,
+                subject: subject.to_owned(),
+                trailer: trailer.to_owned(),
+            }),
+            ["published", rev] => Ok(Command::Published {
+                rev: rev.to_owned(),
+            }),
+            _ => Err(usage("unknown arguments")),
+        }
+    }
+
+    fn table(words: &[&str]) -> Result<Command, Error> {
+        let (full, words): (Vec<&str>, Vec<&str>) = words.iter().partition(|w| **w == "--full");
         if full.len() > 1 {
             return Err(usage("--full is given once"));
         }
         let full = !full.is_empty();
+        let seen = if full { Seen::Full } else { Seen::Any };
         match words[..] {
-            ["table", "read", commit] => Ok(Command::Read {
+            ["read", commit] => Ok(Command::Read {
                 commit: commit.to_owned(),
                 of: Of::Train,
-                seen: if full { Seen::Full } else { Seen::Any },
+                seen,
             }),
-            ["table", "read", commit, "--half", half] => Ok(Command::Read {
+            ["read", commit, "--half", half] => Ok(Command::Read {
                 commit: commit.to_owned(),
                 of: Of::Half(Half::parse(half)?),
-                seen: if full { Seen::Full } else { Seen::Any },
+                seen,
             }),
-            ["table", "write", half, commit, status] => Ok(Command::Write {
+            ["write", half, commit, status] => Ok(Command::Write {
                 half: Half::parse(half)?,
                 commit: commit.to_owned(),
                 ended: Ended::of_status(
@@ -57,6 +105,40 @@ impl Command {
                 scope: if full { Scope::Full } else { Scope::Selective },
             }),
             _ => Err(usage("unknown arguments")),
+        }
+    }
+
+    /// An empty `<rev>` is refused, never read as master's tip, which would leave the rev meant
+    /// below the table for good.
+    fn publish(mut words: &[&str]) -> Result<Command, Error> {
+        let (mut skips, mut admits) = (Vec::new(), Vec::new());
+        loop {
+            match words {
+                ["--skip", skip, rest @ ..] => {
+                    skips.push((*skip).to_owned());
+                    words = rest;
+                }
+                ["--admit", path, rest @ ..] => {
+                    admits.push(RepoPath::parse(path)?);
+                    words = rest;
+                }
+                [] => {
+                    return Ok(Command::Publish {
+                        skips,
+                        admits,
+                        rev: None,
+                    });
+                }
+                [""] => return Err(crate::refusal::Refusal::EmptyRev.into()),
+                [rev] if !rev.starts_with("--") => {
+                    return Ok(Command::Publish {
+                        skips,
+                        admits,
+                        rev: Some((*rev).to_owned()),
+                    });
+                }
+                _ => return Err(usage("unknown arguments")),
+            }
         }
     }
 }

@@ -51,8 +51,10 @@ pub struct Table { .. }                            // .git/train/gates/<gate>/<h
 
 pub struct Built { base: Commit, merges: Vec<Merge>, release: Option<Release>, head: Commit }
 pub struct Landable { built: Built, tree: TreeId } // made only by Table::landable; land takes it
-pub enum LeakCheck { Clean(PublicTree), Hits(Vec<Hit>), CouldNotRun(CheckError) }
-pub struct Matcher(PathBuf);                       // only Matcher::deployed(&Roots)
+pub enum LeakCheck<T> { Clean(T), Hits, CouldNotRun(CheckError) }   // T2; T is PublicTree
+pub enum Publishable<T> { Publishable(T), Leak, CouldNotRun(CheckError), Held(Vec<RepoPath>) }
+pub enum Push { Row, GateBranch }                  // a gate branch holds new admissions alone
+pub struct Matcher(PathBuf);                       // only Matcher::deployed()
 pub struct Admitted(RepoPath);                     // only Admitted::at_terminal(path, &Terminal)
 
 pub enum Msg { Ended(Half, ExitStatus), Stop(Signal), Polled(RunState), Published(CacheWord) }
@@ -81,13 +83,18 @@ channel. The leak guard's matcher stays the deployed binary.
    ⌈log₂ n⌉ probes, and a prefix already in the table is never probed. (T3)
 5. **Publication.** The rows are the first-parent commits after the newest `Source:`, oldest
    first; a skip is accepted only for a failing commit that is not the last;
-   `publish(publish(s)) = publish(s)`. (T2)
+   `publish(publish(s)) = publish(s)`. `law_5_the_rows_are_the_first_parent_commits_after_the_newest_source`,
+   `law_5_publishing_twice_is_publishing_once` and `a_skip_is_never_taken_on_a_check_that_did_not_run`
+   (T2, `tests/publication.rs`).
 6. **Record.** Running it twice is running it once, and each write is skipped exactly when its
    repository holds the result (`landreadsdone`). (T4)
 7. **The stored formats.** The table's and the pass store's lines parse and print to the same
    bytes, and a table today's script wrote reads the same in the port.
    `law_7_the_stored_rows_read_and_print_as_train_sh_wrote_them` (T1; the pass store's in G2).
-8. **Admission.** No `Admitted` without a `Terminal`, as a `compile_fail` doc test. (T2)
+8. **Admission.** No `Admitted` without a `Terminal`, as a `compile_fail` doc test (T2,
+   `admitted.rs`). Beside it, the one check before every push to core:
+   `a_gate_branch_holds_what_a_row_holds_and_only_its_admissions` and
+   `a_check_that_could_not_run_is_never_a_leak_or_a_pass`.
 9. **The matcher.** `suzatary-tooling` depends on no workspace member.
    `law_9_the_tool_depends_on_no_workspace_member` (T1).
 10. **The gate's key.** Changing a tree entry outside a step's reads keeps its key, and changing
@@ -103,9 +110,11 @@ type, and lists each such exception (`portdifferential`).
 
 - **T1, the crate and the verdict table**: the pull request that added this plan.
 - **T2, publication.** `publish`, `checked`, `fresh_rows`, `row`, `tree_of`, `public_commit`,
-  `published`, `skipped_by`, `newest` and `on_chain` (about 230 lines) become `train publish`, with
-  `LeakCheck`, `Matcher::deployed` and `Admitted::at_terminal`. Laws 5 and 8. #412 lands or
-  closes first. Safe while trains run: `publish` is idempotent and only climbs.
+  `published`, `skipped_by`, `newest`, `on_chain` and `gate_push` became `train publish`,
+  `publishable`, `push-gate` and `published`, with `LeakCheck`, `Matcher::deployed` and
+  `Admitted::at_terminal`. Every push to core, a gate branch's too, passes one check
+  (`publishable`). Laws 5 and 8. Next in the same vein: `scripts/deploy.sh` still reads core's
+  `Source:` trailers itself, and moves to `train published` when it is ported.
 - **T3, the gate run and the stop path.** `gate`, `beside`, `finish`, `run_half`, `run_here`, the
   `cloud_*` functions, `gate_run`, `bisect`, `nightly_gate`, `nightly_remote`, `check`, the lock
   and `scripts/groups.sh`'s use by the train (about 500 lines) become the `step`/`run` pair. Laws 2,
@@ -155,6 +164,15 @@ Each stage restates the running total of its reading-set delta against `origin/m
 | stage | delta | running total |
 |---|---:|---:|
 | T1, the crate and the verdict table | +9,943 | +9,943 |
+| T2, publication | +15,540 | +25,483 |
+
+T2 removed 269 lines of `train.sh` (about 5,800 tokens) and five stub guards whose properties
+became laws or types, and added about 1,580 lines of Rust (about 21,300 tokens, with its README): a
+typed refusal for each of the shell's `die` lines, the four outcomes of the one check as a sum, the
+gate branch as a type, and the rows and admissions read once as values. At this rate the third
+clause of the bar fails after T4 unless T3 and T4 delete more than they add. So T3's brief states
+its projected delta before any code, and each later stage deletes, in the same pull request, the
+stub guards its laws replace.
 
 Revisit Python only if `nopython` is revised. Move the gate's Rust steps to Nix only when a
 derivation per workspace member keeps a CLI-only change near today's time on the runners; the

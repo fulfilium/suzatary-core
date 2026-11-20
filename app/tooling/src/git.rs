@@ -1,43 +1,32 @@
 //! What the tool asks git, as a subprocess in the working directory: one reading of the
 //! repository, git's own.
 
-use crate::Error;
 use crate::oid::Oid;
+use crate::{Error, process};
 use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
-/// `git <args>`'s stdout without its last newline.
+/// `git <args>`, ready for an environment or a directory before [`process::out`] runs it.
+pub fn cmd<S: AsRef<OsStr>>(args: &[S]) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    cmd
+}
+
 fn git<S: AsRef<OsStr>>(args: &[S]) -> Result<String, Error> {
-    let shown = || {
-        args.iter()
-            .map(|arg| arg.as_ref().to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
-    let out = Command::new("git")
-        .args(args)
-        .output()
-        .map_err(|e| Error::Git {
-            args: shown(),
-            why: e.to_string(),
-        })?;
-    if !out.status.success() {
-        let said = String::from_utf8_lossy(&out.stderr).trim().to_owned();
-        return Err(Error::Git {
-            args: shown(),
-            why: if said.is_empty() {
-                format!("exited {}", out.status)
-            } else {
-                said
-            },
-        });
-    }
-    let text = String::from_utf8(out.stdout).map_err(|_| Error::Git {
-        args: shown(),
-        why: "its answer is not UTF-8".into(),
-    })?;
-    Ok(text.strip_suffix('\n').unwrap_or(&text).to_owned())
+    process::out(&mut cmd(args))
+}
+
+/// Whether `git <args>` exits 0, for a question git answers by its status alone (`rev-parse
+/// --verify`, `cat-file -e`, `remote get-url`).
+pub fn holds<S: AsRef<OsStr>>(args: &[S]) -> Result<bool, Error> {
+    process::succeeds(&mut cmd(args), Stdio::null())
+}
+
+/// Whether `git <args>` did what it was asked, git's words on stderr shown: a fetch or a push.
+pub fn act<S: AsRef<OsStr>>(args: &[S]) -> Result<bool, Error> {
+    process::succeeds(&mut cmd(args), Stdio::inherit())
 }
 
 /// The repository's `.git`, shared by its worktrees.
@@ -45,7 +34,10 @@ pub fn common_dir() -> Result<PathBuf, Error> {
     git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(PathBuf::from)
 }
 
-/// The commit `name` names.
+pub fn top() -> Result<PathBuf, Error> {
+    git(&["rev-parse", "--show-toplevel"]).map(PathBuf::from)
+}
+
 pub fn commit(name: &str) -> Result<Oid, Error> {
     Oid::parse(&git(&[
         "rev-parse",
@@ -55,7 +47,26 @@ pub fn commit(name: &str) -> Result<Oid, Error> {
     ])?)
 }
 
-/// The tree of the commit `name` names.
+/// The commit `name` names, or none where `rev-parse` says so (exit 1); any other failure is an
+/// error.
+pub fn commit_if(name: &str) -> Result<Option<Oid>, Error> {
+    let mut rev_parse = cmd(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("{name}^{{commit}}"),
+    ]);
+    let out = process::output(&mut rev_parse)?;
+    match out.status.code() {
+        Some(0) => Oid::parse(String::from_utf8_lossy(&out.stdout).trim()).map(Some),
+        Some(1) if out.stdout.is_empty() => Ok(None),
+        _ => Err(Error::Run {
+            command: format!("git rev-parse {name}"),
+            why: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+        }),
+    }
+}
+
 pub fn tree(name: &str) -> Result<Oid, Error> {
     Oid::parse(&git(&[
         "rev-parse",
@@ -65,8 +76,19 @@ pub fn tree(name: &str) -> Result<Oid, Error> {
     ])?)
 }
 
-/// The name git gives the file at `path` as a blob.
-#[cfg(feature = "seams")]
-pub fn hash_object(path: &OsStr) -> Result<Oid, Error> {
-    Oid::parse(&git(&[OsStr::new("hash-object"), path])?)
+/// The name git gives the file at `path` as a blob, its bytes as they are.
+pub fn hash_object(path: &Path) -> Result<Oid, Error> {
+    Oid::parse(&git(&[
+        OsStr::new("hash-object"),
+        OsStr::new("--no-filters"),
+        path.as_os_str(),
+    ])?)
+}
+
+/// The first-parent chain of `name`, newest first.
+pub fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
+    git(&["rev-list", "--first-parent", name])?
+        .lines()
+        .map(Oid::parse)
+        .collect()
 }

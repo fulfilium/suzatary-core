@@ -3,8 +3,12 @@
 
 use std::process::ExitCode;
 use suzatary_tooling::command::{Command, Of};
+use suzatary_tooling::core_rows::{CORE_MASTER, Core};
 use suzatary_tooling::gate::Gate;
 use suzatary_tooling::instant::Instant;
+use suzatary_tooling::matcher::Matcher;
+use suzatary_tooling::public_tree::Script;
+use suzatary_tooling::publication::{self, Guard};
 use suzatary_tooling::{Ended, Error, Half, LandOrder, Row, Table, git};
 
 fn main() -> ExitCode {
@@ -26,9 +30,9 @@ fn main() -> ExitCode {
 
 /// Runs `command` in the working directory's repository; the status to exit with.
 fn run(command: Command) -> Result<u8, Error> {
-    let table = Table::at(&git::common_dir()?.join("train").join("gates"), &gate()?);
     match command {
         Command::Read { commit, of, seen } => {
+            let table = table()?;
             let tree = git::tree(&commit)?;
             let reading = match of {
                 Of::Half(half) => table.read(half, seen, &tree)?,
@@ -54,7 +58,7 @@ fn run(command: Command) -> Result<u8, Error> {
                         commit: git::commit(&commit)?,
                         at: Instant::now(),
                     };
-                    table.write(half, scope, &git::tree(&commit)?, &row)?;
+                    table()?.write(half, scope, &git::tree(&commit)?, &row)?;
                 }
                 Ended::DidNotStart => eprintln!(
                     "train: the {} half did not start, so it says nothing of the tree",
@@ -63,7 +67,37 @@ fn run(command: Command) -> Result<u8, Error> {
             }
             Ok(ended.status())
         }
+        Command::Publish { skips, admits, rev } => {
+            publication::publish(&guard()?, rev.as_deref(), &skips, admits)
+        }
+        Command::Publishable { commit } => {
+            Ok(publication::gate_check(&guard()?, &commit)?.0.status())
+        }
+        Command::PushGate {
+            commit,
+            branch,
+            subject,
+            trailer,
+        } => publication::push_gate(&guard()?, &commit, &branch, &subject, &trailer),
+        Command::Published { rev } => {
+            // The local name as `record` just fetched it: absent is a core with no master.
+            let core = match git::commit_if(CORE_MASTER)? {
+                None => Core::Unborn,
+                Some(tip) => Core::read(tip)?,
+            };
+            if let Some(row) = core.rows().published(&git::commit(&rev)?) {
+                println!("{row}");
+            }
+            Ok(0)
+        }
     }
+}
+
+fn table() -> Result<Table, Error> {
+    Ok(Table::at(
+        &git::common_dir()?.join("train").join("gates"),
+        &gate()?,
+    ))
 }
 
 /// The merge gate's table, or under the guards' seam a stub gate's, keyed by the stub's bytes.
@@ -73,8 +107,28 @@ fn run(command: Command) -> Result<u8, Error> {
 )]
 fn gate() -> Result<Gate, Error> {
     #[cfg(feature = "seams")]
-    if let Some(stub) = std::env::var_os("SUZATARY_TRAIN_GATE").filter(|path| !path.is_empty()) {
-        return Ok(Gate::stub(&git::hash_object(&stub)?));
+    if let Some(stub) = seam("SUZATARY_TRAIN_GATE") {
+        return Ok(Gate::stub(&git::hash_object(std::path::Path::new(&stub))?));
     }
     Ok(Gate::merge_gate())
+}
+
+/// The checkout's `public-tree.sh` and the deployed app, or under the guards' seams their stubs.
+fn guard() -> Result<Guard, Error> {
+    #[cfg(feature = "seams")]
+    let (script, matcher) = (
+        seam("SUZATARY_TRAIN_PUBLIC").map(|path| Script::stub(path.into())),
+        seam("SUZATARY_TRAIN_BIN").map(|path| Matcher::stub(path.into())),
+    );
+    #[cfg(not(feature = "seams"))]
+    let (script, matcher) = (None, None);
+    Ok(Guard {
+        script: script.map_or_else(Script::of_checkout, Ok)?,
+        matcher: matcher.map_or_else(Matcher::deployed, Ok)?,
+    })
+}
+
+#[cfg(feature = "seams")]
+fn seam(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name).filter(|value| !value.is_empty())
 }

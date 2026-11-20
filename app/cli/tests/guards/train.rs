@@ -148,8 +148,7 @@ exit 1
 
 /// The stub public-tree script: `<out> <rev>` writes `<rev>`'s tree without its `private/`,
 /// and `--check --strict <dir>` exits 1, naming the file, where a file of it says `leak`. With
-/// `PUBLIC_UNWRITTEN` set no tree is written, and with `PUBLIC_UNCHECKED` the check exits 2,
-/// the real one's "could not run whole".
+/// `PUBLIC_UNCHECKED` set the check exits 2, the real one's "could not run whole".
 const PUBLIC: &str = r#"#!/bin/sh
 if [ "$1" = --check ]; then
   echo "${SUZATARY_BIN:-}" >>"$TRAIN_PROBES.matcher"
@@ -159,7 +158,6 @@ if [ "$1" = --check ]; then
   echo "$hits"
   exit 1
 fi
-[ -z "$PUBLIC_UNWRITTEN" ] || { echo "public-tree: no space left" >&2; exit 1; }
 mkdir -p "$1" && git archive "$2" | tar -x -C "$1" && rm -rf "$1/private"
 "#;
 
@@ -2078,6 +2076,131 @@ fn train_gate_github_whose_public_tree_leaks_pushes_nothing() {
     assert_eq!(t.probes("--no-live"), 0, "no step of the tree half ran");
 }
 
+/// A gate branch is a publication (GitHub serves a deleted branch's commit by its name, and forks
+/// share objects), so it holds no admission a person did not make: a pull request that adds a
+/// file with its own line in the admitted files, a `.gitleaksignore` fingerprint and a change of
+/// the secret rules reaches no gate branch, from `gate` or from `check`, and the box's steps do
+/// not run for it. `check` reaches `push-gate` with no `publishable` before it, so `push-gate`
+/// holds it on its own. A new plain-text path passes both checks wherever it goes, so it is
+/// pushed.
+#[test]
+fn train_gate_github_pushes_no_admission_a_person_did_not_make() {
+    let t = Train::new("github-admission");
+    t.on_github();
+    t.pr(
+        1,
+        "an opaque file and its own admissions",
+        &[
+            ("blob.txt", "opaque bytes\n"),
+            (
+                "scripts/public-admitted.sha256",
+                &format!("{}  blob.txt\n", "a".repeat(64)),
+            ),
+            (".gitleaksignore", "notes.txt:generic-api-key:1\n"),
+            ("scripts/secret-rules.toml", "[extend]\nuseDefault = true\n"),
+        ],
+    );
+    assert!(t.train(&["build", "1"]).status.success());
+    let out = t.train(&["gate", "--remote", "github"]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    for held in ["blob.txt", "notes.txt", "scripts/secret-rules.toml"] {
+        assert!(
+            stderr.contains(&format!("held: {held} (in ")),
+            "{held}: {stderr}"
+        );
+    }
+    assert!(stderr.contains("tree half: unknown"), "{stderr}");
+    assert_eq!(t.core_pushes(), Vec::<String>::new(), "nothing pushed");
+    assert_eq!(t.probes("--no-live"), 0, "no step of the tree half ran");
+
+    let checked = t.check_beside_a_train(1);
+    assert!(!checked.status.success());
+    assert_eq!(
+        t.core_pushes(),
+        Vec::<String>::new(),
+        "check pushed nothing"
+    );
+    assert!(
+        t.comments(1).contains("holds an admission"),
+        "{}",
+        t.comments(1)
+    );
+
+    let t = Train::new("github-new-path");
+    t.on_github();
+    t.pr(1, "a new plain-text file", &[("fresh.txt", "new\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    let out = t.train(&["gate", "--remote", "github"]);
+    assert!(out.status.success(), "gate: {}", text(&out.stderr));
+    assert_eq!(t.core_pushes().len(), 2, "pushed, then deleted");
+}
+
+/// A leak guard that could not run gives the tree half no verdict: it is no leak and no red tree,
+/// nothing is pushed, and the live half still runs.
+#[test]
+fn train_gate_github_whose_check_could_not_run_has_no_verdict() {
+    let t = Train::new("github-unchecked");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    let out = t.train_with(
+        &["gate", "--remote", "github"],
+        &[("PUBLIC_UNCHECKED", "1")],
+    );
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("the leak guard could not run")
+            && stderr.contains("tree half: unknown")
+            && !stderr.contains("red on the box")
+            && !stderr.contains("did not pass"),
+        "{stderr}"
+    );
+    assert_eq!(t.core_pushes(), Vec::<String>::new(), "nothing pushed");
+    assert!(t.probes("--only-live") > 0, "the live half ran");
+}
+
+/// Every tool `train.sh` names in `needs` is in the `.#triage` shell itself, asked of the shell
+/// with nothing else on PATH, so a tool the box has elsewhere cannot hide its absence there.
+#[test]
+fn train_needs_only_tools_the_triage_shell_carries() {
+    if !super::scratch::on_path("nix") {
+        eprintln!("train_needs_only_tools_the_triage_shell_carries: no nix");
+        return;
+    }
+    let script = std::fs::read_to_string(repo().join("scripts/train.sh")).expect("train.sh reads");
+    let tools: BTreeSet<String> = script
+        .lines()
+        .flat_map(|line| line.split(['&', '|', ';', ')']))
+        .filter_map(|command| command.trim().strip_prefix("needs "))
+        .flat_map(str::split_whitespace)
+        .map(|word| match word {
+            "\"$gh\"" => "gh".to_owned(),
+            word => word.to_owned(),
+        })
+        .collect();
+    assert!(
+        tools.contains("git") && tools.contains("cargo"),
+        "{tools:?}"
+    );
+    let out = Command::new("nix")
+        .arg("develop")
+        .arg(format!("{}#triage", repo().display()))
+        .args(["--ignore-environment", "-c", "bash", "-c"])
+        .arg(r#"for t; do command -v "$t" >/dev/null || echo "$t"; done"#)
+        .arg("bash")
+        .args(&tools)
+        .output()
+        .expect("nix develop runs");
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(
+        text(&out.stdout),
+        "",
+        "missing from .#triage (of {tools:?})"
+    );
+}
+
 /// A train killed while it waits on the cloud's run deletes its gate branch on the way out.
 /// Stopped by TERM or HUP, it also stops the wait and cancels its run, even when it was started
 /// with both signals ignored, which bash can neither trap nor reset.
@@ -2243,40 +2366,6 @@ fn train_land_whose_public_tree_leaks_lands_and_publishes_nothing() {
     );
 }
 
-/// Only a commit master's first-parent chain took is published, and the table only climbs: a
-/// source older than the newest published, or one a merge only brought, is refused.
-#[test]
-fn train_publish_only_climbs_master_first_parent_chain() {
-    let t = Train::new("publish-climbs");
-    let seed = t.origin_master();
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    let series = run_git(&t.author(), &["rev-parse", "HEAD"]);
-    assert!(t.train(&["build", "1"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(t.train(&["land"]).status.success());
-    let published = t.core(&["rev-parse", "master"]);
-
-    let older = t.train(&["publish", &seed]);
-    assert!(!older.status.success());
-    assert!(
-        text(&older.stderr).contains("only climbs"),
-        "{}",
-        text(&older.stderr)
-    );
-    let side = t.train(&["publish", &series]);
-    assert!(!side.status.success());
-    assert!(
-        text(&side.stderr).contains("first-parent"),
-        "{}",
-        text(&side.stderr)
-    );
-    assert_eq!(
-        t.core(&["rev-parse", "master"]),
-        published,
-        "core did not move"
-    );
-}
-
 /// A land that could not reach core loses nothing: the next publish walks every landed commit
 /// after the newest published, oldest first, one core commit each. (Where core publishes
 /// nothing yet, the first publish is the one commit named, never the whole history.)
@@ -2320,81 +2409,6 @@ fn train_publish_catches_up_every_landed_commit_in_order() {
         "one commit per landed commit, oldest first"
     );
     assert_eq!(t.core(&["show", "master~1:a.txt"]), "a");
-}
-
-/// A commit step that names no commit stops the publish before the push, which with an empty
-/// name would delete core's master.
-#[test]
-fn train_publish_refuses_to_push_an_empty_commit() {
-    let t = Train::new("publish-empty");
-    let populated = t.core(&["rev-parse", "master"]);
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(t.train(&["land"]).status.success());
-    let published = t.core(&["rev-parse", "master"]);
-    assert_ne!(published, populated);
-
-    t.pr(2, "the second", &[("b.txt", "b\n")]);
-    assert!(t.train(&["build", "2"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    let real = run(
-        Command::new("sh").args(["-c", "command -v git"]),
-        "which git",
-    );
-    let broken = t.scratch.join("broken");
-    let _ = suzatary_testkit::fake_program(
-        &broken,
-        "git",
-        &format!("#!/bin/sh\n[ \"$1\" = commit-tree ] && exit 0\nexec {real} \"$@\"\n"),
-    );
-    let path = format!(
-        "{}:{}",
-        broken.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    let refused = t.train_with(&["land"], &[("PATH", &path)]);
-    assert!(!refused.status.success());
-    assert!(
-        text(&refused.stderr).contains("named no commit"),
-        "{}",
-        text(&refused.stderr)
-    );
-    assert_eq!(
-        t.core(&["rev-parse", "master"]),
-        published,
-        "core's master is neither moved nor deleted"
-    );
-}
-
-/// An empty <rev> is refused, never read as master's tip: a variable that read nothing upstream
-/// would otherwise publish the tip and leave the rev meant below the table for good.
-#[test]
-fn train_publish_refuses_an_empty_rev() {
-    let t = Train::new("publish-empty-rev");
-    let populated = t.core(&["rev-parse", "master"]);
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    t.git(&["remote", "set-url", "core", "../nowhere.git"]);
-    assert!(
-        !t.train(&["land"]).status.success(),
-        "landed, not published"
-    );
-    t.git(&["remote", "set-url", "core", "../core.git"]);
-
-    let refused = t.train(&["publish", ""]);
-    assert!(!refused.status.success());
-    assert!(
-        text(&refused.stderr).contains("empty <rev>"),
-        "{}",
-        text(&refused.stderr)
-    );
-    assert_eq!(
-        t.core(&["rev-parse", "master"]),
-        populated,
-        "nothing published"
-    );
 }
 
 /// A landed commit whose tree can never pass blocks every row after it, naming its file and line
@@ -2461,51 +2475,6 @@ fn train_publish_skips_a_commit_only_when_it_fails() {
         text(&again.stderr).contains("was skipped by publish"),
         "{}",
         text(&again.stderr)
-    );
-}
-
-/// A skip of a commit whose tree passes is refused before any row is pushed: a skipped commit is
-/// never deployed, and deploy would call it a leak when it is not.
-#[test]
-fn train_publish_refuses_to_skip_a_clean_commit() {
-    let t = Train::new("publish-skip-clean");
-    t.pr(1, "the start", &[("start.txt", "s\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(t.train(&["land"]).status.success());
-    let published = t.core(&["rev-parse", "master"]);
-
-    t.git(&["remote", "set-url", "core", "../nowhere.git"]);
-    t.pr(3, "clean", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "3"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(
-        !t.train(&["land"]).status.success(),
-        "landed, not published"
-    );
-    let clean = t.origin_master();
-    t.pr(4, "after", &[("b.txt", "b\n")]);
-    assert!(t.train(&["build", "4"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(
-        !t.train(&["land"]).status.success(),
-        "landed, not published"
-    );
-    t.git(&["remote", "set-url", "core", "../core.git"]);
-
-    let refused = t.train(&["publish", "--skip", &clean]);
-    assert!(!refused.status.success());
-    assert!(
-        text(&refused.stderr).contains(&format!(
-            "{clean} passes its leak guard; publish it instead"
-        )),
-        "{}",
-        text(&refused.stderr)
-    );
-    assert_eq!(
-        t.core(&["rev-parse", "master"]),
-        published,
-        "core did not move"
     );
 }
 
@@ -2765,62 +2734,6 @@ fn train_publish_admits_more_held_paths_than_a_pipe_holds() {
     let admitted = t.at_a_terminal(&args);
     assert!(admitted.status.success(), "{}", text(&admitted.stdout));
     assert_eq!(t.core(&["show", &format!("master:{}", paths[0])]), "x");
-}
-
-/// A skip is taken only on a check that ran and found hits: where the public tree could not be
-/// written, or the check could not run whole, the publish stops naming that, and core does not
-/// move, whatever the tree holds.
-#[test]
-fn train_publish_never_skips_on_a_check_that_could_not_run() {
-    let t = Train::new("publish-skip-unchecked");
-    t.pr(1, "the start", &[("start.txt", "s\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(t.train(&["land"]).status.success());
-    let published = t.core(&["rev-parse", "master"]);
-
-    t.git(&["remote", "set-url", "core", "../nowhere.git"]);
-    t.pr(3, "clean", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "3"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(
-        !t.train(&["land"]).status.success(),
-        "landed, not published"
-    );
-    let clean = t.origin_master();
-    t.pr(4, "after", &[("b.txt", "b\n")]);
-    assert!(t.train(&["build", "4"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert!(
-        !t.train(&["land"]).status.success(),
-        "landed, not published"
-    );
-    t.git(&["remote", "set-url", "core", "../core.git"]);
-
-    for (flag, said) in [
-        ("PUBLIC_UNWRITTEN", "could not write the public tree"),
-        ("PUBLIC_UNCHECKED", "the leak guard could not run"),
-    ] {
-        let refused = t.train_with(&["publish", "--skip", &clean], &[(flag, "1")]);
-        assert!(!refused.status.success(), "{flag}");
-        assert!(
-            text(&refused.stderr).contains(said),
-            "{flag}: {}",
-            text(&refused.stderr)
-        );
-        assert_eq!(
-            t.core(&["rev-parse", "master"]),
-            published,
-            "{flag}: core did not move"
-        );
-        let row = t.train_with(&["publish"], &[(flag, "1")]);
-        assert!(!row.status.success(), "{flag}");
-        assert!(
-            text(&row.stderr).contains(said) && !text(&row.stderr).contains("did not pass"),
-            "{flag}: a row that could not be checked is not called a leak: {}",
-            text(&row.stderr)
-        );
-    }
 }
 
 /// The release fixture's instance file: `{data}` and `{key}` are filled in. The roadmap is mounted

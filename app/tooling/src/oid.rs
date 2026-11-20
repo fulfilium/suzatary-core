@@ -17,6 +17,12 @@ impl Oid {
             )))
         }
     }
+
+    /// Its first twelve digits, as the train's messages print a commit.
+    #[must_use]
+    pub fn short(&self) -> &str {
+        &self.0[..12]
+    }
 }
 
 impl fmt::Display for Oid {

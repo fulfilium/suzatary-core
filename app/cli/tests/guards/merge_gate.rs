@@ -1877,7 +1877,9 @@ fn reads_beyond_the_public_tree(body: &str) -> bool {
         .iter()
         .any(|w| body.contains(w))
         && body.contains("repo()");
-    deployment || private || git || walk
+    // The box's own `.#triage`, asked with nothing else on PATH: what the train runs in here.
+    let shell = body.contains("\"--ignore-environment\"");
+    deployment || private || git || walk || shell
 }
 
 /// The live half runs on the box exactly the guards whose verdict the public tree cannot give:

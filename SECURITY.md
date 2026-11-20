@@ -115,8 +115,10 @@ checks read, or in a file listed by its path and SHA-256 in
   the line breaks of an encoding does not hide it.
 - **Admissions are held.** The train publishes a new manifest line, a new
   `.gitleaksignore` fingerprint or any change to the secret rules only once
-  `scripts/train.sh publish --admit <path>` names it, and the Prodrome's scan
-  reads every commit of a range and takes `--admit` the same way.
+  `scripts/train.sh publish --admit <path>` names it, and pushes no gate
+  branch that holds one: GitHub serves a deleted branch's commit by its name,
+  so a gate branch is a publication too. The Prodrome's scan reads every
+  commit of a range and takes `--admit` the same way.
 
 **What "at a terminal" stops.** `--admit` refuses a standard input that is not
 a terminal (`[[ -t 0 ]]`), which stops cron, CI and an unattended `train.sh

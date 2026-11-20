@@ -14,8 +14,8 @@
 #   publish [--skip <sha>]... [--admit <path>]... [<rev>]
 #                    core's master += the public tree of each landed commit up to <rev>
 #
-# `--remote github` runs the tree half on core's runners (only a public tree its leak guard passed
-# leaves the box); the box keeps the steps that read this repository and the live half. Run inside
+# `--remote github` runs the tree half on core's runners (only a public tree the tool finds
+# publishable leaves the box: its leak guard passed, and it holds no admission core lacks); the box keeps the steps that read this repository and the live half. Run inside
 # `nix develop .#triage`, from a clean checkout; it never touches the data repository.
 #
 # Verdicts go to .git/train/gates/, keyed by half and tree, and only the train's tool reads or
@@ -48,9 +48,8 @@ needs() {
       || die "$tool is not on PATH; the .#triage shell (flake.nix) carries every tool this script calls. Nothing ran."
   done
 }
-needs git flock
+needs git flock cargo getent
 case "${1:-}" in build | land | check | nightly) needs "$gh" ;; esac
-case "${1:-}" in gate | bisect | land | nightly) needs cargo getent ;; esac
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --show-toplevel)" || die "not inside a git checkout."
 cd "$root"
@@ -167,7 +166,7 @@ resolve_app() {
   app_bin="${app_bins[$rev]}"
 }
 
-# The leak guard's matcher: no tree it reads built it, nor (this script's app-bin.sh) chose it.
+# The app the box runs, which no tree the train judges built.
 deployed_app() {
   "$scripts/app-bin.sh" --deployed || die "there is no deployed app to read the tree with (scripts/deploy.sh <rev> first)."
 }
@@ -608,42 +607,21 @@ cloud_push() {
 
 # The box's steps, then the public tree pushed; prints the gate commit, else 1 (red) or 2.
 pushing() {
-  local commit="$1" dir code=0 repo pushed
+  local commit="$1" code=0 repo pushed
   repo="$(core_repo)" \
     || { say "the remote \`core\` is not a GitHub repository, so the tree half cannot run on GitHub's runners"; return 2; }
-  dir="$(mktemp -d)" || return 2
-  # The leak guard first: what fails it never leaves the box.
-  if ! checked "$commit" "$dir"; then
-    rm -rf "$dir"
-    say "the public tree of ${commit:0:12} did not pass its leak guard (the files and lines above), so nothing went to $repo and the tree half says nothing of it; the live half's public-check judges it"
+  # The one publishable check first: what fails it never leaves the box, and runs no step.
+  if ! "$tool" publishable "$commit"; then
+    say "nothing went to $repo, so the tree half says nothing of ${commit:0:12}; the live half's public-check judges it"
     return 2
   fi
   run_here tree "$commit" --steps "$box_before" || code=$?
   if ((code)); then
-    rm -rf "$dir"
     record tree "$commit" "$code" || return
   fi
-  pushed="$(gate_push "$commit" "$dir" "$gate_prefix$commit" "Gate ${commit:0:12}" "Gate: $commit")" || return 2
+  pushed="$("$tool" push-gate "$commit" "$gate_prefix$commit" "Gate ${commit:0:12}" "Gate: $commit")" \
+    || { say "nothing went to $repo, so the tree half says nothing of ${commit:0:12}"; return 2; }
   say "the tree half of ${commit:0:12} runs on GitHub's runners: $repo, branch $gate_prefix$commit, commit ${pushed:0:12}"
-  echo "$pushed"
-}
-
-# gate_push <commit> <dir> <branch> <subject> <trailer>: <dir>'s tree pushed to <branch> alone.
-gate_push() {
-  local commit="$1" dir="$2" branch="$3" tree parent="" pushed
-  if git ls-remote --exit-code --heads core "refs/heads/$core_branch" >/dev/null; then
-    git fetch --quiet core "+refs/heads/$core_branch:refs/remotes/core/$core_branch" \
-      || { rm -rf "$dir"; say "core's $core_branch could not be fetched, so nothing went to core"; return 2; }
-    parent="$(git rev-parse "refs/remotes/core/$core_branch")"
-  fi
-  tree="$(tree_of "$dir")" || { rm -rf "$dir"; say "the public tree of ${commit:0:12} could not be written as a git tree"; return 2; }
-  rm -rf "$dir"
-  # Stamped with the instant, so each commit (and its run) has a sha of its own.
-  pushed="$(public_commit "$tree" "$parent" "$(date -u +%FT%TZ)" "$4, $(date -u +%FT%T.%NZ)" "$5")" \
-    && [[ "$pushed" =~ ^[0-9a-f]{40}$ ]] \
-    || { say "the public tree of ${commit:0:12} could not be committed"; return 2; }
-  git push --quiet core "+$pushed:refs/heads/$branch" \
-    || { say "core refused $branch, so it says nothing of ${commit:0:12}"; return 2; }
   echo "$pushed"
 }
 
@@ -986,7 +964,7 @@ nightly_gate() {
 # refused guard is posted instead. No verdict is recorded.
 check() {
   (($# == 1)) && [[ "$1" =~ ^[1-9][0-9]*$ ]] || usage
-  local n="$1" meta current head master tree merge dir pushed code=0 log what verdict
+  local n="$1" meta current head master tree merge pushed code=0 log what verdict
   trap '[[ -z "$gate_branch" ]] || cloud_close' EXIT
   core_repo >/dev/null || die "the remote \`core\` is not a GitHub repository, so the tree half cannot run on GitHub's runners."
   fetch_origin
@@ -1002,14 +980,14 @@ check() {
   fi
   merge="$(GIT_AUTHOR_NAME=Suzatary GIT_AUTHOR_EMAIL=publish@suzatary.invalid GIT_COMMITTER_NAME=Suzatary \
     GIT_COMMITTER_EMAIL=publish@suzatary.invalid git commit-tree "${tree%%$'\n'*}" -p "$master" -p "$head" -m "Check #$n")"
-  dir="$(mktemp -d)" || die "could not make a scratch directory."
   # The guard's hits stay on the box: a comment says only that it refused.
-  if ! (checked "$merge" "$dir"); then
-    rm -rf "$dir"
-    post "$n" "$what did not pass the leak guard on the box, or it could not run: nothing went to GitHub." && return 1
-  fi
-  pushed="$(gate_push "$merge" "$dir" "gate/pr$n-${head:0:12}" "Check #$n ${head:0:12}" "Check: $head")" \
-    || die "nothing went to core for #$n (above)."
+  pushed="$("$tool" push-gate "$merge" "gate/pr$n-${head:0:12}" "Check #$n ${head:0:12}" "Check: $head")" || code=$?
+  case "$code" in
+    0) ;;
+    1) post "$n" "$what did not pass the leak guard on the box: nothing went to GitHub." && return 1 ;;
+    4) post "$n" "$what holds an admission no publication of master holds yet: nothing went to GitHub." && return 1 ;;
+    *) post "$n" "$what could not be checked or sent from the box (its words are on the box): nothing went to GitHub. Check again." && return 1 ;;
+  esac
   gate_branch="gate/pr$n-${head:0:12}" gate_pushed="$pushed"
   log="$(mkdir -p "$state/logs" && echo "$state/logs/check-pr$n-$head.log")"
   : >"$log"
@@ -1156,9 +1134,9 @@ record_release() {
       "$app_bin" release complete --release "$version" "${todos[@]}" "${notes[@]}" >&2 \
         || die "the todos $version completed are not all recorded done (above): scripts/train.sh record ${rev:0:12}"
     fi
-    git fetch --quiet core "+refs/heads/$core_branch:refs/remotes/core/$core_branch" \
+    git fetch --quiet core "+refs/heads/master:refs/remotes/core/master" \
       || die "core could not be fetched, so the roadmap's pin has nothing to move to: scripts/train.sh record ${rev:0:12}"
-    core="$(published "$rev")"
+    core="$("$tool" published "$rev")" || die "core's rows could not be read (above): scripts/train.sh record ${rev:0:12}"
     [[ -n "$core" ]] \
       || die "core does not publish ${rev:0:12} yet, and the roadmap pins the published code: scripts/train.sh publish, which records it after."
     pin "$core"
@@ -1242,7 +1220,7 @@ land() {
   landed="$(git rev-parse HEAD)"
   printf 'landed: master is %s%s\n' "$landed" "${version:+, tagged v$version}"
   # In order: code, core, roadmap. The roadmap pins core's row, so it is recorded last.
-  (publish "$landed") \
+  "$tool" publish "$landed" \
     || die "master landed at ${landed:0:12}, and its public tree was not published, so no deploy can run it yet; scripts/train.sh publish, once the cause above is mended, then records its release."
   [[ -z "$version" ]] || (record_release "$landed") \
     || die "master landed, v$version is tagged and published, and the roadmap does not record it yet: scripts/train.sh record ${landed:0:12}"
@@ -1250,259 +1228,14 @@ land() {
   printf '  scripts/deploy.sh %s\n' "$landed"
 }
 
-core_branch=master
-# Each line a person's word on those bytes, so a new line is held as a new path is.
-admitted=scripts/public-admitted.sha256
-# A change to the secret rules changes what passes, so it is admitted as a line is.
-rules=scripts/secret-rules.toml
-
-# The core commit whose Source is <rev>, or nothing (awk reads the whole log: no SIGPIPE).
-published() {
-  git rev-parse --verify --quiet "refs/remotes/core/$core_branch" >/dev/null || return 0
-  git log --first-parent --format='%H%x09%(trailers:key=Source,valueonly,separator=%x2C)' \
-    "refs/remotes/core/$core_branch" | awk -F'\t' -v rev="$1" '$2 == rev && !n++ { print $1 }'
-}
-
-skipped_by() {
-  git rev-parse --verify --quiet "refs/remotes/core/$core_branch" >/dev/null || return 0
-  git log --first-parent --format='%H%x09%(trailers:key=Skipped,valueonly,separator=%x09)' \
-    "refs/remotes/core/$core_branch" | awk -F'\t' -v rev="$1" '{ for (i = 2; i <= NF; i++) if ($i == rev && !n++) print $1 }'
-}
-
-newest() {
-  git rev-parse --verify --quiet "refs/remotes/core/$core_branch" >/dev/null || return 0
-  git log --first-parent --format='%(trailers:key=Source,valueonly,separator=%x2C)' \
-    "refs/remotes/core/$core_branch" | awk 'NF && !n++'
-}
-
-# Publishes core's missing rows up to <rev> (origin/master), oldest first, until a leak guard fails.
-publish() {
-  local rev heads last source sources=() skips=() skipped=() at
-  local admits=()
-  while [[ "${1:-}" == --skip || "${1:-}" == --admit ]]; do
-    (($# >= 2)) || usage
-    if [[ "$1" == --admit ]]; then
-      [[ -t 0 ]] \
-        || die "--admit $2 is a person's word that they looked at it, so it is taken at a terminal and never from a script. Nothing published."
-      admits+=("$2")
-    else
-      at="$(git rev-parse --verify --quiet "$2^{commit}")" || die "--skip ${2:-\"\"} names no commit. Nothing published."
-      skips+=("$at")
-    fi
-    shift 2
-  done
-  (($# <= 1)) || usage
-  # An empty <rev> is a mistake, never "the tip", which would leave the meant rev unpublished.
-  (($# == 0)) || [[ -n "$1" ]] || die "publish was given an empty <rev>. Nothing published."
-  git remote get-url core >/dev/null 2>&1 \
-    || die "this checkout has no remote \`core\`, the repository a deployment runs: git remote add core <its url>. Nothing published."
-  git fetch --quiet origin master || die "could not fetch origin's master. Nothing published."
-  rev="$(git rev-parse --verify --quiet "${1:-origin/master}^{commit}")" || die "${1:-origin/master} names no commit. Nothing published."
-  on_chain "$rev" origin/master \
-    || die "${rev:0:12} is not on master's first-parent chain: only a landed commit is published. Nothing published."
-  heads="$(git ls-remote --heads core "refs/heads/$core_branch")" || die "could not reach core. Nothing published."
-  if [[ -n "$heads" ]]; then
-    git fetch --quiet core "+refs/heads/$core_branch:refs/remotes/core/$core_branch" \
-      || die "could not fetch core's $core_branch. Nothing published."
-  else
-    git update-ref -d "refs/remotes/core/$core_branch" 2>/dev/null || true
-  fi
-  source="$(published "$rev")"
-  if [[ -n "$source" ]]; then
-    say "core already publishes ${rev:0:12}, as ${source:0:12}"
-    return 0
-  fi
-  source="$(skipped_by "$rev")"
-  [[ -z "$source" ]] \
-    || die "${rev:0:12} was skipped by publish, never published (${source:0:12} of core's $core_branch names it in a Skipped: trailer): its tree did not pass the leak guard. Nothing published."
-  last="$(newest)"
-  if [[ -z "$last" ]]; then
-    sources=("$rev")
-  else
-    git merge-base --is-ancestor "$last" "$rev" 2>/dev/null \
-      || die "core publishes ${last:0:12}, and ${rev:0:12} does not descend from it: the table only climbs. Nothing published."
-    mapfile -t sources < <(git rev-list --first-parent --reverse "$last..$rev")
-  fi
-  ((${#sources[@]})) || die "found no commit between ${last:0:12} and ${rev:0:12} to publish. Nothing published."
-  for at in "${skips[@]}"; do
-    printf '%s\n' "${sources[@]}" | awk -v r="$at" '$0 == r { f = 1 } END { exit !f }' \
-      || die "--skip ${at:0:12} is not a commit this publish would make a row of. Nothing published."
-    [[ "$at" != "${sources[-1]}" ]] \
-      || die "--skip ${at:0:12} is the last commit to publish, so no row after it would record the skip; publish again once another commit lands. Nothing published."
-    # A skip is for a tree that can never pass: a skipped commit is never deployed.
-    ! checked "$at" \
-      || die "--skip ${at:0:12}: ${at} passes its leak guard; publish it instead. Nothing published."
-  done
-  # Read by `row`. An admit must name one of these paths.
-  local pending=() fresh paths
-  for source in "${sources[@]}"; do
-    printf '%s\n' "${skips[@]}" | awk -v r="$source" '$0 == r { f = 1 } END { exit !f }' || pending+=("$source")
-  done
-  fresh="$(fresh_rows "${pending[@]}")" || die "could not write the public tree to list the paths it would publish. Nothing published."
-  # A here-string, not a pipe: `grep -q` exits early and the writer's SIGPIPE reads as no match.
-  paths="$(cut -d' ' -f2- <<<"$fresh")"
-  for at in "${admits[@]}"; do
-    grep -qxF -- "$at" <<<"$paths" \
-      || die "--admit $at names no path this publish would hold: admit only what a held row names. Nothing published."
-  done
-  for source in "${sources[@]}"; do
-    if printf '%s\n' "${skips[@]}" | awk -v r="$source" '$0 == r { f = 1 } END { exit !f }'; then
-      say "skipping ${source:0:12}, as asked: the next row names it"
-      skipped+=("$source")
-      continue
-    fi
-    row "$source" "${skipped[@]}" || return 1
-    skipped=()
-  done
-}
-
-# on_chain <commit> <branch>, read to the end (a reader quitting early breaks the pipe: pipefail).
-on_chain() {
-  git rev-list --first-parent "$2" | awk -v r="$1" '$0 == r { f = 1 } END { exit !f }'
-}
-
-# checked <source> [<dir>]: the leak guard on <source>'s public tree (kept in <dir>/tree): 0 passes,
-# 1 hits (on stderr); a guard that could not run dies, so no check is skipped unrun.
-checked() {
-  local source="$1" dir="${2:-}" own="" code=0 public
-  public="${SUZATARY_TRAIN_PUBLIC:-$root/scripts/public-tree.sh}"
-  if [[ -z "$dir" ]]; then
-    dir="$(mktemp -d)" || die "could not make a scratch directory to check ${source:0:12}. Nothing published."
-    own=yes
-  fi
-  if ! "$public" "$dir/tree" "$source" >&2; then
-    rm -rf "$dir"
-    die "could not write the public tree of ${source:0:12}, so its leak guard did not run. Nothing published."
-  fi
-  SUZATARY_BIN="${SUZATARY_TRAIN_BIN:-$(deployed_app)/bin/suzatary}" "$public" --check --strict "$dir/tree" >&2 || code=$?
-  [[ -z "$own" ]] || rm -rf "$dir"
-  case "$code" in
-    0 | 1) return "$code" ;;
-    *)
-      rm -rf "$dir"
-      die "the leak guard could not run over the public tree of ${source:0:12} (it exited $code; see above). Nothing published."
-      ;;
-  esac
-}
-
-# "<source> <path>" for each path or admission (`suzatary leaks --admissions`) of each <source> that
-# no core row or earlier source holds; none while core is empty (the operator's baseline).
-fresh_rows() {
-  local public scratch s c bin
-  git rev-parse --verify --quiet "refs/remotes/core/$core_branch" >/dev/null || return 0
-  public="${SUZATARY_TRAIN_PUBLIC:-$root/scripts/public-tree.sh}"
-  bin="${SUZATARY_TRAIN_BIN:-}"
-  [ -n "$bin" ] || bin="$(deployed_app)/bin/suzatary"
-  scratch="$(mktemp -d)" || return 1
-  admissions_of() {
-    local dir="$1" manifest="$1/$admitted" ignore="$1/.gitleaksignore"
-    [ -f "$manifest" ] || manifest=/dev/null
-    [ -f "$ignore" ] || ignore=/dev/null
-    "$bin" leaks --terms /dev/null --words /dev/null --links /dev/null --admissions \
-      --admitted "$manifest" --findings "$ignore" || return 1
-    [ ! -f "$dir/$rules" ] || printf '%s\trules %s\n' "$rules" "$(sha256sum <"$dir/$rules" | cut -d' ' -f1)"
-  }
-  # NUL-separated end to end, so no path is quoted and every one compares as `find` prints it.
-  git log -z --format= --name-only "refs/remotes/core/$core_branch" | grep -zv '^$' |
-    LC_ALL=C sort -zu >"$scratch/known" || { rm -rf "$scratch"; return 1; }
-  # Once published, an admission stands.
-  : >"$scratch/admitted"
-  git log --format=%H "refs/remotes/core/$core_branch" -- "$admitted" .gitleaksignore "$rules" >"$scratch/rows" ||
-    { rm -rf "$scratch"; return 1; }
-  while IFS= read -r c; do
-    rm -rf "$scratch/row" && mkdir -p "$scratch/row/$(dirname "$admitted")" "$scratch/row/$(dirname "$rules")"
-    for f in "$admitted" .gitleaksignore "$rules"; do
-      git show "$c:$f" >"$scratch/row/$f" 2>/dev/null || rm -f "$scratch/row/$f"
-    done
-    admissions_of "$scratch/row" >>"$scratch/admitted" || { rm -rf "$scratch"; return 1; }
-  done <"$scratch/rows"
-  LC_ALL=C sort -u "$scratch/admitted" -o "$scratch/admitted"
-  for s in "$@"; do
-    rm -rf "$scratch/tree"
-    if ! "$public" "$scratch/tree" "$s" >/dev/null 2>&1; then
-      rm -rf "$scratch"
-      say "could not write the public tree of ${s:0:12} to list its paths"
-      return 1
-    fi
-    (cd "$scratch/tree" && find . -type f -printf '%P\0' | LC_ALL=C sort -z) >"$scratch/paths"
-    admissions_of "$scratch/tree" | LC_ALL=C sort -u >"$scratch/lines" ||
-      { rm -rf "$scratch"; say "could not read the admissions of ${s:0:12}"; return 1; }
-    {
-      LC_ALL=C comm -z -23 "$scratch/paths" "$scratch/known" | tr '\0' '\n'
-      LC_ALL=C comm -23 "$scratch/lines" "$scratch/admitted" | cut -f1
-    } | LC_ALL=C sort -u | sed "s#^#$s #"
-    LC_ALL=C sort -zu "$scratch/known" "$scratch/paths" -o "$scratch/known"
-    LC_ALL=C sort -u "$scratch/admitted" "$scratch/lines" -o "$scratch/admitted"
-  done
-  rm -rf "$scratch"
-}
-
-# <dir>/tree as a git tree, its id printed, through its own index, forced past any `.gitignore`.
-tree_of() {
-  local gitdir
-  gitdir="$(git rev-parse --absolute-git-dir)" &&
-    (cd "$1/tree" && export GIT_DIR="$gitdir" GIT_WORK_TREE=. GIT_INDEX_FILE="$1/index" &&
-      git add --all --force . && git write-tree)
-}
-
-# public_commit <tree> <parent> <when> <subject> <trailers>, by a fixed author: no person's name.
-public_commit() {
-  GIT_AUTHOR_NAME=Suzatary GIT_AUTHOR_EMAIL=publish@suzatary.invalid GIT_AUTHOR_DATE="$3" \
-    GIT_COMMITTER_NAME=Suzatary GIT_COMMITTER_EMAIL=publish@suzatary.invalid GIT_COMMITTER_DATE="$3" \
-    git commit-tree "$1" ${2:+-p "$2"} -m "$4" -m "$5"
-}
-
-# One row: <source>'s checked public tree, committed on core's master and pushed.
-row() {
-  local source="$1" dir tree parent commit when trailers s new held every path line
-  # One paragraph, so git reads every line as a trailer.
-  trailers="Source: $source"
-  for s in "${@:2}"; do trailers+=$'\n'"Skipped: $s"; done
-  dir="$(mktemp -d)" || die "could not make a scratch directory. Nothing published."
-  if ! checked "$source" "$dir"; then
-    rm -rf "$dir"
-    say "the public tree of ${source:0:12} did not pass its leak guard (the files and lines above). Nothing published from it on. If a term added to the lists since it landed matches it, it can never pass: scripts/train.sh publish --skip ${source}"
-    return 1
-  fi
-  new="$(printf '%s\n' "$fresh" | sed -n "s#^$source ##p")"
-  held="$(printf '%s\n' "$new" | grep -vxF -f <(printf '%s\n' "${admits[@]}" "") | grep . || true)"
-  if [[ -n "$held" ]]; then
-    rm -rf "$dir"
-    # Every row's held paths, so one look admits them all; a path keeps its spaces.
-    every="$(while IFS= read -r line; do
-      s="${line%% *}" path="${line#* }"
-      grep -qxF -- "$path" <<<"$(printf '%s\n' "${admits[@]}")" || printf '%s %s\n' "${s:0:12}" "$path"
-    done <<<"$fresh")"
-    printf '%s\n' "$every" | sed 's/^\([^ ]*\) \(.*\)$/held: \2 (in \1)/' >&2
-    say "the public tree of ${source:0:12} holds a path no publication has held; every row's are above. Nothing published from it on. Look at each, then at a terminal: scripts/train.sh publish$(while IFS= read -r line; do printf " --admit %q" "${line#* }"; done <<<"$every")"
-    return 1
-  fi
-  while IFS= read -r s; do
-    [[ -z "$s" ]] || trailers+=$'\n'"Admitted: $s"
-  done <<<"$new"
-  tree="$(tree_of "$dir")" ||
-    { rm -rf "$dir"; die "could not write the public tree of ${source:0:12} as a git tree. Nothing published."; }
-  rm -rf "$dir"
-  parent="$(git rev-parse --verify --quiet "refs/remotes/core/$core_branch")" || parent=""
-  when="$(git log -1 --format=%cI "$source")" && [[ -n "$when" ]] \
-    || die "could not read ${source:0:12}'s date. Nothing published."
-  commit="$(public_commit "$tree" "$parent" "$when" "Publish ${source:0:12}" "$trailers")" \
-    || die "could not commit the public tree of ${source:0:12}. Nothing published."
-  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] \
-    || die "committing the public tree of ${source:0:12} named no commit (\"$commit\"), and pushing it would delete core's $core_branch. Nothing published."
-  git push --quiet core "$commit:refs/heads/$core_branch" \
-    || die "core refused $core_branch at ${commit:0:12} (did it move?); scripts/train.sh publish again."
-  git update-ref "refs/remotes/core/$core_branch" "$commit" \
-    || die "core took ${commit:0:12}, but the local ref of it did not move; scripts/train.sh publish again reads it afresh."
-  printf 'published: core %s is %s (Source: %s)\n' "$core_branch" "$commit" "$source"
-}
-
 # The train's tool, built from this checkout before anything else into its own target under .git,
 # so a train that changes the tool is gated and landed by it; under a test seam, apart, with seams.
 case "${1:-}" in
-  gate | bisect | land | nightly)
+  build | gate | bisect | land | record | nightly | check | publish)
     tool="$(git -C "$scripts" rev-parse --path-format=absolute --git-common-dir)/train/tool" features=()
     if [[ -n "${!SUZATARY_TRAIN_*}" ]]; then tool+=-seams && features=(--features seams); fi
+    # `check` takes no lock, so it never builds into the target whose binary a locked train execs.
+    [[ "$1" != check ]] || tool+=-check
     # The account's cargo home, whatever HOME the train was handed: another registry path makes every
     # dependency dirty, and the next build compiles them all again.
     account="$(getent passwd "$(id -u)" | cut -d: -f6)" || account="$HOME"
@@ -1521,6 +1254,6 @@ case "${1:-}" in
   record) shift && record_done "$@" ;;
   nightly) shift && nightly_gate "$@" ;;
   check) shift && check "$@" ;;
-  publish) shift && fetch_origin && publish "$@" && record_origin ;;
+  publish) shift && fetch_origin && "$tool" publish "$@" && record_origin ;;
   *) usage ;;
 esac

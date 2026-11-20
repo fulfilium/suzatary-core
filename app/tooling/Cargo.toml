@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-tooling"
-description = "The merge train's typed program: its verdict table, read and written as train.sh stores it"
+description = "The merge train's typed program: its verdict table, and the publication of its landed commits"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -30,6 +30,10 @@ serde_json.workspace = true
 [[test]]
 name = "laws"
 path = "tests/laws.rs"
+
+[[test]]
+name = "publication"
+path = "tests/publication.rs"
 
 [lints]
 workspace = true

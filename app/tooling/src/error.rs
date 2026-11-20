@@ -1,5 +1,6 @@
 //! What can stop the tool.
 
+use crate::refusal::Refusal;
 use std::path::PathBuf;
 
 /// Why `train` could not do what it was asked.
@@ -7,7 +8,13 @@ use std::path::PathBuf;
 pub enum Error {
     #[error("{0}")]
     Usage(String),
-    /// A word or a line not in the table's format.
+    #[error("{0}")]
+    Refused(#[from] Refusal),
+    /// A step the tool needs could not run, so it decided nothing: the leak guard, the matcher,
+    /// a fetch or a push.
+    #[error("{0}")]
+    Unrun(String),
+    /// A word or a line not in the format it should be in.
     #[error("{0}")]
     Malformed(String),
     #[error("{}:{line}: {why}", path.display())]
@@ -21,21 +28,23 @@ pub enum Error {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[error("git {args}: {why}")]
-    Git { args: String, why: String },
+    #[error("{command}: {why}")]
+    Run { command: String, why: String },
 }
 
 impl Error {
-    /// The status the tool exits with: 64 for a usage error, as every script here, else 3, which
-    /// no caller reads as a verdict.
+    /// The status the tool exits with: 64 for a usage error, as every script here, 1 for a
+    /// refusal, else 3, which no caller reads as a verdict.
     #[must_use]
     pub fn status(&self) -> u8 {
         match self {
             Error::Usage(_) => 64,
-            Error::Malformed(_)
+            Error::Refused(_) => 1,
+            Error::Unrun(_)
+            | Error::Malformed(_)
             | Error::Unreadable { .. }
             | Error::Io { .. }
-            | Error::Git { .. } => 3,
+            | Error::Run { .. } => 3,
         }
     }
 }
