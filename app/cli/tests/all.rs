@@ -81,6 +81,9 @@ mod markup;
 mod mcp;
 #[path = "memory.rs"]
 mod memory;
+#[cfg(feature = "fixture")]
+#[path = "migrate_cost.rs"]
+mod migrate_cost;
 #[path = "objects.rs"]
 mod objects;
 #[path = "operator.rs"]

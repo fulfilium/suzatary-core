@@ -6,7 +6,7 @@
 use crate::present::Present as _;
 use std::fs::{File, OpenOptions, Permissions};
 use std::io::{self, Write as _};
-use std::os::unix::fs::PermissionsExt as _;
+use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
 use std::path::Path;
 
 /// Who may read a replaced file.
@@ -38,46 +38,183 @@ impl Mode {
 /// A failure before the rename leaves the target as it was and no temporary; a failed directory
 /// sync after it leaves the new bytes in place, not yet known to survive a power cut.
 pub fn replace(path: &Path, bytes: &[u8], mode: Mode) -> io::Result<()> {
-    deliver(path, parent(path)?, bytes, mode)
+    commit(&[(path, bytes)], Staging::Beside, mode).map_err(|failed| failed.error)
+}
+
+/// Make each path hold its bytes, durably, as one group commit: see `commit` below.
+///
+/// # Errors
+/// The file it failed at. A failure before the renames leaves every target as it was; one after
+/// leaves the files before it renamed into place, not yet known to survive a power cut.
+pub fn replace_all(files: &[(&Path, &[u8])], mode: Mode) -> Result<(), Failed> {
+    commit(files, Staging::Beside, mode)
 }
 
 /// [`replace`], staged in `staging` (a maildir's `tmp/`) rather than beside the target.
 /// `staging` must be on the target's filesystem, so the rename is atomic.
 pub fn deliver(path: &Path, staging: &Path, bytes: &[u8], mode: Mode) -> io::Result<()> {
-    let dir = parent(path)?;
+    commit(&[(path, bytes)], Staging::In(staging), mode).map_err(|failed| failed.error)
+}
+
+/// A durable write that failed, and the file or directory it failed at.
+#[derive(Debug, thiserror::Error)]
+#[error("{}: {error}", path.display())]
+pub struct Failed {
+    pub path: std::path::PathBuf,
+    pub error: io::Error,
+}
+
+/// Where a commit stages its files.
+#[derive(Clone, Copy)]
+enum Staging<'a> {
+    /// Beside each target.
+    Beside,
+    /// In one directory on the targets' filesystem.
+    In(&'a Path),
+}
+
+/// The group commit. Every directory a file is renamed into or out of is made and opened first,
+/// before any byte is staged; then each file is staged; then the bytes are made durable, by an
+/// fsync of the file when there is one and otherwise by one sync of each filesystem the
+/// directories are on, through one of their handles; then each file is renamed into place, and
+/// each directory synced. A rename can reach the disk before the bytes it names, so no rename
+/// comes before that sync.
+///
+/// It needs Linux 5.8 or later: from 5.8, a sync of the filesystem through a handle reports every
+/// write-back error the filesystem met since that handle was opened; before it, the call answers
+/// Ok whatever was lost. Every staged file is written after the handles are opened, so a
+/// write-back error of any of them fails the commit, as an fsync of each file would have.
+fn commit<'p>(files: &[(&'p Path, &[u8])], staging: Staging<'p>, mode: Mode) -> Result<(), Failed> {
+    let at = |path: &Path| {
+        let path = path.to_path_buf();
+        move |error| Failed { path, error }
+    };
+    let into = |path: &'p Path| match staging {
+        Staging::Beside => parent(path),
+        Staging::In(dir) => Ok(dir),
+    };
+    let mut dirs = std::collections::BTreeMap::new();
+    for (path, _) in files {
+        for dir in [
+            parent(path).map_err(at(path))?,
+            into(path).map_err(at(path))?,
+        ] {
+            if !dirs.contains_key(dir) {
+                made(dir, mode).map_err(at(dir))?;
+                dirs.insert(dir, File::open(dir).map_err(at(dir))?);
+            }
+        }
+    }
+    let mut staged = Vec::with_capacity(files.len());
+    for (path, bytes) in files {
+        let dir = into(path).map_err(at(path))?;
+        staged.push((stage(path, dir, bytes, mode).map_err(at(path))?, *path));
+    }
+    if let [(one, path)] = staged.as_slice() {
+        sync_file(one.as_file()).map_err(at(path))?;
+    } else {
+        let mut synced_devices = std::collections::BTreeSet::new();
+        for (dir, handle) in &dirs {
+            let device = handle.metadata().map_err(at(dir))?.dev();
+            if synced_devices.insert(device) {
+                sync_filesystem(handle).map_err(at(dir))?;
+            }
+        }
+    }
+    for (temp, path) in staged {
+        temp.persist(path)
+            .map_err(|failed| at(path)(failed.error))?;
+    }
+    for (dir, handle) in &dirs {
+        synced(handle, &DIR_SYNCS).map_err(at(dir))?;
+    }
+    Ok(())
+}
+
+/// `dir` and any missing ancestor made; a private file's new directories are `0o700`, whatever
+/// the umask said.
+fn made(dir: &Path, mode: Mode) -> io::Result<()> {
     let new_dirs = create_dirs(dir)?;
-    // A private file's new directories are 0o700 too, whatever the umask said.
     if mode == Mode::Private {
         for new_dir in new_dirs {
             std::fs::set_permissions(new_dir, Permissions::from_mode(0o700))?;
         }
     }
-    create_dirs(staging)?;
+    Ok(())
+}
+
+/// `bytes` written to a temporary in `staging`, not synced.
+fn stage(
+    path: &Path,
+    staging: &Path,
+    bytes: &[u8],
+    mode: Mode,
+) -> io::Result<tempfile::NamedTempFile> {
     let mut temp = tempfile::Builder::new()
         .prefix(".")
-        .suffix(".writing")
+        .suffix(STAGED)
         .tempfile_in(staging)?;
     // Set after creating, since a mode given at creation is filtered by the umask.
     temp.as_file()
         .set_permissions(Permissions::from_mode(mode.bits(path)?))?;
     temp.write_all(bytes)?;
-    temp.as_file().sync_all()?;
-    temp.persist(path).map_err(|failed| failed.error)?;
-    File::open(dir)?.sync_all()?;
-    // The rename took the name out of the staging directory too.
-    if staging != dir {
-        File::open(staging)?.sync_all()?;
+    Ok(temp)
+}
+
+/// The ending of a staged file's name: what a commit stopped before its renames leaves.
+const STAGED: &str = ".writing";
+
+/// Remove every staged file a stopped commit left in `dir`; answers how many. Only a writer that
+/// excludes every other writer of `dir` may call it, since it cannot tell a stopped commit's file
+/// from a running one's.
+///
+/// # Errors
+/// A directory that cannot be listed, or a file that cannot be removed.
+pub fn remove_staged(dir: &Path) -> io::Result<usize> {
+    let Some(entries) = std::fs::read_dir(dir).present()? else {
+        return Ok(0);
+    };
+    let mut staged = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with('.') && name.ends_with(STAGED) {
+            staged.push(entry.path());
+        }
     }
-    Ok(())
+    remove_all(
+        &staged
+            .iter()
+            .map(std::path::PathBuf::as_path)
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// Make `path` absent, durably; answers whether a file was there. Removing what is not there
 /// still syncs the directory, since an earlier removal may not have reached the disk.
 pub fn remove(path: &Path) -> io::Result<bool> {
-    let removed = std::fs::remove_file(path).present()?.is_some();
-    File::open(parent(path)?)
-        .present()?
-        .map_or(Ok(()), |dir| dir.sync_all())?;
+    remove_all(&[path]).map(|removed| removed == 1)
+}
+
+/// Make every path absent, durably, each directory synced once after every removal from it;
+/// answers how many files were there.
+///
+/// # Errors
+/// A failed removal or sync; the removals before it are made and not yet known to survive a
+/// power cut.
+pub fn remove_all(paths: &[&Path]) -> io::Result<usize> {
+    let mut dirs = std::collections::BTreeSet::new();
+    let mut removed = 0;
+    for path in paths {
+        removed += usize::from(std::fs::remove_file(path).present()?.is_some());
+        dirs.insert(parent(path)?);
+    }
+    for dir in dirs {
+        File::open(dir)
+            .present()?
+            .map_or(Ok(()), |dir| synced(&dir, &DIR_SYNCS))?;
+    }
     Ok(removed)
 }
 
@@ -113,9 +250,58 @@ fn create_dirs(dir: &Path) -> io::Result<Vec<&Path>> {
     }
     std::fs::create_dir_all(dir)?;
     for made in &missing {
-        File::open(parent(made)?)?.sync_all()?;
+        sync_dir(parent(made)?)?;
     }
     Ok(missing)
+}
+
+thread_local! {
+    static FILE_SYNCS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static DIR_SYNCS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FILESYSTEM_SYNCS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many syncs this thread has asked of the disk through this module: what a measurement
+/// counts, since a sync's cost is the disk's and not the clock's.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Syncs {
+    /// Of a file's bytes.
+    pub files: usize,
+    /// Of a directory's entries: what makes a rename or a removal survive a power cut.
+    pub dirs: usize,
+    /// Of a whole filesystem: what makes a batch's bytes survive a power cut at once.
+    pub filesystems: usize,
+}
+
+/// [`Syncs`] so far on this thread.
+#[must_use]
+pub fn syncs() -> Syncs {
+    Syncs {
+        files: FILE_SYNCS.with(std::cell::Cell::get),
+        dirs: DIR_SYNCS.with(std::cell::Cell::get),
+        filesystems: FILESYSTEM_SYNCS.with(std::cell::Cell::get),
+    }
+}
+
+fn synced(
+    file: &File,
+    count: &'static std::thread::LocalKey<std::cell::Cell<usize>>,
+) -> io::Result<()> {
+    count.with(|count| count.set(count.get() + 1));
+    file.sync_all()
+}
+
+fn sync_file(file: &File) -> io::Result<()> {
+    synced(file, &FILE_SYNCS)
+}
+
+fn sync_dir(dir: &Path) -> io::Result<()> {
+    synced(&File::open(dir)?, &DIR_SYNCS)
+}
+
+fn sync_filesystem(handle: &File) -> io::Result<()> {
+    FILESYSTEM_SYNCS.with(|count| count.set(count.get() + 1));
+    rustix::fs::syncfs(handle).map_err(io::Error::from)
 }
 
 fn parent(path: &Path) -> io::Result<&Path> {
@@ -131,7 +317,7 @@ fn parent(path: &Path) -> io::Result<&Path> {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::MetadataExt as _;
+    use std::path::PathBuf;
 
     use super::*;
 
@@ -161,6 +347,52 @@ mod tests {
         assert!(entries(&dir.path().join("keys")).is_empty());
         remove(&path).expect("removing what is gone succeeds");
         remove(&dir.path().join("never/made")).expect("nothing to remove");
+    }
+
+    /// A group commit over two directories of one filesystem: one sync of the filesystem for the
+    /// batch's bytes and one sync per directory for the writes, and one per directory for the
+    /// removals.
+    #[test]
+    fn a_batch_syncs_each_filesystem_once_and_each_directory_once() {
+        let dir = suzatary_testkit::scratch("durable");
+        let paths: Vec<_> = (0..6)
+            .map(|n| {
+                let shard = if n % 2 == 0 { "keys" } else { "more" };
+                dir.path().join(shard).join(n.to_string())
+            })
+            .collect();
+        replace(&paths[0], b"made", Mode::Private).expect("one directory made");
+        replace(&paths[1], b"made", Mode::Private).expect("the other made");
+        let counted = |run: &dyn Fn()| {
+            let before = syncs();
+            run();
+            let after = syncs();
+            (
+                after.files - before.files,
+                after.filesystems - before.filesystems,
+                after.dirs - before.dirs,
+            )
+        };
+        let files: Vec<(&Path, &[u8])> = paths
+            .iter()
+            .map(|path| (path.as_path(), &b"key"[..]))
+            .collect();
+        assert_eq!(
+            counted(&|| replace_all(&files, Mode::Private).expect("written")),
+            (0, 1, 2)
+        );
+        assert!(
+            paths
+                .iter()
+                .all(|path| std::fs::read(path).expect("there") == b"key")
+        );
+        let named: Vec<&Path> = paths.iter().map(PathBuf::as_path).collect();
+        assert_eq!(
+            counted(&|| assert_eq!(remove_all(&named).expect("removed"), 6)),
+            (0, 0, 2)
+        );
+        assert!(entries(&dir.path().join("keys")).is_empty());
+        assert!(entries(&dir.path().join("more")).is_empty());
     }
 
     #[test]

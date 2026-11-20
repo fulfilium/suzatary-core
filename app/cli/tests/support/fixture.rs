@@ -1282,7 +1282,7 @@ pub struct Bulk {
 impl Bulk {
     /// The todos, the proposals that serve them, then the lines, then their topics: each filing
     /// reads a small store of conversations.
-    fn write(&self, read: &crate::instance::Instance) -> anyhow::Result<()> {
+    pub fn write(&self, read: &crate::instance::Instance) -> anyhow::Result<()> {
         bulk_todos(read, self.todos)?;
         bulk_proposals(read, self.proposals, self.todos)?;
         bulk_lines(
@@ -1441,6 +1441,7 @@ fn bulk_lines(
         }
         let mut held = u32::try_from(*size)?;
         for (key, words) in slots {
+            let words = suzatary_held::redact::Scrubbed::of(&words)?;
             let mut from = key.name();
             for _ in 0..depth {
                 written += 1;

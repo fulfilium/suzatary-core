@@ -111,7 +111,7 @@ fn a_resealed_conversation_reads_as_the_box_reads_it() {
         }
         held.lines.append(line).expect("appended");
     }
-    let done = rescrub::run(held.conversations(), at(9)).expect("runs");
+    let done = rescrub::run(held.conversations(), at(9), rescrub::BATCH).expect("runs");
     assert_eq!((done.resealed, done.destroyed), (2, 2));
     let boxed = transcript::read(held.conversations(), &id)
         .expect("reads")

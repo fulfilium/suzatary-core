@@ -3135,7 +3135,8 @@ fn erase_line(lines: &suzatary_stores::stores::conversations::InMemory, at: usiz
 
 /// `migrate-scrub` run on the box: every stale slot sealed again, and swept.
 fn migrate(lines: &suzatary_stores::stores::conversations::InMemory) {
-    let done = rescrub::run(lines.conversations(), later(now(), 30)).expect("migrated");
+    let done =
+        rescrub::run(lines.conversations(), later(now(), 30), rescrub::BATCH).expect("migrated");
     assert!(done.resealed > 0, "the stale slots are sealed again");
 }
 
@@ -3180,7 +3181,7 @@ fn reseal_again(lines: &suzatary_stores::stores::conversations::InMemory) {
             held,
             of.clone(),
             own,
-            &words[of],
+            &suzatary_held::redact::Scrubbed::of(&words[of]).expect("words through the door"),
             &lines.entropy,
         )
         .expect("a reseal");

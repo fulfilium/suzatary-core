@@ -28,7 +28,7 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_held::redact::Rules;
+use suzatary_held::redact::{Rules, Scrubbed};
 use suzatary_memory::secretary::carried::Carried;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::line_words::LineWords;
@@ -241,12 +241,12 @@ impl LineEvent {
     }
 
     /// The words of slot `of` of a line of `conversation`, sealed again from the seal locked
-    /// under `from`: `words` through the redaction door and locked under a key drawn from
+    /// under `from`: `words`, already through the redaction door, locked under a key drawn from
     /// `entropy`, as a line written here by `actor` holding `held` lines at `at`; answers the key
     /// that opens it.
     ///
     /// # Errors
-    /// [`NotALine`] for words the door refuses, or no key.
+    /// [`NotALine`] for no key.
     #[expect(
         clippy::too_many_arguments,
         reason = "a line's head, the slot, and its words"
@@ -258,7 +258,7 @@ impl LineEvent {
         held: u32,
         of: KeyName,
         from: KeyName,
-        words: &LineWords,
+        words: &Scrubbed<LineWords>,
         entropy: &dyn Entropy,
     ) -> Result<(Self, TextKey), NotALine> {
         let mut line = Self {
@@ -270,7 +270,7 @@ impl LineEvent {
             shape: LineShape::Resealed { of, from },
             words: Vec::new(),
         };
-        let (sealed, opens) = seal(&line, 0, words, entropy)?;
+        let (sealed, opens) = locked(&line, 0, words, entropy)?;
         line.words.push(sealed);
         Ok((line, opens))
     }
@@ -545,12 +545,21 @@ fn seal(
     words: &LineWords,
     entropy: &dyn Entropy,
 ) -> Result<(SealedSlot, TextKey), NotALine> {
-    let words = words
-        .scrubbed()
-        .map_err(|failed| NotALine::Unscrubbable(failed.to_string()))?;
+    let words = Scrubbed::of(words).map_err(|failed| NotALine::Unscrubbable(failed.to_string()))?;
+    locked(line, slot, &words, entropy)
+}
+
+/// Slot `slot` of `line` holding `words`, locked under a key drawn from `entropy` as words
+/// through the current rules' door.
+fn locked(
+    line: &LineEvent,
+    slot: usize,
+    words: &Scrubbed<LineWords>,
+    entropy: &dyn Entropy,
+) -> Result<(SealedSlot, TextKey), NotALine> {
     let under = ScrubbedUnder::Version(Rules::current(()).clone());
     let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
-    let (locked, opens) = Locked::lock(&line.slot(slot, &under), &words, key);
+    let (locked, opens) = Locked::lock(&line.slot(slot, &under), words.get(), key);
     Ok((
         SealedSlot {
             seal: Seal::Locked(locked),

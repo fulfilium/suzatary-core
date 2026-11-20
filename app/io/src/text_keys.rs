@@ -7,21 +7,63 @@
 use std::path::PathBuf;
 
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
+use suzatary_store::store::{Doc, Gets, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 
-/// The keys of one store's locked texts, by name.
-pub type TextKeys = Docs<KeyName, TextKey>;
+/// The keys of one store's locked texts, by name, in one directory.
+#[derive(Debug)]
+pub struct TextKeys {
+    docs: Docs<KeyName, TextKey>,
+    dir: PathBuf,
+}
 
 /// The keys under `dir`, made on the first put.
 #[must_use]
 pub fn open(dir: PathBuf) -> TextKeys {
-    Docs::new(
-        "keys",
-        move |name: &KeyName| dir.join(name.as_str()),
-        &CODEC,
-    )
-    .private()
+    let under = dir.clone();
+    TextKeys {
+        docs: Docs::new(
+            "keys",
+            move |name: &KeyName| under.join(name.as_str()),
+            &CODEC,
+        )
+        .private(),
+        dir,
+    }
+}
+
+impl Gets<KeyName, TextKey> for TextKeys {
+    fn get(&self, name: &KeyName) -> Result<Option<TextKey>, StoreError> {
+        self.docs.get(name)
+    }
+}
+
+impl Doc<KeyName, TextKey> for TextKeys {
+    fn set(&self, name: &KeyName, key: &TextKey) -> Result<(), StoreError> {
+        self.docs.set(name, key)
+    }
+
+    fn remove(&self, name: &KeyName) -> Result<(), StoreError> {
+        self.docs.remove(name)
+    }
+
+    fn set_all(&self, keys: &[(&KeyName, &TextKey)]) -> Result<(), StoreError> {
+        self.docs.set_all(keys)
+    }
+
+    fn remove_all(&self, names: &[&KeyName]) -> Result<(), StoreError> {
+        self.docs.remove_all(names)
+    }
+
+    /// Every key is written under the lines' lock, so its holder excludes every other writer.
+    fn tidy(&self) -> Result<(), StoreError> {
+        crate::durable::remove_staged(&self.dir)
+            .map(|_| ())
+            .map_err(|failed| {
+                StoreError::unwritable("keys", format!("{}: {failed}", self.dir.display()))
+            })
+    }
 }
 
 /// The file is the key's bytes, and its name is their digest.
@@ -42,7 +84,6 @@ mod tests {
 
     use suzatary_memory::secretary::locked_text::{FreshKey, Locked, Shape};
     use suzatary_memory::secretary::memory::Fact;
-    use suzatary_store::store::{Doc as _, Gets as _};
 
     use super::*;
     use crate::texts::SystemEntropy;

@@ -870,7 +870,7 @@ fn live_shape() -> (InMemory, ConversationId) {
         write(&id(conversation), 5, &mut said);
     }
     write(&big, 20, &mut said);
-    rescrub::run(held.conversations(), at(3599)).expect("reseals and sweeps");
+    rescrub::run(held.conversations(), at(3599), rescrub::BATCH).expect("reseals and sweeps");
     (held, big)
 }
 

@@ -37,7 +37,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 }
 
 /// A fresh `Instance` over a temp directory: `ada` and the agents on every roster.
-fn fresh_instance(name: &str) -> Instance {
+pub(crate) fn fresh_instance(name: &str) -> Instance {
     let dir = temp_dir(name);
     let instance_path = dir.join("instance.toml");
     let repo = dir.to_str().expect("a utf-8 temp path");
@@ -893,7 +893,7 @@ fn the_digest_census_prints_counts_and_no_word() {
 }
 
 /// The conversation `id` as the box reads it: its fold, which a reseal leaves as it was.
-fn read_lines(
+pub(crate) fn read_lines(
     instance: &Instance,
     id: &ConversationId,
 ) -> suzatary_conversations::secretary::store::Stored {
@@ -918,7 +918,7 @@ fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)
 }
 
 /// `suzatary secretary migrate-scrub`, its count of keys and what it said.
-fn migrated(
+pub(crate) fn migrated(
     instance: &Instance,
     apply: bool,
 ) -> (Option<suzatary_lines::secretary::rescrub::Done>, String) {
@@ -931,7 +931,7 @@ fn migrated(
 /// A conversation of lines locked before lines recorded their rules, scrubbed under rules that
 /// missed a link's token and an SSN in them, the last of its words erased, then one line written
 /// under the current rules.
-fn written_before_the_rules(instance: &Instance) -> ConversationId {
+pub(crate) fn written_before_the_rules(instance: &Instance) -> ConversationId {
     use prodrome_core::event::Actor;
     use suzatary_conversations::secretary::store::Entry;
     use suzatary_lines::secretary::line_event::LineEvent;
@@ -1010,7 +1010,7 @@ fn written_before_the_rules(instance: &Instance) -> ConversationId {
 }
 
 /// The names of the keys the box keeps.
-fn kept_keys(instance: &Instance) -> std::collections::BTreeSet<String> {
+pub(crate) fn kept_keys(instance: &Instance) -> std::collections::BTreeSet<String> {
     std::fs::read_dir(instance.secretary.line_keys())
         .expect("the keys")
         .map(|entry| {

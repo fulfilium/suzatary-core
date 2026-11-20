@@ -379,7 +379,7 @@ fn chains_written(
                     count,
                     of.clone(),
                     from,
-                    words,
+                    &suzatary_held::redact::Scrubbed::of(words).expect("words through the door"),
                     &suzatary_io::texts::SystemEntropy,
                 )
                 .expect("sealed again");

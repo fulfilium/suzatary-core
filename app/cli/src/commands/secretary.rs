@@ -1894,7 +1894,11 @@ pub fn migrate_scrub(
         )?;
         return Ok(None);
     }
-    let done = rescrub::run(stores.conversations(), Clock::now(&SystemClock))?;
+    let done = rescrub::run(
+        stores.conversations(),
+        Clock::now(&SystemClock),
+        rescrub::BATCH,
+    )?;
     writeln!(
         out,
         "{}\nsealed {} slot(s) again; the sweep destroyed {} key(s)",

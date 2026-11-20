@@ -1152,10 +1152,21 @@ pub fn dead_among<'l>(
 /// words as locked only name blocks, and are shown to no one.
 #[must_use]
 pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<suzatary_base::answer::Renderable> {
+    rendered(
+        [line.unscrubbed(slot, key), line.open(slot, key)]
+            .iter()
+            .flatten(),
+    )
+}
+
+/// The answer blocks `words` were rendered to, each once: [`fed`] of words already opened.
+pub fn rendered<'w>(
+    words: impl IntoIterator<Item = &'w LineWords>,
+) -> Vec<suzatary_base::answer::Renderable> {
     let mut fed: Vec<suzatary_base::answer::Renderable> = Vec::new();
-    for words in [line.unscrubbed(slot, key), line.open(slot, key)] {
-        if let Some(LineWords::Model { text }) = words {
-            for block in suzatary_base::answer::blocks(&text) {
+    for words in words {
+        if let LineWords::Model { text } = words {
+            for block in suzatary_base::answer::blocks(text) {
                 let block = suzatary_base::answer::Renderable::of(&block.source);
                 if !fed.contains(&block) {
                     fed.push(block);
@@ -1339,26 +1350,158 @@ pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, Sto
     Ok(writes(&nodes).into_keys().cloned().collect())
 }
 
-/// Destroy every key an erasure line names that the key store still holds, each once every
-/// holder of its words is emptied ([`Holder::ALL`]), and say how many. The sweep is monotone: it
-/// takes no hold, and running it twice, or on two replicas, destroys what running it once does.
+/// Destroy every key the key store still holds that an erasure line names, that a reseal which
+/// opens supersedes, or that seals a reseal waiting outside the history whose slot the history
+/// reads without it, each once every holder of its words is emptied ([`Holder::ALL`]), and say
+/// how many. A key goes only where what it opens is held elsewhere or erased, checked. The sweep
+/// is monotone: it takes no hold, and running it twice, or on two replicas, destroys what running
+/// it once does. Taking no hold, it can see a batch's child placed before its parent while a
+/// migration places its lines: the child's slot still reads from its old seal, whose key that
+/// reseal does not yet supersede, so the child's key may go and the old one stays; the slot reads
+/// the same, and the next run seals it again.
 ///
 /// # Errors
 /// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a copy of its
 /// words may still be on disk; the next sweep tries again.
 pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
+    sweep_knowing(conversations, &Known::default())
+}
+
+/// What a writer that has just opened or sealed slots knows of them, so the sweep after it opens
+/// none of them again. The sweep trusts it, so only the migration makes one
+/// ([`crate::secretary::rescrub::run`]).
+#[derive(Debug, Default)]
+pub(crate) struct Known {
+    /// The blocks the words under each key were rendered to ([`fed`]).
+    pub(crate) fed: BTreeMap<KeyName, Vec<suzatary_base::answer::Renderable>>,
+    /// The keys of seals the writer made: each opens its slot, whose words it sealed.
+    pub(crate) sealed: BTreeSet<KeyName>,
+}
+
+/// [`sweep`], asking `known` before opening a slot.
+pub(crate) fn sweep_knowing(
+    conversations: Conversations<'_>,
+    known: &Known,
+) -> Result<usize, StoreError> {
     let graph = conversations.lines.graph()?;
     // A key neither holds has nothing left to empty; an unreadable store is asked, and refuses.
     let held = |name: &KeyName| {
         conversations.opened.holds(name) || !matches!(conversations.keys.get(name), Ok(None))
     };
+    let keys = |name: &KeyName| conversations.reads().key(name);
+    let waiting = waiting_reseals(conversations.lines, &graph, &keys)?;
+    // A waiting reseal of an erased slot is a dead slot: every holder of its words is emptied.
+    let erased = waiting
+        .erased
+        .iter()
+        .filter_map(|line| line.keys().next().map(|key| (line, 0, key)));
     destroy(
         conversations,
         &sessions(lines_of(graph.objects())),
-        dead_among(lines_of(graph.objects()), &held, &|name: &KeyName| {
-            conversations.reads().key(name)
-        }),
+        known,
+        &waiting.read_elsewhere,
+        dead_among(
+            lines_of(graph.objects()),
+            &held,
+            &Sealed {
+                sealed: &known.sealed,
+                slots: &keys,
+            },
+        )
+        .into_iter()
+        .chain(erased),
     )
+}
+
+/// The key of every reseal outside the history whose slot the history reads without it: a seal
+/// of that slot in the history opens as `slots` reads it, or an erasure in the history names the
+/// slot. That is a crash's case, where a hold kept a reseal and lost the line it rests on, and
+/// the next run sealed the slot again. A reseal is also left out when a line beneath it does not
+/// read, for a cause that can be mended; then the history holds no other seal that opens, and the
+/// key stays, the store's own finding naming what does not read. So a waiting reseal's key goes
+/// only where what it opens is held elsewhere, checked.
+fn waiting_reseals(
+    lines: &dyn Prodrome<LineEvent>,
+    history: &suzatary_store::store::Graph<LineEvent>,
+    slots: &impl Slots,
+) -> Result<Waiting, StoreError> {
+    let vocabulary = crate::secretary::line_event::LineVocabulary;
+    let by = by_conversation(lines_of(history.objects()));
+    let erased = |waiting: &LineEvent, of: &KeyName| {
+        by.get(waiting.conversation())
+            .is_some_and(|held| erasures(held.iter().copied()).contains_key(of))
+    };
+    let read_elsewhere = |waiting: &LineEvent, of: &KeyName| {
+        let Some(held) = by.get(waiting.conversation()) else {
+            return false;
+        };
+        held.iter().any(|(_, line)| {
+            if let LineShape::Resealed { of: sealed, .. } = line.shape() {
+                sealed == of && line.slot_opens(0, slots)
+            } else {
+                line.keys()
+                    .position(|key| key == of)
+                    .is_some_and(|slot| line.slot_opens(slot, slots))
+            }
+        })
+    };
+    let mut waiting = Waiting::default();
+    let excluded = lines.excluded()?;
+    let left_out = excluded
+        .iter()
+        .filter_map(|name| lines.literals(std::slice::from_ref(name)).ok()?.pop()?)
+        .filter_map(|print| {
+            prodrome_core::event::parse_envelope::<LineEvent>(&vocabulary, &print).ok()
+        })
+        .filter_map(|object| object.event().cloned());
+    for line in left_out {
+        let LineShape::Resealed { of, .. } = line.shape() else {
+            continue;
+        };
+        if erased(&line, of) {
+            waiting.erased.push(line);
+        } else if read_elsewhere(&line, of) {
+            waiting.read_elsewhere.extend(line.keys().cloned());
+        }
+    }
+    Ok(waiting)
+}
+
+/// The reseals waiting outside the history that a sweep destroys the key of.
+#[derive(Default)]
+struct Waiting {
+    /// Of a slot an erasure in the history names: dead slots, each holder of their words emptied.
+    erased: Vec<LineEvent>,
+    /// The keys of those whose slot a seal in the history opens: the words stay readable there.
+    read_elsewhere: Vec<KeyName>,
+}
+
+/// `slots`, answering that a slot opens without opening it where its key is one `sealed` names,
+/// since whoever sealed under that key sealed that slot.
+struct Sealed<'a, S> {
+    sealed: &'a BTreeSet<KeyName>,
+    slots: &'a S,
+}
+
+impl<S: Slots> Slots for Sealed<'_, S> {
+    fn words(
+        &self,
+        name: &KeyName,
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
+    ) -> Words<LineWords> {
+        self.slots.words(name, open)
+    }
+
+    fn opens(
+        &self,
+        name: &KeyName,
+        read: &dyn Fn() -> Words<LineWords>,
+        unlocks: &dyn Fn(&TextKey) -> bool,
+    ) -> bool {
+        self.slots.opens(name, read, &|key| {
+            self.sealed.contains(&key.name()) || unlocks(key)
+        })
+    }
 }
 
 /// Each conversation's model sessions, with the directory each was opened in.
@@ -1379,13 +1522,24 @@ fn sessions<'l>(
     sessions
 }
 
-/// [`sweep`] of `slots`.
+/// [`sweep`] of `slots` and of the `waiting` reseals' keys: every holder but the key store
+/// emptied of each, then every key whose holders are empty destroyed in one batch, so the key
+/// store syncs once.
 fn destroy<'l>(
     conversations: Conversations<'_>,
     sessions: &BTreeMap<&ConversationId, BTreeSet<(&SessionId, &str)>>,
+    known: &Known,
+    waiting: &'l [KeyName],
     slots: impl IntoIterator<Item = (&'l LineEvent, usize, &'l KeyName)>,
 ) -> Result<usize, StoreError> {
-    let mut destroyed = 0;
+    let mut emptied: Vec<&KeyName> = Vec::new();
+    // Its slot's words stay readable from the history, so only the key itself goes.
+    for name in waiting {
+        if conversations.keys.get(name)?.is_some() {
+            conversations.opened.forget(name);
+            emptied.push(name);
+        }
+    }
     let mut kept = Vec::new();
     for (line, slot, name) in slots {
         let Some(key) = conversations.keys.get(name)? else {
@@ -1393,12 +1547,15 @@ fn destroy<'l>(
             continue;
         };
         // A copy left on disk keeps the key, so the next sweep can find the copy again.
-        let emptied = Holder::ALL.into_iter().try_for_each(|holder| match holder {
+        let other_holders = Holder::ALL.into_iter().try_for_each(|holder| match holder {
             Holder::Opened => {
                 conversations.opened.forget(name);
                 Ok(())
             }
-            Holder::Renders => fed(line, slot, &key)
+            Holder::Renders => known
+                .fed
+                .get(name)
+                .map_or_else(|| fed(line, slot, &key), Clone::clone)
                 .iter()
                 .try_for_each(|block| conversations.renders.forget(block)),
             Holder::ModelSessions => sessions
@@ -1406,18 +1563,22 @@ fn destroy<'l>(
                 .into_iter()
                 .flatten()
                 .try_for_each(|(id, cwd)| conversations.sessions.forget(id, cwd)),
-            Holder::Keys => conversations
-                .keys
-                .remove(name)
-                .map_err(|failed| failed.to_string()),
-            // Out of the box's reach: the erase question names them.
-            Holder::Vault | Holder::DataHistory | Holder::DeviceLines => Ok(()),
+            // The keys are destroyed below, together, once every other holder of each is
+            // emptied; the rest are out of the box's reach, and the erase question names them.
+            Holder::Keys | Holder::Vault | Holder::DataHistory | Holder::DeviceLines => Ok(()),
         });
-        match emptied {
-            Ok(()) => destroyed += 1,
+        match other_holders {
+            Ok(()) => emptied.push(name),
             Err(failed) => kept.push(format!("{name}: {failed}")),
         }
     }
+    let destroyed = match conversations.keys.remove_all(&emptied) {
+        Ok(()) => emptied.len(),
+        Err(failed) => {
+            kept.extend(emptied.iter().map(|name| format!("{name}: {failed}")));
+            0
+        }
+    };
     if kept.is_empty() {
         Ok(destroyed)
     } else {

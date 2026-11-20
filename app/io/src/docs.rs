@@ -159,6 +159,15 @@ impl<K: 'static, T: 'static> Docs<K, T> {
     fn failed_read(&self, path: &std::path::Path, failed: &std::io::Error) -> StoreError {
         StoreError::unreadable(self.store, format!("{}: {failed}", path.display()))
     }
+
+    fn unwritable(&self, paths: &[&std::path::Path], why: &dyn std::fmt::Display) -> StoreError {
+        let named = match paths {
+            [one] => one.display().to_string(),
+            [first, rest @ ..] => format!("{} and {} more", first.display(), rest.len()),
+            [] => String::new(),
+        };
+        StoreError::unwritable(self.store, format!("{named}: {why}"))
+    }
 }
 
 impl<K, T> Gets<K, T> for Docs<K, T>
@@ -185,18 +194,40 @@ where
     T: Sync + 'static,
 {
     fn set(&self, key: &K, value: &T) -> Result<(), StoreError> {
-        let path = self.path(key);
-        let unwritable = |why: &dyn std::fmt::Display| {
-            StoreError::unwritable(self.store, format!("{}: {why}", path.display()))
-        };
-        let bytes = (self.codec.print)(key, value).map_err(|why| unwritable(&why))?;
-        crate::durable::replace(&path, &bytes, self.mode).map_err(|failed| unwritable(&failed))
+        self.set_all(&[(key, value)])
     }
 
     fn remove(&self, key: &K) -> Result<(), StoreError> {
-        let path = self.path(key);
-        crate::durable::remove(&path).map(|_| ()).map_err(|failed| {
-            StoreError::unwritable(self.store, format!("{}: {failed}", path.display()))
-        })
+        self.remove_all(&[key])
+    }
+
+    /// One [`crate::durable::replace_all`]: the batch's bytes synced together, then each
+    /// directory once.
+    fn set_all(&self, values: &[(&K, &T)]) -> Result<(), StoreError> {
+        let paths: Vec<std::path::PathBuf> = values.iter().map(|(key, _)| self.path(key)).collect();
+        let named: Vec<&std::path::Path> = paths.iter().map(std::path::PathBuf::as_path).collect();
+        let bytes = values
+            .iter()
+            .zip(&named)
+            .map(|((key, value), path)| {
+                (self.codec.print)(key, value).map_err(|why| self.unwritable(&[path], &why))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let files: Vec<(&std::path::Path, &[u8])> = named
+            .iter()
+            .copied()
+            .zip(bytes.iter().map(Vec::as_slice))
+            .collect();
+        crate::durable::replace_all(&files, self.mode)
+            .map_err(|failed| self.unwritable(&[&failed.path], &failed.error))
+    }
+
+    /// One [`crate::durable::remove_all`]: each directory synced once.
+    fn remove_all(&self, keys: &[&K]) -> Result<(), StoreError> {
+        let paths: Vec<std::path::PathBuf> = keys.iter().map(|key| self.path(key)).collect();
+        let named: Vec<&std::path::Path> = paths.iter().map(std::path::PathBuf::as_path).collect();
+        crate::durable::remove_all(&named)
+            .map(|_| ())
+            .map_err(|failed| self.unwritable(&named, &failed))
     }
 }

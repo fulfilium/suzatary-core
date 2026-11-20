@@ -95,10 +95,11 @@ pub(crate) fn store() -> InMemory {
             *held + 1,
             of.clone(),
             of,
-            &LineWords::Person {
+            &suzatary_held::redact::Scrubbed::of(&LineWords::Person {
                 text,
                 attachments: Vec::new(),
-            },
+            })
+            .expect("words through the door"),
             &lines.entropy,
         )
         .expect("a reseal");

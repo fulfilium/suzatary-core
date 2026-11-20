@@ -1,12 +1,8 @@
 use super::StoreError;
 
-/// Values, one per key, read: what a record that may only read holds, so no write is reachable
-/// from it.
+/// Values, one per key, read: a record holding only this reaches no write.
 pub trait Gets<K, T>: Sync {
-    /// The value, or `None` when none was ever set.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// The value, or `None` when none was ever set; [`StoreError::Unreadable`] when unread.
     fn get(&self, key: &K) -> Result<Option<T>, StoreError>;
 }
 
@@ -23,14 +19,25 @@ pub trait Doc<K, T>: Gets<K, T> {
     /// # Errors
     /// [`StoreError::Unwritable`] for a store that keeps what it holds, or a failed deletion.
     fn remove(&self, key: &K) -> Result<(), StoreError>;
+
+    /// [`Doc::set`] of each, all durable on return.
+    fn set_all(&self, values: &[(&K, &T)]) -> Result<(), StoreError> {
+        values.iter().try_for_each(|(k, v)| self.set(k, v))
+    }
+
+    /// [`Doc::remove`] of each, all durable on return.
+    fn remove_all(&self, keys: &[&K]) -> Result<(), StoreError> {
+        keys.iter().try_for_each(|k| self.remove(k))
+    }
+
+    /// Remove what a stopped [`Doc::set_all`] staged; call only while excluding every writer.
+    fn tidy(&self) -> Result<(), StoreError> {
+        Ok(())
+    }
 }
 
-/// A [`Doc`] that can say which keys hold a value, so a caller that removes many can remove only
-/// what is there.
+/// A [`Doc`] that can say which keys hold a value.
 pub trait Lists<K, T>: Doc<K, T> {
     /// Every key that holds a value now.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     fn held(&self) -> Result<std::collections::BTreeSet<K>, StoreError>;
 }

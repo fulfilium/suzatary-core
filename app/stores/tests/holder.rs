@@ -125,7 +125,7 @@ fn a_migration_forgets_the_blocks_its_old_words_were_rendered_to() {
         rendered.iter().any(|block| block.contains("482913")),
         "the old words' blocks hold the code: {rendered:?}"
     );
-    rescrub::run(held.conversations(), at(9)).expect("migrated");
+    rescrub::run(held.conversations(), at(9), rescrub::BATCH).expect("migrated");
     let forgot = held.forgot.sources();
     for block in &rendered {
         assert!(
@@ -154,7 +154,7 @@ fn killing_a_slot_deletes_its_conversation_s_model_session() {
                 at(9),
             )
             .map(|_| ()),
-            _ => rescrub::run(held.conversations(), at(9)).map(|_| ()),
+            _ => rescrub::run(held.conversations(), at(9), rescrub::BATCH).map(|_| ()),
         }
         .expect("the act runs");
         assert!(
