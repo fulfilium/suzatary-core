@@ -780,6 +780,51 @@ fn crate_reads() -> Vec<String> {
         .collect()
 }
 
+/// Every path the gate's read lists name is in the tree: a step's pass is keyed by the paths it
+/// reads, so a listed path that holds nothing keys it by nothing, and the step is kept stale once
+/// something lands there. The lists are each step's reads, `crate_reads` and the scenes' base
+/// (`unit_base[files:web/e2e]`, which `--list` does not print). The private history may be
+/// absent: a public tree leaves it out, and `docs/reports` is empty between sessions.
+#[test]
+fn merge_gate_every_path_a_read_list_names_is_in_the_tree() {
+    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
+    let scenes: Vec<String> = gate
+        .lines()
+        .find_map(|l| {
+            l.trim()
+                .strip_prefix("[files:web/e2e]=\"")?
+                .strip_suffix('"')
+        })
+        .expect("the scenes' base")
+        .split_whitespace()
+        .filter(|word| !word.contains(['$', '{', '}']))
+        .map(str::to_owned)
+        .collect();
+    let steps = steps();
+    let listed = steps
+        .iter()
+        .flat_map(|step| {
+            step.skips()
+                .into_iter()
+                .chain(step.only().unwrap_or_default())
+        })
+        .map(str::to_owned)
+        .chain(
+            crate_reads()
+                .into_iter()
+                .filter_map(|declared| declared.split_once('=').map(|(_, path)| path.to_owned())),
+        )
+        .chain(scenes);
+    let private: Vec<String> = PRIVATE_HISTORY.iter().map(|&p| private_path(p)).collect();
+    let missing: BTreeSet<String> = listed
+        .filter(|path| !private.contains(path) && !repo().join(path).exists())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "scripts/merge-gate.sh's read lists name paths the tree does not hold: {missing:?}"
+    );
+}
+
 /// The paths every Rust unit skips unless it declares them: the fmt step's.
 fn rust_skips() -> Vec<String> {
     steps()

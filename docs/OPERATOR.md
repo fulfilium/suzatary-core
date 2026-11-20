@@ -74,10 +74,9 @@ cache). It sets:
 - **Actions on**, allowing GitHub's own actions,
   `cachix/install-nix-action` and `nix-community/cache-nix-action`'s
   `restore` and `save` alone; every workflow pins each by its commit.
-- **`gate.yml`, `gate-store.yml` and `publication.yml` on, every other
-  workflow off.** The public tree carries the private repository's
-  workflows too (`quick.yml` would run on every publication,
-  `update-flake-lock.yml` on its schedule).
+- **The script's `core_workflows` on, every other workflow off.** The public
+  tree carries the private repository's workflows too (`quick.yml` would run
+  on every publication, `update-flake-lock.yml` on its schedule).
 - **The runs' token reads only** (`default_workflow_permissions=read`) and
   cannot approve a pull request. `gate.yml` asks for `contents: read` itself,
   and its checkout keeps no credential.

@@ -4,15 +4,16 @@
 #
 #   scripts/core-settings.sh [<owner>/<repo>]   (default: the remote `core` of this checkout)
 #
-# Idempotent. It sets: Actions on, limited to GitHub's own and the two pinned Nix actions;
-# gate.yml, gate-store.yml and publication.yml on, every other workflow off; the run token
-# read-only and unable to approve PRs; outside contributors' runs wait for approval; a ruleset
-# letting only an administrator move master (else a gate branch's workflow could move master and
-# run its own code beside the cache token); the environment `cachix`, entered only from master,
-# holding CACHIX_AUTH_TOKEN, passed on stdin so it is in no argument, file or printed line.
+# Idempotent; each step prints what it sets. Only an administrator may move master, else a gate
+# branch's workflow could move master and run its own code beside the cache token, and
+# CACHIX_AUTH_TOKEN goes on stdin, so it is in no argument, file or printed line.
 #
 # Needs `gh` logged in as an administrator of core, and secretspec holding CACHIX_AUTH_TOKEN.
 set -euo pipefail
+
+# The workflows that run in core; app/cli/tests/guards/gate_yml.rs holds the list to their own
+# `on:` and `if:`.
+core_workflows=(gate.yml gate-passes.yml gate-store.yml publication.yml)
 
 die() {
   printf 'core-settings: %s\n' "$*" >&2
@@ -48,18 +49,17 @@ echo "core-settings: an outside contributor's run waits for an approval"
 gh api --silent -X PUT "repos/$repo/actions/permissions/fork-pr-contributor-approval" \
   -f approval_policy=all_external_contributors
 
-echo "core-settings: gate.yml, gate-store.yml and publication.yml on, every other workflow off"
+echo "core-settings: ${core_workflows[*]} on, every other workflow off"
 while IFS=$'\t' read -r id path state; do
-  case "$path" in
-    .github/workflows/gate.yml | .github/workflows/gate-store.yml | .github/workflows/publication.yml)
-      [[ "$state" != active ]] || continue
-      gh api --silent -X PUT "repos/$repo/actions/workflows/$id/enable"
-      echo "core-settings:   $path on" ;;
-    *)
-      [[ "$state" == active ]] || continue
-      gh api --silent -X PUT "repos/$repo/actions/workflows/$id/disable"
-      echo "core-settings:   $path off" ;;
-  esac
+  if [[ " ${core_workflows[*]} " == *" ${path#.github/workflows/} "* ]]; then
+    [[ "$state" != active ]] || continue
+    gh api --silent -X PUT "repos/$repo/actions/workflows/$id/enable"
+    echo "core-settings:   $path on"
+  else
+    [[ "$state" == active ]] || continue
+    gh api --silent -X PUT "repos/$repo/actions/workflows/$id/disable"
+    echo "core-settings:   $path off"
+  fi
 done < <(gh api --paginate "repos/$repo/actions/workflows" --jq '.workflows[] | "\(.id)\t\(.path)\t\(.state)"')
 
 # The train's publish pushes as the owner, an administrator; a run's token never is one. Core's

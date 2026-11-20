@@ -25,6 +25,8 @@ mod agent;
 mod binary;
 #[path = "guards/changelog.rs"]
 mod changelog;
+#[path = "guards/citations.rs"]
+mod citations;
 #[path = "guards/context.rs"]
 mod context;
 #[path = "guards/door_two.rs"]

@@ -26,7 +26,7 @@ confirm. Everything below derives from this.
 - The code follows [`AGENTS.md`](AGENTS.md): sums over records with a flag,
   smart constructors, total functions, exhaustive matches, a pure core with
   effects at the edge, typed errors, no backward compatibility (its §10;
-  → `nobackcompat`). Tools are pinned in the flake (`.#triage` is the operator
+  → `movetonew`). Tools are pinned in the flake (`.#triage` is the operator
   env).
 - **The language is Rust**, rustls and never OpenSSL, and ONE of it (→
   `rustlanguage`). **A data push verifies the data, never the code**:
@@ -259,8 +259,8 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   `markednothidden`).
 - ⚠️ **The agent's writes do not reach a chain; they are cards**: the agent
   holds the secretary's verb types, its `Holds` files a `Proposal::Changes`
-  card, one per todo, and only the owner's tap performs it. Its chain is a
-  READ replica (→ `triagecards`).
+  card, one per todo, and only the owner's tap performs it. It reads the chain
+  and never writes it (→ `triagecards`).
 - **The secretary reviews the triage cards**: it withdraws duplicates and noise
   with a REQUIRED `why`, leaves the rest for the owner, and never performs one;
   the next brief offers each withdrawal back as a card the owner's tap applies
@@ -337,11 +337,12 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   or mail). Docs live at Drive `/shared-with-me/the owner Documents`.
 - Triage auth: ~1-year `claude setup-token` in pass (re-mint ~Aug 2027).
 - **Layout.** THERE IS NO PYTHON and THERE IS ONE WORKSPACE. `app/` is the
-  application — `core` (meaning, pure), `io` (the interpreters), `cli` (the one
-  binary, ORGANISED BY VERB: `cli/src/commands/<verb>.rs`). `web/` is the
-  frontend, `android/` the portal, `scripts/` the operator's shell, `nix/` the
-  deployment, `memory/` the project's memory. New application behaviour goes
-  into `app/` (→ `nopython`).
+  application, one crate per concern; `context.toml`'s units name them and what
+  each depends on; `cli` is the one binary, ORGANISED BY VERB
+  (`cli/src/commands/<verb>.rs`). A new module goes into the crate whose concern
+  it is, or into a new crate when none is. `web/` is the frontend, `android/`
+  the portal, `scripts/` the operator's shell, `nix/` the deployment, `memory/`
+  the project's memory (→ `nopython`).
 - **THERE ARE TWO CHAINS**: `life` (the owner's todos) is FIRST, and `[upkeep]
   chain` names the system's own work. **The routing rule**: anything about the
   SYSTEM (a failing gate, a flaky test, a broken sync) goes to upkeep; anything
@@ -409,8 +410,9 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     every answer carries `serve::POLICY` (→ `addressnotidentity`).
   - **Mail** is read-only: notmuch as a subprocess, bodies as capped text, the
     agent's disposition a BADGE, never a filter (→ `mailreads`).
-- **`web/` is the app's frontend**: TypeScript, one esbuild bundle, no
-  framework, no npm (→ `webphone`). The rules:
+- **`web/` is the app's frontend**: one esbuild bundle, no framework, no npm;
+  a page's logic is Rust over a view tree and the TypeScript paints (→
+  `frameworklanguages`). The rules:
   - The browser never computes a fulfillment of its own: it runs the same
     core as `suzatary-wasm` (→ `onebrowserevaluator`).
   - **Escaping is the DOM** (`web/src/view/dom.ts`) with ONE exception:

@@ -620,3 +620,50 @@ fn publication_builds_what_the_live_web_step_reads() {
         "measured and pushed with the deploy's builds"
     );
 }
+
+/// `scripts/core-settings.sh` turns on the workflows of its `core_workflows` in core and turns
+/// every other one off, so that list is exactly the workflows that run there: those whose every
+/// job skips in a private repository, and gate.yml's kind, which only a push to a `gate/**` branch
+/// starts (the train pushes those to core alone).
+#[test]
+fn core_settings_turns_on_exactly_the_workflows_that_run_in_core() {
+    let settings = read("scripts/core-settings.sh");
+    let listed: BTreeSet<&str> = settings
+        .lines()
+        .find_map(|line| line.strip_prefix("core_workflows=(")?.strip_suffix(')'))
+        .expect("the list core_workflows")
+        .split(' ')
+        .collect();
+    let runs_in_core = |body: &str| {
+        let jobs: Vec<&str> = body
+            .lines()
+            .skip_while(|line| *line != "jobs:")
+            .filter_map(|line| line.strip_prefix("  ")?.strip_suffix(':'))
+            .filter(|name| !name.starts_with(' '))
+            .collect();
+        trigger(body) == ["push:", "branches: [ 'gate/**' ]", ""]
+            || jobs.iter().all(|job| {
+                conjuncts(body, job)
+                    .is_some_and(|all| all.contains("!github.event.repository.private"))
+            })
+    };
+    let mut in_core = BTreeSet::new();
+    for entry in std::fs::read_dir(repo().join(".github/workflows")).expect("the workflows") {
+        let name = entry.expect("a workflow").file_name();
+        let name = name.to_str().expect("a UTF-8 name").to_owned();
+        if runs_in_core(&code(&format!(".github/workflows/{name}"))) {
+            in_core.insert(name);
+        }
+    }
+    let in_core: BTreeSet<&str> = in_core.iter().map(String::as_str).collect();
+    assert_eq!(
+        listed, in_core,
+        "core_workflows in scripts/core-settings.sh names the workflows that run in core"
+    );
+    assert!(
+        !runs_in_core(
+            "on:\n  push:\n    branches: [ master ]\njobs:\n  a:\n    if: ${{ github.event.repository.private }}\n"
+        ),
+        "a workflow that skips in the public repository is not one"
+    );
+}

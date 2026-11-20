@@ -356,7 +356,7 @@ fi
 cli_only=CHANGELOG.md,changelog.d,CLAUDE.md,app/release.toml
 rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
-web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/tooling/src,app/tooling/tests,app/wit
+web_app_skips=app/cli/src,app/cli/tests,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/tooling/src,app/tooling/tests,app/wit
 web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # Paths a member's tests read beyond its cargo dependencies; merge_gate.rs checks them.
@@ -367,7 +367,7 @@ rust_skips="${rust#all-but:}" web_skips="${web#all-but:}"
 declare -A unit_base=(
   [crates]="${rust_skips//,/ }"
   [files:web/test]="${web_skips//,/ }"
-  [files:web/e2e]="android docs memory ${cli_only//,/ } app/conformance app/plugin-fence/src app/plugin-fence/wit app/tooling/src app/tooling/tests"
+  [files:web/e2e]="android docs memory ${cli_only//,/ } app/plugin-fence/src app/plugin-fence/wit app/tooling/src app/tooling/tests"
 )
 declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]="${web//,/ }" [files:web/e2e]=all)
 ((!list)) || echo "cli_only $cli_only"
@@ -573,9 +573,9 @@ step tree changelog       unkept  changelog_entry
 lane=live
 # Kept by the code that reads the data, not by the data (the nightly reruns them); merge_gate.rs
 # holds the list to the paths their sources name.
-live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/base app/record app/release
+live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/base app/record app/release
   app/store app/signatures app/todo app/held app/memory app/mail app/health app/triage
-  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/io app/plugin app/bench app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
+  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/io app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
   app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml app/tooling/Cargo.toml tokens.typ
