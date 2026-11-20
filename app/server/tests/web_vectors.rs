@@ -135,6 +135,7 @@ fn six_todo_chain(root: &Path) -> EventStore {
                 prodrome_core::event::canonical_envelope(&genesis),
             )]),
             &name,
+            prodrome_core::store::Sender::Stranger,
         )
         .expect("begins");
     let now = now();

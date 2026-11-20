@@ -1401,7 +1401,7 @@ pub fn owed_compare(
 ) -> anyhow::Result<()> {
     use suzatary_lines::secretary::compare::{Order, compare};
     anyhow::ensure!(store.is_dir(), "no lines at {}", store.display());
-    let lines: Objects<_, suzatary_io::husked::Husked<_>> = Objects::husked(store);
+    let lines: Objects<_> = Objects::open(store);
     let compared = compare(&lines, now)?;
     let (mut owed, mut resumed, mut reordered, mut unread) = (0, 0, 0, 0);
     let (mut owed_apart, mut claimed_beyond, mut past) = (0, 0, 0);

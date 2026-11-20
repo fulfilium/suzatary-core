@@ -12,6 +12,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::wire::lines::{LineWriter, NodeHeader, SkeletonNode};
+use prodrome_core::store::Husk;
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::{KEY_BYTES, KeyName};
@@ -19,7 +20,6 @@ use suzatary_store::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash}
 use suzatary_store::replica::pulling::{Delta, Pulling};
 use suzatary_store::replica::row::Row;
 use suzatary_store::snapshot::{self, NotASnapshot, Unprinted};
-use suzatary_store::store::Husk;
 
 /// The lines' rows.
 pub type LinePulling = Pulling<Parsed, KeyRing>;

@@ -514,7 +514,8 @@ fn adopt(to: &Disk, from: &Disk) {
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
     for tip in from.tips().expect("tips") {
-        to.adopt_objects(&prints, &tip).expect("adopted");
+        to.adopt_objects(&prints, &tip, prodrome_core::store::Sender::Stranger)
+            .expect("adopted");
     }
 }
 
@@ -1383,7 +1384,9 @@ fn measure_the_store_at_the_live_size() {
     });
     timed("adopt them", || {
         for head in &heads {
-            store.adopt_objects(&prints, head).expect("adopted");
+            store
+                .adopt_objects(&prints, head, prodrome_core::store::Sender::Stranger)
+                .expect("adopted");
         }
     });
     let mut each = Vec::new();

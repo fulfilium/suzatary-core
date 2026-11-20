@@ -12,20 +12,20 @@ use prodrome_core::declared::{Declaration, Declared};
 use prodrome_core::event::{Envelope, Hash, TodoEvent};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
-use prodrome_core::store::{EventStore, Replica};
+use prodrome_core::store::{EventStore, Husking, Replica, Sender};
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_record::record::Record;
-use suzatary_store::store::{Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreError, WriteLock};
+use suzatary_store::store::{
+    Hold, Prodrome, Reads, Reentrant, Rule, Shut, StoreError, WriteLock, begun,
+};
 use suzatary_stores::stores::{Kind, Store};
 
 use crate::durable;
-use crate::husked::Husked;
-use crate::object_files::ObjectFiles;
 use suzatary_lines::parts;
 
-/// A prodrome's objects, behind the memo and its hold, kept in `F`.
-pub struct Objects<E: Schema, F = EventStore<E, Untrusted>> {
-    events: F,
+/// A prodrome's objects, behind the memo and its hold.
+pub struct Objects<E: Schema> {
+    events: EventStore<E, Untrusted>,
     remembered: Mutex<Option<Remembered<E>>>,
     reentrant: Reentrant,
     /// What the store refuses to take, whoever offers it: an appended event, or a received
@@ -54,7 +54,7 @@ struct Remembered<E: Schema> {
     verified: Option<Vec<String>>,
 }
 
-impl<E: Store, F: ObjectFiles<E>> std::fmt::Debug for Objects<E, F> {
+impl<E: Store> std::fmt::Debug for Objects<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Objects")
             .field("kind", &E::KIND)
@@ -110,8 +110,8 @@ impl Objects<Declared> {
     }
 }
 
-impl<E: Schema, F> Objects<E, F> {
-    fn new(events: F) -> Self {
+impl<E: Schema> Objects<E> {
+    fn new(events: EventStore<E, Untrusted>) -> Self {
         Self {
             events,
             remembered: Mutex::new(None),
@@ -128,37 +128,44 @@ impl<E: Schema, F> Objects<E, F> {
     }
 
     #[must_use]
-    pub fn inner(&self) -> &F {
+    pub fn inner(&self) -> &EventStore<E, Untrusted> {
         &self.events
     }
 }
 
-impl<E: Store<Vocabulary: Default>> Objects<E, Husked<E>>
-where
-    E: suzatary_store::store::Husking,
-{
-    /// The store at `root`, every writer believed, where a name may hold a husk in place of its
-    /// whole.
-    #[must_use]
-    pub fn husked(root: impl Into<std::path::PathBuf>) -> Self {
-        Self::new(Husked::open(root))
-    }
+/// The objects a prune husked, and the bytes they no longer take.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LetGo {
+    pub objects: usize,
+    pub bytes: usize,
+}
 
+impl<E: Store + Husking> Objects<E> {
     /// Every whole object `names` names that holds sealed parts replaced by its husk, under the
-    /// store's hold, by the husked store's own `husk`.
+    /// store's hold ([`EventStore::husk`]).
     ///
     /// # Errors
     /// [`StoreError::Unwritable`]; what was replaced stays.
-    pub fn husk(
-        &self,
-        names: &std::collections::BTreeSet<Hash>,
-    ) -> Result<crate::husked::LetGo, StoreError> {
+    pub fn husk(&self, names: &std::collections::BTreeSet<Hash>) -> Result<LetGo, StoreError> {
         let _held = self.locked()?;
-        self.events.husk(names).map_err(|e| Self::not_appended(e))
+        let names: Vec<Hash> = names.iter().cloned().collect();
+        let was: BTreeMap<Hash, usize> = names
+            .iter()
+            .cloned()
+            .zip(self.sizes(&names)?)
+            .filter_map(|(name, size)| Some((name, size?)))
+            .collect();
+        let husked = self.events.husk(names).map_err(|e| Self::not_appended(e))?;
+        let now: usize = self.sizes(&husked)?.into_iter().flatten().sum();
+        let before: usize = husked.iter().filter_map(|name| was.get(name)).sum();
+        Ok(LetGo {
+            objects: husked.len(),
+            bytes: before.saturating_sub(now),
+        })
     }
 }
 
-impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
+impl<E: Store> Objects<E> {
     /// Its `Genesis` written when it holds nothing, so a replica's first change has a prodrome to
     /// rest on: a replica may not begin one. A begun store stays as it is.
     ///
@@ -225,7 +232,7 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// `look` at what this head set reads: what the same heads already produced, or the store
     /// read again. The heads are the store's record of them where it holds one (the Prodrome's
     /// `heads()`: one small file and a `stat` per tip, no listing), so a store whose heads have not
-    /// moved is read with no listing of its objects.
+    /// moved is read with no listing of its objects; without a record they are derived.
     ///
     /// The record is only the key: what is kept is read from the files themselves, so a handle's
     /// first read is what the files hold, whatever the record says. A door that changes
@@ -233,24 +240,16 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
     /// heads until the record moves (the Prodrome's law 62), and through a new handle as the
     /// files: a process that opens a store never serves a reading older than its files.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
-        let recorded =
-            parts::part("record", || self.events.recorded()).map_err(|e| Self::unreadable(e))?;
+        let heads =
+            parts::part("record", || self.events.heads()).map_err(|e| Self::unreadable(e))?;
         let mut slot = self
             .remembered
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        if let Some(held) = slot
-            .as_mut()
-            .filter(|held| recorded.as_ref() == Some(&held.heads))
-        {
-            return Ok(look(held));
-        }
-        let dag = self.events.dag().map_err(|e| Self::unreadable(e))?;
-        // Without a record the heads are read off the history: one look at the files.
-        let heads = recorded.unwrap_or_else(|| dag.heads());
         if let Some(held) = slot.as_mut().filter(|held| held.heads == heads) {
             return Ok(look(held));
         }
+        let dag = self.events.dag().map_err(|e| Self::unreadable(e))?;
         let excluded = parts::part("excluded", || suzatary_store::store::left_out(&dag));
         Ok(look(slot.insert(Remembered {
             heads,
@@ -269,7 +268,7 @@ impl<E: Store, F: ObjectFiles<E>> Objects<E, F> {
 
 impl WriteLock for durable::Held {}
 
-impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
+impl<E: Store> Reads<E> for Objects<E> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         self.with(|held| {
             held.graph
@@ -351,7 +350,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
     fn verify(&self) -> Vec<String> {
         // History beneath the epoch predates signatures: its unsigned writes are not findings.
         let findings = || {
-            let found = self.events.findings();
+            let found = self.events.verify();
             let found = match self.events.dag() {
                 Ok(dag) => suzatary_signatures::signatures::since_epoch(&dag, found),
                 Err(_) => found,
@@ -363,7 +362,7 @@ impl<E: Store, F: ObjectFiles<E>> Reads<E> for Objects<E, F> {
     }
 }
 
-impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
+impl<E: Store> Prodrome<E> for Objects<E> {
     fn append(&self, event: E) -> Result<Hash, StoreError> {
         self.takes(&event).map_err(Self::shut)?;
         let mut once = Some(event);
@@ -374,42 +373,44 @@ impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
             .ok_or_else(|| Self::not_appended("no event was written"))
     }
 
-    /// One hold of the store's lock for the whole run, not one per event.
+    /// One run of the store (`EventStore::append_all`): one hold of its lock and one look for the
+    /// whole run, the events decided before a refusal placed.
     fn append_each(
         &self,
         next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
     ) -> Result<Vec<Hash>, StoreError> {
-        let mut names = Vec::new();
+        begun(&self.events, E::LABEL).map_err(|e| Self::not_appended(e))?;
         let mut refused = None;
-        let written = self.events.append_each(
-            E::LABEL,
-            &mut || {
-                let event = next().map_err(|e| {
-                    let shown = e.to_string();
-                    refused = Some(e);
-                    shown
-                })?;
-                if let Some(event) = &event
-                    && let Err(shut) = self.takes(event)
-                {
-                    let shown = format!("{shut:?}");
+        let events = std::iter::from_fn(|| match next() {
+            Ok(Some(event)) => match self.takes(&event) {
+                Ok(()) => Some(event),
+                Err(shut) => {
                     refused = Some(Self::shut(shut));
-                    return Err(shown);
+                    None
                 }
-                Ok(event)
             },
-            &mut names,
-        );
-        Self::wrote(&names);
+            Ok(None) => None,
+            Err(e) => {
+                refused = Some(e);
+                None
+            }
+        });
+        let written = self.events.append_all(events);
+        Self::wrote(match &written {
+            Ok(names) => names,
+            Err(stopped) => &stopped.placed,
+        });
         match (written, refused) {
-            (Ok(()), _) => Ok(names),
-            (Err(_), Some(refused)) => Err(refused),
-            (Err(why), None) => Err(Self::not_appended(why)),
+            (_, Some(refused)) => Err(refused),
+            (Ok(names), None) => Ok(names),
+            (Err(stopped), None) => Err(Self::not_appended(stopped.why)),
         }
     }
 
     /// Where the store has a door, every object goes through it first, so a refusal takes
-    /// nothing.
+    /// nothing. The objects are a stranger's (SPEC §3): every caller hands over another
+    /// party's post, and the box keeps its own files, so a print that does not hash to its name
+    /// is refused at every schema, a husking one too.
     fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
         if !matches!(self.door, Door::Open) {
             for (name, print) in objects {
@@ -426,6 +427,7 @@ impl<E: Store, F: ObjectFiles<E>> Prodrome<E> for Objects<E, F> {
             &self.events,
             by_name.keys().map(|name| (*name).clone()).collect(),
             &|name| by_name.get(name).map(|print| print.as_bytes().to_vec()),
+            Sender::Stranger,
         )
         .map_err(|e| Self::not_appended(e))?;
         Self::wrote(&taken);

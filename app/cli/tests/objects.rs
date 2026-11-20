@@ -262,6 +262,7 @@ fn a_change_a_phone_appended_lands_through_adoption() {
     tab.receive(
         caps.chain.tips().expect("tips").into_iter().collect(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
+        prodrome_core::store::Sender::Stranger,
     )
     .expect("the box's objects verify");
     let name = tab

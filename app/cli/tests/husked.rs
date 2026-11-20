@@ -1,4 +1,4 @@
-//! The lines' store keeps a husk in place of a line no key opens (`suzatary_io::husked`): a prune
+//! The lines' store keeps a husk in place of a line no key opens (`EventStore::husk`): a prune
 //! changes no reading, writes nothing the second time, and takes back no whole it let go.
 
 use std::cell::{Cell, RefCell};
@@ -175,9 +175,9 @@ fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
         .into_iter()
         .find_map(|(name, object)| match object {
             prodrome_core::event::Envelope::Change(change)
-                if suzatary_store::store::Husking::holds_sealed(&change.event) =>
+                if prodrome_core::store::Husking::holds_sealed(&change.event) =>
             {
-                Some((name, suzatary_store::store::HuskObject::of(&change)?))
+                Some((name, prodrome_core::store::HuskObject::of(&change)?))
             }
             _ => None,
         })

@@ -19,7 +19,11 @@ fn replica<E: Schema<Vocabulary: Default>>(objects: impl Iterator<Item = Object>
     let objects: Vec<_> = objects
         .map(|o| serde_json::json!({ "hash": o.name().as_str(), "text": o.literal() }))
         .collect();
-    Replica::of(&serde_json::Value::Array(objects).to_string()).expect("a reading")
+    Replica::of(
+        &serde_json::Value::Array(objects).to_string(),
+        prodrome_wasm_exports::Sender::Stranger,
+    )
+    .expect("a reading")
 }
 
 fn tips<E: Schema>(r: &Replica<E>) -> serde_json::Value {

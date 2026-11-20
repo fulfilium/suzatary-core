@@ -55,7 +55,7 @@ fn trust_of<H: Health>(store: &InMemory<TodoEvent, H>) -> Trust {
 /// `event` appended to `store` and signed by `by`, as a `Signing` store does it.
 fn signed<H: Health>(store: &InMemory<TodoEvent, H>, by: &Secret, event: TodoEvent) -> Hash {
     let name = store.append(event).expect("appends");
-    sign(store, by, &name).expect("signed");
+    sign(store, by.sign(&name)).expect("signed");
     name
 }
 
@@ -130,7 +130,7 @@ fn an_untrusted_key_proves_nothing_until_the_root_registers_it() {
         KeyStanding::Untrusted
     );
     for name in &added {
-        sign(&store, &root(), name).expect("signed");
+        sign(&store, root().sign(name)).expect("signed");
     }
     assert!(
         trust_of(&store).proves(&written),
@@ -309,8 +309,8 @@ proptest! {
             match signer {
                 // A late key signs after its revocation, below.
                 Signer::Nobody | Signer::RevokedAfter => {}
-                Signer::Registered => { sign(&store, &registered, &name).expect("signed"); }
-                Signer::Stranger => { sign(&store, &stranger, &name).expect("signed"); }
+                Signer::Registered => { sign(&store, registered.sign(&name)).expect("signed"); }
+                Signer::Stranger => { sign(&store, stranger.sign(&name)).expect("signed"); }
                 Signer::Forger => {
                     let other = Hash::new("a".repeat(64)).expect("a name");
                     held(&store, &Envelope::Signed(Signed { object: name.clone(), ..registered.sign(&other) }));
@@ -321,7 +321,7 @@ proptest! {
         revoke(&store, &root(), &actor("ada"), &late.public()).expect("revoked");
         for (name, signer) in &written {
             if matches!(signer, Signer::RevokedAfter) {
-                sign(&store, &late, name).expect("signed");
+                sign(&store, late.sign(name)).expect("signed");
             }
         }
         let reading = trust_of(&store);
@@ -402,7 +402,7 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
         findings(&store).as_slice(),
         [prodrome_core::dag::Finding::Unsigned { object, .. }] if *object == later
     ));
-    sign(&store, keys.root(), &later).expect("signed");
+    sign(&store, keys.root().sign(&later)).expect("signed");
     assert!(findings(&store).is_empty());
 }
 
@@ -618,7 +618,7 @@ fn written_by<H: Health>(
     object: &Envelope<TodoEvent>,
 ) {
     held(store, object);
-    sign(store, by, &prodrome_core::event::seal_hash(object)).expect("signed");
+    sign(store, by.sign(&prodrome_core::event::seal_hash(object))).expect("signed");
 }
 
 fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
@@ -638,7 +638,7 @@ fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
                     }),
                 ),
                 by => {
-                    sign(store, &numbered(by), &name).expect("signed");
+                    sign(store, numbered(by).sign(&name)).expect("signed");
                 }
             }
         }
@@ -736,6 +736,94 @@ fn a_key_revoked_between_two_asks_is_refused_on_the_second() {
     assert_eq!(
         after.admits(after.home(), &actor("ada"), &request),
         Err(Unproven::Revoked {
+            key: phone.public()
+        })
+    );
+}
+
+/// A SIGNATURE VOUCHES FOR A HUSK AND PROVES NONE (the Prodrome's law 77): a line signed by a key
+/// registered to its actor, then held as its husk, reads as vouched for by that key, as the
+/// Prodrome's `Proof` reads it; it is never proven, and the sentence a page shows of it does not
+/// say signed or proven, while the same line held whole is proven.
+#[test]
+fn a_signed_line_held_as_its_husk_is_vouched_for_and_not_proven() {
+    use prodrome_core::event::{canonical_envelope, seal_hash};
+    use prodrome_core::sign::{KeyAdded, Proof, Proved};
+    use prodrome_core::store::{HuskObject, Sender};
+    use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
+
+    struct Ones;
+    impl suzatary_base::capability::Entropy for Ones {
+        fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
+            bytes.fill(1);
+            Ok(())
+        }
+    }
+    let ada = actor("ada");
+    let phone = key('1');
+    let genesis: Envelope<LineEvent> = Envelope::Genesis(
+        prodrome_core::genesis::mk_genesis("lines", &"0".repeat(32)).expect("a genesis"),
+    );
+    let registered: Envelope<LineEvent> = Envelope::KeyAdded(KeyAdded {
+        genesis: seal_hash(&genesis),
+        actor: ada.clone(),
+        key: phone.public(),
+    });
+    let opened = suzatary_conversations::secretary::store::Entry::Opened {
+        at: Datetime::new(2026, 10, 5, 9, 0, 0, 0).expect("an instant"),
+        title: suzatary_memory::secretary::words::Words::kept("Vouched".to_owned()),
+        model: "scripted".to_owned(),
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
+    };
+    let id =
+        suzatary_base::conversation_id::ConversationId::new("2026-10-05-vouched").expect("a slug");
+    let (line, _) = LineEvent::write(id, ada, 0, &opened, &Ones).expect("a line");
+    let change =
+        prodrome_core::change::mk_change(seal_hash(&genesis), Vec::new(), line).expect("a change");
+    let husk = HuskObject::of(&change).expect("a line with words has a husk");
+    let whole = Envelope::Change(change);
+    let name = seal_hash(&whole);
+    let signature: Envelope<LineEvent> = Envelope::Signed(phone.sign(&name));
+    let held = |line: String| {
+        let prints = [
+            (seal_hash(&genesis), canonical_envelope(&genesis)),
+            (seal_hash(&registered), canonical_envelope(&registered)),
+            (name.clone(), line),
+            (seal_hash(&signature), canonical_envelope(&signature)),
+        ];
+        Dag::<LineEvent>::from_prints(
+            &LineVocabulary,
+            prints
+                .into_iter()
+                .map(|(name, print)| (name, Ok(print.into_bytes()))),
+            Sender::Keeper,
+        )
+    };
+    let husked = held(husk.print());
+    assert!(husked.husks().contains(&name), "held as its husk");
+    let trust = Trust::of(&husked, &Registrar::Anyone);
+    assert_eq!(
+        Proof::of(&husked, &Registrar::Anyone).standing(&name),
+        Proved::Vouched
+    );
+    assert!(!trust.proves(&name), "a signature proves no husk");
+    assert_eq!(trust.why(&name), None, "and it is not unproven either");
+    let provenance = trust.provenance(&name).expect("it carries an event");
+    assert_eq!(
+        provenance,
+        Provenance::Vouched {
+            key: phone.public()
+        }
+    );
+    let said = provenance.said();
+    assert!(
+        !said.contains("proven") && !said.starts_with("signed"),
+        "a page says no husk is proven or signed: {said}"
+    );
+    let whole = Trust::of(&held(canonical_envelope(&whole)), &Registrar::Anyone);
+    assert_eq!(
+        whole.provenance(&name),
+        Some(Provenance::Proven {
             key: phone.public()
         })
     );

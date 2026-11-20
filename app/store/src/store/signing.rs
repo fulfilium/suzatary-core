@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
 use prodrome_core::schema::Schema;
-use prodrome_core::sign::Secret;
+use prodrome_core::sign::{Secret, Signed};
 
 use super::{Prodrome, Reads, StoreError, WriteLock};
 
@@ -66,17 +66,18 @@ impl<S> std::fmt::Debug for Signing<S> {
     }
 }
 
-/// `key`'s signature of the object `name` holds, joined into `store`: the one way this
-/// application adds a `Signed`, so a box write and a tap's registration sign alike.
+/// `signed` joined into `store`: the one way this application adds a `Signed`, so a box write and
+/// a tap's registration sign alike. A caller makes it with `Secret::sign` only over a name it has
+/// just sealed, which is a whole; over a name it holds, with `Secret::sign_whole`, since a
+/// signature of a husk's name would prove a whole the signer never hashed.
 ///
 /// # Errors
 /// The store's refusal to take it, as any accept's.
 pub fn sign<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
-    key: &Secret,
-    name: &Hash,
+    signed: Signed,
 ) -> Result<Hash, StoreError> {
-    let signed = Envelope::<E>::Signed(key.sign(name));
+    let signed = Envelope::<E>::Signed(signed);
     let named = seal_hash(&signed);
     store.accept(&[(named.clone(), canonical_envelope(&signed))])?;
     Ok(named)
@@ -121,7 +122,7 @@ impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
             Signer::Refusing(why) => Err(StoreError::not_appended("chain", why)),
             Signer::Key(key) => {
                 let name = self.store.append(event)?;
-                sign(&self.store, key, &name)?;
+                sign(&self.store, key.sign(&name))?;
                 Ok(name)
             }
             Signer::Unsigned => self.store.append(event),

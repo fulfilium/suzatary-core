@@ -594,7 +594,7 @@ proptest! {
                     prop_assert!(!opens, "{}: husked though a key the pull sends opens it", node.hash);
                     // A node sized before an erasure the store moved by is sized as its literal.
                     prop_assert!(node.size == husk.len() || (moved && node.size == print.len()));
-                    prop_assert_eq!(Some(husk.clone()), line.and_then(suzatary_store::store::Husk::of).map(|h| h.print()));
+                    prop_assert_eq!(Some(husk.clone()), line.and_then(prodrome_core::store::Husk::of).map(|h| h.print()));
                 }
             }
             literals.insert(node.hash.clone(), print);

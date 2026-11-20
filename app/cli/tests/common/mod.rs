@@ -132,6 +132,7 @@ pub fn begun(store: &EventStore) {
                 prodrome_core::event::canonical_envelope(&genesis),
             )]),
             &name,
+            prodrome_core::store::Sender::Stranger,
         )
         .expect("begins");
 }
@@ -155,9 +156,11 @@ pub fn tab(
         })
         .collect();
     let tab = prodrome_core::store::MemoryStore::default();
-    tab.receive(prints.keys().cloned().collect(), &|name| {
-        prints.get(name).map(|print| print.clone().into_bytes())
-    })
+    tab.receive(
+        prints.keys().cloned().collect(),
+        &|name| prints.get(name).map(|print| print.clone().into_bytes()),
+        prodrome_core::store::Sender::Stranger,
+    )
     .expect("the box's objects verify");
     tab
 }
@@ -4303,9 +4306,13 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
                     .to_vec()),
             )
         });
-    let nodes = prodrome_core::dag::Dag::from_prints(&E::Vocabulary::default(), prints)
-        .nodes()
-        .expect("a replica of the store reads");
+    let nodes = prodrome_core::dag::Dag::from_prints(
+        &E::Vocabulary::default(),
+        prints,
+        prodrome_core::store::Sender::Stranger,
+    )
+    .nodes()
+    .expect("a replica of the store reads");
     (nodes, keys)
 }
 
@@ -4499,6 +4506,7 @@ pub fn chains_read(base: &str) -> suzatary_signatures::chain_set::Read {
                     prodrome_core::dag::Dag::from_prints(
                         &suzatary_record::record::TodoVocabulary::default(),
                         prints,
+                        prodrome_core::store::Sender::Stranger,
                     )
                     .objects()
                     .clone()

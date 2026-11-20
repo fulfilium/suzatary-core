@@ -62,7 +62,11 @@ fn begin<E: prodrome_core::schema::Schema>(store: &MemoryStore<E>) {
     let print = canonical_envelope(&genesis).into_bytes();
     let name = seal_hash(&genesis);
     store
-        .receive([name].into(), &|_| Some(print.clone()))
+        .receive(
+            [name].into(),
+            &|_| Some(print.clone()),
+            prodrome_core::store::Sender::Stranger,
+        )
         .expect("begins");
 }
 

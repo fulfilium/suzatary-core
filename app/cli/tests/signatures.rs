@@ -1246,7 +1246,7 @@ fn the_door_s_reading_by_chain_size() {
             .chain
             .accept(&[(name.clone(), canonical_envelope(&change))])
             .expect("kept");
-        suzatary_store::store::sign(&fakes.chain, &phone, &name).expect("signed");
+        suzatary_store::store::sign(&fakes.chain, phone.sign(&name)).expect("signed");
     };
     let mut written: u32 = 0;
     for size in [100, 400, 1600] {

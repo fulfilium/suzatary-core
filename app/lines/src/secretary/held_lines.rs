@@ -26,6 +26,7 @@ use crate::secretary::derived::Derived;
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::transcript::{self, Transcript, Write};
+use prodrome_core::store::Husk;
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::{Entry, NotAConversation, Stored};
@@ -35,7 +36,6 @@ use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
 use suzatary_memory::secretary::slots::Slots;
 use suzatary_memory::secretary::words::{Gone, Words};
-use suzatary_store::store::Husk;
 
 thread_local! {
     static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -647,18 +647,24 @@ impl<F: Folds> HeldLines<F> {
 
     /// `add`, each print beside the name it is claimed to have, hashed against it and decoded
     /// once, and `drop` let go. A print whose bytes are not an object at the schema is held as
-    /// unread, and what rests on it stays out of the history.
+    /// unread, and what rests on it stays out of the history. Each is read as a stranger's, so a
+    /// print that does not hash to its name is unread: a husk comes only through
+    /// [`crate::secretary::held_replica::HeldReplica::take_husks`], checked against its node.
     pub fn hold(&mut self, add: Vec<(Hash, Vec<u8>)>, drop: &[Hash]) {
         let add = add
             .into_iter()
             .filter(|(name, _)| !self.prints.contains_key(name))
             .map(|(name, bytes)| {
                 HASHES.with(|count| count.set(count.get() + 1));
-                let print =
-                    match prodrome_core::dag::decode::<LineEvent>(&LineVocabulary, &name, &bytes) {
-                        Ok(envelope) => Print::of(envelope),
-                        Err(why) => Print::Unread(why),
-                    };
+                let print = match prodrome_core::dag::decode::<LineEvent>(
+                    &LineVocabulary,
+                    &name,
+                    &bytes,
+                    prodrome_core::store::Sender::Stranger,
+                ) {
+                    Ok(stored) => Print::of(stored.into_object()),
+                    Err(why) => Print::Unread(why),
+                };
                 (name, print)
             })
             .collect();

@@ -14,6 +14,7 @@ use prodrome_core::memo::Counts;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use prodrome_core::store::{Husk, HuskObject};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -42,7 +43,6 @@ use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::store::Prodrome as _;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Doc as _, Gets as _};
-use suzatary_store::store::{Husk, HuskObject};
 use suzatary_stores::stores::conversations::InMemory;
 use suzatary_todo::rendering::ANSWER;
 use suzatary_topics::secretary::readings::Dress;
@@ -280,6 +280,7 @@ fn plain(
         prints
             .iter()
             .map(|(name, bytes)| (name.clone(), Ok(bytes.clone()))),
+        prodrome_core::store::Sender::Stranger,
     );
     let nodes = dag.interior().nodes().expect("a down-set reads");
     let read = transcript::transcripts(&nodes, &|name: &KeyName| keys.key(name)).map(|read| {
@@ -449,7 +450,7 @@ proptest! {
         prop_assert_eq!(memoised(&mut lines, &skeleton), before, "the reading is the same");
         let vocabulary = LineVocabulary;
         for (name, bytes) in &all {
-            let Ok(envelope) = prodrome_core::dag::decode::<LineEvent>(&vocabulary, name, bytes) else {
+            let Ok(envelope) = prodrome_core::dag::decode::<LineEvent>(&vocabulary, name, bytes, prodrome_core::store::Sender::Stranger).map(prodrome_core::store::Stored::into_object) else {
                 continue;
             };
             if let Some(object) = match &envelope {
@@ -458,11 +459,12 @@ proptest! {
             } {
                 let print = object.print();
                 prop_assert_eq!(&HuskObject::read(name, &print).expect("reads back"), &object);
-                prop_assert_eq!(parents_of(&object.object()), parents_of(&envelope), "it rests where its whole did");
+                prop_assert_eq!(parents_of(object.object()), parents_of(&envelope), "it rests where its whole did");
                 prop_assert!(parse_envelope::<LineEvent>(&vocabulary, &print).is_err(), "a husk is never read as a whole");
                 let whole = std::str::from_utf8(bytes).expect("a print");
                 prop_assert!(HuskObject::<LineEvent>::read(name, whole).is_err(), "a whole is never read as a husk");
-                prop_assert_eq!(Husk::of(object.husk().event()), Some(object.husk().clone()), "dropping twice is dropping once");
+                let dropped = object.object().event().expect("a husk is a change");
+                prop_assert_eq!(Husk::of(dropped).map(|husk| husk.event().clone()), Some(dropped.clone()), "dropping twice is dropping once");
             }
             let Some(line) = envelope.into_event() else { continue };
             let keyed = line.keys().next().is_some();

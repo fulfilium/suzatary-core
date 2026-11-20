@@ -4,7 +4,7 @@ use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
 use prodrome_core::genesis::mk_genesis;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
-use prodrome_core::store::{MemoryStore, Replica};
+use prodrome_core::store::{MemoryStore, Replica, Sender};
 
 use crate::stores::Store;
 use suzatary_store::store::{InMemoryHold, Prodrome, Reads, StoreError, WriteLock};
@@ -100,7 +100,7 @@ impl<E: Store, H: Health> InMemory<E, H> {
         let name = seal_hash(&genesis);
         let print = canonical_envelope(&genesis).into_bytes();
         self.store
-            .receive([name].into(), &|_| Some(print.clone()))
+            .receive([name].into(), &|_| Some(print.clone()), Sender::Stranger)
             .map(drop)
             .map_err(Self::refused)
     }
@@ -186,6 +186,7 @@ impl<E: Store, H: Health> Prodrome<E> for InMemory<E, H> {
         self.store.append(event).map_err(Self::refused)
     }
 
+    /// A stranger's, as the store on disk takes them (`suzatary_io::objects::Objects::accept`).
     fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
         let prints: std::collections::BTreeMap<&Hash, &String> =
             objects.iter().map(|(name, print)| (name, print)).collect();
@@ -193,6 +194,7 @@ impl<E: Store, H: Health> Prodrome<E> for InMemory<E, H> {
             .receive(
                 prints.keys().map(|name| (*name).clone()).collect(),
                 &|name| prints.get(name).map(|print| print.as_bytes().to_vec()),
+                Sender::Stranger,
             )
             .map_err(Self::refused)
     }

@@ -119,7 +119,11 @@ fn written(root: &Path, steps: &[(usize, &str, Step)]) -> std::path::PathBuf {
                 append(&dir, authored(todo, day, actor, one, 0.4));
                 let theirs = append(&replica, authored(todo, day, "assistant", other, 0.6));
                 store(&dir)
-                    .adopt(&store(&replica), &theirs)
+                    .adopt(
+                        &store(&replica),
+                        &theirs,
+                        prodrome_core::store::Sender::Stranger,
+                    )
                     .expect("adopts the replica's record");
             }
             Step::Event(build, note) => {

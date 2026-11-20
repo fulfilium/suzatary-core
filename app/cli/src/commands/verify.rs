@@ -146,8 +146,7 @@ fn reported(
 /// `verify --husked <was>`.
 fn husked(instance: &Instance, was: &Path) -> anyhow::Result<()> {
     let stores = instance.conversation_stores();
-    let objects =
-        suzatary_io::object_files::ObjectFiles::root(stores.lines.inner()).join("objects");
+    let objects = stores.lines.inner().root().join("objects");
     let mut committed = Vec::new();
     for file in std::fs::read_dir(was)? {
         let file = file?.path();

@@ -209,7 +209,8 @@ fn adopt(to: &Disk, from: &Disk) {
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
     for tip in from.tips().expect("tips") {
-        to.adopt_objects(&prints, &tip).expect("adopted");
+        to.adopt_objects(&prints, &tip, prodrome_core::store::Sender::Stranger)
+            .expect("adopted");
     }
 }
 

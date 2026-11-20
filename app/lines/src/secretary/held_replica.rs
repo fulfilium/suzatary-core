@@ -205,7 +205,7 @@ pub enum NotItsHusk {
     #[error("the box answered a husk for {0}, which names no line this replica reads")]
     Unknown(String),
     #[error("{0}: {1}")]
-    Unread(String, suzatary_store::store::NotAHusk),
+    Unread(String, prodrome_core::store::NotAHusk),
     #[error("the box's husk for {0} is not the line its node says")]
     Header(String),
     #[error("the box answered a husk for {0}, whose words a live key this replica holds opens")]
@@ -857,7 +857,7 @@ impl HeldReplica {
                     })
                     .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
                 let husk =
-                    suzatary_store::store::Husk::<crate::secretary::line_event::LineEvent>::read(
+                    prodrome_core::store::Husk::<crate::secretary::line_event::LineEvent>::read(
                         &text,
                     )
                     .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;

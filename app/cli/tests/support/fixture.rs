@@ -1529,9 +1529,12 @@ where
         .iter()
         .map(|(name, object)| (name.clone(), canonical_envelope(object).into_bytes()))
         .collect();
-    memory.receive(prints.keys().cloned().collect(), &|name| {
-        prints.get(name).cloned()
-    })?;
+    // The store on disk is the copy's keeper of record: a husk it holds is taken as one.
+    memory.receive(
+        prints.keys().cloned().collect(),
+        &|name| prints.get(name).cloned(),
+        prodrome_core::store::Sender::Keeper,
+    )?;
     for event in events {
         memory.append(event)?;
     }

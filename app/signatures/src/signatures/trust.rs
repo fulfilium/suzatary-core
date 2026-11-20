@@ -37,7 +37,8 @@ static CHECKS: LazyLock<Checks> = LazyLock::new(|| Checks::new(KEPT_CHECKS));
 ///              ∀ r = KeyRevoked(g(o), _, actor(o), k) counting in H. s ∈ past(r) }
 /// ```
 ///
-/// and [`Trust::proves`] is `Proof::of` exactly (a law, tested over generated histories). It is
+/// and [`Trust::proves`] is `Proof::of` exactly (a law, tested over generated histories): a
+/// signature proves only the bytes its name is the hash of, and of a husk it vouches. It is
 /// read here, in ONE fold over the objects, with each signature's check asked of a table of
 /// [`Checks`], as `Proof::through` asks it: so a history read again costs the checks of the
 /// signatures it gained.
@@ -47,8 +48,10 @@ static CHECKS: LazyLock<Checks> = LazyLock::new(|| Checks::new(KEPT_CHECKS));
 /// whatever order the objects arrived in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trust {
-    /// The objects carrying an event that a key speaking for its actor signed.
+    /// The objects carrying an event that a key speaking for its actor signed, held whole.
     proven: BTreeSet<Hash>,
+    /// The same, held as husks (SPEC §3): the signature vouches for each and proves none.
+    vouched: BTreeSet<Hash>,
     /// Each `Snapshot` a counted key's signature covers: an epoch.
     epochs: BTreeSet<Hash>,
     /// Beneath an epoch: written before signatures.
@@ -93,10 +96,11 @@ impl Trust {
         if let Some(kept) = READINGS.kept(&reading(registrar, &store.tips()?)) {
             return Ok(kept);
         }
-        let dag: Dag<E> = store.objects()?.into_iter().collect();
+        let graph = store.graph()?;
+        let dag = graph.dag();
         // Kept by the heads of what was read, never by the heads asked about first: a write
         // between the two is in this reading, so only its own heads may name it.
-        let trust = Arc::new(Trust::of(&dag, registrar));
+        let trust = Arc::new(Trust::of(dag, registrar));
         let heads: Vec<Hash> = dag.tips().into_iter().collect();
         // A finding is kept as evidence and answers nothing, so the next read reads again.
         let _ = READINGS.keep(reading(registrar, &heads), Arc::clone(&trust));
@@ -172,7 +176,7 @@ impl Trust {
             }
         }
         // A signature proves where its key is registered and every revocation of it keeps it.
-        let proven = whose
+        let (vouched, proven) = whose
             .iter()
             .filter(|(name, (genesis, actor))| {
                 signatures.get(*name).is_some_and(|by| {
@@ -187,9 +191,10 @@ impl Trust {
                 })
             })
             .map(|(name, _)| name.clone())
-            .collect();
+            .partition(|name| dag.husks().contains(name));
         Trust {
             proven,
+            vouched,
             predating: dag.closure(epochs.iter().cloned()),
             epochs,
             signatures,
@@ -256,12 +261,13 @@ impl Trust {
             .map(|((genesis, actor, key), standing)| (genesis, actor, key, *standing))
     }
 
-    /// Why `object` is not proven: `None` where it is, or where it carries no event (a
-    /// signature, a key, a genesis or a snapshot asserts no actor's fact).
+    /// Why `object` is not proven: `None` where it is or a signature vouches for its husk, or
+    /// where it carries no event (a signature, a key, a genesis or a snapshot asserts no actor's
+    /// fact).
     #[must_use]
     pub fn why(&self, object: &Hash) -> Option<Unproven> {
         let (genesis, actor) = self.whose.get(object)?;
-        if self.proves(object) {
+        if self.proves(object) || self.vouched.contains(object) {
             return None;
         }
         let verifying: Vec<&PublicKey> = self
@@ -294,14 +300,14 @@ impl Trust {
         )
     }
 
-    /// Who wrote `object`, as the reading says it: proven by a key, written before
-    /// signatures, or unproven and why. `None` for an object that carries no event.
+    /// Who wrote `object`, as the reading says it: proven by a key, vouched for as a husk by
+    /// one, written before signatures, or unproven and why. `None` for an object that carries
+    /// no event.
     #[must_use]
     pub fn provenance(&self, object: &Hash) -> Option<Provenance> {
         let (genesis, actor) = self.whose.get(object)?;
-        if self.proves(object) {
-            let key = self
-                .signatures
+        let signer = || {
+            self.signatures
                 .get(object)
                 .into_iter()
                 .flatten()
@@ -309,8 +315,13 @@ impl Trust {
                     one.verifies
                         && self.standing(genesis, actor, &one.key) != KeyStanding::Untrusted
                 })
-                .map(|one| one.key.clone())?;
-            return Some(Provenance::Proven { key });
+                .map(|one| one.key.clone())
+        };
+        if self.proves(object) {
+            return Some(Provenance::Proven { key: signer()? });
+        }
+        if self.vouched.contains(object) {
+            return Some(Provenance::Vouched { key: signer()? });
         }
         if self.predating.contains(object) {
             return Some(Provenance::Predates);

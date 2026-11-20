@@ -1104,6 +1104,12 @@ impl Schema for LineEvent {
     fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
     }
+
+    fn husk(
+        print: &prodrome_core::store::Other<'_>,
+    ) -> Option<prodrome_core::store::HuskObject<Self>> {
+        prodrome_core::store::HuskObject::of_other(print).ok()
+    }
 }
 
 /// A part of a line still spelled as JSON inside its literal: a turn's shape, who named a
@@ -1140,10 +1146,10 @@ fn line_of(
     })
 }
 
-/// A line every key of whose words is let go is kept as its husk ([`suzatary_store::store::Husk`]): each
+/// A line every key of whose words is let go is kept as its husk ([`prodrome_core::store::Husk`]): each
 /// slot's words dropped, the name of the key they were locked under all that is left of them. No
 /// store's vocabulary reads a dropped slot, so a husk is never read as a whole object.
-impl suzatary_store::store::Husking for LineEvent {
+impl prodrome_core::store::Husking for LineEvent {
     type Seal = KeyName;
     type Husks = HuskVocabulary;
 

@@ -127,12 +127,12 @@ impl suzatary_base::capability::Entropy for Counted {
 }
 
 /// The lines' store as the box keeps it.
-pub(crate) type Lines = Objects<LineEvent, suzatary_io::husked::Husked<LineEvent>>;
+pub(crate) type Lines = Objects<LineEvent>;
 
 /// The lines and their keys under `root`.
 pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io::text_keys::TextKeys) {
     (
-        Objects::husked(root.join(LINES)),
+        Objects::open(root.join(LINES)),
         suzatary_io::text_keys::open(root.join(LINE_KEYS)),
     )
 }
@@ -284,13 +284,7 @@ fn begun(root: &Path) -> Objects<suzatary_inbox::secretary::inbox_event::InboxEv
 }
 
 /// Begin `store` with a genesis labelled `label` and a nonce of zeros, so its names are pinned.
-fn rooted<
-    E: suzatary_stores::stores::Store<Vocabulary: Clone>,
-    F: suzatary_io::object_files::ObjectFiles<E>,
->(
-    store: &Objects<E, F>,
-    label: &str,
-) {
+fn rooted<E: suzatary_stores::stores::Store<Vocabulary: Clone>>(store: &Objects<E>, label: &str) {
     let genesis = prodrome_core::event::Envelope::<E>::Genesis(
         prodrome_core::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
     );
@@ -304,7 +298,7 @@ fn rooted<
         Untrusted::none(),
         prodrome_core::store::Replica::schema(store.inner()).clone(),
     )
-    .adopt_objects(&print, &name)
+    .adopt_objects(&print, &name, prodrome_core::store::Sender::Stranger)
     .expect("begins");
 }
 
@@ -1683,11 +1677,11 @@ fn derived(dir: &Path) -> prodrome_core::dag::Heads {
     heads
 }
 
-/// LAW (the Prodrome's 60, for the husked store): after lines written by two handles of one store
+/// LAW (the Prodrome's 60, over the lines' store): after lines written by two handles of one store
 /// in turn, each taking the lock for its own write, and a husk, the record on disk is the derived
 /// heads, so `heads()` serves it; the store's root holds a `.gitignore` of `/.heads` alone.
 #[test]
-fn the_husked_store_records_the_derived_heads() {
+fn the_lines_store_records_the_derived_heads() {
     let dir = suzatary_testkit::scratch("stores");
     let (reader, writer, push) = two_handles(dir.path());
     let other: &'static Lines = Box::leak(Box::new(lines_at(dir.path()).0));
@@ -1710,7 +1704,9 @@ fn the_husked_store_records_the_derived_heads() {
             2 * k + 1
         );
     }
-    let names = suzatary_io::object_files::ObjectFiles::dag(writer.inner())
+    let names = writer
+        .inner()
+        .dag()
         .expect("reads")
         .objects()
         .keys()
@@ -1729,13 +1725,10 @@ fn the_husked_store_records_the_derived_heads() {
         std::fs::read_to_string(root.join(".gitignore")).expect("its gitignore"),
         "/.heads\n"
     );
-    assert!(
-        suzatary_io::object_files::ObjectFiles::findings(writer.inner()).is_empty(),
-        "no finding"
-    );
+    assert!(writer.inner().verify().is_empty(), "no finding");
 }
 
-/// LAW (the Prodrome's 62 and 63, for the husked store): an object brought into `objects/` by
+/// LAW (the Prodrome's 62 and 63, over the lines' store): an object brought into `objects/` by
 /// another door reads as the older heads, and `verify` reports the record, until the heads are
 /// recorded again or the record is deleted; a record naming a head whose file is gone is not
 /// served.
@@ -1772,7 +1765,9 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
     let heads = || prodrome_core::store::Replica::heads(reader.inner()).expect("heads");
     assert_eq!(heads(), recorded, "the older heads, read with no listing");
     assert!(
-        suzatary_io::object_files::ObjectFiles::findings(reader.inner())
+        reader
+            .inner()
+            .verify()
             .iter()
             .any(|finding| matches!(finding, prodrome_core::dag::Finding::StaleHeads { .. })),
         "verify reports the stale record"
@@ -1788,6 +1783,72 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
     std::fs::remove_file(objects.join(format!("{}.py", tip.as_str()))).expect("removed");
     assert_ne!(heads(), now, "the record names an absent head");
     assert_eq!(heads(), derived(dir.path()));
+}
+
+/// LAW (SPEC §3, the sender): a post through the door is a stranger's, so at the lines' schema,
+/// which reads husks from their keeper, a print that does not hash to its name is refused and
+/// nothing is placed, whether it reads as that name's husk or as another whole; the whole itself
+/// is taken.
+#[test]
+fn a_post_whose_print_does_not_hash_to_its_name_is_refused() {
+    let dir = suzatary_testkit::scratch("stores");
+    let elsewhere = suzatary_testkit::scratch("stores");
+    let (_, store, push) = two_handles(dir.path());
+    push(1);
+    // The next line, written in a copy, so this store holds what it rests on and not it.
+    copy(&dir.path().join(LINES), &elsewhere.path().join(LINES));
+    copy(
+        &dir.path().join(LINE_KEYS),
+        &elsewhere.path().join(LINE_KEYS),
+    );
+    let (_, copied, push_there) = two_handles(elsewhere.path());
+    push_there(2);
+    let held = store.inner().dag().expect("reads");
+    let there = copied.inner().dag().expect("reads");
+    let (name, whole) = there
+        .objects()
+        .iter()
+        .find(|(name, _)| !held.objects().contains_key(*name))
+        .map(|(name, object)| (name.clone(), object.clone()))
+        .expect("a line this store does not hold");
+    let prodrome_core::event::Envelope::Change(change) = &whole else {
+        panic!("a line is a change");
+    };
+    let husk = prodrome_core::store::HuskObject::of(change)
+        .expect("a line with words has a husk")
+        .print();
+    let other = prodrome_core::event::canonical_envelope(
+        held.objects().values().next().expect("an object"),
+    );
+    for (print, reads_as) in [(husk, "its husk"), (other, "another whole")] {
+        assert!(
+            store.accept(&[(name.clone(), print)]).is_err(),
+            "a print that reads as {reads_as} is refused"
+        );
+        assert!(
+            !store
+                .inner()
+                .dag()
+                .expect("reads")
+                .objects()
+                .contains_key(&name),
+            "and nothing is placed under the name"
+        );
+    }
+    store
+        .accept(&[(
+            name.clone(),
+            prodrome_core::event::canonical_envelope(&whole),
+        )])
+        .expect("the whole is taken");
+    assert!(
+        store
+            .inner()
+            .dag()
+            .expect("reads")
+            .objects()
+            .contains_key(&name)
+    );
 }
 
 /// LAW: the lines' reading is kept by the store's recorded heads, and it is read from the files.

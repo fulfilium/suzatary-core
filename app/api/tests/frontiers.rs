@@ -65,7 +65,11 @@ impl Device {
         let store = MemoryStore::default();
         let (name_of, print) = genesis();
         store
-            .receive([name_of].into(), &|_| Some(print.clone().into_bytes()))
+            .receive(
+                [name_of].into(),
+                &|_| Some(print.clone().into_bytes()),
+                prodrome_core::store::Sender::Stranger,
+            )
             .expect("begun");
         Self {
             store,
@@ -134,9 +138,11 @@ impl Device {
             })
             .collect();
         self.store
-            .receive(signed.keys().cloned().collect(), &|name| {
-                signed.get(name).map(|print| print.clone().into_bytes())
-            })
+            .receive(
+                signed.keys().cloned().collect(),
+                &|name| signed.get(name).map(|print| print.clone().into_bytes()),
+                prodrome_core::store::Sender::Stranger,
+            )
             .expect("the device keeps its signatures");
         changes
             .iter()
@@ -157,9 +163,11 @@ impl Device {
             })
             .collect();
         self.store
-            .receive(prints.keys().cloned().collect(), &|name| {
-                prints.get(name).cloned()
-            })
+            .receive(
+                prints.keys().cloned().collect(),
+                &|name| prints.get(name).cloned(),
+                prodrome_core::store::Sender::Stranger,
+            )
             .expect("taken");
     }
 }

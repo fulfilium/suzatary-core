@@ -67,7 +67,7 @@ pub fn husked(
             if line.keys().any(|key| sent.contains_key(key.as_str())) {
                 return None;
             }
-            Some((name.clone(), suzatary_store::store::Husk::of(line)?.print()))
+            Some((name.clone(), prodrome_core::store::Husk::of(line)?.print()))
         })
         .collect()
 }

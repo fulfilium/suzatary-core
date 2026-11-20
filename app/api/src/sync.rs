@@ -1203,9 +1203,11 @@ mod tests {
             .map(|object| (seal_hash(object), canonical_envelope(object)))
             .collect();
         let tab = MemoryStore::default();
-        tab.receive(heads(&set), &|name| {
-            prints.get(name).map(|print| print.clone().into_bytes())
-        })
+        tab.receive(
+            heads(&set),
+            &|name| prints.get(name).map(|print| print.clone().into_bytes()),
+            prodrome_core::store::Sender::Stranger,
+        )
         .expect("a closed set is received");
         tab
     }

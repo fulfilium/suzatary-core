@@ -1071,7 +1071,7 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
         .expect("a line");
         let husk = match &whole {
             prodrome_core::event::Envelope::Change(change) => {
-                suzatary_store::store::HuskObject::of(change).map(|husk| husk.print())
+                prodrome_core::store::HuskObject::of(change).map(|husk| husk.print())
             }
             _ => None,
         };

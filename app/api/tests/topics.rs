@@ -67,7 +67,11 @@ fn begun<E: Schema<Vocabulary: Default>>() -> MemoryStore<E> {
         Envelope::Genesis(mk_genesis("topics", &"0".repeat(32)).expect("a genesis"));
     let print = canonical_envelope(&genesis).into_bytes();
     store
-        .receive([seal_hash(&genesis)].into(), &|_| Some(print.clone()))
+        .receive(
+            [seal_hash(&genesis)].into(),
+            &|_| Some(print.clone()),
+            prodrome_core::store::Sender::Stranger,
+        )
         .expect("begins");
     store
 }
@@ -126,8 +130,18 @@ impl Device {
 
     /// Take in everything `other` holds.
     fn take(&self, other: &Device) {
-        sync(&other.memberships, &self.memberships).expect("synced");
-        sync(&other.aliases, &self.aliases).expect("synced");
+        sync(
+            &other.memberships,
+            &self.memberships,
+            prodrome_core::store::Sender::Stranger,
+        )
+        .expect("synced");
+        sync(
+            &other.aliases,
+            &self.aliases,
+            prodrome_core::store::Sender::Stranger,
+        )
+        .expect("synced");
     }
 
     fn tick(&mut self) -> Datetime {
@@ -488,9 +502,11 @@ fn posted<E: Schema<Vocabulary: Default>>(
             )
         })
         .collect();
-    from.receive(signed.keys().cloned().collect(), &|name| {
-        signed.get(name).cloned()
-    })
+    from.receive(
+        signed.keys().cloned().collect(),
+        &|name| signed.get(name).cloned(),
+        prodrome_core::store::Sender::Stranger,
+    )
     .expect("the device keeps its signatures");
     let mine: Vec<String> = own
         .iter()
@@ -526,9 +542,11 @@ fn posted<E: Schema<Vocabulary: Default>>(
         .iter()
         .map(|(name, print)| (name.clone(), print.clone().into_bytes()))
         .collect();
-    to.receive(prints.keys().cloned().collect(), &|name| {
-        prints.get(name).cloned()
-    })
+    to.receive(
+        prints.keys().cloned().collect(),
+        &|name| prints.get(name).cloned(),
+        prodrome_core::store::Sender::Stranger,
+    )
     .expect("the box takes what its door took");
     received.outcome.taken.len()
 }

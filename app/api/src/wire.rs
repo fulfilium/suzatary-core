@@ -879,7 +879,7 @@ impl From<&Provenance> for Proof {
                 key: key.as_str().to_owned(),
             },
             Provenance::Predates => Self::Predates,
-            Provenance::Unproven(_) => Self::Unproven,
+            Provenance::Vouched { .. } | Provenance::Unproven(_) => Self::Unproven,
         }
     }
 }

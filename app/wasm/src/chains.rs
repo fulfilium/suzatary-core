@@ -43,7 +43,8 @@ impl Chains {
     /// answers it, or `{why}`, why the chain did not read.
     pub fn hold(&mut self, name: &str, objects: &str, untrusted: &str) -> Result<String, JsError> {
         let name = ChainName::new(name).map_err(|e| refused(e.to_string()))?;
-        let read = Replica::of(objects)
+        // The todo schema has no husks: every print is read as a stranger's.
+        let read = Replica::of(objects, prodrome_wasm_exports::Sender::Stranger)
             .and_then(|replica| parse_untrusted(untrusted).map(|untrusted| (replica, untrusted)));
         let answer = read
             .as_ref()

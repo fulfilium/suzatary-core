@@ -320,10 +320,15 @@ fn signed_as_owned<E: Schema>(
     untrusted: &Untrusted,
     writes: Vec<(Hash, Actor)>,
 ) -> Result<Vec<Hash>, StoreError> {
+    let dag = dag_of(store)?;
     writes
         .into_iter()
         .filter_map(|(name, actor)| match signers.for_actor(&actor, untrusted) {
-            Signer::Key(key) => Some(sign(store, &key, &name)),
+            Signer::Key(key) => Some(
+                key.sign_whole(&dag, &name)
+                    .map_err(|e| StoreError::not_appended("chain", e))
+                    .and_then(|signed| sign(store, signed)),
+            ),
             Signer::Refusing(_) | Signer::Unsigned => None,
         })
         .collect()
@@ -338,12 +343,13 @@ fn written<E: Schema>(
 ) -> Result<Hash, StoreError> {
     let name = seal_hash(object);
     store.accept(&[(name.clone(), canonical_envelope(object))])?;
-    sign(store, root, &name)?;
+    sign(store, root.sign(&name))?;
     Ok(name)
 }
 
+/// The store's own history, which knows which names it holds as husks.
 fn dag_of<E: Schema>(store: &(impl Prodrome<E> + ?Sized)) -> Result<Dag<E>, StoreError> {
-    Ok(store.objects()?.into_iter().collect())
+    Ok(store.graph()?.dag().clone())
 }
 
 /// A chain ADOPTS signatures: each actor of its roster registered with the key its writes are

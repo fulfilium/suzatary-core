@@ -18,7 +18,7 @@ use crate::texts::SystemEntropy;
 /// The lines and their keys, at their two directories.
 pub struct ConversationStores {
     /// The lines, pushed; a line no key opens may be kept as its husk.
-    pub lines: objects::Objects<LineEvent, crate::husked::Husked<LineEvent>>,
+    pub lines: objects::Objects<LineEvent>,
     /// The keys, box-local, vaulted, never pushed.
     pub keys: TextKeys,
     keys_at: PathBuf,
@@ -41,7 +41,7 @@ impl ConversationStores {
         sessions: Arc<dyn ModelSessions + Send + Sync>,
     ) -> Self {
         Self {
-            lines: objects::Objects::husked(lines),
+            lines: objects::Objects::open(lines),
             keys: text_keys::open(keys.clone()),
             opened: opened_at(&keys),
             keys_at: keys,
@@ -55,7 +55,7 @@ impl ConversationStores {
     #[must_use]
     pub fn reopened(&self) -> Self {
         Self::open(
-            crate::object_files::ObjectFiles::root(self.lines.inner()).to_path_buf(),
+            self.lines.inner().root().to_path_buf(),
             self.keys_at.clone(),
             self.runs.dir().to_path_buf(),
             Arc::clone(&self.renders),

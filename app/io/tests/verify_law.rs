@@ -112,6 +112,7 @@ fn read_as_prints(prints: &[(Hash, Vec<u8>)]) -> Vec<String> {
         prints
             .iter()
             .map(|(name, print)| (name.clone(), Ok(print.clone()))),
+        prodrome_core::store::Sender::Keeper,
     );
     findings_of(&dag, &Untrusted::none())
         .iter()

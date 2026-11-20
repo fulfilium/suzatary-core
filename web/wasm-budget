@@ -34,10 +34,13 @@
 # before a take-back, and a refused topic's page. At its third, from its figures (prodrome
 # 5,007,638, views 3,707,050): views down with the claim deleted, prodrome up with the one owner
 # of which own records may go moved into the core. At its fourth, prodrome from its figure
-# 5,015,176: a seal answers the own records its line rests on, kept again beside it.
+# 5,015,176: a seal answers the own records its line rests on, kept again beside it. The
+# Prodrome pin at 9fe98a4 (huskstoreup) set prodrome's lines from the tree merged with 2.1.189
+# (5,021,662, 2,185 over master's 5,019,477: the husk read where the schema has husks, the sender,
+# and `Trust`'s vouched set), by the same rule.
 views_bg.wasm x86_64-linux 3710000
-prodrome_bg.wasm x86_64-linux 5020000
+prodrome_bg.wasm x86_64-linux 5030000
 typst_bg.wasm x86_64-linux 22020000
 views_bg.wasm aarch64-linux 3720000
-prodrome_bg.wasm aarch64-linux 5030000
+prodrome_bg.wasm aarch64-linux 5040000
 typst_bg.wasm aarch64-linux 22090000

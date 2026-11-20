@@ -251,7 +251,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     }
 
     fn fresh(&self) -> Result<Replica<E>, String> {
-        self.standing().and_then(|o| Replica::of(&o))
+        // No schema a tab holds as objects has husks: each print is read as a stranger's.
+        self.standing()
+            .and_then(|o| Replica::of(&o, prodrome_wasm_exports::Sender::Stranger))
     }
 
     /// `{excluded}`: what the reading leaves out.

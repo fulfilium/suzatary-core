@@ -22,7 +22,6 @@ allowance = 2000
 [ratchet]
 # The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
 # downward.
-# 2026-11-12: raised by hand by 15,065 for the lines' husked store (linesprune); husked.rs and object_files.rs leave with huskstoreup, when it comes down by their tokens.
 # 2026-11-16: raised by hand to the merged tree's figure for door 1, a public store's write guard (+5,451, a new security boundary).
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.148 for `prodrome carry` (+20,175), a verb stage 4 of the public tasks plan deletes; accepted at the review of #520.
 # 2026-11-16: raised by hand to the figure of the tree merged with #520 for the start that folds no conversations (#521, +614 on top of #520's figure, about 5 s off every start).
@@ -42,26 +41,27 @@ allowance = 2000
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.185 for typedtooling T2 (#569, +15,540 over 2.1.185's figure: publication in app/tooling, the one check before every push to core and its laws, less 269 lines of train.sh and five stub guards; the plan restates the running total); accepted at the review of #569.
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.187 for localwrites stage 3 (c2) (#573, +16,647: the stop's halt by the runs its line ends, the chain law, an own line's ruling and words on a turn, a refusal's words taken back whole by one tab or kept on the page that began them, the box's clock and its bounds, the post's 413 and 422, and their laws; and, at its second review, +2,953: a refused topic by its opening, the one test of a line the rows hold, words placed before they are claimed, the composer's draft read, the device's lock bounded, and their laws); accepted at the reviews of #573.
 # 2026-11-20: set to the tree's figure at the fifth review of #573, as that review asked (+4,181 over the third to fifth reviews: the core alone answering which own records go, reading, settling and sealing under the device's lock, a line the rows hold taken, a let-go refusal never posted, a settle's reading kept apart from its cleanup, a seal tried again only where nothing was sealed, and their laws).
-reading = 3148790
+# 2026-11-20: written as `scripts/context.sh record` writes it, by hand, on the tree merged with 2.1.189 for huskstoreup (-11,867: the second store and the husk types deleted), since `record` refuses while `lines` and `digest` stand above their USE ratchets there, as on origin/master; their lines stay.
+reading = 3136923
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
-cli = 81630
+cli = 80237
 # 2026-11-18: `inbox`, `conversations` and `lines` left core over the line (#538); the core split's plan names the further cut of each (rows 24 to 26). Core's figure is lowered by hand to the same tree's.
 # 2026-11-19: `conversations` raised by hand to the figure of #547's head merged with 2.1.174 (`Entry::Again`, `Aside`, `Stored::of_read`, and the claims' reading of `ConversationState`); accepted at the review of #547.
 # 2026-11-20: `conversations` raised by hand to the figure of #573's head merged with 2.1.187 (the halt's run, `Halt::claims`); accepted at the review of #573.
 conversations = 27933
 # 2026-11-18: `digest` left core over the line; the core split's plan names its further cut (rows 27 to 29). Core's figure is lowered by hand to the same tree's.
 digest = 28369
-inbox = 33570
+inbox = 33529
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
-io = 54058
+io = 53169
 # 2026-11-19: `lines` raised by hand to the figure of #547's head (the rule's `World` and `Upload`, `Whole`, `Sealing::{Say, Stop}`, the transcript's `queued`, `state`, `turn_lines` and `Confirms`, `own_taken`; at its review the rule's clock and parents and `replies_to`; at its second the rule's view of a line and `whole`; at its third the fold's `take` and `Writes::waiting`), at its head merged with 2.1.181; accepted at the review of #547.
 # 2026-11-20: `lines` raised by hand to the figure of #573's head merged with 2.1.187 (`Transcript::ended_by`, `skew`, `Question` and `Sealing::Begin`, `Ruling`, `rulings`, `refused_elsewhere`, `acted`, and `OwnLine::{words, conversation, at}`); accepted at the review of #573.
 lines = 46260
 # 2026-11-19: the stores' table left the secretary for `suzatary-stores`, lowered by hand; still over the line, and the plan names the further cut (the triage agent).
-secretary = 33374
+secretary = 33324
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.
@@ -470,25 +470,25 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 [[external]]
 name = "prodrome-core"
 source = "https://github.com/fulfilium/prodrome"
-rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
+rev = "9fe98a47b769e0cb8964d00dcbda58947d0593e2"
 pinned_in = "app/Cargo.toml"
 path = "core"
 shape = "crate"
-use = 130676
+use = 138035
 
 [[external]]
 name = "prodrome-wasm-exports"
 source = "https://github.com/fulfilium/prodrome"
-rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
+rev = "9fe98a47b769e0cb8964d00dcbda58947d0593e2"
 pinned_in = "app/Cargo.toml"
 path = "wasm/exports"
 shape = "crate"
-use = 6478
+use = 6791
 
 [[external]]
 name = "prodrome-typst-wasm"
 source = "https://github.com/fulfilium/prodrome"
-rev = "c141b2b25746375ca8cf9af5180a757cf11f49c1"
+rev = "9fe98a47b769e0cb8964d00dcbda58947d0593e2"
 pinned_in = "app/Cargo.toml"
 path = "typst-wasm"
 shape = "crate"

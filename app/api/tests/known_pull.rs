@@ -118,10 +118,13 @@ pub(crate) fn store() -> InMemory {
         .map(|(name, object)| (name.clone(), canonical_envelope(object).into_bytes()))
         .collect();
     let memory: MemoryStore<LineEvent> = MemoryStore::default();
+    // The box's own lines, copied: their store is the copy's keeper of record.
     memory
-        .receive(begun.keys().cloned().collect(), &|name| {
-            begun.get(name).cloned()
-        })
+        .receive(
+            begun.keys().cloned().collect(),
+            &|name| begun.get(name).cloned(),
+            prodrome_core::store::Sender::Keeper,
+        )
         .expect("received");
     for event in events {
         memory.append(event).expect("appended");
