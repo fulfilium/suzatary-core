@@ -2,26 +2,27 @@
 
 use crate::gate_branch::GateBranch;
 use crate::repo_path::RepoPath;
-use crate::{Ended, Error, Half, Scope, Seen};
+use crate::{Error, Half, Seen};
 
 pub const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--full]
-       train table write <half> <commit> <status> [--full]
        train publish [--skip <sha>]... [--admit <path>]... [<rev>]
        train publishable <commit>
        train push-gate <commit> gate/<name> <subject> <trailer>
-       train published <rev>";
+       train published <rev>
+       train gate [--full] [--remote github]
+       train bisect [--remote github]
+       train nightly
+       train check <pr>
+       train locked <verb> -- <command>...";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Command {
     /// One word on stdout: the reading `of` the commit's tree.
-    Read { commit: String, of: Of, seen: Seen },
-    /// The row of a half's run that ended with an exit status; no row when it did not start.
-    Write {
-        half: Half,
+    Read {
         commit: String,
-        ended: Ended,
-        scope: Scope,
+        of: Of,
+        seen: Seen,
     },
     /// Core's master gains the public tree of each landed commit up to `rev`, origin's master
     /// where it is `None`.
@@ -31,7 +32,9 @@ pub enum Command {
         rev: Option<String>,
     },
     /// Whether the commit's public tree may go to a gate branch.
-    Publishable { commit: String },
+    Publishable {
+        commit: String,
+    },
     /// The commit's public tree, if publishable, pushed to a gate branch.
     PushGate {
         commit: String,
@@ -40,7 +43,26 @@ pub enum Command {
         trailer: String,
     },
     /// The row of core's master that publishes `rev`, or nothing.
-    Published { rev: String },
+    Published {
+        rev: String,
+    },
+    /// Both halves of the train, on the box or with the tree half on GitHub's runners.
+    Gate {
+        full: bool,
+        remote: bool,
+    },
+    Bisect {
+        remote: bool,
+    },
+    Nightly,
+    Check {
+        pr: u32,
+    },
+    /// A command of `train.sh` run under the train's lock.
+    Locked {
+        verb: String,
+        command: Vec<String>,
+    },
 }
 
 /// What a reading answers for: one half, or the train, whose verdict weighs both.
@@ -48,6 +70,15 @@ pub enum Command {
 pub enum Of {
     Half(Half),
     Train,
+}
+
+/// `--remote github`, or nothing: where the tree half runs.
+fn remote(words: &[&str]) -> Result<bool, Error> {
+    match words {
+        [] => Ok(false),
+        ["--remote", "github"] => Ok(true),
+        _ => Err(usage("unknown arguments")),
+    }
 }
 
 fn usage(why: &str) -> Error {
@@ -72,6 +103,30 @@ impl Command {
             ["published", rev] => Ok(Command::Published {
                 rev: rev.to_owned(),
             }),
+            ["gate", ref rest @ ..] => {
+                let (full, rest) = match rest {
+                    ["--full", rest @ ..] => (true, rest),
+                    rest => (false, rest),
+                };
+                Ok(Command::Gate {
+                    full,
+                    remote: remote(rest)?,
+                })
+            }
+            ["bisect", ref rest @ ..] => Ok(Command::Bisect {
+                remote: remote(rest)?,
+            }),
+            ["nightly"] => Ok(Command::Nightly),
+            ["check", n] => match n.parse() {
+                Ok(pr) if !n.starts_with(['0', '+']) => Ok(Command::Check { pr }),
+                _ => Err(usage(&format!("\"{n}\" is not a pull request number"))),
+            },
+            ["locked", verb, "--", ref command @ ..] if !command.is_empty() => {
+                Ok(Command::Locked {
+                    verb: verb.to_owned(),
+                    command: command.iter().map(|word| (*word).to_owned()).collect(),
+                })
+            }
             _ => Err(usage("unknown arguments")),
         }
     }
@@ -93,16 +148,6 @@ impl Command {
                 commit: commit.to_owned(),
                 of: Of::Half(Half::parse(half)?),
                 seen,
-            }),
-            ["write", half, commit, status] => Ok(Command::Write {
-                half: Half::parse(half)?,
-                commit: commit.to_owned(),
-                ended: Ended::of_status(
-                    status
-                        .parse()
-                        .map_err(|_| usage(&format!("\"{status}\" is no exit status")))?,
-                ),
-                scope: if full { Scope::Full } else { Scope::Selective },
             }),
             _ => Err(usage("unknown arguments")),
         }

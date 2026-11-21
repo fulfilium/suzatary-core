@@ -17,7 +17,7 @@ use crate::repo_path::RepoPath;
 use crate::{Error, git, process};
 
 /// The publications' author and committer: no person's name rides a publication.
-const AUTHOR: [(&str, &str); 4] = [
+pub const AUTHOR: [(&str, &str); 4] = [
     ("GIT_AUTHOR_NAME", "Suzatary"),
     ("GIT_AUTHOR_EMAIL", "publish@suzatary.invalid"),
     ("GIT_COMMITTER_NAME", "Suzatary"),
@@ -266,13 +266,7 @@ pub fn push_gate(
     let since = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
-    let now = Instant(since.as_secs());
-    // A stamp to the nanosecond, so each gate commit, and its run, has a name of its own.
-    let stamp = format!(
-        "{}.{:09}Z",
-        now.to_string().trim_end_matches('Z'),
-        since.subsec_nanos()
-    );
+    let (now, stamp) = gate_stamp(since);
     let pushed = commit_tree(
         &tree,
         core.tip(),
@@ -293,6 +287,19 @@ pub fn push_gate(
     }
     println!("{pushed}");
     Ok(0)
+}
+
+/// A gate commit's date and its stamp to the nanosecond, so each gate commit, and its run, has a
+/// name of its own: two pushes at different instants never make the same commit.
+#[must_use]
+pub fn gate_stamp(since: std::time::Duration) -> (Instant, String) {
+    let now = Instant(since.as_secs());
+    let stamp = format!(
+        "{}.{:09}Z",
+        now.to_string().trim_end_matches('Z'),
+        since.subsec_nanos()
+    );
+    (now, stamp)
 }
 
 fn said<T>(verdict: &Publishable<T>, commit: &Oid) -> String {

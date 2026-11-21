@@ -5,13 +5,17 @@ use std::process::ExitCode;
 use suzatary_tooling::command::{Command, Of};
 use suzatary_tooling::core_rows::{CORE_MASTER, Core};
 use suzatary_tooling::gate::Gate;
-use suzatary_tooling::instant::Instant;
+use suzatary_tooling::gate_run::Train;
 use suzatary_tooling::matcher::Matcher;
 use suzatary_tooling::public_tree::Script;
 use suzatary_tooling::publication::{self, Guard};
-use suzatary_tooling::{Ended, Error, Half, LandOrder, Row, Table, git};
+use suzatary_tooling::{Error, Half, LandOrder, Table, git};
 
 fn main() -> ExitCode {
+    if let Err(e) = suzatary_tooling::supervisor::keep_children() {
+        eprintln!("train: the children's statuses could not be kept for the waits: {e}");
+        return ExitCode::from(3);
+    }
     let args: Result<Vec<String>, Error> = std::env::args_os()
         .skip(1)
         .map(|arg| {
@@ -45,28 +49,6 @@ fn run(command: Command) -> Result<u8, Error> {
             println!("{reading}");
             Ok(0)
         }
-        Command::Write {
-            half,
-            commit,
-            ended,
-            scope,
-        } => {
-            match ended {
-                Ended::Judged(outcome) => {
-                    let row = Row {
-                        outcome,
-                        commit: git::commit(&commit)?,
-                        at: Instant::now(),
-                    };
-                    table()?.write(half, scope, &git::tree(&commit)?, &row)?;
-                }
-                Ended::DidNotStart => eprintln!(
-                    "train: the {} half did not start, so it says nothing of the tree",
-                    half.name()
-                ),
-            }
-            Ok(ended.status())
-        }
         Command::Publish { skips, admits, rev } => {
             publication::publish(&guard()?, rev.as_deref(), &skips, admits)
         }
@@ -79,6 +61,11 @@ fn run(command: Command) -> Result<u8, Error> {
             subject,
             trailer,
         } => publication::push_gate(&guard()?, &commit, &branch, &subject, &trailer),
+        Command::Gate { full, remote } => Train::new(table()?)?.gate(full, remote),
+        Command::Bisect { remote } => Train::new(table()?)?.bisect(remote),
+        Command::Nightly => Train::new(table()?)?.nightly(),
+        Command::Check { pr } => Train::new(table()?)?.check(pr),
+        Command::Locked { verb, command } => Train::new(table()?)?.locked(&verb, &command),
         Command::Published { rev } => {
             // The local name as `record` just fetched it: absent is a core with no master.
             let core = match git::commit_if(CORE_MASTER)? {

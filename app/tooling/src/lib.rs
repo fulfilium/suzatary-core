@@ -5,18 +5,22 @@
 
 pub mod admission;
 pub mod admitted;
+pub mod bisect;
 pub mod command;
 pub mod core_rows;
 pub mod error;
 pub mod fresh;
 pub mod gate;
 pub mod gate_branch;
+pub mod gate_run;
+pub mod gating;
 pub mod git;
 pub mod half;
 pub mod instant;
 pub mod known;
 pub mod land_order;
 pub mod leak_check;
+pub mod lock;
 pub mod matcher;
 pub mod oid;
 pub mod outcome;
@@ -30,7 +34,10 @@ pub mod refusal;
 pub mod repo_path;
 pub mod row;
 pub mod scratch;
+pub mod supervisor;
 pub mod table;
+pub mod verbs;
+pub mod watch;
 
 pub use command::Command;
 pub use error::Error;

@@ -14,7 +14,8 @@ pub fn cmd<S: AsRef<OsStr>>(args: &[S]) -> Command {
     cmd
 }
 
-fn git<S: AsRef<OsStr>>(args: &[S]) -> Result<String, Error> {
+/// `git <args>`'s stdout; a failure names the command and git's words.
+pub fn out<S: AsRef<OsStr>>(args: &[S]) -> Result<String, Error> {
     process::out(&mut cmd(args))
 }
 
@@ -31,15 +32,15 @@ pub fn act<S: AsRef<OsStr>>(args: &[S]) -> Result<bool, Error> {
 
 /// The repository's `.git`, shared by its worktrees.
 pub fn common_dir() -> Result<PathBuf, Error> {
-    git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(PathBuf::from)
+    out(&["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(PathBuf::from)
 }
 
 pub fn top() -> Result<PathBuf, Error> {
-    git(&["rev-parse", "--show-toplevel"]).map(PathBuf::from)
+    out(&["rev-parse", "--show-toplevel"]).map(PathBuf::from)
 }
 
 pub fn commit(name: &str) -> Result<Oid, Error> {
-    Oid::parse(&git(&[
+    Oid::parse(&out(&[
         "rev-parse",
         "--verify",
         "--quiet",
@@ -68,7 +69,7 @@ pub fn commit_if(name: &str) -> Result<Option<Oid>, Error> {
 }
 
 pub fn tree(name: &str) -> Result<Oid, Error> {
-    Oid::parse(&git(&[
+    Oid::parse(&out(&[
         "rev-parse",
         "--verify",
         "--quiet",
@@ -78,7 +79,7 @@ pub fn tree(name: &str) -> Result<Oid, Error> {
 
 /// The name git gives the file at `path` as a blob, its bytes as they are.
 pub fn hash_object(path: &Path) -> Result<Oid, Error> {
-    Oid::parse(&git(&[
+    Oid::parse(&out(&[
         OsStr::new("hash-object"),
         OsStr::new("--no-filters"),
         path.as_os_str(),
@@ -87,7 +88,7 @@ pub fn hash_object(path: &Path) -> Result<Oid, Error> {
 
 /// The first-parent chain of `name`, newest first.
 pub fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
-    git(&["rev-list", "--first-parent", name])?
+    out(&["rev-list", "--first-parent", name])?
         .lines()
         .map(Oid::parse)
         .collect()

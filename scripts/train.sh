@@ -3,7 +3,7 @@
 # scripts/merge-gate.sh and landed as one fast-forward of master.
 #
 #   build <pr>...    train := origin/master, each PR merged in, then the release cut on top
-#   gate [--full]    both halves of scripts/merge-gate.sh on the train
+#   gate [--full]    both halves of scripts/merge-gate.sh on the train (the tool's `train gate`)
 #   bisect           the merge that turned a red half red
 #   land             master and v<version> := the gated train, pushed as one while master has not
 #                    moved; then published; then its release recorded on the roadmap
@@ -21,13 +21,12 @@
 # Verdicts go to .git/train/gates/, keyed by half and tree, and only the train's tool reads or
 # writes them (app/tooling, `train table`); a key holding both is a finding.
 #
-# Test seams: the SUZATARY_TRAIN_ names of `train_reads`; a stub gate's verdicts are keyed by its
-# own bytes, so a stub's green never lands a train.
+# `gate`, `bisect`, `nightly` and `check` are the tool's (app/tooling, `gate_run.rs`); every other
+# verb runs under the train's lock, which only the tool holds (`train locked`).
+#
+# Test seams: the SUZATARY_TRAIN_ names of the tool's `TRAIN_READS`; a stub gate's verdicts are
+# keyed by its own bytes, so a stub's green never lands a train.
 set -euo pipefail
-# Bash cannot trap or reset a signal ignored at its start, and `finish` must run on HUP or TERM.
-if ((0x$(awk '/^SigIgn:/ { print $2 }' /proc/$$/status) & 0x4001)); then
-  exec env --default-signal=HUP,TERM "${BASH_SOURCE[0]}" "$@"
-fi
 
 die() {
   printf 'train: %b\n' "$*" >&2
@@ -40,7 +39,7 @@ usage() {
 }
 
 gh="${SUZATARY_TRAIN_GH:-gh}"
-# Before the lock: a missing flock or git would read as another train or no checkout.
+# Before anything: a missing git or flock would read as no checkout or another train.
 needs() {
   local tool
   for tool; do
@@ -56,52 +55,10 @@ cd "$root"
 # In .git, never in the tree.
 state="$(git rev-parse --path-format=absolute --git-common-dir)/train"
 mkdir -p "$state"
-# A coproc holds the lock until this shell and each half's (`start`) close its stdin, a pipe bash
-# keeps from what it execs, so no command it runs inherits the lock.
-# lock [-n]: the lock taken; with -n, 1 at once while another holds it.
-lock_pid="" lock_fd=""
-lock() {
-  local said=""
-  coproc LOCK { trap '' HUP INT TERM; exec 9>>"$state/lock" && flock "$@" 9 && echo held && read -r _; } 2>/dev/null
-  lock_pid="$LOCK_PID" lock_fd="${LOCK[1]}"
-  read -r said <&"${LOCK[0]}" || true
-  [[ "$said" == held ]] && return
-  wait "$lock_pid" 2>/dev/null || true
-  return 1
-}
-
-# unlock: the lock is free when it returns.
-unlock() {
-  [[ -n "$lock_pid" ]] || return 0
-  exec {lock_fd}>&-
-  wait "$lock_pid" 2>/dev/null || true
-  lock_pid="" lock_fd=""
-}
-
-# One train at a time; the nightly waits, a check takes no lock.
-if [[ "${1:-}" != check ]]; then
-  if [[ "${1:-}" == nightly ]]; then
-    lock -n || { say "a train is running here: the nightly gate waits for it"; lock; }
-  else
-    lock -n || die "another scripts/train.sh is running in this checkout ($(cat "$state/lock.holder" 2>/dev/null)); wait for it to finish."
-  fi
-  echo "${1:-}, pid $$, since $(date -u +%FT%TZ)" >"$state/lock.holder"
-fi
-
-return_to="" cloud="" gate_branch="" gate_pushed=""
-# shellcheck source=scripts/groups.sh
-. "$scripts/groups.sh"
-# Above the gate's, so a gate told to stop has stopped its lanes before the train kills it.
-group_grace=10
-# Every half is stopped before its worktree goes.
-finish() {
-  group_stop "${groups[@]}"
-  [[ -z "$gate_branch" ]] || cloud_close
-  worktree_close
-  [[ -z "$return_to" ]] || git checkout --quiet "$return_to"
-  unlock
-}
-trap finish EXIT
+# Land's return to the train after a refused push; every other verb's lock and stop path is the
+# tool's (`train locked`, `train gate`).
+return_to=""
+trap '[[ -z "$return_to" ]] || git checkout --quiet "$return_to"' EXIT
 
 clean() {
   [[ -z "$(git status --porcelain)" ]] \
@@ -431,13 +388,6 @@ build() {
 }
 
 halves=(tree live)
-# `gate --full`, or `nightly`, which also runs the live web suite whole.
-full=0 nightly=0
-half_flag() { case "$1" in tree) echo --no-live ;; live) echo --only-live ;; esac; }
-gate_flags() {
-  if ((nightly)); then printf -- '--nightly '; elif ((full)); then printf -- '--full '; fi
-  half_flag "$1"
-}
 
 # reading <var> <commit> [--half <half>] [--full]: <var> := ok, failed, unknown or finding, of one
 # half or, with no --half, the train's verdict (ok < unknown < failed < finding); from every gate or
@@ -447,593 +397,18 @@ reading() {
   into="$("$tool" table read "${@:2}")" || die "the verdict table could not be read (above)."
 }
 
-# record <half> <commit> <code>: the half's row; 0 ok, 1 failed, 2 no row (75: did not start).
-record() {
-  local said=0 scope=()
-  ((!full)) || scope=(--full)
-  "$tool" table write "$@" "${scope[@]}" || said=$?
-  ((said <= 2)) || die "the verdict table could not be written (above)."
-  return "$said"
-}
-
 log_of() { mkdir -p "$state/logs" && echo "$state/logs/$1-$(git rev-parse "$2^{tree}").log"; }
 # A red step's screenshots and server output, `<step>-<commit12>`, beside the logs (merge-gate.sh).
 evidence_dir="$state/logs/evidence"
-
-worktree="$state/worktree"
-target="$state/target"
-
-# One worktree path, so cargo's fingerprints, which name it, hold.
-worktree_open() {
-  worktree_close
-  git worktree add --quiet --detach "$worktree" "$1" >/dev/null 2>&1 || return 1
-  [[ ! -d "$target" ]] || { mkdir -p "$worktree/app" && mv "$target" "$worktree/app/target"; }
-}
-
-# Keeps the target. Safe from the exit trap and when there is no worktree.
-worktree_close() {
-  [[ -e "$worktree" ]] || { git worktree prune; return 0; }
-  [[ ! -d "$worktree/app/target" || -e "$target" ]] || mv "$worktree/app/target" "$target"
-  git worktree remove --force "$worktree" >/dev/null 2>&1 || rm -rf "$worktree"
-  git worktree prune
-}
-
-# Gate <half> of <commit> and record the verdict: 0 green, 1 red, 2 no verdict.
-run_half() {
-  local half="$1" commit="$2" code=0
-  if [[ "$half" == tree && -n "$cloud" ]]; then
-    cloud_half "$commit"
-    return
-  fi
-  run_here "$half" "$commit" "${@:3}" || code=$?
-  record "$half" "$commit" "$code"
-}
-
-# run_here <half> <commit> [gate args...]: its gate in a worktree, as a half; 75: no worktree.
-run_here() {
-  local commit="$2" code=0
-  worktree_open "$commit" \
-    || { say "no worktree could be made at ${commit:0:12}"; return 75; }
-  half gating "$@" || code=$?
-  worktree_close
-  return "$code"
-}
-
-# gating <half> <commit> [gate args...]: the gate, without train_reads, its log kept.
-gating() {
-  local gate unset=() name
-  gate="${SUZATARY_TRAIN_GATE:-$worktree/scripts/merge-gate.sh}"
-  for name in "${train_reads[@]}"; do unset+=(-u "$name"); done
-  # shellcheck disable=SC2046
-  (cd "$worktree" && env "${unset[@]}" SUZATARY_GATE_EVIDENCE="$evidence_dir" "$gate" $(gate_flags "$1") "${@:3}") 2>&1 \
-    | tee "$(log_of "$1" "$2")" >&2
-}
-
-# half <command...>: <command> as a group `finish` stops, and its status; inside a half, part of it.
-in_half=""
-half() {
-  [[ -z "$in_half" ]] || { "$@"; return; }
-  start "$@"
-  group_wait "$group"
-}
-
-# start <command...>: a half in the background; sets `group`. A subshell's, `finish` would miss.
-start() {
-  ((BASHPID == $$)) || die "a half started in a subshell: $*"
-  exec 9>&"$lock_fd"
-  in_half=1
-  group_start "$@"
-  in_half=""
-  exec 9>&-
-}
-
-# The train's own test seams and signing keys; a gate is handed none of them.
-train_reads=(SUZATARY_TRAIN_BIN SUZATARY_TRAIN_GATE SUZATARY_TRAIN_GH SUZATARY_TRAIN_POLL SUZATARY_TRAIN_PIN
-  SUZATARY_TRAIN_PUBLIC SUZATARY_TRAIN_CACHE_TIMEOUT SUZATARY_BOX_KEY SUZATARY_AGENT_KEY SUZATARY_DEDUP_KEY)
-# Variables the gate's steps read: an inherited one would be judged beside the tree.
-gate_reads='^(SUZATARY_|CARGO|RUST|PROPTEST_|TYPST|NODE_OPTIONS$|LD_PRELOAD$|LD_LIBRARY_PATH$|LIBRARY_PATH$)'
-
-# Refused outside `.#triage` or with an inherited `gate_reads` variable; SUZATARY_INSTANCE made absolute.
-gate_environment() {
-  [[ -n "${IN_NIX_SHELL:-}" && "${SUZATARY_SHELL:-}" == triage ]] \
-    || die "a gate runs inside the .#triage shell, whose tools are what it tests with: nix develop .#triage -c scripts/train.sh $*"
-  local entry name found=()
-  local allowed=" SUZATARY_SHELL SUZATARY_SHELL_SETS SUZATARY_INSTANCE SUZATARY_GATE_SERIAL ${train_reads[*]} ${SUZATARY_SHELL_SETS:-} "
-  # From env(1): the shell's bash is built without `compgen`.
-  while IFS= read -r -d '' entry; do
-    name="${entry%%=*}"
-    [[ "$name" =~ $gate_reads && "$allowed" != *" $name "* ]] || continue
-    found+=("$name")
-  done < <(env -0)
-  ((${#found[@]} == 0)) \
-    || die "the caller exported ${found[*]}, which the gate's steps read and the .#triage shell does not set, so the gate would test something beside the tree: unset $(printf '%s ' "${found[@]}")and gate again."
-  if [[ -z "${SUZATARY_INSTANCE:-}" && -e "$root/instance.toml" ]]; then
-    export SUZATARY_INSTANCE
-    SUZATARY_INSTANCE="$(realpath "$root/instance.toml")"
-  fi
-}
-
-remote_opt() {
-  case "$#/${1:-}/${2:-}" in
-    0//) ;;
-    2/--remote/github) cloud=github && needs "$gh" ;;
-    *) usage ;;
-  esac
-}
-
-# The tree half's steps that read this repository, before the push and after the publication run.
-box_before="fmt,changelog"
-box_after="public-tree,deployed-shape"
-# The live half's steps that need no publication build, then the rest (a guard holds both whole).
-live_early="live,live-all,live-guards"
-# gate.yml runs a `gate/nightly-` branch --nightly.
-gate_prefix=gate/
-live_after="web-live,deploy-build,push-dry,public-check"
-# A run not ended in six hours (GitHub's job limit) is no verdict.
-gate_workflow=.github/workflows/gate.yml
-cloud_hours=6
-# Seconds to wait for the publication run to appear, and to end (past its own 180 minutes).
-cache_appear=600
-cache_timeout="${SUZATARY_TRAIN_CACHE_TIMEOUT:-12000}"
-box_builds="the box builds the public tree itself, about 45 minutes of release build beside the app it serves"
-
-core_repo() {
-  local url
-  url="$(git config --get remote.core.url)" || return 1
-  [[ "$url" =~ github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$ ]] || return 1
-  echo "${BASH_REMATCH[1]%.git}"
-}
-
-# The tree half of <commit> on GitHub's runners, start to end: 0 green, 1 red, 2 no verdict.
-cloud_half() {
-  local commit="$1" pushed code=0
-  cloud_push "$commit" || return
-  gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
-  cloud_dispatch "$pushed"
-  cloud_after "$commit" "$pushed" || code=$?
-  ((code)) || half cloud_wait "$commit" "$pushed" || code=$?
-  cloud_close
-  return "$code"
-}
-
-# Sets `pushed`: `pushing` <commit> as a half.
-cloud_push() {
-  local code=0
-  pushed=""
-  half pushing "$1" >"$state/pushed" || code=$?
-  ((code)) || pushed="$(<"$state/pushed")"
-  return "$code"
-}
-
-# The box's steps, then the public tree pushed; prints the gate commit, else 1 (red) or 2.
-pushing() {
-  local commit="$1" code=0 repo pushed
-  repo="$(core_repo)" \
-    || { say "the remote \`core\` is not a GitHub repository, so the tree half cannot run on GitHub's runners"; return 2; }
-  # The one publishable check first: what fails it never leaves the box, and runs no step.
-  if ! "$tool" publishable "$commit"; then
-    say "nothing went to $repo, so the tree half says nothing of ${commit:0:12}; the live half's public-check judges it"
-    return 2
-  fi
-  run_here tree "$commit" --steps "$box_before" || code=$?
-  if ((code)); then
-    record tree "$commit" "$code" || return
-  fi
-  pushed="$("$tool" push-gate "$commit" "$gate_prefix$commit" "Gate ${commit:0:12}" "Gate: $commit")" \
-    || { say "nothing went to $repo, so the tree half says nothing of ${commit:0:12}"; return 2; }
-  say "the tree half of ${commit:0:12} runs on GitHub's runners: $repo, branch $gate_prefix$commit, commit ${pushed:0:12}"
-  echo "$pushed"
-}
-
-# Starts master's publication run of <pushed> (no gate branch's workflow holds the cache token). A
-# dispatch gh gave up on (124) may have started the run, so the train looks for it all the same.
-dispatched=""
-cloud_dispatch() {
-  local repo code=0
-  repo="$(core_repo)"
-  timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$1" >&2 || code=$?
-  case "$code" in
-    0) dispatched="$1" ;;
-    124)
-      dispatched="$1"
-      say "the dispatch of the publication run of ${1:0:12} on $repo got no answer within 60s: looking for the run all the same"
-      ;;
-    *) say "could not start the publication run of ${1:0:12} on $repo (above): $box_builds" ;;
-  esac
-}
-
-# The box's steps once the dispatched run of <pushed> ends: 0 when they pass, else recorded.
-cloud_after() {
-  local commit="$1" pushed="$2" repo run url detail code=0
-  repo="$(core_repo)"
-  if [[ "$dispatched" == "$pushed" ]]; then
-    say "waiting for the publication run of ${pushed:0:12} in $repo before the box builds the public tree (at most ${cache_timeout}s)"
-    run="$("$scripts/publication-run.sh" "$gh" "$repo" workflow_dispatch "$pushed" "$cache_appear" "$cache_timeout" "${SUZATARY_TRAIN_POLL:-60}")"
-    read -r run url detail <<<"$run"
-    case "$run" in
-      success) say "the publication run of ${pushed:0:12} succeeded: the box's builds come from the binary cache" ;;
-      failed) say "the publication run of ${pushed:0:12} ended $detail ($url): $box_builds" ;;
-      none) say "no publication run of ${pushed:0:12} appeared within ${cache_appear}s: $box_builds" ;;
-      running) say "the publication run of ${pushed:0:12} was still $detail after ${cache_timeout}s ($url): $box_builds" ;;
-      unasked) say "could not ask GitHub for the publication run of ${pushed:0:12} (gh's words above): $box_builds" ;;
-    esac
-  fi
-  run_here tree "$commit" --steps "$box_after" || code=$?
-  ((code == 0)) || record tree "$commit" "$code"
-}
-
-# `<id> <name>` per job of <repo>'s run <run> whose `red` step failed (its gate exited 1).
-red_jobs() {
-  timeout 60 "$gh" api "repos/$1/actions/runs/$2/jobs?per_page=100" \
-    --jq '.jobs[] | select(any((.steps // [])[]; .name == "red" and .conclusion == "failure")) | "\(.id) \(.name)"'
-}
-
-# Records the gate run's verdict on the tree half of <commit>.
-cloud_wait() {
-  local code=0
-  gate_run "$1" "$2" "$(log_of tree "$1")" || code=$?
-  ((code != 2)) || return 2
-  record tree "$1" "$code"
-}
-
-# gate_run <commit> <pushed> <log>: the gate run of <pushed>, 1 (red) once a job's `red` step
-# failed, else at its end 0 on success, 2 otherwise; red jobs' logs go to <log>, `run_url` names it.
-gate_run() {
-  local commit="$1" pushed="$2" log="$3" repo run="" status="" misses=0 red="" job name deadline
-  run_url=""
-  repo="$(core_repo)"
-  deadline=$((SECONDS + cloud_hours * 3600))
-  while [[ -z "$run" ]] && ((misses < 10 && SECONDS < deadline)); do
-    sleep "${SUZATARY_TRAIN_POLL:-60}"
-    run="$(timeout 60 "$gh" api "repos/$repo/actions/runs?head_sha=$pushed&event=push" \
-      --jq ".workflow_runs[] | select(.path == \"$gate_workflow\") | .id" | awk 'NR == 1')" || run=""
-    misses=$((misses + 1))
-  done
-  if [[ -z "$run" ]]; then
-    say "no run of $gate_workflow started on $repo for ${pushed:0:12}, so the tree half says nothing of ${commit:0:12} (are Actions enabled? scripts/core-settings.sh)"
-    return 2
-  fi
-  run_url="https://github.com/$repo/actions/runs/$run"
-  say "waiting on $run_url"
-  misses=0
-  # Status before jobs, so a run read as ended has every job's verdict in the jobs read after.
-  while [[ -z "$red" && "$status" != completed\ * ]] && ((misses < 10 && SECONDS < deadline)); do
-    sleep "${SUZATARY_TRAIN_POLL:-60}"
-    if status="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run" --jq '.status + " " + (.conclusion // "")')" \
-      && red="$(red_jobs "$repo" "$run")"; then
-      misses=0
-    else
-      misses=$((misses + 1)) status="" red=""
-    fi
-  done
-  if [[ -z "$red" && "$status" != completed\ * ]]; then
-    say "the run $run on $repo did not end (${status:-unreachable}), so the tree half says nothing of ${commit:0:12}"
-    return 2
-  fi
-  if [[ "$status" == "completed success" ]]; then
-    echo "run $run: success" >>"$log"
-    return 0
-  fi
-  if [[ -z "$red" ]]; then
-    say "the run $run ended ${status#completed }, and no job's gate found the tree red (a runner lost, a cancel, a gate that did not start), so the tree half says nothing of ${commit:0:12}"
-    return 2
-  fi
-  # Strip each line's timestamp, so failing_lines reads the gate's sections as it does here.
-  while read -r job name; do
-    say "red: $name"
-    { echo "--- job $name"
-      timeout 60 "$gh" api "repos/$repo/actions/jobs/$job/logs" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z //' ||
-        echo "(its log could not be read)"; } >>"$log"
-  done <<<"$red"
-  return 1
-}
-
-# Cancels the gate commit's unfinished runs (no red tree's builds reach the cache); deletes its branch.
-cloud_close() {
-  local repo id
-  if repo="$(core_repo)" && [[ -n "$gate_pushed" ]]; then
-    while read -r id; do
-      [[ -z "$id" ]] || timeout 60 "$gh" api "repos/$repo/actions/runs/$id/cancel" -X POST >/dev/null \
-        || say "could not cancel the run $id on $repo: cancel it by hand (gh run cancel $id --repo $repo)"
-    done < <(timeout 60 "$gh" api "repos/$repo/actions/runs?per_page=100" \
-      --jq ".workflow_runs[] | select(.status != \"completed\" and (.head_sha == \"$gate_pushed\" or .display_title == \"Publication cache $gate_pushed\")) | .id" \
-      || say "could not list the runs of ${gate_pushed:0:12} on $repo to cancel them")
-  fi
-  git push --quiet core --delete "refs/heads/$gate_branch" 2>/dev/null \
-    || say "could not delete core's $gate_branch: delete it by hand (git push core --delete $gate_branch)"
-  gate_branch="" gate_pushed=""
-}
 
 on_train() {
   git rev-parse --verify --quiet train >/dev/null || die "there is no train; scripts/train.sh build <pr>... first."
   git checkout --quiet train
 }
 
-train_commit() {
-  git rev-parse --verify --quiet "train^{commit}" || die "there is no train; scripts/train.sh build <pr>... first."
-}
-
-# beside <tree> <commit> [gate args...]: the live half beside the half <tree>; a red one stops the
-# other, which records no verdict.
-beside() {
-  local tree="$1" live ended code=0 name=(tree live) other
-  shift
-  start run_half live "$@"
-  live="$group"
-  wait -n -p ended "$tree" "$live" || code=$?
-  group_stop "$ended"
-  if [[ "$ended" == "$tree" ]]; then other="$live"; else other="$tree" name=(live tree); fi
-  if ((code == 1)); then
-    say "the ${name[0]} half is red, so the ${name[1]} half is stopped"
-    group_stop "$other"
-    worktree_close
-  else
-    group_wait "$other" || true
-  fi
-}
-
-gate() {
-  gate_environment gate "$@"
-  if [[ "${1:-}" == --full ]]; then full=1 && shift; fi
-  remote_opt "$@"
-  sync
-  local commit
-  commit="$(train_commit)"
-  local code=0
-  if [[ -n "$cloud" ]]; then
-    # The box's steps first, so the live half's deploy-build finds their builds in the store.
-    local pushed early=""
-    cloud_push "$commit" || code=$?
-    if ((code == 0)); then
-      gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
-      cloud_dispatch "$pushed"
-      early=0
-      run_here live "$commit" --steps "$live_early" || early=$?
-      if ((early)); then
-        record live "$commit" "$early" || say "the live half's early steps gave no green, so the tree half is stopped"
-      else
-        cloud_after "$commit" "$pushed" || code=$?
-        if ((code == 0)); then
-          start cloud_wait "$commit" "$pushed"
-          beside "$group" "$commit" --steps "$live_after"
-        fi
-      fi
-      cloud_close
-    fi
-    case "$code" in
-      1) say "the tree half is red on the box, so the live half's other steps do not run" ;;
-      2)
-        case "$early" in
-          "") run_half live "$commit" || true ;;
-          0) run_half live "$commit" --steps "$live_after" || true ;;
-        esac
-        ;;
-    esac
-  else
-    run_half tree "$commit" || code=$?
-    if ((code == 1)); then
-      say "the tree half is red, so the live half does not run"
-    else
-      run_half live "$commit" || true
-    fi
-  fi
-  report "$commit"
-}
-
-# Per `--- job` section of <log>: the gate's failing-lines block, else its last error lines, uncoloured.
-failing_lines() {
-  awk '
-    function flush(  i) {
-      if (!block) for (i = (n > 20 ? n - 19 : 1); i <= n; i++) print errors[i]
-      n = 0
-      delete seen
-    }
-    function keep(line) { if (!(line in seen)) { seen[line]; errors[++n] = line } }
-    { gsub(/\033\[[0-9;]*m/, "") }
-    /^--- job / { flush(); block = inside = under = 0; print; next }
-    /^==> the failing steps. last lines$/ { block = inside = 1; print; next }
-    inside && /^(size: |free after the gate: |##\[)/ { inside = 0 }
-    inside { print; next }
-    /✖|not ok/ { keep($0); under = 6; next }
-    under > 0 && /Error|waited|last:/ { keep($0); under--; next }
-    under > 0 && !/^[[:space:]]/ { under = 0 }
-    /FAILED|panicked|^error|^##\[error\]/ { keep($0) }
-    END { flush() }' "$1"
-}
-
-report() {
-  local commit="$1" h v all short
-  short="$(git rev-parse --short "$commit")"
-  for h in "${halves[@]}"; do
-    reading v "$commit" --half "$h"
-    say "$h half: $v"
-    [[ "$v" != failed || ! -s "$(log_of "$h" "$commit")" ]] || failing_lines "$(log_of "$h" "$commit")" >&2
-  done
-  reading all "$commit"
-  case "$all" in
-    ok) say "green: the train $short may land (scripts/train.sh land)" ;;
-    finding) die "red, where a half once passed this tree: the gate is not a function of the tree. The logs are in $state/logs/." ;;
-    unknown) die "a half has no verdict on $short: gate again." ;;
-    failed) die "red: scripts/train.sh bisect finds the merge that broke it. The logs are in $state/logs/." ;;
-  esac
-}
-
 pr_of() { git log -1 --format=%s "$1" | sed -n 's/^Merge #\([0-9]*\):.*/\1/p'; }
 
 prs_of() { pr_of "$1" && trailer_of "$1" Carries | tr ' ' '\n' | sed '/^$/d'; }
-
-# The longest prefix of a red train's merges its first red half passes, assuming red stays red.
-bisect() {
-  gate_environment bisect "$@"
-  remote_opt "$@"
-  sync
-  local half="" h v all train
-  train="$(train_commit)"
-  reading all "$train"
-  case "$all" in
-    failed)
-      for h in "${halves[@]}"; do reading v "$train" --half "$h"; if [[ -z "$half" && "$v" == failed ]]; then half="$h"; fi; done
-      ;;
-    ok) die "the train is green; there is nothing to bisect." ;;
-    unknown) die "the gate has not judged the train's HEAD in both halves: scripts/train.sh gate first." ;;
-    finding) die "the gate both passed and failed the train's tree: it is not a function of the tree, so no prefix's verdict can be trusted either." ;;
-  esac
-  local merges=() lo=0 hi mid probes=0 commit seen prs=()
-  # The release commit on top is no PR; it is blamed as itself below.
-  for commit in $(git rev-list --first-parent --reverse "$(git merge-base origin/master "$train")..$train"); do
-    [[ -z "$(pr_of "$commit")" ]] || merges+=("$commit")
-  done
-  hi=${#merges[@]}
-  ((hi)) || die "the train merges no PR, so there is nothing to bisect."
-  if [[ "${merges[hi - 1]}" != "$train" ]]; then
-    commit="${merges[hi - 1]}"
-    reading seen "$commit" --half "$half"
-    if [[ "$seen" == unknown ]]; then
-      say "probe: every merge, through #$(pr_of "$commit"), without the release on top"
-      run_half "$half" "$commit" || true
-      reading seen "$commit" --half "$half"
-    fi
-    if [[ "$seen" == ok ]]; then
-      printf 'green in the %s half: master and every merge of the train\n' "$half"
-      printf 'broke it: %s\n' "$(git log -1 --format=%s "$train")"
-      printf 'next: scripts/train.sh build %s, then gate (the release is cut again)\n' \
-        "$(for commit in "${merges[@]}"; do prs_of "$commit"; done | paste -sd' ')"
-      return
-    fi
-  fi
-  while ((1 << probes < hi)); do probes=$((probes + 1)); done
-  say "bisecting ${hi} merges over the $half half: at most ${probes} probes, each that half of the merge gate (a prefix gated before is read from the table)"
-  while ((hi - lo > 1)); do
-    mid=$(((lo + hi) / 2))
-    commit="${merges[mid - 1]}"
-    reading seen "$commit" --half "$half"
-    if [[ "$seen" == unknown ]]; then
-      say "probe: the first $mid merges, through #$(pr_of "$commit")"
-      run_half "$half" "$commit" || true
-      reading seen "$commit" --half "$half"
-    fi
-    case "$seen" in
-      ok) lo=$mid ;;
-      failed) hi=$mid ;;
-      unknown) die "the $half half gave no verdict on the first $mid merges, so the search stops here." ;;
-      *) die "the gate both passed and failed the first $mid merges' tree: it is not a function of the tree, so the search stops here." ;;
-    esac
-  done
-  for commit in "${merges[@]:0:lo}"; do prs+=("#$(pr_of "$commit")"); done
-  printf 'green in the %s half: master and the first %s merges %s\n' "$half" "$lo" "${prs[*]:-}"
-  printf 'broke it: %s\n' "$(git log -1 --format=%s "${merges[hi - 1]}")"
-  # The broken merge's own PR is left out; the PRs it carried go on, to be judged alone.
-  prs=()
-  for commit in "${merges[@]}"; do
-    if [[ "$commit" == "${merges[hi - 1]}" ]]; then
-      mapfile -t -O "${#prs[@]}" prs < <(prs_of "$commit" | tail -n +2)
-    else
-      mapfile -t -O "${#prs[@]}" prs < <(prs_of "$commit")
-    fi
-  done
-  printf 'next: scripts/train.sh build %s, then gate\n' "${prs[*]:-}"
-}
-
-nightly_gate() {
-  (($# == 0)) || usage
-  gate_environment nightly
-  full=1 nightly=1
-  sync
-  local commit h v code failed=() unknown=()
-  commit="$(git rev-parse --verify origin/master)"
-  if core_repo >/dev/null; then
-    cloud=github
-    nightly_remote "$commit"
-  else
-    for h in "${halves[@]}"; do run_half "$h" "$commit" || true; done
-  fi
-  for h in "${halves[@]}"; do
-    reading v "$commit" --half "$h" --full; case "$v" in
-      ok) ;;
-      failed) failed+=("$h") ;;
-      *) unknown+=("$h") ;;
-    esac
-  done
-  code=0
-  report_nightly "$commit" "${failed[@]}" || code=$?
-  ((${#unknown[@]} == 0)) || die "the ${unknown[*]} half gave no verdict on origin/master ${commit:0:12}; the logs are in $state/logs/."
-  return "$code"
-}
-
-# check <pr>: the gate run of <pr>'s head merged on origin/master, posted on the PR; a conflict or a
-# refused guard is posted instead. No verdict is recorded.
-check() {
-  (($# == 1)) && [[ "$1" =~ ^[1-9][0-9]*$ ]] || usage
-  local n="$1" meta current head master tree merge pushed code=0 log what verdict
-  trap '[[ -z "$gate_branch" ]] || cloud_close' EXIT
-  core_repo >/dev/null || die "the remote \`core\` is not a GitHub repository, so the tree half cannot run on GitHub's runners."
-  fetch_origin
-  git fetch --quiet origin "+refs/pull/$n/head:refs/check/pr$n" || die "origin has no refs/pull/$n/head."
-  head="$(git rev-parse "refs/check/pr$n")" master="$(git rev-parse origin/master)"
-  meta="$("$gh" pr view "$n" --json title,url,headRefOid --jq '[.title, .url, .headRefOid] | @tsv')" \
-    || die "gh could not read #$n."
-  IFS=$'\t' read -r _ _ current <<<"$meta"
-  [[ "$current" == "$head" ]] || die "#$n: refs/pull/$n/head is not GitHub's head $current yet."
-  what="The tree half of ${head:0:12} on master ${master:0:12}"
-  if ! tree="$(git merge-tree --write-tree --name-only --no-messages "$master" "$head")"; then
-    post "$n" "$what conflicts with master in: $(tail -n +2 <<<"$tree" | sed '/^$/d' | paste -sd' ')." && return 1
-  fi
-  merge="$(GIT_AUTHOR_NAME=Suzatary GIT_AUTHOR_EMAIL=publish@suzatary.invalid GIT_COMMITTER_NAME=Suzatary \
-    GIT_COMMITTER_EMAIL=publish@suzatary.invalid git commit-tree "${tree%%$'\n'*}" -p "$master" -p "$head" -m "Check #$n")"
-  # The guard's hits stay on the box: a comment says only that it refused.
-  pushed="$("$tool" push-gate "$merge" "gate/pr$n-${head:0:12}" "Check #$n ${head:0:12}" "Check: $head")" || code=$?
-  case "$code" in
-    0) ;;
-    1) post "$n" "$what did not pass the leak guard on the box: nothing went to GitHub." && return 1 ;;
-    4) post "$n" "$what holds an admission no publication of master holds yet: nothing went to GitHub." && return 1 ;;
-    *) post "$n" "$what could not be checked or sent from the box (its words are on the box): nothing went to GitHub. Check again." && return 1 ;;
-  esac
-  gate_branch="gate/pr$n-${head:0:12}" gate_pushed="$pushed"
-  log="$(mkdir -p "$state/logs" && echo "$state/logs/check-pr$n-$head.log")"
-  : >"$log"
-  gate_run "$merge" "$pushed" "$log" || code=$?
-  cloud_close
-  case "$code" in
-    0) verdict="$what is green on GitHub's runners: $run_url" ;;
-    1) verdict="$what is red on GitHub's runners: $run_url"$'\n\n```\n'"$(failing_lines "$log")"$'\n```' ;;
-    *) verdict="$what gave no verdict on GitHub's runners: ${run_url:-no run}. Check again." ;;
-  esac
-  post "$n" "$verdict"
-  return "$code"
-}
-
-# post <pr> <text>: a comment on the pull request, and the same words here.
-post() {
-  say "#$1: ${2%%$'\n'*}"
-  "$gh" pr comment "$1" --body "$2" >/dev/null || die "could not comment on #$1 (above)."
-}
-
-# nightly_remote <commit>: the tree half on the runners, the live half here; neither stops the
-# other, and the lock is let go while only the runners work.
-nightly_remote() {
-  local commit="$1" pushed code=0 a=0 b=0
-  gate_prefix=gate/nightly-
-  if cloud_push "$commit"; then
-    gate_branch="$gate_prefix$commit" gate_pushed="$pushed"
-    cloud_dispatch "$pushed"
-    run_here live "$commit" --steps "$live_early" || a=$?
-    cloud_after "$commit" "$pushed" || code=$?
-    run_here live "$commit" --steps "$live_after" || b=$?
-  else
-    code=1
-    run_here live "$commit" || a=$?
-  fi
-  # Red over silent over green.
-  ((a == 0 || a == 75 && b && b != 75)) && a=$b
-  record live "$commit" "$a" || true
-  # Unlocked, a train may own the worktree.
-  trap '[[ -z "$gate_branch" ]] || cloud_close' EXIT
-  unlock
-  ((code)) || cloud_wait "$commit" "$pushed" || true
-  [[ -z "$gate_branch" ]] || cloud_close
-  lock
-  trap finish EXIT
-}
 
 # The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree on
 # the instance's [upkeep] chain, or on none when it names none.
@@ -1231,7 +606,7 @@ land() {
 # The train's tool, built from this checkout before anything else into its own target under .git,
 # so a train that changes the tool is gated and landed by it; under a test seam, apart, with seams.
 case "${1:-}" in
-  build | gate | bisect | land | record | nightly | check | publish)
+  build | gate | bisect | land | record | nightly | check | publish | sync | nightly-report)
     tool="$(git -C "$scripts" rev-parse --path-format=absolute --git-common-dir)/train/tool" features=()
     if [[ -n "${!SUZATARY_TRAIN_*}" ]]; then tool+=-seams && features=(--features seams); fi
     # `check` takes no lock, so it never builds into the target whose binary a locked train execs.
@@ -1239,21 +614,45 @@ case "${1:-}" in
     # The account's cargo home, whatever HOME the train was handed: another registry path makes every
     # dependency dirty, and the next build compiles them all again.
     account="$(getent passwd "$(id -u)" | cut -d: -f6)" || account="$HOME"
-    CARGO_HOME="${CARGO_HOME:-$account/.cargo}" cargo build --quiet --locked -p suzatary-tooling \
-      --manifest-path "$scripts/../app/Cargo.toml" --target-dir "$tool" "${features[@]}" \
-      || die "the train's tool (app/tooling) did not build (above). Nothing ran."
+    build=(env CARGO_HOME="${CARGO_HOME:-$account/.cargo}" cargo build --quiet --locked -p suzatary-tooling
+      --manifest-path "$scripts/../app/Cargo.toml" --target-dir "$tool" "${features[@]}")
+    # A child of the tool runs the tool its parent built. Every other locked verb builds under the
+    # train's lock, so no build reads a checkout a running train is merging; the nightly waits.
+    # `-o`: the build is not handed the lock's descriptor, so nothing it leaves behind holds it.
+    built=0
+    if [[ -n "${SUZATARY_LOCK_HOLDER:-}" ]]; then
+      :
+    elif [[ "$1" == check ]]; then
+      "${build[@]}" || built=$?
+    else
+      flock -o -n -E 75 "$state/lock" "${build[@]}" || built=$?
+      if ((built == 75)) && [[ "$1" == nightly ]]; then
+        say "a train is running here: the nightly gate waits for it"
+        built=0 && flock -o "$state/lock" "${build[@]}" || built=$?
+      fi
+      ((built != 75)) \
+        || die "another scripts/train.sh is running in this checkout ($(cat "$state/lock.holder" 2>/dev/null)); wait for it to finish."
+    fi
+    ((built == 0)) || die "the train's tool (app/tooling) did not build (above). Nothing ran."
     tool+=/debug/train
+    ;;
+esac
+
+# A verb of this script runs as a child of the tool, which holds the lock; a gate's `sync` and
+# `nightly-report` are the tool's own children, under its lock.
+case "${1:-}" in
+  build | land | record | publish | sync | nightly-report)
+    [[ -n "${SUZATARY_LOCK_HOLDER:-}" ]] || exec "$tool" locked "$1" -- "$scripts/train.sh" "$@"
     ;;
 esac
 
 case "${1:-}" in
   build) shift && build "$@" ;;
-  gate) shift && gate "$@" ;;
-  bisect) shift && bisect "$@" ;;
   land) shift && land "$@" ;;
   record) shift && record_done "$@" ;;
-  nightly) shift && nightly_gate "$@" ;;
-  check) shift && check "$@" ;;
   publish) shift && fetch_origin && "$tool" publish "$@" && record_origin ;;
+  sync) shift && { (($# == 0)) || usage; } && sync ;;
+  nightly-report) shift && report_nightly "$@" ;;
+  gate | bisect | nightly | check) SUZATARY_SCRIPTS="$scripts" exec "$tool" "$@" ;;
   *) usage ;;
 esac

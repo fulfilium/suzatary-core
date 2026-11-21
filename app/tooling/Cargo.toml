@@ -21,6 +21,10 @@ seams = []
 
 # No workspace member: the train never links code of a tree it judges (law 9, tests/laws.rs).
 [dependencies]
+# A child's process group signalled, waited for and reaped as a group, safely (the runner).
+rustix = { version = "1", features = ["event", "process"] }
+# HUP, INT and TERM received as messages, whatever disposition the train inherited.
+signal-hook = "0.4"
 thiserror.workspace = true
 
 [dev-dependencies]
@@ -34,6 +38,10 @@ path = "tests/laws.rs"
 [[test]]
 name = "publication"
 path = "tests/publication.rs"
+
+[[test]]
+name = "gating"
+path = "tests/gating.rs"
 
 [lints]
 workspace = true

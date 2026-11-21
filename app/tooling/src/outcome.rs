@@ -1,6 +1,7 @@
 //! What a run of a half found, and how it ended.
 
 use crate::Error;
+use crate::supervisor::Status;
 
 /// What a judged run of a half found: the one fact a row of the table stores.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -27,33 +28,48 @@ impl Outcome {
     }
 }
 
-/// How one run of a half ended. Only `Judged` writes a row.
+/// How a half ended. Only `Judged` writes a row.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Ended {
     Judged(Outcome),
-    DidNotStart,
+    /// It says nothing of the tree: its gate did not start (75), its run on the runners was lost,
+    /// cancelled or never came, or it was stopped.
+    Unjudged,
+    /// The one check before a push kept the tree on the box, so nothing judged it there.
+    Refused(Check),
+}
+
+/// Why the one check before a push to core (`train publishable`, `push-gate`) kept a tree on the
+/// box.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Check {
+    Leak,
+    Held,
+    Unrun,
 }
 
 impl Ended {
-    /// The merge gate's exit status: 0 green, 75 "did not start" (merge-gate.sh's own words), and
-    /// any other status red, a usage error (64) included.
+    /// The merge gate's end: 0 green, 75 "did not start" (merge-gate.sh's own words), any other
+    /// status red, a usage error (64) included; and a status nothing read says nothing.
     #[must_use]
-    pub fn of_status(status: u8) -> Ended {
+    pub fn of(status: Status) -> Ended {
         match status {
-            0 => Ended::Judged(Outcome::Green),
-            75 => Ended::DidNotStart,
-            _ => Ended::Judged(Outcome::Red),
+            Status::Read(0) => Ended::Judged(Outcome::Green),
+            Status::Read(75) | Status::Unread => Ended::Unjudged,
+            Status::Read(_) => Ended::Judged(Outcome::Red),
         }
     }
+}
 
-    /// The status `train table write` exits with, which train.sh's callers read: 0 green, 1 red,
-    /// 2 no verdict.
-    #[must_use]
-    pub fn status(self) -> u8 {
-        match self {
-            Ended::Judged(Outcome::Green) => 0,
-            Ended::Judged(Outcome::Red) => 1,
-            Ended::DidNotStart => 2,
+impl Check {
+    /// `train publishable`'s and `push-gate`'s status (`Publishable::status`): 0 passes, and a
+    /// status nothing read is a check that could not run.
+    pub fn of(status: Status) -> Result<(), Check> {
+        match status {
+            Status::Read(0) => Ok(()),
+            Status::Read(1) => Err(Check::Leak),
+            Status::Read(4) => Err(Check::Held),
+            Status::Read(_) | Status::Unread => Err(Check::Unrun),
         }
     }
 }

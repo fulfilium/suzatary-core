@@ -9,6 +9,7 @@ use suzatary_tooling::gate_branch::GateBranch;
 use suzatary_tooling::leak_check::{CheckError, LeakCheck};
 use suzatary_tooling::oid::Oid;
 use suzatary_tooling::plan::{Plan, Source};
+use suzatary_tooling::publication;
 use suzatary_tooling::publishable::{Publishable, publishable};
 use suzatary_tooling::refusal::Refusal;
 use suzatary_tooling::repo_path::RepoPath;
@@ -269,4 +270,20 @@ fn a_publication_parses_its_rev_and_its_gate_branch() {
             Some(taken)
         );
     }
+}
+
+/// Each gate pushes a commit of its own: the stamp in its subject names the instant to the
+/// nanosecond, so two pushes at different instants never make the same commit (and so never
+/// share a run on the runners).
+#[test]
+fn each_gate_push_is_a_commit_of_its_own() {
+    // Two instants in one second: a stamp without its nanoseconds would make them one commit.
+    proptest!(|(second in 0u64..4_000_000_000, an in 0u32..1_000_000_000, bn in 0u32..1_000_000_000)| {
+        let (a, b) = (std::time::Duration::new(second, an), std::time::Duration::new(second, bn));
+        prop_assert_eq!(publication::gate_stamp(a).1 == publication::gate_stamp(b).1, an == bn);
+    });
+    proptest!(|(a in 0u64..4_000_000_000, an in 0u32..1_000_000_000, b in 0u64..4_000_000_000, bn in 0u32..1_000_000_000)| {
+        let (a, b) = (std::time::Duration::new(a, an), std::time::Duration::new(b, bn));
+        prop_assert_eq!(publication::gate_stamp(a).1 == publication::gate_stamp(b).1, a == b);
+    });
 }

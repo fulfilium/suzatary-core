@@ -1,5 +1,5 @@
 //! The tree half on GitHub's runners (`scripts/train.sh gate --remote github`): the steps the box
-//! runs (`box_before` and `box_after` in `scripts/train.sh`) and the jobs of `.github/workflows/gate.yml` hold every
+//! runs (`BOX_BEFORE` and `BOX_AFTER` in `app/tooling/src/gating.rs`) and the jobs of `.github/workflows/gate.yml` hold every
 //! step of `scripts/merge-gate.sh`'s tree half between them; the workflow runs on a push to a gate
 //! branch alone, with a read-only token, no secret and every action pinned, and restores the store
 //! `.github/workflows/gate-store.yml` saves on master and saves nothing; and `scripts/e2e-part.sh`
@@ -42,24 +42,24 @@ fn jobs() -> BTreeMap<String, (Vec<String>, String)> {
         .collect()
 }
 
-/// The steps `scripts/train.sh` runs on the box, each list one run of the gate: `box_before`,
-/// before the push, and `box_after`, after it.
+/// The steps the train runs on the box, each list one run of the gate: `BOX_BEFORE`, before the
+/// push, and `BOX_AFTER`, after it.
 fn box_runs() -> Vec<(&'static str, Vec<String>)> {
-    train_lists(&["box_before", "box_after"])
+    train_lists(&["BOX_BEFORE", "BOX_AFTER"])
 }
 
-/// The step lists `scripts/train.sh` names, each `<name>="<step>,<step>..."`.
+/// The step lists the train's tool names, each `pub const <NAME>: &str = "<step>,<step>...";`.
 fn train_lists(names: &[&'static str]) -> Vec<(&'static str, Vec<String>)> {
-    let train = read("scripts/train.sh");
+    let train = read("app/tooling/src/gating.rs");
     names
         .iter()
         .copied()
         .map(|name| {
             let steps = train
                 .lines()
-                .find_map(|line| line.strip_prefix(&format!("{name}=\"")))
-                .and_then(|list| list.strip_suffix('"'))
-                .unwrap_or_else(|| panic!("train.sh names the box's steps, {name}"))
+                .find_map(|line| line.strip_prefix(&format!("pub const {name}: &str = \"")))
+                .and_then(|list| list.strip_suffix("\";"))
+                .unwrap_or_else(|| panic!("the tool names the box's steps, {name}"))
                 .split(',')
                 .map(str::to_owned)
                 .collect();
@@ -132,8 +132,8 @@ fn gate_yml_and_the_box_run_every_tree_step() {
     }
 }
 
-/// With the tree half on GitHub's runners, the box runs the live half in two runs, `live_early`
-/// while the publication run builds and `live_after` beside the runners: together every live step,
+/// With the tree half on GitHub's runners, the box runs the live half in two runs, `LIVE_EARLY`
+/// while the publication run builds and `LIVE_AFTER` beside the runners: together every live step,
 /// each once. The one name beyond `--list` they may hold is `live`, the live pins' step, which a
 /// public tree (no pins) does not declare.
 #[test]
@@ -143,7 +143,7 @@ fn train_runs_every_live_step_once_in_two_runs() {
         .filter(|s| s.half == "live")
         .map(|s| s.name)
         .collect();
-    let runs = train_lists(&["live_early", "live_after"]);
+    let runs = train_lists(&["LIVE_EARLY", "LIVE_AFTER"]);
     let named: Vec<String> = runs.iter().flat_map(|(_, s)| s.clone()).collect();
     let held: BTreeSet<String> = named.iter().cloned().collect();
     assert!(
@@ -158,7 +158,7 @@ fn train_runs_every_live_step_once_in_two_runs() {
     );
 }
 
-/// A nightly's branch (train.sh's `nightly_remote`) runs every lane --nightly.
+/// A nightly's branch (the tool's `Train::nightly`, `verbs.rs`) runs every lane --nightly.
 #[test]
 fn gate_yml_runs_a_nightly_branch_full() {
     let gate = code(".github/workflows/gate.yml");
@@ -167,7 +167,7 @@ fn gate_yml_runs_a_nightly_branch_full() {
             && gate.contains("scripts/merge-gate.sh --no-live \"${full[@]}\" --steps \"$STEPS\""),
         "the gate step runs a nightly branch --nightly"
     );
-    assert!(read("scripts/train.sh").contains("gate_prefix=gate/nightly-"));
+    assert!(read("app/tooling/src/verbs.rs").contains("\"gate/nightly-\""));
 }
 
 /// The e2e jobs are the timed scenes' part and the parts 1/n to n/n of one n, each once, and only
