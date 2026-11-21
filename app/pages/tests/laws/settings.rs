@@ -275,3 +275,92 @@ proptest! {
         page_laws::<settings::Settings>(|| settings::Flags { context: context(writes) }, &msgs);
     }
 }
+
+/// What happens while a setup card that asks a value stands in Settings: the overview with its
+/// offer or without, the Inbox's rows read or failing (the line that says the cards are on their
+/// way comes and goes), this device's reading, the card's body, and the person's steps.
+#[derive(Debug, Clone)]
+enum Around {
+    Overview(bool),
+    Rows(bool),
+    Device(Value),
+    Body,
+    Ui(card::Ev),
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Law (the secret ask rests on it, in Settings as in the Inbox): whatever comes and goes
+    /// above Settings' cards (this device's part, the line that says the cards are on their way,
+    /// the offers), a setup card's value field is drawn once while it stands and never made
+    /// another's.
+    #[test]
+    fn a_settings_card_keeps_its_field_as_the_parts_above_it_come_and_go(
+        steps in proptest::collection::vec(prop_oneof![
+            any::<bool>().prop_map(Around::Overview),
+            any::<bool>().prop_map(Around::Rows),
+            device().prop_map(Around::Device),
+            Just(Around::Body),
+            prop_oneof![
+                Just(card::Ev::Open(card::Step::Saying { verb: "dismiss".to_owned() })),
+                Just(card::Ev::Close),
+                any::<bool>().prop_map(card::Ev::Details),
+            ].prop_map(Around::Ui),
+        ], 0..20),
+    ) {
+        use proptest::strategy::ValueTree as _;
+        use viewtree::Program;
+        const FIELD: &str = "secret/setup/1";
+        let held = |ask: settings::Hold, reading: Reading<Answer>| settings::Msg::Host(Box::new(Input::Held { ask, reading, behind: None }));
+        let done = |body: &Value| Reading::Val { v: Answer::Done { body: Text::printed(body) } };
+        let mut secret = proposal(1).new_tree(&mut proptest::test_runner::TestRunner::deterministic()).expect("a row").current();
+        secret["state"] = json!("standing");
+        secret["act"] = json!({"kind": "secret", "label": "the calendar's link", "found": null, "link": null});
+        secret["card"]["answers"] = json!([{"verb": "store", "label": "Store", "done": "Stored", "asks": "value", "input": "The link"}]);
+        secret["card"]["problem"] = json!("");
+        secret["card"]["link"] = json!(null);
+        let overview = |offers: bool| json!({
+            "groups": [{"group": "models", "lines": [{"key": "l0", "label": "Line 0", "detail": null,
+                "standing": {"kind": "missing", "what": ["a link"]}, "cards": ["proposal:setup/1"], "replaces": []}]}],
+            "ask": "setup",
+            "offers": if offers { json!([{"template": "google", "group": "mail", "title": "a Google account"}]) } else { json!([]) }});
+        let rows = json!({"payload": {"at": "", "failed": [], "proposals": [{"id": "p1", "asked": "proposal:setup/1", "serves": null,
+            "headline": "", "by": {"kind": "setup"}, "why": "", "state": {"kind": "open"}, "value": null, "at": "2026-11-10T04:00:00"}]}, "held": []});
+        let body = json!({"id": "setup", "title": "Setup", "model": "", "opened": "", "turns": [], "proposals": [secret],
+            "unplaced": [], "state": "idle", "first": 0, "total": 0, "again": null});
+        let (mut m, _) = settings::Settings::init(settings::Flags { context: context(true) });
+        settings::Settings::update(&mut m, held(settings::Hold::Overview, done(&overview(false))));
+        let (mut painter, first) = viewtree::Painter::start(settings::Settings::view(&m));
+        let mut dom = viewtree::dom::Dom::default();
+        dom.apply(&first);
+        let (mut field, mut drawn) = (None, 0);
+        for step in steps {
+            let msg = match step {
+                Around::Overview(offers) => held(settings::Hold::Overview, done(&overview(offers))),
+                Around::Rows(true) => held(settings::Hold::Rows(Watched::Proposals), done(&rows)),
+                Around::Rows(false) => held(settings::Hold::Rows(Watched::Proposals), Reading::Error { e: "no answer".to_owned() }),
+                Around::Device(device) => held(settings::Hold::Device, done(&device)),
+                Around::Body => held(settings::Hold::Rows(Watched::Cards("setup".to_owned())), done(&body)),
+                Around::Ui(ev) => settings::Msg::Card(card::Key { conversation: "setup".to_owned(), index: 1 }, ev),
+            };
+            settings::Settings::update(&mut m, msg);
+            let patches = painter.paint(settings::Settings::view(&m));
+            for patch in &patches {
+                if let viewtree::Patch::Set { id, name, value } = patch && name == "data-field" {
+                    if value == FIELD {
+                        drawn += 1;
+                        field = Some(*id);
+                    } else {
+                        prop_assert_ne!(Some(*id), field, "the field became {}", value);
+                    }
+                }
+            }
+            prop_assert!(drawn <= 1, "the field was drawn {} times in one stay", drawn);
+            dom.apply(&patches);
+            if !format!("{:?}", dom.page()).contains(FIELD) {
+                (field, drawn) = (None, 0);
+            }
+        }
+    }
+}

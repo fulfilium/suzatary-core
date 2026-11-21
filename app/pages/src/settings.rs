@@ -14,6 +14,7 @@ use viewtree::Attr::{
     Value,
 };
 use viewtree::kit::{Reading, button, disclosure, para};
+use viewtree::node::slot;
 use viewtree::{Node, Program, view};
 
 use crate::card::{self, Cards, Drawn, Placed};
@@ -383,15 +384,16 @@ fn shown(m: &Model, o: &Overview) -> Node<Msg> {
         Gate::Views => None,
     };
     let groups = o.groups.iter().filter(|g| !g.lines.is_empty());
+    // The parts above the body keep their slots, so the cards in it are never drawn anew.
     view! { Div "settingsview" [
-        before,
+        slot(before),
         view! { Div "settingsask" [ask] },
-        match &m.rows.proposals {
+        slot(match &m.rows.proposals {
             Reading::Error { e } => Some(para("settingshealth settingshealth-failing settingscards", format!("The Inbox's cards could not be read: {e}"))),
             Reading::Loading | Reading::Val { .. } if !m.rows.answered() => Some(para("settingsmeta settingscards", "The Inbox's cards are on their way.")),
             Reading::Loading | Reading::Val { .. } => None,
-        },
-        offered(m, o),
+        }),
+        slot(offered(m, o)),
         view! { Div "settingsbody" => groups.map(|g| (key(g.group).to_owned(), group(m, g))) },
         after,
     ] }
@@ -650,13 +652,13 @@ fn line_cards(m: &Model, l: &OverviewLine) -> Vec<(String, Node<Msg>)> {
         .map(|&(conversation, row)| {
             let within = match pair {
                 Some((link, grant)) if link.index == row.index => {
-                    vec![view! { Div "proposalallow" [m.cards.view(drawn(conversation, grant), Vec::new(), Vec::new(), Msg::Card)] }]
+                    vec![view! { Div "proposalallow" [m.cards.view(drawn(conversation, grant), None, Vec::new(), Msg::Card)] }]
                 }
                 Some(_) | None => Vec::new(),
             };
             (
                 format!("card:{}", card::Key::of(conversation, row).reference()),
-                m.cards.view(drawn(conversation, row), Vec::new(), within, Msg::Card),
+                m.cards.view(drawn(conversation, row), None, within, Msg::Card),
             )
         })
         .collect()

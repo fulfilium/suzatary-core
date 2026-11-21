@@ -108,7 +108,6 @@ pub(crate) fn card_ev() -> impl Strategy<Value = (card::Key, card::Ev)> {
             Just(card::Ev::Close),
             any::<bool>().prop_map(card::Ev::Details),
             (0usize..2).prop_map(card::Ev::Yes),
-            any::<bool>().prop_map(card::Ev::Value),
             Just(card::Ev::Dismiss),
             Just(card::Ev::Acknowledge),
             Just(card::Ev::Reply),

@@ -13,8 +13,12 @@ use suzatary_inbox::wire::inbox::{
 };
 use suzatary_topics::wire::topics::{ProposalRow, ProposalState};
 use ts_rs::TS;
-use viewtree::Attr::{Autocomplete, Class, Data, Disabled, Href, Open, Placeholder, Title, Type};
+use viewtree::Attr::{
+    Autocapitalize, Autocomplete, Autocorrect, Class, Data, Hidden, Href, Open, Pattern,
+    Placeholder, Required, Spellcheck, Title, Type,
+};
 use viewtree::kit::para;
+use viewtree::node::slot;
 use viewtree::{Node, view};
 
 use crate::chrome::{Chips, link, prose};
@@ -84,14 +88,12 @@ pub enum Step {
     },
 }
 
-/// Whether a value is typed; the value never leaves its field but in the tap.
+/// A card's state on this device; a value's words are its field's alone, in the DOM.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Ui {
     step: Step,
     text: String,
     details: bool,
-    #[serde(skip)]
-    typed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,7 +103,6 @@ pub enum Ev {
     Close,
     Details(bool),
     Yes(usize),
-    Value(bool),
     Dismiss,
     Acknowledge,
     Drop,
@@ -359,9 +360,8 @@ impl Cards {
     }
 
     pub(crate) fn held(&mut self, key: Key, v: serde_json::Value) {
-        let typed = self.uis.get(&key).is_some_and(|u| u.typed);
-        let ui = serde_json::from_value::<Ui>(v).unwrap_or_default();
-        self.uis.insert(key, Ui { typed, ..ui });
+        self.uis
+            .insert(key, serde_json::from_value::<Ui>(v).unwrap_or_default());
     }
 
     pub(crate) fn update(&mut self, key: &Key, row: &ProposalRow, ev: Ev) -> Vec<Out> {
@@ -397,13 +397,7 @@ impl Cards {
         if was.step != ui.step && matches!(ui.step, Step::Saying { .. }) {
             out.push(Out::Focus(key.field("reason")));
         }
-        if (Ui {
-            typed: false,
-            ..ui.clone()
-        }) != (Ui {
-            typed: false,
-            ..was
-        }) {
+        if ui != was {
             out.push(Out::Keep(
                 key.kept(),
                 serde_json::to_value(&ui).unwrap_or(serde_json::Value::Null),
@@ -476,7 +470,7 @@ impl Cards {
     pub(crate) fn view<M: 'static>(
         &self,
         d: Drawn<'_>,
-        before: Vec<Node<M>>,
+        before: Option<Node<M>>,
         within: Vec<Node<M>>,
         lift: fn(Key, Ev) -> M,
     ) -> Node<M> {
@@ -486,14 +480,15 @@ impl Cards {
         for (a, v) in attrs {
             el = el.set(a, v);
         }
+        // Each part in its slot, so one coming or going never draws the value's field anew.
         let mapped: Vec<Node<M>> = parts
             .into_iter()
             .map(|n| {
                 let k = key.clone();
-                n.map(move |ev| lift(k.clone(), ev))
+                slot(n.map(|n| n.map(move |ev| lift(k.clone(), ev))))
             })
             .collect();
-        el.child(before).child(mapped).child(within).node()
+        el.child(slot(before)).child(mapped).child(within).node()
     }
 }
 
@@ -524,20 +519,14 @@ fn wants(key: &Key, row: &ProposalRow, ui: &Ui, ev: Ev) -> Wants {
             details: ui.details || matches!(step, Step::Confirming { .. }),
             step,
             text: String::new(),
-            typed: ui.typed,
         }),
         Ev::Typed(text) => Wants::Ui(Ui { text, ..ui.clone() }),
         Ev::Close => Wants::Ui(Ui {
             details: ui.details,
-            typed: ui.typed,
             ..Ui::default()
         }),
         Ev::Details(details) => Wants::Ui(Ui {
             details,
-            ..ui.clone()
-        }),
-        Ev::Value(typed) => Wants::Ui(Ui {
-            typed,
             ..ui.clone()
         }),
         Ev::Yes(n) => match performing.get(n) {
@@ -824,15 +813,19 @@ fn yes_of<'a>(row: &'a ProposalRow, ui: &Ui) -> Option<(usize, &'a CardAnswer)> 
         .find(|(_, a)| &a.verb == verb && !matches!(a.asks, Asks::Now | Asks::Value { .. }))
 }
 
-fn control(n: usize, a: &CardAnswer, key: &Key, ui: &Ui) -> Node<Ev> {
+fn control(n: usize, a: &CardAnswer, key: &Key) -> Node<Ev> {
     let class = format!("act act-{}", a.verb);
     match &a.asks {
-        Asks::Value { input } => view! { Div "proposalsecretfield" [
+        // The DOM owns the words and whether there are any: the browser submits the form only
+        // while the field holds a character other than a space, and says what is missing. A
+        // text field masked by the stylesheet, so no password manager takes the form for a
+        // sign-in and offers to keep the value.
+        Asks::Value { input } => view! { Form "proposalsecretfield" @submit(Ev::Yes(n)) [
             view! { Label "secretlabel" [
                 view! { Span [input.as_str()] },
-                view! { Input "secretvalue" {Type => "password", Autocomplete => "off", Placeholder => "Paste it here", Data("field") => key.field("secret")} @input(|w: String| Ev::Value(!w.is_empty())) },
+                view! { Input "secretvalue" {Type => "text", Autocomplete => "off", Autocapitalize => "none", Autocorrect => "off", Spellcheck => "false", Placeholder => "Paste it here", Required => true, Pattern => r".*\S.*", Data("field") => key.field("secret")} },
             ] },
-            view! { Button {Type => "button", Class => class, Disabled => !ui.typed} @click(Ev::Yes(n)) [a.label.as_str()] },
+            view! { Button {Type => "submit", Class => class} [a.label.as_str()] },
         ] },
         Asks::Now => {
             view! { Button {Type => "button", Class => class} @click(Ev::Yes(n)) [a.label.as_str()] }
@@ -874,7 +867,6 @@ fn readonly(d: Drawn<'_>) -> Node<Ev> {
 fn idle(
     performing: &[CardAnswer],
     key: &Key,
-    ui: &Ui,
     shown: &Shown,
     reply: Option<&Node<Ev>>,
 ) -> Vec<Node<Ev>> {
@@ -883,7 +875,8 @@ fn idle(
         performing
             .iter()
             .enumerate()
-            .map(|(n, a)| control(n, a, key, ui)),
+            .filter(|(_, a)| !matches!(a.asks, Asks::Value { .. }))
+            .map(|(n, a)| control(n, a, key)),
     );
     v.push(button(
         "act act-dismiss",
@@ -896,8 +889,55 @@ fn idle(
     v
 }
 
+/// What a card's act row draws.
+enum Acting<'a> {
+    Settled,
+    Readonly,
+    Waiting,
+    Confirming(usize, &'a CardAnswer),
+    Saying,
+    Idle,
+}
+
+fn acting<'a>(d: Drawn<'a>, ui: &Ui, shown: &Shown) -> Acting<'a> {
+    let row = d.row;
+    if !answerable(row.state) {
+        Acting::Settled
+    } else if !matches!(d.reach, Reach::Writes) {
+        Acting::Readonly
+    } else if shown.waits() {
+        Acting::Waiting
+    } else {
+        match (
+            yes_of(row, ui).filter(|_| row.card.problem.is_empty()),
+            &ui.step,
+        ) {
+            (Some((n, a)), _) => Acting::Confirming(n, a),
+            (None, Step::Saying { verb }) if verb == "dismiss" => Acting::Saying,
+            (None, Step::Idle | Step::Confirming { .. } | Step::Saying { .. }) => Acting::Idle,
+        }
+    }
+}
+
+/// The field of the answer that asks a value: drawn while the card stands and the login writes,
+/// hidden while the card asks nothing, so it is never drawn anew under a standing card.
+fn asked_value(d: Drawn<'_>, acting: &Acting<'_>, key: &Key) -> Option<Node<Ev>> {
+    let card = &d.row.card;
+    let asking = matches!(acting, Acting::Idle) && card.problem.is_empty();
+    (answerable(d.row.state) && matches!(d.reach, Reach::Writes))
+        .then(|| {
+            card.answers
+                .iter()
+                .enumerate()
+                .find(|(_, a)| matches!(a.asks, Asks::Value { .. }))
+        })
+        .flatten()
+        .map(|(n, a)| view! { Div "proposalask" {Hidden => !asking} [control(n, a, key)] })
+}
+
 fn acts(
     d: Drawn<'_>,
+    acting: &Acting<'_>,
     ui: &Ui,
     key: &Key,
     shown: &Shown,
@@ -905,60 +945,57 @@ fn acts(
 ) -> Option<Node<Ev>> {
     let row = d.row;
     let card = &row.card;
-    let writes = matches!(d.reach, Reach::Writes);
-    if !answerable(row.state) {
-        let checking = (row.state == ProposalState::Unknown && writes).then(|| {
-            let line = asked_line(shown);
-            if shown.waits() {
-                vec![line]
+    let parts: Vec<Node<Ev>> = match acting {
+        Acting::Settled => {
+            let checking = (row.state == ProposalState::Unknown
+                && matches!(d.reach, Reach::Writes))
+            .then(|| {
+                let line = asked_line(shown);
+                if shown.waits() {
+                    vec![line]
+                } else {
+                    vec![
+                        line,
+                        Some(button("act act-acknowledge", &card.check, Ev::Acknowledge)),
+                    ]
+                }
+            });
+            return (checking.is_some() || reply.is_some())
+                .then(|| view! { Div "proposalact-row" [checking, reply.cloned()] });
+        }
+        Acting::Readonly => return Some(readonly(d)),
+        Acting::Waiting => {
+            return Some(view! { Div "proposalact-row" [asked_line(shown), reply.cloned()] });
+        }
+        Acting::Confirming(n, a) => {
+            let (question, yes) = match &a.asks {
+                Asks::Confirm { question, yes }
+                | Asks::Always { question, yes }
+                | Asks::Endorse { question, yes } => (question.as_str(), yes.as_str()),
+                Asks::Now | Asks::Value { .. } => ("", ""),
+            };
+            vec![
+                view! { Span "proposalconfirm" [question] },
+                button(&format!("act act-{} confirming", a.verb), yes, Ev::Yes(*n)),
+                button("act act-cancelsend", "No", Ev::Close),
+                view! { Input "noteline" {Type => "text", Placeholder => "Why, or what next", viewtree::Attr::AriaLabel => "Why, or what next", viewtree::Attr::Value => &ui.text, Data("field") => key.field("note")} @input(Ev::Typed) },
+            ]
+        }
+        Acting::Saying => vec![
+            reason(key, ui, "Why not? (wrong person, already sent, not yet…)"),
+            button("act act-dismiss confirming", "Dismiss", Ev::Dismiss),
+            button("act act-canceldismiss", "Keep", Ev::Close),
+        ],
+        Acting::Idle => {
+            let performing: &[CardAnswer] = if card.problem.is_empty() {
+                &card.answers
             } else {
-                vec![
-                    line,
-                    Some(button("act act-acknowledge", &card.check, Ev::Acknowledge)),
-                ]
-            }
-        });
-        (checking.is_some() || reply.is_some())
-            .then(|| view! { Div "proposalact-row" [checking, reply.cloned()] })
-    } else if !writes {
-        Some(readonly(d))
-    } else if shown.waits() {
-        Some(view! { Div "proposalact-row" [asked_line(shown), reply.cloned()] })
-    } else {
-        let performing: &[CardAnswer] = if card.problem.is_empty() {
-            &card.answers
-        } else {
-            &[]
-        };
-        let parts: Vec<Node<Ev>> = match (
-            yes_of(row, ui).filter(|_| card.problem.is_empty()),
-            &ui.step,
-        ) {
-            (Some((n, a)), _) => {
-                let (question, yes) = match &a.asks {
-                    Asks::Confirm { question, yes }
-                    | Asks::Always { question, yes }
-                    | Asks::Endorse { question, yes } => (question.as_str(), yes.as_str()),
-                    Asks::Now | Asks::Value { .. } => ("", ""),
-                };
-                vec![
-                    view! { Span "proposalconfirm" [question] },
-                    button(&format!("act act-{} confirming", a.verb), yes, Ev::Yes(n)),
-                    button("act act-cancelsend", "No", Ev::Close),
-                    view! { Input "noteline" {Type => "text", Placeholder => "Why, or what next", viewtree::Attr::AriaLabel => "Why, or what next", viewtree::Attr::Value => &ui.text, Data("field") => key.field("note")} @input(Ev::Typed) },
-                ]
-            }
-            (None, Step::Saying { verb }) if verb == "dismiss" => vec![
-                reason(key, ui, "Why not? (wrong person, already sent, not yet…)"),
-                button("act act-dismiss confirming", "Dismiss", Ev::Dismiss),
-                button("act act-canceldismiss", "Keep", Ev::Close),
-            ],
-            (None, Step::Idle | Step::Confirming { .. } | Step::Saying { .. }) => {
-                idle(performing, key, ui, shown, reply)
-            }
-        };
-        Some(view! { Div "proposalact-row" [parts] })
-    }
+                &[]
+            };
+            idle(performing, key, shown, reply)
+        }
+    };
+    Some(view! { Div "proposalact-row" [parts] })
 }
 
 fn details(d: Drawn<'_>, ui: &Ui, carried: usize) -> Node<Ev> {
@@ -980,7 +1017,10 @@ fn details(d: Drawn<'_>, ui: &Ui, carried: usize) -> Node<Ev> {
     ] }
 }
 
-fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec<Node<Ev>>) {
+/// A card's parts in their places, each present or not.
+type Parts = Vec<Option<Node<Ev>>>;
+
+fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Parts) {
     let row = d.row;
     let card = &row.card;
     let signed = signature(row);
@@ -1019,7 +1059,9 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
     let details = details(d, ui, carried);
     let outcome =
         (row.state != ProposalState::Standing).then(|| para("proposaloutcome", said(row)));
-    let acts = acts(d, ui, key, &shown, reply.as_ref());
+    let acting = acting(d, ui, &shown);
+    let asked = asked_value(d, &acting, key);
+    let acts = acts(d, &acting, ui, key, &shown, reply.as_ref());
     let session = (!answerable(row.state))
         .then(|| {
             row.coding
@@ -1074,9 +1116,10 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
         Some(details),
         outcome,
         session,
+        asked,
         acts,
     ];
-    (attrs, parts.into_iter().flatten().collect())
+    (attrs, parts)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]

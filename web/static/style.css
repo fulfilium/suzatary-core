@@ -3494,11 +3494,17 @@ h1[tabindex="-1"]:focus {
 }
 
 .proposalsecretfield {
+  margin-top: var(--s-2h);
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--s-2);
+}
+
+/* The value is masked here, not by `type=password`, which a password manager takes for a sign-in. */
+.secretvalue {
+  -webkit-text-security: disc;
 }
 
 .secretlabel {

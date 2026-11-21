@@ -78,7 +78,8 @@ impl Body for Answer {
     const CAP: usize = MAX_ACT_BYTES;
 
     /// The value is read once into a [`suzatary_base::capability::Secret`], and the body dropped
-    /// with this call; a body naming two of `value`, `always` and `endorsement` is refused.
+    /// with this call; a blank value, and a body naming two of `value`, `always` and
+    /// `endorsement`, are refused.
     type Wire = Tapping;
 
     fn parse(tapping: Tapping, _: &State) -> Result<Self, Refusal> {
@@ -97,6 +98,15 @@ impl Body for Answer {
             };
         }
         let endorsement = endorsement.as_ref().map(endorsement_of).transpose()?;
+        // The store trims what it keeps: a blank value would reach it as nothing.
+        if value
+            .as_ref()
+            .is_some_and(|value| value.expose().trim().is_empty())
+        {
+            return Err(Refusal::bad_request(
+                "value is empty: there is nothing to keep",
+            ));
+        }
         let answer = match (value, always, endorsement) {
             (None, false, None) => TapAnswer::Plain,
             (Some(value), false, None) => TapAnswer::Value(value),

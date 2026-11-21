@@ -136,6 +136,8 @@ pub enum Attr {
     AriaLabel,
     Autocomplete,
     Autocapitalize,
+    /// Safari's and iOS keyboards' correction of what is typed.
+    Autocorrect,
     Spellcheck,
     Disabled,
     /// Set as the property, and only when the field holds another.
@@ -160,6 +162,8 @@ pub enum Attr {
     Checked,
     /// The field a label names by its `id`.
     For,
+    Required,
+    Pattern,
     Data(&'static str),
 }
 
@@ -180,6 +184,7 @@ impl Attr {
             Attr::AriaLabel => "aria-label".to_owned(),
             Attr::Autocomplete => "autocomplete".to_owned(),
             Attr::Autocapitalize => "autocapitalize".to_owned(),
+            Attr::Autocorrect => "autocorrect".to_owned(),
             Attr::Spellcheck => "spellcheck".to_owned(),
             Attr::Disabled => "disabled".to_owned(),
             Attr::Value => "value".to_owned(),
@@ -200,6 +205,8 @@ impl Attr {
             Attr::AriaControls => "aria-controls".to_owned(),
             Attr::Tabindex => "tabindex".to_owned(),
             Attr::For => "for".to_owned(),
+            Attr::Required => "required".to_owned(),
+            Attr::Pattern => "pattern".to_owned(),
             Attr::Data(suffix) => format!("data-{suffix}"),
         }
     }
@@ -651,6 +658,15 @@ pub enum Node<M, I = (), L = Lazy<M>> {
 
 pub fn text<M>(s: impl Into<String>) -> Node<M> {
     Node::Text((), s.into())
+}
+
+/// One place among its siblings, held whether `node` is there or not: absent, it is an empty
+/// text, which the DOM neither draws nor counts for `:empty`. An absent `Option` child takes no
+/// place, so the siblings after it move when it comes or goes and the diff draws them anew; a
+/// caller asks for a slot where that would lose what only the DOM holds, such as a field's words.
+#[must_use]
+pub fn slot<M>(node: Option<Node<M>>) -> Node<M> {
+    node.unwrap_or_else(|| text(""))
 }
 
 pub fn foreign<M>(kind: &'static str, key: impl Into<String>, props: impl Into<String>) -> Node<M> {

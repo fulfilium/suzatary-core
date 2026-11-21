@@ -52,6 +52,8 @@ hex.workspace = true
 ring.workspace = true
 # The Gmail API's search query, percent-encoded into its URL.
 percent-encoding = "2"
+# The secret store's one lock (`secrets::CALLS`), whose wait a call's timeout bounds.
+parking_lot = "0.12"
 # `markup.suspicious`' three tripwires, and the html-to-text walk over a body.
 regex.workspace = true
 # --- THE MAIL TRANSPORTS (§8.6).
@@ -80,6 +82,13 @@ tempfile = "3"
 # `secrets::Declarations` reads the code root's `secretspec.toml` and writes the file that
 # extends it with the names an instance derives.
 toml.workspace = true
+# A refusal of the secret store leaves its evidence in the log (`secrets::Said`).
+tracing.workspace = true
+
+[features]
+# The e2e fixture's build alone: it also logs the secret store's stderr, whose values are test
+# values there. `suzatary`'s `fixture` enables it; the shipped build does not compile it.
+fixture = []
 
 [lints]
 workspace = true

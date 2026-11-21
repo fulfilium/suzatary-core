@@ -13,8 +13,8 @@
  * assertions below never depend on it starting unset: `overview.test.ts`
  * checks the fresh-start transition, on the calendar's link.
  *
- * ONE SCENE: the card shows the sentence and a password field, Store is
- * disabled until something is typed, and tapping it does what any proposal's
+ * ONE SCENE: the card shows the sentence and a masked field, Store over an
+ * empty field or spaces alone sends nothing, and tapping it does what any proposal's
  * tap does in the Inbox (`inbox.test.ts`'s own "tapping a proposal … drops
  * the count" scene) — SETTLES THE DECISION, so the card leaves the Inbox
  * entirely rather than sitting there re-drawn as `Acted`. The rendering rule this
@@ -68,13 +68,15 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   );
 
   const field = `${CARD} .proposalsecretfield input`;
-  assert.equal(
-    await app.page.evaluate<string>(`document.querySelector('${field}').getAttribute('type')`),
-    "password",
-  );
-  assert.equal(
-    await app.page.evaluate<string | null>(`document.querySelector('${field}').getAttribute('autocomplete')`),
-    "off",
+  // A TEXT FIELD THE STYLESHEET MASKS, never `type=password`, which a password
+  // manager takes for a sign-in and offers to keep; nothing fills, corrects or
+  // spell-checks it.
+  assert.deepEqual(
+    await app.page.evaluate<string[]>(`(() => {
+      const f = document.querySelector('${field}');
+      return [f.type, f.getAttribute('autocomplete'), f.getAttribute('spellcheck'), getComputedStyle(f).webkitTextSecurity];
+    })()`),
+    ["text", "off", "false", "disc"],
   );
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector('${field}').closest("label").querySelector("span").textContent`),
@@ -83,30 +85,25 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   );
   assert.equal(await app.page.evaluate<string>(`document.querySelector('${field}').placeholder`), "Paste it here");
 
-  // NOTHING TYPED YET: ONE BUTTON, AND IT IS DISABLED — there is no confirm
-  // step behind it, so it must not be pressable on an empty field.
+  // NOTHING TYPED YET: ONE BUTTON, with no confirm step behind it.
   assert.equal(
     await app.page.evaluate<number>(`document.querySelectorAll('${CARD} .proposalsecretfield button').length`),
     1,
     "one button, not a two-step confirm",
   );
-  assert.equal(
-    await app.page.evaluate<boolean>(`document.querySelector('${CARD} .act-store').disabled`),
-    true,
-    "Store is disabled until something is typed",
-  );
 
-  // ⚠️ THE CAPTURE STARTS BEFORE THE VALUE IS EVER TYPED, so the request that
-  // carries it is provably the one this scene drives, not an artefact of an
-  // earlier scene's own traffic.
+  // ⚠️ THE CAPTURE STARTS BEFORE ANY TAP, so the request that carries the
+  // value is provably the one this scene drives, and the count of taps below
+  // is what proves that Store over an empty field, or over spaces alone, sent
+  // nothing: the browser holds the form back while the field holds no
+  // character other than a space.
   const stopCapture = await app.page.captureNetwork(["/tap"]);
+  await app.page.click(`${CARD} .act-store`);
+  await app.page.type(field, "   ");
+  await app.page.click(`${CARD} .act-store`);
+  await app.page.evaluate(`document.querySelector('${field}').value = ""`);
 
   await app.page.type(field, FIXTURE_VALUE);
-  assert.equal(
-    await app.page.evaluate<boolean>(`document.querySelector('${CARD} .act-store').disabled`),
-    false,
-    "typing enables Store",
-  );
   await app.page.click(`${CARD} .act-store`);
   // SETTLING THE DECISION DROPS IT FROM THE INBOX — the same rule a
   // changeset's tap obeys there (`inbox.test.ts`), never a `proposal-acted`
@@ -114,6 +111,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   await app.page.waitFor(`document.querySelector('${CARD}') === null`, { timeout: 10000 });
 
   const traffic = await stopCapture();
+  assert.equal(traffic.length, 1, `one tap went, the one with the value: ${JSON.stringify(traffic.map((exchange) => exchange.url))}`);
   const withValue = traffic.filter((exchange) => exchange.requestBody.includes(FIXTURE_VALUE));
   assert.equal(
     withValue.length,

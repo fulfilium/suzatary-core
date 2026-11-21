@@ -92,11 +92,11 @@ names=("$@")
 if [[ $# -eq 0 ]]; then
   for file in web/e2e/*.test.ts; do names+=("$(basename "$file" .test.ts)"); done
 fi
-# A file that observes the page's long tasks measures the page's thread, which another shard's
-# browser preempts, so it runs after the shards, alone.
+# A file that observes the page's long tasks, itself or through `longtasks.ts`, measures the page's
+# thread, which another shard's browser preempts, so it runs after the shards, alone.
 alone=() shared=()
 for name in "${names[@]}"; do
-  if grep -q '"longtask"' "web/e2e/$name.test.ts"; then alone+=("$name"); else shared+=("$name"); fi
+  if grep -qE '"longtask"|from "\./longtasks"' "web/e2e/$name.test.ts"; then alone+=("$name"); else shared+=("$name"); fi
 done
 if ((shards > 1 && ${#shared[@]} > 0 && ${#names[@]} > 1)); then
   ((shards <= ${#shared[@]})) || shards=${#shared[@]}
@@ -208,6 +208,11 @@ cleanup() {
     mkdir -p "$kept"
     for log in "$work"/*.log; do
       [[ -e "$log" ]] && cp "$log" "$kept/"
+    done
+    # Each store call's time, verb, names and outcome, never a value: whether another call ran
+    # beside a refused one.
+    for audit in "$work"/*/state/secretspec/audit.log; do
+      [[ -e "$audit" ]] && cp "$audit" "$kept/$(basename "$(dirname "$(dirname "$(dirname "$audit")")")").secretspec-audit.jsonl"
     done
     echo "==> the fixture servers' output is kept in $kept" >&2
   fi

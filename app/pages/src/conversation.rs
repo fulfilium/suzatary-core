@@ -1685,7 +1685,7 @@ fn round_parts(m: &Model, p: &ConversationPayload, s: &Shape_) -> Vec<(String, N
             };
             parts.push((
                 format!("p{index}"),
-                m.cards.view(d, Vec::new(), Vec::new(), Msg::Card),
+                m.cards.view(d, None, Vec::new(), Msg::Card),
             ));
         }
     }

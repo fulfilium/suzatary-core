@@ -7,6 +7,7 @@ use suzatary_topics::wire::topics::UnplacedProposal;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Open};
 use viewtree::kit::{Reading, para};
+use viewtree::node::slot;
 use viewtree::{Node, Program, view};
 
 use crate::card::{self, Cards, Drawn, Placed, Titles};
@@ -222,25 +223,32 @@ impl Program for Inbox {
             .filter(|w| matches!(w.standing(), Standing::Unreadable(_)))
             .collect();
         let nothing = (problem.is_none() && answered).then(|| chrome::empty("Nothing is waiting on you. Changes the triage agent and the secretary propose appear here."));
-        let listed: Vec<Node<Msg>> = if owed == 0 {
-            nothing.into_iter().collect()
+        // Keyed by card, so a card's body arriving above another moves that card and never draws
+        // it again: a secret's field holds its words in the DOM alone.
+        let listed: Vec<(String, Node<Msg>)> = if owed == 0 {
+            nothing
+                .map(|n| ("nothing".to_owned(), n))
+                .into_iter()
+                .collect()
         } else {
-            let mut v: Vec<Node<Msg>> = work.iter().map(|r| row(m, *r)).collect();
-            v.extend(setup_row(m, &setup));
-            v
+            work.iter()
+                .map(|r| (field(*r), row(m, *r)))
+                .chain(setup_row(m, &setup).map(|n| ("setup".to_owned(), n)))
+                .collect()
         };
+        let sections = [
+            ("unplaced", unplaced_section(&unplaced)),
+            ("unreadable", unreadable_section(&unreadable)),
+            ("settled", settled_section(m, &settled)),
+        ]
+        .into_iter()
+        .filter_map(|(k, n)| n.map(|n| (k.to_owned(), n)));
+        // The problem's slot holds its place, so the cards below are never drawn anew.
         let body = vec![
-            problem.map(|p| para("problem", p)),
-            Some(
-                view! { Div "proposals" {Data("box") => if answered { "Answered" } else { "Asking" }} [
-                    listed,
-                    unplaced_section(&unplaced),
-                    unreadable_section(&unreadable),
-                    settled_section(m, &settled),
-                ] },
-            ),
+            slot(problem.map(|p| para("problem", p))),
+            view! { Div "proposals" {Data("box") => if answered { "Answered" } else { "Asking" }} => listed.into_iter().chain(sections) },
         ];
-        chrome::page(chrome, status, body.into_iter().flatten().collect())
+        chrome::page(chrome, status, body)
     }
 }
 
@@ -345,8 +353,7 @@ fn row(m: &Model, shown: Row<'_>) -> Node<Msg> {
                 titles: &m.titles,
                 opened,
             };
-            m.cards
-                .view(drawn, unpriced.into_iter().collect(), Vec::new(), Msg::Card)
+            m.cards.view(drawn, unpriced, Vec::new(), Msg::Card)
         }
         Row::Unresolved(w) => {
             let said: Vec<Node<Msg>> = match w {
@@ -392,11 +399,14 @@ fn row(m: &Model, shown: Row<'_>) -> Node<Msg> {
 fn setup_row(m: &Model, rows: &[Row<'_>]) -> Option<Node<Msg>> {
     (!rows.is_empty()).then(|| {
         let n = rows.len();
-        view! { Details "setupgroup" {Open => m.setup, Data("setup") => n.to_string()} @toggle(Msg::Setup) [
-            view! { Summary [view! { Span [view! { Span "setuplabel" ["Setup"] }, format!(" · {}", chrome::counted(n, "thing to set up", "things to set up"))] }] },
-            rows.iter().map(|r| row(m, *r)).collect::<Vec<_>>(),
-            link("setupsettings", Place::Settings, "Open Settings"),
-        ] }
+        let summary = view! { Summary [view! { Span [view! { Span "setuplabel" ["Setup"] }, format!(" · {}", chrome::counted(n, "thing to set up", "things to set up"))] }] };
+        let kids = std::iter::once(("summary".to_owned(), summary))
+            .chain(rows.iter().map(|r| (field(*r), row(m, *r))))
+            .chain(std::iter::once((
+                "settings".to_owned(),
+                link("setupsettings", Place::Settings, "Open Settings"),
+            )));
+        view! { Details "setupgroup" {Open => m.setup, Data("setup") => n.to_string()} @toggle(Msg::Setup) => kids }
     })
 }
 

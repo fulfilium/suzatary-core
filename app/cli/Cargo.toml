@@ -97,7 +97,7 @@ async-stream = "0.3"
 # that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
-fixture = ["suzatary-secretary/fixture"]
+fixture = ["suzatary-secretary/fixture", "suzatary-io/fixture"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
 # repository's containment scripts with `git` against throwaway repositories, which a build

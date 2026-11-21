@@ -38,9 +38,11 @@
 # Prodrome pin at 9fe98a4 (huskstoreup) set prodrome's lines from the tree merged with 2.1.189
 # (5,021,662, 2,185 over master's 5,019,477: the husk read where the schema has husks, the sender,
 # and `Trust`'s vouched set), by the same rule.
-views_bg.wasm x86_64-linux 3710000
+# tapsecretflake keeps a value field's place (viewtree's slot): merged with 2.1.192, views
+# 3,711,939 (+4,889 over master's 3,707,050), so both views lines rise by 10,000.
+views_bg.wasm x86_64-linux 3720000
 prodrome_bg.wasm x86_64-linux 5030000
 typst_bg.wasm x86_64-linux 22020000
-views_bg.wasm aarch64-linux 3720000
+views_bg.wasm aarch64-linux 3730000
 prodrome_bg.wasm aarch64-linux 5040000
 typst_bg.wasm aarch64-linux 22090000

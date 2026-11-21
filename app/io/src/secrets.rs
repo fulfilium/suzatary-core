@@ -13,7 +13,7 @@ use suzatary_base::capability::Secret;
 use suzatary_connect::secrets::{Answer, SecretState, Snapshot};
 use suzatary_connect::settings::{Settable, Settables};
 
-use crate::run::{Cmd, RunError, run, succeed, zero};
+use crate::run::{Cmd, Ran, RunError, run, zero};
 
 /// What the secret store's providers read of the environment beyond [`crate::run::BASE`]. Any
 /// child that reaches the store (mbsync's `PassCmd`) passes these too.
@@ -150,11 +150,12 @@ impl Secretspec {
                 self.timeout
                     .saturating_mul(u32::try_from(names).unwrap_or(u32::MAX)),
             );
-        let ran = run(&cmd).map_err(|failed| SecretError::of(EVERY, &failed))?;
+        let refused = |failed| SecretError::of(EVERY, Verb::Check, &failed);
+        let ran = self.held(Verb::Check, &cmd).map_err(refused)?;
         if let Some(report) = Report::in_(&ran.stdout) {
             return Ok(report);
         }
-        zero(&cmd, ran).map_err(|failed| SecretError::of(EVERY, &failed))?;
+        zero(&cmd, ran).map_err(refused)?;
         Err(SecretError::Unread {
             name: EVERY.to_owned(),
         })
@@ -201,23 +202,26 @@ impl Secretspec {
         let cmd = self
             .command(&spec, "set", name, reason)
             .stdin(format!("{}\n", value.expose()));
-        succeed(&cmd)
+        let verb = Verb::Set(value);
+        self.succeeded(verb, &cmd)
             .map(drop)
-            .map_err(|failed| SecretError::of(name, &failed))
+            .map_err(|failed| SecretError::of(name, verb, &failed))
     }
 
     pub fn delete(&self, name: &str, reason: &str) -> Result<(), SecretError> {
         let spec = self.configured(name)?;
-        succeed(&self.command(&spec, "delete", name, reason))
+        let cmd = self.command(&spec, "delete", name, reason);
+        self.succeeded(Verb::Delete, &cmd)
             .map(drop)
-            .map_err(|failed| SecretError::of(name, &failed))
+            .map_err(|failed| SecretError::of(name, Verb::Delete, &failed))
     }
 
     /// The last line of `secretspec get`'s stdout: some providers print a banner first. A
     /// refusal is "unset" only when the store says the name is not found.
     fn asked(&self, name: &str, reason: &str) -> Result<Option<Secret>, SecretError> {
         let spec = self.configured(name)?;
-        let ran = match succeed(&self.command(&spec, "get", name, reason)) {
+        let cmd = self.command(&spec, "get", name, reason);
+        let ran = match self.succeeded(Verb::Get, &cmd) {
             Ok(ran) => ran,
             Err(RunError::Exited { stderr, .. })
                 if stderr
@@ -226,7 +230,7 @@ impl Secretspec {
             {
                 return Ok(None);
             }
-            Err(failed) => return Err(SecretError::of(name, &failed)),
+            Err(failed) => return Err(SecretError::of(name, Verb::Get, &failed)),
         };
         let stdout = String::from_utf8(ran.stdout).map_err(|_| SecretError::Unread {
             name: name.to_owned(),
@@ -238,6 +242,50 @@ impl Secretspec {
             .map(str::trim)
             .filter(|last| !last.is_empty())
             .map(Secret::new))
+    }
+}
+
+/// One lock per store, keyed by the file every spec of it extends; each store call holds its
+/// store's, a write alone: a dotenv store is rewritten whole and a `pass` store commits each
+/// write to one git repository. It orders this process's calls only.
+type Locks = std::collections::BTreeMap<PathBuf, Arc<parking_lot::RwLock<()>>>;
+static STORES: parking_lot::Mutex<Locks> = parking_lot::const_mutex(Locks::new());
+
+impl Secretspec {
+    /// The store's identity: its file, or for a declared store the code root's file that each
+    /// declared file extends (a widened declaration is a new file of the same store).
+    fn store(&self) -> &Path {
+        match &self.spec {
+            Spec::File(file) => file,
+            Spec::Declared(declarations) => &declarations.base,
+        }
+    }
+
+    /// `cmd` run under its store's lock. A call waits for the lock at most its timeout, and is
+    /// [`RunError::TimedOut`] if it could not start in it; a child that starts has its whole
+    /// timeout, so a call takes at most twice its timeout.
+    fn held(&self, verb: Verb<'_>, cmd: &Cmd) -> Result<Ran, RunError> {
+        let after = cmd.timeout.unwrap_or(Duration::MAX);
+        let timed_out = || RunError::TimedOut {
+            program: cmd.program.to_string_lossy().into_owned(),
+            after,
+        };
+        let lock = Arc::clone(STORES.lock().entry(self.store().to_path_buf()).or_default());
+        match verb {
+            Verb::Get | Verb::Check => {
+                let _reading = lock.try_read_for(after).ok_or_else(timed_out)?;
+                run(cmd)
+            }
+            Verb::Set(_) | Verb::Delete => {
+                let _writing = lock.try_write_for(after).ok_or_else(timed_out)?;
+                run(cmd)
+            }
+        }
+    }
+
+    /// [`Secretspec::held`], and a non-zero exit as [`RunError::Exited`].
+    fn succeeded(&self, verb: Verb<'_>, cmd: &Cmd) -> Result<Ran, RunError> {
+        self.held(verb, cmd).and_then(|ran| zero(cmd, ran))
     }
 }
 
@@ -456,22 +504,150 @@ impl SecretError {
         }
     }
 
-    fn of(name: &str, failed: &RunError) -> Self {
-        let name = name.to_owned();
+    /// A refusal leaves [`Said`] in the log, at WARN when it is [`Refusal::Unsaid`].
+    fn of(name: &str, verb: Verb<'_>, failed: &RunError) -> Self {
+        let owned = name.to_owned();
         match failed {
-            RunError::Spawn { .. } => Self::Spawn { name },
-            RunError::TimedOut { .. } => Self::Timeout { name },
-            RunError::Halted { .. } => Self::Stopped { name },
-            RunError::Wait { .. } => Self::Lost { name },
+            RunError::Spawn { .. } => Self::Spawn { name: owned },
+            RunError::TimedOut { .. } => Self::Timeout { name: owned },
+            RunError::Halted { .. } => Self::Stopped { name: owned },
+            RunError::Wait { .. } => Self::Lost { name: owned },
             RunError::Exited { status, stderr, .. } => {
                 let (exit, refusal) = (Exit::of(*status), Refusal::of(stderr.as_str()));
+                let said = Said::of(stderr.as_str(), name, verb);
+                match refusal {
+                    Refusal::Unsaid => tracing::warn!(
+                        verb = verb.word(), secret = name, %exit, %said,
+                        "the secret store refused in words this box does not read"
+                    ),
+                    Refusal::Unparsed | Refusal::Denied | Refusal::Locked => tracing::debug!(
+                        verb = verb.word(), secret = name, %exit, %refusal, %said,
+                        "the secret store refused"
+                    ),
+                }
+                #[cfg(feature = "fixture")]
+                tracing::warn!(
+                    verb = verb.word(), secret = name, %stderr,
+                    "the secret store's stderr, which only the fixture build logs"
+                );
                 Self::Refused {
-                    name,
+                    name: owned,
                     exit,
                     refusal,
                 }
             }
         }
+    }
+}
+
+/// A call of the store; a write holds the value [`Said`] leaves out.
+#[derive(Clone, Copy)]
+enum Verb<'a> {
+    Get,
+    Check,
+    Set(&'a Secret),
+    Delete,
+}
+
+impl Verb<'_> {
+    fn word(self) -> &'static str {
+        match self {
+            Self::Get => "get",
+            Self::Check => "check",
+            Self::Set(_) => "set",
+            Self::Delete => "delete",
+        }
+    }
+}
+
+/// What a refusal's stderr said, as a log may quote it. The value a `set` wrote, its trimmed
+/// whole and each of its lines are first put out of the stderr, wherever each occurs as a
+/// substring, by a stand-in of its length; then the reduction, which never looks at the value
+/// again, keeps the line and character counts, the name asked for, the words of [`WORDS`] and
+/// the errno after `os error`, and makes everything else `…`. So a stderr that echoes the value
+/// reads as one that echoes the stand-in, and one that does not contain the value, whole or a
+/// line of it, reads the same whatever the value. A value or line of one or two characters is
+/// put out of every word that contains it. The counts can tell an echoed value's length; for
+/// `get`, `check` and `delete` no value is known, so a store that echoed another secret would
+/// show it only if that secret were itself a word of the list. Its one constructor is that
+/// reduction, so no log site of the shipped build can quote the stderr itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Said {
+    lines: usize,
+    chars: usize,
+    words: String,
+}
+
+/// The words a store, its providers and the OS use to say why a call failed.
+const WORDS: &str = "\
+    a access already an and at audit available backend broken busy by call can cannot character \
+    check commit config could create declared decryption defined delete denied device directory \
+    disk dotenv empty encryption end entry eof error exists extended failed fatal file files for \
+    found from get git gpg in index input interrupted invalid io is key left line lock locked \
+    many missing no not note of on only open operation or os parse parsing pass passphrase \
+    permission pinentry pipe profile project provider quota read reading required resource saved \
+    secret secretspec set space spec store such system temporarily text the timed to toml too \
+    unable unavailable unexpected unterminated utf valid value warning with write writing \
+    written";
+
+impl Said {
+    fn of(stderr: &str, name: &str, verb: Verb<'_>) -> Self {
+        let mut said = stderr.to_owned();
+        if let Verb::Set(value) = verb {
+            let value = value.expose();
+            let mut whole: Vec<&str> = [value, value.trim()]
+                .into_iter()
+                .chain(value.lines().map(str::trim))
+                .filter(|whole| !whole.is_empty())
+                .collect();
+            whole.sort_by_key(|whole| std::cmp::Reverse(whole.len()));
+            for whole in whole {
+                said = said.replace(whole, &"x".repeat(whole.chars().count()));
+            }
+        }
+        let lines: Vec<String> = said
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| {
+                let mut kept: Vec<&str> = Vec::new();
+                for token in line
+                    .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .filter(|token| !token.is_empty())
+                {
+                    let lower = token.to_lowercase();
+                    let errno = token.len() <= 3
+                        && token.bytes().all(|b| b.is_ascii_digit())
+                        && kept.ends_with(&["os", "error"]);
+                    let word = if token == name
+                        || WORDS.split_whitespace().any(|word| word == lower)
+                        || errno
+                    {
+                        token
+                    } else {
+                        "…"
+                    };
+                    if !(word == "…" && kept.last() == Some(&"…")) {
+                        kept.push(word);
+                    }
+                }
+                kept.join(" ")
+            })
+            .collect();
+        Self {
+            lines: lines.len(),
+            chars: said.chars().count(),
+            words: lines.join(" | "),
+        }
+    }
+}
+
+impl std::fmt::Display for Said {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} line(s), {} chars: {}",
+            self.lines, self.chars, self.words
+        )
     }
 }
 
@@ -882,7 +1058,7 @@ mod tests {
         assert_eq!(state(&found), SecretState::Failed);
     }
 
-    /// The store asked name by name, as every reading was before [`Secretspec::snapshot`].
+    /// The store asked name by name.
     struct EachName<'a>(&'a Secretspec);
 
     impl suzatary_connect::secrets::Secrets for EachName<'_> {
@@ -1033,6 +1209,125 @@ mod tests {
         }
     }
 
+    /// A value with separators, newlines and letters beyond ASCII.
+    const VALUES: &str = "[a-zA-Z0-9 _:/.=+'\"\\-\néß中🔑]{1,40}";
+
+    proptest::proptest! {
+        /// Law (a refusal's log line rests on it), its first half: a stderr that repeats the value
+        /// written reads as one that holds a stand-in of its length there instead; and the name
+        /// and every listed word around it are kept.
+        #[test]
+        fn a_refusal_s_evidence_reads_an_echoed_value_as_its_stand_in(
+            value in VALUES,
+            words in proptest::collection::vec(proptest::sample::select(WORDS.split_whitespace().collect::<Vec<_>>()), 0..12),
+            at in 0usize..12,
+        ) {
+            let said = |what: &str| {
+                let mut said: Vec<&str> = words.clone();
+                said.insert(at.min(said.len()), what);
+                format!("{}\nError: {NOBODY} (os error 16) '{what}'", said.join(" "))
+            };
+            let template = said("");
+            let whole = [value.as_str(), value.trim()].into_iter().chain(value.lines().map(str::trim));
+            proptest::prop_assume!(whole.filter(|w| !w.is_empty()).all(|w| !template.contains(w)));
+            let secret = Secret::new(value.clone());
+            let evidence = |stderr: &str| Said::of(stderr, NOBODY, Verb::Set(&secret));
+            let shown = evidence(&said(&value));
+            proptest::prop_assert_eq!(&shown, &evidence(&said(&"x".repeat(value.chars().count()))));
+            for word in &words {
+                proptest::prop_assert!(shown.to_string().contains(word), "{word}: {shown}");
+            }
+        }
+
+        /// Its second half: a stderr that does not contain the value, whole or a line of it, as a
+        /// substring reads the same whatever the value written.
+        #[test]
+        fn a_refusal_s_evidence_of_a_stderr_without_the_value_is_the_same_for_every_value(
+            one in VALUES,
+            other in VALUES,
+            words in proptest::collection::vec(proptest::sample::select(WORDS.split_whitespace().collect::<Vec<_>>()), 0..12),
+        ) {
+            let stderr = format!("{}\nError: {NOBODY} (os error 16)", words.join(" "));
+            let absent = |value: &str| {
+                [value, value.trim()].into_iter().chain(value.lines().map(str::trim)).filter(|w| !w.is_empty()).all(|w| !stderr.contains(w))
+            };
+            proptest::prop_assume!(absent(&one) && absent(&other));
+            let evidence = |value: &str| Said::of(&stderr, NOBODY, Verb::Set(&Secret::new(value)));
+            proptest::prop_assert_eq!(evidence(&one), evidence(&other));
+        }
+    }
+
+    /// `secretspec set`'s stderr when the box handed it nothing, as an e2e run kept it.
+    #[test]
+    fn a_refusal_s_evidence_reads_as_the_store_said_it() {
+        let stderr = format!(
+            "Writing secret '{NOBODY}' to dotenv:/run/e2e/secrets-store.env (profile: default)\n  \
+             target: item={NOBODY}\nError:   × Failed to set secret\n  \
+             ╰─▶ Provider operation failed: Secret value cannot be empty"
+        );
+        assert_eq!(
+            Said::of(&stderr, NOBODY, Verb::Set(&Secret::new("hunter2"))).to_string(),
+            format!(
+                "4 line(s), {} chars: Writing secret {NOBODY} to dotenv … store … \
+                 profile … | … {NOBODY} | Error Failed to set secret | Provider operation failed \
+                 Secret value cannot … empty",
+                stderr.chars().count()
+            )
+        );
+    }
+
+    /// A call that cannot take its store's lock within its timeout is `Timeout`, as one that
+    /// does not finish is: a set beside a slow read of the same store answers in its own time.
+    #[test]
+    fn a_set_beside_a_slow_read_times_out_in_its_own_time() {
+        let script = "case \"$1\" in get) touch \"$(dirname \"$0\")/reading\"; sleep 2;; *) cat >/dev/null;; esac";
+        let (dir, slow) = fake(script, Duration::from_secs(5));
+        let quick = Secretspec {
+            timeout: Duration::from_millis(300),
+            ..slow.clone()
+        };
+        std::thread::scope(|both| {
+            both.spawn(|| slow.get(NOBODY, "test"));
+            while !dir.path().join("reading").exists() {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let started = std::time::Instant::now();
+            let set = quick.set(NOBODY, &Secret::new("v"), "test");
+            assert_eq!(
+                set,
+                Err(SecretError::Timeout {
+                    name: NOBODY.to_owned()
+                })
+            );
+            assert!(
+                started.elapsed() < Duration::from_secs(1),
+                "{:?}",
+                started.elapsed()
+            );
+        });
+    }
+
+    /// Law (the store's file rests on it): two sets at once both land, against a store that
+    /// rewrites its whole file from what it read, as `secretspec`'s dotenv provider does.
+    #[test]
+    fn two_sets_at_once_both_land() {
+        let (dir, spec) = fake(
+            "value=$(cat); store=\"$(dirname \"$0\")/store\"; kept=$(cat \"$store\" 2>/dev/null); \
+             sleep 0.3; printf '%s\\n%s=%s\\n' \"$kept\" \"$2\" \"$value\" > \"$store\"",
+            Duration::from_secs(5),
+        );
+        std::thread::scope(|both| {
+            for name in ["A_TOKEN", "B_TOKEN"] {
+                let spec = &spec;
+                both.spawn(move || spec.set(name, &Secret::new("v"), "test").expect("set"));
+            }
+        });
+        let kept = std::fs::read_to_string(dir.path().join("store")).expect("the store");
+        for name in ["A_TOKEN", "B_TOKEN"] {
+            assert!(kept.contains(&format!("{name}=v")), "{kept}");
+        }
+    }
+
     #[test]
     fn set_hands_the_value_down_stdin() {
         let (dir, spec) = fake("cat > \"$(dirname \"$0\")/fed\"", Duration::from_secs(5));
@@ -1088,7 +1383,7 @@ mod tests {
                 source: os(),
             },
         ]
-        .map(|failed| SecretError::of(NOBODY, &failed));
+        .map(|failed| SecretError::of(NOBODY, Verb::Get, &failed));
         let name = || NOBODY.to_owned();
         assert_eq!(
             causes,
