@@ -2,7 +2,8 @@
 
 The plan of the roadmap task `typedtooling`: `scripts/train.sh` (the merge train) and then
 `scripts/merge-gate.sh` (the gate) stop being shell. The design note is the description of pull
-request #559; this file keeps only what guides the work still open. The task completes with T4.
+request #559. The port ended at its third stage (section 7): `build`, `land`, the records and
+`sync` stay in `train.sh`, which calls the tool for the table, the publication and the gate.
 
 ## 1. The decision
 
@@ -139,7 +140,7 @@ type, and lists each such exception (`portdifferential`).
   law for a stop's alarm, not for the rest of a group after its leader exits (no test leaves a
   process that ignores TERM); and the calls to the network that no signal interrupts (the sweep,
   the delete, `check`'s reads and its post), which the shell had too.
-- **T4, build, land, record and the entry.** `build`, `cut_release`, `land`, `record_release`,
+- **T4, build, land, record and the entry (not done: the port ended at T3, section 7).** `build`, `cut_release`, `land`, `record_release`,
   `record_done`, `sync` and the dispatch go; `train.sh` becomes a launcher of about ten lines;
   `.git/train/skipped` goes. Laws 6 and 11. T4's own land is run by T4's land, as today's script
   lands every change to `land`; the guards over the stubbed origin, core and roadmap run first.
@@ -201,12 +202,24 @@ shell, after its two reviews): the machine and its plans, the watch of a run on 
 interpreter of the effects and the verbs. The growth was accepted at the review of #571, and the
 ratchet raised by the merged tree's figure.
 
-**The third clause has failed.** "The reading-set delta of T1 to T4 together is not positive"
-cannot hold after T3, so the gate's port (G1 to G3) does not happen. T4 states its projected delta
-from T3's measured ratio (3.1 tokens of Rust for each token of shell) before any code, and stops
-at twice it. Noted for T4: every change sets `context.toml`'s one `reading` line by hand, so two
-accepted changes conflict there and cannot ride one train; the train should set that line from the
-merged tree when it merges a change.
+**The port ended at its third stage** (decided at the review of #585). The third clause cannot
+hold: three stages measured about 3.1 tokens of Rust for each token of shell they replaced, the
+four together could not leave the reading set smaller, and T4 projected +26,500 more for the last
+658 lines. So T4 and the gate's port (G1 to G3) do not happen. `build`, `cut_release`, `land`,
+`record_release`, `record_done`, `sync` and `nightly-report` stay in `train.sh`, a sequence of
+tool calls whose decisions (the table, the publication, the gate runs, the lock) are the tool's
+verbs, as section 6 says a script may stay. What T4 was to carry that stands alone landed in the
+shell instead: the build sets `context.toml`'s `reading` from the merged tree, and a pull request
+declares its growth on a `Reading-growth:` line (#585).
+
+Left from the third stage's reviews, worth doing in the tool by itself one day, each small:
+
+- the calls to the network that no signal interrupts: the sweep and the delete of gate branches,
+  and `check`'s reads and its comment, bounded in time and run under the supervisor;
+- the law of a green end bound to the reaping loop itself (`reap_group` as a fold from its start),
+  not only to the fold of `Status::reaped`;
+- the kill after the grace held by a law for a leader's exit as for a stop, with a witness that
+  leaves a process ignoring TERM in a gate's group.
 
 Revisit Python only if `nopython` is revised. Move the gate's Rust steps to Nix only when a
 derivation per workspace member keeps a CLI-only change near today's time on the runners; the

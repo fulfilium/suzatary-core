@@ -4,8 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use anyhow::Context as _;
-use suzatary_io::run::{Cmd, succeed};
+use anyhow::{Context as _, bail};
 
 /// Every text file of a tree, by its path from the root. A file that is not UTF-8 is left out:
 /// an agent does not read an image or a font.
@@ -56,14 +55,8 @@ impl Tree {
             let _ = writeln!(asked, "{rev}:{path}");
             asked
         });
-        let ran = succeed(
-            &Cmd::new("git")
-                .arg("-C")
-                .arg(root)
-                .args(["cat-file", "--batch"])
-                .stdin(asked),
-        )?;
-        let mut rest = ran.stdout.as_slice();
+        let out = bytes(root, &["cat-file", "--batch"], &asked)?;
+        let mut rest = out.as_slice();
         let mut files = BTreeMap::new();
         for path in paths {
             let end = rest
@@ -115,6 +108,31 @@ impl Tree {
 /// # Errors
 /// When it cannot run or fails.
 pub fn git(root: &Path, args: &[&str]) -> anyhow::Result<String> {
-    let ran = succeed(&Cmd::new("git").arg("-C").arg(root).args(args))?;
-    Ok(String::from_utf8(ran.stdout)?)
+    Ok(String::from_utf8(bytes(root, args, "")?)?)
+}
+
+/// The bytes `git -C root <args>` printed, given `stdin`, which is written as it reads.
+fn bytes(root: &Path, args: &[&str], stdin: &str) -> anyhow::Result<Vec<u8>> {
+    let mut child = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("git did not start")?;
+    let mut input = child.stdin.take().context("git's stdin")?;
+    let text = stdin.to_owned();
+    let writer = std::thread::spawn(move || std::io::Write::write_all(&mut input, text.as_bytes()));
+    let out = child.wait_with_output()?;
+    let _ = writer.join();
+    if !out.status.success() {
+        bail!(
+            "git {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(out.stdout)
 }

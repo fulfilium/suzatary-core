@@ -18,12 +18,10 @@ pub enum Finding {
         /// The most it may be.
         limit: u64,
     },
-    /// The reading set is over the ratchet plus the allowance.
-    Grown {
-        reading: u64,
-        ratchet: u64,
-        allowance: u64,
-    },
+    /// The reading set is over what is allowed.
+    Grown { reading: u64, limit: u64 },
+    /// The ratchet is written, with another figure than the tree's.
+    Written { written: u64, measured: u64 },
     /// A unit's `depends` is not what its manifest and witnesses show.
     Depends {
         unit: String,
@@ -65,15 +63,18 @@ impl fmt::Display for Finding {
                 "{unit}: its USE is {tokens} tokens, over its limit of {limit}: shorten its README \
                  or its public interface"
             ),
-            Self::Grown {
-                reading,
-                ratchet,
-                allowance,
-            } => write!(
+            Self::Grown { reading, limit } => write!(
                 f,
-                "the repository's reading set is {reading} tokens, over the ratchet of {ratchet} \
-                 plus {allowance}: delete as much elsewhere in this change, or say in the pull \
-                 request why the growth pays"
+                "the reading set is {reading} tokens, over the {limit} its merge base allows: \
+                 delete as much, or say why it pays on a line `Reading-growth: +{}: <reason>` in \
+                 the pull request's description, which the train copies into its merge, and \
+                 in a commit message of the branch, which its own gate reads",
+                reading - limit
+            ),
+            Self::Written { written, measured } => write!(
+                f,
+                "{FILE} says `reading = {written}`, the tree reads {measured}: a pull request \
+                 writes no `reading`, the train's build does"
             ),
             Self::Depends {
                 unit,
@@ -102,7 +103,12 @@ impl fmt::Display for Finding {
 
 /// Every refusal of `report`, measured over `tree` by `plan`.
 #[must_use]
-pub fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding> {
+pub(crate) fn findings(
+    plan: &Plan,
+    tree: &Tree,
+    report: &Report,
+    allowed: &Allowed,
+) -> Vec<Finding> {
     let mut found = Vec::new();
     for (unit, measured) in plan.units.iter().zip(&report.units) {
         let limit = plan.ratchet.use_limit(&unit.name, &plan.budget);
@@ -133,13 +139,11 @@ pub fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding> {
             }
         }
     }
-    if report.reading.total() > plan.ratchet.reading + plan.budget.allowance {
-        found.push(Finding::Grown {
-            reading: report.reading.total(),
-            ratchet: plan.ratchet.reading,
-            allowance: plan.budget.allowance,
-        });
-    }
+    found.extend(reading(
+        plan.ratchet.reading,
+        report.reading.total(),
+        allowed,
+    ));
     found.extend(
         plan.in_force
             .iter()
@@ -211,4 +215,106 @@ fn members(plan: &Plan, tree: &Tree) -> Vec<Finding> {
             }),
     );
     found
+}
+
+/// What the reading set may be: the merge base's ratchet, one allowance per merge since, and
+/// each `Reading-growth: +<tokens>: <reason>` line since.
+#[derive(Debug)]
+pub(crate) struct Allowed {
+    ratchet: u64,
+    allowance: u64,
+    declared: u64,
+}
+
+impl Allowed {
+    /// Over `ratchet`, for `merges` merges and the `messages` since it; a line not in its form
+    /// declares nothing.
+    #[must_use]
+    pub(crate) fn of(ratchet: u64, allowance: u64, merges: u64, declared: &[String]) -> Self {
+        let declared = declared
+            .iter()
+            .filter_map(|value| value.trim().strip_prefix('+'))
+            .filter_map(|said| {
+                said.split_once(':')
+                    .filter(|(_, why)| !why.trim().is_empty())
+            })
+            .filter_map(|(tokens, _)| tokens.trim().parse::<u64>().ok())
+            .sum();
+        Self {
+            ratchet,
+            allowance: allowance * merges.max(1),
+            declared,
+        }
+    }
+
+    const fn limit(&self) -> u64 {
+        self.ratchet + self.allowance + self.declared
+    }
+}
+
+/// The refusals of a reading set of `measured` tokens whose ratchet says `written`.
+#[must_use]
+pub(crate) fn reading(written: u64, measured: u64, allowed: &Allowed) -> Vec<Finding> {
+    let mut found = Vec::new();
+    if measured > allowed.limit() {
+        found.push(Finding::Grown {
+            reading: measured,
+            limit: allowed.limit(),
+        });
+    }
+    if written != allowed.ratchet && written != measured {
+        found.push(Finding::Written { written, measured });
+    }
+    found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Allowed, reading};
+
+    /// Over a merge base's ratchet of 1,000 and 2,000 for each merge: a growth past it with no
+    /// declared line is refused and names the line to write; a declared one goes through; a
+    /// pull request that writes `reading` is refused unless it wrote the tree's own figure; and
+    /// a line not in its form declares nothing, and neither does a line of prose that begins with
+    /// the key, which git reads as no trailer.
+    #[test]
+    fn a_growth_is_declared_and_reading_is_the_builds() {
+        let said = |found: Vec<super::Finding>| -> Vec<String> {
+            found.iter().map(ToString::to_string).collect()
+        };
+        let declared =
+            |message: &str| crate::git::trailers("Reading-growth", message).expect("git reads");
+        let one = Allowed::of(1_000, 2_000, 1, &[]);
+        assert!(
+            reading(1_000, 3_000, &one).is_empty(),
+            "within one allowance"
+        );
+        assert!(reading(1_000, 5_000, &Allowed::of(1_000, 2_000, 2, &[])).is_empty());
+        let refused = said(reading(1_000, 3_500, &one));
+        assert!(
+            refused.len() == 1 && refused[0].contains("`Reading-growth: +500: <reason>`"),
+            "{refused:?}"
+        );
+        let lines = declared("x\n\nprose.\n\nReading-growth: +600: the laws\n");
+        assert!(reading(1_000, 3_500, &Allowed::of(1_000, 2_000, 1, &lines)).is_empty());
+        let prose =
+            declared("x\n\nIts lines ride beside\nReading-growth: +600: as said.\nMore prose.\n");
+        assert_eq!(prose, Vec::<String>::new(), "a line of prose is no trailer");
+        let written = said(reading(3_000, 2_900, &one));
+        assert!(
+            written.len() == 1 && written[0].contains("a pull request writes no `reading`"),
+            "{written:?}"
+        );
+        assert!(
+            reading(2_900, 2_900, &one).is_empty(),
+            "the build's own figure"
+        );
+        let unread = Allowed::of(
+            1_000,
+            2_000,
+            1,
+            &declared("x\n\nReading-growth: 600 tokens\n"),
+        );
+        assert_eq!(said(reading(1_000, 3_500, &unread)).len(), 1);
+    }
 }

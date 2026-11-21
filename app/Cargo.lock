@@ -4196,6 +4196,7 @@ dependencies = [
  "suzatary-stores",
  "suzatary-testkit",
  "suzatary-todo",
+ "suzatary-tooling",
  "suzatary-topics",
  "suzatary-triage",
  "tokio",
@@ -4908,11 +4909,15 @@ dependencies = [
 name = "suzatary-tooling"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "proptest",
  "rustix",
+ "serde",
  "serde_json",
  "signal-hook",
  "thiserror",
+ "toml 0.9.12+spec-1.1.0",
+ "toml_edit",
 ]
 
 [[package]]

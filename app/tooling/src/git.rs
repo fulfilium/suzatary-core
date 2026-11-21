@@ -93,3 +93,50 @@ pub fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
         .map(Oid::parse)
         .collect()
 }
+
+/// The values of `key` among `message`'s trailers, read as git reads them
+/// (`git interpret-trailers --parse`): a line of prose that begins with the key is none.
+pub fn trailers(key: &str, message: &str) -> Result<Vec<String>, Error> {
+    let mut parse = cmd(&["interpret-trailers", "--parse"]);
+    parse.stdin(Stdio::piped()).stdout(Stdio::piped());
+    let failed = |why: String| Error::Run {
+        command: "git interpret-trailers --parse".into(),
+        why,
+    };
+    let mut child = parse.spawn().map_err(|e| failed(e.to_string()))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| failed("no stdin".into()))?;
+    let text = message.to_owned();
+    let writer = std::thread::spawn(move || std::io::Write::write_all(&mut stdin, text.as_bytes()));
+    let out = child
+        .wait_with_output()
+        .map_err(|e| failed(e.to_string()))?;
+    let _ = writer.join();
+    if !out.status.success() {
+        return Err(failed(format!("exited {}", out.status)));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(name, _)| name.trim().eq_ignore_ascii_case(key))
+        .map(|(_, value)| value.trim().to_owned())
+        .collect())
+}
+
+/// The values of `key` among the trailers of each commit of `range` in the repository at `root`.
+pub fn declared(root: &Path, range: &str, key: &str) -> Result<Vec<String>, Error> {
+    let log = process::out(&mut cmd(&[
+        OsStr::new("-C"),
+        root.as_os_str(),
+        OsStr::new("log"),
+        OsStr::new("--format=%B%x00"),
+        OsStr::new(range),
+    ]))?;
+    let mut values = Vec::new();
+    for message in log.split('\0').filter(|m| !m.trim().is_empty()) {
+        values.extend(trailers(key, message.trim_start())?);
+    }
+    Ok(values)
+}

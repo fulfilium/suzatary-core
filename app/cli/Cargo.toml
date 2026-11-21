@@ -56,6 +56,8 @@ suzatary-stores.workspace = true
 suzatary-api.workspace = true
 suzatary-server.workspace = true
 suzatary-io.workspace = true
+# The context budget's measure, which the train runs without building this binary.
+suzatary-tooling.workspace = true
 # The plugin host: `suzatary plugin sync` runs the `[[plugins]]` sources.
 suzatary-plugin.workspace = true
 prodrome_core.workspace = true

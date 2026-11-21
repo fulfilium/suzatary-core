@@ -75,10 +75,12 @@ names each unit that is still over, and by how much. The guard
 repository's reading set has a ratchet that only falls. Follow these rules in every pull
 request:
 
-1. Show the context change. The guard prints each unit's figures against `origin/master`. If
-   the reading set grows, delete as much elsewhere in the same pull request, or say in its
-   description why the growth pays. The guard refuses growth past the ratchet plus 2k tokens;
-   when a change lowers the figures, run `scripts/context.sh record`.
+1. Show the context change. The guard prints each unit's figures against the merge base with
+   `origin/master`. If the reading set grows past 2k tokens, delete as much elsewhere, or say why
+   it pays on a line `Reading-growth: +6000: the record's laws` in two places: the pull
+   request's description, which the train copies into the merge, and a commit message of the
+   branch, which the branch's own gate reads (the guard names the line it lacks). A pull request
+   writes no `reading`: the train's build sets it from the merged tree.
 2. Write a comment only for what the code cannot say: an invariant, a hazard, a unit, or a
    reason that the types cannot carry. Do not narrate, argue with the reviewer or tell history.
    Git and the pull request hold the history.

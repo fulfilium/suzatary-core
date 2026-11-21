@@ -5,8 +5,9 @@
 # The goal is that no unit is over `budget.use` or `budget.develop`. `suzatary context` reads this
 # file; `scripts/context.sh` prints its table and names each unit still over and by how much. The
 # guard app/cli/tests/guards/context.rs fails when a unit's USE is over `budget.use` (or over its
-# `ratchet.use` plus `budget.allowance`), when the repository's reading set grows past
-# `ratchet.reading` plus `budget.allowance`, or when a unit's `depends` differs from what its
+# `ratchet.use` plus `budget.allowance`), when the repository's reading set grows past the merge
+# base's `ratchet.reading` plus `budget.allowance` for each pull request merged since it and what
+# their `Reading-growth:` lines declare, or when a unit's `depends` differs from what its
 # Cargo.toml or its `witnesses` say.
 
 [budget]
@@ -16,12 +17,13 @@ use = 25000
 develop = 500000
 # Tokens of one unit's tests (fixtures are reported beside them).
 tests = 500000
-# Tokens a pull request may grow the reading set by before the guard refuses it.
+# Tokens each pull request may grow the reading set by without a `Reading-growth:` line.
 allowance = 2000
 
 [ratchet]
-# The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
-# downward.
+# The repository's reading set in tokens. The train's build writes it from the merged tree
+# (`scripts/context.sh record --merged`, the figure and its reasons in the release commit), and
+# `scripts/context.sh record` lowers it; a pull request writes no figure.
 # 2026-11-16: raised by hand to the merged tree's figure for door 1, a public store's write guard (+5,451, a new security boundary).
 # 2026-11-16: raised by hand to the figure of the tree merged with 2.1.148 for `prodrome carry` (+20,175), a verb stage 4 of the public tasks plan deletes; accepted at the review of #520.
 # 2026-11-16: raised by hand to the figure of the tree merged with #520 for the start that folds no conversations (#521, +614 on top of #520's figure, about 5 s off every start).
@@ -398,7 +400,7 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
@@ -455,7 +457,7 @@ name = "tooling"
 path = "app/tooling"
 shape = "crate"
 depends = []
-scripts = ["scripts/train.sh"]
+scripts = ["scripts/context.sh", "scripts/train.sh"]
 
 [[unit]]
 name = "web"

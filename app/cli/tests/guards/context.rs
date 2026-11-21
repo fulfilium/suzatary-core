@@ -8,7 +8,7 @@ use super::repo;
 
 #[test]
 fn context_every_unit_is_within_its_budget_and_the_reading_set_within_the_ratchet() {
-    let (table, findings) = suzatary_cli::commands::context::check(&repo()).expect("it measures");
+    let (table, findings) = suzatary_tooling::context::check(&repo()).expect("it measures");
     println!("{table}");
     let refused: Vec<String> = findings.iter().map(ToString::to_string).collect();
     assert!(

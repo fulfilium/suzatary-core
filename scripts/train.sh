@@ -88,19 +88,36 @@ completes_of() {
   done <<<"$body"
 }
 
-# PR <n>'s `Wasm-growth:` texts, one a line, which its merge carries as trailers (wasm_budget.rs).
+# PR <n>'s `Wasm-growth:` and `Reading-growth:` lines, which its merge carries as trailers.
 growth_of() {
   local body line
   body="$("$gh" pr view "$1" --json body --jq .body)" || return 1
   while IFS= read -r line; do
     line="${line%$'\r'}"
-    [[ "$line" =~ ^[[:space:]]*Wasm-growth:[[:space:]]*(.+)$ ]] || continue
-    echo "${BASH_REMATCH[1]}"
+    [[ "$line" =~ ^[[:space:]]*(Wasm-growth|Reading-growth):[[:space:]]*(.+)$ ]] || continue
+    echo "${BASH_REMATCH[1]}: ${BASH_REMATCH[2]}"
   done <<<"$body"
 }
 
-# `Wasm-growth: <line>` for each of PR <n>'s lines, ready to follow its other trailers.
-grown() { sed '/^$/d; s/^/Wasm-growth: /' <<<"${growth_lines[$1]}"; }
+# PR <n>'s growth lines, ready to follow its other trailers.
+grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
+
+# context.toml's `reading` set from the merged tree and staged; on stdout, what a commit says of it.
+reading_line() {
+  [[ -e context.toml ]] || return 0
+  local before after commit line
+  figure() { sed -n 's/^reading = \([0-9]*\)$/\1/p' context.toml; }
+  before="$(figure)"
+  "$root/scripts/context.sh" record --merged >&2 && git add -- context.toml \
+    || die "the reading set of the merged tree could not be measured (above), so the train is not built."
+  after="$(figure)"
+  echo "The reading set: $after tokens, from $before on origin/master."
+  for commit in $(git rev-list --first-parent --reverse "origin/master..HEAD"); do
+    while IFS= read -r line; do
+      [[ -z "$line" ]] || echo "#$(pr_of "$commit"): Reading-growth: $line"
+    done < <(git log -1 --format='%(trailers:key=Reading-growth,valueonly,separator=%x0A)' "$commit")
+  done
+}
 
 # Sets `app_bin`: SUZATARY_TRAIN_BIN, else the named commit's app from a cache, else the deployed one.
 app_bin=""
@@ -202,7 +219,8 @@ store_at() {
 # The roadmap commit a cut and a check read: what its origin publishes now.
 tasks_head() { git -C "$roadmap" rev-parse --verify origin/master; }
 
-# The train's last commit: the release the roadmap reads once the train's todos are done.
+# The train's last commit: the release the roadmap reads once the train's todos are done; $1 says
+# the reading set's line.
 cut_release() {
   find_roadmap origin/master
   [[ -n "$roadmap" ]] || return 0
@@ -232,7 +250,7 @@ cut_release() {
     || die "the chain reads $version, and origin has v$version already (a tag no release on master names): the train is not built. Move or delete that tag, or complete a todo so the chain reads past it."
   # No crate compiles any of them, so the release moves no gate key. The cut removed every fragment.
   git add -- CHANGELOG.md app/release.toml && git rm -rq --cached --ignore-unmatch -- changelog.d
-  git commit --quiet -m "release: $version" \
+  git commit --quiet -m "release: $version" ${1:+-m "$1"} \
     -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks")" \
     || die "the release $version did not commit (a hook?)."
   printf 'release %s%s\n' "$version" "$( ((${#todos[@]} == 0)) || printf ', completing %s' "${todos[*]}")"
@@ -384,7 +402,13 @@ build() {
   printf 'train is %s on origin/master %s\n' "$(git rev-parse --short HEAD)" "$(git rev-parse --short origin/master)"
   [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]] \
     || die "no PR merged ($(printf '#%s ' "${prs[@]}")skipped or already on master), so the train is master and there is nothing to gate."
-  cut_release
+  local context
+  context="$(reading_line)" || exit 1
+  cut_release "$context"
+  # With no release to say it in, the line rides a commit of its own.
+  git diff --cached --quiet \
+    || git commit --quiet -m "context: the reading set of the merged tree" -m "$context" \
+    || die "the reading set's line did not commit (a hook?)."
 }
 
 halves=(tree live)

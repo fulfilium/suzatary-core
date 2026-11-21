@@ -66,6 +66,9 @@ fn run(command: Command) -> Result<u8, Error> {
         Command::Nightly => Train::new(table()?)?.nightly(),
         Command::Check { pr } => Train::new(table()?)?.check(pr),
         Command::Locked { verb, command } => Train::new(table()?)?.locked(&verb, &command),
+        Command::Context { repo, act } => suzatary_tooling::context::run(&repo, &act)
+            .map(|()| 0)
+            .map_err(|e| Error::Said(format!("{e:#}"))),
         Command::Published { rev } => {
             // The local name as `record` just fetched it: absent is a core with no master.
             let core = match git::commit_if(CORE_MASTER)? {

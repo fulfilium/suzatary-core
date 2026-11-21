@@ -7,6 +7,7 @@ pub mod admission;
 pub mod admitted;
 pub mod bisect;
 pub mod command;
+pub mod context;
 pub mod core_rows;
 pub mod error;
 pub mod fresh;

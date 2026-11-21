@@ -1,9 +1,9 @@
 //! The shipped wasm modules' budget (`web/wasm-budget`), in bytes after wasm-opt:
 //! `scripts/build-web.sh` refuses a module over its line, and this refuses a line raised against
 //! the merge base with `origin/master` by more than [`ALLOWANCE`], unless a commit since the merge
-//! base declares the growth on a `Wasm-growth: <module> +<bytes>: <reason>` line. A pull request
-//! says it on such a line of its description, which `scripts/train.sh` writes into its merge
-//! commit; a branch may say it in a commit of its own. So a module grows past the allowance only by
+//! base declares the growth in a `Wasm-growth: <module> +<bytes>: <reason>` trailer, read as git reads
+//! trailers. A pull request says it on such a line of its description, which `scripts/train.sh`
+//! writes into its merge commit; a branch may say it in a trailer of a commit of its own. So a module grows past the allowance only by
 //! a change that says why where a reviewer reads it.
 
 use std::collections::BTreeMap;
@@ -21,15 +21,17 @@ const ALLOWANCE: u64 = 16_000;
 /// Every line is a multiple of this: its system's measured figure rounded up to the next one.
 const STEP: u64 = 10_000;
 
-/// `Wasm-growth:` lines: what each declares a module may grow by, summed over the lines naming it.
-/// A line naming no number of bytes, or no reason, fails here, so a declaration is never read as
-/// something it does not say.
-fn grants(messages: &str) -> BTreeMap<String, u64> {
+/// The `Wasm-growth:` trailers of `messages`, read as git reads trailers (a line of prose that
+/// begins with the key is none): what each declares a module may grow by, summed over the
+/// trailers naming it. A trailer naming no number of bytes, or no reason, fails here, so a
+/// declaration is never read as something it does not say.
+fn grants(messages: &[&str]) -> BTreeMap<String, u64> {
     let mut grants = BTreeMap::new();
-    for line in messages.lines().map(str::trim) {
-        let Some(said) = line.strip_prefix("Wasm-growth:") else {
-            continue;
-        };
+    let values = messages.iter().flat_map(|message| {
+        suzatary_tooling::git::trailers("Wasm-growth", message).expect("git reads trailers")
+    });
+    for said in values {
+        let line = format!("Wasm-growth: {said}");
         let (Some((name, bytes)), reason) = (
             said.split_once(':')
                 .and_then(|(head, _)| head.trim().split_once(" +")),
@@ -153,7 +155,8 @@ fn wasm_budget_no_module_s_line_rises() {
         return;
     };
     let messages =
-        git(&["log", "--format=%B", &format!("{}..HEAD", base.trim())]).unwrap_or_default();
+        git(&["log", "--format=%B%x00", &format!("{}..HEAD", base.trim())]).unwrap_or_default();
+    let messages: Vec<&str> = messages.split('\0').map(str::trim_start).collect();
     let raised = refused(&lines(&was), &now, &grants(&messages));
     assert!(
         raised.is_empty(),
@@ -187,7 +190,7 @@ fn wasm_budget_a_line_rises_by_the_allowance_or_by_what_is_declared() {
         1,
         "a byte past it"
     );
-    let said = grants("Merge #1: x\n\nWasm-growth: views_bg.wasm +19000: master's topic PRs\n");
+    let said = grants(&["Merge #1: x\n\nWasm-growth: views_bg.wasm +19000: master's topic PRs\n"]);
     let grown = BTreeMap::from([
         line("views_bg.wasm", 509_000),
         line("prodrome_bg.wasm", 1_100_000),
@@ -206,7 +209,7 @@ fn wasm_budget_a_line_rises_by_the_allowance_or_by_what_is_declared() {
         refused(
             &was,
             &grown,
-            &grants("Wasm-growth: prodrome_bg.wasm +19000: another\n")
+            &grants(&["x\n\nWasm-growth: prodrome_bg.wasm +19000: another\n"])
         )
         .len()
             == 1,
@@ -217,5 +220,13 @@ fn wasm_budget_a_line_rises_by_the_allowance_or_by_what_is_declared() {
 #[test]
 #[should_panic(expected = "gives no reason")]
 fn wasm_budget_a_declaration_without_a_reason_is_refused() {
-    grants("Wasm-growth: views_bg.wasm +19000:\n");
+    grants(&["x\n\nWasm-growth: views_bg.wasm +19000:\n"]);
+}
+
+/// A line of a message's prose that begins with the key is no trailer, so it declares nothing and
+/// fails nothing: the body of a commit that wraps a sentence onto `Wasm-growth:`.
+#[test]
+fn wasm_budget_a_line_of_prose_is_no_declaration() {
+    let prose = "train: a change\n\nIts growth lines ride its merge as trailers beside\nWasm-growth:. After the last merge the build runs.\n";
+    assert!(grants(&[prose]).is_empty());
 }

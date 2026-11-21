@@ -75,7 +75,8 @@ confirm. Everything below derives from this.
   interface, ≤ 25k tokens) and to DEVELOP (≤ 500k). The goal is no unit over
   either, and the table names each unit still over; the guard
   `app/cli/tests/guards/context.rs` holds USE, and the repository's reading
-  set only falls (AGENTS.md, "Context budget").
+  set grows only by what a pull request declares (`Reading-growth:`); the
+  train's build writes the figure (AGENTS.md, "Context budget").
 
 ## Semantics (the FPL layer)
 

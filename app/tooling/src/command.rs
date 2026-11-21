@@ -13,11 +13,17 @@ pub const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--
        train bisect [--remote github]
        train nightly
        train check <pr>
-       train locked <verb> -- <command>...";
+       train locked <verb> -- <command>...
+       train context [--repo <dir>] [files [<unit>] | record [--merged] | external <name> <dir>]";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Command {
+    /// The context budget of the repository at `repo`.
+    Context {
+        repo: std::path::PathBuf,
+        act: crate::context::Act,
+    },
     /// One word on stdout: the reading `of` the commit's tree.
     Read {
         commit: String,
@@ -121,6 +127,8 @@ impl Command {
                 Ok(pr) if !n.starts_with(['0', '+']) => Ok(Command::Check { pr }),
                 _ => Err(usage(&format!("\"{n}\" is not a pull request number"))),
             },
+            ["context", "--repo", repo, ref rest @ ..] => Command::context(repo, rest),
+            ["context", ref rest @ ..] => Command::context(".", rest),
             ["locked", verb, "--", ref command @ ..] if !command.is_empty() => {
                 Ok(Command::Locked {
                     verb: verb.to_owned(),
@@ -129,6 +137,26 @@ impl Command {
             }
             _ => Err(usage("unknown arguments")),
         }
+    }
+
+    fn context(repo: &str, words: &[&str]) -> Result<Command, Error> {
+        use crate::context::{Act, Recording};
+        let act = match words {
+            [] => Act::Show,
+            ["files"] => Act::Files(None),
+            ["files", unit] => Act::Files(Some((*unit).to_owned())),
+            ["record"] => Act::Record(Recording::Lowered),
+            ["record", "--merged"] => Act::Record(Recording::Merged),
+            ["external", name, checkout] => Act::External {
+                name: (*name).to_owned(),
+                checkout: checkout.into(),
+            },
+            _ => return Err(usage("unknown arguments")),
+        };
+        Ok(Command::Context {
+            repo: repo.into(),
+            act,
+        })
     }
 
     fn table(words: &[&str]) -> Result<Command, Error> {

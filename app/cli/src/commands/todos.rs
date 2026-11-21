@@ -142,7 +142,7 @@ fn packages(mounts: &crate::instance::Mounts, code: Option<&Path>) -> Packages {
     match mounts.project() {
         Err(why) => unchecked(format!("the release plan does not read: {why:#}")),
         Ok(None) => unchecked("no chain holds a release plan".to_owned()),
-        Ok(Some(project)) => match code.map(super::context::read_plan) {
+        Ok(Some(project)) => match code.map(suzatary_tooling::context::read_plan) {
             Some(Ok(plan)) => Packages::Checked {
                 chain: project.chain,
                 units: plan.units.into_iter().map(|unit| unit.name).collect(),

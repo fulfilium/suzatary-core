@@ -709,6 +709,56 @@ fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
     );
 }
 
+/// The stub of `scripts/context.sh`: the reading set of a tree is the bytes of its `.txt` files.
+const CONTEXT: &str = "#!/bin/sh\n[ \"$1 $2\" = \"record --merged\" ] || exit 64\nn=$(cat ./*.txt 2>/dev/null | wc -c)\nsed -i \"s/^reading = .*/reading = $n/\" context.toml\n";
+
+/// Two pull requests that each grow the reading set ride one train, since neither writes
+/// `context.toml`'s `reading`: the build sets it from the merged tree, by the tree's own
+/// `scripts/context.sh`, and its commit says the figure written, the figure before and each
+/// declared growth with its pull request, which the merge carries as a trailer.
+#[test]
+fn train_build_sets_the_reading_set_from_the_merged_tree() {
+    let t = Train::new("reading");
+    t.master_releases(
+        &[
+            ("context.toml", "[ratchet]\nreading = 10\n"),
+            ("scripts/context.sh", CONTEXT),
+        ],
+        "0.1.0",
+    );
+    t.pr(1, "grows by a", &[("a.txt", "aaaa\n")]);
+    std::fs::write(
+        t.scratch.join("prs/1.body"),
+        "The a.\n\nReading-growth: +3000: the a's laws\n",
+    )
+    .expect("a body");
+    t.pr(2, "grows by b", &[("b.txt", "bbbbbb\n")]);
+    let out = t.train(&["build", "1", "2"]);
+    assert!(out.status.success(), "build: {}", text(&out.stderr));
+    assert_eq!(
+        t.merges().len(),
+        3,
+        "both merged, and the figure: {:?}",
+        t.merges()
+    );
+    assert!(
+        t.git(&["show", "train:context.toml"])
+            .contains("reading = 12"),
+        "the merged tree's figure"
+    );
+    let said = t.git(&["log", "-1", "--format=%B", "train"]);
+    assert!(
+        said.starts_with("context: the reading set of the merged tree")
+            && said.contains("The reading set: 12 tokens, from 10 on origin/master.")
+            && said.contains("#1: Reading-growth: +3000: the a's laws"),
+        "{said}"
+    );
+    assert_eq!(
+        merge_trailer(&t, 1, "Reading-growth"),
+        "+3000: the a's laws"
+    );
+}
+
 /// A stacked PR merges before the PR it carries, whatever their numbers: its merge brings the
 /// base's commits, the base is `in`, and the todos both complete ride on that merge, each once.
 /// The stack numbered upward and downward builds one tree, and so does a second build.

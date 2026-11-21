@@ -26,6 +26,11 @@ rustix = { version = "1", features = ["event", "process"] }
 # HUP, INT and TERM received as messages, whatever disposition the train inherited.
 signal-hook = "0.4"
 thiserror.workspace = true
+# The context budget (`context`): context.toml read and edited, Rust and Cargo manifests read.
+anyhow.workspace = true
+serde.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
