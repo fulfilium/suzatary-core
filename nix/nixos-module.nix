@@ -301,6 +301,28 @@ in
       };
     };
 
+    # THE FOLLOWED STORES: each `[[follows]]` copy brought to its upstream branch. A fetch only
+    # gains objects, under the copy's own lock, so it needs no ordering with anything here. A
+    # refused fetch fails the unit with one line per store, its name and git's words.
+    systemd.user.services.suzatary-follows = baseUnit
+      "Suzatary followed stores' fetch (every hour)"
+      {
+        Type = "oneshot";
+        Nice = 10;
+        ExecStart = "${services.follows}/bin/suzatary-follows";
+      };
+
+    systemd.user.timers.suzatary-follows = {
+      description = "Fetch Suzatary's followed stores every hour";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        # A followed store is another repository's plan, which moves when its pull requests
+        # merge: an hour bounds how stale its rows read, and every reading dates the copy.
+        OnCalendar = "*:37";
+        Persistent = true;
+      };
+    };
+
     # IMAP IDLE for each Microsoft account, starting the triage on a debounced wake; it never syncs.
     # A watch that ends fails and restarts; a roster with no such account exits 0 and stays down.
     systemd.user.services.suzatary-mail-idle = servingUnit

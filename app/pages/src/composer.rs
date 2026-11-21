@@ -180,7 +180,11 @@ impl Composer {
     pub(crate) fn of(draft: &str, seeded: &[String]) -> (Composer, Local) {
         let mut references: Vec<String> = Vec::new();
         for r in seeded {
-            if r.parse::<Reference>().is_ok() && !references.contains(r) {
+            // A todo named by its genesis is no thing the secretary reads: it reads a chain's.
+            let seeds = r
+                .parse::<Reference>()
+                .is_ok_and(|r| !matches!(r, Reference::Global(_)));
+            if seeds && !references.contains(r) {
                 references.push(r.clone());
             }
         }
@@ -650,6 +654,19 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The composer is seeded with the references the secretary reads, never a todo named by
+    /// its genesis, nor a string that is no reference.
+    #[test]
+    fn a_seed_by_genesis_is_not_taken() {
+        let seeds = [
+            "todo:life/x".to_owned(),
+            "todo:+3f2a9c1b2d4e/x".to_owned(),
+            "not a reference".to_owned(),
+        ];
+        let (composer, _) = Composer::of("d", &seeds);
+        assert_eq!(composer.references, vec!["todo:life/x".to_owned()]);
+    }
 
     fn k(name: &str, ctrl: bool, shift: bool) -> Key {
         Key {

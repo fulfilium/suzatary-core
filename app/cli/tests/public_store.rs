@@ -630,3 +630,163 @@ fn a_public_store_refuses_the_secretary_and_every_signature() {
         .expect("the main session's write is taken");
     assert_eq!(held(&root).len(), before.len() + 1, "one unsigned change");
 }
+
+/// `todo add <id> --waiting-on <on>` on the box's first chain.
+fn waiting(instance: &Path, id: &str, on: &str) -> std::process::Output {
+    signing(
+        instance,
+        &[
+            "todo",
+            "add",
+            id,
+            "--body",
+            "Mow",
+            "--rationale",
+            "A plain reason",
+            "--category",
+            "home",
+            "--priority",
+            "70",
+            "--waiting-on",
+            on,
+        ],
+        &[
+            (suzatary_signatures::signatures::BOX_KEY, SEED.to_owned()),
+            (suzatary_signatures::signatures::AGENT_KEY, "8".repeat(64)),
+        ],
+    )
+}
+
+/// The private chain `home`, holding `hometask`, added to the box at `root`.
+fn a_private_chain(root: &Path, instance: &Path) {
+    let private = suzatary_record::record::EventStore::new(
+        root.join("events-home"),
+        prodrome_core::policy::Untrusted::none(),
+    );
+    suzatary_store::store::append_to(
+        &private,
+        suzatary_record::record::GENESIS,
+        crate::follows::task("hometask", 0.5, ""),
+    )
+    .expect("appends");
+    let text = std::fs::read_to_string(instance).expect("the instance");
+    std::fs::write(
+        instance,
+        format!(
+            "{text}\n[[chains]]\nname = \"home\"\nevents = \"events-home\"\n\
+             untrusted = []\nactors = [\"ada\"]\nowner = \"ada\"\n"
+        ),
+    )
+    .expect("the instance");
+}
+
+/// A public store names a todo by its store's genesis, never by a chain name of this deployment
+/// and never a task of a private chain, by either name. A chain name of a store anyone reads is
+/// refused with the whole name by genesis to write instead, which `todo show` prints and the store
+/// then takes; one of a private chain is refused with no name to write, and so is a private
+/// chain's genesis. A private store takes every one of them.
+#[test]
+fn a_public_store_refuses_a_chain_name_and_says_the_genesis_form() {
+    for (name, public) in [("door-named", true), ("door-named-private", false)] {
+        let (root, instance) = a_box(name, public);
+        a_private_chain(&root, &instance);
+        let first = add(&instance, "zzfirst", "Water the garden", "A plain reason");
+        assert!(
+            first.status.success(),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        let named = |reference: &str| {
+            let shown = signing(&instance, &["todo", "show", reference], &[]);
+            assert!(
+                shown.status.success(),
+                "{}",
+                String::from_utf8_lossy(&shown.stderr)
+            );
+            let shown: serde_json::Value =
+                serde_json::from_slice(&shown.stdout).expect("todo show prints JSON");
+            shown["name"].as_str().expect("its name").to_owned()
+        };
+        let life = named("todo:life/zzfirst");
+        assert_eq!(named(&life), life, "shown by its name, it names itself");
+        let home = named("todo:home/hometask");
+        let before = held(&root);
+        let private = "names no task of a private chain".to_owned();
+        for (id, on, said) in [
+            (
+                "zzlocal",
+                "todo:life/zzfirst".to_owned(),
+                format!("write {life} instead"),
+            ),
+            ("zzhome", "todo:home/hometask".to_owned(), private.clone()),
+            ("zzhomeg", home.clone(), private.clone()),
+            (
+                "zzhomes",
+                format!("todo:+{}/hometask", &home[6..14]),
+                private.clone(),
+            ),
+        ] {
+            let wrote = waiting(&instance, id, &on);
+            let stderr = String::from_utf8_lossy(&wrote.stderr);
+            if public {
+                assert!(!wrote.status.success(), "{on} was published");
+                assert!(stderr.contains(&said), "{stderr}");
+                assert!(stderr.contains("rewrite the field"), "{stderr}");
+                // A refusal may repeat what the writer wrote, never say what they did not.
+                assert!(
+                    on.contains(&home[6..18]) || !stderr.contains(&home[6..18]),
+                    "a private genesis was said: {stderr}"
+                );
+                assert_eq!(held(&root), before, "the store moved");
+            } else {
+                assert!(wrote.status.success(), "{stderr}");
+            }
+        }
+        let global = waiting(&instance, "zzglobal", &life);
+        assert!(
+            global.status.success(),
+            "{}",
+            String::from_utf8_lossy(&global.stderr)
+        );
+    }
+}
+
+/// Where a chain of the deployment does not read, door 1 cannot tell whether a todo a write names
+/// is one of it, so it takes no write that names a todo, a rightful name by genesis included,
+/// and says which chain did not read; a write that names no todo is still taken.
+#[test]
+fn a_public_store_takes_no_name_while_a_chain_of_the_deployment_does_not_read() {
+    let (root, instance) = a_box("door-unread-chain", true);
+    a_private_chain(&root, &instance);
+    let first = add(&instance, "zzfirst", "Water the garden", "A plain reason");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let shown = signing(&instance, &["todo", "show", "todo:life/zzfirst"], &[]);
+    let shown: serde_json::Value = serde_json::from_slice(&shown.stdout).expect("JSON");
+    let life = shown["name"].as_str().expect("its name").to_owned();
+    // A second genesis: a chain is one prodrome, so it no longer reads.
+    let second: Envelope<suzatary_record::record::TodoEvent> = Envelope::Genesis(
+        prodrome_core::genesis::mk_genesis("todos", &"1".repeat(32)).expect("a genesis"),
+    );
+    std::fs::write(
+        root.join("events-home/objects")
+            .join(format!("{}.py", seal_hash(&second).as_str())),
+        canonical_envelope(&second),
+    )
+    .expect("a second genesis");
+    let before = held(&root);
+    let named = waiting(&instance, "zznamed", &life);
+    let said = String::from_utf8_lossy(&named.stderr);
+    assert!(!named.status.success(), "taken while a chain did not read");
+    assert!(said.contains("the chain home does not read"), "{said}");
+    assert_eq!(held(&root), before, "the store moved");
+    let plain = waiting(&instance, "zzplain", "Ada");
+    assert!(
+        plain.status.success(),
+        "{}",
+        String::from_utf8_lossy(&plain.stderr)
+    );
+}

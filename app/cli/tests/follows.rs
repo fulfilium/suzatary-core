@@ -1,5 +1,7 @@
 //! A followed store through the real binary: `follow fetch` copies it, the one list reads it and
-//! a wait from a private chain raises its task, and every command that walks the chains (adoption,
+//! a wait from a private chain raises its task, and a wait written in it by genesis raises a task
+//! of a second followed store, kept as the library keeps its own roadmap (a `roadmap/` of its
+//! `roadmap-data` branch, items mirrored from an issue tracker, a pricing bot's claims); and every command that walks the chains (adoption,
 //! an append aimed at it, the release plan, the public push's listing) leaves its copy
 //! byte-identical; and what `todos open` answers for a store it could not read.
 
@@ -28,7 +30,7 @@ fn at(day: u32) -> Datetime {
     Datetime::new(2026, 9, day, 9, 0, 0, 0).expect("a real instant")
 }
 
-fn task(id: &str, price: f64, waiting_on: &str) -> suzatary_record::record::TodoEvent {
+pub(crate) fn task(id: &str, price: f64, waiting_on: &str) -> suzatary_record::record::TodoEvent {
     mk_authored(
         id,
         at(1),
@@ -65,15 +67,15 @@ fn git(dir: &Path, args: &[&str]) {
 }
 
 /// A repository whose `main` holds, in `roadmap/` beside two documents, a public store of one
-/// task with a plan and a charter that a walk of the chains would read.
-fn an_upstream(root: &Path) -> PathBuf {
+/// task, waiting on `waiting_on`, with a plan and a charter that a walk of the chains would read.
+fn an_upstream(root: &Path, waiting_on: &str) -> PathBuf {
     let upstream = root.join("upstream");
     let store = upstream.join("roadmap");
     let events = EventStore::new(store.clone(), prodrome_core::policy::Untrusted::none());
     suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
-        task("libtask", 0.9, ""),
+        task("libtask", 0.9, waiting_on),
     )
     .expect("appends");
     std::fs::write(store.join("charter.toml"), "public = true\n").expect("a charter");
@@ -84,6 +86,102 @@ fn an_upstream(root: &Path) -> PathBuf {
     git(&upstream, &["add", "."]);
     git(&upstream, &["commit", "--quiet", "-m", "a store"]);
     upstream
+}
+
+/// The object the library's issue mirror writes for its issue 7, as its own binary prints it,
+/// with the issue's address at a reserved domain.
+const MIRRORED: &str = "Authored(todo='gh-7', at=datetime(2026, 9, 18, 8, 0, 0), \
+    actor='github-mirror', kind='todo', created=datetime(2026, 9, 18, 8, 0, 0), \
+    body='a sync protocol between replicas', spec=Flat(value=0.8), rationale=(), \
+    category='issue', waiting_on='', detail='', source=Source(sender='hubot', \
+    subject='a sync protocol between replicas', date=datetime(2026, 9, 18, 8, 0, 0), hash='', \
+    thread_id='', message_id='https://example.test/library/issues/7'), subtodos=(), notes=(), \
+    note='')";
+
+/// A repository kept as the library keeps its roadmap: the branch `roadmap-data`, its store in
+/// `roadmap/` begun by a genesis labelled `roadmap`, each issue an item `gh-<n>` that the mirror
+/// creates and records at 80%, a maintainer's reprice, and a pricing bot's proposal, a claim
+/// under a reader that names it untrusted. Answers the store's genesis.
+fn a_library_roadmap(root: &Path) -> String {
+    let upstream = root.join("roadmap-upstream");
+    let store = upstream.join("roadmap");
+    let events = EventStore::new(store.clone(), prodrome_core::policy::Untrusted::none());
+    let day = |d: u32, h: u32| Datetime::new(2026, 9, d, h, 0, 0, 0).expect("an instant");
+    let issue = |n: u32, title: &str, d: u32| {
+        let id = format!("gh-{n}");
+        let created = prodrome_core::event::mk_created(&id, day(d, 8), "github-mirror", title, "")
+            .expect("a creation");
+        let record = mk_authored(
+            &id,
+            day(d, 8),
+            "github-mirror",
+            "todo",
+            day(d, 8),
+            MarkupSource::escaped(title),
+            fpl::mk_flat(0.8).expect("a flat"),
+            vec![],
+            "issue",
+            "",
+            MarkupSource::empty(),
+            Some(suzatary_record::record::mk_source(
+                "hubot",
+                title,
+                day(d, 8),
+                "",
+                "",
+                &format!("https://example.test/library/issues/{n}"),
+            )),
+            Vec::new(),
+            Vec::new(),
+            "",
+        )
+        .expect("a record");
+        [created, record]
+    };
+    let reprice = |actor: &str, value: f64| {
+        prodrome_core::event::mk_spec_revised(
+            "gh-12",
+            day(21, 9),
+            actor,
+            fpl::mk_flat(value).expect("a flat"),
+            "",
+        )
+        .expect("a reprice")
+    };
+    let written: Vec<_> = issue(7, "a sync protocol between replicas", 18)
+        .into_iter()
+        .chain(issue(12, "verify is quadratic on large stores", 20))
+        .chain([reprice("maintainer", 0.4), reprice("pricing-bot", 0.05)])
+        .collect();
+    for event in written {
+        suzatary_store::store::append_to(&events, "roadmap", event).expect("appends");
+    }
+    let objects: Vec<(String, String)> = std::fs::read_dir(store.join("objects"))
+        .expect("the objects")
+        .map(|entry| {
+            let path = entry.expect("an entry").path();
+            let name = path
+                .file_name()
+                .expect("a name")
+                .to_string_lossy()
+                .into_owned();
+            (name, std::fs::read_to_string(&path).expect("an object"))
+        })
+        .collect();
+    assert!(
+        objects.iter().any(|(_, text)| text.contains(MIRRORED)),
+        "the record is the library mirror's bytes"
+    );
+    let genesis = objects
+        .iter()
+        .find(|(_, text)| text.starts_with("Genesis(label='roadmap'"))
+        .map(|(name, _)| name.clone())
+        .expect("a genesis");
+    std::fs::write(upstream.join("PRICING.md"), "The scale.\n").expect("a document");
+    git(&upstream, &["init", "--quiet", "-b", "roadmap-data"]);
+    git(&upstream, &["add", "."]);
+    git(&upstream, &["commit", "--quiet", "-m", "the roadmap"]);
+    genesis
 }
 
 fn json(output: &std::process::Output) -> serde_json::Value {
@@ -108,8 +206,10 @@ fn bytes(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 /// A box whose private chain `life` holds `ship`, waiting on the followed store's `libtask`, and
-/// whose instance follows `library`, the `roadmap/` of the branch `main` of a repository beside
-/// it named by a relative remote, which resolves against the instance file's directory.
+/// `later`, waiting by genesis on a store no deployment holds; whose instance follows `library`,
+/// the `roadmap/` of the branch `main` of a repository beside it named by a relative remote,
+/// which resolves against the instance file's directory, and `prodrome`, the library's own
+/// roadmap. `libtask` waits on the roadmap's `gh-12` by its genesis.
 fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let root = scratch(name);
     a_chain(&root);
@@ -117,13 +217,19 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
         root.join("events"),
         prodrome_core::policy::Untrusted::none(),
     );
-    suzatary_store::store::append_to(
-        &life,
-        suzatary_record::record::GENESIS,
-        task("ship", 0.2, "Ada, and todo:library/libtask"),
-    )
-    .expect("appends");
-    let upstream = an_upstream(&root);
+    for (id, price, waiting_on) in [
+        ("ship", 0.2, "Ada, and todo:library/libtask"),
+        ("later", 0.6, "todo:+0000000000ff/gone"),
+    ] {
+        suzatary_store::store::append_to(
+            &life,
+            suzatary_record::record::GENESIS,
+            task(id, price, waiting_on),
+        )
+        .expect("appends");
+    }
+    let roadmap = a_library_roadmap(&root);
+    let upstream = an_upstream(&root, &format!("todo:+{}/gh-12", &roadmap[..12]));
     let instance = a_signing_instance(
         &root,
         &prodrome_core::sign::Secret::new(OWN)
@@ -132,7 +238,8 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     );
     let text = format!(
         "{}\n[[follows]]\nname = \"library\"\nremote = \"upstream\"\nbranch = \"main\"\n\
-         path = \"roadmap\"\n",
+         path = \"roadmap\"\n\n[[follows]]\nname = \"prodrome\"\nremote = \"roadmap-upstream\"\n\
+         branch = \"roadmap-data\"\npath = \"roadmap\"\nuntrusted = [\"pricing-bot\"]\n",
         std::fs::read_to_string(&instance).expect("the instance"),
     );
     std::fs::write(&instance, text).expect("the instance");
@@ -170,6 +277,32 @@ fn a_followed_store_is_read_and_never_written() {
     assert_eq!(library["reading"]["by"], "todo:life/ship");
     assert_eq!(printed["open"][0]["id"], "ship", "the most urgent first");
     ok(&run(&["todo", "--chain", "library", "show", "libtask"]));
+    let issue = printed["open"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .find(|row| row["chain"] == "prodrome" && row["id"] == "gh-12")
+        .expect("the roadmap's mirrored item is listed");
+    assert_eq!(
+        issue["priority"]["percent"], "40.00%",
+        "the bot's claim is no price: {issue}"
+    );
+    assert_eq!(
+        issue["reading"]["by"], "todo:life/ship",
+        "raised through libtask: {issue}"
+    );
+    let named = issue["name"].as_str().expect("its name").to_owned();
+    let shown = run(&["todo", "show", &named]);
+    ok(&shown);
+    assert_eq!(json(&shown)["name"], named.as_str());
+    assert_eq!(
+        printed["unresolved"],
+        serde_json::json!([{
+            "waiter": "todo:life/later",
+            "reference": "todo:+0000000000ff/gone",
+            "missing": { "type": "Unheld" },
+        }]),
+    );
 
     ok(&run(&["device", "init"]));
     let aimed = run(&[

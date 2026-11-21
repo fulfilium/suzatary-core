@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use suzatary_base::topic_target::Target;
 
 use serde::{Deserialize, Serialize};
-use suzatary_base::reference::Reference;
+use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_inbox::wire::inbox::{
     Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, FixThen,
     ProposedAct, ProposedObject,
@@ -283,8 +283,9 @@ pub(crate) type Titles = BTreeMap<String, String>;
 #[must_use]
 pub(crate) fn spoken(r: &Reference, titles: &Titles) -> String {
     match r {
-        Reference::Todo(t) => titles
-            .get(t.id.as_str())
+        Reference::Global(_) => r.to_string(),
+        Reference::Todo(TodoRef { id, .. }) => titles
+            .get(id.as_str())
             .cloned()
             .unwrap_or_else(|| "a todo".to_owned()),
         Reference::Mail { .. } => "a message".to_owned(),
@@ -715,9 +716,7 @@ fn file_row(f: &CardFile) -> Node<Ev> {
 
 fn source(text: &str, titles: &Titles) -> Node<Ev> {
     match text.parse::<Reference>() {
-        Ok(r) => {
-            view! { A {Class => format!("reflink proposalsource ref-{}", r.scheme()), Href => Place::Reference(&r).href()} [spoken(&r, titles)] }
-        }
+        Ok(r) => crate::places::reference(&r, "reflink proposalsource", spoken(&r, titles)),
         Err(_) => viewtree::node::text(text),
     }
 }

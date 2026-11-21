@@ -340,7 +340,7 @@ fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
     let speaker = Speaker::at(call.guard.as_str(), Seat::of(&call.admitted));
     if references
         .iter()
-        .any(|reference| matches!(reference, Reference::Todo(_)))
+        .any(|reference| matches!(reference, Reference::Todo(_) | Reference::Global(_)))
     {
         let read = call.state.chains_read();
         stamp::pointing(

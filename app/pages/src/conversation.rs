@@ -1510,7 +1510,7 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
         }).collect::<Vec<_>>()] }
     });
     let refs = (!references.is_empty()).then(|| {
-        view! { Div "turnrefs" [references.iter().map(|r| view! { A {Class => format!("reflink turnref ref-{}", r.scheme()), Href => Place::Reference(r).href()} [r.to_string()] }).collect::<Vec<_>>()] }
+        view! { Div "turnrefs" [references.iter().map(|r| crate::places::reference(r, "reflink turnref", r.to_string())).collect::<Vec<_>>()] }
     });
     let replies = reply
         && t.gone.is_none()

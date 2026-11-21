@@ -25,11 +25,12 @@ export namespace href {
   const web = (u: URL): boolean => u.protocol === "http:" || u.protocol === "https:"
 
   /** An outbound href is kept as written, since the browser reads it as `URL` just did; a bare `todo:` names nothing
-   * and stays inert, as every scheme outside `OUTBOUND` does. */
+   * and stays inert, as every scheme outside `OUTBOUND` does, and so does `todo:+<genesis>/<id>`: the tab holds no
+   * store's genesis, so it cannot tell which todo that is. */
   export const of = (raw: string, base: string): Href => {
     const u = parsed(raw, base)
     return u === null ? { type: "Inert" }
-      : u.protocol === "todo:" ? (u.pathname === "" ? { type: "Inert" } : { type: "Todo", id: u.pathname })
+      : u.protocol === "todo:" ? (u.pathname === "" || u.pathname.startsWith("+") ? { type: "Inert" } : { type: "Todo", id: u.pathname })
       : OUTBOUND.has(u.protocol)
         ? { type: "Outbound", href: raw, shown: web(u) ? u.host : u.pathname, address: web(u) ? u.href : `${u.pathname}${u.search}` }
       : { type: "Inert" }

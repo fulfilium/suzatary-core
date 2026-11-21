@@ -150,14 +150,24 @@ impl Stamp {
 /// The stamp the gate's `speaker` puts on a line pointing at `references`, as `set` reads the chains
 /// when the line is written: the actor's own, unless a reference names a todo whose content is
 /// still an untrusted writer's ([`suzatary_todo::view::provisional_content`]), or one the set cannot show
-/// to be otherwise, which makes it [`Stamp::Unconfirmed`]. What decides is who wrote the todo's
+/// to be otherwise, a todo named by genesis among them, which makes it [`Stamp::Unconfirmed`]. What decides is who wrote the todo's
 /// words, its id among them; an untrusted claim about a todo he wrote leaves them his.
 #[must_use]
 pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) -> Stamp {
     let mut todos: BTreeMap<_, BTreeSet<&str>> = BTreeMap::new();
     for reference in references {
-        if let Reference::Todo(TodoRef { chain, id }) = reference {
-            todos.entry(chain).or_default().insert(id.as_str());
+        match reference {
+            Reference::Todo(TodoRef { chain, id }) => {
+                todos.entry(chain).or_default().insert(id.as_str());
+            }
+            // The set reads chains by name, so it cannot show who wrote a todo named by genesis.
+            Reference::Global(_) => return Stamp::Unconfirmed(speaker),
+            Reference::Mail { .. }
+            | Reference::Thread { .. }
+            | Reference::Briefing { .. }
+            | Reference::Proposal(_)
+            | Reference::Batch { .. }
+            | Reference::Target(_) => {}
         }
     }
     let confirmed = todos.into_iter().all(|(chain, ids)| {
@@ -209,6 +219,24 @@ mod tests {
         assert_eq!(
             Stamp::from("ada at the box's terminal pointing at an unconfirmed todo"),
             Stamp::Unconfirmed(Speaker::at("ada", Seat::Operator))
+        );
+    }
+
+    /// A line pointing at a todo named by genesis is stamped unconfirmed: the set reads chains by
+    /// name and cannot show who wrote it, whatever store holds it.
+    #[test]
+    fn a_todo_named_by_genesis_is_stamped_unconfirmed() {
+        let at =
+            prodrome_core::literal::Datetime::new(2026, 9, 1, 12, 0, 0, 0).expect("an instant");
+        let set = ChainSet::new(at);
+        let global: Reference = "todo:+3f2a9c1b2d4e/x".parse().expect("a reference");
+        assert_eq!(
+            pointing(Speaker::device("ada"), &[global], &set),
+            Stamp::Unconfirmed(Speaker::device("ada"))
+        );
+        assert_eq!(
+            pointing(Speaker::device("ada"), &[], &set),
+            Stamp::Actor(Speaker::device("ada"))
         );
     }
 }

@@ -2,8 +2,8 @@
 # HEAD's public tree run as a deploy runs it: a read-only store path, files dated 1970, no
 # `.git`, a `-source` basename, and the units' PATH with no dev shell. It typesets the decisions
 # page, runs `safe-push.sh --dry` over a fresh deployment (no cargo on PATH), writes to a public
-# chain through door 1 with the package's own gitleaks (none on PATH), and stores a calendar's
-# link with `secretspec` beside the read-only tree.
+# chain through door 1 with the package's own gitleaks (none on PATH), stores a calendar's
+# link with `secretspec` beside the read-only tree, and runs the followed stores' unit command.
 #
 #   nix develop .#triage -c scripts/deployed-shape.sh
 set -euo pipefail
@@ -163,3 +163,33 @@ printf '%s\n' "$link" | "${store[@]}" secretspec set PLUGIN_ICS_WORK --file "$de
   { echo "deployed-shape: secretspec refused the calendar's link" >&2; exit 1; }
 [[ "$("${store[@]}" secretspec get PLUGIN_ICS_WORK --file "$declared" --reason "deployed-shape: read back" | tail -n 1)" == "$link" ]] ||
   { echo "deployed-shape: the calendar's link did not read back" >&2; exit 1; }
+
+# The followed stores' unit runs `app-bin.sh --deployed follow fetch` from the tree; here the
+# deployed binary is this run's, and the upstream is a branch whose `roadmap/` holds the public
+# chain's objects written above.
+echo "==> a followed store, fetched by the unit's command beside the read-only tree" >&2
+"${units[@]}" sh -c 'mkdir -p "$1/upstream/roadmap" "$1/roots" &&
+  cp -r "$1/data/events-suzatary/objects" "$1/upstream/roadmap/" &&
+  ln -s "$1/bin" "$1/roots/lock-bin" &&
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$1/upstream" init -q -b main &&
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$1/upstream" add roadmap &&
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git -C "$1/upstream" -c user.name=Ada -c user.email=ada@example.test commit -qm roadmap' \
+  sh "$scratch"
+"${units[@]}" sh -c 'cat >>"$1"' sh "$scratch/data/instance.toml" <<FOLLOWS
+
+[[follows]]
+name = "library"
+remote = "$scratch/upstream"
+branch = "main"
+path = "roadmap"
+FOLLOWS
+"${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" "SUZATARY_ROOTS=$scratch/roots" \
+  "$tree/scripts/app-bin.sh" --deployed follow fetch ||
+  { echo "deployed-shape: the unit's command did not fetch the followed store" >&2; exit 1; }
+listed="$("${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" "$scratch/suzatary" \
+  todos open --chain library --json)"
+case "$listed" in
+  *'"id":"zzclean"'*) ;;
+  *) echo "deployed-shape: the fetched store does not list its task: $listed" >&2; exit 1 ;;
+esac

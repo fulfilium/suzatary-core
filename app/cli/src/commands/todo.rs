@@ -20,6 +20,8 @@ use suzatary_todo::{authoring, view};
 use super::store_at::StoreAt;
 use crate::instance::{ChainDir, Instance};
 use suzatary_base::chains::ChainName;
+use suzatary_base::reference::{GenesisPrefix, GlobalTodo, Reference};
+use suzatary_plan::wait::Audience;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;
 
@@ -38,9 +40,11 @@ pub struct Args {
 /// EVERY `todo` act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
-    /// One todo as the chain holds it: its block, its fields, its authorship.
+    /// One todo as the chain holds it: its block, its fields, its authorship, and its name in
+    /// every store (`todo:+<genesis>/<id>`).
     Show {
-        /// The todo.
+        /// The todo: its id in `--chain`, `todo:<chain>/<id>`, or `todo:+<genesis>/<id>`, which
+        /// names it in whichever store held here begins with that genesis.
         id: String,
         #[command(flatten)]
         store: StoreAt,
@@ -90,7 +94,8 @@ pub enum Act {
         /// The optional second paragraph, as Typst markup.
         #[arg(long, default_value = "")]
         detail: String,
-        /// What it is blocked on — only when there is nothing we can do.
+        /// What it is blocked on — only when there is nothing we can do. A todo it waits on is
+        /// `todo:<chain>/<id>`, or `todo:+<genesis>/<id>`, the one form a public chain takes.
         #[arg(long, default_value = "")]
         waiting_on: String,
         /// The todo this is a subtodo of: its spec gains a reference to this
@@ -122,7 +127,7 @@ pub enum Act {
         /// use this, never `--detail`, when the detail already exists.
         #[arg(long)]
         detail_append: Option<String>,
-        /// A new blocker, as plain text.
+        /// A new blocker, as plain text; a todo in it as `--waiting-on` on `add` names one.
         #[arg(long)]
         waiting_on: Option<String>,
         /// Set the blocker back to nothing.
@@ -265,7 +270,20 @@ pub struct Lifecycle {
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     match args.action {
         Action::Show { id, store, at } => {
-            show(&store.todos(path, args.chain.as_deref())?, at.or_now(), &id)
+            let at = at.or_now();
+            match shown_as(&id, args.chain.as_deref())? {
+                Named::Here(chain, id) => show(&store.todos(path, chain.as_deref())?, at, &id),
+                Named::Global(global) => {
+                    let (read, stores) = store.every(path)?;
+                    let held = super::todos::held(&read.set(at), &stores);
+                    let todo =
+                        suzatary_plan::wait::by_genesis(Audience::Deployment, &global, &held)
+                            .map_err(|missing| {
+                                anyhow::anyhow!("{global}: {}", super::todos::why(&missing))
+                            })?;
+                    show(&(read, todo.chain), at, todo.id.as_str())
+                }
+            }
         }
         Action::Act(act) => act_on(path, args.chain.as_deref(), *act),
     }
@@ -632,20 +650,69 @@ fn show(
         .iter()
         .map(|(name, envelope)| (name.clone(), envelope))
         .collect();
-    let shown = set
-        .entries(name)
-        .context("folding the chain")?
-        .iter()
-        .find(|entry| entry.key.as_str() == id)
-        .map(|entry| suzatary_todo::shown::shown(entry, &by_hash))
-        .transpose()
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
-        .flatten();
-    let Some(shown) = shown else {
+    let home = suzatary_signatures::chain_set::home(held.dag).unwrap_or(None);
+    let entries = set.entries(name).context("folding the chain")?;
+    let Some(entry) = entries.iter().find(|entry| entry.key.as_str() == id) else {
         bail!("no todo with id {id:?} on the chain");
     };
-    println!("{}", serde_json::to_string(&shown)?);
+    let Some(shown) = suzatary_todo::shown::shown(entry, &by_hash)
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
+    else {
+        bail!("no todo with id {id:?} on the chain");
+    };
+    let prodrome = entry
+        .genesis
+        .clone()
+        .or(home)
+        .context("a store that holds a todo holds its prodrome")?;
+    let printed = Printed {
+        name: GlobalTodo {
+            genesis: GenesisPrefix::whole(&prodrome),
+            id: entry.key.clone(),
+        }
+        .to_string(),
+        shown,
+    };
+    println!("{}", serde_json::to_string(&printed)?);
     Ok(())
+}
+
+/// `todo show`'s answer: the todo's name in every store beside what the chain holds of it.
+#[derive(serde::Serialize)]
+struct Printed<T> {
+    name: String,
+    #[serde(flatten)]
+    shown: T,
+}
+
+/// What `todo show` was asked for.
+enum Named {
+    /// An id in a chain of this deployment, `--chain`'s or a local reference's.
+    Here(Option<String>, String),
+    Global(GlobalTodo),
+}
+
+/// `id` parsed once: a bare id in `chain`, or a reference to a todo.
+fn shown_as(id: &str, chain: Option<&str>) -> anyhow::Result<Named> {
+    if !id.contains(':') {
+        return Ok(Named::Here(chain.map(str::to_owned), id.to_owned()));
+    }
+    match id.parse::<Reference>()? {
+        Reference::Todo(local) => match chain {
+            Some(named) if named != local.chain.as_str() => {
+                bail!(
+                    "{local} names the chain {}, and --chain names {named}",
+                    local.chain
+                )
+            }
+            _ => Ok(Named::Here(
+                Some(local.chain.to_string()),
+                local.id.as_str().to_owned(),
+            )),
+        },
+        Reference::Global(global) => Ok(Named::Global(global)),
+        other => bail!("{other} is not a todo"),
+    }
 }
 
 /// A lifecycle event's `(todo, at, actor, note)` constructor.

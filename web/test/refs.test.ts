@@ -26,7 +26,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import type { Reference } from "../src/chat/refs";
-import { parse, print, tokenise, urlTokens } from "../src/chat/refs";
+import { hrefOf, parse, print, tokenise, urlTokens } from "../src/chat/refs";
 
 /** The seven `SECRETARY.md` shows the model, and a triage batch's, which held decisions still
  * name, as `suzatary_base::reference::tests` asserts them. */
@@ -133,6 +133,15 @@ test("a sentence splits into prose and the things it names, at boundaries only",
     ["notodo:life/x and xmail:a1b2c3d4e5f6", [{ text: "notodo:life/x and xmail:a1b2c3d4e5f6" }]],
     ["see thread:00ab.", [{ text: "see " }, { reference: { kind: "thread", id: "00ab" } }, { text: "." }]],
     ["todo:permitfiling", [{ text: "todo:permitfiling" }]],
+    [
+      "waits on todo:+3f2a9c1b2d4e/fold-law.",
+      [
+        { text: "waits on " },
+        { reference: { kind: "global", genesis: "3f2a9c1b2d4e", id: "fold-law" } },
+        { text: "." },
+      ],
+    ],
+    ["todo:+3f2a9c1/x is too short", [{ text: "todo:+3f2a9c1/x is too short" }]],
   ];
   for (const [text, tokens] of cases) assert.deepEqual(tokenise(text), tokens, text);
 });
@@ -173,4 +182,11 @@ test("urlTokens reassembles into exactly the input", () => {
       .join("");
     assert.equal(rebuilt, text, JSON.stringify(text));
   }
+});
+
+test("a todo named by its genesis links nowhere, since the tab holds no store's genesis", () => {
+  const global = parse("todo:+3f2a9c1b2d4e/fold-law");
+  assert.deepEqual(global, { kind: "global", genesis: "3f2a9c1b2d4e", id: "fold-law" });
+  assert.equal(hrefOf(global as Reference), null);
+  assert.notEqual(hrefOf({ kind: "todo", chain: "life", id: "fold-law" }), null);
 });

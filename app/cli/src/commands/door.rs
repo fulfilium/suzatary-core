@@ -5,6 +5,7 @@
 //! to that todo, and a published history never takes a word back: the check runs before the
 //! store holds the object, or not at all.
 
+use std::cell::OnceCell;
 use std::collections::BTreeSet;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -12,11 +13,16 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
+use prodrome_core::event::Hash;
 use prodrome_core::literal::Value;
 use suzatary_base::capability::{RenderError, Typeset};
+use suzatary_base::chains::ChainName;
 use suzatary_base::chains::ChainPolicy;
+use suzatary_base::reference::{Found, GenesisPrefix, GlobalTodo, Reference, mentions};
 use suzatary_held::leak::{Matcher, Opaque, Scope};
+use suzatary_plan::wait::{Audience, Kept};
 use suzatary_record::record::TodoEvent;
+use suzatary_signatures::chain_set::NotAMember;
 use suzatary_store::store::{Rule, Shut};
 
 use crate::instance::Local;
@@ -176,9 +182,11 @@ impl Door {
     /// each event. The lists are read once and gitleaks runs once for the whole batch, and the
     /// verdicts are the ones each event gets alone (`door_1_judges_a_batch_as_each_event_alone`).
     pub fn judge(&self, events: &[&TodoEvent], verdicts: &mut [Result<(), Shut>]) {
+        // The deployment's stores, read once for the batch and only if an event names a todo.
+        let stores = std::cell::OnceCell::new();
         let mut open = Vec::new();
         for (i, (event, verdict)) in events.iter().zip(verdicts.iter_mut()).enumerate() {
-            *verdict = self.writes(event);
+            *verdict = self.writes(event, &stores);
             if verdict.is_ok() {
                 open.push(i);
             }
@@ -234,9 +242,9 @@ impl Door {
         })
     }
 
-    fn writes(&self, event: &TodoEvent) -> Result<(), Shut> {
+    fn writes(&self, event: &TodoEvent, stores: &OnceCell<Stores>) -> Result<(), Shut> {
         if self.writers.contains(event.actor()) {
-            return Ok(());
+            return self.names_no_chain(event, stores);
         }
         let named: Vec<&str> = self.writers.iter().map(Actor::as_str).collect();
         Err(Shut::Refused(format!(
@@ -244,6 +252,111 @@ impl Door {
              secretary's and the triage agent's writes go to a private chain",
             event.actor().as_str()
         )))
+    }
+}
+
+/// What a store of the deployment begins, as door 1 reads it.
+enum Home {
+    Begun(Hash),
+    /// It holds no object yet, or it is a followed store no fetch has confirmed.
+    NotBegun,
+    Unread(String),
+}
+
+/// The deployment's stores as door 1 reads them, or why they cannot be read.
+type Stores = Result<Vec<(ChainName, Home, Kept)>, String>;
+
+impl Door {
+    /// A public store names a todo by its store's genesis, never by a chain name of this
+    /// deployment, which means nothing to its readers and is the deployment's own word, and never
+    /// a task of a private chain, by either name.
+    fn names_no_chain(&self, event: &TodoEvent, stores: &OnceCell<Stores>) -> Result<(), Shut> {
+        let named: Vec<(String, Reference)> = published(event)
+            .into_iter()
+            .flat_map(|(path, text)| {
+                mentions(&text)
+                    .into_iter()
+                    .map(move |mention| (path.clone(), mention))
+            })
+            .filter(|(_, mention)| {
+                matches!(
+                    mention,
+                    Reference::Todo(_) | Reference::Global(_) | Reference::Batch { .. }
+                )
+            })
+            .collect();
+        if named.is_empty() {
+            return Ok(());
+        }
+        let stores = stores
+            .get_or_init(|| self.lists.stores())
+            .as_ref()
+            .map_err(|why| unjudged(why))?;
+        // A chain of this deployment that does not read could be the one a name points into.
+        if let Some((name, why)) = stores.iter().find_map(|(name, home, kept)| match home {
+            Home::Unread(why) if kept.own() => Some((name, why)),
+            Home::Begun(_) | Home::NotBegun | Home::Unread(_) => None,
+        }) {
+            return Err(unjudged(&format!(
+                "the chain {name} does not read ({why}), so it cannot tell whether a todo this \
+                 write names is one of it"
+            )));
+        }
+        let private = |genesis: &GenesisPrefix| {
+            let homes = stores
+                .iter()
+                .filter_map(|(_, home, kept)| match (home, kept) {
+                    (Home::Begun(home), Kept::Private) => Some(home),
+                    (Home::Begun(_) | Home::NotBegun | Home::Unread(_), _) => None,
+                });
+            !matches!(genesis.among(homes), Found::Unheld)
+        };
+        let rewrite = "a revision restates every field, so rewrite the field that holds it";
+        for (path, mention) in named {
+            let refused = match &mention {
+                Reference::Todo(local) => {
+                    let shared = stores.iter().find_map(|(name, home, kept)| match home {
+                        Home::Begun(home)
+                            if *name == local.chain && kept.audience() == Audience::Anyone =>
+                        {
+                            Some(home)
+                        }
+                        Home::Begun(_) | Home::NotBegun | Home::Unread(_) => None,
+                    });
+                    match shared.filter(|home| !private(&GenesisPrefix::whole(home))) {
+                        Some(home) => format!(
+                            "field {path} names {local} by this deployment's name for its store, \
+                             which a public store's readers do not hold: write {} instead; \
+                             {rewrite}",
+                            GlobalTodo {
+                                genesis: GenesisPrefix::whole(home),
+                                id: local.id.clone(),
+                            }
+                        ),
+                        None => format!(
+                            "field {path} names {local}, a todo of a chain of this deployment, \
+                             and a public store names no task of a private chain; {rewrite}"
+                        ),
+                    }
+                }
+                Reference::Global(global) if private(&global.genesis) => format!(
+                    "field {path} names {global}, and its genesis begins a private chain of this \
+                     deployment: a public store names no task of a private chain; {rewrite}"
+                ),
+                Reference::Batch { chain, .. } => format!(
+                    "field {path} names a held batch of the chain {chain}, this deployment's \
+                     name, and a public store publishes its words; {rewrite}"
+                ),
+                Reference::Global(_)
+                | Reference::Mail { .. }
+                | Reference::Thread { .. }
+                | Reference::Briefing { .. }
+                | Reference::Proposal(_)
+                | Reference::Target(_) => continue,
+            };
+            return Err(Shut::Refused(refused));
+        }
+        Ok(())
     }
 }
 
@@ -395,6 +508,33 @@ impl Lists {
             }
         }
         Ok(verdicts)
+    }
+
+    /// Every store the instance reads as it stands, with what it begins and whose it is.
+    fn stores(&self) -> Stores {
+        let instance = crate::instance::Instance::open(&self.instance)
+            .map_err(|e| format!("the deployment's stores cannot be read ({e:#})"))?;
+        let read = super::plan_read(&instance);
+        let set = read.set(suzatary_base::capability::Clock::now(
+            &suzatary_io::clock::SystemClock,
+        ));
+        Ok(super::todos::kept(&instance)
+            .into_iter()
+            .map(|(name, kept)| {
+                let home = match set.held(&name) {
+                    Ok(held) => match suzatary_signatures::chain_set::home(held.dag) {
+                        Ok(Some(home)) => Home::Begun(home),
+                        Ok(None) => Home::NotBegun,
+                        Err(several) => Home::Unread(format!("it holds {several} geneses")),
+                    },
+                    Err(NotAMember::Absent(_)) => Home::NotBegun,
+                    Err(why @ (NotAMember::Unread(..) | NotAMember::Several(..))) => {
+                        Home::Unread(why.to_string())
+                    }
+                };
+                (name, home, kept)
+            })
+            .collect())
     }
 
     /// Both lists' terms, read as `scripts/public-tree.sh` reads them.

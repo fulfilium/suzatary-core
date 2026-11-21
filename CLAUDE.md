@@ -425,7 +425,8 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     `innerHTML`. Mail bodies are `textContent` (→ `typstfirst`).
   - **The phone is a replica**: an act is sealed in the tab; a REFUSED object
     stays local and NAMED, never retried (→ `phonereplica`).
-  - **A reference has ONE text form** that prints and parses (`todo:life/x`,
+  - **A reference has ONE text form** that prints and parses (`todo:life/x`;
+    `todo:+<genesis>/x`, a todo by its store's genesis, the one a public store holds;
     `mail:<hash>`, `thread:<id>`, `briefing:<day>`,
     `proposal:<conversation>/<n>`; `suzatary_base::reference::Reference`),
     because a model writes text. A link between todos is derived from content,

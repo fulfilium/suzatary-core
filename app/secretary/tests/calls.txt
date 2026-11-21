@@ -93,7 +93,7 @@ agent record [note garbled] answered {"acts":1,"filed":"proposal:triage/0","next
 agent record [sources missing] refused 400: sources is required
 agent record [sources null] refused 400: invalid type: unit value, expected a string
 agent record [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-agent record [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+agent record [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 agent record [todo missing] refused 400: todo is required
 agent record [todo null] refused 400: invalid type: unit value, expected a string
 agent record [todo mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -234,7 +234,7 @@ agent todo_add [source_subject garbled] refused 400: source is all four fields o
 agent todo_add [sources missing] refused 400: sources is required
 agent todo_add [sources null] refused 400: invalid type: unit value, expected a string
 agent todo_add [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-agent todo_add [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+agent todo_add [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 agent todo_add [todo_id missing] refused 400: todo_id is required
 agent todo_add [todo_id null] refused 400: invalid type: unit value, expected a string
 agent todo_add [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -338,7 +338,7 @@ agent todo_update [recur_every_days fractional] refused 400: invalid type: float
 agent todo_update [sources missing] refused 400: sources is required
 agent todo_update [sources null] refused 400: invalid type: unit value, expected a string
 agent todo_update [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-agent todo_update [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+agent todo_update [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 agent todo_update [todo_id missing] refused 400: todo_id is required
 agent todo_update [todo_id null] refused 400: invalid type: unit value, expected a string
 agent todo_update [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -692,7 +692,7 @@ secretary todo_add [source_subject garbled] refused 400: source is all four fiel
 secretary todo_add [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
 secretary todo_add [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_add [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary todo_add [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary todo_add [todo_id missing] refused 400: todo_id is required
 secretary todo_add [todo_id null] refused 400: invalid type: unit value, expected a string
 secretary todo_add [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -796,7 +796,7 @@ secretary todo_update [recur_every_days fractional] refused 400: invalid type: f
 secretary todo_update [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
 secretary todo_update [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary todo_update [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary todo_update [todo_id missing] refused 400: todo_id is required
 secretary todo_update [todo_id null] refused 400: invalid type: unit value, expected a string
 secretary todo_update [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -846,7 +846,7 @@ secretary record [note garbled] answered {"chain":"life","next":"This round hold
 secretary record [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary record [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
 secretary record [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary record [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary record [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary record [todo missing] refused 400: todo is required
 secretary record [todo null] refused 400: invalid type: unit value, expected a string
 secretary record [todo mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -881,11 +881,11 @@ secretary propose_email [revises fractional] refused 400: invalid type: floating
 secretary propose_email [serves given] answered {"attachments":[],"cc":[],"held":[],"next":"The owner sees this with its exact text, its reason and its sources as links, and taps it, dismisses it with a reason, or leaves it. You cannot send it and there is no verb that can; do not offer to.","proposed":0,"sources":["todo:life/alpha"],"subject":"Hello","to":["c@d.test"],"why":"Because it matters."}
 secretary propose_email [serves null] answered {"attachments":[],"cc":[],"held":[],"next":"The owner sees this with its exact text, its reason and its sources as links, and taps it, dismisses it with a reason, or leaves it. You cannot send it and there is no verb that can; do not offer to.","proposed":0,"sources":["todo:life/alpha"],"subject":"Hello","to":["c@d.test"],"why":"Because it matters."}
 secretary propose_email [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_email [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_email [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_email [sources missing] refused 400: sources is required
 secretary propose_email [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_email [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_email [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_email [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_email [subject missing] refused 400: subject is required
 secretary propose_email [subject null] refused 400: subject is required
 secretary propose_email [subject mistyped] refused 400: subject must be a string
@@ -932,7 +932,7 @@ secretary propose_forward [serves garbled] refused 404: the local corpus holds n
 secretary propose_forward [sources missing] refused 400: sources is required
 secretary propose_forward [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_forward [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_forward [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_forward [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_forward [subject missing] refused 400: subject is required
 secretary propose_forward [subject null] refused 400: subject is required
 secretary propose_forward [subject mistyped] refused 400: subject must be a string
@@ -983,11 +983,11 @@ secretary propose_act [revises fractional] refused 400: invalid type: floating p
 secretary propose_act [serves given] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [serves null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_act [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_act [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_act [sources missing] refused 400: sources is required
 secretary propose_act [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_act [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_act [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_act [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_act [start given] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [start null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [start mistyped] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
@@ -1022,11 +1022,11 @@ secretary propose_changes [revises fractional] refused 400: invalid type: floati
 secretary propose_changes [serves given] answered {"acts":1,"chain":"life","next":"The owner sees this as a DIFF — every row with its before and after — and confirms it, denies it with a reason, or replies. Nothing is on the chain until they confirm. Do not propose the same changeset twice; if they deny one, read the reason and propose the corrected one or ask.","proposed":0,"why":"Because it matters."}
 secretary propose_changes [serves null] answered {"acts":1,"chain":"life","next":"The owner sees this as a DIFF — every row with its before and after — and confirms it, denies it with a reason, or replies. Nothing is on the chain until they confirm. Do not propose the same changeset twice; if they deny one, read the reason and propose the corrected one or ask.","proposed":0,"why":"Because it matters."}
 secretary propose_changes [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_changes [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_changes [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_changes [sources missing] refused 400: sources is required
 secretary propose_changes [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_changes [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_changes [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_changes [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_changes [why missing] refused 400: why is required
 secretary propose_changes [why null] refused 400: invalid type: unit value, expected a string
 secretary propose_changes [why mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -1101,7 +1101,7 @@ secretary web [search garbled] answered {"asked":0,"next":"no rule allows this h
 secretary web [sources missing] refused 400: sources is required
 secretary web [sources null] refused 400: invalid type: unit value, expected a string
 secretary web [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary web [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary web [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary web [url given] refused 400: give exactly one of search or url
 secretary web [url null] answered {"asked":0,"next":"no rule allows this host, so the owner was asked; the page arrives here as a turn if they tap it","request":"search html.duckduckgo.com for “weather”"}
 secretary web [url mistyped] refused 400: url must be a string or null
@@ -1127,7 +1127,7 @@ secretary drive_read [path garbled] refused 400: a Drive path is absolute (/my-f
 secretary drive_read [sources missing] refused 400: sources is required
 secretary drive_read [sources null] refused 400: invalid type: unit value, expected a string
 secretary drive_read [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary drive_read [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary drive_read [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary drive_read [why missing] refused 400: why is required
 secretary drive_read [why null] refused 400: invalid type: unit value, expected a string
 secretary drive_read [why mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -1231,11 +1231,11 @@ secretary propose_patch [revises fractional] refused 400: invalid type: floating
 secretary propose_patch [serves given] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [serves null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_patch [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_patch [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_patch [sources missing] refused 400: sources is required
 secretary propose_patch [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_patch [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_patch [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_patch [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_patch [why missing] refused 400: why is required
 secretary propose_patch [why null] refused 400: invalid type: unit value, expected a string
 secretary propose_patch [why mistyped] refused 400: invalid type: integer `7`, expected a string
@@ -1251,11 +1251,11 @@ secretary propose_coding_session [revises fractional] refused 400: invalid type:
 secretary propose_coding_session [serves given] answered {"next":"The owner reads the whole task on a card. Their tap starts the session; its branch and report come back to this conversation as a card of their own. You cannot start one and there is no verb that can.","proposed":0,"sentence":"start a coding session: Hello"}
 secretary propose_coding_session [serves null] answered {"next":"The owner reads the whole task on a card. Their tap starts the session; its branch and report come back to this conversation as a card of their own. You cannot start one and there is no verb that can.","proposed":0,"sentence":"start a coding session: Hello"}
 secretary propose_coding_session [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_coding_session [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_coding_session [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_coding_session [sources missing] refused 400: sources is required
 secretary propose_coding_session [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_coding_session [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_coding_session [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_coding_session [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_coding_session [task missing] refused 400: task is required
 secretary propose_coding_session [task null] refused 400: task is required
 secretary propose_coding_session [task mistyped] refused 400: task must be a string
@@ -1287,11 +1287,11 @@ secretary propose_decision [revises fractional] refused 400: invalid type: float
 secretary propose_decision [serves given] answered {"next":"The owner reads the whole decision on a card; their tap records it. You cannot record one and there is no verb that can.","proposed":0,"sentence":"record the decision abcdef123456: Hello"}
 secretary propose_decision [serves null] answered {"next":"The owner reads the whole decision on a card; their tap records it. You cannot record one and there is no verb that can.","proposed":0,"sentence":"record the decision abcdef123456: Hello"}
 secretary propose_decision [serves mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_decision [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_decision [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_decision [sources missing] refused 400: sources is required
 secretary propose_decision [sources null] refused 400: invalid type: unit value, expected a string
 secretary propose_decision [sources mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_decision [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary propose_decision [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_decision [supersedes given] refused 400: a decision id is 3-64 lowercase letters and digits starting with a letter, got "x"
 secretary propose_decision [supersedes null] answered {"next":"The owner reads the whole decision on a card; their tap records it. You cannot record one and there is no verb that can.","proposed":0,"sentence":"record the decision abcdef123456: Hello"}
 secretary propose_decision [supersedes mistyped] refused 400: supersedes must be a string or null
@@ -1320,15 +1320,15 @@ secretary draft_note [chain mistyped] refused 400: chain must be a string or nul
 secretary triage_cards [valid] answered {"cards":[],"next":"Withdraw a duplicate or noise with triage_withdraw, naming the card and saying WHY. Leave every other card for the owner's tap, and say in your answer which ones you left and why. When in doubt, leave it."}
 secretary triage_cards [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary triage_cards [chain mistyped] refused 400: chain must be a string or null
-secretary triage_withdraw [valid] refused 400: card: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "x"
+secretary triage_withdraw [valid] refused 400: card: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "x"
 secretary triage_withdraw [card missing] refused 400: card is required
 secretary triage_withdraw [card null] refused 400: card is required
 secretary triage_withdraw [card mistyped] refused 400: card must be a string
-secretary triage_withdraw [card garbled] refused 400: card: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
+secretary triage_withdraw [card garbled] refused 400: card: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary triage_withdraw [why missing] refused 400: why is required
 secretary triage_withdraw [why null] refused 400: why is required
 secretary triage_withdraw [why mistyped] refused 400: why must be a string
-secretary triage_withdraw [why garbled] refused 400: card: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "x"
+secretary triage_withdraw [why garbled] refused 400: card: a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "x"
 secretary triage_withdraw [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary triage_withdraw [chain mistyped] refused 400: chain must be a string or null
 secretary add_topics [valid] refused 409: no question is being answered here

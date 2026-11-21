@@ -1,6 +1,11 @@
 //! The app's addresses as `web/src/shell/route.ts` reads them, and the box's routes as `app/cli`
 //! answers them, each printed in one place.
 
+use suzatary_base::reference::Reference;
+use suzatary_base::topic_target::Target;
+use viewtree::Attr::{Class, Href};
+use viewtree::{Node, view};
+
 use crate::runtime::{component, search};
 
 /// The box's own cap on mail rows per page (`MAX_MAIL`).
@@ -33,9 +38,6 @@ pub(crate) enum Place<'a> {
     Typst(&'a str),
     /// An uploaded file, served as itself by the box.
     Attachment(&'a str),
-    /// A todo's route drops the chain; a proposal, round or note goes to its conversation, a
-    /// batch to the Inbox.
-    Reference(&'a suzatary_base::reference::Reference),
     Conversation {
         id: &'a str,
         /// `""` for none.
@@ -81,23 +83,6 @@ impl<'a> Place<'a> {
             Place::Typst("") => "#/typst".to_owned(),
             Place::Typst(open) => format!("#/typst/{}", component(open)),
             Place::Attachment(id) => format!("/api/secretary/attachments/{}", component(id)),
-            Place::Reference(r) => {
-                use suzatary_base::reference::Reference;
-                match r {
-                    Reference::Todo(t) => Place::Todo(t.id.as_str()).href(),
-                    Reference::Mail { hash } => Place::Message(hash.as_str()).href(),
-                    Reference::Thread { id } => Place::Thread(id.as_str()).href(),
-                    Reference::Briefing { date } => {
-                        Place::Briefing(&date.format("%Y-%m-%d").to_string()).href()
-                    }
-                    Reference::Proposal(p) => Place::conversation(p.conversation.as_str()).href(),
-                    Reference::Batch { .. } => Place::Inbox("").href(),
-                    Reference::Target(
-                        suzatary_base::topic_target::Target::Round { conversation, .. }
-                        | suzatary_base::topic_target::Target::Note { conversation, .. },
-                    ) => Place::conversation(conversation.as_str()).href(),
-                }
-            }
             Place::Conversation {
                 id,
                 reference,
@@ -215,5 +200,48 @@ impl Question<'_> {
             }
             Question::Author(chain) => format!("/api/{}/author", component(chain)),
         }
+    }
+}
+
+/// Where a reference links: a todo's route drops the chain; a proposal, round or note goes to its
+/// conversation, a batch to the Inbox. A todo named by its genesis links nowhere: the tab holds no
+/// store's genesis, so it cannot tell which store, if any, holds that todo.
+fn linked(r: &Reference) -> Option<String> {
+    match r {
+        Reference::Todo(todo) => Some(Place::Todo(todo.id.as_str()).href()),
+        Reference::Global(_) => None,
+        Reference::Mail { hash } => Some(Place::Message(hash.as_str()).href()),
+        Reference::Thread { id } => Some(Place::Thread(id.as_str()).href()),
+        Reference::Briefing { date } => {
+            Some(Place::Briefing(&date.format("%Y-%m-%d").to_string()).href())
+        }
+        Reference::Proposal(p) => Some(Place::conversation(p.conversation.as_str()).href()),
+        Reference::Batch { .. } => Some(Place::Inbox("").href()),
+        Reference::Target(
+            Target::Round { conversation, .. } | Target::Note { conversation, .. },
+        ) => Some(Place::conversation(conversation.as_str()).href()),
+    }
+}
+
+/// `r` as a link of `class` reading `label`, or `label` as text where it links nowhere.
+pub(crate) fn reference<M>(r: &Reference, class: &str, label: String) -> Node<M> {
+    let class = format!("{class} ref-{}", r.scheme());
+    match linked(r) {
+        Some(href) => view! { A {Class => class, Href => href} [label] },
+        None => view! { Span {Class => class} [label] },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A todo named by its genesis links nowhere, and a todo by its chain links to its page.
+    #[test]
+    fn a_todo_by_genesis_links_nowhere() {
+        let global: Reference = "todo:+3f2a9c1b2d4e/x".parse().expect("a reference");
+        let local: Reference = "todo:life/x".parse().expect("a reference");
+        assert_eq!(linked(&global), None);
+        assert_eq!(linked(&local), Some(Place::Todo("x").href()));
     }
 }

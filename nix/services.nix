@@ -111,13 +111,13 @@ let
   # A service that runs one of the app's scripts with the environment it needs.
   # `runsTheApp` marks it for nix/module-check.nix, which finds a unit that
   # runs one by its ExecStart.
-  appService = { name, script, waitForNet ? true }:
+  appService = { name, script, args ? [ ], waitForNet ? true }:
     pkgs.writeShellScriptBin name ''
       set -euo pipefail
       export PATH="${lib.makeBinPath runtimeDeps}:''${PATH:-}"
       ${resolveApp name}
       ${lib.optionalString waitForNet "${waitForNetwork}"}
-      exec "$app/${script}" "$@"
+      exec "$app/${script}" ${lib.escapeShellArgs args} "$@"
     '' // { runsTheApp = true; };
 in
 rec {
@@ -198,6 +198,15 @@ rec {
   plugins = appService {
     name = "suzatary-plugins";
     script = "scripts/plugin-sync.sh";
+  };
+
+  # `suzatary follow fetch` by the deployed binary, which evaluates nothing. It waits for the
+  # network first: the timer's catch-up after a boot would otherwise run before it, and a refused
+  # fetch is recorded beside the copy, where every reading of the list says it until the next one.
+  follows = appService {
+    name = "suzatary-follows";
+    script = "scripts/app-bin.sh";
+    args = [ "--deployed" "follow" "fetch" ];
   };
 
   web = appService {

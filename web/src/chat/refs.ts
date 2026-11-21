@@ -14,6 +14,7 @@ import { hrefOf as routeHref } from "../shell/route";
 /** `reference::Reference` in parts. The wire and the store carry its text form; this is what `parse` reads it into. */
 export type Reference =
   | { readonly kind: "todo"; readonly chain: string; readonly id: string }
+  | { readonly kind: "global"; readonly genesis: string; readonly id: string }
   | { readonly kind: "mail"; readonly hash: string }
   | { readonly kind: "thread"; readonly id: string }
   | { readonly kind: "briefing"; readonly date: string }
@@ -28,6 +29,7 @@ export type Reference =
 const PATTERN = new RegExp(
   "(^|[^A-Za-z0-9_-])(" +
     "todo:[a-z][a-z0-9-]*\\/[a-z0-9_-]+" +
+    "|todo:\\+[0-9a-f]{8,64}\\/[a-z0-9_-]+" +
     "|mail:[0-9a-f]{6,64}" +
     "|thread:[A-Za-z0-9_-](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?" +
     "|briefing:\\d{4}-\\d{2}-\\d{2}" +
@@ -43,6 +45,8 @@ export function print(reference: Reference): string {
   switch (reference.kind) {
     case "todo":
       return `todo:${reference.chain}/${reference.id}`;
+    case "global":
+      return `todo:+${reference.genesis}/${reference.id}`;
     case "mail":
       return `mail:${reference.hash}`;
     case "thread":
@@ -70,6 +74,9 @@ export function parse(text: string): Reference | null {
       if (slash <= 0 || slash === rest.length - 1) return null;
       const chain = rest.slice(0, slash);
       const id = rest.slice(slash + 1);
+      if (/^\+[0-9a-f]{8,64}$/.test(chain) && /^[a-z0-9_-]+$/.test(id)) {
+        return { kind: "global", genesis: chain.slice(1), id };
+      }
       if (!/^[a-z][a-z0-9-]{0,31}$/.test(chain)) return null;
       if (!/^[a-z0-9_-]+$/.test(id)) return null;
       return { kind: "todo", chain, id };
@@ -127,11 +134,13 @@ function isDay(text: string): boolean {
   return month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 
-/** A todo's route drops the chain, the route's own decision; a proposal, a round and a note go to their conversation, a batch to its card. */
-export function hrefOf(reference: Reference): string {
+/** A todo's route drops the chain; a proposal, a round and a note go to their conversation, a batch to its card. A todo named by its genesis links nowhere: the tab holds no store's genesis. */
+export function hrefOf(reference: Reference): string | null {
   switch (reference.kind) {
     case "todo":
       return routeHref({ type: "todo", id: reference.id });
+    case "global":
+      return null;
     case "mail":
       return routeHref({ type: "message", id: reference.hash });
     case "thread":
@@ -150,7 +159,9 @@ export function hrefOf(reference: Reference): string {
 
 /** Labelled with the text form, so a reader learns the spelling by seeing it; a card names it in words instead. */
 export function anchor(reference: Reference, className = "reflink", label = print(reference)): HTMLElement {
-  return el("a", { class: `${className} ref-${reference.kind}`, href: hrefOf(reference) }, label);
+  const href = hrefOf(reference);
+  const cls = `${className} ref-${reference.kind === "global" ? "todo" : reference.kind}`;
+  return href === null ? el("span", { class: cls }, label) : el("a", { class: cls, href }, label);
 }
 
 /** The references among these texts, in order. */

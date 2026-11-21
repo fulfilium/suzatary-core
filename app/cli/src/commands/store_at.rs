@@ -63,6 +63,24 @@ impl StoreAt {
     }
 }
 
+impl StoreAt {
+    /// Every store read once, followed stores beside the chains, and the names they are read
+    /// under; or the path's store alone.
+    pub(crate) fn every(
+        &self,
+        path: &Path,
+    ) -> anyhow::Result<(Read, Vec<(ChainName, suzatary_plan::wait::Kept)>)> {
+        self.or_instance(
+            path,
+            |dir| {
+                by_path(dir)
+                    .map(|(read, name)| (read, vec![(name, suzatary_plan::wait::Kept::Followed)]))
+            },
+            |instance| Ok((super::plan_read(&instance), super::todos::kept(&instance))),
+        )
+    }
+}
+
 /// The store at `dir` read alone, believing every writer, and the name it is read under.
 pub(crate) fn by_path(dir: &Path) -> anyhow::Result<(Read, ChainName)> {
     let name = ChainName::new("store")?;

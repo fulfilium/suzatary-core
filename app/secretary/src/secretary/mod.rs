@@ -242,18 +242,21 @@ pub(crate) fn confirming<'c>(
     clock: &'c dyn Clock,
 ) -> impl Fn(&[suzatary_base::reference::Reference]) -> bool + 'c {
     move |references| {
-        !references
-            .iter()
-            .any(|reference| matches!(reference, suzatary_base::reference::Reference::Todo(_)))
-            || {
-                let read = chains_read(chains);
-                let set = read.set(clock.now());
-                let speaker = suzatary_inbox::secretary::stamp::Speaker::device("");
-                matches!(
-                    suzatary_inbox::secretary::stamp::pointing(speaker, references, &set),
-                    suzatary_inbox::secretary::stamp::Stamp::Actor(_)
-                )
-            }
+        !references.iter().any(|reference| {
+            matches!(
+                reference,
+                suzatary_base::reference::Reference::Todo(_)
+                    | suzatary_base::reference::Reference::Global(_)
+            )
+        }) || {
+            let read = chains_read(chains);
+            let set = read.set(clock.now());
+            let speaker = suzatary_inbox::secretary::stamp::Speaker::device("");
+            matches!(
+                suzatary_inbox::secretary::stamp::pointing(speaker, references, &set),
+                suzatary_inbox::secretary::stamp::Stamp::Actor(_)
+            )
+        }
     }
 }
 
@@ -378,11 +381,19 @@ fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)>
             );
             Some(("search", args))
         }
-        Reference::Briefing { .. }
+        Reference::Global(_)
+        | Reference::Briefing { .. }
         | Reference::Proposal(_)
         | Reference::Batch { .. }
         | Reference::Target(_) => None,
     }
+}
+
+/// The secretary's verbs read a todo by its chain.
+fn by_genesis(global: &suzatary_base::reference::GlobalTodo) -> Refusal {
+    Refusal::not_found(format!(
+        "{global} names a todo by its store's genesis; ask about it by its chain"
+    ))
 }
 
 fn load(
@@ -480,6 +491,7 @@ fn load(
                 "tries": standing.object.tries(),
             }))
         }
+        Reference::Global(global) => Err(by_genesis(global)),
         // A batch is the replica's, which the secretary's record does not hold.
         Reference::Batch { chain, head } => Err(Refusal::not_found(format!(
             "batch:{chain}/{} is not readable from the conversation; ask about the \
@@ -771,6 +783,25 @@ fn rewound(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Noon;
+
+    impl Clock for Noon {
+        fn now(&self) -> suzatary_base::capability::Datetime {
+            suzatary_base::capability::Datetime::new(2026, 9, 1, 12, 0, 0, 0).expect("an instant")
+        }
+    }
+
+    /// The gate confirms a line only where it can show who wrote each todo it names, so a todo
+    /// named by its genesis is never confirmed, and a line naming no todo always is.
+    #[test]
+    fn a_todo_by_genesis_is_never_confirmed() {
+        let confirms = confirming(&[], &Noon);
+        let global: Reference = "todo:+3f2a9c1b2d4e/x".parse().expect("a reference");
+        let mail: Reference = "mail:a1b2c3d4e5f6".parse().expect("a reference");
+        assert!(!confirms(&[global, mail.clone()]));
+        assert!(confirms(&[mail]));
+    }
 
     /// The actor is this module's constant, and it is the trusted one.
     #[test]

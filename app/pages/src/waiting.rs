@@ -119,6 +119,7 @@ impl<'a> Waiting<'a> {
             }
             Ok(
                 r @ (Reference::Todo(_)
+                | Reference::Global(_)
                 | Reference::Mail { .. }
                 | Reference::Thread { .. }
                 | Reference::Briefing { .. }

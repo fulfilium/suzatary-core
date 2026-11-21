@@ -2,5 +2,7 @@
 
 #[path = "listed.rs"]
 mod listed;
+#[path = "wait.rs"]
+mod wait;
 #[path = "waits.rs"]
 mod waits;

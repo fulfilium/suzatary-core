@@ -2,17 +2,25 @@
 //! of the records the store's policy confirms; the list restricted to a store that no wait
 //! touches is that store's list; a store that is absent moves no row it does not reach by waits;
 //! a claim the policy does not confirm moves no reading; and the `waiting_on` of a store whose
-//! waits are labels moves no reading.
+//! waits are labels moves no reading. Where a store spells its waits by genesis: the reading is
+//! unchanged by renaming every local chain, and a wait into an absent store moves nothing and is
+//! said. Words in a store anyone reads move no private chain's row, two held stores that begin
+//! with one genesis are two stores, and every law draws both shapes of store, one begun by a
+//! genesis and a legacy one.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{Actor, Hash, mk_completed, mk_sealed, seal_hash};
+use prodrome_core::change::mk_change;
+use prodrome_core::event::{Actor, Hash, mk_completed, mk_created, mk_sealed, seal_hash};
 use prodrome_core::fpl;
+use prodrome_core::genesis::mk_genesis;
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use proptest::prelude::*;
 use suzatary_base::chains::ChainName;
-use suzatary_plan::listed::{ListRow, Store, Units, Urgency, Waits, listed};
+use suzatary_base::reference::{Reference, TodoRef};
+use suzatary_plan::listed::{ListRow, Store, Units, Unresolved, Urgency, listed};
+use suzatary_plan::wait::{Audience, Kept, Missing};
 use suzatary_record::decoration::records_of;
 use suzatary_record::record::{Envelope, MarkupSource, TodoEvent, mk_authored};
 use suzatary_signatures::chain_set::Read;
@@ -29,13 +37,34 @@ fn at(day: u32) -> Datetime {
 /// done, and the tasks it waits on as (store, task) indices.
 type Task = (Option<usize>, bool, Vec<(usize, usize)>);
 
-/// Each store's tasks, written by `ada`, and its claims, written by the untrusted `triage`.
+/// Each store's tasks, written by `ada`, and its claims, written by the untrusted `triage`, each
+/// wait spelled as its store spells them.
 #[derive(Debug, Clone)]
 struct Stores {
+    shapes: Vec<Shape>,
+    /// Whether the last store begins with the second's first object: a replica of it.
+    replica: bool,
+    spelled: Vec<Spelling>,
     tasks: Vec<Vec<Task>>,
     claims: Vec<Vec<Task>>,
     over: Vec<Vec<(usize, Over)>>,
     revised: Vec<BTreeMap<usize, Revision>>,
+}
+
+/// A store begun by a genesis, its writes changes over each todo's heads; or a legacy one, a line
+/// of sealed objects from a first that carries no task, named by that root.
+#[derive(Debug, Clone, Copy)]
+enum Shape {
+    Genesis,
+    Legacy,
+}
+
+/// How a store spells the tasks it waits on: by this deployment's chain names, or by the first
+/// `n` hex of each store's genesis.
+#[derive(Debug, Clone, Copy)]
+enum Spelling {
+    Local,
+    Genesis(usize),
 }
 
 /// What `ada` writes over one of her tasks after everything else, at its own price: one revision
@@ -106,23 +135,88 @@ fn stores() -> impl Strategy<Value = Stores> {
         proptest::collection::btree_map(0usize..6, revision, 0..4),
         STORES.len(),
     );
-    (each(), each(), over, revised).prop_map(|(tasks, claims, over, revised)| Stores {
-        tasks,
-        claims,
-        over,
-        revised,
-    })
+    let shape = prop_oneof![Just(Shape::Genesis), Just(Shape::Legacy)];
+    (
+        (each(), each(), over, revised),
+        proptest::collection::vec(shape, STORES.len()),
+        proptest::bool::weighted(0.3),
+    )
+        .prop_map(|((tasks, claims, over, revised), shapes, replica)| Stores {
+            shapes,
+            replica,
+            spelled: vec![Spelling::Local; STORES.len()],
+            tasks,
+            claims,
+            over,
+            revised,
+        })
+}
+
+/// [`stores`], each store spelling its waits by local name or by a genesis prefix.
+fn spelled_stores() -> impl Strategy<Value = Stores> {
+    let spelling = prop_oneof![
+        Just(Spelling::Local),
+        (8usize..=64).prop_map(Spelling::Genesis)
+    ];
+    (stores(), proptest::collection::vec(spelling, STORES.len())).prop_map(
+        |(generated, spelled)| Stores {
+            spelled,
+            ..generated
+        },
+    )
 }
 
 fn name(store: usize) -> ChainName {
     ChainName::new(STORES[store]).expect("a slug")
 }
 
-fn authored(id: &str, actor: &str, (price, _, waits): &Task) -> TodoEvent {
+/// The store whose first object `store` begins with: itself, or the second for a replica.
+fn origin(generated: &Stores, store: usize) -> usize {
+    if generated.replica && store == STORES.len() - 1 {
+        1
+    } else {
+        store
+    }
+}
+
+/// Each store's first object, the same whatever the deployment calls the store and whatever it
+/// holds after.
+fn first(generated: &Stores, store: usize) -> Envelope {
+    let origin = origin(generated, store);
+    match generated.shapes[origin] {
+        Shape::Genesis => {
+            Envelope::Genesis(mk_genesis("todos", &format!("{origin:032x}")).expect("a genesis"))
+        }
+        Shape::Legacy => mk_sealed(
+            None,
+            mk_created(&format!("root{origin}"), at(1), "ada", "the root", "").expect("a creation"),
+        ),
+    }
+}
+
+/// The prodrome a store begins: its genesis, or a legacy store's root.
+fn home(generated: &Stores, store: usize) -> Hash {
+    seal_hash(&first(generated, store))
+}
+
+/// How a store, of a deployment that calls the stores `names`, writes its waits.
+#[derive(Clone, Copy)]
+struct Writing<'a> {
+    spelling: Spelling,
+    names: &'a [&'a str],
+    homes: &'a [Hash],
+}
+
+fn authored(id: &str, actor: &str, (price, _, waits): &Task, by: Writing<'_>) -> TodoEvent {
     let spec = price.map_or_else(fpl::mk_absent, |p| fpl::mk_flat(PRICES[p]).expect("a flat"));
     let waiting: Vec<String> = waits
         .iter()
-        .map(|(store, task)| format!("todo:{}/t{task}", STORES[*store]))
+        .map(|(store, task)| match by.spelling {
+            Spelling::Local => format!("todo:{}/t{task}", by.names[*store]),
+            Spelling::Genesis(n) => {
+                format!("todo:+{}/t{task}", &by.homes[*store].as_str()[..n])
+            }
+        })
         .chain(["Ada".to_owned()])
         .collect();
     mk_authored(
@@ -145,86 +239,129 @@ fn authored(id: &str, actor: &str, (price, _, waits): &Task) -> TodoEvent {
     .expect("a record")
 }
 
-/// One store's objects: each task authored with its waits as `todo:` references beside a label,
-/// and completed where it is done; then each claim, written by `triage`.
-fn objects(
-    tasks: &[Task],
-    claims: &[Task],
-    over: &[(usize, Over)],
-    revised: &BTreeMap<usize, Revision>,
-) -> Vec<(Hash, Envelope)> {
+/// The store `store`'s objects: its genesis; each task authored with its waits as `todo:`
+/// references beside a label, and completed where it is done; then each claim, written by
+/// `triage`. Each change rests on its todo's heads.
+fn objects(generated: &Stores, store: usize, names: &[&str]) -> Vec<(Hash, Envelope)> {
+    let homes: Vec<Hash> = (0..STORES.len()).map(|s| home(generated, s)).collect();
+    let writing = Writing {
+        spelling: generated.spelled[store],
+        names,
+        homes: &homes,
+    };
+    let (tasks, revised) = (&generated.tasks[store], &generated.revised[store]);
     let mut events = Vec::new();
     for (index, task) in tasks.iter().enumerate() {
         let id = format!("t{index}");
-        events.push(authored(&id, "ada", task));
+        events.push(authored(&id, "ada", task, writing));
         if task.1 {
             events.push(mk_completed(&id, at(2), "ada", "").expect("a completion"));
         }
     }
-    for (index, claim) in claims.iter().enumerate() {
-        events.push(authored(&format!("c{index}"), "triage", claim));
+    for (index, claim) in generated.claims[store].iter().enumerate() {
+        events.push(authored(&format!("c{index}"), "triage", claim, writing));
     }
-    for (task, over) in over.iter().filter(|(task, _)| *task < tasks.len()) {
+    for (task, over) in generated.over[store]
+        .iter()
+        .filter(|(task, _)| *task < tasks.len())
+    {
         let id = format!("t{task}");
         events.push(match over {
             Over::Completes => mk_completed(&id, at(2), "triage", "").expect("a claim"),
-            Over::Revises(waits) => {
-                authored(&id, "triage", &(tasks[*task].0, false, waits.clone()))
-            }
+            Over::Revises(waits) => authored(
+                &id,
+                "triage",
+                &(tasks[*task].0, false, waits.clone()),
+                writing,
+            ),
         });
     }
-    let mut objects: Vec<(Hash, Envelope)> = Vec::new();
+    let begun = first(generated, store);
+    let home = seal_hash(&begun);
+    let mut objects: Vec<(Hash, Envelope)> = vec![(home.clone(), begun)];
+    let shape = generated.shapes[origin(generated, store)];
+    // A change rests on its todo's heads; a legacy object on the last one.
+    let mut heads: BTreeMap<String, Vec<Hash>> = BTreeMap::new();
+    let put = |event: TodoEvent, deps: Vec<Hash>, objects: &mut Vec<(Hash, Envelope)>| {
+        let envelope = match shape {
+            Shape::Genesis => {
+                Envelope::Change(mk_change(home.clone(), deps, event).expect("a change"))
+            }
+            Shape::Legacy => mk_sealed(deps.into_iter().next(), event),
+        };
+        let name = seal_hash(&envelope);
+        objects.push((name.clone(), envelope));
+        name
+    };
+    let deps =
+        |heads: &BTreeMap<String, Vec<Hash>>, id: &str, objects: &[(Hash, Envelope)]| match shape {
+            Shape::Genesis => heads.get(id).cloned().unwrap_or_default(),
+            Shape::Legacy => objects
+                .last()
+                .map(|(name, _)| name.clone())
+                .into_iter()
+                .collect(),
+        };
     for event in events {
-        let envelope = mk_sealed(objects.last().map(|(name, _)| name.clone()), event);
-        objects.push((seal_hash(&envelope), envelope));
+        let id = event.todo().as_str().to_owned();
+        let on = deps(&heads, &id, &objects);
+        let name = put(event, on, &mut objects);
+        heads.insert(id, vec![name]);
     }
-    // Every revision rests on the same tip, so two of one task are a conflict.
-    let tip = objects.last().map(|(name, _)| name.clone());
+    // Every revision of a task rests on the same heads, so two of one task are a conflict.
     for (task, revision) in revised.iter().filter(|(task, _)| **task < tasks.len()) {
+        let id = format!("t{task}");
+        let on = deps(&heads, &id, &objects);
         for waits in revision.waits() {
-            let event = authored(
-                &format!("t{task}"),
-                "ada",
-                &(tasks[*task].0, false, waits.clone()),
-            );
-            let envelope = mk_sealed(tip.clone(), event);
-            objects.push((seal_hash(&envelope), envelope));
+            let event = authored(&id, "ada", &(tasks[*task].0, false, waits.clone()), writing);
+            put(event, on.clone(), &mut objects);
         }
     }
     objects
 }
 
 fn read(generated: &Stores, held: &BTreeSet<usize>) -> Read {
+    read_named(generated, held, &STORES)
+}
+
+/// The stores of `held`, the deployment calling store `i` by `names[i]`.
+fn read_named(generated: &Stores, held: &BTreeSet<usize>, names: &[&str]) -> Read {
     let triage = Untrusted::of([Actor::new("triage").expect("an actor")]);
     Read::of_objects(
         (0..STORES.len())
             .filter(|store| held.contains(store))
             .map(|store| {
-                let objects = objects(
-                    &generated.tasks[store],
-                    &generated.claims[store],
-                    &generated.over[store],
-                    &generated.revised[store],
-                );
-                (name(store), triage.clone(), objects)
+                let chain = ChainName::new(names[store]).expect("a slug");
+                (chain, triage.clone(), objects(generated, store, names))
             }),
     )
 }
 
-const PRIVATE: [Waits; 3] = [Waits::ByLocalName; 3];
+const PRIVATE: [Kept; 3] = [Kept::Private; 3];
 
-fn the_list(read: &Read, waits: [Waits; 3]) -> Vec<ListRow> {
-    let names: Vec<ChainName> = (0..STORES.len()).map(name).collect();
+fn the_list(read: &Read, audiences: [Kept; 3]) -> Vec<ListRow> {
+    the_named_list(read, audiences, &STORES).rows
+}
+
+fn the_named_list(
+    read: &Read,
+    audiences: [Kept; 3],
+    names: &[&str],
+) -> suzatary_plan::listed::Listed {
+    let names: Vec<ChainName> = names
+        .iter()
+        .map(|name| ChainName::new(*name).expect("a slug"))
+        .collect();
     let stores: Vec<Store<'_>> = names
         .iter()
-        .zip(waits)
-        .map(|(chain, waits)| Store {
+        .zip(audiences)
+        .map(|(chain, kept)| Store {
             chain,
-            waits,
+            kept,
             units: Units::Unknown,
         })
         .collect();
-    listed(&read.set(at(3)), &stores).0
+    listed(&read.set(at(3)), &stores)
 }
 
 fn all() -> BTreeSet<usize> {
@@ -266,6 +403,9 @@ fn untouched(generated: &Stores, store: usize) -> Stores {
             .collect()
     };
     Stores {
+        shapes: generated.shapes.clone(),
+        replica: generated.replica,
+        spelled: generated.spelled.clone(),
         tasks: cut(&generated.tasks),
         claims: cut(&generated.claims),
         over: generated.over.clone(),
@@ -330,14 +470,17 @@ proptest! {
     /// of a trusted task, move no reading either way: every task reads as it reads with no
     /// claims at all, and is still on the list.
     #[test]
-    fn a_claim_the_policy_does_not_confirm_moves_no_reading(generated in stores()) {
+    fn a_claim_the_policy_does_not_confirm_moves_no_reading(
+        generated in spelled_stores(),
+        audiences in audiences(),
+    ) {
         let none = Stores {
             claims: vec![Vec::new(); STORES.len()],
             over: vec![Vec::new(); STORES.len()],
             ..generated.clone()
         };
-        let without = the_list(&read(&none, &all()), PRIVATE);
-        let with = the_list(&read(&generated, &all()), PRIVATE);
+        let without = the_list(&read(&none, &all()), audiences);
+        let with = the_list(&read(&generated, &all()), audiences);
         let with = by_key(&with);
         for (key, row) in by_key(&without) {
             let claimed = with.get(&key).copied();
@@ -353,22 +496,50 @@ proptest! {
     /// The waits are those of the records the store's policy confirms: a task's own, or the
     /// later revision's that replaced them (so a revision that clears a wait ends it), or each
     /// candidate's of two revisions in conflict; whatever is claimed over it. Each task reads
-    /// the least price upstream of it under exactly those waits.
+    /// the least price upstream of it under exactly those waits, each read by the rule
+    /// ([`counted`]).
     #[test]
-    fn the_waits_are_those_of_the_confirmed_records(generated in stores()) {
+    fn the_waits_are_those_of_the_confirmed_records(
+        generated in spelled_stores(),
+        audiences in audiences(),
+    ) {
         let open = |store: usize, task: usize| {
             generated.tasks[store].get(task).is_some_and(|(_, done, _)| !*done)
         };
         let waits = |store: usize, task: usize| -> Vec<(usize, usize)> {
-            match generated.revised[store].get(&task) {
-                Some(revision) => revision.waits().into_iter().flatten().copied().collect(),
-                None => generated.tasks[store][task].2.clone(),
-            }
+            confirmed(&generated, store, task)
+                .into_iter()
+                .filter_map(|blocker| match counted(&generated, audiences, &all(), store, blocker) {
+                    Counted::Into(there) => Some((there, blocker.1)),
+                    Counted::Label | Counted::Said(_) => None,
+                })
+                .collect()
         };
         let own = |(store, task): (usize, usize)| {
             generated.tasks[store][task].0.map(|price| PRICES[price])
         };
-        let list = the_list(&read(&generated, &all()), PRIVATE);
+        let listed = the_named_list(&read(&generated, &all()), audiences, &STORES);
+        let mut said = BTreeSet::new();
+        for store in 0..STORES.len() {
+            for task in (0..generated.tasks[store].len()).filter(|task| open(store, *task)) {
+                for blocker in confirmed(&generated, store, task) {
+                    if let Counted::Said(missing) = counted(&generated, audiences, &all(), store, blocker) {
+                        said.insert((
+                            TodoRef { chain: name(store), id: todo_id(task) },
+                            spelled(&generated, store, blocker),
+                            missing,
+                        ));
+                    }
+                }
+            }
+        }
+        let unresolved: BTreeSet<_> = listed
+            .unresolved
+            .iter()
+            .map(|wait| (wait.waiter.clone(), wait.reference.to_string(), wait.missing.clone()))
+            .collect();
+        prop_assert_eq!(unresolved, said);
+        let list = listed.rows;
         let rows = by_key(&list);
         for (store, label) in STORES.iter().enumerate() {
             for task in (0..generated.tasks[store].len()).filter(|task| open(store, *task)) {
@@ -404,7 +575,7 @@ proptest! {
     #[test]
     fn a_label_moves_no_reading(generated in stores(), labels in 0..STORES.len()) {
         let mut modes = PRIVATE;
-        modes[labels] = Waits::None;
+        modes[labels] = Kept::Public;
         let bare = |stores: &[Vec<Task>]| -> Vec<Vec<Task>> {
             stores.iter().enumerate().map(|(here, tasks)| {
                 tasks.iter().map(|(price, done, waits)| {
@@ -413,6 +584,9 @@ proptest! {
             }).collect()
         };
         let quiet = Stores {
+            shapes: generated.shapes.clone(),
+            replica: generated.replica,
+            spelled: generated.spelled.clone(),
             tasks: bare(&generated.tasks),
             claims: bare(&generated.claims),
             over: generated.over.clone(),
@@ -429,6 +603,212 @@ proptest! {
             reading(&the_list(&read(&generated, &all()), modes)),
             reading(&the_list(&read(&quiet, &all()), modes))
         );
+    }
+
+    /// The reading is unchanged by renaming every local chain: a private store's local names are
+    /// the deployment's and follow it, and a name by genesis is the same under any.
+    #[test]
+    fn renaming_every_local_chain_changes_no_reading(
+        generated in spelled_stores(),
+        audiences in audiences(),
+    ) {
+        const RENAMED: [&str; 3] = ["alpha", "beta", "gamma"];
+        let reading = |names: &[&str]| -> Vec<_> {
+            let place = |chain: &ChainName| names.iter().position(|name| *name == chain.as_str());
+            the_named_list(&read_named(&generated, &all(), names), audiences, names)
+                .rows
+                .iter()
+                .map(|row| {
+                    let by = match &row.reading {
+                        Urgency::Own => None,
+                        Urgency::Raised { percent, by } => {
+                            Some((percent.clone(), place(&by.chain), by.id.clone()))
+                        }
+                    };
+                    (place(&row.chain), row.row.id.clone(), row.name.clone(), by)
+                })
+                .collect()
+        };
+        prop_assert_eq!(reading(&STORES), reading(&RENAMED));
+    }
+
+    /// A wait into a store that is absent moves no row it does not reach, and is said: every
+    /// confirmed wait of an open task on a task of the absent store, by either spelling, is in
+    /// `unresolved` as unheld, and nothing else is.
+    #[test]
+    fn a_wait_into_an_absent_store_moves_nothing_and_is_said(
+        generated in spelled_stores().prop_map(|generated| Stores { replica: false, ..generated }),
+        gone in 0..STORES.len(),
+    ) {
+        let mut held = all();
+        held.remove(&gone);
+        let whole = the_list(&read(&generated, &all()), PRIVATE);
+        let without = the_named_list(&read(&generated, &held), PRIVATE, &STORES);
+        let reached = reached_from(&generated, gone);
+        let after = by_key(&without.rows);
+        for (key, row) in by_key(&whole).into_iter().filter(|((chain, _), _)| *chain != name(gone)) {
+            if !reached.contains(&key) {
+                prop_assert_eq!(after.get(&key).copied(), Some(row));
+            }
+        }
+        let mut expected = BTreeSet::new();
+        for store in held.iter().copied() {
+            for (task, (_, done, _)) in generated.tasks[store].iter().enumerate() {
+                let confirmed = confirmed(&generated, store, task);
+                for (there, blocker) in confirmed.into_iter().filter(|(there, _)| *there == gone) {
+                    if !*done {
+                        expected.insert((
+                            TodoRef { chain: name(store), id: todo_id(task) },
+                            (there, format!("t{blocker}")),
+                        ));
+                    }
+                }
+            }
+        }
+        let said: BTreeSet<_> = without
+            .unresolved
+            .iter()
+            .map(|Unresolved { waiter, reference, missing }| {
+                assert_eq!(*missing, suzatary_plan::wait::Missing::Unheld);
+                (waiter.clone(), named(&generated, reference))
+            })
+            .collect();
+        prop_assert_eq!(said, expected);
+    }
+
+    /// Words anyone may write move no private chain's row: whatever a public or a followed store
+    /// holds, its genesis and name kept, every row of a private chain reads the same.
+    #[test]
+    fn no_store_anyone_reads_moves_a_private_row(
+        generated in spelled_stores(),
+        other in spelled_stores(),
+        audiences in audiences(),
+    ) {
+        let swapped = |mine: &Stores| {
+            let pick = |store: usize| if audiences[store] == Kept::Private { mine } else { &other };
+            Stores {
+                spelled: (0..STORES.len()).map(|s| pick(s).spelled[s]).collect(),
+                tasks: (0..STORES.len()).map(|s| pick(s).tasks[s].clone()).collect(),
+                claims: (0..STORES.len()).map(|s| pick(s).claims[s].clone()).collect(),
+                over: (0..STORES.len()).map(|s| pick(s).over[s].clone()).collect(),
+                revised: (0..STORES.len()).map(|s| pick(s).revised[s].clone()).collect(),
+                ..mine.clone()
+            }
+        };
+        let private = |list: Vec<ListRow>| -> Vec<_> {
+            list.into_iter()
+                .filter(|row| audiences[STORES.iter().position(|n| *n == row.chain.as_str()).expect("a store")] == Kept::Private)
+                .map(|row| (row.chain, row.row.id, row.reading))
+                .collect()
+        };
+        prop_assert_eq!(
+            private(the_list(&read(&generated, &all()), audiences)),
+            private(the_list(&read(&swapped(&generated), &all()), audiences))
+        );
+    }
+}
+
+fn audiences() -> impl Strategy<Value = [Kept; 3]> {
+    proptest::array::uniform3(prop_oneof![
+        Just(Kept::Private),
+        Just(Kept::Public),
+        Just(Kept::Followed)
+    ])
+}
+
+/// The waits of the records `store`'s policy confirms for `task`: the last revision's, each
+/// candidate's of a conflict, else its own.
+fn confirmed(generated: &Stores, store: usize, task: usize) -> Vec<(usize, usize)> {
+    match generated.revised[store].get(&task) {
+        Some(revision) => revision.waits().into_iter().flatten().copied().collect(),
+        None => generated.tasks[store][task].2.clone(),
+    }
+}
+
+/// What a generated wait does, by the rule written out apart from the code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Counted {
+    Into(usize),
+    Label,
+    Said(Missing),
+}
+
+/// A wait written in `here` on the task `(there, _)`, spelled as `here` spells waits, among the
+/// stores `held`, each kept as `kept` says. A prefix two held geneses share is drawn by the rule's
+/// own law (`wait.rs`), since a store's genesis cannot be chosen to share one here.
+fn counted(
+    generated: &Stores,
+    kept: [Kept; 3],
+    held: &BTreeSet<usize>,
+    here: usize,
+    (there, _): (usize, usize),
+) -> Counted {
+    let anyone = kept[here].audience() == Audience::Anyone;
+    match generated.spelled[here] {
+        Spelling::Local if anyone => Counted::Label,
+        Spelling::Local if held.contains(&there) => Counted::Into(there),
+        Spelling::Local => Counted::Said(Missing::Unheld),
+        Spelling::Genesis(_) => {
+            let holders: Vec<usize> = held
+                .iter()
+                .copied()
+                .filter(|s| home(generated, *s) == home(generated, there))
+                .collect();
+            let readable: Vec<usize> = holders
+                .iter()
+                .copied()
+                .filter(|s| !anyone || kept[*s].audience() == Audience::Anyone)
+                .collect();
+            let owned: Vec<usize> = readable
+                .iter()
+                .copied()
+                .filter(|s| kept[*s].own())
+                .collect();
+            match (holders.as_slice(), owned.as_slice(), readable.as_slice()) {
+                ([], ..) => Counted::Said(Missing::Unheld),
+                (_, _, []) => Counted::Said(Missing::Private),
+                (_, [one], _) | (_, _, [one]) => Counted::Into(*one),
+                (.., several) => Counted::Said(Missing::Replicas {
+                    stores: several.iter().map(|s| name(*s)).collect(),
+                }),
+            }
+        }
+    }
+}
+
+/// The text a generated wait on `(there, task)` is written as in `here`.
+fn spelled(generated: &Stores, here: usize, (there, task): (usize, usize)) -> String {
+    match generated.spelled[here] {
+        Spelling::Local => format!("todo:{}/t{task}", STORES[there]),
+        Spelling::Genesis(n) => format!("todo:+{}/t{task}", &home(generated, there).as_str()[..n]),
+    }
+}
+
+fn todo_id(task: usize) -> prodrome_core::event::TodoId {
+    prodrome_core::event::TodoId::new(format!("t{task}")).expect("an id")
+}
+
+/// The (store, id) a generated wait's reference names, by either spelling.
+fn named(generated: &Stores, reference: &Reference) -> (usize, String) {
+    match reference {
+        Reference::Todo(local) => (
+            STORES
+                .iter()
+                .position(|name| *name == local.chain.as_str())
+                .expect("a store"),
+            local.id.as_str().to_owned(),
+        ),
+        Reference::Global(global) => (
+            (0..STORES.len())
+                .find(|store| {
+                    home(generated, *store)
+                        .as_str()
+                        .starts_with(global.genesis.as_str())
+                })
+                .expect("a store"),
+            global.id.as_str().to_owned(),
+        ),
+        other => panic!("a generated wait is a todo, got {other}"),
     }
 }
 

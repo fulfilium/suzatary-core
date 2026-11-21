@@ -7,11 +7,10 @@ use serde::Deserialize;
 use suzatary_base::reference::mentions;
 use suzatary_topics::wire::topics::{BlockRow, ProposalRow, Speaker, TurnRow};
 use ts_rs::TS;
-use viewtree::Attr::{AriaLabel, Class, Href, Open, Title, Type};
+use viewtree::Attr::{AriaLabel, Class, Open, Title, Type};
 use viewtree::{Node, view};
 
 use crate::chrome::rich_block;
-use crate::places::Place;
 
 /// Copies words or Typst, never markup.
 pub(crate) fn copy<M: Clone>(label: &str, class: &'static str, m: M) -> Node<M> {
@@ -29,7 +28,7 @@ pub(crate) fn blocks<M: Clone>(
             rich_block(b.html.as_deref(), &b.source, b.kind),
             copy("Copy", "copyblock", copied(b.plain.clone())),
         ] }).collect::<Vec<_>>(),
-        (!found.is_empty()).then(|| view! { Div "turnrefs" [found.iter().map(|r| view! { A {Class => format!("reflink turnref ref-{}", r.scheme()), Href => Place::Reference(r).href()} [r.to_string()] }).collect::<Vec<_>>()] }),
+        (!found.is_empty()).then(|| view! { Div "turnrefs" [found.iter().map(|r| crate::places::reference(r, "reflink turnref", r.to_string())).collect::<Vec<_>>()] }),
     ] }
 }
 

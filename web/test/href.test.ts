@@ -93,9 +93,9 @@ test("every link in the box's vectors renders, and an outbound one is drawn by i
   assert.ok(outbound >= 5, "the vectors hold labeled and bare outbound links")
 })
 
-test("a todo: link names its todo, a bare one and any other scheme name nothing", () => {
+test("a todo: link names its todo; a bare one, one by genesis and any other scheme name nothing", () => {
   assert.deepEqual(href.of("todo:life/flight", BASE), { type: "Todo", id: "life/flight" });
-  for (const raw of ["todo:", "ftp://example.invalid/x", "blob:https://box.example.test/x", "file:///etc/passwd", "http://[x"]) {
+  for (const raw of ["todo:", "todo:+3f2a9c1b2d4e/x", "ftp://example.invalid/x", "blob:https://box.example.test/x", "file:///etc/passwd", "http://[x"]) {
     assert.deepEqual(href.of(raw, BASE), { type: "Inert" }, raw);
   }
 });

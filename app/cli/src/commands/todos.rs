@@ -10,7 +10,10 @@ use anyhow::bail;
 use clap::Subcommand;
 use prodrome_core::literal::Datetime;
 use suzatary_base::chains::ChainName;
-use suzatary_plan::listed::{ListRow, Package, Store, Units, Urgency, Waits, listed};
+use suzatary_base::reference::GlobalTodo;
+use suzatary_plan::listed::{ListRow, Package, Store, Units, Unresolved, Urgency, listed};
+use suzatary_plan::wait::{Held, Kept, Missing};
+use suzatary_signatures::chain_set::{ChainSet, home};
 use suzatary_signatures::chain_set::{NotAMember, Read};
 use suzatary_todo::shown::Priority;
 
@@ -46,7 +49,7 @@ pub enum Action {
 /// Every store the list reads, and how.
 struct Listing {
     read: Read,
-    stores: Vec<(ChainName, Waits)>,
+    stores: Vec<(ChainName, Kept)>,
     packages: Packages,
     follows: Vec<(ChainName, Copied)>,
 }
@@ -85,7 +88,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             );
             Ok(Listing {
                 read,
-                stores: vec![(name, Waits::None)],
+                stores: vec![(name, Kept::Followed)],
                 packages,
                 follows: Vec::new(),
             })
@@ -110,21 +113,26 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     }
 }
 
-fn of_instance(instance: &Instance) -> Listing {
+/// Every store the instance reads, chains then followed stores, each with whose it is.
+pub(crate) fn kept(instance: &Instance) -> Vec<(ChainName, Kept)> {
     let chains = instance.chains.iter().map(|chain| {
-        let waits = match chain.charter {
-            Charted::Private => Waits::ByLocalName,
-            Charted::Public(_) => Waits::None,
+        let kept = match chain.charter {
+            Charted::Private => Kept::Private,
+            Charted::Public(_) => Kept::Public,
         };
-        (chain.policy.name.clone(), waits)
+        (chain.policy.name.clone(), kept)
     });
     let followed = instance
         .follows
         .iter()
-        .map(|followed| (followed.name.clone(), Waits::None));
+        .map(|followed| (followed.name.clone(), Kept::Followed));
+    chains.chain(followed).collect()
+}
+
+fn of_instance(instance: &Instance) -> Listing {
     Listing {
         read: super::plan_read(instance),
-        stores: chains.chain(followed).collect(),
+        stores: kept(instance),
         packages: packages(&instance.mounts(), Some(instance.code())),
         follows: instance
             .follows
@@ -159,9 +167,9 @@ fn open_todos(read: &Listing, only: Option<&str>, at: Datetime, json: bool) -> a
     let stores: Vec<Store<'_>> = read
         .stores
         .iter()
-        .map(|(chain, waits)| Store {
+        .map(|(chain, kept)| Store {
             chain,
-            waits: *waits,
+            kept: *kept,
             units: match &read.packages {
                 Packages::Checked {
                     chain: project,
@@ -171,8 +179,15 @@ fn open_todos(read: &Listing, only: Option<&str>, at: Datetime, json: bool) -> a
             },
         })
         .collect();
-    let (rows, failed) = listed(&set, &stores);
-    let rows: Vec<ListRow> = rows
+    let list = listed(&set, &stores);
+    let failed = list.failed;
+    let unresolved: Vec<Unresolved> = list
+        .unresolved
+        .into_iter()
+        .filter(|wait| only.is_none_or(|name| wait.waiter.chain.as_str() == name))
+        .collect();
+    let rows: Vec<ListRow> = list
+        .rows
         .into_iter()
         .filter(|row| only.is_none_or(|name| row.chain.as_str() == name))
         .collect();
@@ -204,12 +219,16 @@ fn open_todos(read: &Listing, only: Option<&str>, at: Datetime, json: bool) -> a
                 "open": rows,
                 "failed": failed,
                 "follows": follows,
+                "unresolved": unresolved,
                 "packages": read.packages,
             })
         );
     } else {
         for (chain, copy) in &read.follows {
             eprintln!("{chain}: followed, {}", copied(copy));
+        }
+        for wait in &unresolved {
+            eprintln!("{}", lost(wait));
         }
         if let Packages::Unchecked { why } = &read.packages {
             eprintln!("packages unchecked: {why}");
@@ -250,6 +269,49 @@ fn copied(copy: &Copied) -> String {
     }
 }
 
+/// A wait the list could not follow, in words.
+fn lost(wait: &Unresolved) -> String {
+    format!(
+        "{} waits on {}, which moves nothing: {}",
+        wait.waiter,
+        wait.reference,
+        why(&wait.missing)
+    )
+}
+
+/// Why a reference moves no task held here, in words.
+pub(crate) fn why(missing: &Missing) -> String {
+    match missing {
+        Missing::Unheld => "no store this deployment holds is the one it names".to_owned(),
+        Missing::Ambiguous { geneses } => format!(
+            "its genesis prefix starts {} held geneses ({}); write more of it",
+            geneses.len(),
+            geneses.join(", ")
+        ),
+        Missing::Replicas { stores } => {
+            let names: Vec<&str> = stores.iter().map(ChainName::as_str).collect();
+            format!(
+                "the stores {} begin with its genesis, and not one alone of them is this \
+                 deployment's own chain",
+                names.join(", ")
+            )
+        }
+        Missing::Private => {
+            "it names a task of a private chain, and words anyone may write move none".to_owned()
+        }
+    }
+}
+
+/// The stores of `stores` that `set` read, as a wait reads them.
+pub(crate) fn held(set: &ChainSet<'_>, stores: &[(ChainName, Kept)]) -> Held {
+    stores.iter().fold(Held::default(), |held, (name, kept)| {
+        match set.held(name).map(|store| home(store.dag)) {
+            Ok(Ok(Some(prodrome))) => held.with(name.clone(), prodrome, *kept),
+            Ok(Ok(None) | Err(_)) | Err(_) => held,
+        }
+    })
+}
+
 /// One row as plain text, which the briefing and the agent's dedup read.
 fn line(row: &ListRow) -> String {
     let own = match &row.row.priority {
@@ -272,10 +334,14 @@ fn line(row: &ListRow) -> String {
     } else {
         ""
     };
+    let name = GlobalTodo {
+        genesis: row.name.genesis.shortened(),
+        id: row.name.id.clone(),
+    };
     format!(
-        "{price:>7}  {:<10} {package:<10} {:<24}{mark} {}{raised}",
+        "{price:>7}  {:<10} {package:<10} {:<40}{mark} {}{raised}",
         row.chain.as_str(),
-        row.row.id,
+        name.to_string(),
         row.row.body
     )
 }

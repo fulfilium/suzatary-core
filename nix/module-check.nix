@@ -65,6 +65,8 @@ let
   # the binary reads at run time (an empty roster or plugin list is no work).
   core = [
     "suzatary-app.target"
+    "suzatary-follows.service"
+    "suzatary-follows.timer"
     "suzatary-mail-idle.service"
     "suzatary-plugins.service"
     "suzatary-plugins.timer"
@@ -197,6 +199,10 @@ let
     "a declared vault snapshots daily, at a minute no triage tick lands on" =
       (host { services.suzatary.vault.enable = true; })
         .config.systemd.user.timers.suzatary-vault.timerConfig.OnCalendar == "*-*-* 04:17:00";
+    "the followed stores are fetched hourly by the deployed binary, catching up after downtime" =
+      let timer = config.systemd.user.timers.suzatary-follows.timerConfig;
+      in timer.OnCalendar == "*:37" && timer.Persistent
+        && units.suzatary-follows.serviceConfig.Type == "oneshot";
     "a declared bridge restarts always, as every Proton job is downstream of it" =
       (host { services.suzatary.protonBridge.enable = true; })
         .config.systemd.user.services.proton-bridge.serviceConfig.Restart == "always";
