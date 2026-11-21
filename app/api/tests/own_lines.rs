@@ -171,7 +171,9 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
     let names = objects.iter().map(|(n, _)| n.clone()).collect();
     let held = <LinesRule as suzatary_store::admission::Admission>::held(&objects);
     let trusting = suzatary_signatures::signatures::Trusting::held(
-        &[&suzatary_stores::stores::phone_trusted(&["ada"])],
+        &suzatary_signatures::signatures::Keeping::stores(&[
+            &suzatary_stores::stores::phone_trusted(&["ada"]),
+        ]),
         &suzatary_connect::cast::keys::root(),
     )
     .expect("reads");
@@ -289,7 +291,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
                     &frontiers,
                     routes::Writer {
                         actor: &ada,
-                        chains: &[&chain],
+                        chains: &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
                         root: &suzatary_connect::cast::keys::root(),
                     },
                     routes::Recording {
@@ -428,7 +430,7 @@ fn a_posted_key_never_opens_erased_words() {
         &Frontiers::remembered(KEPT),
         routes::Writer {
             actor: &ada,
-            chains: &[&chain],
+            chains: &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
             root: &suzatary_connect::cast::keys::root(),
         },
         routes::Recording {
@@ -882,7 +884,7 @@ fn the_box_s_acceptance_of_a_full_post_measured() {
         &frontiers,
         routes::Writer {
             actor: &ada,
-            chains: &[&chain],
+            chains: &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
             root: &suzatary_connect::cast::keys::root(),
         },
         routes::Recording {

@@ -1321,8 +1321,8 @@ pub struct Posted<'a> {
 pub struct Writer<'a> {
     /// The gate's actor.
     pub actor: &'a Actor,
-    /// Every chain.
-    pub chains: &'a [&'a dyn Prodrome<record::TodoEvent>],
+    /// The keyed chains.
+    pub chains: &'a signatures::Keeping<signatures::Keeper<'a>>,
     /// The deployment's root.
     pub root: &'a prodrome_core::sign::PublicKey,
 }
@@ -1374,7 +1374,8 @@ where
         // Read under the lock, so a revocation that lands before it is seen by this post.
         let trusting = part("trust", || {
             signatures::Trusting::held(writer.chains, writer.root)
-        })?;
+        })
+        .map_err(|unread| signatures::refused(&signatures::Unadmitted::Unread(unread)))?;
         let objects = part("read", || store.objects())?;
         let names = objects.iter().map(|(name, _)| name.clone()).collect();
         let received = {

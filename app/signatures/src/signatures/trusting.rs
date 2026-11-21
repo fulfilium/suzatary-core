@@ -3,56 +3,54 @@ use std::sync::Arc;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::{PublicKey, Registrar, Signed};
 
-use super::{Trust, Unproven};
-use suzatary_record::record::TodoEvent;
-use suzatary_store::store::{Prodrome, StoreError};
+use super::{Keeper, Keeping, Trust, Unproven, Unread};
 
-/// The trust of every chain the box holds, each read under the deployment's root.
+/// The trust of every chain that keeps keys, each read under the deployment's root.
 #[derive(Debug, Clone)]
-pub struct Trusting(Vec<Arc<Trust>>);
+pub struct Trusting(Keeping<Arc<Trust>>);
 
 impl Trusting {
-    /// The trust of `chains`, each read under `root`.
+    /// The trust of the keyed chains, each read under `root`.
     ///
     /// # Errors
-    /// A chain unreadable.
-    pub fn held(chains: &[&dyn Prodrome<TodoEvent>], root: &PublicKey) -> Result<Self, StoreError> {
+    /// The first keyed chain that did not read.
+    pub fn held(chains: &Keeping<Keeper<'_>>, root: &PublicKey) -> Result<Self, Unread> {
         let roots = Registrar::Roots([root.clone()].into_iter().collect());
-        chains
-            .iter()
-            .map(|chain| Trust::held(*chain, &roots))
-            .collect::<Result<_, _>>()
-            .map(Self)
+        Ok(Self(match chains {
+            Keeping::Keyless => Keeping::Keyless,
+            Keeping::Keyed(keyed) => Keeping::Keyed(keyed.try_map(|chain| {
+                Trust::held(chain.store, &roots).map_err(|error| Unread {
+                    chain: chain.name.clone(),
+                    error,
+                })
+            })?),
+        }))
     }
 
-    /// Readings already made.
-    #[must_use]
-    pub fn of(trusts: Vec<Arc<Trust>>) -> Self {
-        Self(trusts)
-    }
-
-    /// `signed` verifies, and every chain trusts its key for `actor`; a revocation on any chain
-    /// counts on all, and no chain at all trusts nothing.
+    /// `signed` verifies, and every keyed chain trusts its key for `actor`; a revocation on any
+    /// keyed chain counts on all, and where no chain keeps keys no key is trusted.
     ///
     /// # Errors
-    /// [`Unproven::Revoked`] where any chain revoked the key, else the first chain's refusal.
+    /// [`Unproven::Revoked`] where any keyed chain revoked the key, else the first keyed chain's
+    /// refusal.
     pub fn admits(&self, actor: &Actor, signed: &Signed) -> Result<(), Unproven> {
-        if let Some(revoked) = self.revoked(actor, signed) {
-            return Err(revoked);
-        }
-        let mut answers = self
-            .0
-            .iter()
-            .map(|trust| trust.admits(trust.home(), actor, signed));
-        match answers.next() {
-            None => Err(Unproven::Untrusted {
+        match &self.0 {
+            Keeping::Keyless => Err(Unproven::Untrusted {
                 key: signed.key.clone(),
             }),
-            Some(first) => answers.fold(first, Result::and),
+            Keeping::Keyed(keyed) => {
+                if let Some(revoked) = self.revoked(actor, signed) {
+                    return Err(revoked);
+                }
+                keyed
+                    .iter()
+                    .map(|trust| trust.admits(trust.home(), actor, signed))
+                    .fold(Ok(()), Result::and)
+            }
         }
     }
 
-    /// [`Unproven::Revoked`] where any chain revoked `signed`'s key for `actor`.
+    /// [`Unproven::Revoked`] where any keyed chain revoked `signed`'s key for `actor`.
     #[must_use]
     pub fn revoked(&self, actor: &Actor, signed: &Signed) -> Option<Unproven> {
         self.0

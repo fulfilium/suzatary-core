@@ -1,6 +1,6 @@
 //! Signed requests (SPEC law 42): a request is named by its method, target, device instant and
-//! body digest, signed by a device key, and proven against every chain the route can write, so a
-//! revoked key writes through no route.
+//! body digest, signed by a device key, and proven against every keyed chain the route can reach,
+//! so a revoked key writes through no route.
 //!
 //! A request is performed once: its record and answer are kept under its name, and a resend is
 //! answered from there with no new effect. Its instant must be within
@@ -17,11 +17,11 @@ use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Hash;
 use prodrome_core::sign::PublicKey;
 use suzatary_base::refusal::Refusal;
-use suzatary_record::record::TodoEvent;
 use suzatary_server::gate::{actor_of, writer_of};
 use suzatary_signatures::signatures::Admitted;
-use suzatary_signatures::signatures::{Answer, Asking, Proven, Request, Requested, refused};
-use suzatary_store::store::Prodrome;
+use suzatary_signatures::signatures::{
+    Answer, Asking, Keeper, Keeping, Proven, Request, Requested, Unadmitted, refused,
+};
 
 use super::State;
 use super::guard::{Asks, Proof};
@@ -44,7 +44,7 @@ const ANSWER_CAP: usize = 16 << 20;
 pub type InFlight = Arc<Mutex<BTreeSet<Hash>>>;
 
 /// The body, read whole where a signature covers it, and the door's proof `P` of the request.
-/// `trusting` is every chain the route can write.
+/// `trusting` is the keyed chains the route can reach.
 ///
 /// # Errors
 /// A body over its cap, a request dated outside the window, or one its signature does not prove,
@@ -52,7 +52,7 @@ pub type InFlight = Arc<Mutex<BTreeSet<Hash>>>;
 pub async fn asked<P: Proof>(
     state: &State,
     admitted: &Admitted,
-    trusting: Vec<&'static dyn Prodrome<TodoEvent>>,
+    trusting: Keeping<Keeper<'static>>,
     parts: &Parts,
     body: Body,
     cap: usize,
@@ -101,7 +101,7 @@ pub async fn asked<P: Proof>(
 async fn read_by_a_kept_key(
     state: &State,
     admitted: &Admitted,
-    trusting: &[&'static dyn Prodrome<TodoEvent>],
+    trusting: &Keeping<Keeper<'static>>,
     root: &PublicKey,
     parts: &Parts,
 ) -> Result<(), Refusal> {
@@ -136,11 +136,12 @@ async fn read_by_a_kept_key(
     ) else {
         return Ok(());
     };
-    let chains = trusting.to_vec();
+    let chains = trusting.clone();
     let root = root.clone();
-    blocking(move || match asking.revoked(&chains, &root)? {
-        Some(why) => Err(refused(&why)),
-        None => Ok(()),
+    blocking(move || match asking.revoked(&chains, &root) {
+        Ok(Some(why)) => Err(refused(&why.into())),
+        Ok(None) => Ok(()),
+        Err(unread) => Err(refused(&Unadmitted::Unread(unread))),
     })
     .await
 }

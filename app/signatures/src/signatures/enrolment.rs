@@ -3,7 +3,7 @@ use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash}
 use prodrome_core::sign::{KeyAdded, PublicKey, Registrar, Secret, Signature, Signed};
 use serde::{Deserialize, Serialize};
 
-use super::{KeyStanding, Trust, Unproven};
+use super::{KeyStanding, Keyed, Trust, Unproven};
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::{Prodrome, StoreError};
 
@@ -122,12 +122,12 @@ pub(crate) fn endorses(
     Ok(signed)
 }
 
-/// THE TAP'S DOOR TO KEYS: every chain, and the root that signs what is registered there. Held
-/// by no record; only the tap route builds one.
+/// THE TAP'S DOOR TO KEYS: the keyed chains, and the root that signs what is registered there.
+/// Held by no record; only the tap route builds one.
 #[derive(Clone, Copy)]
 pub struct Enrolling<'a> {
-    /// Every chain, the first being the one an endorsement is read against and kept in.
-    pub chains: &'a [&'a dyn Prodrome<TodoEvent>],
+    /// The keyed chains, the first being the one an endorsement is read against and kept in.
+    pub chains: &'a Keyed<&'a dyn Prodrome<TodoEvent>>,
     /// The root.
     pub root: &'a Secret,
 }
@@ -137,17 +137,14 @@ impl Enrolling<'_> {
     /// it signed.
     ///
     /// # Errors
-    /// The first chain unreadable; inside, why not.
+    /// The first keyed chain unreadable; inside, why not.
     pub fn endorsed(
         &self,
         tapper: &Actor,
         enrolment: &Enrolment,
         endorsement: &Endorsement,
     ) -> Result<Result<Signed, Unproven>, StoreError> {
-        let Some(first) = self.chains.first() else {
-            return Ok(Err(Unproven::Unsigned));
-        };
-        let history: Dag<TodoEvent> = first.objects()?.into_iter().collect();
+        let history: Dag<TodoEvent> = self.chains.first().objects()?.into_iter().collect();
         Ok(endorses(
             &history,
             &self.root.public(),
@@ -157,20 +154,20 @@ impl Enrolling<'_> {
         ))
     }
 
-    /// Register the enrolment's key for its actor on every chain, signed by the root, and keep
-    /// the endorsement beside the first chain's registration.
+    /// Register the enrolment's key for its actor on every keyed chain, signed by the root, and
+    /// keep the endorsement beside the first keyed chain's registration.
     ///
     /// # Errors
     /// A store refusing; the chains written before it keep the key, and tapping again writes
     /// the same objects.
     pub fn enrol(&self, enrolment: &Enrolment, endorsed: &Signed) -> Result<(), StoreError> {
-        for chain in self.chains {
+        for chain in self.chains.iter() {
             super::trust(*chain, self.root, &enrolment.actor, &enrolment.key)?;
         }
-        if let Some(first) = self.chains.first() {
-            let object = Envelope::<TodoEvent>::Signed(endorsed.clone());
-            first.accept(&[(seal_hash(&object), canonical_envelope(&object))])?;
-        }
+        let object = Envelope::<TodoEvent>::Signed(endorsed.clone());
+        self.chains
+            .first()
+            .accept(&[(seal_hash(&object), canonical_envelope(&object))])?;
         Ok(())
     }
 }

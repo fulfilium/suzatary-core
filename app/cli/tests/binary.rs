@@ -81,3 +81,98 @@ fn home() -> PathBuf {
     std::fs::create_dir_all(home.join("run")).expect("a home for the binary's runs");
     home
 }
+
+/// [`fixture`] with the fixture box's signing seeds and a state directory under `root`, as
+/// `scripts/web-e2e.sh` runs it.
+#[cfg(feature = "fixture")]
+pub(crate) fn keyed_fixture(root: &std::path::Path) -> Command {
+    use suzatary_cli::commands::fixture::{AGENT_SEED, BOX_SEED};
+    let mut command = fixture();
+    command
+        .env("XDG_STATE_HOME", root.join("state"))
+        .env(suzatary_signatures::signatures::BOX_KEY, BOX_SEED)
+        .env(suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED)
+        .env(
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
+            "e2e0000000000000000000000000000000000000000000000000000000000d3d",
+        )
+        .env("MALLOC_ARENA_MAX", "2");
+    command
+}
+
+/// `suzatary-dev serve` over a fixture instance, ended when the test is. Every line it logs is
+/// kept for [`Serving::log`].
+#[cfg(feature = "fixture")]
+pub(crate) struct Serving {
+    child: std::process::Child,
+    log: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+#[cfg(feature = "fixture")]
+impl Serving {
+    /// The server over `instance`, answering once its log says it listens, with a script that
+    /// says "Noted." to every turn and its mail kept under `root`.
+    pub(crate) fn start(root: &std::path::Path, instance: &std::path::Path) -> Self {
+        use std::io::BufRead as _;
+        use std::process::Stdio;
+        let script = root.join("model-script.json");
+        std::fs::write(
+            &script,
+            r#"[{"when": "", "reply": "{\"say\": \"Noted.\"}"}]"#,
+        )
+        .expect("the script writes");
+        let mut child = keyed_fixture(root)
+            .arg("serve")
+            .arg("--instance")
+            .arg(instance)
+            .args(["--whois-fixture", "e2e-writer@example.invalid"])
+            .arg("--model-fixture")
+            .arg(&script)
+            .arg("--smtp-fixture")
+            .arg(root.join("sent"))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the server starts");
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let keep = |from: Box<dyn std::io::Read + Send>| {
+            let log = std::sync::Arc::clone(&log);
+            let (said, heard) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                for line in std::io::BufReader::new(from).lines().map_while(Result::ok) {
+                    if line.contains("serve: http") {
+                        let _ = said.send(());
+                    }
+                    log.lock().expect("the log").push(line);
+                }
+            });
+            heard
+        };
+        let listening = keep(Box::new(child.stdout.take().expect("piped")));
+        let _ = keep(Box::new(child.stderr.take().expect("piped")));
+        let serving = Serving { child, log };
+        assert!(
+            listening.recv().is_ok(),
+            "the server ended before it listened: {}",
+            serving.log()
+        );
+        serving
+    }
+
+    pub(crate) fn id(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Every line logged until now.
+    pub(crate) fn log(&self) -> String {
+        self.log.lock().expect("the log").join("\n")
+    }
+}
+
+#[cfg(feature = "fixture")]
+impl Drop for Serving {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}

@@ -161,7 +161,7 @@ fn beside<B: Beside>(literals: &Literals) -> Result<B, Refusal> {
 pub fn take(call: &Call<Poster, Written, Literals>) -> Result<Json<ReceiptPayload>, Refusal> {
     let caps = call.state.first.caps;
     let topics = caps.secretary.topics;
-    let chains = call.state.chain_stores();
+    let chains = call.state.keeping();
     let (posted, frontiers) = (&call.body.posted(), &call.state.frontiers);
     let writer = routes::Writer {
         actor: &call.guard.0,

@@ -127,14 +127,14 @@ pub fn revoked_for<E: Schema>(
         }))
 }
 
-/// A revocation is ALL CHAINS OR NONE: every key a chain holds revoked is revoked on each other
-/// chain that still trusts it, so a revoke interrupted between chains is completed by the next
-/// writer to adopt. Answers what it wrote.
+/// A revocation is ALL KEYED CHAINS OR NONE: every key a keyed chain holds revoked is revoked on
+/// each other keyed chain that still trusts it, so a revoke interrupted between chains is completed
+/// by the next writer to adopt. Answers what it wrote.
 ///
 /// # Errors
 /// A store unreadable, or refusing the objects.
 pub fn complete_revocations<E: Schema>(
-    stores: &[&dyn Prodrome<E>],
+    stores: &super::Keyed<&dyn Prodrome<E>>,
     root: &Secret,
 ) -> Result<Vec<Hash>, StoreError> {
     let roots = Registrar::Roots([root.public()].into_iter().collect());

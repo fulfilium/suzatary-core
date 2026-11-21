@@ -155,10 +155,10 @@ async fn serve<W: Guarded, P: Params, B: Body, O: Outcome>(
     let chain = state.bound(asked.chain())?;
     let params = P::parse(&asked, &chain)?;
     // A chain's route writes that chain; a box route can reach every chain, so its device must
-    // be trusted on each, read where the door reads it.
+    // be trusted on each that keeps keys.
     let trusting = match scope {
-        Scope::Box => state.chain_stores(),
-        Scope::Chain | Scope::Named => vec![chain.caps.secretary.chain],
+        Scope::Box => state.keeping(),
+        Scope::Chain | Scope::Named => super::Chained::keeping([&chain]),
     };
     let mut traced = Traced::of(<W::Proof as Proof>::ASKS, &parts);
     let (body, proof) =

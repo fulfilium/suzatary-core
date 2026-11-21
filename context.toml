@@ -45,7 +45,8 @@ allowance = 2000
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.190 for megaroadmap's one list (#576, +15,539 over 2.1.190's figure: the crate app/plan with the wait reading, the one list and their five laws, `[[follows]]` and `follow fetch`, `todos open`'s answer for a store it could not read, the reading of a store's believed waits, the copy's fence and fetch record, the law of the confirmed records' waits, and the binary-level tests of a followed store); accepted at the reviews of #576.
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.191 for migratecost (#577, +9,532: the migration's bench, its crash-order, count, lock-window, waiting-reseal and unread-file laws and their stopping stores, and the group commit); the growth accepted at the review of #577.
 # 2026-11-20: raised by hand to the figure of the tree merged with 2.1.192 for tapsecretflake (#574, +4,926: the store's refusal evidence and its stand-in, a lock per store whose wait a call's timeout bounds, the door's blank value, a value field that stands with its card as masked text in a form the browser checks, and viewtree's slot); accepted at the review of #574.
-reading = 3166920
+# 2026-11-21: raised by hand to the figure of the tree merged with 2.1.193 for publicchaindoor (#579, +2,140: `Keeping`, `Keyed`, `Keeper` and `Unread`, the door's `Unadmitted` and its words, and every walk of a key's standing taking the keyed chains); accepted at the review of #579.
+reading = 3169060
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.

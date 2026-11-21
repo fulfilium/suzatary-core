@@ -14,7 +14,8 @@
 use crate::common;
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+
+use crate::binary::{Serving, keyed_fixture as fixture};
 
 /// The rounds before the first reading, and again before the second.
 const ROUNDS: usize = 4;
@@ -41,33 +42,6 @@ fn status_mb(pid: u32, field: &str) -> u64 {
         .expect("the field is there")
 }
 
-/// The fixture binary, from a clean environment ([`crate::binary::fixture`]), with the box's
-/// signing seeds and a state directory of its own, as `scripts/web-e2e.sh` runs it.
-fn fixture(root: &Path) -> Command {
-    use suzatary_cli::commands::fixture::{AGENT_SEED, BOX_SEED};
-    let mut command = crate::binary::fixture();
-    command
-        .env("XDG_STATE_HOME", root.join("state"))
-        .env(suzatary_signatures::signatures::BOX_KEY, BOX_SEED)
-        .env(suzatary_signatures::signatures::AGENT_KEY, AGENT_SEED)
-        .env(
-            suzatary_mail::mail::dedup_key::DEDUP_KEY,
-            "e2e0000000000000000000000000000000000000000000000000000000000d3d",
-        )
-        .env("MALLOC_ARENA_MAX", "2");
-    command
-}
-
-/// The server, ended when the test is.
-struct Serving(Child);
-
-impl Drop for Serving {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
 /// The fixture's chain and stores at the test's shape, then its server, answering once its log
 /// says it listens.
 fn served(root: &Path) -> (Serving, String) {
@@ -92,44 +66,9 @@ fn served(root: &Path) -> (Serving, String) {
         "fixture-chain: {}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let script = root.join("model-script.json");
-    std::fs::write(
-        &script,
-        r#"[{"when": "", "reply": "{\"say\": \"Noted.\"}"}]"#,
-    )
-    .expect("the script writes");
-    let mut child = fixture(root)
-        .arg("serve")
-        .arg("--instance")
-        .arg(root.join("box/instance.toml"))
-        .args(["--whois-fixture", "e2e-writer@example.invalid"])
-        .arg("--model-fixture")
-        .arg(&script)
-        .arg("--smtp-fixture")
-        .arg(root.join("sent"))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("the server starts");
-    let said = child.stdout.take().expect("piped");
-    let mut why = child.stderr.take().expect("piped");
-    let mut serving = Serving(child);
-    // The server says it serves once its port is bound; the rest of its log is read and dropped,
-    // so the pipe never fills under the server.
-    let mut lines = std::io::BufRead::lines(std::io::BufReader::new(said));
-    let listened = lines
-        .by_ref()
-        .map_while(Result::ok)
-        .any(|line| line.contains("serve: http"));
-    if !listened {
-        let _ = serving.0.wait();
-        let mut said = String::new();
-        let _ = std::io::Read::read_to_string(&mut why, &mut said);
-        panic!("the server ended before it listened on {port}: {said}");
-    }
-    std::thread::spawn(move || std::io::copy(&mut why, &mut std::io::sink()));
-    std::thread::spawn(move || lines.for_each(drop));
-    (serving, format!("http://127.0.0.1:{port}"))
+    let serving = Serving::start(root, &root.join("box/instance.toml"));
+    let base = format!("http://127.0.0.1:{port}");
+    (serving, base)
 }
 
 /// A key the box trusts, trusted at the terminal as `suzatary device trust` does.
@@ -352,7 +291,7 @@ fn the_servers_resident_memory_does_not_grow_with_its_rounds() {
     let root: PathBuf = common::scratch("resident");
     let (serving, base) = served(&root);
     let key = trusted(&root);
-    let pid = serving.0.id();
+    let pid = serving.id();
     let mut at = 0;
     let mut reading = || {
         for _ in 0..ROUNDS {

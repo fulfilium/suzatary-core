@@ -61,7 +61,7 @@ pub type Registered = Vec<(Actor, PublicKey)>;
 /// What [`Instance::adopt`] did.
 #[derive(Debug)]
 pub struct Adopted<'a> {
-    /// Each chain that adopted, and the actors it registered.
+    /// Each keyed chain that adopted, and the actors it registered.
     pub chains: Vec<(&'a ChainDir, Registered)>,
     /// One sentence for each chain that did not, and each revocation not completed.
     pub failed: Vec<String>,
@@ -347,14 +347,20 @@ impl Instance {
         }
     }
 
-    /// Adoption of every chain (idempotent): the box's and the agent's keys and its epoch, under
-    /// a lock beside each chain.
+    /// What every walk that registers, revokes, lists or asks a key's standing takes.
+    #[must_use]
+    pub(crate) fn keeping(&self) -> signatures::Keeping<&ChainDir> {
+        signatures::Keeping::of(self.chains.iter(), |chain| &chain.policy)
+    }
+
+    /// Adoption of every keyed chain (idempotent): the box's and the agent's keys and its epoch,
+    /// under a lock beside each chain.
     #[must_use]
     pub fn adopt(&self, signers: &signatures::Signers) -> Adopted<'_> {
-        let (adopted, failed): (Vec<_>, Vec<_>) = self
-            .chains
+        let keeping = self.keeping();
+        let (adopted, failed): (Vec<_>, Vec<_>) = keeping
             .iter()
-            .map(|chain| (chain, Self::adopted(chain, signers)))
+            .map(|chain| (*chain, Self::adopted(chain, signers)))
             .partition(|(_, answer)| answer.is_ok());
         let mut failed: Vec<String> = failed
             .into_iter()
@@ -364,10 +370,9 @@ impl Instance {
                     .map(|why| format!("{}: {why:#}", chain.policy.name))
             })
             .collect();
-        if let Some(keys) = signers.held() {
-            let stores: Vec<_> = self.chains.iter().map(crate::commands::store_of).collect();
-            let stores: Vec<&dyn store::Prodrome<TodoEvent>> =
-                stores.iter().map(|store| store as _).collect();
+        if let (Some(keys), signatures::Keeping::Keyed(keyed)) = (signers.held(), &keeping) {
+            let opened = keyed.map(|chain| crate::commands::store_of(chain));
+            let stores = opened.map(|store| store as &dyn store::Prodrome<TodoEvent>);
             if let Err(why) = signatures::complete_revocations(&stores, keys.root()) {
                 failed.push(format!("completing a revocation across chains: {why}"));
             }

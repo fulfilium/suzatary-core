@@ -121,6 +121,15 @@ pub struct Unnamed {
 }
 
 impl ChainPolicy {
+    /// Whether its store keeps key objects: a public one keeps none.
+    #[must_use]
+    pub fn keeps_keys(&self) -> bool {
+        match self.naming {
+            Naming::AsActs => true,
+            Naming::Published(_) => false,
+        }
+    }
+
     /// The name `actor`'s events carry on this chain: its own on a private chain; on a public
     /// one, its own where that is already a public name (on the roster), else its public name.
     ///

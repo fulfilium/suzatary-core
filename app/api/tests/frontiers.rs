@@ -251,7 +251,7 @@ impl TheBox {
             &self.frontiers,
             routes::Writer {
                 actor: &device.actor,
-                chains: &[&self.chain],
+                chains: &suzatary_signatures::signatures::Keeping::stores(&[&self.chain]),
                 root: &suzatary_connect::cast::keys::root(),
             },
             routes::Recording {

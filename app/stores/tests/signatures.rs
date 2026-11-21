@@ -193,7 +193,10 @@ fn a_revocation_reaches_every_chain_or_is_completed() {
         KeyStanding::Trusted,
         "the interrupted state"
     );
-    let stores: [&dyn Prodrome<TodoEvent>; 2] = [&life, &project];
+    let Keeping::Keyed(keyed) = Keeping::stores(&[&life, &project]) else {
+        panic!("two keyed chains");
+    };
+    let stores = keyed.map(|chain| chain.store);
     assert!(
         !complete_revocations(&stores, &root())
             .expect("completed")
@@ -827,4 +830,274 @@ fn a_signed_line_held_as_its_husk_is_vouched_for_and_not_proven() {
             key: phone.public()
         })
     );
+}
+
+/// What one chain of a generated deployment holds of the phone's key.
+#[derive(Debug, Clone, Copy)]
+enum Chained {
+    /// A chain that keeps keys, the key standing so on it.
+    Private(Standing),
+    /// A public chain, holding these key objects as no real public store could.
+    Public(Held),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Standing {
+    Unregistered,
+    Trusted,
+    Revoked,
+    /// Trusted for another actor.
+    Elsewhere,
+    /// The store does not read.
+    Unread,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Held {
+    Nothing,
+    KeyAdded,
+    KeyRevoked,
+}
+
+/// The door's answer, comparable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Answer {
+    Admitted,
+    Keyless,
+    Unread(String),
+    Revoked,
+    Untrusted,
+}
+
+/// A chain's store that does not read.
+struct Unreadable;
+
+impl suzatary_store::store::Reads<TodoEvent> for Unreadable {
+    fn objects(
+        &self,
+    ) -> Result<Vec<(Hash, Envelope<TodoEvent>)>, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::unreadable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+
+    fn excluded(&self) -> Result<BTreeSet<Hash>, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::unreadable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+
+    fn tips(&self) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::unreadable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+
+    fn verify(&self) -> Vec<String> {
+        vec!["the disk is gone".to_owned()]
+    }
+}
+
+impl Prodrome<TodoEvent> for Unreadable {
+    fn append(&self, _: TodoEvent) -> Result<Hash, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::unwritable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+
+    fn accept(&self, _: &[(Hash, String)]) -> Result<Vec<Hash>, suzatary_store::store::StoreError> {
+        Err(suzatary_store::store::StoreError::unwritable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+
+    fn locked(
+        &self,
+    ) -> Result<Box<dyn suzatary_store::store::WriteLock + '_>, suzatary_store::store::StoreError>
+    {
+        Err(suzatary_store::store::StoreError::unwritable(
+            "chain",
+            "the disk is gone",
+        ))
+    }
+}
+
+fn chained() -> impl Strategy<Value = Chained> {
+    prop_oneof![
+        prop_oneof![
+            Just(Standing::Unregistered),
+            Just(Standing::Trusted),
+            Just(Standing::Revoked),
+            Just(Standing::Elsewhere),
+            Just(Standing::Unread),
+        ]
+        .prop_map(Chained::Private),
+        prop_oneof![
+            Just(Held::Nothing),
+            Just(Held::KeyAdded),
+            Just(Held::KeyRevoked)
+        ]
+        .prop_map(Chained::Public),
+    ]
+}
+
+/// THE DOOR'S RULE: no keyed chain proves nothing; a keyed chain that does not read is said as
+/// such; a revocation on any keyed chain wins; else trusted exactly where every keyed chain
+/// trusts. Public chains are not in it.
+fn ruled(chains: &[Chained]) -> Answer {
+    let keyed: Vec<(usize, Standing)> = chains
+        .iter()
+        .enumerate()
+        .filter_map(|(n, chain)| match chain {
+            Chained::Private(standing) => Some((n, *standing)),
+            Chained::Public(_) => None,
+        })
+        .collect();
+    if keyed.is_empty() {
+        return Answer::Keyless;
+    }
+    if let Some((n, _)) = keyed
+        .iter()
+        .find(|(_, standing)| *standing == Standing::Unread)
+    {
+        return Answer::Unread(format!("c{n}"));
+    }
+    if keyed
+        .iter()
+        .any(|(_, standing)| *standing == Standing::Revoked)
+    {
+        return Answer::Revoked;
+    }
+    if keyed
+        .iter()
+        .all(|(_, standing)| *standing == Standing::Trusted)
+    {
+        Answer::Admitted
+    } else {
+        Answer::Untrusted
+    }
+}
+
+/// The door's answer to a request the phone signed as ada, over a deployment of `chains`.
+fn door(chains: &[Chained]) -> Answer {
+    let phone = key('1');
+    let stores: Vec<Box<dyn Prodrome<TodoEvent>>> = chains
+        .iter()
+        .map(|chain| -> Box<dyn Prodrome<TodoEvent>> {
+            let (standing, held) = match chain {
+                Chained::Private(Standing::Unread) => return Box::new(Unreadable),
+                Chained::Private(standing) => (*standing, Held::Nothing),
+                Chained::Public(held) => (Standing::Unregistered, *held),
+            };
+            let store = begun(InMemory::default());
+            let ada = actor("ada");
+            match (standing, held) {
+                (Standing::Trusted, _) | (_, Held::KeyAdded) => {
+                    trust(&store, &root(), &ada, &phone.public()).expect("trusted");
+                }
+                (Standing::Revoked, _) | (_, Held::KeyRevoked) => {
+                    trust(&store, &root(), &ada, &phone.public()).expect("trusted");
+                    revoke(&store, &root(), &ada, &phone.public()).expect("revoked");
+                }
+                (Standing::Elsewhere, _) => {
+                    trust(&store, &root(), &actor("bob"), &phone.public()).expect("trusted");
+                }
+                (Standing::Unregistered | Standing::Unread, Held::Nothing) => {}
+            }
+            Box::new(store)
+        })
+        .collect();
+    let policies: Vec<suzatary_base::chains::ChainPolicy> = chains
+        .iter()
+        .enumerate()
+        .map(|(n, chain)| suzatary_base::chains::ChainPolicy {
+            name: suzatary_base::chains::ChainName::new(format!("c{n}")).expect("a slug"),
+            naming: match chain {
+                Chained::Private(_) => suzatary_base::chains::Naming::AsActs,
+                Chained::Public(_) => {
+                    suzatary_base::chains::Naming::Published(std::collections::BTreeMap::new())
+                }
+            },
+            ..chain_trusting(Untrusted::none())
+        })
+        .collect();
+    let paired = Keeping::of(policies.iter().zip(&stores), |pair| pair.0);
+    let keeping = paired.map(|(policy, store)| Keeper {
+        name: policy.name.clone(),
+        store: store.as_ref(),
+    });
+    let (at, nonce, body) = (
+        "2026-09-02T12:00:00.000Z",
+        "0123456789abcdef0123456789abcdef",
+        b"{}",
+    );
+    let name = request_name(
+        "POST",
+        "/api/act",
+        at,
+        nonce,
+        &body_digest(body),
+        phone.public().as_str(),
+    );
+    let signed = phone.sign(&name);
+    let now = chrono::DateTime::parse_from_rfc3339(at)
+        .expect("an instant")
+        .with_timezone(&chrono::Utc);
+    let asking = Asking::of(
+        &Request {
+            method: "POST",
+            target: "/api/act",
+            at: Some(at),
+            nonce: Some(nonce),
+            body,
+            key: Some(signed.key.as_str()),
+            signature: Some(signed.signature.as_str()),
+        },
+        actor("ada"),
+        now,
+    )
+    .expect("a well-formed request");
+    match asking.trusted(&keeping, &root().public()) {
+        Ok(_) => Answer::Admitted,
+        Err(Unadmitted::Keyless) => Answer::Keyless,
+        Err(Unadmitted::Unread(unread)) => Answer::Unread(unread.chain.to_string()),
+        Err(Unadmitted::Unproven(Unproven::Revoked { key })) => {
+            assert_eq!(key, phone.public());
+            Answer::Revoked
+        }
+        Err(Unadmitted::Unproven(Unproven::Untrusted { key })) => {
+            assert_eq!(key, phone.public());
+            Answer::Untrusted
+        }
+        Err(Unadmitted::Unproven(other @ (Unproven::Unsigned | Unproven::Forged))) => {
+            panic!("a verifying signature refused as {other:?}")
+        }
+    }
+}
+
+proptest! {
+    /// THE DOOR'S LAW, over generated deployments: any mix of private and public chains, the
+    /// phone's key in any standing on each keyed chain, and the public chains holding key objects
+    /// no real public store takes. The door answers exactly what the rule says, and emptying
+    /// every public chain moves no answer.
+    #[test]
+    fn the_door_admits_exactly_what_the_keyed_chains_prove(
+        chains in proptest::collection::vec(chained(), 0..6)
+    ) {
+        let answer = door(&chains);
+        prop_assert_eq!(&answer, &ruled(&chains));
+        let emptied: Vec<Chained> = chains
+            .iter()
+            .map(|chain| match chain {
+                Chained::Public(_) => Chained::Public(Held::Nothing),
+                Chained::Private(standing) => Chained::Private(*standing),
+            })
+            .collect();
+        prop_assert_eq!(answer, door(&emptied));
+    }
 }

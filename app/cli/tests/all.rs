@@ -99,6 +99,9 @@ mod perf_fold_chain;
 #[cfg(feature = "fixture")]
 #[path = "ports.rs"]
 mod ports;
+#[cfg(feature = "fixture")]
+#[path = "public_chain.rs"]
+mod public_chain;
 #[path = "public_store.rs"]
 mod public_store;
 #[path = "push.rs"]

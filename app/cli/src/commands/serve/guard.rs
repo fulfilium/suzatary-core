@@ -5,13 +5,13 @@ use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
-use suzatary_record::record::TodoEvent;
 use suzatary_server::gate::{actor_of, writer_of};
 use suzatary_signatures::signatures::Admitted;
 use suzatary_signatures::signatures::Tap;
 use suzatary_signatures::signatures::{ActHeaders, check_csrf};
-use suzatary_signatures::signatures::{Asking, Possessed, Proven, Trusted, Unproven};
-use suzatary_store::store::Prodrome;
+use suzatary_signatures::signatures::{
+    Asking, Keeper, Keeping, Possessed, Proven, Trusted, Unadmitted, Unproven,
+};
 
 use super::State;
 use suzatary_api::clienterror::Verdict;
@@ -99,9 +99,9 @@ pub trait Proof: Sized + Send + 'static {
     /// Why the request does not prove it.
     fn proved(
         asking: Option<Asking>,
-        trusting: &[&dyn Prodrome<TodoEvent>],
+        trusting: &Keeping<Keeper<'_>>,
         root: &PublicKey,
-    ) -> Result<Self, Unproven>;
+    ) -> Result<Self, Unadmitted>;
 
     /// `None` for a proof that asked nothing.
     fn proven(&self) -> Option<&Proven>;
@@ -110,11 +110,7 @@ pub trait Proof: Sized + Send + 'static {
 impl Proof for () {
     const ASKS: Asks = Asks::Nothing;
 
-    fn proved(
-        _: Option<Asking>,
-        _: &[&dyn Prodrome<TodoEvent>],
-        _: &PublicKey,
-    ) -> Result<(), Unproven> {
+    fn proved(_: Option<Asking>, _: &Keeping<Keeper<'_>>, _: &PublicKey) -> Result<(), Unadmitted> {
         Ok(())
     }
 
@@ -128,10 +124,10 @@ impl Proof for Possessed {
 
     fn proved(
         asking: Option<Asking>,
-        _: &[&dyn Prodrome<TodoEvent>],
+        _: &Keeping<Keeper<'_>>,
         _: &PublicKey,
-    ) -> Result<Self, Unproven> {
-        asking.ok_or(Unproven::Unsigned)?.possessed()
+    ) -> Result<Self, Unadmitted> {
+        Ok(asking.ok_or(Unproven::Unsigned)?.possessed()?)
     }
 
     fn proven(&self) -> Option<&Proven> {
@@ -144,9 +140,9 @@ impl Proof for Trusted {
 
     fn proved(
         asking: Option<Asking>,
-        trusting: &[&dyn Prodrome<TodoEvent>],
+        trusting: &Keeping<Keeper<'_>>,
         root: &PublicKey,
-    ) -> Result<Self, Unproven> {
+    ) -> Result<Self, Unadmitted> {
         asking.ok_or(Unproven::Unsigned)?.trusted(trusting, root)
     }
 

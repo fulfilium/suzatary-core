@@ -2,7 +2,7 @@
 //! law 42).
 //!
 //! Trusted keys are history: `trust` writes a `KeyAdded` and `revoke` a `KeyRevoked` into every
-//! chain, both signed by the root key.
+//! private chain, both signed by the root key.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -12,10 +12,10 @@ use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_mail::mail::dedup_key::DEDUP_KEY;
-use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Trust};
+use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Keeping, Keyed, Trust};
 
 use super::store_of;
-use crate::instance::Instance;
+use crate::instance::{ChainDir, Instance};
 use suzatary_base::capability;
 use suzatary_signatures::signatures;
 use suzatary_signatures::signatures::MINUTES;
@@ -52,8 +52,8 @@ pub enum Action {
         #[arg(long)]
         actor: Option<String>,
     },
-    /// Trust a device's public key for an actor on every chain, as a tapped Inbox card does,
-    /// and withdraw its card in the Inbox.
+    /// Trust a device's public key for an actor on every private chain, as a tapped Inbox card
+    /// does, and withdraw its card in the Inbox.
     Trust {
         /// The device's public key, 64 lowercase hex, as its card shows it.
         key: String,
@@ -61,9 +61,9 @@ pub enum Action {
         #[arg(long)]
         actor: Option<String>,
     },
-    /// Revoke a key on every chain, all or none: a chain that fails is named and the revoke is
-    /// run again until every chain holds it (and the next writer to start completes it). What
-    /// it signed until now stays proven, nothing after.
+    /// Revoke a key on every private chain, all or none: a chain that fails is named and the
+    /// revoke is run again until every one holds it (and the next writer to start completes it).
+    /// What it signed until now stays proven, nothing after.
     Revoke {
         /// The key, 64 lowercase hex.
         key: String,
@@ -72,7 +72,7 @@ pub enum Action {
         #[arg(long)]
         actor: Option<String>,
     },
-    /// Every registered key on every chain, and its standing.
+    /// Every registered key on every private chain, and its standing.
     List,
 }
 
@@ -86,15 +86,19 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Init => init(&instance),
         Action::Pair { actor } => pair(&instance, actor.as_deref()),
         Action::Trust { key, actor } => {
+            let keyed = keyed(&instance)?;
             let (keys, key, actor) = asked(&instance, key, actor.as_deref())?;
-            for chain in &instance.chains {
+            for chain in keyed.iter() {
                 signatures::trust(&store_of(chain), keys.root(), &actor, &key)
                     .with_context(|| format!("registering the key on {}", chain.policy.name))?;
             }
-            println!("trusted {} for {actor} on every chain", key.as_str());
+            println!(
+                "trusted {} for {actor} on every private chain",
+                key.as_str()
+            );
             let withdrawn = suzatary_server::secretary::routes::withdraw_trusted(
                 &instance.inbox_store(),
-                &store_of(instance.first()),
+                &store_of(keyed.first()),
                 &keys.root().public(),
                 capability::Clock::now(&suzatary_io::clock::SystemClock),
             )
@@ -110,9 +114,10 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     }
 }
 
-/// The key revoked for the actor named, or for every actor it speaks for on any chain, on every
-/// chain, all or none.
+/// The key revoked for the actor named, or for every actor it speaks for on any private chain,
+/// on every private chain, all or none.
 fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result<()> {
+    let keyed = keyed(instance)?;
     let (keys, key, actors) = if let Some(named) = actor {
         let (keys, key, actor) = asked(instance, key, Some(named))?;
         (keys, key, BTreeSet::from([actor]))
@@ -120,7 +125,7 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
         let keys = held_keys(instance)?;
         let key = PublicKey::new(key).map_err(|e| anyhow::anyhow!("{e}"))?;
         let mut actors = BTreeSet::new();
-        for chain in &instance.chains {
+        for chain in keyed.iter() {
             actors.extend(
                 signatures::trusted_for(&store_of(chain), &keys.root().public(), &key)
                     .with_context(|| format!("reading {}", chain.policy.name))?,
@@ -132,8 +137,7 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
         (keys, key, actors)
     };
     // Every chain is tried, whatever one answers, so a failure leaves the fewest behind.
-    let failed: Vec<String> = instance
-        .chains
+    let failed: Vec<String> = keyed
         .iter()
         .flat_map(|chain| actors.iter().map(move |actor| (chain, actor)))
         .filter_map(|(chain, actor)| {
@@ -144,12 +148,15 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
         .collect();
     if !failed.is_empty() {
         bail!(
-            "the key is not yet revoked on every chain — run this again until it is:\n{}",
+            "the key is not yet revoked on every private chain — run this again until it is:\n{}",
             failed.join("\n")
         );
     }
     for actor in &actors {
-        println!("revoked {} for {actor} on every chain", key.as_str());
+        println!(
+            "revoked {} for {actor} on every private chain",
+            key.as_str()
+        );
     }
     // A revoked key's device is told to wipe what it holds, and nothing more: the login it
     // reads as is the tailnet's, which this box cannot take back.
@@ -160,13 +167,13 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
     Ok(())
 }
 
-/// The unsigned writes listed, chain by chain, and signed only when asked.
+/// The unsigned writes listed, private chain by private chain, and signed only when asked.
 fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
     use prodrome_core::fpl::{instant_of, iso};
     let signers = signatures::Signers::Held(held_keys(instance)?);
     let root = instance.root();
     let mut listed = 0;
-    for chain in &instance.chains {
+    for chain in instance.keeping().iter() {
         let _held = chain_lock(chain)?;
         let store = store_of(chain);
         let writes = signatures::unsigned_writes(&store, root)
@@ -208,6 +215,7 @@ fn pair(instance: &Instance, actor: Option<&str>) -> anyhow::Result<()> {
     use suzatary_signatures::signatures::Pairings as _;
     // The server registers the key with the root, so a box that cannot sign pairs nothing.
     held_keys(instance)?;
+    keyed(instance)?;
     let actor = on_every_roster(instance, actor)?;
     let (code, salt) = suzatary_io::pairing::fresh().map_err(|e| anyhow::anyhow!(e))?;
     let now = chrono::Utc::now();
@@ -231,6 +239,13 @@ fn pair(instance: &Instance, actor: Option<&str>) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn keyed(instance: &Instance) -> anyhow::Result<Keyed<&ChainDir>> {
+    match instance.keeping() {
+        Keeping::Keyed(keyed) => Ok(keyed),
+        Keeping::Keyless => bail!("every chain is public, and a public chain keeps no key"),
+    }
+}
+
 /// The keys, the key named and the actor it is for, each checked.
 fn asked(
     instance: &Instance,
@@ -242,18 +257,19 @@ fn asked(
     Ok((keys, key, on_every_roster(instance, actor)?))
 }
 
-/// The actor named, or the first chain's owner, refused unless every chain's roster holds it.
+/// The actor named, or the first chain's owner, refused unless every private chain's roster
+/// holds it.
 fn on_every_roster(instance: &Instance, actor: Option<&str>) -> anyhow::Result<Actor> {
     let actor = match actor {
         Some(named) => Actor::new(named).map_err(|e| anyhow::anyhow!("{e}"))?,
         None => instance.chains.first().owner.clone(),
     };
     if !instance
-        .chains
+        .keeping()
         .iter()
         .all(|chain| chain.policy.roster.contains(&actor))
     {
-        bail!("{actor} is not on every chain's roster");
+        bail!("{actor} is not on every private chain's roster");
     }
     Ok(actor)
 }
@@ -334,8 +350,8 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
         );
     }
     println!(
-        "Every chain has adopted the root {}, each actor registered with the key that signs its \
-         writes.",
+        "Every private chain has adopted the root {}, each actor registered with the key that \
+         signs its writes.",
         root.as_str()
     );
     Ok(())
@@ -343,7 +359,7 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
 
 /// Revoke each box key registered for an actor whose writes the other box key signs, so each
 /// actor speaks only with the key that signs its writes. Idempotent.
-fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
+fn repair(chain: &ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
     let name = &chain.policy.name;
     let _held = chain_lock(chain)?;
     for (actor, key) in signatures::revoke_misplaced(&store_of(chain), keys, &chain.policy)? {
@@ -352,10 +368,10 @@ fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<(
     Ok(())
 }
 
-/// One line per registered key per chain.
+/// One line per registered key per private chain.
 fn list(instance: &Instance) -> anyhow::Result<()> {
     let registrar = instance.chains.first().policy.registrar();
-    for chain in &instance.chains {
+    for chain in instance.keeping().iter() {
         let dag: prodrome_core::dag::Dag<suzatary_record::record::TodoEvent> = store_of(chain)
             .objects()
             .with_context(|| format!("reading {}", chain.policy.name))?
@@ -375,6 +391,6 @@ fn list(instance: &Instance) -> anyhow::Result<()> {
 }
 
 /// The adoption lock, so a repair and a starting writer do not interleave.
-fn chain_lock(chain: &crate::instance::ChainDir) -> anyhow::Result<suzatary_io::durable::Held> {
+fn chain_lock(chain: &ChainDir) -> anyhow::Result<suzatary_io::durable::Held> {
     crate::instance::adoption_lock(&chain.events)
 }

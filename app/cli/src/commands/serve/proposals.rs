@@ -7,8 +7,8 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_base::refusal::Refusal;
 use suzatary_server::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
-use suzatary_signatures::signatures::Endorsement;
 use suzatary_signatures::signatures::Tap;
+use suzatary_signatures::signatures::{Endorsement, Keeping};
 use suzatary_topics::wire::topics as wire;
 
 use super::body::{Body, MAX_ACT_BYTES};
@@ -148,7 +148,21 @@ pub fn tap(
     let state = &call.state;
     let card = &call.params;
     let (id, index) = (&card.conversation, &card.index);
-    let chains = state.chain_stores();
+    // The door admits no tap where no chain keeps keys.
+    let keyed = match state.keeping() {
+        Keeping::Keyed(keyed) => Some(keyed.map(|chain| chain.store)),
+        Keeping::Keyless => None,
+    };
+    let enrolling = state
+        .keys
+        .as_deref()
+        .zip(keyed.as_ref())
+        .map(
+            |(keys, chains)| suzatary_signatures::signatures::Enrolling {
+                chains,
+                root: keys.root(),
+            },
+        );
     let started = std::time::Instant::now();
     let answered = state
         .editing(call.guard.who().as_str(), |edits| {
@@ -163,12 +177,7 @@ pub fn tap(
                     signing: state.signing.as_ref(),
                     edits,
                     forget: state.forget.as_ref(),
-                    enrolling: state.keys.as_deref().map(|keys| {
-                        suzatary_signatures::signatures::Enrolling {
-                            chains: &chains,
-                            root: keys.root(),
-                        }
-                    }),
+                    enrolling,
                     consents: state.consenting.as_ref(),
                 };
                 match &call.body {

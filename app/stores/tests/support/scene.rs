@@ -56,7 +56,10 @@ pub fn scene(actor: &str) -> Trusted {
         .with_timezone(&chrono::Utc);
     Asking::of(&request, actor, now)
         .expect("a well-formed request")
-        .trusted(&[&chain], &keys::root())
+        .trusted(
+            &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
+            &keys::root(),
+        )
         .expect("the phone is trusted")
 }
 

@@ -200,9 +200,14 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
             "this box trusts no device by a code: it holds no root key to register one with",
         ));
     };
+    let signatures::Keeping::Keyed(keyed) = state.keeping() else {
+        return Err(Refusal::forbidden(
+            "this box trusts no device by a code: every chain it mounts is public",
+        ));
+    };
     // Asked before the code is read, so a revoked key spends no try and no code.
-    for chain in state.chain_stores() {
-        if signatures::revoked_for(chain, &keys.root().public(), actor, device)? {
+    for chain in keyed.iter() {
+        if signatures::revoked_for(chain.store, &keys.root().public(), actor, device)? {
             return Err(Refusal::forbidden(
                 "This device's key was revoked, so no code can trust it again. Use a new key on \
                  this device (Settings, This device), then type the code.",
@@ -213,8 +218,8 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
     match presented {
         Presented::Refused(refused) => Err(Refusal::forbidden(refused.said())),
         Presented::Matched => {
-            for chain in state.chain_stores() {
-                signatures::trust(chain, keys.root(), actor, device)?;
+            for chain in keyed.iter() {
+                signatures::trust(chain.store, keys.root(), actor, device)?;
             }
             tracing::info!(
                 "paired: trusted the device key {} for {actor}",
@@ -223,7 +228,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
             let caps = state.first.caps;
             match suzatary_server::secretary::routes::withdraw_trusted(
                 caps.secretary.inbox,
-                caps.secretary.chain,
+                keyed.first().store,
                 &keys.root().public(),
                 caps.secretary.clock.now(),
             ) {

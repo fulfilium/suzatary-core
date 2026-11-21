@@ -31,7 +31,7 @@ use suzatary_server::portal::Portal;
 use suzatary_server::secretary::routes::{Cards, Perform, Post};
 use suzatary_signatures::chain_set;
 use suzatary_signatures::epoch::Epochs;
-use suzatary_signatures::signatures::{BoxKeys, Pairings};
+use suzatary_signatures::signatures::{self, BoxKeys, Pairings};
 use suzatary_stores::asks::AskEvent;
 pub(crate) mod asked;
 mod body;
@@ -342,6 +342,19 @@ pub struct Chained {
     pub policy: Arc<suzatary_base::chains::ChainPolicy>,
 }
 
+impl Chained {
+    fn keeping<'a>(
+        chains: impl IntoIterator<Item = &'a Chained>,
+    ) -> signatures::Keeping<signatures::Keeper<'static>> {
+        signatures::Keeping::of(chains, |chained| &chained.policy).map(|chained| {
+            signatures::Keeper {
+                name: chained.policy.name.clone(),
+                store: chained.caps.secretary.chain,
+            }
+        })
+    }
+}
+
 impl State {
     #[must_use]
     #[allow(clippy::too_many_arguments)]
@@ -502,19 +515,13 @@ impl State {
         self
     }
 
-    /// Every chain's writer.
-    #[must_use]
-    pub fn chain_stores(
-        &self,
-    ) -> Vec<&'static dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>> {
-        std::iter::once(self.first.caps.secretary.chain)
-            .chain(
-                self.chains
-                    .values()
-                    .filter(|chained| chained.policy.name != self.first.policy.name)
-                    .map(|chained| chained.caps.secretary.chain),
-            )
-            .collect()
+    /// What every question of a key's standing asks.
+    fn keeping(&self) -> signatures::Keeping<signatures::Keeper<'static>> {
+        let rest = self
+            .chains
+            .values()
+            .filter(|chained| chained.policy.name != self.first.policy.name);
+        Chained::keeping(std::iter::once(&self.first).chain(rest))
     }
 
     #[must_use]

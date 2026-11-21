@@ -458,8 +458,11 @@ static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> 
 fn trusting_of(
     chains: &[&dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>],
 ) -> suzatary_signatures::signatures::Trusting {
-    suzatary_signatures::signatures::Trusting::held(chains, &suzatary_connect::cast::keys::root())
-        .expect("reads")
+    suzatary_signatures::signatures::Trusting::held(
+        &suzatary_signatures::signatures::Keeping::stores(chains),
+        &suzatary_connect::cast::keys::root(),
+    )
+    .expect("reads")
 }
 
 /// The phone's signature of `object`, as the object a tab posts beside it.

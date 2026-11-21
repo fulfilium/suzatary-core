@@ -1,10 +1,11 @@
 use prodrome_core::event::Actor;
 use prodrome_core::sign::{PublicKey, Signature, Signed};
 
-use super::{Requested, Trusting, Unproven, WINDOW_SECONDS, body_digest, is_nonce, request_name};
+use super::{
+    Keeper, Keeping, Requested, Trusting, Unproven, Unread, WINDOW_SECONDS, body_digest, is_nonce,
+    request_name,
+};
 use suzatary_base::refusal::Refusal;
-use suzatary_record::record::TodoEvent;
-use suzatary_store::store::{Prodrome, StoreError};
 
 /// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it; key and signature absent where unsigned.
 #[derive(Debug, Clone, Copy)]
@@ -38,7 +39,7 @@ pub struct Asking {
 #[derive(Debug)]
 pub struct Possessed(Proven);
 
-/// A request signed by a key every chain the route can write trusts for its actor: the only
+/// A request signed by a key every keyed chain the route can reach trusts for its actor: the only
 /// proof a route acting for the owner may hold. Only [`Asking::trusted`] makes one.
 ///
 /// ```compile_fail
@@ -66,7 +67,7 @@ impl Asking {
         actor: Actor,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<Self, Refusal> {
-        let unsigned = || refused(&Unproven::Unsigned);
+        let unsigned = || refused(&Unproven::Unsigned.into());
         let at = request.at.ok_or_else(unsigned)?;
         let stamped = chrono::DateTime::parse_from_rfc3339(at)
             .map_err(|_| Refusal::bad_request("the request's instant is not an RFC 3339 instant"))?
@@ -87,7 +88,7 @@ impl Asking {
         let (Some(key), Some(signature)) = (request.key, request.signature) else {
             return Err(unsigned());
         };
-        let forged = || refused(&Unproven::Forged);
+        let forged = || refused(&Unproven::Forged.into());
         let key = PublicKey::new(key).map_err(|_| forged())?;
         let signature = Signature::new(signature).map_err(|_| forged())?;
         let name = request_name(
@@ -131,31 +132,35 @@ impl Asking {
         }
     }
 
-    /// The request, its key trusted for its actor on every one of `chains` under `root`.
+    /// The request, its key trusted for its actor on every keyed chain under `root` and revoked
+    /// on none.
     ///
     /// # Errors
-    /// Why not, as [`Trusting::admits`] says it.
+    /// [`Unadmitted`].
     pub fn trusted(
         self,
-        chains: &[&dyn Prodrome<TodoEvent>],
+        chains: &Keeping<Keeper<'_>>,
         root: &PublicKey,
-    ) -> Result<Trusted, Unproven> {
-        let trusting = Trusting::held(chains, root).map_err(|_| Unproven::Untrusted {
-            key: self.signed.key.clone(),
-        })?;
-        trusting.admits(&self.actor, &self.signed)?;
+    ) -> Result<Trusted, Unadmitted> {
+        if let Keeping::Keyless = chains {
+            return Err(Unadmitted::Keyless);
+        }
+        Trusting::held(chains, root)
+            .map_err(Unadmitted::Unread)?
+            .admits(&self.actor, &self.signed)?;
         Ok(Trusted(self.proven()))
     }
 
-    /// [`Unproven::Revoked`] where any of `chains` revoked the key; asked only of a verifying signature.
+    /// [`Unproven::Revoked`] where any keyed chain revoked the key; asked only of a verifying
+    /// signature.
     ///
     /// # Errors
-    /// A chain unreadable.
+    /// A keyed chain that did not read.
     pub fn revoked(
         &self,
-        chains: &[&dyn Prodrome<TodoEvent>],
+        chains: &Keeping<Keeper<'_>>,
         root: &PublicKey,
-    ) -> Result<Option<Unproven>, StoreError> {
+    ) -> Result<Option<Unproven>, Unread> {
         if !self.signed.verifies() {
             return Ok(None);
         }
@@ -207,16 +212,44 @@ impl Trusted {
     }
 }
 
-/// The door's refusal of an unproven request: the wipe for a revoked key, else a 403.
+/// Why the door admits no request.
+#[derive(Debug)]
+pub enum Unadmitted {
+    Unproven(Unproven),
+    Unread(Unread),
+    /// No chain the request is checked against keeps keys.
+    Keyless,
+}
+
+impl From<Unproven> for Unadmitted {
+    fn from(why: Unproven) -> Self {
+        Unadmitted::Unproven(why)
+    }
+}
+
+/// The door's refusal: the wipe for a revoked key, a 500 for a chain unread, else a 403.
 #[must_use]
-pub fn refused(why: &Unproven) -> Refusal {
-    let said = format!("this request's signature does not prove it: {}", why.said());
+pub fn refused(why: &Unadmitted) -> Refusal {
     match why {
-        Unproven::Revoked { .. } => Refusal::wipe(format!(
-            "{said}; this device deletes what it holds, and may ask to be trusted again"
-        )),
-        Unproven::Unsigned | Unproven::Forged | Unproven::Untrusted { .. } => {
-            Refusal::forbidden(said)
+        Unadmitted::Unproven(unproven) => {
+            let said = format!(
+                "this request's signature does not prove it: {}",
+                unproven.said()
+            );
+            match unproven {
+                Unproven::Revoked { .. } => Refusal::wipe(format!(
+                    "{said}; this device deletes what it holds, and may ask to be trusted again"
+                )),
+                Unproven::Unsigned | Unproven::Forged | Unproven::Untrusted { .. } => {
+                    Refusal::forbidden(said)
+                }
+            }
         }
+        Unadmitted::Unread(unread) => {
+            Refusal::internal(format!("this request could not be checked: {unread}"))
+        }
+        Unadmitted::Keyless => Refusal::forbidden(
+            "this request cannot be proven: no chain it is checked against keeps keys",
+        ),
     }
 }

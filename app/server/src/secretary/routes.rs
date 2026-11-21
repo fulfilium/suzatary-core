@@ -515,7 +515,7 @@ pub struct Effectors<'a> {
     pub edits: &'a dyn Edits,
     /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn suzatary_mail::mail::cache::Forget,
-    /// Registers a device's key on every chain; `None` without a root.
+    /// Registers a device's key on every keyed chain; `None` without a root key.
     pub enrolling: Option<Enrolling<'a>>,
     /// Opens a sign-in with Google.
     pub consents: &'a dyn google_sign_in::Consents,
@@ -1715,7 +1715,7 @@ fn vouched(
         .map_err(|why| Refusal::forbidden(format!("this device cannot vouch: {}", why.said())))
 }
 
-/// Register a vouched device's key on every chain.
+/// Register a vouched device's key on every private chain.
 fn trusted(enrolling: Enrolling<'_>, enrolment: &Enrolment, endorsed: &Signed) -> Performed {
     match enrolling.enrol(enrolment, endorsed) {
         Ok(()) => Performed::Done(Done::Acted {
