@@ -152,7 +152,6 @@ export namespace content {
     if (lane !== "Ahead") await taken(fx, answer)
   }
 
-  // An answer handed to the reader: its literals held, its husks taken in their lines' places.
   const taken = async (fx: Effects, answer: Answer): Promise<void> => {
     await take(fx, answer.literals)
     if (answer.husks.length > 0) await fx.husked(answer.husks)
@@ -198,7 +197,6 @@ export namespace content {
       }
     }
 
-    // The bar told of each of `nodes` a page waits on that it was not told of yet.
     const tell = (nodes: readonly SkeletonNode[]): void => {
       const unsaid = nodes.filter(n => !told.has(n.hash))
       for (const n of unsaid) told.add(n.hash)
@@ -271,15 +269,13 @@ export namespace content {
       const named = new Set(lacking.map(n => n.hash))
       const later = LANES.slice(LANES.indexOf(lane) + 1)
       for (const n of lacking) if (later.includes(reading.get(n.hash) ?? lane)) reading.set(n.hash, lane)
+      // A name a later lane queued is read from the device again: a held prefetch's read may predate another tab's keep.
       const moved = later.flatMap(l => queues[l].filter(n => named.has(n.hash)))
-      if (moved.length > 0) {
-        for (const l of later) queues[l] = queues[l].filter(n => !named.has(n.hash))
-        queues[lane] = [...queues[lane], ...moved]
-        if (lane === "Behind") queues.Behind.sort(newest)
-      }
+      for (const l of later) queues[l] = queues[l].filter(n => !named.has(n.hash))
+      for (const n of moved) reading.set(n.hash, lane)
       if (lane !== "Ahead") tell(lacking.filter(n => !reading.has(n.hash)))
       pump()
-      if (fresh.length > 0) void read(lane, fresh)
+      if (fresh.length + moved.length > 0) void read(lane, [...fresh, ...moved])
       await Promise.all(lacking.flatMap(n => waits.get(n.hash)?.done ?? []))
     }
 

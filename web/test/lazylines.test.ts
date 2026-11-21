@@ -350,6 +350,36 @@ test("a prefetch sends nothing while the page is hidden, and once it is shown a 
   assert.equal(asked.length, 1, "once shown, a wake sends one answer")
 })
 
+// The order that failed `warmload`'s wake law: a tab's prefetch reads the device before another tab of the device keeps
+// the content, so its names wait in the prefetch's queue, held while the page is hidden; another tab then keeps them,
+// the box goes away, and this tab's reading asks for them.
+test("a reading reads the device again for names a held prefetch queued, so content another tab kept meanwhile asks the box nothing", async () => {
+  fakeIndexedDB()
+  await content.keepOnly(new Set(), [], () => Promise.resolve())
+  const nodes = box.skeleton.nodes.filter(n => literals.has(n.hash)).slice(0, 5)
+  const asked: string[] = []
+  const reader = readerOf()
+  const { fetch } = content.fetcher({
+    ask: hashes => {
+      asked.push(...hashes)
+      return Promise.reject(new Error("HTTP 503"))
+    },
+    asked: () => {},
+    came: () => {},
+    lost: () => {},
+    atOnce: () => 4,
+    ...reader,
+    shown: () => false,
+  })
+  void fetch("Ahead", nodes)
+  await new Promise(done => setTimeout(done, 20))
+  // Another tab of the device fetched them and kept them, as `keep` does.
+  await idb.within(CONTENT, "readwrite", s => Promise.all(nodes.map(n => idb.done(s.put(literals.get(n.hash)!, n.hash)))))
+  await fetch("Behind", nodes)
+  assert.deepEqual(asked, [], "the box is asked for nothing the device holds")
+  assert.ok(nodes.every(n => reader.prints.has(n.hash)), "and the reader holds every print")
+})
+
 test("concurrent whole readings read each object the device keeps once, in one transaction, and ask the box nothing", async () => {
   const device = fakeIndexedDB()
   await content.keepOnly(new Set(), [], () => Promise.resolve())

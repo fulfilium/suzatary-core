@@ -439,9 +439,12 @@ test("a tab another tab's landing wakes reads it with no pull of its own, and wi
     topicStores = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
     holds = Math.ceil(order.length / 2)
     const [landing, woken] = [tab(), tab()]
+    // A tab's first reading starts a pull of every store and waits for the lines to land (`storeset.readyOf`); the
+    // pull asked after it runs once that one ends (`serial`). So neither tab has a pull still out when the box grows,
+    // which would land the growth in the woken tab by a pull of its own.
     for (const t of [landing, woken]) {
-      assert.equal(await t.ask({ type: "Pull" }), true)
       await listed(t)
+      assert.equal(await t.ask({ type: "Pull" }), true)
     }
     const before = await cold()
     device.lose = () => lost
