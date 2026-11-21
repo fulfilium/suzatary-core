@@ -52,8 +52,9 @@ app.scene("every page draws at phone width with no problem and no exception", as
   const failed: string[] = [];
   for (const hash of PAGES) failed.push(...(await failures(hash, thrown)));
   await app.page.navigate(`${BASE}/#/`);
-  await app.page.waitFor(`document.querySelectorAll(".tree .row[data-todo]").length > 0`, { timeout: 60000 });
-  const todo = await app.page.evaluate<string>(`document.querySelector(".tree .row[data-todo]").dataset.todo`);
+  // A group at rest shows one peek and no row, so a store with nothing that needs attention draws no row here.
+  await app.page.waitFor(`document.querySelector(".tree [data-todo]") !== null`, { timeout: 60000 });
+  const todo = await app.page.evaluate<string>(`document.querySelector(".tree [data-todo]").dataset.todo`);
   // A todo at phone width is a pushed screen with no title of its own: its reading is what it draws.
   failed.push(...(await failures(`#/todo/${encodeURIComponent(todo)}`, thrown, `document.querySelector(".todoview .whytree") !== null`)));
   assert.deepEqual(failed, []);
