@@ -247,23 +247,23 @@ export namespace storeset {
       // of each other, read by their clocks as two devices' are.
       //
       // A seal answers which: sealed, or not sealed for a cause a pull may cure (a conversation the tab does not hold:
-      // opened a moment ago, by another device, or a reset that landed meanwhile; or no pull landed since a reset,
-      // which a topic begun or a setup needs), when nothing was sealed. That one is pulled and the seal tried again,
+      // opened a moment ago, by another device, or a reset that landed meanwhile; one resting on a line the tab does not
+      // hold; or no pull landed since a reset, which a topic begun or a setup needs), when nothing was sealed. That one is pulled and the seal tried again,
       // once, outside the lock. Anything else is the seal's own failure, never tried again: after the core sealed, a
       // second try would seal a second line.
-      type Attempt = { readonly type: "Sealed"; readonly sealed: sealing.Sealed } | { readonly type: "Unheld" }
+      type Attempt = { readonly type: "Sealed"; readonly sealed: sealing.Sealed } | { readonly type: "Unheld"; readonly why: string }
       const conversation = line.type === "Say" || line.type === "Stop" || line.type === "Rename" ? line.conversation : null
       const sealOnce = (): Promise<Attempt> => {
         const asked = performance.now()
         return ownlines.device(ownlines.LOCK, async (): Promise<Attempt> => {
           measure("seal:lock", asked, { store: "lines" })
           await part("row", () => lines.ownNow())
-          if (conversation !== null && !lines.holds(conversation)) return { type: "Unheld" }
+          if (conversation !== null && !lines.holds(conversation)) return { type: "Unheld", why: `no conversation ${conversation} on this device to write to` }
           // Its keys drawn here; kept on the device and read at once, a begun topic's two lines in one move.
           const sealing = performance.now()
           const sealed = held.seal(JSON.stringify(line), at, actor, crypto.getRandomValues(new Uint8Array(ENTROPY)))
           measure("seal:core", sealing, { store: "lines" })
-          if (sealed === undefined) return { type: "Unheld" }
+          if (typeof sealed === "string") return { type: "Unheld", why: sealed }
           const kept = { name: sealed.name, conversation: sealed.conversation }
           await part("keep", () => lines.ownKeep(sealed))
           return { type: "Sealed", sealed: kept }
@@ -272,7 +272,7 @@ export namespace storeset {
       const first = await sealOnce()
       // A pull that fails (offline) is no answer of its own: the second try says what the seal lacks.
       const attempt = first.type === "Sealed" ? first : await part("pull", () => lines.engine.want().catch(() => false)).then(sealOnce)
-      if (attempt.type === "Unheld") throw new Error(conversation === null ? "the lines are not on this device yet, so nothing is written to them" : `no conversation ${conversation} on this device to write to`)
+      if (attempt.type === "Unheld") throw new Error(attempt.why)
       const answer = attempt.sealed
       measure("write:seal", start, { store: "lines" })
       await writes.sign("lines")

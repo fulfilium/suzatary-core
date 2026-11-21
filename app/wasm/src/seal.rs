@@ -169,16 +169,17 @@ impl Lines {
     /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}`,
     /// `{type: "Begin", title, say: {text, references, files}}` or `{type: "Stop", conversation}`)
     /// sealed by `actor` at `at` (ISO), its keys drawn from `entropy`, bytes the worker drew: kept
-    /// unsent and read at once, a begun topic's two lines in one move. `undefined` where nothing
-    /// was sealed for a cause a pull may cure (no lines pulled since a reset, or a conversation
-    /// not read here); any other refusal throws.
+    /// unsent and read at once, a begun topic's two lines in one move. Where nothing was sealed for
+    /// a cause a pull may cure (no lines pulled since a reset, a conversation not read here, or one
+    /// a line of which rests on a line not read here), that cause's sentence, a string; any other
+    /// refusal throws.
     pub fn seal(
         &mut self,
         asked: &str,
         at: &str,
         actor: &str,
         entropy: &[u8],
-    ) -> Result<Option<Sealed>, JsError> {
+    ) -> Result<JsValue, JsError> {
         let asked: Asked =
             serde_json::from_str(asked).map_err(|e| refused(format!("a seal: {e}")))?;
         let sealing = match asked {
@@ -226,7 +227,9 @@ impl Lines {
         let drawn = Drawn(Mutex::new(entropy.to_vec()));
         let (owned, name, moved) = match self.0.seal(sealing, at, &actor, &drawn) {
             Ok(sealed) => sealed,
-            Err(NotSealed::Unpulled | NotSealed::Unknown(_)) => return Ok(None),
+            Err(why @ (NotSealed::Unpulled | NotSealed::Unknown(_) | NotSealed::Unclosed(_))) => {
+                return Ok(JsValue::from_str(&why.to_string()));
+            }
             Err(e) => return Err(refused(e.to_string())),
         };
         let conversation = owned
@@ -234,12 +237,13 @@ impl Lines {
             .find_map(|own| own.node.conversation())
             .unwrap_or_default()
             .to_owned();
-        Ok(Some(Sealed {
+        Ok(Sealed {
             delta: records(&owned)?,
             moved: said(&moved)?,
             name: name.as_str().to_owned(),
             conversation,
-        }))
+        }
+        .into())
     }
 
     /// `{free: [<print>, …], refused: [<name>, …]}`: every own record the device may let go, and

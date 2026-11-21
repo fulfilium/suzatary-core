@@ -153,7 +153,11 @@ impl<E: Store, H: Health> Reads<E> for InMemory<E, H> {
         if let Some(graph) = kept.as_ref().filter(|graph| graph.heads() == &heads) {
             return Ok(std::sync::Arc::clone(graph));
         }
-        let graph = std::sync::Arc::new(suzatary_store::store::Graph::of(self.objects()?));
+        // Of the store's own history, shared, as a store on disk builds it.
+        let unreadable =
+            |why: prodrome_core::literal::ProdromeError| StoreError::unreadable("memory", why);
+        let dag = self.store.held().map_err(unreadable)?.dag;
+        let graph = std::sync::Arc::new(suzatary_store::store::Graph::over(dag)?);
         *kept = Some(std::sync::Arc::clone(&graph));
         Ok(graph)
     }

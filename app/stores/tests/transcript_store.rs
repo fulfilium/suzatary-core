@@ -673,3 +673,42 @@ fn a_stop_ends_the_rounds_before_it_and_none_begun_after_its_take() {
         );
     }
 }
+
+/// A line resting on two lines one of which rests on the other reads as the same line resting on
+/// the upper one alone: every reading of a conversation reads what a line rests on through its
+/// ancestry, which the dep beneath the other does not change. A store may hold such a line from
+/// before the door refused one; `verify` names it ("change … depends on …, which its dep …
+/// already rests on"), and it stays.
+#[test]
+fn a_dep_beneath_another_dep_reads_as_if_it_were_not_there() {
+    let read = |last: Vec<usize>| {
+        let (held, opens) = sealed_over(&[
+            ("ada", person(1, "Is the permit due?"), vec![0]),
+            ("ada", person(2, "And the fee?"), vec![1]),
+            ("ada", person(3, "Thanks."), last),
+        ]);
+        let writes: Vec<Write<'_>> = held
+            .iter()
+            .map(|(name, line, parents)| Write {
+                name,
+                line,
+                parents,
+            })
+            .collect();
+        Transcript::of(&id("morning"), &writes, &opens).expect("a conversation")
+    };
+    // The opening is 0: the last question rests on the second, and on the opening beneath it.
+    let (redundant, alone) = (read(vec![2, 0]), read(vec![2]));
+    assert_eq!(redundant.entries(), alone.entries());
+    assert_eq!(redundant.stored(), alone.stored());
+    assert_eq!(redundant.turn_lines(), alone.turn_lines());
+    assert_eq!(redundant.owed(), alone.owed());
+    assert_eq!(redundant.queued(), alone.queued());
+    assert_eq!(redundant.state(), alone.state());
+    let names =
+        |read: &Transcript| -> Vec<_> { read.lines().iter().map(|w| w.name.clone()).collect() };
+    assert_eq!(names(&redundant), names(&alone), "one causal order");
+    for line in 0..redundant.lines().len() {
+        assert_eq!(redundant.beneath(line), alone.beneath(line));
+    }
+}

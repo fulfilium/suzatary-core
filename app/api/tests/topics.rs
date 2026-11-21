@@ -520,18 +520,10 @@ fn posted<E: Schema<Vocabulary: Default>>(
                 .map(|bytes| String::from_utf8(bytes.clone()).expect("a print")),
         )
         .collect();
-    let held: BTreeSet<prodrome_core::event::Hash> = to
-        .held()
-        .expect("held")
-        .dag
-        .objects()
-        .keys()
-        .cloned()
-        .collect();
+    let history = to.held().expect("held").dag.clone();
     let received = suzatary_api::sync::receive_changes::<Shared<E>>(
         Holding {
-            names: &held,
-            held: (),
+            history: &history,
             world: &(),
         },
         &mine,
@@ -556,7 +548,7 @@ fn posted<E: Schema<Vocabulary: Default>>(
 
 /// A topic store the box began, and what a tab of `device0` posts to it.
 struct Door {
-    held: BTreeSet<prodrome_core::event::Hash>,
+    held: prodrome_core::dag::Dag<MembershipEvent>,
     ada: Actor,
     /// `device0`'s topic, resting on the genesis.
     mine: Envelope<MembershipEvent>,
@@ -590,7 +582,7 @@ impl Door {
         let unheld = prodrome_core::event::Hash::new("f".repeat(64)).expect("a name");
         let theirs = change(&Actor::new("triage").expect("an actor"), Vec::new(), true);
         Self {
-            held: [begun.clone()].into(),
+            held: [(begun.clone(), genesis)].into_iter().collect(),
             child: change(&ada, vec![seal_hash(&mine)], false),
             orphan: change(&ada, vec![unheld], true),
             on_theirs: change(&ada, vec![seal_hash(&theirs)], false),
@@ -608,8 +600,7 @@ impl Door {
     ) -> suzatary_api::sync::Received {
         suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
             Holding {
-                names: &self.held,
-                held: (),
+                history: &self.held,
                 world: &(),
             },
             prints,
@@ -705,16 +696,11 @@ fn the_box_door_takes_only_the_posters_changes() {
             seal_hash(&signature(&door.child)),
         ]
     );
-    let held: BTreeSet<prodrome_core::event::Hash> = door
-        .held
-        .iter()
-        .cloned()
-        .chain([seal_hash(&door.theirs)])
-        .collect();
+    let mut held = door.held.clone();
+    held.extend([(seal_hash(&door.theirs), door.theirs.clone())]);
     let again = suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
         Holding {
-            names: &held,
-            held: (),
+            history: &held,
             world: &(),
         },
         &[print(&door.theirs)],
@@ -738,7 +724,7 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         type Beside = ();
         type Held<'e> = ();
         type World = ();
-        fn held(_: &[(prodrome_core::event::Hash, Envelope<MembershipEvent>)]) {}
+        fn held(_: &prodrome_core::dag::Dag<MembershipEvent>) {}
         fn refuses(
             change: &prodrome_core::change::Change<MembershipEvent>,
             _: &suzatary_store::admission::Post<'_, '_, Self>,
@@ -770,8 +756,7 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
     );
     let ruled = suzatary_api::sync::receive_changes::<Roots>(
         Holding {
-            names: &door.held,
-            held: (),
+            history: &door.held,
             world: &(),
         },
         &prints,
@@ -858,12 +843,11 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
         door.refused(&[print(&signature(mine))]),
         vec![Reason::NotYetHeld(seal_hash(mine))]
     );
-    let held: BTreeSet<prodrome_core::event::Hash> =
-        door.held.iter().cloned().chain([seal_hash(mine)]).collect();
+    let mut held = door.held.clone();
+    held.extend([(seal_hash(mine), mine.clone())]);
     let lone = suzatary_api::sync::receive_changes::<Shared<MembershipEvent>>(
         Holding {
-            names: &held,
-            held: (),
+            history: &held,
             world: &(),
         },
         &[print(&signature(mine))],

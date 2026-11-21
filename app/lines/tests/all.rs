@@ -6,6 +6,8 @@
 
 #[path = "conversation_id.rs"]
 mod conversation_id;
+#[path = "frontier.rs"]
+mod frontier;
 #[path = "line_replica.rs"]
 mod line_replica;
 #[path = "sequence.rs"]

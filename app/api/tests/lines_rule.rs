@@ -23,6 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use prodrome_core::change::mk_change;
+use prodrome_core::dag::Dag;
 use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
 use prodrome_core::genesis::mk_genesis;
 use suzatary_api::sync::{Holding, Received};
@@ -82,7 +83,8 @@ fn titled(second: u32, by: &str, title: &str) -> Entry {
 /// The lines' store at the door: its genesis, and the conversations it holds.
 struct Door {
     genesis: Hash,
-    names: BTreeSet<Hash>,
+    /// Every object the store holds, by name.
+    history: Dag<LineEvent>,
     /// Every object of a line the store holds: `default`'s opening, and what it took.
     lines: Vec<(Hash, Envelope<LineEvent>)>,
     entropy: Counting,
@@ -131,9 +133,9 @@ static TRUSTING: std::sync::LazyLock<suzatary_signatures::signatures::Trusting> 
 
 impl Door {
     fn new() -> Self {
-        let genesis: Envelope<LineEvent> =
+        let begun: Envelope<LineEvent> =
             Envelope::Genesis(mk_genesis("lines", &"0".repeat(32)).expect("a genesis"));
-        let genesis = seal_hash(&genesis);
+        let genesis = seal_hash(&begun);
         let entropy = Counting(AtomicU8::new(1));
         let (default, _) = LineEvent::write(
             ConversationId::new("default").expect("a slug"),
@@ -150,7 +152,9 @@ impl Door {
         .expect("a line");
         let default = stored(&genesis, default, Vec::new());
         Self {
-            names: [genesis.clone(), default.0.clone()].into(),
+            history: [(genesis.clone(), begun), default.clone()]
+                .into_iter()
+                .collect(),
             genesis,
             lines: vec![default],
             entropy,
@@ -207,7 +211,7 @@ impl Door {
             deps.iter().map(|dep| (*dep).clone()).collect(),
         );
         let name = held.0.clone();
-        self.names.insert(name.clone());
+        self.history.extend([held.clone()]);
         self.lines.push(held);
         name
     }
@@ -239,7 +243,7 @@ impl Door {
             deps.iter().map(|dep| (*dep).clone()).collect(),
         );
         let name = held.0.clone();
-        self.names.insert(name.clone());
+        self.history.extend([held.clone()]);
         self.lines.push(held);
         name
     }
@@ -264,11 +268,9 @@ impl Door {
             .map(|p| (p.name().as_str().to_owned(), p.hex()))
             .collect();
         let keys = SlotKeys::parse(&keys).expect("the keys parse");
-        let held = <LinesRule as suzatary_store::admission::Admission>::held(&self.lines);
         suzatary_api::sync::receive_changes::<LinesRule>(
             Holding {
-                names: &self.names,
-                held,
+                history: &self.history,
                 world: self.world,
             },
             &prints,
@@ -295,11 +297,9 @@ impl Door {
             .map(|p| (p.name().as_str().to_owned(), p.hex()))
             .collect();
         let keys = SlotKeys::parse(&keys).expect("the keys parse");
-        let held = <LinesRule as suzatary_store::admission::Admission>::held(&self.lines);
         suzatary_api::sync::receive_changes::<LinesRule>(
             Holding {
-                names: &self.names,
-                held,
+                history: &self.history,
                 world,
             },
             &prints,
@@ -312,12 +312,12 @@ impl Door {
     /// The post taken in, as the store's accept does.
     fn take(&mut self, received: &Received) {
         for (name, print) in &received.outcome.taken {
-            self.names.insert(name.clone());
             let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
                 &suzatary_lines::secretary::line_event::LineVocabulary,
                 print,
             )
             .expect("parses");
+            self.history.extend([(name.clone(), envelope.clone())]);
             if matches!(envelope, Envelope::Change(_)) {
                 self.lines.push((name.clone(), envelope));
             }
@@ -637,7 +637,7 @@ fn the_rule_takes_a_title_only_as_the_box_reads_one() {
 fn a_key_a_held_line_names_is_never_taken_again() {
     let key = [7u8; 32];
     let default = || ConversationId::new("default").expect("a slug");
-    let door = Door::new();
+    let mut door = Door::new();
     let (held, _) = LineEvent::write(
         default(),
         Actor::new("assistant").expect("an actor"),
@@ -647,10 +647,8 @@ fn a_key_a_held_line_names_is_never_taken_again() {
     )
     .expect("a line");
     let held = stored(&door.genesis, held, Vec::new());
-    let door = Door {
-        lines: [door.lines.clone(), vec![held]].concat(),
-        ..door
-    };
+    door.history.extend([held.clone()]);
+    door.lines.push(held);
     let (line, keys) = LineEvent::write(
         default(),
         ada(),
@@ -1845,5 +1843,169 @@ proptest::proptest! {
         posts.rotate_left(first);
         let (door, _) = handed_over(owed, &script, &lines, &posts);
         proptest::prop_assert_eq!(invariants(&door, owed), Ok(()), "(ii) in {:?}", posts);
+    }
+}
+
+/// A rename of `conversation` by the device, under keys of its own drawn from `seed`, resting on
+/// `deps` under the genesis `genesis`.
+fn renamed(conversation: &ConversationId, n: u8, genesis: &Hash, deps: Vec<Hash>) -> Posted {
+    let (line, keys) = LineEvent::write(
+        conversation.clone(),
+        ada(),
+        0,
+        &titled(50 + u32::from(n), "device0", "Garden"),
+        &Given([100 + n; 32]),
+    )
+    .expect("a line");
+    Posted {
+        change: Envelope::Change(mk_change(genesis.clone(), deps, line).expect("a change")),
+        keys,
+    }
+}
+
+/// What the store's own check reports of `history`, as a store a tab writes verifies.
+fn findings(history: &Dag<LineEvent>) -> Vec<String> {
+    suzatary_signatures::signatures::findings_of(history, &prodrome_core::policy::Untrusted::none())
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+/// `default` held three deep (its opening, then two lines of the box's, each on the one before),
+/// and the opening of a second conversation: the door the laws below post to, and the names held.
+fn deep() -> (Door, ConversationId, [Hash; 4]) {
+    let mut door = Door::new();
+    let opening = door.default_opening();
+    let first = door.box_wrote(&titled(10, "assistant", "One"), &[&opening]);
+    let second = door.box_wrote(&titled(11, "assistant", "Two"), &[&first]);
+    let (begun, _) = LineEvent::begin(
+        Actor::new("assistant").expect("an actor"),
+        &opened(12),
+        &door.entropy,
+    )
+    .expect("a line");
+    let other = begun.begun_id();
+    let garden = door.hold(begun, &[]);
+    (door, other, [opening, first, second, garden])
+}
+
+/// Each finding the store's check makes of one change against the store it joins, and the door
+/// refuses: a dep beneath another dep, a dep that is not a write to its entity, a genesis that is
+/// no genesis the store holds, and a parent of another genesis. Each is refused for good in the
+/// check's sentence, and the line the door takes beside them leaves the store reporting nothing.
+#[test]
+fn the_door_refuses_each_finding_of_one_change_in_the_check_s_words() {
+    let (mut door, other, [opening, first, second, garden]) = deep();
+    let default = ConversationId::new("default").expect("a slug");
+    let genesis = door.genesis.clone();
+    // A second prodrome in the store, with a line of its own.
+    let elsewhere: Envelope<LineEvent> =
+        Envelope::Genesis(mk_genesis("lines", &"1".repeat(32)).expect("a genesis"));
+    let elsewhere_name = seal_hash(&elsewhere);
+    door.history.extend([(elsewhere_name.clone(), elsewhere)]);
+    let (line, _) = LineEvent::write(
+        default.clone(),
+        Actor::new("assistant").expect("an actor"),
+        0,
+        &titled(13, "assistant", "Three"),
+        &door.entropy,
+    )
+    .expect("a line");
+    let theirs = stored(&elsewhere_name, line, Vec::new());
+    door.history.extend([theirs.clone()]);
+    door.lines.push(theirs.clone());
+    let before = findings(&door.history);
+    assert_eq!(before, Vec::<String>::new(), "the store reports nothing");
+
+    let redundant = renamed(&default, 0, &genesis, vec![second.clone(), first.clone()]);
+    let foreign = renamed(&other, 1, &genesis, vec![garden.clone(), opening.clone()]);
+    let stranger = renamed(&default, 2, &second, vec![second.clone()]);
+    let crossing = renamed(
+        &default,
+        3,
+        &genesis,
+        vec![second.clone(), theirs.0.clone()],
+    );
+    let whole = renamed(&default, 4, &genesis, vec![second.clone()]);
+    let received = door.post(&[&redundant, &foreign, &stranger, &crossing, &whole]);
+    let found = |posted: &Posted, finding: &str| {
+        let why = refused_finally(&received, posted);
+        assert!(
+            why.starts_with("the store's check would report it for ever once held: ")
+                && why.contains(finding),
+            "{why}"
+        );
+    };
+    found(
+        &redundant,
+        &format!("depends on {first}, which its dep {second} already rests on"),
+    );
+    found(
+        &foreign,
+        &format!("depends on {opening}, which is not a write to its entity"),
+    );
+    found(
+        &stranger,
+        &format!("names genesis {second}, which the store does not hold"),
+    );
+    found(
+        &crossing,
+        &format!("rests on {}, of another genesis", theirs.0),
+    );
+    assert_eq!(said(&received, &whole), Ok(()), "{received:?}");
+    door.take(&received);
+    assert_eq!(
+        findings(&door.history),
+        before,
+        "the store reports what it reported"
+    );
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(128))]
+
+    /// For any post the door takes, the store's findings after it are its findings before it,
+    /// and each line it refuses as the check's the check reports once the store holds it: over
+    /// generated posts of renames of either conversation, each resting on any set of the lines
+    /// held and of those posted before it, under the store's genesis or a held line's name.
+    #[test]
+    fn the_store_reports_after_any_post_what_it_reported_before(
+        drawn in proptest::collection::vec(
+            (
+                proptest::prelude::any::<bool>(),
+                proptest::collection::btree_set(0usize..10, 0..4),
+                proptest::prelude::any::<bool>(),
+            ),
+            1..6,
+        ),
+    ) {
+        let (mut door, other, held) = deep();
+        let default = ConversationId::new("default").expect("a slug");
+        let before = findings(&door.history);
+        let mut pool: Vec<Hash> = held.to_vec();
+        let mut posted = Vec::new();
+        for (n, (of_default, deps, stranger)) in drawn.into_iter().enumerate() {
+            let n = u8::try_from(n).expect("few lines");
+            let deps = deps.into_iter().filter_map(|i| pool.get(i).cloned()).collect();
+            let genesis = if stranger { held[1].clone() } else { door.genesis.clone() };
+            let line = renamed(if of_default { &default } else { &other }, n, &genesis, deps);
+            pool.push(line.name());
+            posted.push(line);
+        }
+        let received = door.post(&posted.iter().collect::<Vec<_>>());
+        door.take(&received);
+        proptest::prop_assert_eq!(findings(&door.history), before.clone(), "{:?}", received);
+        for refused in &received.outcome.refused {
+            let (Some(name), suzatary_api::sync::Reason::Reported(said)) = (&refused.name, &refused.reason) else {
+                continue;
+            };
+            let line = posted.iter().find(|line| line.name() == *name).expect("posted");
+            let mut held = door.history.clone();
+            held.extend([(name.clone(), line.change.clone())]);
+            proptest::prop_assert!(
+                findings(&held).iter().any(|finding| finding.contains(name.as_str()) && !before.contains(finding)),
+                "refused as {:?}, and the check reports nothing of it once held", said
+            );
+        }
     }
 }

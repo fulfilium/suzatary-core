@@ -167,9 +167,7 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
     let posted = [print, canonical_envelope(&signed)];
     let keys: BTreeMap<String, Vec<String>> =
         [(name.as_str().to_owned(), own.keys().into_values().collect())].into();
-    let objects = lines.lines.objects().expect("held");
-    let names = objects.iter().map(|(n, _)| n.clone()).collect();
-    let held = <LinesRule as suzatary_store::admission::Admission>::held(&objects);
+    let history = lines.lines.objects().expect("held").into_iter().collect();
     let trusting = suzatary_signatures::signatures::Trusting::held(
         &suzatary_signatures::signatures::Keeping::stores(&[
             &suzatary_stores::stores::phone_trusted(&["ada"]),
@@ -180,8 +178,7 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
     let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
     let received = suzatary_api::sync::receive_changes::<LinesRule>(
         Holding {
-            names: &names,
-            held,
+            history: &history,
             world: &OnADevice as &dyn suzatary_lines::secretary::lines_rule::World,
         },
         &posted,
@@ -205,14 +202,19 @@ fn handed_over(lines: &InMemory, own: &OwnLine, ada: &Actor) -> SlotKeys {
 /// The box's acceptance of one posted rename, measured on a store the size of the box's own
 /// (`known_pull::store`, about 14,700 lines): the route's whole decision under the lines' lock
 /// (the store read, the trust read, the rule, the key kept, the line taken and the receipt).
-/// Printed as a measurement; the law is only that it is taken.
+/// Printed as a measurement; the law is only that it is taken. Measured again with the store's
+/// first conversation holding 5,000 of its lines (`known_pull::shaped`), which the renames go to.
 #[test]
+fn the_box_s_acceptance_of_a_posted_line_measured() {
+    acceptance_measured(&crate::known_pull::store(), "spread");
+    acceptance_measured(&crate::known_pull::shaped(2_500), "long");
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one measurement: the store, the post, each step timed"
 )]
-fn the_box_s_acceptance_of_a_posted_line_measured() {
-    let lines = crate::known_pull::store();
+fn acceptance_measured(lines: &InMemory, shape: &str) {
     let conversation = crate::known_pull::id(0);
     // A conversation with room for the questions: every generated one holds many unanswered.
     let roomy = suzatary_base::conversation_id::ConversationId::new("measured").expect("an id");
@@ -223,7 +225,7 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
         kind: Kind::Topic,
     };
     transcript::start(lines.conversations(), &roomy, &opened).expect("opened");
-    let mut tab = HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("pulled");
+    let mut tab = HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(lines))).expect("pulled");
     let ada = Actor::new("ada").expect("an actor");
     let chain = suzatary_stores::stores::phone_trusted(&["ada"]);
     let asks: suzatary_stores::stores::InMemory<suzatary_stores::asks::AskEvent> =
@@ -309,10 +311,13 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
             );
         }
         took.sort();
+        let mut locked: Vec<std::time::Duration> = steps.iter().map(under_the_lock).collect();
+        locked.sort();
         println!(
-            "the box's acceptance of one posted {kind}: median {:?}, slowest {:?}; its steps, each a median: {}",
+            "{shape}: the box's acceptance of one posted {kind}: median {:?}, slowest {:?}, the lock held {:?}; its steps, each a median: {}",
             took[took.len() / 2],
             took[took.len() - 1],
+            locked[locked.len() / 2],
             medians(&steps),
         );
     }
@@ -337,8 +342,19 @@ fn the_box_s_acceptance_of_a_posted_line_measured() {
     let (read, held) = timed(false);
     let (dag, _) = timed(true);
     println!(
-        "over {held} objects: one whole read of the store: median {read:?}; with its DAG: median {dag:?}"
+        "{shape}: over {held} objects: one whole read of the store: median {read:?}; with its DAG: median {dag:?}"
     );
+}
+
+/// How long a post held the store's lock: every part of the route but those after it (the
+/// receipt's history, its frontier and the asks' record).
+fn under_the_lock(parts: &suzatary_lines::parts::Parts) -> std::time::Duration {
+    parts
+        .each()
+        .iter()
+        .filter(|(name, _, _)| !matches!(*name, "dag" | "frontier" | "record"))
+        .map(|(_, spent, _)| *spent)
+        .sum()
 }
 
 /// The same bytes every time, given.
@@ -833,13 +849,18 @@ fn an_own_line_erased_elsewhere_lets_its_key_go() {
 /// The box's acceptance of a post at the route's limit, 256 renames and their signatures (512
 /// objects), each resting on the one before, into one conversation of the store the size of the
 /// box's own: every rename is taken, so the conversation is read again before each next line is
-/// judged. Printed as a measurement; run with `--release --ignored`.
+/// judged. Printed as a measurement; run with `--release --ignored`. Measured again with that
+/// conversation holding 5,000 of the store's lines (`known_pull::shaped`).
 #[test]
 #[ignore = "a measurement, run by hand"]
 fn the_box_s_acceptance_of_a_full_post_measured() {
-    let lines = crate::known_pull::store();
+    full_post_measured(&crate::known_pull::store(), "spread");
+    full_post_measured(&crate::known_pull::shaped(2_500), "long");
+}
+
+fn full_post_measured(lines: &InMemory, shape: &str) {
     let conversation = crate::known_pull::id(0);
-    let mut tab = HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("pulled");
+    let mut tab = HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(lines))).expect("pulled");
     let ada = Actor::new("ada").expect("an actor");
     let chain = suzatary_stores::stores::phone_trusted(&["ada"]);
     let asks: suzatary_stores::stores::InMemory<suzatary_stores::asks::AskEvent> =
@@ -870,36 +891,42 @@ fn the_box_s_acceptance_of_a_full_post_measured() {
     let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
     let keep = |_: &[prodrome_core::event::Hash]| Ok(());
     let started = std::time::Instant::now();
-    let receipt = routes::receive_changes(
-        &lines.lines,
-        &routes::Posted {
-            objects: &objects,
-            since: &Since::Nothing,
-        },
-        &routes::Beside {
-            posted: &slot_keys,
-            keep: &keep,
-            world: &OnADevice as &dyn suzatary_lines::secretary::lines_rule::World,
-        },
-        &frontiers,
-        routes::Writer {
-            actor: &ada,
-            chains: &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
-            root: &suzatary_connect::cast::keys::root(),
-        },
-        routes::Recording {
-            asks: &asks,
-            at: at(59),
-        },
-    )
-    .expect("answered");
+    let (receipt, parts) = suzatary_lines::parts::scoped(|| {
+        routes::receive_changes(
+            &lines.lines,
+            &routes::Posted {
+                objects: &objects,
+                since: &Since::Nothing,
+            },
+            &routes::Beside {
+                posted: &slot_keys,
+                keep: &keep,
+                world: &OnADevice as &dyn suzatary_lines::secretary::lines_rule::World,
+            },
+            &frontiers,
+            routes::Writer {
+                actor: &ada,
+                chains: &suzatary_signatures::signatures::Keeping::stores(&[&chain]),
+                root: &suzatary_connect::cast::keys::root(),
+            },
+            routes::Recording {
+                asks: &asks,
+                at: at(59),
+            },
+        )
+    });
+    let receipt = receipt.expect("answered");
     let took = started.elapsed();
     assert_eq!(
         receipt.adopted.len(),
         512,
         "every rename taken: {receipt:?}"
     );
-    println!("the box's acceptance of a post of 256 renames and their signatures: {took:?}");
+    println!(
+        "{shape}: the box's acceptance of a post of 256 renames and their signatures: {took:?}, the lock held {:?}; its steps: {}",
+        under_the_lock(&parts),
+        parts.line("")
+    );
 }
 
 /// A key seed of its own for each `n`.
@@ -1341,103 +1368,249 @@ fn step() -> impl proptest::strategy::Strategy<Value = (usize, Step)> {
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
 
-    /// For any order of two tabs' reads, answers, acts and seals over one row: no record stays in
-    /// the row whose line the rows hold once its keys are held, whatever answer it carries; and no
-    /// record let go as refused is posted again by either tab.
+    /// For any order of two tabs' reads, seals, takings (the answer lost or not), refusals,
+    /// landings and acts over one row: no record stays in the row whose line the rows hold once
+    /// its keys are held, whatever answer it carries; no record let go as refused is posted again
+    /// by either tab; the box takes every line a tab hands over whose parents it holds; and every
+    /// line a tab seals rests on parents none of which lies beneath another, once the box holds
+    /// them all.
     #[test]
     fn two_tabs_over_one_row_keep_no_taken_record_and_post_no_let_go_one(
         steps in proptest::collection::vec(step(), 1..24),
     ) {
-        use std::collections::BTreeSet;
-        use suzatary_store::replica::writes::{Answer, Fit, Refusal, Writes};
-        let lines = InMemory::default();
-        let opened = Entry::Opened {
-            at: at(0),
-            title: Words::kept("Secretary".to_owned()),
-            model: "a-cli/small".to_owned(),
-            kind: Kind::Default,
-        };
-        transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
-        let pulled = || HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
-        let ada = Actor::new("ada").expect("an actor");
-        let mut tabs = [pulled(), pulled()];
-        let mut row: Writes<OwnLine> = Writes::default();
-        let mut acted_row: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
-        let mut told: BTreeSet<String> = BTreeSet::new();
-        let mut let_go: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
-        let fit = Fit { most: 1000, bytes: usize::MAX };
-        let unsent_lines = |tab: &HeldReplica| -> Vec<OwnLine> {
-            tab.unsent(fit, |_| 1).into_iter().flatten().filter(|own| matches!(own, OwnLine::Line { .. })).cloned().collect()
-        };
-        let read = |tab: &mut HeldReplica, row: &Writes<OwnLine>, acted_row: &BTreeSet<prodrome_core::event::Hash>| {
-            let _ = tab.take_own(&row.iter().cloned().collect::<Vec<_>>());
-            let _ = tab.acted(acted_row);
-        };
-        for (n, (t, step)) in steps.into_iter().enumerate() {
-            let seq = u8::try_from(n).expect("few steps");
-            match step {
-                Step::Settle => {
-                    read(&mut tabs[t], &row, &acted_row);
-                    let released = tabs[t].releasable(&told);
-                    acted_row.extend(released.refused.iter().cloned());
-                    let_go.extend(released.refused);
-                    row = Writes::of(&row.iter().filter(|own| !released.prints.contains(own.node.print())).cloned().collect::<Vec<_>>());
-                    // Nothing whose line this tab's rows hold stays, whatever its answer: a landing
-                    // holds a line's keys beside its node.
-                    for own in row.iter() {
-                        proptest::prop_assert!(!tabs[t].holds(own.node.name()), "a record the rows hold stayed, answered {:?}", own.answer);
-                    }
+        two_tabs(steps)?;
+    }
+}
+
+/// The case the law above found: tab one seals P, then A on P; the box takes P and the answer is
+/// lost; tab one lands P and lets P's record go. Tab two reads the row and finds A alone, not the
+/// line it rests on, so it seals nothing until a pull brings P, and then seals over A alone;
+/// before, it sealed C over A and the opening, which P already rests on, and the box took C.
+#[test]
+fn a_tab_that_lacks_what_a_line_rests_on_seals_nothing_over_it() {
+    let sealed = two_tabs(vec![
+        (0, Step::Seal),
+        (0, Step::Seal),
+        (0, Step::Take(true)),
+        (0, Step::Land),
+        (0, Step::Settle),
+        (1, Step::Seal),
+        (0, Step::Take(false)),
+        (1, Step::Take(false)),
+        (1, Step::Land),
+        (1, Step::Seal),
+        (1, Step::Take(false)),
+    ])
+    .expect("the law holds");
+    let [p, a, d] = sealed.as_slice() else {
+        panic!("tab one's two lines, then tab two's once it pulled: {sealed:?}");
+    };
+    assert!(a.rests_on().contains(p.name()));
+    assert!(
+        d.rests_on().contains(a.name()) && !d.rests_on().contains(p.name()),
+        "tab two's line rests on A, and on nothing beneath it: {:?}",
+        d.rests_on()
+    );
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one law: the two tabs, the row, the box, each step"
+)]
+/// The law over `steps`: the lines the tabs sealed, in order.
+fn two_tabs(
+    steps: Vec<(usize, Step)>,
+) -> Result<Vec<OwnLine>, proptest::test_runner::TestCaseError> {
+    use std::collections::BTreeSet;
+    use suzatary_store::replica::writes::{Answer, Fit, Refusal, Writes};
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let pulled =
+        || HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let ada = Actor::new("ada").expect("an actor");
+    let mut tabs = [pulled(), pulled()];
+    let mut row: Writes<OwnLine> = Writes::default();
+    let mut acted_row: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+    let mut told: BTreeSet<String> = BTreeSet::new();
+    let mut let_go: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+    let mut sealed: Vec<OwnLine> = Vec::new();
+    let fit = Fit {
+        most: 1000,
+        bytes: usize::MAX,
+    };
+    let unsent_lines = |tab: &HeldReplica| -> Vec<OwnLine> {
+        tab.unsent(fit, |_| 1)
+            .into_iter()
+            .flatten()
+            .filter(|own| matches!(own, OwnLine::Line { .. }))
+            .cloned()
+            .collect()
+    };
+    let read = |tab: &mut HeldReplica,
+                row: &Writes<OwnLine>,
+                acted_row: &BTreeSet<prodrome_core::event::Hash>| {
+        let _ = tab.take_own(&row.iter().cloned().collect::<Vec<_>>());
+        let _ = tab.acted(acted_row);
+    };
+    let held = || -> BTreeSet<prodrome_core::event::Hash> {
+        lines
+            .lines
+            .objects()
+            .expect("held")
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect()
+    };
+    for (n, (t, step)) in steps.into_iter().enumerate() {
+        let seq = u8::try_from(n).expect("few steps");
+        match step {
+            Step::Settle => {
+                read(&mut tabs[t], &row, &acted_row);
+                let released = tabs[t].releasable(&told);
+                acted_row.extend(released.refused.iter().cloned());
+                let_go.extend(released.refused);
+                row = Writes::of(
+                    &row.iter()
+                        .filter(|own| !released.prints.contains(own.node.print()))
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                );
+                // Nothing whose line this tab's rows hold stays, whatever its answer: a landing
+                // holds a line's keys beside its node.
+                for own in row.iter() {
+                    proptest::prop_assert!(
+                        !tabs[t].holds(own.node.name()),
+                        "a record the rows hold stayed, answered {:?}",
+                        own.answer
+                    );
                 }
-                Step::Seal => {
-                    read(&mut tabs[t], &row, &acted_row);
-                    if let Ok((owned, _, _)) = tabs[t].seal(say(&format!("question {n}")), at(1 + u32::from(seq)), &ada, &Fixed(AtomicU8::new(seq.wrapping_mul(7).wrapping_add(3)))) {
-                        row.apply(&owned);
-                    }
+            }
+            Step::Seal => {
+                read(&mut tabs[t], &row, &acted_row);
+                if let Ok((owned, _, _)) = tabs[t].seal(
+                    say(&format!("question {n}")),
+                    at(1 + u32::from(seq)),
+                    &ada,
+                    &Fixed(AtomicU8::new(seq.wrapping_mul(7).wrapping_add(3))),
+                ) {
+                    sealed.extend(owned.iter().take(1).map(|own| own.node.clone()));
+                    row.apply(&owned);
                 }
-                Step::Refuse(act) => {
-                    if let Some(line) = unsent_lines(&tabs[t]).first() {
-                        told.insert(line.print().to_owned());
-                        let (moved, _) = tabs[t].answered(vec![(line.name().clone(), Answer::Refused { kind: Refusal::Final, reason: "never".to_owned() })]);
+            }
+            Step::Refuse(act) => {
+                if let Some(line) = unsent_lines(&tabs[t]).first() {
+                    // The box answers as its door does: a line it holds is taken already, and a
+                    // taken line has no ruling to act on.
+                    if held().contains(line.name()) {
+                        let (moved, _) =
+                            tabs[t].answered(vec![(line.name().clone(), Answer::Taken)]);
                         row.apply(&moved);
-                        if act {
-                            let names: BTreeSet<_> = [line.name().clone()].into();
-                            acted_row.extend(names.iter().cloned());
-                            let _ = tabs[t].acted(&names);
-                        }
+                        continue;
+                    }
+                    told.insert(line.print().to_owned());
+                    let never = Answer::Refused {
+                        kind: Refusal::Final,
+                        reason: "never".to_owned(),
+                    };
+                    let (moved, _) = tabs[t].answered(vec![(line.name().clone(), never)]);
+                    row.apply(&moved);
+                    if act {
+                        let names: BTreeSet<_> = [line.name().clone()].into();
+                        acted_row.extend(names.iter().cloned());
+                        let _ = tabs[t].acted(&names);
                     }
                 }
-                Step::Post => {
-                    // A hand-over reads the row first; what it posts is what the tab holds unsent.
-                    read(&mut tabs[t], &row, &acted_row);
-                    for line in unsent_lines(&tabs[t]) {
-                        proptest::prop_assert!(!let_go.contains(line.name()), "a record let go as refused is posted again");
+            }
+            Step::Post => {
+                // A hand-over reads the row first; what it posts is what the tab holds unsent.
+                read(&mut tabs[t], &row, &acted_row);
+                for line in unsent_lines(&tabs[t]) {
+                    proptest::prop_assert!(
+                        !let_go.contains(line.name()),
+                        "a record let go as refused is posted again"
+                    );
+                }
+            }
+            Step::Take(lost) => {
+                read(&mut tabs[t], &row, &acted_row);
+                let held = held();
+                let takeable = unsent_lines(&tabs[t])
+                    .into_iter()
+                    .find(|line| line.rests_on().iter().all(|p| held.contains(p)));
+                if let Some(line) = takeable {
+                    handed_over(&lines, &line, &ada);
+                    if !lost {
+                        let (moved, _) =
+                            tabs[t].answered(vec![(line.name().clone(), Answer::Taken)]);
+                        row.apply(&moved);
                     }
                 }
-                Step::Take(lost) => {
-                    read(&mut tabs[t], &row, &acted_row);
-                    let held: BTreeSet<_> = lines.lines.objects().expect("held").into_iter().map(|(n, _)| n).collect();
-                    let takeable = unsent_lines(&tabs[t]).into_iter().find(|line| line.rests_on().iter().all(|p| held.contains(p)));
-                    if let Some(line) = takeable {
-                        handed_over(&lines, &line, &ada);
-                        if !lost {
-                            let (moved, _) = tabs[t].answered(vec![(line.name().clone(), Answer::Taken)]);
-                            row.apply(&moved);
-                        }
-                    }
-                }
-                Step::Land => {
-                    let served = skeleton(&lines);
-                    let keys: BTreeMap<_, _> = served.keys.iter().map(|(n, k)| (suzatary_memory::secretary::locked_text::KeyName::new(n.clone()).expect("a name"), k.clone())).collect();
-                    tabs[t].piece(served, suzatary_memory::secretary::key_ring::KeyRing::of(&keys), u64::from(seq) + 1).expect("a piece");
-                    let _ = tabs[t].land();
-                }
-                Step::Act => {
-                    use suzatary_lines::secretary::held_replica::Ruling;
-                    let names: BTreeSet<_> = tabs[t].rulings(&DEFAULT).into_iter().filter(|(_, r)| matches!(r, Ruling::Refused { .. })).map(|(name, _)| name).collect();
-                    acted_row.extend(names.iter().cloned());
-                    let _ = tabs[t].acted(&names);
-                }
+            }
+            Step::Land => {
+                let served = skeleton(&lines);
+                let keys: BTreeMap<_, _> = served
+                    .keys
+                    .iter()
+                    .map(|(n, k)| {
+                        (
+                            suzatary_memory::secretary::locked_text::KeyName::new(n.clone())
+                                .expect("a name"),
+                            k.clone(),
+                        )
+                    })
+                    .collect();
+                tabs[t]
+                    .piece(
+                        served,
+                        suzatary_memory::secretary::key_ring::KeyRing::of(&keys),
+                        u64::from(seq) + 1,
+                    )
+                    .expect("a piece");
+                let _ = tabs[t].land();
+            }
+            Step::Act => {
+                use suzatary_lines::secretary::held_replica::Ruling;
+                let names: BTreeSet<_> = tabs[t]
+                    .rulings(&DEFAULT)
+                    .into_iter()
+                    .filter(|(_, r)| matches!(r, Ruling::Refused { .. }))
+                    .map(|(name, _)| name)
+                    .collect();
+                acted_row.extend(names.iter().cloned());
+                let _ = tabs[t].acted(&names);
             }
         }
     }
+    // Every line sealed whose parents the box holds rests on no parent beneath another.
+    let dag: prodrome_core::dag::Dag<LineEvent> =
+        lines.lines.objects().expect("held").into_iter().collect();
+    for line in &sealed {
+        let parents = line.rests_on();
+        if parents.iter().all(|p| dag.objects().contains_key(p)) {
+            // Its deps: what it rests on, less the genesis every line names.
+            let deps: Vec<_> = parents
+                .iter()
+                .filter(|p| !matches!(dag.get(p), Some(Envelope::Genesis(_))))
+                .collect();
+            for parent in &deps {
+                let beneath = dag.closure(
+                    deps.iter()
+                        .filter(|other| *other != parent)
+                        .map(|other| (*other).clone()),
+                );
+                proptest::prop_assert!(
+                    !beneath.contains(*parent),
+                    "{} rests on {parent}, which another of its parents rests on",
+                    line.name()
+                );
+            }
+        }
+    }
+    Ok(sealed)
 }

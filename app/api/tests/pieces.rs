@@ -40,13 +40,15 @@ fn id(n: usize) -> ConversationId {
 }
 
 /// One write to one of a few conversations: a turn of some length, the erasure of the words of
-/// its latest line that has any, or a fork: two replicas each writing a turn from the same lines,
-/// joined, so the next line of that conversation rests on both.
+/// its latest line that has any, a fork: two replicas each writing a turn from the same lines,
+/// joined, so the next line of that conversation rests on both; or a turn sealed under the rules
+/// from before lines recorded them, and every such slot of the store sealed again.
 #[derive(Debug, Clone)]
 enum Write {
     Said { conversation: usize, words: usize },
     Erased { conversation: usize },
     Fork { conversation: usize, words: usize },
+    Resealed { conversation: usize },
 }
 
 fn write() -> impl Strategy<Value = Write> {
@@ -54,6 +56,7 @@ fn write() -> impl Strategy<Value = Write> {
         4 => (0..3usize, 1..600usize).prop_map(|(conversation, words)| Write::Said { conversation, words }),
         1 => (0..3usize).prop_map(|conversation| Write::Erased { conversation }),
         1 => (0..3usize, 1..600usize).prop_map(|(conversation, words)| Write::Fork { conversation, words }),
+        1 => (0..3usize).prop_map(|conversation| Write::Resealed { conversation }),
     ]
 }
 
@@ -76,20 +79,47 @@ impl Writer {
     }
 
     fn line(&mut self, conversation: usize, entry: &Entry) -> LineEvent {
-        let held = self.written.entry(conversation).or_insert(0);
+        let held = self.next(conversation);
         let (line, keys) = LineEvent::write(
             id(conversation),
             Actor::new("assistant").expect("an actor"),
-            *held,
+            held,
             entry,
             &self.lines.entropy,
         )
         .expect("a line");
+        self.keep(&keys);
+        line
+    }
+
+    /// A line of `conversation`, its words scrubbed under the rules from before lines recorded
+    /// them.
+    fn stale(&mut self, conversation: usize, entry: &Entry) -> LineEvent {
+        let held = self.next(conversation);
+        let (line, keys) = LineEvent::written_under(
+            &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
+            id(conversation),
+            Actor::new("assistant").expect("an actor"),
+            held,
+            entry,
+            &self.lines.entropy,
+        )
+        .expect("a line");
+        self.keep(&keys);
+        line
+    }
+
+    /// How many lines `conversation` holds, one more counted.
+    fn next(&mut self, conversation: usize) -> u32 {
+        let held = self.written.entry(conversation).or_insert(0);
         *held += 1;
-        for key in &keys {
+        *held - 1
+    }
+
+    fn keep(&self, keys: &[suzatary_memory::secretary::locked_text::TextKey]) {
+        for key in keys {
             self.lines.keys.set(&key.name(), key).expect("kept");
         }
-        line
     }
 
     fn said(&mut self, conversation: usize, words: usize) -> Entry {
@@ -164,6 +194,17 @@ impl Writer {
                     })
                     .collect();
                 self.lines.lines.accept(&forked).expect("joined");
+            }
+            Write::Resealed { conversation } => {
+                let said = self.said(*conversation, 40);
+                let line = self.stale(*conversation, &said);
+                self.lines.lines.append(line).expect("said");
+                self.second += 1;
+                suzatary_lines::secretary::rescrub::reseal(
+                    self.lines.conversations(),
+                    at(self.second),
+                )
+                .expect("reseals");
             }
             Write::Erased { conversation } => {
                 let objects = self.lines.lines.objects().expect("reads");
@@ -315,6 +356,25 @@ fn a_fork_then_a_line_is_a_merge() {
     assert_eq!(merges, 1);
 }
 
+/// The writes make what the law needs: a stale turn is sealed again, by a line of its own.
+#[test]
+fn a_stale_turn_is_resealed() {
+    let mut store = Writer::new();
+    store.apply(&Write::Resealed { conversation: 0 });
+    let objects = store.lines.lines.objects().expect("reads");
+    let reseals = objects
+        .iter()
+        .filter_map(|(_, object)| object.event())
+        .filter(|line| {
+            matches!(
+                line.shape(),
+                suzatary_lines::secretary::line_shape::LineShape::Resealed { .. }
+            )
+        })
+        .count();
+    assert_eq!(reseals, 1);
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
@@ -382,13 +442,14 @@ proptest! {
 
 /// A replica of the lines pulled piece by piece at `budget` bytes a piece, landing each piece as
 /// it is kept when `each`, else once at the end; after each landing, `landed` is told the names
-/// the landed row reads and whether it reads as behind the box's heads.
+/// the landed row reads, whether it reads as behind the box's heads, and each conversation it
+/// reads whose frontier is open (`Outlines::frontier`).
 fn landed_by_pieces(
     store: &Writer,
     books: Books<'_>,
     budget: usize,
     each: bool,
-    mut landed: impl FnMut(&BTreeSet<Hash>, &BTreeMap<Hash, Vec<Hash>>, bool),
+    mut landed: impl FnMut(&BTreeSet<Hash>, &BTreeMap<Hash, Vec<Hash>>, bool, &[ConversationId]),
 ) -> suzatary_lines::secretary::held_replica::HeldReplica {
     use suzatary_store::replica::held::Node as _;
     let mut replica = suzatary_lines::secretary::held_replica::HeldReplica::default();
@@ -439,7 +500,18 @@ fn landed_by_pieces(
                 .nodes()
                 .map(|node| (node.name().clone(), node.rests_on().to_vec()))
                 .collect();
-            landed(&names, &parents, read.behind(&heads));
+            let open: Vec<ConversationId> = replica
+                .outlines()
+                .outlines()
+                .map(|(id, _)| id.clone())
+                .filter(|id| {
+                    matches!(
+                        replica.outlines().frontier(id),
+                        Some(suzatary_lines::secretary::outlines::Frontier::Open(_))
+                    )
+                })
+                .collect();
+            landed(&names, &parents, read.behind(&heads), &open);
         }
         if rest == 0 {
             return replica;
@@ -452,7 +524,9 @@ proptest! {
 
     /// Landing each piece as it comes reads as landing once: every landed row is closed under
     /// parents, reads as behind the box's heads until the last piece lands, and the last landed
-    /// row holds the nodes, the keys and the heads that one landing at the end holds.
+    /// row holds the nodes, the keys and the heads that one landing at the end holds. After every
+    /// landing, every conversation the device reads has a closed frontier, so a seal over it is
+    /// never refused for a line the box did not serve.
     #[test]
     fn law_landing_each_piece_reads_as_landing_once(
         script in prop::collection::vec(write(), 1..24),
@@ -465,11 +539,16 @@ proptest! {
         let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let mut landings: Vec<(bool, bool)> = Vec::new();
-        let each = landed_by_pieces(&store, books, budget, true, |names, parents, behind| {
+        let mut open_ever: Vec<ConversationId> = Vec::new();
+        let each = landed_by_pieces(&store, books, budget, true, |names, parents, behind, open| {
             let closed = parents.values().flatten().all(|parent| names.contains(parent));
             landings.push((closed, behind));
+            open_ever.extend(open.iter().cloned());
         });
-        let once = landed_by_pieces(&store, books, budget, false, |_, _, _| {});
+        let once = landed_by_pieces(&store, books, budget, false, |_, _, _, open| {
+            open_ever.extend(open.iter().cloned());
+        });
+        prop_assert!(open_ever.is_empty(), "a conversation read with an open frontier: {:?}", open_ever);
         prop_assert!(landings.iter().all(|(closed, _)| *closed), "every landed row is closed under parents");
         let (last, before) = landings.split_last().expect("a landing");
         prop_assert!(!last.1, "the last landing reads as the box's heads");
@@ -1318,4 +1397,47 @@ proptest! {
             );
         }
     }
+}
+
+/// The fixture's store of the box's size (`known_pull::store`, half of it reseals), pulled by
+/// pieces of the route's own size: every conversation the device then reads has a closed frontier.
+#[test]
+fn every_conversation_of_the_known_store_pulled_has_a_closed_frontier() {
+    let lines = crate::known_pull::store();
+    let (epochs, frontiers) = (
+        suzatary_signatures::epoch::Epochs::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let books = Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let replica = suzatary_lines::secretary::held_replica::HeldReplica::pulled(|since| {
+        let since = if since.is_empty() {
+            Since::Nothing
+        } else {
+            Since::Frontier(Token::parse(since).expect("a digest"))
+        };
+        Ok::<_, suzatary_lines::secretary::held_replica::NotAnAnswer>(
+            routes::lines_skeleton(lines.conversations(), &since, books, now(), Cut::PIECE)
+                .expect("a piece"),
+        )
+    })
+    .expect("pulled");
+    let outlines = replica.outlines();
+    let open: Vec<&ConversationId> = outlines
+        .outlines()
+        .map(|(id, _)| id)
+        .filter(|id| {
+            matches!(
+                outlines.frontier(id),
+                Some(suzatary_lines::secretary::outlines::Frontier::Open(_))
+            )
+        })
+        .collect();
+    assert!(
+        outlines.outlines().count() > 1,
+        "the store's conversations read"
+    );
+    assert_eq!(open, Vec::<&ConversationId>::new());
 }

@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 use prodrome_core::change::Change;
-use prodrome_core::event::{Envelope, Hash};
+use prodrome_core::dag::Dag;
+use prodrome_core::event::Hash;
 use prodrome_core::schema::Schema;
 
 /// On which grounds a store's own rule refuses a change.
@@ -107,9 +108,9 @@ pub trait Admission {
     /// What the rule reads beyond its own store, as the box holds it now.
     type World: ?Sized;
 
-    /// That reading, of every object the store holds beside its name, made once per post under
-    /// the store's lock.
-    fn held(objects: &[(Hash, Envelope<Self::Schema>)]) -> Self::Held<'_>;
+    /// That reading, of every object the store holds by name, made once per post under the
+    /// store's lock.
+    fn held(history: &Dag<Self::Schema>) -> Self::Held<'_>;
 
     /// Why the box refuses `change` beyond the shared rule, in its own words; none to take it.
     fn refuses(change: &Change<Self::Schema>, post: &Post<'_, '_, Self>) -> Option<Inadmissible>;
@@ -132,7 +133,7 @@ impl<E: Schema> Admission for Shared<E> {
         E: 'e;
     type World = ();
 
-    fn held(_: &[(Hash, Envelope<E>)]) {}
+    fn held(_: &Dag<E>) {}
 
     fn refuses(_: &Change<E>, _: &Post<'_, '_, Self>) -> Option<Inadmissible> {
         None

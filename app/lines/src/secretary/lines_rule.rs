@@ -42,6 +42,7 @@ use std::rc::Rc;
 use suzatary_conversations::secretary::queue;
 
 use prodrome_core::change::Change;
+use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use suzatary_base::conversation_id::ConversationId;
@@ -115,11 +116,14 @@ impl Beside for SlotKeys {
 pub struct Held<'e> {
     conversations: BTreeSet<ConversationId>,
     keys: BTreeSet<KeyName>,
-    objects: &'e [(Hash, Envelope<LineEvent>)],
+    lines: BTreeMap<&'e ConversationId, Vec<(&'e Hash, &'e Change<LineEvent>)>>,
+    copied: RefCell<BTreeMap<ConversationId, Rc<Lines>>>,
     /// The post's lines taken so far.
-    taken: Vec<(Hash, Change<LineEvent>)>,
+    taken: Lines,
     read: RefCell<BTreeMap<ConversationId, Option<Rc<Transcript>>>>,
 }
+
+type Lines = Vec<(Hash, Change<LineEvent>)>;
 
 impl Held<'_> {
     /// Conversation `id` as the lines held read it, without its words; none for one that does
@@ -139,18 +143,30 @@ impl Held<'_> {
         id: &ConversationId,
         line: Option<(&Hash, &Change<LineEvent>)>,
     ) -> Option<Transcript> {
-        let held = self
-            .objects
-            .iter()
-            .filter_map(|(name, object)| match object {
-                Envelope::Change(change) => Some((name, change)),
-                _ => None,
-            });
+        // Copied out once a post: a transcript reads them many times, faster from one block.
+        let copied = Rc::clone(
+            self.copied
+                .borrow_mut()
+                .entry(id.clone())
+                .or_insert_with(|| {
+                    Rc::new(
+                        self.lines
+                            .get(id)
+                            .into_iter()
+                            .flatten()
+                            .map(|(name, change)| ((*name).clone(), (*change).clone()))
+                            .collect(),
+                    )
+                }),
+        );
+        let held = copied.iter().map(|(name, change)| (name, change));
         let taken = self.taken.iter().map(|(name, change)| (name, change));
         let writes: Vec<Write<'_>> = held
-            .chain(taken)
-            .chain(line)
-            .filter(|(_, change)| change.event.conversation() == id)
+            .chain(
+                taken
+                    .chain(line)
+                    .filter(|(_, change)| change.event.conversation() == id),
+            )
             .map(|(name, change)| Write {
                 name,
                 line: &change.event,
@@ -198,17 +214,27 @@ impl Admission for LinesRule {
     type Held<'e> = Held<'e>;
     type World = dyn World;
 
-    fn held(objects: &[(Hash, Envelope<LineEvent>)]) -> Held<'_> {
+    fn held(history: &Dag<LineEvent>) -> Held<'_> {
         let mut conversations = BTreeSet::new();
         let mut keys = BTreeSet::new();
-        for line in objects.iter().filter_map(|(_, object)| object.event()) {
-            conversations.insert(line.conversation().clone());
-            keys.extend(line.keys().cloned());
+        let mut lines: BTreeMap<&ConversationId, Vec<_>> = BTreeMap::new();
+        for (name, object) in history.objects() {
+            if let Some(line) = object.event() {
+                conversations.insert(line.conversation().clone());
+                keys.extend(line.keys().cloned());
+            }
+            if let Envelope::Change(change) = object {
+                lines
+                    .entry(change.event.conversation())
+                    .or_default()
+                    .push((name, change));
+            }
         }
         Held {
             conversations,
             keys,
-            objects,
+            lines,
+            copied: RefCell::new(BTreeMap::new()),
             taken: Vec::new(),
             read: RefCell::new(BTreeMap::new()),
         }

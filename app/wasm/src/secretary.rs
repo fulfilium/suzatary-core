@@ -140,7 +140,7 @@ impl Lines {
     /// Whether the skeleton holds a line of conversation `id`.
     pub fn holds(&self, id: &str) -> Result<bool, JsError> {
         let id = ConversationId::new(id).map_err(|e| refused(e.to_string()))?;
-        Ok(self.0.outlines().holds_conversation(&id))
+        Ok(self.0.outlines().frontier(&id).is_some())
     }
 
     /// `{<name>: [<answer key>, …]}`: every key held, landed or in a pull's pieces, that is dead (the

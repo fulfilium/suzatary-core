@@ -72,8 +72,8 @@ export class Proposals extends ObjectStore {
 /** The lines a tab holds, each print decoded once, read by what moved since the last reading. */
 export class Lines {
   constructor();
-  /** A rename, an opening or a setup sealed as this tab's line, unsent, and read at once. */
-  seal(asked: string, at: string, actor: string, entropy: Uint8Array): Step & { readonly name: string; readonly conversation: string };
+  /** A line sealed as this tab's, unsent, and read at once; or, where a pull may cure what kept it from being sealed, that cause's sentence. */
+  seal(asked: string, at: string, actor: string, entropy: Uint8Array): (Step & { readonly name: string; readonly conversation: string }) | string;
   /** The device's record of own lines, `[{literal, keys, answer}]`, taken: `{moved, unread}`. */
   take_own(records: string): string;
   own_taken(): string;

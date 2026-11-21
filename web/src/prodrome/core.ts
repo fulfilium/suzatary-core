@@ -170,8 +170,9 @@ export interface Sealed extends LineStep {
 /** The lines a tab holds; a slot without its key reads as missing. What this tab wrote is handed over as every
  * store a tab writes is (`written`), each step of it the device's record of the own lines. */
 export interface Lines extends Written {
-  /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once. */
-  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | undefined;
+  /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once; or, where a pull
+   * may cure what kept it from being sealed, that cause's sentence. */
+  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | string;
   /** The device's record of own lines taken: `{moved, unread, taken}`. */
   take_own: (records: string) => string;
   /** `[{hash, literal, line, free}]`: each own write the box took, and whether its record may be let go. */

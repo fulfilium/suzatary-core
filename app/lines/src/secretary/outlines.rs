@@ -1,7 +1,6 @@
 //! The skeleton's lines by conversation, each conversation's outline kept until a line of it comes
-//! or goes: what the stream counts and chooses its rounds by, with no line's object read. Beside
-//! them, every node the skeleton holds as it was given, which says what the store holds and is
-//! what a snapshot of it prints.
+//! or goes: what the stream counts and chooses its rounds by, with no line's object read; and
+//! each conversation's heads, which a new line rests on.
 
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,20 +23,32 @@ pub struct Outlines {
     given: BTreeMap<Hash, wire::SkeletonNode>,
     /// What each node held rests on, parsed once, a structure node's included.
     parents: BTreeMap<Hash, Vec<Hash>>,
+    /// The lines held resting on each name.
+    children: BTreeMap<Hash, BTreeSet<Hash>>,
 }
 
-/// What a reading reads of the skeleton: the whole store; some conversations, each with every
-/// node its lines rest on; the lines the stream chose, and nothing they rest on; or every
-/// conversation a line naming one of some keys is in, as some conversations are read.
+/// A conversation's lines as a new line rests on them.
+#[derive(Debug)]
+pub enum Frontier<'o> {
+    /// All its lines rest on is held: the lines none rests on, and how many it has.
+    Closed {
+        heads: &'o BTreeSet<Hash>,
+        lines: usize,
+    },
+    /// What its lines rest on that is not held.
+    Open(&'o BTreeSet<Hash>),
+}
+
+/// What a reading reads of the skeleton.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
     /// Every node.
     Whole,
-    /// These conversations.
+    /// These conversations, each with every node its lines rest on.
     Conversations(BTreeSet<ConversationId>),
-    /// These nodes alone.
+    /// These nodes (the lines the stream chose), and nothing they rest on.
     Objects(BTreeSet<Hash>),
-    /// The conversations whose lines name one of these keys.
+    /// Each conversation a line naming one of these keys is in, read as `Conversations`.
     Naming(BTreeSet<KeyName>),
 }
 
@@ -171,9 +182,13 @@ impl suzatary_store::replica::held::Node for Parsed {
     }
 }
 
-/// One conversation's lines, and its outline once folded, emptied whenever a line comes or goes.
+/// One conversation's lines, its heads and what its lines rest on that is not held, and its
+/// outline once folded, emptied whenever a line comes or goes.
+#[derive(Default)]
 struct Conversation {
     lines: BTreeSet<Hash>,
+    heads: BTreeSet<Hash>,
+    lacking: BTreeSet<Hash>,
     outline: OnceCell<Outline>,
 }
 
@@ -182,6 +197,8 @@ impl Outlines {
     /// or went is folded again at its next reading, and named in the answer.
     pub fn hold(&mut self, add: Vec<Parsed>, drop: &[Hash]) -> BTreeSet<ConversationId> {
         let mut moved = BTreeSet::new();
+        // Each name whose standing as a head or as lacking in a conversation may have changed.
+        let mut touched: BTreeSet<(Hash, ConversationId)> = BTreeSet::new();
         for name in drop {
             self.given.remove(name);
             self.parents.remove(name);
@@ -189,13 +206,27 @@ impl Outlines {
                 if let Some(conversation) = self.conversations.get_mut(&node.conversation) {
                     conversation.lines.remove(name);
                 }
+                for parent in &node.parents {
+                    if let Some(children) = self.children.get_mut(parent) {
+                        children.remove(name);
+                        if children.is_empty() {
+                            self.children.remove(parent);
+                        }
+                    }
+                    touched.insert((parent.clone(), node.conversation.clone()));
+                }
+                touched.insert((name.clone(), node.conversation.clone()));
                 moved.insert(node.conversation);
             }
+            touched.extend(self.resting_on(name));
         }
         for Parsed { given, read } in add {
             let node = match read {
                 Read::Line(node) => node,
                 Read::Structure(name, parents) => {
+                    if !self.given.contains_key(&name) {
+                        touched.extend(self.resting_on(&name));
+                    }
                     self.parents.entry(name.clone()).or_insert(parents);
                     self.given.entry(name).or_insert(given);
                     continue;
@@ -208,15 +239,22 @@ impl Outlines {
             self.parents.insert(node.name.clone(), node.parents.clone());
             self.conversations
                 .entry(node.conversation.clone())
-                .or_insert_with(|| Conversation {
-                    lines: BTreeSet::new(),
-                    outline: OnceCell::new(),
-                })
+                .or_default()
                 .lines
                 .insert(node.name.clone());
+            for parent in &node.parents {
+                self.children
+                    .entry(parent.clone())
+                    .or_default()
+                    .insert(node.name.clone());
+                touched.insert((parent.clone(), node.conversation.clone()));
+            }
+            touched.insert((node.name.clone(), node.conversation.clone()));
+            touched.extend(self.resting_on(&node.name));
             moved.insert(node.conversation.clone());
             self.nodes.insert(node.name.clone(), node);
         }
+        self.restand(touched);
         for id in &moved {
             match self.conversations.get_mut(id) {
                 Some(conversation) if conversation.lines.is_empty() => {
@@ -229,10 +267,58 @@ impl Outlines {
         moved
     }
 
-    /// Whether the skeleton holds a line of conversation `id`.
+    /// `name` beside the conversation of each line held that rests on it.
+    fn resting_on(&self, name: &Hash) -> Vec<(Hash, ConversationId)> {
+        self.children
+            .get(name)
+            .into_iter()
+            .flatten()
+            .filter_map(|child| self.nodes.get(child))
+            .map(|child| (name.clone(), child.conversation.clone()))
+            .collect()
+    }
+
+    /// Each of `touched` placed again among its conversation's heads and what it lacks.
+    fn restand(&mut self, touched: BTreeSet<(Hash, ConversationId)>) {
+        let Outlines {
+            nodes,
+            conversations,
+            given,
+            children,
+            ..
+        } = self;
+        for (name, id) in touched {
+            let Some(conversation) = conversations.get_mut(&id) else {
+                continue;
+            };
+            let line = nodes.get(&name).is_some_and(|node| node.conversation == id);
+            let held = given.contains_key(&name);
+            // Never asked of the genesis, which every line rests on.
+            let rested_on = (line || !held)
+                && children.get(&name).is_some_and(|children| {
+                    children.iter().any(|child| {
+                        nodes
+                            .get(child)
+                            .is_some_and(|child| child.conversation == id)
+                    })
+                });
+            place(&mut conversation.heads, &name, line && !rested_on);
+            place(&mut conversation.lacking, &name, !held && rested_on);
+        }
+    }
+
+    /// Conversation `id`'s frontier; none where no line of it is held.
     #[must_use]
-    pub fn holds_conversation(&self, id: &ConversationId) -> bool {
-        self.conversations.contains_key(id)
+    pub fn frontier(&self, id: &ConversationId) -> Option<Frontier<'_>> {
+        let conversation = self.conversations.get(id)?;
+        Some(if conversation.lacking.is_empty() {
+            Frontier::Closed {
+                heads: &conversation.heads,
+                lines: conversation.lines.len(),
+            }
+        } else {
+            Frontier::Open(&conversation.lacking)
+        })
     }
 
     /// Every node `scope` reads of the skeleton held and `beside` (nodes not held yet), by name.
@@ -292,9 +378,7 @@ impl Outlines {
         naming(self.nodes.values(), keys)
     }
 
-    /// The keys the lines held and the line nodes of `beside` retire, of those their own
-    /// conversation names (`retired`), the box's rule read from the steps alone, given which keys
-    /// `holds`.
+    /// The keys the lines held and the line nodes of `beside` retire, given which keys `holds`.
     #[must_use]
     pub fn retired(
         &self,
@@ -361,11 +445,6 @@ impl Outlines {
         self.given.keys()
     }
 
-    /// Every node held, as it was given, by name.
-    pub fn given(&self) -> impl Iterator<Item = &wire::SkeletonNode> {
-        self.given.values()
-    }
-
     /// The node named `name`, as it was given.
     #[must_use]
     pub fn node(&self, name: &Hash) -> Option<&wire::SkeletonNode> {
@@ -393,6 +472,15 @@ impl Outlines {
             });
             (id, outline)
         })
+    }
+}
+
+/// `name` in `set` exactly when `is`.
+fn place(set: &mut BTreeSet<Hash>, name: &Hash, is: bool) {
+    if is {
+        set.insert(name.clone());
+    } else {
+        set.remove(name);
     }
 }
 

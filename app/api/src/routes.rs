@@ -1252,12 +1252,13 @@ pub fn receive_objects(
     } = *posted;
     counted(posted)?;
     let _held = store.locked()?;
-    let objects = store.objects()?;
+    let objects = part("read", || store.objects())?;
     let outcome = crate::sync::receive(
-        &crate::sync::Objects::of(&objects),
+        &part("objects", || crate::sync::Objects::of(&objects)),
         posted,
         actor,
         &chain.root,
+        &chain.untrusted,
     );
     let taken: Vec<TodoEvent> = outcome
         .taken
@@ -1277,7 +1278,7 @@ pub fn receive_objects(
     let heard = act_lines::heard_from_objects(&taken, actor, &chain.name, &|posted| {
         suzatary_todo::todos::current(&shown, posted.at, posted.todo.as_str())
     });
-    store.accept(&outcome.taken)?;
+    part("take", || store.accept(&outcome.taken))?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
     let fresh: Vec<Escaped> = taken
         .iter()
@@ -1299,7 +1300,7 @@ pub fn receive_objects(
     let key = format!("chain/{}", chain.name.as_str());
     Ok((
         receipt(
-            &left(objects, &outcome.taken),
+            &left(objects.into_iter().collect(), &outcome.taken),
             &outcome,
             (&key, since, frontiers),
         )?,
@@ -1369,30 +1370,25 @@ where
         since,
     } = *posted;
     counted(posted)?;
-    let (received, objects) = {
+    let (received, graph) = {
         let _held = store.locked()?;
         // Read under the lock, so a revocation that lands before it is seen by this post.
         let trusting = part("trust", || {
             signatures::Trusting::held(writer.chains, writer.root)
         })
         .map_err(|unread| signatures::refused(&signatures::Unadmitted::Unread(unread)))?;
-        let objects = part("read", || store.objects())?;
-        let names = objects.iter().map(|(name, _)| name.clone()).collect();
-        let received = {
-            let ruled = part("held", || <E::Rule as Admission>::held(&objects));
-            let held = crate::sync::Holding::<E::Rule> {
-                names: &names,
-                held: ruled,
+        // The store's own graph at its heads, borrowed: no object is copied under the lock.
+        let graph = part("read", || store.graph())?;
+        let received = crate::sync::receive_changes::<E::Rule>(
+            crate::sync::Holding {
+                history: graph.dag(),
                 world: beside.world,
-            };
-            crate::sync::receive_changes::<E::Rule>(
-                held,
-                posted,
-                beside.posted,
-                writer.actor,
-                &trusting,
-            )
-        };
+            },
+            posted,
+            beside.posted,
+            writer.actor,
+            &trusting,
+        );
         let taken: Vec<_> = received
             .outcome
             .taken
@@ -1401,26 +1397,26 @@ where
             .collect();
         part("keep", || (beside.keep)(&taken))?;
         part("take", || store.accept(&received.outcome.taken))?;
-        (received, objects)
+        (received, graph)
     };
     part("record", || record(&received.recorded, E::KIND, recording))?;
     let key = format!("store/{}", E::KIND.name());
+    let history = part("dag", || graph.dag().clone());
     receipt(
-        &left(objects, &received.outcome.taken),
+        &left(history, &received.outcome.taken),
         &received.outcome,
         (&key, since, frontiers),
     )
 }
 
-/// The store as a post left it: `held`, the objects read under the store's lock, and `taken`,
+/// The store as a post left it: `dag`, the objects read under the store's lock, and `taken`,
 /// the prints the post took while it held the lock. So a receipt answers what this post's
 /// write made of the store, read once. A taken print was parsed as this schema to be taken.
-fn left<E: Schema>(held: Vec<(Hash, event::Envelope<E>)>, taken: &[(Hash, String)]) -> Dag<E>
+fn left<E: Schema>(mut dag: Dag<E>, taken: &[(Hash, String)]) -> Dag<E>
 where
     E::Vocabulary: Default,
 {
     let vocabulary = E::Vocabulary::default();
-    let mut dag: Dag<E> = suzatary_lines::parts::part("dag", || held.into_iter().collect());
     dag.extend(taken.iter().filter_map(|(name, print)| {
         let object = parse_envelope(&vocabulary, print).ok()?;
         Some((name.clone(), object))

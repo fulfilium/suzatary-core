@@ -237,6 +237,7 @@ export const opened = (title: string): string => `(async (title) => {
   const me = await (await fetch("/api/me")).json();
   const at = new Date().toISOString().slice(0, 23);
   const sealed = lines.seal(JSON.stringify({ type: "Open", title }), at, me.actor, crypto.getRandomValues(new Uint8Array(32)));
+  if (typeof sealed === "string") throw new Error(sealed);
   const conversation = sealed.conversation;
   sealed.free();
   const [[line]] = JSON.parse(lines.unsent());

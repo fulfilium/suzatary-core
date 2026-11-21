@@ -42,6 +42,12 @@ pub(crate) fn id(n: usize) -> ConversationId {
 /// reseals. The first line begins the store; the rest are appended through one store in memory
 /// holding it and handed over at once, since an append each reads the store again.
 pub(crate) fn store() -> InMemory {
+    shaped(0)
+}
+
+/// [`store`], its first `long` turns all in conversation 0: with 2,500, that conversation holds
+/// 5,001 lines of the store's 14,100.
+pub(crate) fn shaped(long: usize) -> InMemory {
     let lines = InMemory::default();
     let writer = Actor::new("assistant").expect("an actor");
     let mut held: BTreeMap<usize, u32> = BTreeMap::new();
@@ -66,7 +72,7 @@ pub(crate) fn store() -> InMemory {
     }
     let mut count: BTreeMap<usize, u32> = (0..CONVERSATIONS).map(|n| (n, 1)).collect();
     for n in 0..LINES {
-        let conversation = n % CONVERSATIONS;
+        let conversation = if n < long { 0 } else { n % CONVERSATIONS };
         let text = format!("Question {n} on the permit, asked again.");
         let said = Entry::Said {
             at: at(CONVERSATIONS + 2 * n),

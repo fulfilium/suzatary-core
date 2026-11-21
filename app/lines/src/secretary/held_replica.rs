@@ -13,7 +13,7 @@ use prodrome_core::event::Hash;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
-use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
+use crate::secretary::outlines::{Frontier, NotANode, Outlines, Parsed, Scope};
 use crate::secretary::own_line::OwnLine;
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 use prodrome_core::event::{Actor, Envelope};
@@ -140,9 +140,14 @@ pub enum NotSealed {
     /// The rows name no genesis of the lines yet: nothing was pulled.
     #[error("the lines are not on this device yet, so nothing is written to them")]
     Unpulled,
-    /// The conversation renamed is not one the tab reads.
+    /// A conversation the tab does not read.
     #[error("no conversation {0} on this device")]
     Unknown(ConversationId),
+    /// A line of it rests on one not held, so its heads are unknown.
+    #[error(
+        "conversation {0} rests on a line this device has not pulled yet, so nothing is written to it"
+    )]
+    Unclosed(ConversationId),
     /// The line itself.
     #[error(transparent)]
     Line(#[from] crate::secretary::line_event::NotALine),
@@ -386,8 +391,8 @@ impl HeldReplica {
     /// what it moved.
     ///
     /// # Errors
-    /// [`NotSealed`]: nothing pulled yet, a rename of a conversation not read here, or words the
-    /// door refuses; nothing is kept.
+    /// [`NotSealed`]: nothing pulled yet, a conversation not read here or not read whole, or
+    /// words the door refuses; nothing is kept.
     pub fn seal(
         &mut self,
         sealing: Sealing,
@@ -526,30 +531,17 @@ impl HeldReplica {
     }
 
     /// The heads of `conversation` among the lines read, own lines included, and how many lines
-    /// it holds.
+    /// it holds: defined only where every name a line of it rests on is read, since a line that
+    /// lies beneath an unread one may look like a head.
     fn heads(&self, conversation: &ConversationId) -> Result<(Vec<Hash>, u32), NotSealed> {
-        let lines: Vec<&crate::wire::lines::SkeletonNode> = self
-            .outlines
-            .given()
-            .filter(|node| {
-                matches!(&node.header, crate::wire::lines::NodeHeader::Line {
-                    conversation: of, ..
-                } if of == conversation.as_str())
-            })
-            .collect();
-        if lines.is_empty() {
-            return Err(NotSealed::Unknown(conversation.clone()));
+        match self.outlines.frontier(conversation) {
+            None => Err(NotSealed::Unknown(conversation.clone())),
+            Some(Frontier::Open(_)) => Err(NotSealed::Unclosed(conversation.clone())),
+            Some(Frontier::Closed { heads, lines }) => Ok((
+                heads.iter().cloned().collect(),
+                u32::try_from(lines).unwrap_or(u32::MAX),
+            )),
         }
-        let under: BTreeSet<&str> = lines
-            .iter()
-            .flat_map(|node| node.parents.iter().map(String::as_str))
-            .collect();
-        let deps = lines
-            .iter()
-            .filter(|node| !under.contains(node.hash.as_str()))
-            .filter_map(|node| Hash::new(node.hash.clone()).ok())
-            .collect();
-        Ok((deps, u32::try_from(lines.len()).unwrap_or(u32::MAX)))
     }
 
     /// `owned` taken, whoever made it: another tab's writes, or the device's own read back; each
