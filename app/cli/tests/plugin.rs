@@ -15,7 +15,6 @@ use std::thread;
 
 use suzatary_base::capability::Secret;
 use suzatary_cli::commands::plugin;
-use suzatary_cli::instance::Plugins;
 use suzatary_google::calendar::{Calendar, Status};
 use suzatary_health::health::Reading;
 use suzatary_health::health::Register as _;
@@ -24,6 +23,7 @@ use suzatary_io::plugin_store::PluginStore;
 use suzatary_io::secrets::Resolves;
 use suzatary_plugin::{Budget, Effects, Host};
 use suzatary_services::plugin::Manifest;
+use suzatary_services::plugin::Plugins;
 use suzatary_store::store::Reads;
 
 /// A feed whose body the test changes between syncs.

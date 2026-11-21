@@ -71,6 +71,12 @@ world (files, subprocesses, IMAP and SMTP, HTTP, the `claude` CLI, notmuch, tail
 makes no decisions. It depends on the model crates below `api` and the Prodrome. Start at `run.rs` (every subprocess),
 `objects.rs` (a store on disk) and `model.rs` (the model port).
 
+**server** (`app/server`, `suzatary-server`). The axum shell that answers the routes: the gate
+(`gate.rs`, the door's rules and the layer that applies them), the box's half of the routes, and
+`serve/`, the state a running server reads, its handlers and its route table (`serve/table.rs`).
+It is handed a built `State` and never reads the instance file. It depends on the model crates and
+io. Start at `serve/table.rs`, then the handler you change.
+
 **plugin** (`app/plugin`). The plugin host: wasmtime components of `app/wit/plugin.wit`,
 each call in a fresh store under a time and memory budget, each `fetch` admitted against the
 plugin's manifest. It depends on the secretary crate and io. Start at its `README.md` and `Host::load`.
@@ -82,10 +88,10 @@ fake programs for tests, and makes their scratch directories, each removed when 
 
 **cli** (`app/cli`, the binary `suzatary`; `suzatary-dev` adds the fixtures). One module per
 verb, `src/commands/<verb>.rs`; `src/verb.rs` is the argument tree and the one `match`. It
-owns the runtime (tokio, axum), the instance file (`instance/`), the HTTP server
-(`commands/serve/`, its routes in `serve/table.rs`), the tap that performs a proposal
+owns the runtime (tokio), the instance file (`instance/`), the run of the HTTP server
+(`commands/serve.rs`, which builds the server's `State` from the instance), the tap that performs a proposal
 (`commands/tap.rs`) and the one file that names the mail transport
-(`commands::mail::deliver`). It depends on the model crates, io and plugin. Start at `verb.rs`, then the
+(`commands::mail::deliver`). It depends on the model crates, io, server and plugin. Start at `verb.rs`, then the
 verb you change.
 
 **wasm** (`app/wasm`). The tab's module: the Prodrome's exports at this application's schemas,

@@ -4,10 +4,10 @@
 
 pub mod commands;
 pub mod instance;
+pub(crate) mod interpreters;
 mod journal;
+pub mod mail_cache;
 pub mod paths;
 pub mod stamp;
 pub mod verb;
 pub mod wiring;
-
-pub use commands::serve;

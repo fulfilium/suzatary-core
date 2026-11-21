@@ -1,0 +1,65 @@
+//! Hourly, a repository card whose change is already in its default branch closes as done
+//! another way (`secretary::merged_patches`), and a calendar card whose event has ended as no
+//! longer needed (`secretary::lapsed`). Nothing is fetched while no repository card waits.
+
+use std::sync::Arc;
+use std::time::Duration;
+use suzatary_io::repos::Mirrors;
+
+use super::State;
+
+const EVERY: Duration = Duration::from_hours(1);
+
+/// The sweep, forever.
+pub(crate) async fn sweeping(state: State, mirrors: Arc<Mirrors>) {
+    let mut every = tokio::time::interval(EVERY);
+    loop {
+        every.tick().await;
+        once(&state, &mirrors).await;
+    }
+}
+
+/// A failure is a log line; the next tick goes on.
+async fn once(state: &State, mirrors: &Arc<Mirrors>) {
+    let (caps, mirrors) = (state.first.caps, Arc::clone(mirrors));
+    let swept = tokio::task::spawn_blocking(move || {
+        suzatary_cards::secretary::merged_patches::sweep(
+            caps.secretary.inbox,
+            mirrors.as_ref(),
+            caps.secretary.clock.now(),
+        )
+    })
+    .await;
+    match swept {
+        Ok(Ok(swept)) => {
+            for (card, why) in &swept.unread {
+                tracing::warn!("repository cards: {card} was not checked: {why}");
+            }
+            if !swept.closed.is_empty() {
+                tracing::info!(
+                    closed = swept.closed.len(),
+                    "repository cards: done another way"
+                );
+                state.heard(&suzatary_base::conversation_id::DEFAULT);
+            }
+        }
+        Ok(Err(failed)) => tracing::warn!("repository cards: {}", failed.message()),
+        Err(panicked) => tracing::warn!("repository cards: {panicked}"),
+    }
+    let caps = state.first.caps;
+    match suzatary_cards::secretary::lapsed::sweep(
+        caps.secretary.inbox,
+        state.deployment.zone,
+        caps.secretary.clock.now(),
+    ) {
+        Ok(swept) if !swept.closed.is_empty() => {
+            tracing::info!(
+                closed = swept.closed.len(),
+                "calendar cards: their events ended"
+            );
+            state.notice();
+        }
+        Ok(_) => {}
+        Err(failed) => tracing::warn!("calendar cards: {}", failed.message()),
+    }
+}

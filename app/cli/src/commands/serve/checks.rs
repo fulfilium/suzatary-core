@@ -2,7 +2,6 @@
 //! the line says what it found before the person leaves the page.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::PluginName;
@@ -82,13 +81,3 @@ impl Synced {
         tracing::info!("check: {}", report.line);
     }
 }
-
-/// Syncs nothing at a tap: a server with no plugin host, as a test's is unless it says.
-pub struct Unsynced;
-
-impl suzatary_connect::settings::Checks for Unsynced {
-    fn check(&self, _: &SourceKey) {}
-}
-
-/// The checks a state's taps run.
-pub type Checks = Arc<dyn suzatary_connect::settings::Checks + Send + Sync>;

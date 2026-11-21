@@ -24,6 +24,7 @@ pub mod secretary {
     pub mod indexed_tree;
     pub mod memories;
     pub mod recollection;
+    pub mod reserve;
     pub mod shown_record;
     pub mod told;
 }

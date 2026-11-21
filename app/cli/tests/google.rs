@@ -87,7 +87,7 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
     let edits = Arc::new(EditsRecorder::declaring(declared));
     let checks = Arc::new(common::CheckRecorder::default());
     let settings = SettingsFixture {
-        live: suzatary_cli::serve::Live {
+        live: suzatary_server::serve::Live {
             settables,
             accounts,
             ..empty.live.clone()

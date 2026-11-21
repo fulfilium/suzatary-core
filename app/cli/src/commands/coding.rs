@@ -4,13 +4,13 @@
 //! poll reads `claude/` branches for a report and never merges, builds or promotes one.
 
 use crate::commands::secretary::ActingConversations;
-use crate::commands::serve::Workers;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use suzatary_base::repo_ids::RepoName;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::repos::Mirrors;
+use suzatary_server::serve::Workers;
 
 use suzatary_base::capability::Clock as _;
 use suzatary_base::conversation_id::ConversationId;
@@ -266,7 +266,7 @@ pub fn spawn_polling(
     if let Some(coding) = &instance.deployment.coding {
         tokio::spawn(polling(
             conversations,
-            crate::commands::serve::interpreters::mirrors(instance),
+            crate::interpreters::mirrors(instance),
             coding.repo.clone(),
             Arc::clone(workers),
         ));
@@ -288,7 +288,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         })?;
     let (conversations, mirrors) = (
         instance.conversation_stores(),
-        crate::commands::serve::interpreters::mirrors(&instance),
+        crate::interpreters::mirrors(&instance),
     );
     if explaining {
         for line in explain(&conversations, &mirrors, &coding.repo)? {

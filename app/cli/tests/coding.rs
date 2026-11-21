@@ -425,7 +425,7 @@ fn a_poll_that_fails_leaves_the_server_answering() {
         .build()
         .expect("a runtime");
     let conversations: &'static _ = Box::leak(Box::new(fakes.conversations.reopened()));
-    let workers = suzatary_cli::commands::serve::Workers::new();
+    let workers = suzatary_server::serve::Workers::new();
     let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
         let repo: suzatary_base::repo_ids::RepoName = repo.parse().expect("a name");
         runtime.block_on(suzatary_cli::commands::coding::poll_once(

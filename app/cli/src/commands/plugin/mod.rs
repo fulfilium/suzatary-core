@@ -23,7 +23,8 @@ use suzatary_plugin::{Budget, Effects, Fetch, Host, Run, Source};
 use suzatary_services::plugin::{Answer, Came, LastRun, Manifest, admit};
 use suzatary_store::store::{Learnt, learn};
 
-use crate::instance::{Instance, Plugins};
+use crate::instance::Instance;
+use suzatary_services::plugin::Plugins;
 
 /// Where the app's reference plugins are, when no `--components` names a directory: the box's
 /// timer roots `.#suzatary-plugins` and passes it here.
@@ -127,7 +128,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
 /// register that cannot be written is a journal line, since the next run probes again.
 fn probe_drive(instance: &Instance, health: &suzatary_io::source_health::Health) {
     use suzatary_services::drive::Drive as _;
-    let drive = super::serve::interpreters::DriveAccess::of(instance);
+    let drive = crate::interpreters::DriveAccess::of(instance);
     let at = instant_of(SystemClock.now());
     let probed = suzatary_services::drive::probe(drive.port(), &drive.allowed_folders(), at);
     if let Err(failed) = health.join(&probed) {

@@ -12,8 +12,8 @@ use suzatary_stores::stores::{Database, Kind};
 
 use super::store_at::StoreAt;
 use super::store_of;
-use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
+use crate::interpreters::{file_store, upload_store};
 use prodrome_core::event::Hash;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;

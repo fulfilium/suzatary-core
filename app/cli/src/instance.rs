@@ -19,7 +19,6 @@ mod followed;
 mod local;
 mod plugins;
 pub(crate) mod project;
-mod reserve;
 mod roots;
 
 pub use chain_dir::{ChainDir, ChainDirs, Charted};
@@ -29,15 +28,14 @@ pub(crate) use file::{Chain, File, Upkeep, Web};
 pub use file::{Mail, Secretary, Serving, Triage};
 pub use followed::{Copied, Followed, Since, Tree};
 pub use local::Local;
-pub use plugins::Plugins;
 use plugins::plugins_of;
 pub use project::{Mounts, Project};
-pub use reserve::{BadReserve, Reserve};
 use roots::resolve_under;
 pub use roots::{CodeRoot, DataRoot, Roots};
 
 use crate::paths::{Env, Paths};
 use std::path::{Path, PathBuf};
+use suzatary_services::plugin::Plugins;
 
 use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
@@ -163,7 +161,7 @@ impl Instance {
     pub fn conversation_stores(&self) -> suzatary_io::conversations::ConversationStores {
         self.secretary.conversation_stores(
             std::sync::Arc::new(self.answers()),
-            std::sync::Arc::new(crate::serve::interpreters::spawner(self, "").sessions()),
+            std::sync::Arc::new(crate::interpreters::spawner(self, "").sessions()),
         )
     }
 

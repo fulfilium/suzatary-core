@@ -186,7 +186,7 @@ record`. No `suzatary_core` re-export is left behind (AGENTS §10).
 | 18 | mail 23 / 352 | 29 | cards 19 / 57 |
 | 19 | health 12 / 80 | 30 | secretary 92 / 200 |
 | 20 | triage 16 / 93 | 31 | api 9 / 305; `suzatary-core` is deleted |
-| 21 | services 22 / 234 | 32 | server: `cli/src/commands/serve/` (38 files) |
+| 21 | services 22 / 234 | 32 | server: the CLI's `serve` (38 files) |
 
 **PR 11 (base).** It moves 24 modules and `literals.rs`. Eight modules of the cut table's base stay
 in core, each under the cut of its lowest user in `guards/layers.toml`: `cast` (signatures),
@@ -878,6 +878,46 @@ tokens:
 | 22 | `secretary` | 175.0 | **33.4** | 20 | **784** |
 | 23 | `api` | 66.3 | 19.0 | 16 | **604** |
 | 24 | `server` | 41.8 | 6.5 | 21 | **681** |
+
+**Row 32's second half (the CLI's `serve`), one pull request.** `serve` is
+`suzatary_server::serve`, each module at its path under it, in the plan's order:
+- **The CLI's wiring first.** `interpreters` and `mail_cache` sit beside `wiring.rs`. `Reserve` is
+  the digest's (`secretary::reserve`, beside `Compacting`) and `Plugins` the plugin module's
+  (`suzatary_services::plugin`), since `State` and `Models` hold them.
+- **`State` holds values.** The plan store is `Projects`, a reader the run builds over the mounts,
+  read again per request; the build is `Stamp` (the release read once, and a `Build`, compiled or,
+  under the server's `fixture`, a file); the mail delete is `Settings::forget`. `Checks` was
+  already a value (`suzatary_connect::settings::Checks`): the sync at a tap, `Synced`, is the
+  CLI's, in `commands/serve/checks.rs`, with `World`.
+- **The run is the CLI's verb**, `commands/serve.rs`, and hands the crate a built `State`; the
+  crate starts, watches and serves it (`started_up`, `after_started`, `watching`, `serve_on`).
+- **`system_prompt`** is `suzatary_secretary::secretary`'s; `BRIEF` already was.
+- **The two gates are one**, `suzatary_server::gate`; the rule that shared the layer's name is
+  `admits`, private. `app` returns `Gated`, the one thing `serve_on` serves.
+- **The surface is what the CLI names.** Every other item of `serve` is `pub(crate)`: as `pub`
+  items of the crate they measured 28.2k of USE, through names that collide (`todo`, `build`).
+- **Tests:** `table.rs` and its golden are the server's; every other CLI test that names `serve`
+  drives it through the CLI's harness and stays. `#[test]` functions: 2,362 on master and here.
+- **USE**, as `scripts/context.sh` prints it on the tree merged with 2.1.197: server 15,654; CLI
+  59,350, against 82,011 on master (whose row was 80,237). `record` refuses there while `lines`
+  stands above its row, as on master, so the CLI's row is written to 59,350 by hand.
+
+Measured with `cargo check` on four cores, one line edited, the second run of each, master and
+branch each on its own target directory:
+
+| one-line edit in | command | master | branch |
+|---|---|---|---|
+| the conversation worker | `--workspace --all-targets` | 10.6 s | 12.0 s |
+| a route (`chain.rs`) | `--workspace --all-targets` | 10.7 s | 10.9 s |
+| a CLI verb (`todo.rs`) | `--workspace --all-targets` | 11.5 s | 9.0 s |
+| the conversation worker | `-p suzatary-server --all-targets` | 0.3 s (not in it) | 4.3 s |
+| a route (`chain.rs`) | `-p suzatary-server --all-targets` | 0.3 s (not in it) | 4.3 s |
+| the conversation worker | `-p suzatary --all-targets` | 10.7 s | 11.3 s |
+| a route (`chain.rs`) | `-p suzatary --all-targets` | 11.1 s | 10.7 s |
+| a CLI verb (`todo.rs`) | `-p suzatary --all-targets` | 10.6 s | 9.0 s |
+
+An edit in the server still rechecks the CLI and its test binary, which is most of the workspace
+figure. A session working in the server alone waits 4.3 s instead of the CLI's 11 s.
 
 Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned

@@ -17,7 +17,6 @@ use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 use suzatary_base::escape::Escaped;
 use suzatary_cards::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_cli::serve::{self, Chained, State};
 pub use suzatary_connect::cast::{self, CAST};
 use suzatary_connect::deployment::Deployment;
 use suzatary_conversations::secretary::model::{
@@ -37,6 +36,7 @@ use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::SyncReport;
 use suzatary_mail::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_server::serve::{self, Chained, State};
 use suzatary_services::repository::{Repository, RepositoryError};
 use suzatary_todo::render::{Html, Render};
 use suzatary_topics::secretary::answers::{AnswerError, Answers};
@@ -474,8 +474,8 @@ impl Whois for ThisBoxAt {
 
 /// A listener on a port of `ip` nothing else holds, and where it is.
 /// `router` served on `listener` until the test binary exits.
-fn served(listener: std::net::TcpListener, router: axum::Router) {
-    let service = router.into_make_service_with_connect_info::<SocketAddr>();
+fn served(listener: std::net::TcpListener, gated: serve::Gated) {
+    let service = gated.service();
     runtime().spawn(async move {
         let server = axum_server::from_tcp(listener).expect("wraps the std listener");
         let _ = server.serve(service).await;
@@ -510,7 +510,8 @@ fn dialled(
         caps: Box::leak(Box::new(Effects { whois, ..*record })),
     };
     let app_url = format!("http://{address}");
-    let door = serve::door(&app_url).expect("a test server's address is an app_url");
+    let door =
+        suzatary_server::gate::door(&app_url).expect("a test server's address is an app_url");
     (
         chained,
         Arc::new(Deployment {
@@ -1885,6 +1886,10 @@ impl SettingsFixture {
             secrets: self.secrets,
             declares: self.declares,
             edits: self.edits,
+            forget: Arc::new(suzatary_cli::mail_cache::Unkept(self.grants)),
+            stamp: suzatary_cli::stamp::stamped(serve::Build::Compiled(
+                suzatary_cli::stamp::build(),
+            )),
             data,
         }
     }
@@ -1909,7 +1914,7 @@ impl SettingsFixture {
                 chat: suzatary_digest::model_name::ModelName::parse("claude-opus-5-5")
                     .expect("a model name"),
                 compacting: suzatary_digest::secretary::compacting::Compacting::Off,
-                reserve: suzatary_cli::instance::Reserve::default(),
+                reserve: suzatary_digest::secretary::reserve::Reserve::default(),
             }),
             secrets: Arc::new(SecretRecorder::new()),
             declares: Arc::new(Undeclared),
@@ -3491,7 +3496,6 @@ impl Server {
         let vault = Arc::new(FakeVault::default());
         let requests = recorded_requests(address.port());
         let pairings = Arc::new(suzatary_signatures::signatures::InMemoryPairings::default());
-        let grants = self.settings.grants.clone();
         let (chained, deploying, door) = dialled(
             &(self.effects)(held.server()),
             self.deploying,
@@ -3515,14 +3519,10 @@ impl Server {
             self.settings.over(Arc::new(held.root.clone())),
         )
         .with_keys(self.keys)
-        .with_mounts(self.mounts)
+        .with_projects(suzatary_cli::commands::serve::projects(self.mounts))
         .with_wall(stamped)
         // The store the fakes' upload index reads, under their scratch root.
         .with_uploads(upload_store(&held.root), vault.clone());
-        let state = match grants {
-            Some(tokens) => state.with_grants(tokens),
-            None => state,
-        };
         let state = match self.checks {
             Some(checks) => state.with_checks(checks),
             None => state,

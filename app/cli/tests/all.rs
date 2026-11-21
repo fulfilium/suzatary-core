@@ -147,8 +147,6 @@ mod suites;
 mod surface;
 #[path = "sweep.rs"]
 mod sweep;
-#[path = "table.rs"]
-mod table;
 #[path = "this_box.rs"]
 mod this_box;
 #[path = "todos.rs"]

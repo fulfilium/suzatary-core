@@ -3,9 +3,7 @@
 use crate::commands::ask::Conversation;
 use crate::commands::coding::Coder;
 use crate::commands::coding::Firing;
-use crate::commands::serve::Brain;
-use crate::commands::serve::Workers;
-use crate::commands::serve::sign_ins::SignIns;
+use crate::interpreters::Brain;
 use crate::wiring::Opened;
 use crate::wiring::Stores;
 use prodrome_core::event::Actor;
@@ -34,10 +32,11 @@ use suzatary_secretary::secretary;
 use suzatary_secretary::secretary::daily::Run;
 use suzatary_secretary::secretary::review::{Noticed, Pass};
 use suzatary_secretary::secretary::{Answered, Asker, Bound, Saying, Secretary};
+use suzatary_server::serve::Workers;
+use suzatary_server::serve::sign_ins::SignIns;
 use suzatary_store::store::Prodrome;
 
 use anyhow::Context as _;
-use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_held::excerpt::Excerpt;
 use suzatary_held::secretary::attached::Checked;
@@ -46,6 +45,7 @@ use suzatary_inbox::secretary::proposal::Draft;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::send::{Composed, Outgoing};
 use suzatary_secretary::conversation::round::Ending;
+use suzatary_secretary::secretary::system_prompt;
 use suzatary_server::secretary::routes::Post;
 
 use crate::instance::Instance;
@@ -63,16 +63,6 @@ use suzatary_mail::mail::account;
 use suzatary_memory::secretary::salted_text;
 use suzatary_services::web;
 use suzatary_topics::secretary::topics::backfill;
-
-/// `SECRETARY.md`; without it the model is told to propose nothing.
-#[must_use]
-pub fn system_prompt(manuals: &dyn Manuals) -> String {
-    manuals.document(Manual::Secretary).unwrap_or_else(|| {
-        "SECRETARY.md is not present in this checkout. Answer only what you are \
-         asked, propose nothing, and say that the secretary's brief is missing."
-            .to_owned()
-    })
-}
 
 /// What sends a tapped proposal.
 pub enum Postman {
@@ -260,13 +250,11 @@ impl Acting {
             tokens: crate::commands::mail::tokens(instance),
             inbox: stores.inbox,
             publishing: Arc::new(Publishing {
-                mirrors: crate::commands::serve::interpreters::mirrors(instance),
+                mirrors: crate::interpreters::mirrors(instance),
                 author: Author::of_this_box(),
             }),
-            drive: Arc::new(
-                crate::commands::serve::interpreters::proton_drive(instance).read_only(),
-            ),
-            kept: crate::commands::serve::interpreters::file_store(instance),
+            drive: Arc::new(crate::interpreters::proton_drive(instance).read_only()),
+            kept: crate::interpreters::file_store(instance),
             coder: Arc::new(Coder {
                 firing: Firing::of(instance),
                 conversations: stores.conversations,
@@ -299,10 +287,8 @@ impl Acting {
                     email: "fixture@example.invalid".to_owned(),
                 }),
             }),
-            drive: Arc::new(
-                crate::commands::serve::interpreters::proton_drive(instance).read_only(),
-            ),
-            kept: crate::commands::serve::interpreters::file_store(instance),
+            drive: Arc::new(crate::interpreters::proton_drive(instance).read_only()),
+            kept: crate::interpreters::file_store(instance),
             coder: Arc::new(Coder {
                 firing: Firing::Undeclared,
                 conversations: stores.conversations,
@@ -381,7 +367,7 @@ impl Acting {
             Acting::NotYet => Performed::Tried(Tried::NotSent {
                 reason: format!(
                     "sign-ins are not driven by this build; {}",
-                    crate::commands::serve::sign_ins::AT_A_TERMINAL
+                    suzatary_server::serve::sign_ins::AT_A_TERMINAL
                 ),
             }),
             Acting::Real { signing, .. } => signing.begin(object, now),
@@ -1372,7 +1358,7 @@ enum BackfillRun {
 
 use suzatary_connect::settings::Edits;
 use suzatary_lines::secretary::transcript::push;
-pub(crate) use suzatary_secretary::secretary::briefs::BRIEF;
+use suzatary_secretary::secretary::briefs::BRIEF;
 use suzatary_services::web::WebAnswer;
 
 /// Hours before a stale triage heartbeat alarms: twelve missed five-minute timers.
@@ -1532,7 +1518,7 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
             match run {
                 BackfillRun::Apply(file) => backfill_apply(instance, &file, out),
                 BackfillRun::Plan(plan) => {
-                    let model = crate::commands::serve::interpreters::CompactorModel::new(
+                    let model = crate::interpreters::CompactorModel::new(
                         instance,
                         instance.secretary.compactors.first().clone(),
                     );
@@ -1995,7 +1981,7 @@ fn wired(instance: &Instance, first: Option<&str>) -> anyhow::Result<Wired> {
         opened: Opened::of(instance, DECLARED),
         first: Stores::of(named, &signers),
         rest,
-        brain: crate::commands::serve::interpreters::brain(
+        brain: crate::interpreters::brain(
             instance,
             suzatary_io::model_health::beside(&instance.mail.heartbeat),
         ),

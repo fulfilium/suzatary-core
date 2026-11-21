@@ -648,7 +648,7 @@ fn ntfy() -> suzatary_connect::settings::Settables {
 /// Settings declaring an ntfy channel, its topic settable.
 fn ntfy_settings(settings: common::SettingsFixture) -> common::SettingsFixture {
     common::SettingsFixture {
-        live: suzatary_cli::serve::Live {
+        live: suzatary_server::serve::Live {
             settables: ntfy(),
             ..settings.live
         },
@@ -1077,7 +1077,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
 
     // Every route the server lists that asks a signature, sent a body it performs.
     let mut listed = 0;
-    for line in include_str!("surface.golden").lines() {
+    for line in include_str!("../../server/tests/surface.golden").lines() {
         let words: Vec<&str> = line.split_whitespace().collect();
         if line.starts_with('#') || words.len() != 4 || words[0] != "POST" || words[3] == "-" {
             continue;

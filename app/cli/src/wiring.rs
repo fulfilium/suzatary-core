@@ -1,8 +1,8 @@
 //! The box's interpreters, opened once from the instance: what every record borrows. Each
 //! effect's interpreter is built in one place.
 
-use crate::commands::serve::mail_cache::MailCache;
 use crate::instance::InstanceEdits;
+use crate::mail_cache::MailCache;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -47,8 +47,8 @@ use suzatary_store::store::{Only, Reads, Signing};
 use suzatary_todo::decisions::{DecisionEvent, Decisions};
 use suzatary_todo::render_cache::RenderCache;
 
-use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};
+use crate::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 
 /// The files a [`Grounds`] reads and writes, and the accounts its sync pulls.
 pub struct Ground {
@@ -241,7 +241,7 @@ impl Remembering {
         Self {
             conversations: instance.secretary.conversation_stores(
                 renders,
-                Arc::new(crate::serve::interpreters::spawner(instance, "").sessions()),
+                Arc::new(crate::interpreters::spawner(instance, "").sessions()),
             ),
             memory: instance.memory_store(),
             memory_texts: Texts::open(instance.secretary.memory_texts()),
@@ -353,7 +353,7 @@ pub struct Opened {
     pub(crate) junk: Junk,
     pub(crate) sync: suzatary_io::mail_sync::Timer,
     pub(crate) health: suzatary_io::source_health::Health,
-    pub(crate) older: crate::commands::serve::interpreters::Older,
+    pub(crate) older: crate::interpreters::Older,
     pub(crate) uploads: suzatary_io::attachments::AttachmentStore,
     pub(crate) upload_index: suzatary_io::upload_index::UploadIndexFiles,
     pub(crate) kept: suzatary_io::blobs::Blobs,
@@ -371,7 +371,7 @@ impl Opened {
     /// Every interpreter the instance file chooses, the secret store's audit saying `asking`.
     #[must_use]
     pub fn of(instance: &Instance, asking: &'static str) -> Self {
-        use crate::commands::serve::interpreters as chosen;
+        use crate::interpreters as chosen;
         let answers = Arc::new(instance.answers());
         Self {
             grounds: Grounds::of(instance),

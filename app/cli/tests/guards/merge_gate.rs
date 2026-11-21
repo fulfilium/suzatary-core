@@ -306,7 +306,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
     ("app/cli/tests/support/fixture.rs", "memory"),
-    ("app/cli/src/commands/serve/table.rs", "memory"),
+    ("app/server/src/serve/table.rs", "memory"),
     ("app/cli/src/wiring.rs", "memory"),
     ("app/cli/tests/common/mod.rs", "memory"),
     ("app/cli/tests/memory.rs", "memory"),

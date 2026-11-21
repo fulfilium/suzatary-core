@@ -21,9 +21,10 @@ use suzatary_services::repos::Declared;
 use suzatary_services::web::AllowRule;
 use suzatary_triage::mail::junk::ChurnList;
 
-use super::{CodeRoot, DataRoot, Reserve};
+use super::{CodeRoot, DataRoot};
 use suzatary_conversations::nonempty;
 use suzatary_digest::secretary::compacting::Compacting;
+use suzatary_digest::secretary::reserve::Reserve;
 
 /// The whole file. A key the binary does not read refuses the file.
 #[derive(Debug, Deserialize, Serialize)]

@@ -49,7 +49,7 @@ fi
 # place under a running server.
 DIST="$(scripts/web-dist.sh)"
 BIN="$(scripts/app-bin.sh)"
-# A tapped link card is checked by syncing its plugin once (`commands::serve::checks`).
+# A tapped link card is checked by syncing its plugin once (`suzatary serve`'s `checks.rs`).
 roots="${SUZATARY_ROOTS:-${XDG_STATE_HOME:-$HOME/.local/state}/suzatary/roots-dev}"
 mkdir -p "$roots"
 SUZATARY_PLUGINS="$(nix build "$REPO#suzatary-plugins" -o "$roots/plugins" --print-out-paths)"

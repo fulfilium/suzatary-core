@@ -37,7 +37,7 @@ pub use record::Secretary;
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
 pub use surface::{SecretaryCall, SecretaryVerb, tools};
-use suzatary_base::capability::Clock;
+use suzatary_base::capability::{Clock, Manual, Manuals};
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
@@ -55,6 +55,16 @@ use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Retry;
 use suzatary_topics::secretary::{build, readings};
 use verb_answer::VerbAnswer;
+
+/// `SECRETARY.md`; without it the model is told to propose nothing.
+#[must_use]
+pub fn system_prompt(manuals: &dyn Manuals) -> String {
+    manuals.document(Manual::Secretary).unwrap_or_else(|| {
+        "SECRETARY.md is not present in this checkout. Answer only what you are \
+         asked, propose nothing, and say that the secretary's brief is missing."
+            .to_owned()
+    })
+}
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
 pub const WRITES_AS: Writer = Writer::Assistant;

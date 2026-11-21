@@ -1,0 +1,398 @@
+//! Sign-ins with Google: consents opened by a tapped card and finished by Google's callback.
+//!
+//! The callback is a GET with no CSRF triple; in its place stand the one-use state (RFC 6749
+//! §10.12) and the gate's actor, which must be the actor who tapped.
+
+use std::sync::{Arc, Mutex};
+use suzatary_base::capability::Datetime;
+use suzatary_io::google::Grant;
+
+use axum::response::Redirect;
+use suzatary_base::capability::Entropy;
+use suzatary_base::refusal::Refusal;
+use suzatary_cards::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
+use suzatary_google::google::{Callback, RedirectUri, Scopes, State as Drawn, Verifier};
+use suzatary_inbox::secretary::inbox::ProposalId;
+use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
+use suzatary_inbox::secretary::stamp::stamp;
+use suzatary_io::google::Google;
+use suzatary_io::secrets::Resolves;
+use suzatary_mail::mail::account::Sync as Strategy;
+use suzatary_mail::mail::address::EmailAddress;
+
+use super::call::Call;
+use super::guard::Reader;
+use super::params::{Asked, Params};
+use super::{Chained, State};
+use crate::gate::actor_of;
+use prodrome_core::fpl::instant_of;
+use suzatary_connect::settings::{Configuration, Edits};
+use suzatary_google::google;
+
+const BACK: &str = "/#/inbox";
+
+/// The consents this server holds open.
+pub struct Consenting {
+    open: Mutex<Open>,
+    google: Google,
+    store: Arc<dyn Resolves + Send + Sync>,
+    configuration: Arc<dyn Configuration>,
+    redirect: Option<RedirectUri>,
+    entropy: Arc<dyn Entropy + Send + Sync>,
+}
+
+impl Consenting {
+    #[must_use]
+    pub fn new(
+        google: Google,
+        store: Arc<dyn Resolves + Send + Sync>,
+        configuration: Arc<dyn Configuration>,
+        app_url: &str,
+    ) -> Self {
+        Self {
+            open: Mutex::default(),
+            google,
+            store,
+            configuration,
+            redirect: RedirectUri::of_app(app_url).ok(),
+            entropy: Arc::new(suzatary_io::texts::SystemEntropy),
+        }
+    }
+
+    fn table(&self) -> std::sync::MutexGuard<'_, Open> {
+        self.open
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// How `account` syncs its mail, or `None` for an account the instance does not declare.
+    fn declared(&self, account: &EmailAddress) -> Result<Option<Strategy>, String> {
+        let declared = self
+            .configuration
+            .declared()
+            .map_err(|failed| failed.to_string())?;
+        Ok(declared
+            .accounts
+            .iter()
+            .find(|held| held.email.is(account.as_str()))
+            .map(|held| held.sync.clone()))
+    }
+}
+
+impl google_sign_in::Consents for Consenting {
+    fn redirect(&self) -> Option<&RedirectUri> {
+        self.redirect.as_ref()
+    }
+
+    fn begin(
+        &self,
+        card: &ProposalId,
+        account: &EmailAddress,
+        scopes: &Scopes,
+        by: &prodrome_core::event::Actor,
+        now: Datetime,
+        then: Then,
+    ) -> Performed {
+        let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
+        match self.declared(account) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return not_sent(format!(
+                    "{account} is not an account the instance file declares"
+                ));
+            }
+            Err(failed) => return not_sent(format!("the instance file does not read: {failed}")),
+        }
+        let Some(redirect) = self.redirect.clone() else {
+            return not_sent(
+                "the app's URL is not https, so Google cannot send you back to it".to_owned(),
+            );
+        };
+        let client = match Grant::client(self.store.as_ref()) {
+            Ok(Some(client)) => client,
+            Ok(None) => {
+                return not_sent(
+                    "the box's Google client is not kept yet: paste it into its card first"
+                        .to_owned(),
+                );
+            }
+            Err(failed) => return not_sent(format!("the secret store did not answer: {failed}")),
+        };
+        let (state, verifier) = match (
+            Drawn::draw(self.entropy.as_ref()),
+            Verifier::draw(self.entropy.as_ref()),
+        ) {
+            (Ok(state), Ok(verifier)) => (state, verifier),
+            (Err(failed), _) | (_, Err(failed)) => {
+                return not_sent(format!("no state could be drawn: {failed}"));
+            }
+        };
+        let link = google::authorize(
+            self.google.endpoints(),
+            &client.id,
+            &redirect,
+            (&state, &verifier.challenge()),
+            scopes,
+            account,
+        );
+        let began = instant_of(now);
+        let until = began + google_sign_in::lasts();
+        let mut table = self.table();
+        table.lapse(began);
+        table.open(
+            state,
+            Begun {
+                card: card.clone(),
+                account: account.clone(),
+                scopes: scopes.clone(),
+                by: by.clone(),
+                verifier,
+                client,
+                redirect,
+                link,
+                until,
+                then,
+            },
+        );
+        Performed::Tried(Tried::Running {
+            began: stamp(now),
+            expires_at: prodrome_core::fpl::iso(until),
+        })
+    }
+}
+
+impl Params for Callback {
+    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        Callback::of_query(
+            asked.query("state"),
+            asked.query("code"),
+            asked.query("error"),
+        )
+        .map_err(Refusal::bad_request)
+    }
+}
+
+pub(crate) struct Card(ProposalId);
+
+impl Params for Card {
+    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        ProposalId::new(asked.segment("card")?)
+            .map(Card)
+            .map_err(|refused| Refusal::bad_request(refused.to_string()))
+    }
+}
+
+/// `GET /api/oauth/google/consent/{card}`: redirects the tapping actor to Google's consent page.
+///
+/// # Errors
+/// [`Refusal::forbidden`] for another actor than the one who tapped, and [`Refusal::not_found`]
+/// when the card holds no consent open.
+pub(crate) fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
+    let by = actor_of(&call.state.deployment, &call.admitted)?;
+    let table = call.state.consenting.table();
+    let Some(begun) = table.begun(&call.params.0) else {
+        return Err(Refusal::not_found(
+            "this card holds no sign-in with Google open: tap Sign in with Google to open one",
+        ));
+    };
+    if begun.by != by {
+        return Err(Refusal::forbidden(
+            "this sign-in with Google was opened by someone else",
+        ));
+    }
+    Ok(Redirect::to(&begun.link))
+}
+
+/// `GET /api/oauth/google/callback`: trades Google's code for the grant and ends the card.
+///
+/// # Errors
+/// [`Refusal::forbidden`] for another actor than the one who tapped, and [`Refusal::bad_request`]
+/// for a state no consent is open under. None of them reads a code.
+pub(crate) fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> {
+    let state = &call.state;
+    let by = actor_of(&state.deployment, &call.admitted)?;
+    let consenting = &state.consenting;
+    let now = state.first.caps.secretary.clock.now();
+    let taken = consenting
+        .table()
+        .take(call.params.state(), &by, instant_of(now));
+    let (card, performed) = match (&taken, &call.params) {
+        (Taken::Yours(begun), Callback::Code { code, .. }) => (
+            begun.card.clone(),
+            state.editing(by.as_str(), |edits| {
+                exchanged(state, edits, &consenting.google, begun, code)
+            }),
+        ),
+        (_, Callback::Refused { error, .. }) => {
+            match google_sign_in::refused(&taken, Some(error)) {
+                Some(ended) => ended,
+                None => return Err(Refusal::bad_request(NOT_OPEN)),
+            }
+        }
+        (_, Callback::Code { .. }) => match google_sign_in::refused(&taken, None) {
+            Some(ended) => ended,
+            None => return Err(Refusal::bad_request(NOT_OPEN)),
+        },
+    };
+    let kept = if let (Taken::Yours(begun), Performed::Done(_)) = (&taken, &performed) {
+        Some(suzatary_health::health::SourceKey::GoogleCalendar(
+            suzatary_mail::mail::account_email::AccountEmail::folded(&begun.account),
+        ))
+    } else {
+        None
+    };
+    let retrying = match &taken {
+        Taken::Yours(begun) => Some(&**begun),
+        Taken::Lapsed(begun) => Some(begun),
+        Taken::Unknown | Taken::NotYours(_) => None,
+    }
+    .and_then(|begun| match &begun.then {
+        Then::Retry { card, consent } => Some((card.clone(), begun.by.clone(), *consent)),
+        Then::Ended => None,
+    });
+    ended(state, &card, now, performed.clone())?;
+    if let Some(calendars) = kept {
+        state.checks.check(&calendars);
+        state.notice();
+    }
+    let back = match retrying {
+        Some((lacked, by, consent)) => {
+            let caps = state.first.caps;
+            let conversation = crate::secretary::routes::retry(
+                &caps.secretary,
+                (
+                    state.edits.as_ref(),
+                    &state.settables(),
+                    state.acting.as_ref(),
+                ),
+                (&lacked, &by, consent),
+                &performed,
+            )?;
+            state.notice();
+            conversation.map_or_else(
+                || BACK.to_owned(),
+                |conversation| {
+                    state.heard(&conversation);
+                    format!("/#/secretary/{}", conversation.as_str())
+                },
+            )
+        }
+        None => BACK.to_owned(),
+    };
+    match taken {
+        Taken::NotYours(_) => Err(Refusal::forbidden(
+            "this sign-in with Google was begun by someone else, so nothing was kept",
+        )),
+        Taken::Unknown | Taken::Lapsed(_) | Taken::Yours(_) => Ok(Redirect::to(&back)),
+    }
+}
+
+const NOT_OPEN: &str = "this sign-in with Google is not open: it was finished already, it was \
+                        never begun on this box, or the box restarted since. Tap Sign in with \
+                        Google on its card to begin again.";
+
+/// Trade `code` for the grant and keep its refresh token under the account's name.
+fn exchanged(
+    state: &State,
+    edits: &dyn Edits,
+    google: &Google,
+    begun: &Begun,
+    code: &google::Code,
+) -> Performed {
+    let read = google.exchange(
+        &begun.client,
+        code,
+        &begun.verifier,
+        &begun.redirect,
+        &begun.account,
+    );
+    let (performed, kept) = google_sign_in::exchanged(begun, read);
+    let Some(kept) = kept else {
+        return performed;
+    };
+    let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
+    // A lieer account moves only on a consent for its mail, once the grant has read it.
+    let moving = match state.consenting.declared(&begun.account) {
+        Ok(sync) => {
+            matches!(sync, Some(Strategy::Gmail)) && begun.scopes.contains(google::Scope::Mail)
+        }
+        Err(failed) => {
+            return not_sent(format!(
+                "Google granted it, and the instance file does not read, so nothing was kept: \
+                 {failed}"
+            ));
+        }
+    };
+    if moving {
+        let grant = Grant {
+            account: begun.account.clone(),
+            client: begun.client.clone(),
+            refresh: kept.refresh.clone(),
+            parts: kept.parts.clone(),
+        };
+        if let Err(failed) = google.mailbox(&grant) {
+            return not_sent(format!(
+                "Google granted it, and reading {}'s mail through it failed ({failed}), so \
+                 nothing was kept and lieer reads its mail as before; tap Sign in with Google to \
+                 try again",
+                begun.account
+            ));
+        }
+    }
+    let name = google::grant_name(&begun.account);
+    let stored = suzatary_connect::settings::Settable::mint(&state.settables(), &name)
+        .map_err(|failed| failed.to_string())
+        .and_then(|name| state.secrets.write_secret(&name, &kept.print()));
+    if let Err(failed) = stored {
+        return not_sent(format!(
+            "Google granted it, and the secret store did not keep it: {failed}; tap Sign in with \
+             Google to ask again"
+        ));
+    }
+    if !moving {
+        return performed;
+    }
+    let moved = suzatary_connect::connect::Connection::parse(
+        "google",
+        &[begun.account.as_str().to_owned()],
+    )
+    .map_err(|failed| failed.to_string())
+    .and_then(|connection| {
+        edits
+            .add_connection(&connection)
+            .map_err(|failed| failed.to_string())
+    });
+    match (moved, performed) {
+        (Ok(()), Performed::Done(Done::Acted { what })) => Performed::Done(Done::Acted {
+            what: format!(
+                "{what}; its mail is read through this sign-in now, in place of lieer's own"
+            ),
+        }),
+        (Ok(()), performed) => performed,
+        (Err(failed), _) => not_sent(format!(
+            "the grant is kept, and the instance file was not changed ({failed}), so lieer \
+             reads {}'s mail as before; tap Sign in with Google to try again",
+            begun.account
+        )),
+    }
+}
+
+fn ended(
+    state: &State,
+    card: &ProposalId,
+    now: Datetime,
+    performed: Performed,
+) -> Result<(), Refusal> {
+    let caps = state.first.caps;
+    if let Some(conversation) = google_sign_in::end(
+        caps.secretary.conversations,
+        caps.secretary.inbox,
+        card,
+        now,
+        performed,
+    )? {
+        state.heard(&conversation);
+    }
+    state.notice();
+    Ok(())
+}

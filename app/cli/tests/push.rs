@@ -14,7 +14,10 @@ fn ada() -> suzatary_base::capability::Login {
 
 /// Like `tests/stream.rs::writer`, and also hands back the [`Fakes`], a second handle on the
 /// same `Arc`, to read what [`common::FakeNotify`] recorded.
-fn writer(tag: &str, model: FakeModel) -> (String, Arc<Fakes>, Arc<suzatary_cli::serve::Workers>) {
+fn writer(
+    tag: &str,
+    model: FakeModel,
+) -> (String, Arc<Fakes>, Arc<suzatary_server::serve::Workers>) {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
     let fakes = Arc::new(Fakes::new(tag).whois(whois).model(model));
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);

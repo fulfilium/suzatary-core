@@ -314,7 +314,7 @@ fn door_line(read: &crate::instance::Instance) -> String {
         .ok()
         .and_then(|port| port.parse::<u16>().ok());
     door_said(
-        crate::commands::serve::door(&read.deployment.app_url),
+        suzatary_server::gate::door(&read.deployment.app_url),
         under.map_or(Binds::Shell(read.serving.port), Binds::Unit),
     )
 }

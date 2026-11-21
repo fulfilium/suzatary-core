@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 use suzatary_release::release::{Released, ReleasedError};
 
+use suzatary_server::serve::{Build, Stamp};
+
 /// Where the release file is installed, relative to the package's `<out>`.
 pub const BESIDE: &str = "share/suzatary/release.toml";
 
@@ -149,4 +151,18 @@ pub fn version() -> &'static str {
         Ok(Release::Dev) => "dev".to_owned(),
         Err(unread) => format!("unreadable ({unread})"),
     })
+}
+
+/// What `GET /api/about` names of this process: its release, read once, and `build`.
+#[must_use]
+pub fn stamped(build: Build) -> Stamp {
+    Stamp {
+        release: release()
+            .map(|release| match release {
+                Release::Released(released) => Some(released),
+                Release::Dev => None,
+            })
+            .map_err(ToString::to_string),
+        build,
+    }
 }

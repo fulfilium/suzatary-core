@@ -4,8 +4,8 @@ use suzatary_io::devices::Devices;
 use suzatary_io::notify::Configured;
 use suzatary_server::server::Server;
 
-use super::interpreters::{Brain, Peers};
 use crate::instance::Instance;
+use crate::interpreters::{Brain, Peers};
 use crate::wiring::{Opened, Stores};
 use suzatary_signatures::signatures::Signers;
 

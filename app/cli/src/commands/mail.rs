@@ -149,7 +149,7 @@ pub fn gate(path: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("reading {}", instance.paths.last_sync.display()))?
         .map(|(report, _)| report);
     let queue = Queue::of(&rows, report);
-    if let Some(limited) = crate::commands::serve::interpreters::limited_now(&instance) {
+    if let Some(limited) = crate::interpreters::limited_now(&instance) {
         println!("{queue}; the model is not asked: {limited}");
         std::process::exit(3);
     }

@@ -34,23 +34,36 @@ suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
 suzatary-stores.workspace = true
 suzatary-api.workspace = true
+suzatary-release.workspace = true
+suzatary-triage.workspace = true
+suzatary-io.workspace = true
 tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
+# THE AXUM SHELL: the routes, the gate, the listener and its TLS.
+axum.workspace = true
+axum-server.workspace = true
+rustls.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+async-stream = "0.3"
+# An API answer's validator is a digest of its bytes (`serve/validated.rs`).
+sha2.workspace = true
+hex.workspace = true
+# The listener's and the door's failures, as the run reports them.
+anyhow.workspace = true
 
 [features]
 nothing = ["suzatary-secretary/nothing"]
+# `GET /api/about`'s build read from a file per request; never in the shipped binary.
+fixture = []
 
 [dev-dependencies]
 suzatary-server = { path = ".", features = ["nothing"] }
-suzatary-release.workspace = true
-suzatary-triage.workspace = true
 suzatary-testkit = { path = "../testkit" }
 proptest.workspace = true
 ts-rs.workspace = true
-# A device key is printed as hex (`tests/web_vectors.rs`).
-hex.workspace = true
 
 [lints]
 workspace = true

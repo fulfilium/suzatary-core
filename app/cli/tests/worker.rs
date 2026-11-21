@@ -13,7 +13,7 @@ fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-fn writer(tag: &str, model: FakeModel) -> (String, Arc<suzatary_cli::serve::Workers>) {
+fn writer(tag: &str, model: FakeModel) -> (String, Arc<suzatary_server::serve::Workers>) {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
     let fakes = Fakes::new(tag).whois(whois).model(model);
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
@@ -27,7 +27,7 @@ fn writer_idle(
     tag: &str,
     model: FakeModel,
     idle: std::time::Duration,
-) -> (String, Arc<suzatary_cli::serve::Workers>) {
+) -> (String, Arc<suzatary_server::serve::Workers>) {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
     let fakes = Fakes::new(tag).whois(whois).model(model);
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);

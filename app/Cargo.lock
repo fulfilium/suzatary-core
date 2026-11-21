@@ -4152,7 +4152,6 @@ name = "suzatary"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "async-stream",
  "axum",
  "axum-server",
  "base64 0.22.1",
@@ -4165,7 +4164,6 @@ dependencies = [
  "regex",
  "rmcp",
  "rustix",
- "rustls",
  "schemars",
  "serde",
  "serde_json",
@@ -4202,7 +4200,6 @@ dependencies = [
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "toml_edit",
- "tower-http",
  "tracing",
  "tracing-subscriber",
  "ureq",
@@ -4756,12 +4753,18 @@ dependencies = [
 name = "suzatary-server"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-stream",
+ "axum",
+ "axum-server",
  "chrono",
  "hex",
  "prodrome-core",
  "proptest",
+ "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "suzatary-api",
  "suzatary-base",
  "suzatary-cards",
@@ -4772,6 +4775,7 @@ dependencies = [
  "suzatary-health",
  "suzatary-held",
  "suzatary-inbox",
+ "suzatary-io",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
@@ -4787,6 +4791,8 @@ dependencies = [
  "suzatary-todo",
  "suzatary-topics",
  "suzatary-triage",
+ "tokio",
+ "tower-http",
  "tracing",
  "ts-rs",
 ]

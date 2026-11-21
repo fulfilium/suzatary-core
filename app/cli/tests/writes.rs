@@ -242,7 +242,7 @@ fn every_answer_carries_the_policy_and_no_api_answer_is_stored() {
         let response = common::get(&format!("{base}{path}"));
         assert_eq!(
             header(&response, "content-security-policy").as_deref(),
-            Some(suzatary_cli::serve::POLICY),
+            Some(suzatary_server::serve::POLICY),
             "{path}"
         );
         assert_eq!(
@@ -259,7 +259,7 @@ fn every_answer_carries_the_policy_and_no_api_answer_is_stored() {
     let shell = common::get(&format!("{base}/"));
     assert_eq!(
         header(&shell, "content-security-policy").as_deref(),
-        Some(suzatary_cli::serve::POLICY)
+        Some(suzatary_server::serve::POLICY)
     );
     assert_eq!(
         header(&shell, "cross-origin-opener-policy").as_deref(),
@@ -276,34 +276,46 @@ fn every_answer_carries_the_policy_and_no_api_answer_is_stored() {
         "frame-ancestors 'none'",
     ] {
         assert!(
-            suzatary_cli::serve::POLICY.contains(directive),
+            suzatary_server::serve::POLICY.contains(directive),
             "{directive}"
         );
     }
     // Typst's style attributes are the one inline thing a page may carry; no script, no eval.
     assert_eq!(
-        suzatary_cli::serve::POLICY
+        suzatary_server::serve::POLICY
             .matches("'unsafe-inline'")
             .count(),
         1
     );
-    assert!(!suzatary_cli::serve::POLICY.contains("'unsafe-eval'"));
+    assert!(!suzatary_server::serve::POLICY.contains("'unsafe-eval'"));
 }
 
 /// The app authors no HTML; the only HTML on the wire is typst's.
 #[test]
 fn the_app_authors_no_html() {
-    let serve = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/commands/serve");
-    let files: Vec<_> = std::fs::read_dir(&serve)
-        .unwrap_or_else(|e| panic!("reading {}: {e}", serve.display()))
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect();
-    assert!(
-        files.iter().any(|path| path.ends_with("route.rs")),
-        "the walk found the serve module"
-    );
+    let server = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../server/src");
+    let mut files = Vec::new();
+    let mut walk = vec![server.clone()];
+    while let Some(dir) = walk.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
+            .filter_map(Result::ok)
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                walk.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    for known in ["serve/route.rs", "gate.rs", "secretary/routes.rs"] {
+        assert!(
+            files.contains(&server.join(known)),
+            "the walk found {known} under {}",
+            server.display()
+        );
+    }
     for path in files {
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
@@ -406,7 +418,7 @@ fn the_tap_is_minted_only_by_the_guard_from_a_proof() {
     let constructor = ["Tap::", "of("].concat();
     assert_eq!(
         production_callers(&constructor),
-        vec!["cli/src/commands/serve/guard.rs"],
+        vec!["server/src/serve/guard.rs"],
         "{constructor} callers outside test code"
     );
 }
@@ -492,10 +504,10 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         editing,
         [
-            "cli/src/commands/serve/google.rs",
-            "cli/src/commands/serve/noting.rs",
             "cli/tests/support/fixture.rs",
             "server/src/secretary/routes.rs",
+            "server/src/serve/google.rs",
+            "server/src/serve/noting.rs",
         ],
         "callers of the connection edits"
     );
@@ -503,7 +515,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         forgetting,
         [
-            "cli/src/commands/serve/mail_cache.rs",
+            "cli/src/mail_cache.rs",
             "cli/tests/support/fixture.rs",
             "server/src/secretary/routes.rs",
         ],
@@ -513,7 +525,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     // and by the token store's own tests.
     assert_eq!(
         revoking,
-        ["cli/src/commands/serve/mail_cache.rs", "io/src/oauth.rs"],
+        ["cli/src/mail_cache.rs", "io/src/oauth.rs"],
         "callers of the sign-ins' delete"
     );
 }

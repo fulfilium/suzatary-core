@@ -23,7 +23,7 @@ struct Line {
 }
 
 fn golden() -> Vec<Line> {
-    include_str!("surface.golden")
+    include_str!("../../server/tests/surface.golden")
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
         .map(|line| {

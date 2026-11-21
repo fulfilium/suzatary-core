@@ -408,7 +408,7 @@ release="$work/model-release"
 sed -i "s|MODEL_RELEASE|$release|" "$script"
 sent="$work/would-have-sent.jsonl"
 
-# The fake `claude` a sign-in runs (`commands::serve::sign_ins`).
+# The fake `claude` a sign-in runs (`suzatary_server::serve::sign_ins`).
 fake_bin="$work/fake-bin"
 mkdir -p "$fake_bin"
 cat >"$fake_bin/claude" <<'FAKECLAUDE'

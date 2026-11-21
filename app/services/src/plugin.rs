@@ -5,6 +5,7 @@ mod bundle_path;
 mod fetch;
 mod item;
 mod manifest;
+mod plugins;
 mod run;
 mod url;
 
@@ -12,5 +13,6 @@ pub(crate) use bundle_path::BundlePath;
 pub use fetch::{MAX_RESPONSE, Outgoing, Target};
 pub use item::admit;
 pub use manifest::Manifest;
+pub use plugins::Plugins;
 pub use run::{Answer, Came, LastRun};
 pub use url::PluginUrl;

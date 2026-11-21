@@ -9,8 +9,8 @@ use suzatary_base::reference::ProposalRef;
 use suzatary_server::secretary::routes::TapAnswer;
 
 use super::call::Operator;
-use super::serve::route::Method;
 use crate::instance::Instance;
+use suzatary_server::serve::route::Method;
 
 /// Which card, and what the tap brings.
 #[derive(Debug, clap::Args)]

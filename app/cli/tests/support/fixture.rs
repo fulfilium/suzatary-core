@@ -2134,7 +2134,7 @@ mod tests {
         let first = mailbox.message(id);
         assert!(first.is_ok(), "the seeded message reads first: {first:?}");
 
-        let forgot = crate::commands::serve::mail_cache::MailCache::new(
+        let forgot = crate::mail_cache::MailCache::new(
             mail_root,
             PathBuf::from("notmuch"),
             Some(config),

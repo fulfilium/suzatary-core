@@ -55,7 +55,8 @@ reading = 3206483
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
-cli = 80237
+# 2026-11-21: `cli` written as `scripts/context.sh record` would write it, by hand, on the tree merged with 2.1.197 for the server's move (#583: 82,011 on that tree before it, 59,350 after), since `record` refuses while `lines` stands above its USE ratchet there, as on origin/master.
+cli = 59350
 # 2026-11-18: `inbox`, `conversations` and `lines` left core over the line (#538); the core split's plan names the further cut of each (rows 24 to 26). Core's figure is lowered by hand to the same tree's.
 # 2026-11-19: `conversations` raised by hand to the figure of #547's head merged with 2.1.174 (`Entry::Again`, `Aside`, `Stored::of_read`, and the claims' reading of `ConversationState`); accepted at the review of #547.
 # 2026-11-20: `conversations` raised by hand to the figure of #573's head merged with 2.1.187 (the halt's run, `Halt::claims`); accepted at the review of #573.
@@ -379,7 +380,7 @@ scripts = ["scripts/wire.sh"]
 name = "server"
 path = "app/server"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "secretary", "services", "signatures", "store", "stores", "todo", "topics"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]

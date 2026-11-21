@@ -64,12 +64,8 @@ prodrome_core.workspace = true
 clap = { version = "4", features = ["derive"] }
 # THE AGENT'S TOOLS, over stdio (§8.4).
 rmcp.workspace = true
-# THE RUNTIME AND THE ROUTES LIVE HERE AND NOWHERE ELSE (§2).
-axum.workspace = true
-axum-server.workspace = true
-rustls.workspace = true
+# THE RUNTIME IS BUILT HERE AND NOWHERE ELSE (§2); the routes are `suzatary-server`'s.
 tokio.workspace = true
-tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 # The instance file, and the wire this serialises.
@@ -85,13 +81,12 @@ regex.workspace = true
 # A drawing's value is read in Typst through its generated schema (`prodrome draw`).
 schemars.workspace = true
 chrono.workspace = true
-# An API answer's validator is a digest of its bytes (`commands/serve/validated.rs`).
+# A drawing's and a manual's digest, printed in hex.
 sha2.workspace = true
 hex.workspace = true
 
 # `suzatary typeset` caps its own address space, through a safe `setrlimit`.
 rustix = { version = "1", features = ["process"] }
-async-stream = "0.3"
 
 # THE FIXTURE IS NOT IN THE SHIPPED BINARY; `suzatary-dev` is the one binary built with it.
 # `--whois-fixture` makes every peer one login, which puts the write surface in a browser test's
@@ -99,7 +94,7 @@ async-stream = "0.3"
 # that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
-fixture = ["suzatary-secretary/fixture", "suzatary-io/fixture"]
+fixture = ["suzatary-secretary/fixture", "suzatary-io/fixture", "suzatary-server/fixture"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
 # repository's containment scripts with `git` against throwaway repositories, which a build
@@ -133,6 +128,8 @@ suzatary-secretary = { workspace = true, features = ["nothing"] }
 # a client and a runtime of their own; a socket bound to a second loopback
 # address is a second tailnet peer (tests/google.rs).
 tokio = { workspace = true, features = ["net", "io-util"] }
+axum.workspace = true
+axum-server.workspace = true
 ureq.workspace = true
 # The benchmark harness (tests/perf_fold_chain.rs) gzips bodies at each level itself, to break a
 # route's time into its parts.

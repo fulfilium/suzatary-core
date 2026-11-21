@@ -17,10 +17,10 @@ use suzatary_server::gate::OPERATOR_HEADER;
 use suzatary_signatures::signatures::{Signers, body_digest, request_name};
 use suzatary_store::replica::held::Node as _;
 
-use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
-use super::serve::{route, table};
 use crate::instance::Instance;
 use suzatary_lines::secretary::held_replica;
+use suzatary_server::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
+use suzatary_server::serve::{route, table};
 
 /// Which request.
 #[derive(Debug, clap::Args)]

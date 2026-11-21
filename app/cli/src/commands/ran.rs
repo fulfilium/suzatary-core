@@ -93,7 +93,7 @@ fn limit_of(
         return Ok(None);
     };
     let instance = crate::instance::Instance::open(path)?;
-    crate::commands::serve::interpreters::answered_by(
+    crate::interpreters::answered_by(
         &suzatary_io::model_health::beside(&instance.mail.heartbeat),
         &suzatary_io::model::name_of(model),
         Some(&failed),
