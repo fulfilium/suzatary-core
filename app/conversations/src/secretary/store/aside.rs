@@ -4,10 +4,7 @@
 /// set aside.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Aside {
-    /// The turns, by index.
     pub turns: std::collections::BTreeSet<usize>,
-    /// When.
     pub at: suzatary_base::capability::Datetime,
-    /// Who asked again.
     pub by: String,
 }

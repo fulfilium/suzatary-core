@@ -22,8 +22,6 @@ pub enum NotANeedle {
 impl Needle {
     pub const MAX: usize = 200;
 
-    /// # Errors
-    /// [`NotANeedle`] naming which rule it broke.
     pub fn new(text: &str) -> Result<Self, NotANeedle> {
         let text = text.trim();
         if text.is_empty() {
@@ -60,7 +58,6 @@ pub enum Side {
 pub struct Hit {
     #[ts(type = "string")]
     pub conversation: ConversationId,
-    /// [`Stored::heading`].
     pub title: String,
     pub kind: Kind,
     /// Absolute index, which a window opens at.

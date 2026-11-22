@@ -1,10 +1,8 @@
-//! The lines a tab's core holds, whole: the rows of their skeleton as its pull moves them
-//! ([`LinePulling`]), and what the landed row means, read through [`Outlines`] (its nodes) and
-//! [`HeldLines`] (the prints, opened with its keys). Every move of the rows answers a
-//! [`LineFrame`] and the conversations it moved, and the readings are told the landed row's
-//! readable nodes and keys after each, so they read that row and nothing else. A print is content
-//! held by name, kept whatever the rows name; a line every key of whose words is let go is kept
-//! as its husk ([`LineReplica`]), and its print is the device's to delete.
+//! The lines a tab's core holds, whole: the rows of their skeleton as its pull moves them, and what
+//! the landed row means.
+//!
+//! The readings are told the landed row's readable nodes and keys after each move of the rows, so
+//! they read that row and nothing else. A print is kept whatever the rows name.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -45,7 +43,7 @@ pub struct HeldReplica {
 }
 
 /// The box's last ruling on a line this device wrote and the box does not hold: the line stays a
-/// fact on the device whatever the ruling, and a page says its words from this.
+/// fact on the device whatever the ruling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ruling {
     /// Not answered yet: it goes with the next hand-over.
@@ -64,11 +62,8 @@ pub enum Ruling {
 /// A line a tab seals.
 #[derive(Debug, Clone)]
 pub enum Sealing {
-    /// A conversation renamed.
     Rename {
-        /// Which.
         conversation: ConversationId,
-        /// Its new title.
         title: Title,
     },
     /// A topic opened under `title`; none leaves it for the title job.
@@ -215,21 +210,16 @@ pub enum Whole {
 /// Why a tab cannot seal a line now.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotSealed {
-    /// The rows name no genesis of the lines yet: nothing was pulled.
     #[error("the lines are not on this device yet, so nothing is written to them")]
     Unpulled,
-    /// A conversation the tab does not read.
     #[error("no conversation {0} on this device")]
     Unknown(ConversationId),
-    /// A line of it rests on one not held, so its heads are unknown.
     #[error(
         "conversation {0} rests on a line this device has not pulled yet, so nothing is written to it"
     )]
     Unclosed(ConversationId),
-    /// The line itself.
     #[error(transparent)]
     Line(#[from] crate::secretary::line_event::NotALine),
-    /// The change over it.
     #[error("no change of the lines: {0}")]
     Change(String),
     #[error("the page drew {0}, which this device does not hold")]
@@ -243,18 +233,15 @@ pub enum NotSealed {
 /// taken.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Moved {
-    /// Every conversation.
     All,
-    /// These.
     These(BTreeSet<ConversationId>),
 }
 
-/// What a record raised by [`HeldReplica::acted`] is refused as: the box refused it for good, and
-/// another tab of the device told the person, who acted on it, or let it go.
+/// What a record raised by [`HeldReplica::acted`] is refused as.
 pub const LET_GO: &str = "the box refused it for good, and another tab of this device let it go";
 
-/// What the device may let go of its own records ([`HeldReplica::releasable`]); those let go as
-/// refused are kept as acted on, so a tab still holding one as unsent never posts it again.
+/// What the device may let go of its own records; those let go as refused are kept as acted on, so
+/// a tab still holding one as unsent never posts it again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Released {
     /// Every record let go, by print.
@@ -268,19 +255,16 @@ pub struct Released {
 pub struct Took {
     /// What another replica takes to make the same move.
     pub frame: LineFrame,
-    /// What it moved.
     pub moved: Moved,
 }
 
 /// A skeleton's answer that does not read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotAnAnswer {
-    /// A name that is no object's.
     #[error("the answer names {0:?}, which is no object's name")]
     Name(String),
     #[error("the answer names the key {0:?}, which is no key's name")]
     Key(String),
-    /// A node that does not read.
     #[error(transparent)]
     Node(#[from] NotANode),
 }
@@ -310,7 +294,6 @@ impl HeldReplica {
         (&self.outlines, &mut self.lines)
     }
 
-    /// The rows.
     #[must_use]
     pub fn rows(&self) -> &LinePulling {
         &self.kept.rows
@@ -329,17 +312,15 @@ impl HeldReplica {
     }
 
     /// Whether the rows hold the line named `name`: the one test of a line the box took, whatever
-    /// answer its own record carries (a post's answer may be lost after the box took it). Such a
-    /// line has no ruling, and its record waits for nothing.
+    /// answer its own record carries (a post's answer may be lost after the box took it).
     #[must_use]
     pub fn holds(&self, name: &Hash) -> bool {
         self.kept.rows.holding().replica().read().holds(name)
     }
 
-    /// Each own line of conversation `id` the box does not hold ([`HeldReplica::holds`]), with the
-    /// box's last ruling on it. A line refused for good, or resting on one, is ruled only while it
-    /// gives the person words back and they have not acted on them; one with none is told and let
-    /// go.
+    /// Each own line of conversation `id` the box does not hold, with the box's last ruling on it.
+    /// A line refused for good, or resting on one, is ruled only while it gives the person words
+    /// back and they have not acted on them; one with none is told and let go.
     #[must_use]
     pub fn rulings(&self, id: &ConversationId) -> Vec<(&OwnLine, Ruling)> {
         use suzatary_store::replica::writes::Refusal;
@@ -408,7 +389,6 @@ impl HeldReplica {
                 })
                 .or_else(|| self.outlines.node(name).map(|node| node.header.clone()))
         };
-        // Its line parents, the store's genesis left out.
         let lines: Vec<crate::wire::lines::NodeHeader> = own
             .rests_on()
             .iter()
@@ -429,9 +409,8 @@ impl HeldReplica {
         else {
             return None;
         };
-        // Only the edit's own question, sealed with it at its instant. It is given back plain only
-        // where the rows hold the question's line and no round holds it (set aside since); a
-        // question whose row has not landed is not judged gone by its absence.
+        // It is given back plain only where the rows hold the question's line and no round holds
+        // it; a question whose row has not landed is not judged gone by its absence.
         let in_a_round = self
             .outlines
             .outlines()
@@ -449,8 +428,8 @@ impl HeldReplica {
 
     /// The topics this device began that the box refused: each conversation whose opening is one
     /// of this device's own lines refused for good, beside the box's sentence for it, while a line
-    /// of it still gives the person words back they have not acted on. Defined by what the device wrote, never by what the rows lack, which a reset or a
-    /// pull in progress also lacks.
+    /// of it still gives the person words back they have not acted on. Defined by what the device
+    /// wrote, never by what the rows lack, which a reset or a pull in progress also lacks.
     #[must_use]
     pub fn refused_topics(&self) -> BTreeMap<ConversationId, String> {
         self.own
@@ -470,8 +449,7 @@ impl HeldReplica {
     }
 
     /// Each own line refused for good, with words the person has not acted on, of a topic this
-    /// device began that the box refused ([`HeldReplica::refused_topics`]): no conversation's
-    /// page draws it, so the page that begins topics does.
+    /// device began that the box refused.
     #[must_use]
     pub fn refused_elsewhere(&self) -> Vec<(Hash, Ruling)> {
         self.refused_topics()
@@ -483,9 +461,8 @@ impl HeldReplica {
     }
 
     /// The person acted on the refusals of the own lines `names`, or the device let them go as
-    /// refused: what it moved. A record this tab still holds as unsent or refused for now (it
-    /// missed the wake) is raised to a refusal for good ([`LET_GO`]): never posted again, and what
-    /// rests on it is held back with it.
+    /// refused: what it moved. A record this tab still holds as unsent or refused for now is raised
+    /// to a refusal for good: never posted again, and what rests on it is held back with it.
     pub fn acted(&mut self, names: &BTreeSet<Hash>) -> Moved {
         use suzatary_store::replica::writes::Refusal;
         let mut touched = BTreeSet::new();
@@ -533,14 +510,10 @@ impl HeldReplica {
         }
     }
 
-    /// `sealing` written by `actor` at `at`, its words sealed under keys drawn from `entropy`,
-    /// resting on the heads of its conversation among the lines read: its lines, held and read at
-    /// once in one move (a begun topic's opening and question together), the name of the first, and
-    /// what it moved.
+    /// `sealing`'s lines, held and read at once in one move.
     ///
     /// # Errors
-    /// [`NotSealed`]: nothing pulled yet, a conversation not read here or not read whole, or
-    /// words the door refuses; nothing is kept.
+    /// Nothing is kept on a refusal.
     pub fn seal(
         &mut self,
         sealing: Sealing,
@@ -586,7 +559,6 @@ impl HeldReplica {
             } => vec![onto(conversation, question.said(at, actor))?],
             Sealing::Begin { title, question } => {
                 let (id, opened) = writer.opening(&topic(title, at))?;
-                // The question is the new conversation's second line, over its opening alone.
                 let said = writer.line(
                     id,
                     1,
@@ -667,12 +639,10 @@ impl HeldReplica {
         })
     }
 
-    /// Every own write the box has not taken that `owned` rests on, near or far, as it is held: kept
-    /// again with the writes that rest on it, so a record another tab of the device let go before
-    /// this seal read the row is back beside its dependent, and no kept line rests on a record the
-    /// device no longer keeps. A record the box took, by its answer or by the rows, is not: the box
-    /// holds it. One let go as refused is kept as refused for good, since the seal read the acts
-    /// first ([`HeldReplica::acted`]), and so it is never posted again.
+    /// Every own write the box has not taken that `owned` rests on, near or far, as it is held:
+    /// kept again with the writes that rest on it, so no kept line rests on a record the device no
+    /// longer keeps. One let go as refused is kept as refused for good, so it is never posted
+    /// again.
     fn rested_on(&self, owned: &[Own<OwnLine>]) -> Vec<Own<OwnLine>> {
         let by: BTreeMap<&Hash, &Own<OwnLine>> =
             self.own.iter().map(|own| (own.node.name(), own)).collect();
@@ -804,10 +774,9 @@ impl HeldReplica {
         (owned, moved)
     }
 
-    /// Each own write the box took, by its answer or by the rows ([`HeldReplica::holds`]: a post's
-    /// answer may be lost), beside whether its record may go: once the landed rows hold every key
-    /// of a line or the box retired it, since the record is the one other place they are kept; a
-    /// signature's at once.
+    /// Each own write the box took, by its answer or by the rows (a post's answer may be lost),
+    /// beside whether its record may go: once the landed rows hold every key of a line or the box
+    /// retired it, since the record is the one other place they are kept; a signature's at once.
     #[must_use]
     pub fn own_taken(&self) -> Vec<(&OwnLine, bool)> {
         let landed = self.kept.rows.landed();
@@ -830,13 +799,11 @@ impl HeldReplica {
     }
 
     /// Every own record the device may let go, by its print, `told` naming the refusals the person
-    /// was told of: a taken one whose keys the device holds elsewhere ([`HeldReplica::own_taken`]);
-    /// a refused one the rows hold all the same ([`HeldReplica::holds`]); a refused one that gives
-    /// the person words back once they acted on them, one that gives none once told, and any the
-    /// device let go as refused before ([`HeldReplica::acted`]). None of
-    /// these while an own record still held back rests on it, since what holds that one back is the
-    /// record it rests on: letting the parent go would leave the child posted for ever, its words
-    /// shown nowhere. The one owner of this answer; the device's row removes what it names.
+    /// was told of: a taken one whose keys the device holds elsewhere; a refused one the rows hold
+    /// all the same; a refused one that gives the person words back once they acted on them, one
+    /// that gives none once told, and any the device let go as refused before. None of these while
+    /// an own record still held back rests on it: letting the parent go would leave the child
+    /// posted for ever.
     #[must_use]
     pub fn releasable(&self, told: &BTreeSet<String>) -> Released {
         let refused: BTreeMap<&Hash, &OwnLine> = self
@@ -919,7 +886,7 @@ impl HeldReplica {
     /// is what the piece holds. Heads the answer leaves unsaid are those of what is held now.
     ///
     /// # Errors
-    /// [`NotAnAnswer`] for a name or a node that does not read; nothing is kept.
+    /// Nothing is kept on a refusal.
     pub fn piece(
         &mut self,
         answer: SkeletonPayload,
@@ -964,8 +931,8 @@ impl HeldReplica {
         self.took(LinePulling::start_over)
     }
 
-    /// The keys `gone` let go, from every row, and every line the rows read each key of whose
-    /// words is then let go kept as its husk ([`HeldReplica::bare`]).
+    /// The keys `gone` let go, from every row, and every line the rows read each key of whose words
+    /// is then let go kept as its husk.
     pub fn forget(&mut self, gone: BTreeSet<KeyName>) -> Took {
         let (delta, moved) = self.moving(|rows| rows.forget(gone));
         let names = self.bare();
@@ -989,8 +956,7 @@ impl HeldReplica {
     }
 
     /// The name of every line the rows read, landed or in a pull's pieces, held as a print with
-    /// words each key of which no row holds: a line every slot of which is erased, which a purge
-    /// keeps as its husk. A line a slot of which still opens is kept whole.
+    /// words each key of which no row holds. A line a slot of which still opens is kept whole.
     #[must_use]
     pub fn bare(&self) -> BTreeSet<Hash> {
         let holding = self.kept.rows.holding();
@@ -1055,8 +1021,8 @@ impl HeldReplica {
         self.take_husks(husks)
     }
 
-    /// The husks the box answered, each kept where it is its node's line and no live key held
-    /// opens it, where a purge would have husked the print; else none is kept.
+    /// The husks the box answered, each kept where it is its node's line and no live key held opens
+    /// it; else none is kept.
     pub fn take_husks(&mut self, given: Vec<(Hash, String)>) -> Result<Took, NotItsHusk> {
         let pending = self.pending();
         let ring = self.kept.rows.holding().keys().clone();
@@ -1161,9 +1127,8 @@ impl HeldReplica {
     }
 
     /// The keys of every own line that `held` lacks, less each a line held kills (an erasure, a
-    /// reseal), as a landed key is let go. An own line's keys open its words after the box took
-    /// it too: the tab holds its print, so it never fetches the line's content, nor a key the box
-    /// would hand beside it, and the rows may never hold the key.
+    /// reseal), as a landed key is let go. An own line's keys open its words after the box took it
+    /// too, since the rows may never hold the key.
     fn own_keys(&self, held: &KeyRing) -> KeyRing {
         let mut keys = KeyRing::default();
         for written in self.own.iter() {
@@ -1256,10 +1221,8 @@ fn name(text: String) -> Result<Hash, NotAnAnswer> {
 fn names(texts: Vec<String>) -> Result<BTreeSet<Hash>, NotAnAnswer> {
     texts.into_iter().map(name).collect()
 }
-/// What a device keeps of the lines' content: the plan within the budget and every print held,
-/// which a reading loaded; and what of the plan the prints held lack, which a prefetch fetches.
+/// What a device keeps of the lines' content, and what of the plan the prints held lack.
 pub struct Plan<'r> {
-    /// Every name whose content the device keeps.
     pub keep: BTreeSet<&'r Hash>,
     /// The nodes of the plan whose print is not held, newest conversation first.
     pub ahead: Vec<&'r SkeletonNode>,
@@ -1313,9 +1276,8 @@ impl HeldReplica {
         erased
     }
 
-    /// Conversation `id` read as its transcript, from every line its skeleton names: the order of
-    /// its turns, what is queued and the claims are readings of the conversation whole, so a tab
-    /// that holds a window of it reads nothing and is told how many lines it lacks. `None` for a
+    /// Conversation `id` read as its transcript, from every line its skeleton names: a tab that
+    /// holds a window of it reads nothing and is told how many lines it lacks. `None` for a
     /// conversation the tab does not hold.
     pub fn transcript(&mut self, id: &ConversationId) -> Option<Whole> {
         let lacking = self

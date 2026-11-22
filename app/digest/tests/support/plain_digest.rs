@@ -15,11 +15,7 @@ use suzatary_conversations::secretary::store::Entry;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::salted_text::TextName;
 
-/// The digest of `lines` (every conversation's objects, in the store's order, each read as
-/// `opened` reads it) under `history`: [`under`] of their [`Shape`].
-///
-/// # Errors
-/// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
+/// The digest of `lines` (every conversation's objects, in the store's order) under `history`.
 pub fn digest(
     lines: &[(&Hash, &Envelope<LineEvent>)],
     opened: &BTreeMap<Hash, Entry>,
@@ -37,8 +33,8 @@ pub fn digest(
     Ok(under(Arc::new(shape), history, owners, words))
 }
 
-/// The digest of the lines `shape` holds under `history`, each summary's words read by `words`,
-/// a retraction believed only from one of `owners`.
+/// The digest of the lines `shape` holds under `history`, a retraction believed only from one of
+/// `owners`.
 pub fn under(
     shape: Arc<Shape>,
     history: &[Node<DigestEvent>],

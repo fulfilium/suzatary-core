@@ -1,5 +1,5 @@
-//! Text on its way to a model. Every model client takes [`ForModel`] alone, and each of its
-//! constructors masks, so no path sends a model text the masker did not read.
+//! Text on its way to a model: each constructor of [`ForModel`] masks, so no path sends a model
+//! text the masker did not read.
 
 use crate::held_value::withheld;
 
@@ -8,7 +8,6 @@ use crate::held_value::withheld;
 pub struct ForModel(String);
 
 impl ForModel {
-    /// `text`, masked.
     #[must_use]
     pub fn of(text: &str) -> Self {
         Self(withheld(text))
@@ -20,13 +19,11 @@ impl ForModel {
         Self(crate::held_value::file_name(name))
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// The text, owned.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0

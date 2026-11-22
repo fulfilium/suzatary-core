@@ -8,12 +8,10 @@ use super::{Line, Standing, Unplaced};
 pub struct Lines(pub(super) Vec<Line>);
 
 impl Lines {
-    /// Every line, in order.
     pub fn iter(&self) -> impl Iterator<Item = &Line> {
         self.0.iter()
     }
 
-    /// The lines the reading places, in order, owned.
     #[must_use]
     pub fn into_standings(self) -> Vec<Standing> {
         self.0

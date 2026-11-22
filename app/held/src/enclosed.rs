@@ -1,30 +1,21 @@
 //! A file handed to the model with a verb's answer: a PDF as a document, an image as an image.
-//!
-//! `text` is the file's text layer, already redacted, for an interpreter whose API cannot take
-//! the file itself.
 
 use serde::{Deserialize, Serialize};
 
 use crate::attachment::{AttachmentId, MediaType};
 
-/// What an enclosed file is, which is what block it becomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Enclosure {
-    /// A PDF, read page by page, a scanned one included.
     Pdf,
-    /// An image of a type the model accepts.
     Image(MediaType),
 }
 
-/// One file on a verb's answer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Enclosed {
     /// Its name in the file store: the SHA-256 of its bytes.
     pub id: AttachmentId,
-    /// What it was called where it was read.
     pub name: String,
-    /// What it is.
     pub media: Enclosure,
     /// Its size in bytes.
     pub size: u64,

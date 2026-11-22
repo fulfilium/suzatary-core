@@ -1,16 +1,8 @@
-//! What a conversation is, and what is stored of one.
-//!
-//! A conversation is a prodrome of its own, never turns on the todo chain: each [`Entry`] is a
-//! line of the conversations' schema (`suzatary_lines::secretary::line_event`), its words through the
-//! redaction door and locked, and read back in causal order by `suzatary_lines::secretary::transcript`.
-//! One type per file; this module is their one name.
-//!
-//! The value is a fold: [`Stored::of`] replays the [`Entry`] lines, so nothing is kept in step by
-//! hand.
+//! What a conversation is, and what is stored of one: a prodrome of its own, never turns on the
+//! todo chain, its value the fold [`Stored::of`] of its [`Entry`] lines.
 //!
 //! A proposal is data, never a call: the tap carries an index, never a body, so the text the
-//! owner confirms is the text that goes. The proposal and what became of it live in the inbox
-//! prodrome; a line names the object and [`Stored::standing`] joins the two.
+//! owner confirms is the text that goes.
 
 mod aside;
 mod asking;

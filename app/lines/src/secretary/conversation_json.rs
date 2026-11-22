@@ -22,8 +22,8 @@ impl Json for LineEvent {
         "transcript"
     }
 
-    /// A transcript's value is the line itself, its words locked (its down-set is read by ancestry, never from the
-    /// value), so its JSON is the line's literal.
+    /// A transcript's value is the line itself, its words locked, so its JSON is the line's
+    /// literal.
     fn value(&self, _: Only) -> Value {
         json_literal(&Schema::to_value(self))
     }

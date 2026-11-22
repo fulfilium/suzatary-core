@@ -4,8 +4,7 @@
 
 use crate::secretary::transcript::ANSWERED_WITHIN;
 
-/// How far ahead of the box's clock a tab's line may be dated: a device's clock a little fast is
-/// taken; one further ahead is posted again once the box's clock reaches it.
+/// How far ahead of the box's clock a tab's line may be dated.
 pub const MAX_AHEAD_SECONDS: i64 = 300;
 
 /// A device's clock outside the bounds the box takes its lines by.

@@ -1,5 +1,5 @@
-//! The runs that claim rounds. Each round draws a run and holds it for as long as it runs; a run
-//! nothing holds is gone, so a reader of an unclosed round knows whether it may claim it again.
+//! The runs that claim rounds: a run nothing holds is gone, so a reader of an unclosed round
+//! knows whether it may claim it again.
 
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_store::store::StoreError;
@@ -7,9 +7,6 @@ use suzatary_store::store::StoreError;
 /// Where runs are drawn and whether one is gone.
 pub trait Runs: Sync {
     /// A new run, held until the answer drops.
-    ///
-    /// # Errors
-    /// The run could not be drawn or held.
     fn begin(&self) -> Result<Held, StoreError>;
 
     /// Whether nothing holds `run`: its round ended, or its process did.

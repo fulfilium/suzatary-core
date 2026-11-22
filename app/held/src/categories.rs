@@ -17,7 +17,6 @@ pub(crate) const DASH: Set = Set(&table::DASH);
 pub(crate) const DECIMAL: Set = Set(&table::DECIMAL);
 
 impl Set {
-    /// Whether `c` is in the set.
     #[must_use]
     pub(crate) fn contains(self, c: char) -> bool {
         let c = u32::from(c);

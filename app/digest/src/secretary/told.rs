@@ -1,23 +1,9 @@
 //! What a model is told it remembers when its session opens: every standing fact, whole, then
-//! the view of every conversation under a budget, in the owner's words alone (the owner's answers
-//! 1, 3 and 8).
+//! the view of every conversation under a budget, in the owner's words alone. The facts are
+//! read whole, since a standing instruction does not fade with age.
 //!
-//! What it means: the facts are the memory's live set, read whole, since a standing instruction
-//! from two years ago binds as much as yesterday's and does not fade with age; standing
-//! instructions come first, then preferences, people and the owner, each by id, so the prefix
-//! moves only when a fact does. The view is the digest's cut through one tree of every line,
-//! recent lines fine and old ones coarse, each part one line led by its handle: the owner's own
-//! turn or act as said, a summary of nothing but his words marked `derived:`, and every other
-//! part (the secretary's answers, verbs' answers, the box's bookkeeping) by its size and kinds
-//! alone ([`Label::is_owners`]), so what every session is told carries his words and nobody
-//! else's, and nothing the secretary once restated. `zoom` opens a handle, and [`zoom`] answers
-//! what is beneath one.
-//!
-//! Between the facts and the view it is told the topics in use, each with how many rounds it is
-//! on, so the model reuses a topic rather than making a near twin of it.
-//!
-//! [`context_of`] is a function of the objects and the budget: no clock, no model, no store order,
-//! so two replicas holding the same objects tell a model the same bytes.
+//! [`context_of`] is a function of the objects and the budget, so two replicas holding the same
+//! objects tell a model the same bytes.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -39,38 +25,33 @@ use suzatary_memory::secretary::memory::{Change, Kind, Memory, Remembered};
 use suzatary_topics::secretary::topics::reading::Reading as Topics;
 use suzatary_topics::secretary::topics::topic::Topic;
 
-/// What a session is told when it opens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Told {
-    /// Every standing fact, in the order it is told: an opening is told the whole memory.
+    /// Every standing fact, in the order it is told.
     facts: Vec<Remembered>,
-    /// The memory's version those facts are.
     version: u64,
     topics: InUse,
     record: Record,
 }
 
-/// The topics in use, each with its count of rounds, or why they could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InUse {
     Read(Vec<(Topic, usize)>),
     Unread(String),
 }
 
-/// The view of every conversation, or why it could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Record {
     /// A line per part, its newest kept within the budget.
     Shown(Vec<String>),
-    /// What refused the read.
     Unread(String),
 }
 
 /// The order facts are told in: standing instructions first, since they bind every answer.
 const FACT_ORDER: [Kind; 4] = [Kind::Standing, Kind::Preference, Kind::Person, Kind::Owner];
 
-/// The conversation a model opens in, and the first of its turns it is sent as turns: the record
-/// leaves those lines out, so the model reads each once.
+/// The conversation a model opens in, and the first of its turns it is sent as turns, which the
+/// record leaves out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Asking<'a> {
     pub conversation: &'a ConversationId,
@@ -78,9 +59,8 @@ pub struct Asking<'a> {
     pub from: usize,
 }
 
-/// What a session opening over `memory`, `topics` and `record` (the digest and its lines as read,
-/// or why they were not) is told, its view within `budget` bytes, less what `asking` sends as
-/// turns.
+/// What a session opening over `memory`, `topics` and `record` is told, its view within `budget`
+/// bytes, less what `asking` sends as turns.
 #[must_use]
 pub fn context_of(
     memory: &Memory,
@@ -99,7 +79,7 @@ pub fn context_of(
 }
 
 /// The view of `reading` within `budget` bytes, less what `asking` sends as turns, one line per
-/// part as [`Told::text`] prints them, oldest first: the record before it is fitted to a budget.
+/// part, oldest first.
 #[must_use]
 pub(crate) fn record_lines(
     reading: &Reading,
@@ -116,8 +96,6 @@ pub(crate) fn record_lines(
     lines(&shown)
 }
 
-/// What a session opening over `memory` and `topics` is told, with `record`'s lines as fitted
-/// (or why the record was not read).
 #[must_use]
 pub fn of(
     memory: &Memory,
@@ -145,8 +123,7 @@ pub fn of(
     }
 }
 
-/// The positions in the tree of the lines `asking` sends as turns: its conversation's lines from
-/// the one holding its turn `from`, in the conversation's order, whose said lines are its turns.
+/// The positions in the tree of the lines `asking` sends as turns.
 fn sent(reading: &Reading, asking: Asking<'_>) -> BTreeSet<usize> {
     let entries = reading.entries();
     let lines: Vec<(&Hash, &Entry)> = reading
@@ -182,9 +159,8 @@ fn sent(reading: &Reading, asking: Asking<'_>) -> BTreeSet<usize> {
     at
 }
 
-/// The parts as lines, each led by its handle: the owner's words as said, a summary fenced as
-/// derived, and each run of parts not shown merged into one line, its handle spanning the run
-/// and its kinds their join, which `zoom` opens part by part.
+/// The parts as lines, each led by its handle, a summary fenced as derived, and each run of parts
+/// not shown merged into one line.
 fn lines(shown: &[Shown]) -> Vec<String> {
     let mut lines = Vec::new();
     let mut hidden: Option<(Range<usize>, Label)> = None;
@@ -231,13 +207,11 @@ fn lines(shown: &[Shown]) -> Vec<String> {
 }
 
 impl Told {
-    /// The memory's version it tells.
     #[must_use]
     pub fn version(&self) -> u64 {
         self.version
     }
 
-    /// Whether there is nothing to tell: no fact, no topic, and no part of any conversation.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.facts.is_empty()
@@ -245,8 +219,6 @@ impl Told {
             && self.record == Record::Shown(Vec::new())
     }
 
-    /// What the model reads: the facts as [`Change::told`] says them, when there are any, then
-    /// the topics, then the record.
     #[must_use]
     pub fn text(&self) -> String {
         let mut out = if self.facts.is_empty() {
@@ -299,10 +271,8 @@ impl Told {
     }
 }
 
-/// What opening `handle` in `reading` answers, the `zoom` verb's answer: the taint of what it
-/// shows, which `taint::turn` reads back as the answer's class, and what is beneath it, each with
-/// its own handle: a part `shows` reads as a line whole or a summary as derived words, a node
-/// with none or a part it does not read by its kinds.
+/// The `zoom` verb's answer: the taint of what it shows, which `taint::turn` reads back as the
+/// answer's class, and what is beneath it.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a handle no node of the reading spans.

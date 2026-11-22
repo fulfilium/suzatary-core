@@ -8,7 +8,6 @@ use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_conversations::secretary::turn_shape::{TurnShape, shape};
 use suzatary_conversations::secretary::verb_name::VerbName;
 
-/// The most topics one round or note holds.
 pub const MAX_TOPICS: usize = 3;
 
 /// One live round: the turn that opened it and the turns after it, with their indices, oldest
@@ -57,7 +56,6 @@ impl Round<'_> {
         std::iter::once(self.opening).chain(self.rest.iter().copied())
     }
 
-    /// Its notes.
     #[must_use]
     pub fn notes(&self) -> Vec<Target> {
         notes_in(self.conversation, &self.turns().collect::<Vec<_>>())

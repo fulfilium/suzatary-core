@@ -92,7 +92,7 @@ fn opened() -> Entry {
     }
 }
 
-/// Some instant on the same morning as [`opened`], for `unanswered`'s `now`.
+/// Some instant on the same morning as [`opened`].
 fn now() -> Datetime {
     Datetime::new(2026, 9, 9, 9, 5, 0, 0).expect("a real instant")
 }
@@ -145,7 +145,6 @@ fn a_coding_line_folds_last_wins_by_index_and_refuses_a_phantom() {
     );
 }
 
-/// A file without an opening line was not written by this program.
 #[test]
 fn a_conversation_without_an_opening_line_is_refused() {
     assert_eq!(
@@ -154,7 +153,6 @@ fn a_conversation_without_an_opening_line_is_refused() {
     );
 }
 
-/// An email proposal names itself, and its sources are their text form.
 #[test]
 fn an_email_proposal_round_trips_and_names_itself() {
     let proposal = Proposal::Email(draft());
@@ -166,8 +164,7 @@ fn an_email_proposal_round_trips_and_names_itself() {
     assert!(printed.contains(r#""sources":["mail:a1b2c3d4e5f6","todo:life/permitfiling"]"#));
 }
 
-/// A line names its object, and the standing is the two joined: the act, reasons and responses
-/// from the inbox, the position and replacement from the conversation.
+/// A line names its object, and the standing is the two joined.
 #[test]
 fn a_standing_joins_the_line_with_its_object() {
     let sent = Done::Sent {
@@ -206,7 +203,6 @@ fn a_standing_joins_the_line_with_its_object() {
     );
 }
 
-/// A changeset proposal round trips, and names itself as `"changes"`.
 #[test]
 fn a_changeset_proposal_round_trips_and_names_itself() {
     let proposal = Proposal::Changes(changeset());
@@ -218,7 +214,6 @@ fn a_changeset_proposal_round_trips_and_names_itself() {
     assert_eq!(read, proposal);
 }
 
-/// An act proposal round trips, and names itself as `"act"`.
 #[test]
 fn an_act_proposal_round_trips_and_names_itself() {
     let proposal = Proposal::Act(act());
@@ -233,8 +228,7 @@ fn an_act_proposal_round_trips_and_names_itself() {
     assert_eq!(read, proposal);
 }
 
-/// An unheard turn ends the session it names and no other: a session opened after it heard
-/// the turn, so a line about the one before changes nothing.
+/// An unheard turn ends the session it names and no other.
 #[test]
 fn an_unheard_turn_ends_only_the_session_it_names() {
     let first = SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid");
@@ -275,7 +269,6 @@ fn an_unheard_turn_ends_only_the_session_it_names() {
     assert_eq!(standing.session.map(|kept| kept.session.id), Some(second));
 }
 
-/// The last session line wins, first ever or minted after cold recovery.
 #[test]
 fn the_last_session_line_wins() {
     let first = SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid");
@@ -306,8 +299,7 @@ fn the_last_session_line_wins() {
     assert_eq!(session.session.created, "2026-09-13T09:05:00");
 }
 
-/// A stop reads as the owner's act and ends the session: the killed process holds a question it
-/// never answered, so nothing resumes it.
+/// A stop reads as the owner's act and ends the session.
 #[test]
 fn a_stop_is_an_act_and_ends_the_session() {
     let entries = vec![
@@ -555,7 +547,6 @@ fn a_stop_is_known_by_its_line_not_its_words() {
     assert!(stored.rewind(Rewind::Regenerate).is_err());
 }
 
-/// A rewind past the end of the file is not a conversation.
 #[test]
 fn a_rewind_to_a_turn_never_said_is_refused() {
     let mut entries = one_round();
@@ -664,7 +655,7 @@ proptest::proptest! {
     }
 }
 
-/// The last name wins, so a rename is an append; an unnamed topic heads its row "New topic".
+/// The last name wins; an unnamed topic heads its row "New topic".
 #[test]
 fn the_last_title_wins() {
     let untitled = Entry::Opened {
@@ -699,8 +690,6 @@ fn the_last_title_wins() {
     assert_eq!(stored.title.get().map(String::as_str), Some("The permit"));
     assert_eq!(stored.heading(), "The permit");
 }
-
-// --- the responses and the one reading of them -------------------------
 
 /// One response of each arm; [`arm`] is an exhaustive match, so a new arm fails to compile
 /// until it is listed here.

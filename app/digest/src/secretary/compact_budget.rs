@@ -1,17 +1,13 @@
-//! What the compactor may spend: a cap on calls an hour and on bytes sent a day, read against
-//! the attempts the digest's history records, so the budget is a fold over the digest's own
-//! objects and a restart forgets nothing it spent.
+//! What the compactor may spend: a cap on calls an hour and on bytes sent a day, a fold over the
+//! digest's own objects, so a restart forgets nothing it spent.
 //!
-//! Both windows are rolling and end at the instant asked about. A call is made only when what
-//! the windows spent, joined with what the call itself will spend, is within both caps, so no
-//! call crosses a cap by its own size: the caps are a down-set of the [`Spent`] monoid.
+//! Both windows are rolling and end at the instant asked about.
 
 use prodrome_core::fpl::{Instant, instant_of};
 use prodrome_core::literal::Datetime;
 
 use crate::secretary::digest_spent::Spent;
 
-/// The caps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Budget {
     /// Calls to the model in any hour.
@@ -20,19 +16,14 @@ pub struct Budget {
     pub bytes_per_day: u64,
 }
 
-/// Why no attempt may start now, and when one may.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hold {
-    /// The last hour's calls reached the cap.
     Calls {
-        /// The calls made in it.
         spent: u32,
         /// When enough of them are an hour old.
         until: Instant,
     },
-    /// The last day's bytes and the call's own would cross the cap.
     Bytes {
-        /// The bytes sent in it.
         spent: u64,
         /// The bytes the call would send.
         next: u64,
@@ -42,7 +33,6 @@ pub enum Hold {
 }
 
 impl Hold {
-    /// When an attempt may start again.
     #[must_use]
     pub fn until(self) -> Instant {
         match self {
@@ -70,15 +60,14 @@ impl std::fmt::Display for Hold {
 }
 
 impl Budget {
-    /// Whether a call that spends `next` could ever be made: within both caps on its own. One
-    /// that is not would wait forever, so the rule records it unfit instead of holding it.
+    /// Whether a call that spends `next` could ever be made: within both caps on its own.
     #[must_use]
     pub fn admits(&self, next: Spent) -> bool {
         next.calls <= self.calls_per_hour && next.sent <= self.bytes_per_day
     }
 
-    /// The hold on a call that will spend `next`, at `now`, given every call the history
-    /// records; `None` when it may be made. The hourly cap is asked first.
+    /// The hold on a call that will spend `next`, at `now`; `None` when it may be made. The
+    /// hourly cap is asked first.
     #[must_use]
     pub fn hold(&self, attempts: &[(Datetime, Spent)], next: Spent, now: Instant) -> Option<Hold> {
         let hour = chrono::Duration::hours(1);
@@ -105,9 +94,8 @@ impl Budget {
 }
 
 /// What the attempts in the window of `width` ending at `now` spent, and the instant they no
-/// longer hold the cap, when `over` says they do now: the oldest are dropped until the rest are
-/// under it, and the last dropped leaves the window at its instant plus `width`. A call over
-/// the cap on its own is held a whole window, and asked about again then.
+/// longer hold the cap, when `over` says they do now. A call over the cap on its own is held a
+/// whole window, and asked about again then.
 fn freed(
     attempts: &[(Datetime, Spent)],
     now: Instant,
@@ -157,7 +145,6 @@ mod tests {
         )
     }
 
-    /// The smallest call, which the caps hold exactly when the window has reached them.
     const CALL: Spent = Spent { calls: 1, sent: 1 };
 
     const BUDGET: Budget = Budget {

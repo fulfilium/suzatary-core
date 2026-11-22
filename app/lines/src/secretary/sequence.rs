@@ -1,5 +1,5 @@
 //! One total order of a set of nodes that rest on one another, computed alike by every replica
-//! from the set it holds. It names no type of this application, so it can join the Prodrome.
+//! from the set it holds.
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap};
@@ -28,9 +28,9 @@ pub fn causal<N: Ord, T: Ord + Copy, W>(nodes: &[Node<'_, N, T, W>]) -> Order {
 }
 
 /// [`causal`]'s order with the nodes whose writer `on_spine` names as its spine: every other node
-/// placed just before the first spine node at or above it, else after the last. So a later node
-/// that no spine node rests on moves no node at or before the spine's last. Total over any set,
-/// concurrent spine nodes included.
+/// placed just before the first spine node at or above it, else after the last. Total over any
+/// set, concurrent spine nodes included. A later node no spine node rests on moves none at or
+/// before the spine's last.
 #[must_use]
 pub fn sequenced<N: Ord, T: Ord + Copy, W>(
     nodes: &[Node<'_, N, T, W>],

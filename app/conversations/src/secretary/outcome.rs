@@ -1,30 +1,23 @@
-//! What a verb's call came to, kept with the turn's shape in the clear: answered, refused, or
-//! a fact remembered.
-//!
-//! The fact a `remember` call wrote is its receipt. It lives here, beside the locked words and not
-//! in them, so it still reads once the owner has erased the answer's words.
+//! What a verb's call came to, kept in the clear beside the locked words, so a `remember`'s fact
+//! still reads once the owner has erased the answer's words.
 
 use serde::{Deserialize, Serialize};
 
 use suzatary_memory::secretary::memory::FactId;
 
-/// How one call ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "is", rename_all = "lowercase")]
 pub enum Outcome {
-    /// The verb answered.
     Answered,
     /// The verb refused; the model still sees why.
     Refused,
     /// `remember` wrote fact `fact` to the memory.
     Remembered {
-        /// The fact it wrote.
         fact: FactId,
     },
 }
 
 impl Outcome {
-    /// Whether the call was refused.
     #[must_use]
     pub fn refused(self) -> bool {
         match self {

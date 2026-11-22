@@ -1,10 +1,9 @@
 //! What every node of the digest carries up the tree: whether the lines it spans can hold
 //! somebody else's words, and which kinds of line they are.
 //!
-//! A line's taint is its round's so far (`taint::rounds`), so a model's answer after a mail read
-//! is tainted. A [`Label`] is a join-semilattice with a unit, so the Prodrome's [`Measure`]: a node's label
-//! is the join of its lines', whatever the tree's shape, and it is computed by the reading from
-//! the lines alone, never told by the model that summarised them.
+//! A line's taint is its round's so far, so a model's answer after a mail read is tainted. A
+//! node's label is the join of its lines', computed from the lines alone, never told by the
+//! model that summarised them.
 
 use prodrome_core::digest::Measure;
 
@@ -14,55 +13,39 @@ use suzatary_conversations::secretary::taint::Taint;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
 
-/// A span of lines' taint and kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Label {
-    /// The join of its lines' taints: tainted when any one is.
     pub taint: Taint,
-    /// Every kind of line it spans.
     pub kinds: Kinds,
 }
 
 /// A kind of stored line: an [`Entry`]'s constructor, a said line by whose turn it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
-    /// A conversation opened.
     Opened,
-    /// A conversation named.
     Titled,
     /// The owner's, or a person's, words.
     Person,
-    /// The model's words.
     Model,
     /// A verb's answer.
     Tool,
-    /// The owner's act.
     Act,
     /// The box's own note, an act line it composed from its own state ([`Entry::noted`]).
     Noted,
-    /// A proposal made.
     Proposed,
-    /// A batch settled.
     Reviewed,
-    /// A review that could not run.
     ReviewFailed,
-    /// A round stopped.
     Stopped,
-    /// Turns set aside.
     Rewound,
-    /// The memory's version told.
     MemorySeen,
-    /// A line about the model session: opened, kept, ended by a turn it did not hear, or the
-    /// scope its asks are sent in.
+    /// A line about the model session.
     Session,
-    /// A coding session's line.
     Coding,
     /// An erasure's line, or a line whose words were erased.
     Erased,
 }
 
 impl Kind {
-    /// Every kind, in order.
     pub const ALL: [Kind; 16] = [
         Kind::Opened,
         Kind::Titled,
@@ -82,7 +65,6 @@ impl Kind {
         Kind::Erased,
     ];
 
-    /// The kind of `entry`.
     #[must_use]
     pub fn of(entry: &Entry) -> Self {
         match entry {
@@ -117,7 +99,6 @@ impl Kind {
         }
     }
 
-    /// An act line stamped `by`: the box's own note, or the owner's act.
     pub(crate) fn act(by: Option<&Stamp>) -> Self {
         match by {
             Some(Stamp::Box) => Kind::Noted,
@@ -130,7 +111,6 @@ impl suzatary_base::finite::Finite for Kind {
     const ALL: &'static [Self] = &Kind::ALL;
 }
 
-/// A set of [`Kind`]s, joined by union.
 pub type Kinds = suzatary_base::finite::Set<Kind>;
 
 impl Label {
@@ -143,7 +123,6 @@ impl Label {
         }
     }
 
-    /// One line's: `taint`, its taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), and its kind.
     #[must_use]
     pub fn of(entry: &Entry, taint: Taint) -> Self {
         Self {
@@ -153,19 +132,16 @@ impl Label {
     }
 }
 
-/// Which parts a reader is shown in words. Each is a down-set of the semilattice, a homomorphism
-/// to `bool` under `and` (a span reads exactly when each of its lines does), so a summary of lines
-/// a reader may read is one it may read.
+/// Which parts a reader is shown in words: each is a down-set of the semilattice, so a summary of
+/// lines a reader may read is one it may read.
 impl Label {
-    /// Clean: nothing in it can be somebody else's words. What the compactor reads.
     #[must_use]
     pub fn is_clean(&self) -> bool {
         self.taint == Taint::Clean
     }
 
-    /// The owner's own words: clean, and nothing but his turns and acts (and erasures, which hold
-    /// no words), never the box's notes. What every session is
-    /// told; the secretary's answers, verbs' answers and the box's bookkeeping are opened by `zoom`.
+    /// The owner's own words: clean, and nothing but his turns, acts and erasures, never the
+    /// box's notes.
     #[must_use]
     pub fn is_owners(&self) -> bool {
         self.is_clean()
@@ -176,7 +152,6 @@ impl Label {
     }
 }
 
-/// Clean and no kind is the unit; the join is componentwise, so commutative and idempotent too.
 impl Measure for Label {
     fn empty() -> Self {
         Self::default()

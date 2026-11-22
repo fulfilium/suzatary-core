@@ -6,12 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use super::verb_name::VerbName;
 
-/// A name a transcript holds beside a call or an answer. Stored and debugged as the bare name it
-/// prints, so every transcript and every pin of one reads as it did when the name was a string.
+/// A name a transcript holds beside a call or an answer, stored and debugged as the bare name it
+/// prints.
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum ToolName {
-    /// One of the secretary's verbs.
     Verb(VerbName),
     /// The memory's heading, filed as a verb-shaped turn so a model reads it as data like any
     /// answer, never as the owner's words.

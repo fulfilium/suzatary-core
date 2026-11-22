@@ -27,19 +27,18 @@ pub struct Compared {
     /// The turns a start before the claim sent: every turn owed before the claim, in a
     /// conversation where a person's, a model's or a verb's owed turn was said within the bound.
     pub resumed: Vec<usize>,
-    /// The turns the claims' reading owes ([`Transcript::owed`]).
+    /// The turns the claims' reading owes.
     pub owed_by_claims: Vec<usize>,
     /// The turns the first claim step at `now` claims, every run of the store read as gone, as it
     /// is at a first start.
     pub claimed: Vec<usize>,
-    /// The waking turns queued past the bound, none within it, so the next claim step, at the
-    /// next write that asks nothing, writes the box's sentence under them.
+    /// The waking turns queued past the bound, none within it, so the next claim step writes the
+    /// box's sentence under them.
     pub past: Vec<usize>,
     pub order: Order,
 }
 
-/// Whether the turns read in [`sequence::causal`]'s order, the one before the box's lines were
-/// the spine.
+/// Whether the turns read in [`sequence::causal`]'s order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Order {
     Kept,
@@ -53,9 +52,6 @@ pub enum Order {
 pub type Read = Result<Compared, NotAConversation>;
 
 /// Every conversation of `lines`, newest id first, compared at `now`.
-///
-/// # Errors
-/// The store unreadable.
 pub fn compare(
     lines: &dyn Reads<LineEvent>,
     now: Datetime,
@@ -73,7 +69,6 @@ pub fn compare(
         .collect())
 }
 
-/// One conversation compared at `now`.
 fn compared(read: &Transcript, now: Datetime) -> Compared {
     let owed = owed_before_claims(read);
     let since = prodrome_core::fpl::instant_of(now) - transcript::ANSWERED_WITHIN;
@@ -175,9 +170,9 @@ fn order(read: &Transcript) -> Order {
     }
 }
 
-/// Whether a start before the claim answers an owed `turn` as the box reads it, with the key of every slot no
-/// erasure names: a person's, a model's or a verb's. A turn whose words are gone here only for
-/// want of their key is the turn its shape says.
+/// Whether a start before the claim answers an owed `turn` as the box reads it: a person's, a
+/// model's or a verb's. A turn whose words are gone here only for want of their key is the turn
+/// its shape says.
 fn answered(turn: &Turn) -> bool {
     match turn {
         Turn::Person { .. } | Turn::Model { .. } | Turn::Tool { .. } => true,

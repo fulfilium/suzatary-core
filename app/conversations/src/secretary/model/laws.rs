@@ -1,5 +1,4 @@
-//! The model's laws ([`crate::secretary::model::Model`], the brain `choose_brain` picks), read through
-//! a rig that scripts the far end.
+//! The model's laws, read through a rig that scripts the far end.
 
 use std::fmt;
 
@@ -33,7 +32,6 @@ impl fmt::Display for Law {
 
 /// An implementation with its far end scripted.
 pub trait Rig {
-    /// The model under test.
     type Model: Model;
 
     /// The model, its far end answering `text` to every turn.
@@ -49,16 +47,12 @@ pub trait Rig {
 /// One conversation, and what the far end answers it.
 #[derive(Debug, Clone)]
 pub struct Case {
-    /// The conversation asked.
     pub conversation: Conversation,
     /// The far end's text: an envelope, or prose.
     pub answer: String,
 }
 
 /// Every law over every case, through `rig`, with `tools` the verb list each turn names.
-///
-/// # Errors
-/// The first [`Broken`] law.
 pub fn check<R: Rig>(
     rig: &R,
     tools: &serde_json::Value,
@@ -114,7 +108,6 @@ fn words(turn: &Turn) -> &str {
     match turn {
         Turn::Person { text, .. } | Turn::Model { text, .. } | Turn::Act { text, .. } => text,
         Turn::Tool { answer, .. } => answer,
-        // A turn whose words are gone says none.
         Turn::Erased { .. } => "",
     }
 }

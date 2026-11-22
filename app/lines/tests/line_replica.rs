@@ -99,7 +99,6 @@ fn line_seed(i: usize) -> u8 {
     10 + u8::try_from(i).expect("small")
 }
 
-/// The heads of a store holding `nodes`.
 fn heads(nodes: &[Parsed]) -> BTreeSet<Hash> {
     let named: BTreeSet<&Hash> = nodes.iter().flat_map(Node::rests_on).collect();
     nodes
@@ -287,7 +286,6 @@ proptest! {
             }
         }
         prop_assert_eq!(printed(&rebuilt), printed(&live));
-        // And through the device's form: each delta framed and read back.
         let mut read = LinePulling::default();
         for d in &deltas {
             read.apply(&unframe(&frame(&framed(d)).expect("frames")).expect("reads").expect("of this form").delta);

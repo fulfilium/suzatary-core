@@ -1,7 +1,7 @@
-//! The lines' replica in the device's form: its snapshot ([`suzatary_store::snapshot::Held`]) and its
-//! frames, each name printed as its 32 bytes rather than 64 hex characters. A node reads back
-//! through [`Parsed::of`], as the box's are read, so a snapshot holds nothing a pull could not;
-//! a husk reads back through [`Husk::read`], which reads no words.
+//! The lines' replica in the device's form: its snapshot and its frames, each name printed as its
+//! 32 bytes rather than 64 hex characters. A node reads back through [`Parsed::of`], as the box's
+//! are read, so a snapshot holds nothing a pull could not; a husk reads back through
+//! [`Husk::read`], which reads no words.
 
 use std::collections::BTreeMap;
 
@@ -49,7 +49,6 @@ pub struct LineReplica {
 #[derive(Debug, Clone)]
 pub struct LineFrame {
     pub delta: LineDelta,
-    /// The lines it husked.
     pub husked: Vec<Husked>,
 }
 
@@ -167,9 +166,6 @@ impl snapshot::Held for LineReplica {
 }
 
 /// `frame` as a frame of the log: the snapshot's form, then the frame in postcard.
-///
-/// # Errors
-/// [`Unprinted`] where it refuses to print.
 pub fn frame(frame: &LineFrame) -> Result<Vec<u8>, Unprinted> {
     let form = FrameForm {
         delta: form::delta_form(&frame.delta, row_form, |k| bytes(k.as_str())),
@@ -179,9 +175,6 @@ pub fn frame(frame: &LineFrame) -> Result<Vec<u8>, Unprinted> {
 }
 
 /// The frame `bytes` prints, or none for a frame of another form, which this build passes over.
-///
-/// # Errors
-/// [`NotASnapshot`]: a frame of this form cut short, unread, or holding what no replica holds.
 pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
     let form: FrameForm = match snapshot::read(<LineReplica as snapshot::Held>::FORM, bytes) {
         Ok(form) => form,
@@ -418,7 +411,6 @@ pub fn sized_node(
     }
 }
 
-/// An envelope's constructor.
 fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str {
     use prodrome_core::event::Envelope;
     match envelope {

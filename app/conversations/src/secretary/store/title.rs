@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 #[serde(try_from = "String", into = "String")]
 pub struct Title(String);
 
-/// Text that is not a title.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotATitle {
     /// Nothing but whitespace.
@@ -17,7 +16,6 @@ pub enum NotATitle {
     /// A line break or another control character.
     #[error("a title is one line")]
     Lines,
-    /// Longer than [`Title::MAX`] characters.
     #[error("a title is at most {} characters", Title::MAX)]
     Long,
 }
@@ -26,10 +24,6 @@ impl Title {
     /// The longest title, in characters: a list row, not a sentence.
     pub const MAX: usize = 80;
 
-    /// Trim and check one.
-    ///
-    /// # Errors
-    /// [`NotATitle`] naming which rule it broke.
     pub fn new(text: impl Into<String>) -> Result<Self, NotATitle> {
         let text = text.into().trim().to_owned();
         if text.is_empty() {
@@ -43,7 +37,6 @@ impl Title {
         }
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

@@ -1,10 +1,8 @@
 //! The memory's two stores as one value: its history, a prodrome at the [`MemoryEvent`] schema
-//! that names each fact's words, and its texts, which forgetting deletes. The inbox is read too,
-//! since a remember card names its words in the same text store.
+//! that names each fact's words, and its texts, which forgetting deletes.
 //!
-//! Every reading takes no lock; a fact whose text is missing reads as absent, never an error.
-//! The non-monotone questions (room under [`MAX_LIVE`], a duplicate, standing ids, the next
-//! number, a card keeping these words) are the writes', asked under the history's hold ([`Held`]).
+//! Every reading takes no lock; the non-monotone questions are the writes', asked under the
+//! history's hold ([`Held`]).
 
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
@@ -26,12 +24,10 @@ use suzatary_memory::secretary::texts;
 use suzatary_memory::secretary::two_phase::TwoPhase;
 use suzatary_store::store::{Gets, Lists, Prodrome, Reads, WriteLock};
 
-/// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
 #[derive(Clone, Copy)]
 pub struct Memories<'a> {
     /// What was remembered and forgotten, by id; never a fact's words.
     pub history: &'a dyn Prodrome<MemoryEvent>,
-    /// The words of each standing fact and remember card, by the name that gives them.
     pub texts: &'a dyn Lists<TextName, Text<Fact>>,
     /// The inbox, whose remember cards name their words in [`Memories::texts`].
     pub cards: &'a dyn Prodrome<InboxEvent>,
@@ -49,14 +45,12 @@ pub struct Held<'a> {
 /// The words a remember card names: found on a card already, or kept for this one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kept {
-    /// A card already names these words; asking again names them too.
     Found(TextName),
     /// Kept now, for a card not yet filed.
     New(TextName),
 }
 
 impl Kept {
-    /// The name either way.
     #[must_use]
     pub fn name(&self) -> &TextName {
         match self {
@@ -68,34 +62,25 @@ impl Kept {
 /// The memory as a reader holds it: no field reaches a write.
 #[derive(Clone, Copy)]
 pub struct ReadMemories<'a> {
-    /// What was remembered and forgotten, by id.
     pub history: &'a dyn Reads<MemoryEvent>,
-    /// The words of each standing fact and of each remember card.
     pub texts: &'a dyn Gets<TextName, Text<Fact>>,
     pub digests: ReadDigests<'a>,
 }
 
 impl ReadMemories<'_> {
-    /// The history's reading.
-    ///
-    /// # Errors
-    /// The store's own.
     pub fn history(&self) -> Result<TwoPhase, Refusal> {
         Ok(TwoPhase::of(&self.history.nodes()?))
     }
 
-    /// The memory as a reader gets it: every standing fact whose words read.
+    /// Every standing fact whose words read.
     ///
     /// # Errors
-    /// The stores' own: a text that will not read is a failure, never an absent fact.
+    /// A text that will not read is a failure, never an absent fact.
     pub fn read(&self) -> Result<Memory, Refusal> {
         self.with_words(&self.history()?)
     }
 
     /// The words kept under `name`, for a card or a fact; `None` once they are deleted.
-    ///
-    /// # Errors
-    /// The text store's own, for words that are there and will not read.
     pub fn words(&self, name: &TextName) -> Result<Option<Fact>, Refusal> {
         Ok(self.texts.get(name)?.map(|text| text.words().clone()))
     }
@@ -114,7 +99,6 @@ impl ReadMemories<'_> {
 }
 
 impl<'a> Memories<'a> {
-    /// The stores as a reader holds them.
     #[must_use]
     pub fn reads(&self) -> ReadMemories<'a> {
         ReadMemories {
@@ -124,10 +108,6 @@ impl<'a> Memories<'a> {
         }
     }
 
-    /// Take the history's hold, which every write and every deletion of words is made under.
-    ///
-    /// # Errors
-    /// The store's own.
     pub fn hold(&self) -> Result<Held<'a>, Refusal> {
         Ok(Held {
             memories: *self,
@@ -135,10 +115,6 @@ impl<'a> Memories<'a> {
         })
     }
 
-    /// Remember a fact under the history's hold, as [`Held::remember`].
-    ///
-    /// # Errors
-    /// As [`Held::remember`].
     pub fn remember(
         &self,
         fact: &Fact,
@@ -149,10 +125,6 @@ impl<'a> Memories<'a> {
         self.hold()?.remember(fact, kind, said, at)
     }
 
-    /// Consolidate standing facts under the history's hold, as [`Held::consolidate`].
-    ///
-    /// # Errors
-    /// As [`Held::consolidate`].
     pub fn consolidate(
         &self,
         from: &std::collections::BTreeSet<FactId>,
@@ -164,16 +136,11 @@ impl<'a> Memories<'a> {
         self.hold()?.consolidate(from, fact, kind, round, at)
     }
 
-    /// Forget a standing fact under the history's hold, as [`Held::forget`].
-    ///
-    /// # Errors
-    /// As [`Held::forget`].
     pub fn forget(&self, id: FactId, at: Datetime, by: &Actor) -> Result<Forgotten, Refusal> {
         self.hold()?.forget(id, at, by)
     }
 
-    /// The sweep after a write, under the hold: it never fails the write. A refused sweep is
-    /// logged, and the next sweep deletes what this one did not.
+    /// The sweep after a write, under the hold: it never fails the write.
     pub fn sweep_after_write(&self) {
         match self.hold() {
             Ok(held) => held.sweep_after_write(),
@@ -181,18 +148,11 @@ impl<'a> Memories<'a> {
         }
     }
 
-    /// Sweep under the history's hold, as [`Held::sweep`].
-    ///
-    /// # Errors
-    /// As [`Held::sweep`].
     pub fn sweep(&self) -> Result<usize, Refusal> {
         suzatary_lines::parts::part("lock", || self.hold())?.sweep()
     }
 
     /// [`Memories::sweep`] of `which` alone, refused as the whole sweep is.
-    ///
-    /// # Errors
-    /// As [`Held::sweep`].
     pub fn sweep_only(&self, which: Texts) -> Result<usize, Refusal> {
         let held = suzatary_lines::parts::part("lock", || self.hold())?;
         held.wholes()?;
@@ -208,10 +168,6 @@ pub enum Texts {
 }
 
 impl Held<'_> {
-    /// Remember a fact, as [`Held::write`] with nothing replaced.
-    ///
-    /// # Errors
-    /// As [`Held::write`].
     pub fn remember(
         &self,
         fact: &Fact,
@@ -222,10 +178,10 @@ impl Held<'_> {
         self.write(fact, kind, &Replaces::Nothing, said, at)
     }
 
-    /// Replace the standing facts `from` with `fact`, written in `round`, as [`Held::write`].
+    /// Replace the standing facts `from` with `fact`, written in `round`.
     ///
     /// # Errors
-    /// [`Refusal::bad_request`] for no source; otherwise as [`Held::write`].
+    /// [`Refusal::bad_request`] for no source.
     pub fn consolidate(
         &self,
         from: &std::collections::BTreeSet<FactId>,
@@ -241,9 +197,6 @@ impl Held<'_> {
 
     /// Write `fact` from `origin` in place of `replaces`: its words first, then the event, and
     /// the words removed again if the event is refused.
-    ///
-    /// # Errors
-    /// As `Held::event`; the salt's, the texts' and the history's own.
     pub fn write(
         &self,
         fact: &Fact,
@@ -265,7 +218,6 @@ impl Held<'_> {
         match appended {
             Ok(id) => self.written(id, fact, kind, replaces, at),
             Err(refused) => {
-                // Its words never stood, so they are not kept.
                 let _ = self.memories.texts.remove(&name);
                 Err(refused)
             }
@@ -275,7 +227,7 @@ impl Held<'_> {
     /// Write the words a tapped card keeps under `text`; the fact and the card share the text.
     ///
     /// # Errors
-    /// [`Refusal::not_found`] for words no longer kept; as `Held::event`; the history's own.
+    /// [`Refusal::not_found`] for words no longer kept.
     pub fn write_kept(
         &self,
         text: &TextName,
@@ -297,7 +249,7 @@ impl Held<'_> {
     ///
     /// # Errors
     /// [`Refusal::conflict`] at [`MAX_LIVE`] or for a duplicate standing fact;
-    /// [`Refusal::not_found`] for a source that does not stand; the history's own.
+    /// [`Refusal::not_found`] for a source that does not stand.
     fn event(
         &self,
         fact: &Fact,
@@ -328,7 +280,7 @@ impl Held<'_> {
         }
     }
 
-    /// Fact `id` just written; after a consolidation, the sweep deletes its sources' words.
+    /// After a consolidation, the sweep deletes its sources' words.
     fn written(
         &self,
         id: FactId,
@@ -359,11 +311,8 @@ impl Held<'_> {
         })
     }
 
-    /// The words a remember card about `fact` names: a card's already, word for word, so asking
-    /// again is the same card, or else kept afresh.
-    ///
-    /// # Errors
-    /// The salt's and the stores' own.
+    /// The words a remember card about `fact` names: a card's already, word for word, or else
+    /// kept afresh.
     pub fn keep_card(&self, fact: &Fact) -> Result<Kept, Refusal> {
         let memories = &self.memories;
         let fold = inbox::fold(memories.cards)?;
@@ -381,9 +330,6 @@ impl Held<'_> {
     }
 
     /// Take back words kept for a card that was never filed; words a card already named stay.
-    ///
-    /// # Errors
-    /// The texts' own.
     pub fn unkeep(&self, kept: &Kept) -> Result<(), Refusal> {
         match kept {
             Kept::New(name) => Ok(self.memories.texts.remove(name)?),
@@ -394,7 +340,7 @@ impl Held<'_> {
     /// Forget a standing fact: the event first, then the sweep, which never fails the forgetting.
     ///
     /// # Errors
-    /// [`Refusal::not_found`] for an id no standing fact carries; the stores' own.
+    /// [`Refusal::not_found`] for an id no standing fact carries.
     pub fn forget(&self, id: FactId, at: Datetime, by: &Actor) -> Result<Forgotten, Refusal> {
         let memories = &self.memories;
         let version = forgetting(&memories.reads().history()?, id)?;
@@ -414,15 +360,14 @@ impl Held<'_> {
         })
     }
 
-    /// Delete every held text that something names and nothing live names, reading every naming
-    /// first. Answers how many it deleted, so a second sweep over the same stores answers 0.
+    /// Delete every held text that something names and nothing live names, and answer how many.
     ///
-    /// Asked under the hold, so nothing can come to name a text between the reading and the
-    /// deletion; it reads every store whole or deletes nothing, since an object left out may be
-    /// the one that keeps a text live.
+    /// It reads every store whole or deletes nothing, since an object left out may be the one
+    /// that keeps a text live. It is asked under the hold, so nothing can come to name a text
+    /// between the reading and the deletion.
     ///
     /// # Errors
-    /// [`Refusal::conflict`] naming a store whose read left anything out; the stores' own.
+    /// [`Refusal::conflict`] naming a store whose read left anything out.
     pub fn sweep(&self) -> Result<usize, Refusal> {
         self.wholes()?;
         Ok(self.dead(Texts::Facts)? + self.dead(Texts::Summaries)?)
@@ -441,8 +386,7 @@ impl Held<'_> {
         })
     }
 
-    /// Delete the dead texts of `which` its store holds, every naming of them read first, and
-    /// answer how many.
+    /// Delete the dead texts of `which` its store holds, and answer how many.
     fn dead(&self, which: Texts) -> Result<usize, Refusal> {
         use suzatary_lines::parts::part;
         let memories = &self.memories;
@@ -469,12 +413,12 @@ impl Held<'_> {
     }
 
     /// Erase from its conversation what every forgotten fact's writing provably copied, and offer
-    /// what it cannot prove as a card. Each erasure is stamped with its forgetting's instant, so
-    /// a failed one is erased by the next. A forgetting takes what its facts' sources wrote too
-    /// ([`TwoPhase::forgotten_with`]). Answers how many keys it erased.
+    /// what it cannot prove as a card. Answers how many keys it erased. Each erasure is stamped
+    /// with its forgetting's instant, so a failed one is erased by the next; a forgetting takes
+    /// what its facts' sources wrote too ([`TwoPhase::forgotten_with`]).
     ///
     /// # Errors
-    /// The stores' own; a conversation that does not read owes nothing until it does.
+    /// A conversation that does not read owes nothing until it does.
     pub fn erase_forgotten(&self) -> Result<usize, Refusal> {
         let history = self.memories.reads().history()?;
         let lines = self.memories.digests.lines;
@@ -546,7 +490,6 @@ impl Held<'_> {
         Ok(())
     }
 
-    /// [`Memories::sweep_after_write`], under this hold.
     pub fn sweep_after_write(&self) {
         if let Err(refused) = self.sweep() {
             refused_sweep(&refused);
@@ -565,10 +508,8 @@ impl Held<'_> {
     }
 }
 
-/// A sweep after a write that could not run: said, and left to the next sweep.
-/// The dead texts of `namings` among those `held`. A store that cannot say what it holds is asked
-/// to remove every dead name, as before it could list: removing a name that is not there
-/// succeeds, so the listing can make a sweep cheaper and never make it delete less.
+/// The dead texts of `namings` among those `held`; a store that cannot list them is asked to
+/// remove every dead name.
 fn held_dead<T>(
     namings: impl IntoIterator<Item = texts::Naming<T>>,
     held: Result<std::collections::BTreeSet<TextName>, suzatary_store::store::StoreError>,
@@ -593,9 +534,6 @@ fn refused_sweep(refused: &Refusal) {
 }
 
 /// Refuse unless `store` read whole: a deciding write may not rest on a partial read.
-///
-/// # Errors
-/// [`Refusal::conflict`] naming the store and what its read left out.
 pub(crate) fn whole<E: Schema>(store: &dyn Reads<E>, store_name: &str) -> Result<(), Refusal> {
     let left_out = store.excluded()?;
     if left_out.is_empty() {
@@ -612,10 +550,6 @@ pub(crate) fn whole<E: Schema>(store: &dyn Reads<E>, store_name: &str) -> Result
     )))
 }
 
-/// The event remembering fact `id`, whose words are kept under `text`.
-///
-/// # Errors
-/// [`Refusal::internal`] for a refusal the schema never makes of a remembering.
 fn remembered(
     id: FactId,
     at: Datetime,
@@ -627,7 +561,7 @@ fn remembered(
         .map_err(|refused| Refusal::internal(refused.to_string()))
 }
 
-/// Decide a remember: the new fact's number, one more than every id and version before it.
+/// Decide a remember: the new fact's number.
 ///
 /// # Errors
 /// [`Refusal::conflict`] for a duplicate standing fact, and at [`MAX_LIVE`] counted in the
@@ -648,7 +582,7 @@ pub fn remembering(history: &TwoPhase, memory: &Memory, fact: &Fact) -> Result<F
 }
 
 /// Decide a consolidation: the new fact's number. Its words may repeat a source's, never
-/// another standing fact's, and it needs no room.
+/// another standing fact's.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a source that does not stand; [`Refusal::conflict`] for a duplicate.

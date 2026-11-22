@@ -1,10 +1,6 @@
-//! Where a piece of work spends its time, part by part: the lines that split a server's start, a
-//! process's first read and a skeleton piece.
-//!
-//! A scope is opened on a thread around the work ([`scoped`]); every [`part`] run on that thread
-//! while it is open is summed into it and into every scope enclosing it. A part's time excludes
-//! the parts run inside it, so a scope's parts sum to no more than its wall time. Outside every
-//! scope a part reads no clock, and a part on another thread adds nothing.
+//! Where a piece of work spends its time, part by part, summed into every scope open on the
+//! thread ([`scoped`]): a part's time excludes the parts run inside it, outside every scope a part
+//! reads no clock, and a part on another thread adds nothing.
 
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
@@ -15,7 +11,6 @@ use std::time::{Duration, Instant};
 pub struct Parts(Vec<(&'static str, Duration, usize)>);
 
 impl Parts {
-    /// `spent` more of `part`.
     pub fn add(&mut self, part: &'static str, spent: Duration) {
         match self.0.iter_mut().find(|(name, _, _)| *name == part) {
             Some((_, total, count)) => {
@@ -26,7 +21,6 @@ impl Parts {
         }
     }
 
-    /// Each part: its name, its time summed and how many times it ran.
     #[must_use]
     pub fn each(&self) -> &[(&'static str, Duration, usize)] {
         &self.0
@@ -57,7 +51,6 @@ std::thread_local! {
     static OPEN: RefCell<Vec<Parts>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Whether a scope is open on this thread.
 #[must_use]
 pub fn open() -> bool {
     OPEN.with_borrow(|open| !open.is_empty())

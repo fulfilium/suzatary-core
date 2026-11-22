@@ -1,12 +1,7 @@
-//! What `taint` says a model holds against what a model was sent: a simulated model records every
-//! turn it is sent (a stateless one its window, a session its opening window and each delta
-//! resumed), over generated conversations of the owner's turns, mail read and weather looked up,
-//! sessions opened (some with a turn said while they open, some on a line from before the first
-//! turn was recorded), reopened when the manual changes, lost and answered by a stateless call
-//! instead, transcript asks (the sweep's), stops and rewinds. A stateless answer while a session
-//! is kept ends that session ([`Entry::Unheard`]), as the round writes it. Whenever a model holds a tainted
-//! turn, `remember` is a card and `taint::rounds` labels its answer tainted (law 9's second half:
-//! nothing the model read reaches the memory unasked).
+//! What `taint` says a model holds against what a simulated model was sent, over generated
+//! conversations: whenever a model holds a tainted turn, `remember` is a card and `taint::rounds`
+//! labels its answer tainted (law 9's second half: nothing the model read reaches the memory
+//! unasked).
 
 use std::collections::BTreeSet;
 
@@ -20,7 +15,6 @@ use suzatary_conversations::secretary::taint::Taint;
 
 #[derive(Debug, Clone)]
 enum Step {
-    /// The owner says something.
     Owner,
     /// The model calls a verb that reads mail, and its answer is stored.
     Read,
@@ -28,7 +22,6 @@ enum Step {
     Weather,
     /// The model is asked and answers, closing the round.
     Ask(Asking),
-    /// The owner stops the round.
     Stop,
     /// The owner rewinds to a turn, as a share of the conversation.
     Rewind(u8),
@@ -39,7 +32,7 @@ enum Asking {
     /// A model with no session, sent its window.
     Window,
     /// A session, resumed or opened; when opened, the owner may say up to four turns before its
-    /// line is written, and the line may be one written before its first turn was recorded.
+    /// line is written, and the line may record no first turn.
     Session { concurrent: usize, legacy: bool },
     /// The manual or the verbs changed, so a fresh session opens whether one is kept or not.
     Reopen,
@@ -108,7 +101,6 @@ fn owner(n: usize) -> Entry {
     })
 }
 
-/// The conversation as the box folds it.
 struct Conversation {
     lines: Vec<Entry>,
 }

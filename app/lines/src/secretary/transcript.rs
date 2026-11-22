@@ -1,14 +1,7 @@
-//! The conversations as one prodrome at the [`LineEvent`] schema, keyed by conversation, each line
-//! resting on the lines its writer held. A slot whose key an erasure names reads as erased, and one
-//! whose key is not held reads as missing.
-//!
-//! [`Transcript`] is one conversation's lines in that order, the box's lines its spine
-//! ([`sequence::sequenced`]). [`Transcript::stored`], [`Transcript::owed`] and [`Stored::lines`]
-//! are reads of it.
+//! The conversations as one prodrome at the [`LineEvent`] schema, keyed by conversation.
 //!
 //! Every line is written through [`push`] or [`start`], which take its words through the
-//! redaction door and lock each slot under a fresh key before the store sees it: nothing enters
-//! the lines with its words in the clear.
+//! redaction door and lock each slot under a fresh key before the store sees it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -54,34 +47,27 @@ pub struct Transcript {
     claims: Claims<RunId>,
 }
 
-/// One line beside its name, its reading and the lines it rests on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Written {
     pub name: Hash,
-    /// The line as stored.
     pub line: LineEvent,
-    /// The line as read, its words opened or gone.
     pub entry: Entry,
     /// The positions, in [`Transcript::lines`], of the lines it rests on directly.
     pub rests_on: Vec<usize>,
 }
 
-/// One line of one conversation as a node holds it: its name, the line, and the names of the
-/// objects it rests on, which may include objects that are no line of the conversation.
+/// One line of one conversation as a node holds it; its parents may include objects that are no
+/// line of the conversation.
 #[derive(Debug, Clone, Copy)]
 pub struct Write<'n> {
     pub name: &'n Hash,
     pub line: &'n LineEvent,
-    /// The names of the objects it rests on.
     pub parents: &'n [Hash],
 }
 
 impl Transcript {
     /// One conversation's writes, in any order, put in causal order, each opened by the key
     /// `slots` answers for its name, and folded.
-    ///
-    /// # Errors
-    /// [`NotAConversation`] for lines the fold refuses.
     pub fn of(
         id: &ConversationId,
         writes: &[Write<'_>],
@@ -106,9 +92,6 @@ impl Transcript {
 
     /// One conversation's writes, in any order, each beside its entry as read, put in causal
     /// order and folded.
-    ///
-    /// # Errors
-    /// [`NotAConversation`] for lines the fold refuses.
     pub(crate) fn read(
         id: &ConversationId,
         writes: &[(Write<'_>, Entry)],
@@ -134,7 +117,6 @@ impl Transcript {
             })
             .collect();
         judged(&mut lines);
-        // The fold makes a turn of each said line and each stop, and of nothing else.
         let turns: Vec<usize> = lines
             .iter()
             .enumerate()
@@ -143,10 +125,8 @@ impl Transcript {
             .map(|(at, _)| at)
             .collect();
         // An edit's `Again` folds at its own question's place, where it takes effect: a session
-        // line written between them is dropped with what the edit sets aside. One nothing takes up
-        // folds nowhere.
+        // line written between them is dropped with what the edit sets aside.
         let edits = takers(lines.len(), |at| &lines[at].line, |at| &lines[at].rests_on);
-        // The edit each line takes up, by the line's position.
         let mut takes = vec![None; lines.len()];
         for (at, edit) in edits.iter().enumerate() {
             if let EditAt::TakenBy(then) = *edit {
@@ -193,8 +173,7 @@ impl Transcript {
         found
     }
 
-    /// The positions of the lines named `names` and of every line they rest on, directly or not:
-    /// what a line resting on `names` saw of this conversation.
+    /// The positions of the lines named `names` and of every line they rest on, directly or not.
     #[must_use]
     pub(crate) fn beneath_names(&self, names: &[Hash]) -> BTreeSet<usize> {
         let mut found = BTreeSet::new();
@@ -248,7 +227,7 @@ impl Transcript {
         self.turns.get(turn).copied()
     }
 
-    /// Every line's entry, in causal order: what [`Stored::of`] folds.
+    /// Every line's entry, in causal order.
     #[must_use]
     pub fn entries(&self) -> Vec<Entry> {
         self.lines
@@ -257,19 +236,16 @@ impl Transcript {
             .collect()
     }
 
-    /// The transcript register: the lines folded.
     #[must_use]
     pub fn stored(&self) -> &Stored {
         &self.stored
     }
 
-    /// The transcript register, owned.
     #[must_use]
     pub fn into_stored(self) -> Stored {
         std::sync::Arc::unwrap_or_clone(self.stored)
     }
 
-    /// The transcript register, shared.
     #[must_use]
     pub(crate) fn shared(&self) -> &std::sync::Arc<Stored> {
         &self.stored
@@ -278,8 +254,7 @@ impl Transcript {
     /// The owed register: every live turn the claims do not read as settled, with its index. A
     /// person's or an act's turn is settled by a closed round that covered it, or by a stop or a
     /// close with no round open that rests on it; a model's or a verb's by any close resting on it.
-    /// It reads descent and claims, not position, so it is the same for every order a replica
-    /// received the lines in.
+    /// It reads descent and claims, not position, so it is the same for every arrival order.
     #[must_use]
     pub fn owed(&self) -> Vec<(usize, &Said)> {
         self.stored
@@ -289,7 +264,7 @@ impl Transcript {
             .collect()
     }
 
-    /// Whether a turn that wakes a model is owed: what the conversation's answer rule reads.
+    /// Whether a turn that wakes a model is owed.
     #[must_use]
     pub fn owes_a_round(&self) -> bool {
         self.owed()
@@ -297,8 +272,7 @@ impl Transcript {
             .any(|(_, said)| suzatary_conversations::secretary::queue::wakes(said))
     }
 
-    /// Each live turn owed a round that no round covers yet, by index: what the page draws as
-    /// queued.
+    /// Each live turn owed a round that no round covers yet, by index.
     #[must_use]
     pub fn queued(&self) -> BTreeSet<usize> {
         self.stored
@@ -314,9 +288,7 @@ impl Transcript {
     }
 
     /// The model's turns that answered turn `turn`, by index, in order: those the last round to
-    /// cover it wrote while it was open, read off the claims. None while no round covered it. A
-    /// round's reply is not whatever stands after the turn: a question said after a round's last
-    /// join stands before that round's closing reply and is not answered by it.
+    /// cover it wrote while it was open, read off the claims. None while no round covered it.
     #[must_use]
     pub fn replies_to(&self, turn: usize) -> Option<Vec<usize>> {
         let line = *self.turns.get(turn)?;
@@ -344,8 +316,7 @@ impl Transcript {
 
     /// The conversation's answering state, read off the claims: thinking while a round is open,
     /// queued while a turn that wakes a model is owed and no round covers it, idle otherwise. A
-    /// round whose run is gone reads thinking until the box's close settles it, since a tab
-    /// cannot tell a lost run from a running one.
+    /// round whose run is gone reads thinking until the box's close settles it.
     #[must_use]
     pub fn state(&self) -> ConversationState {
         let open = self
@@ -376,7 +347,7 @@ impl Transcript {
     }
 
     /// The runs whose rounds the line named `line` ends: for a stop, every round open before it in
-    /// this order. A round whose first claim rests on the stop stands after it, so it is not one.
+    /// this order.
     #[must_use]
     pub fn ended_by(&self, line: &Hash) -> BTreeSet<RunId> {
         let Some(at) = self.lines.iter().position(|written| written.name == *line) else {
@@ -390,14 +361,13 @@ impl Transcript {
             .collect()
     }
 
-    /// The claims' reading of these lines.
     #[must_use]
     pub(crate) fn claims(&self) -> &Claims<RunId> {
         &self.claims
     }
 
     /// Every live request (a person's or an act's turn, or a model's or a verb's) as a claim step
-    /// at `now` reads it. A question a live `Again` asked afresh was asked when that line was.
+    /// at `now` reads it.
     #[must_use]
     pub(crate) fn asked(&self, now: Datetime) -> Vec<Asked> {
         let now = prodrome_core::fpl::instant_of(now);
@@ -456,18 +426,13 @@ impl Transcript {
 /// What a round's write for one question did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Answering {
-    /// The lines were written.
     Written,
-    /// The round was closed already (a stop, or the box's close of a run it read as gone), so
-    /// nothing was written.
+    /// The round was closed already, so nothing was written.
     Answered,
 }
 
 /// [`push`] each of `entries`, a round's lines, in one hold of the lock, while the round of `run`
 /// is open: a round that another line closed writes nothing more.
-///
-/// # Errors
-/// As [`push`].
 pub fn push_open(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -486,11 +451,11 @@ pub fn push_open(
 }
 
 /// Whether every todo some references name is one a trusted actor confirmed, as the chains read
-/// now: what a claim judges another writer's turn by.
+/// now.
 pub type Confirms<'a> = dyn Fn(&[suzatary_base::reference::Reference]) -> bool + 'a;
 
 /// How long after a request is made a round may still claim it: past it, the box closes it
-/// unanswered, and asking again is the person's.
+/// unanswered.
 pub const ANSWERED_WITHIN: chrono::Duration = chrono::Duration::hours(1);
 
 /// What a claim step did.
@@ -507,11 +472,8 @@ pub enum Claimed {
 
 /// The claim step of conversation `id` at `now`, under the lines' lock: what the claim reading
 /// owes (a first claim, a retry of a lost round, the box's close, or nothing while another run's
-/// round runs), written for the round of `run`. A covered turn's taint is the box's judgment of it now. The
-/// box's close is `close` of the conversation as read.
-///
-/// # Errors
-/// As [`push`].
+/// round runs), written for the round of `run`. A covered turn's taint is the box's judgment of
+/// it now.
 pub fn claim(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -549,9 +511,6 @@ pub fn claim(
 
 /// Before the round of `run` asks again, under the lines' lock: a `Began` of its run covering
 /// every request queued, when there is any. A retry round takes none.
-///
-/// # Errors
-/// As [`push`].
 pub fn join(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -576,7 +535,7 @@ pub fn join(
 impl Transcript {
     /// The lines the claim step of a start at `now` claims: a retry of a lost round, or a first
     /// claim that covers a person's question. A conversation owed only an act, a note or the
-    /// box's close waits for its next write, as a start before claims left it.
+    /// box's close is not resumed.
     #[must_use]
     pub(crate) fn resumes(
         &self,
@@ -659,12 +618,8 @@ impl Transcript {
     }
 }
 
-/// Every conversation a start at `now` resumes, oldest id first: one whose claim step would retry
-/// a lost round, or claim a person's question. One owed only an act, a note or the box's close
-/// waits for its next write, as a start before claims left it.
-///
-/// # Errors
-/// The store's.
+/// Every conversation a start at `now` resumes, oldest id first: one whose claim step would retry a
+/// lost round, or claim a person's question.
 pub fn resumed(
     conversations: Conversations<'_>,
     now: Datetime,
@@ -737,8 +692,8 @@ fn marks(lines: &[Written], stored: &Stored, turns: &[usize]) -> Vec<Mark<RunId>
         .collect()
 }
 
-/// The turns the line at `at` sets aside, by index, where it is an `Again` whose question is a
-/// line here: read over descent ([`crate::secretary::again::aside`]); none for any other line.
+/// The turns the line at `at` sets aside, by index, where it is an `Again` whose question is a line
+/// here; none for any other line.
 fn set_aside(lines: &[Written], turns: &[usize], at: usize) -> Vec<usize> {
     let Entry::Again { question, how, .. } = &lines[at].entry else {
         return Vec::new();
@@ -769,7 +724,6 @@ fn set_aside(lines: &[Written], turns: &[usize], at: usize) -> Vec<usize> {
         .collect()
 }
 
-/// Whether `line` is an edit's `Again`.
 fn edit(line: &LineEvent) -> bool {
     matches!(
         line.shape(),
@@ -780,11 +734,8 @@ fn edit(line: &LineEvent) -> bool {
     )
 }
 
-/// The one question every reader asks of an edit: whether `later`, resting on the lines at
-/// `rests_on` (positions among the conversation's lines, the genesis left out), takes up the edit
-/// `again` at `at`. It rests on that `Again` alone, is a round-opening turn of a writer other than
-/// the box ([`Step::takes_up`]), and was sealed at the `Again`'s instant, as the tab seals the
-/// pair in one move.
+/// Whether `later`, resting on the lines at `rests_on` (positions among the conversation's lines,
+/// the genesis left out), takes up the edit `again` at `at`.
 fn takes_up(later: &LineEvent, rests_on: &[usize], at: usize, again: &LineEvent) -> bool {
     rests_on == [at]
         && edit(again)
@@ -802,7 +753,7 @@ enum EditAt {
 }
 
 /// What each of `len` lines is to the edits, by position: the first line that takes an edit's
-/// `Again` up ([`takes_up`]) takes it. One pass over the lines.
+/// `Again` up ([`takes_up`]) takes it.
 fn takers<'l>(
     len: usize,
     line: impl Fn(usize) -> &'l LineEvent,
@@ -830,7 +781,7 @@ fn takers<'l>(
 }
 
 /// The edits' `Again` lines among `lines` (a name, a line, the names it rests on) that no line
-/// takes up, for a reader that folds no transcript: the fold's own pass, `takers`.
+/// takes up.
 #[must_use]
 pub fn inert_edits<'l>(lines: &[(&'l Hash, &'l LineEvent, &'l [Hash])]) -> BTreeSet<&'l Hash> {
     let index: BTreeMap<&Hash, usize> = lines
@@ -932,12 +883,10 @@ pub(crate) fn erasers<'l>(
 }
 
 /// Every key a reseal among `lines` supersedes here: the key of each seal a slot was sealed again
-/// from, where `slots` opens that reseal's one slot (reads it as anything but missing), or where
-/// a later reseal supersedes the reseal's own key, since that reseal holds the same words. Its
-/// words then stand in a reseal, so the key is destroyed like an erased one, and the slot reads
-/// from the reseal. A reseal whose key is not held, and that nothing later supersedes, supersedes
-/// nothing, so a store restored with its lines and without their keys keeps reading the old seal
-/// until a run seals it again. Monotone in the lines and in the keys held.
+/// from, where `slots` opens that reseal's one slot, or where a later reseal supersedes the
+/// reseal's own key. A reseal whose key is not held, and that nothing later supersedes, supersedes
+/// nothing, so a store restored without its keys keeps reading the old seal until a run seals it
+/// again. Monotone in the lines and in the keys held.
 #[must_use]
 pub fn superseded<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
@@ -982,9 +931,7 @@ fn resealed_from<'l>(
 }
 
 /// Whether a reseal supersedes the seal under `key`: one sealed again from it whose slot `slots`
-/// opens, or whose own key a later reseal supersedes in turn, walking `resealed_from`, the
-/// reseals sealed again from each key. Each key is walked once, so the walk ends whatever the
-/// lines name.
+/// opens, or whose own key a later reseal supersedes in turn.
 pub fn supersedes<'l>(
     key: &KeyName,
     resealed_from: impl Fn(&KeyName) -> Vec<&'l LineEvent>,
@@ -1007,19 +954,14 @@ pub fn supersedes<'l>(
 }
 
 /// What a store's lines retire of their keys, a function of the lines alone, so it is read once
-/// per set of heads: every key an erasure of its own conversation names ([`erased`]), and each
-/// conversation's reseals by the key of the seal each was sealed from, so
-/// whether a key is superseded is asked of its own conversation's reseals descending from it
-/// alone ([`supersedes`]), as [`dead`] asks it.
+/// per set of heads; whether a key is superseded is asked of its own conversation's reseals alone.
 #[derive(Debug, Default)]
 pub struct Retired {
-    /// The keys erased, with why.
     pub erased: BTreeMap<KeyName, Erasure>,
     resealed: BTreeMap<ConversationId, BTreeMap<KeyName, Vec<Hash>>>,
 }
 
 impl Retired {
-    /// What `objects` retire.
     #[must_use]
     pub fn of<'l>(objects: impl IntoIterator<Item = impl Named<'l>>) -> Self {
         let lines: Vec<(&Hash, &LineEvent)> = lines_of(objects).collect();
@@ -1071,10 +1013,9 @@ impl Retired {
 }
 
 /// Every reseal among `lines`, by the key of the slot it seals, those under the current rules
-/// first, and among those under the same rules the newest first: the one sealed again from
-/// another's key comes before that other, however far down the chain. Where a slot's own seal
-/// does not open, it is read from the first of these that does, so a slot whose every reseal is
-/// under older rules reads its newest, which the current rules scrub least.
+/// first, and among those under the same rules the newest first. Where a slot's own seal does not
+/// open, it is read from the first of these that does, so a slot whose every reseal is under older
+/// rules reads its newest, which the current rules scrub least.
 #[must_use]
 pub fn reseals<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
@@ -1105,10 +1046,8 @@ pub fn reseals<'l>(
         .collect()
 }
 
-/// How many reseals down from the slot's first seal `reseal` stands: one when it was sealed
-/// again from the first seal `of`, one more than the reseal whose own key it was sealed from
-/// otherwise. A chain is walked at most once through `seals`, so the count ends whatever the
-/// lines name.
+/// How many reseals down from the slot's first seal `reseal` stands: one when it was sealed again
+/// from the first seal `of`, one more than the reseal whose own key it was sealed from otherwise.
 fn depth(reseal: &LineEvent, of: &KeyName, seals: &[(&Hash, &LineEvent)]) -> usize {
     let mut depth = 1;
     let mut at = reseal;
@@ -1138,13 +1077,10 @@ fn depth(reseal: &LineEvent, of: &KeyName, seals: &[(&Hash, &LineEvent)]) -> usi
 /// names its key, so its own seal is never opened and scrubbed again; else as `slots` reads it,
 /// and where that is missing, from the first reseal that opens.
 pub struct Through<'a, S> {
-    /// The keys erased, with why.
     pub erased: &'a BTreeMap<KeyName, Erasure>,
-    /// The keys a reseal that opens here supersedes ([`superseded`]).
+    /// The keys a reseal that opens here supersedes.
     pub superseded: &'a BTreeSet<KeyName>,
-    /// The reseals of each slot ([`reseals`]).
     pub reseals: &'a BTreeMap<KeyName, Vec<&'a LineEvent>>,
-    /// How a slot is read by its key.
     pub slots: &'a S,
 }
 
@@ -1190,7 +1126,6 @@ fn missing(words: &Words<LineWords>) -> bool {
     )
 }
 
-/// Lines, by conversation.
 fn by_conversation<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
 ) -> BTreeMap<&'l ConversationId, Vec<(&'l Hash, &'l LineEvent)>> {
@@ -1203,10 +1138,8 @@ fn by_conversation<'l>(
     by
 }
 
-/// An object of the lines beside its name, as a slice of a store's objects yields it and as a
-/// store's graph does.
+/// An object of the lines beside its name.
 pub trait Named<'l> {
-    /// The name and the object.
     fn named(self) -> (&'l Hash, &'l Envelope<LineEvent>);
 }
 
@@ -1228,7 +1161,6 @@ impl<'l> Named<'l> for &'l (&'l Hash, &'l Envelope<LineEvent>) {
     }
 }
 
-/// The objects' lines, by name.
 fn lines_of<'l>(
     objects: impl IntoIterator<Item = impl Named<'l>>,
 ) -> impl Iterator<Item = (&'l Hash, &'l LineEvent)> {
@@ -1239,9 +1171,8 @@ fn lines_of<'l>(
 }
 
 /// Every slot whose key an erasure line of its own conversation names, or a reseal of it that
-/// `slots` opens supersedes ([`superseded`]), as the line, the slot and its key's name: what a
-/// sweep destroys, on the box or in a tab. Monotone in the lines and the keys held, since a key an
-/// erasure names or a reseal supersedes stays so as lines and keys are added.
+/// `slots` opens supersedes ([`superseded`]), as the line, the slot and its key's name. Monotone in
+/// the lines and the keys held.
 #[must_use]
 pub fn dead<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
@@ -1276,11 +1207,10 @@ pub fn dead_among<'l>(
         .collect()
 }
 
-/// The answer blocks slot `slot`'s words were rendered to, opened by `key`: what a replica
-/// forgets before it destroys the key, since nothing finds them once the words are gone. A slot
-/// under older rules was rendered from its words as they were locked while those rules stood, and
-/// from its words as the current rules read them after, so the blocks of both are named; the
-/// words as locked only name blocks, and are shown to no one.
+/// The answer blocks slot `slot`'s words were rendered to, opened by `key`: what a replica forgets
+/// before it destroys the key, since nothing finds them once the words are gone. A slot under older
+/// rules names the blocks of its words as locked and as the current rules read them; the words as
+/// locked are shown to no one.
 #[must_use]
 pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<suzatary_base::answer::Renderable> {
     rendered(
@@ -1290,7 +1220,7 @@ pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<suzatary_base::a
     )
 }
 
-/// The answer blocks `words` were rendered to, each once: [`fed`] of words already opened.
+/// The answer blocks `words` were rendered to, each once.
 pub fn rendered<'w>(
     words: impl IntoIterator<Item = &'w LineWords>,
 ) -> Vec<suzatary_base::answer::Renderable> {
@@ -1308,9 +1238,8 @@ pub fn rendered<'w>(
     fed
 }
 
-/// Every key the objects' lines name that an erasure of the same conversation names: the keys
-/// whose words are erased, each with why. A key an erasure names in another conversation is no
-/// key of its, and erases nothing.
+/// Every key the objects' lines name that an erasure of the same conversation names, each with why.
+/// A key an erasure names in another conversation is no key of its, and erases nothing.
 #[must_use]
 pub fn erased<'l>(objects: impl IntoIterator<Item = impl Named<'l>>) -> BTreeMap<KeyName, Erasure> {
     erased_lines(lines_of(objects))
@@ -1333,9 +1262,8 @@ pub fn erased_lines<'l>(
         .collect()
 }
 
-/// One conversation's lines in the order every reading takes ([`sequence::sequenced`]), the box's
-/// lines its spine: each with the positions in that order of the lines it rests on. A parent that
-/// is no line here (the genesis) orders nothing.
+/// One conversation's lines in the order every reading takes ([`sequence::sequenced`]), each with
+/// the positions in that order of the lines it rests on.
 #[must_use]
 pub fn sequenced(lines: &[sequence::Node<'_, Hash, Datetime, LineWriter>]) -> sequence::Order {
     sequence::sequenced(lines, LineWriter::spine)
@@ -1363,9 +1291,6 @@ fn writes(nodes: &[Node<LineEvent>]) -> BTreeMap<&ConversationId, Vec<Write<'_>>
 }
 
 /// Every conversation the nodes hold, read, each slot opened by the key `key` answers.
-///
-/// # Errors
-/// [`NotAConversation`] for lines the fold refuses.
 pub fn transcripts(
     nodes: &[Node<LineEvent>],
     slots: &impl Slots,
@@ -1384,20 +1309,15 @@ fn unreadable(failed: impl std::fmt::Display) -> StoreError {
 pub type Read = Result<std::sync::Arc<Transcript>, NotAConversation>;
 
 /// Every conversation, newest id first, each read on its own, so one whose lines the fold refuses
-/// is that conversation's refusal and no other's: one fold of the store for all of them.
-///
-/// # Errors
-/// The store's own.
+/// is that conversation's refusal and no other's.
 pub fn each(conversations: Conversations<'_>) -> Result<Vec<(ConversationId, Read)>, StoreError> {
     conversations.reads().fold(HeldLines::transcripts)
 }
 
 /// What `verify` reports of the conversations, read against `inbox` and by their shapes alone,
-/// since whether a conversation folds never rests on its words: the store's own findings,
-/// every conversation whose lines do not fold, and every proposal line naming a record the inbox
-/// does not hold, by its reference. An inbox that does not fold, and a line answered and never
-/// asked, are the inbox's own findings ([`suzatary_inbox::secretary::inbox::findings`]), so each is named
-/// once.
+/// since whether a conversation folds never rests on its words: the store's own findings, every
+/// conversation whose lines do not fold, and every proposal line naming a record the inbox does not
+/// hold, by its reference.
 #[must_use]
 pub fn findings(
     lines: &dyn Prodrome<LineEvent>,
@@ -1446,7 +1366,7 @@ pub fn findings(
 /// One conversation, read.
 ///
 /// # Errors
-/// [`StoreError::Absent`] for an id never started, and [`each`]'s.
+/// [`StoreError::Absent`] for an id never started.
 pub fn read(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1462,9 +1382,6 @@ pub fn read(
 }
 
 /// One conversation's lines, in causal order.
-///
-/// # Errors
-/// As [`read`].
 pub fn lines(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1473,9 +1390,6 @@ pub fn lines(
 }
 
 /// Every conversation's id, sorted.
-///
-/// # Errors
-/// The store's.
 pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, StoreError> {
     let nodes = conversations.lines.nodes()?;
     Ok(writes(&nodes).into_keys().cloned().collect())
@@ -1483,27 +1397,24 @@ pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, Sto
 
 /// Destroy every key the key store still holds that an erasure line names, that a reseal which
 /// opens supersedes, or that seals a reseal waiting outside the history whose slot the history
-/// reads without it, each once every holder of its words is emptied ([`Holder::ALL`]), and say
-/// how many. A key goes only where what it opens is held elsewhere or erased, checked. The sweep
-/// is monotone: it takes no hold, and running it twice, or on two replicas, destroys what running
-/// it once does. Taking no hold, it can see a batch's child placed before its parent while a
-/// migration places its lines: the child's slot still reads from its old seal, whose key that
-/// reseal does not yet supersede, so the child's key may go and the old one stays; the slot reads
-/// the same, and the next run seals it again.
+/// reads without it, each once every holder of its words is emptied ([`Holder::ALL`]), and say how
+/// many. A key goes only where what it opens is held elsewhere or erased, checked. The sweep is
+/// monotone: it takes no hold, and running it twice, or on two replicas, destroys what running it
+/// once does. Taking no hold, it can see a batch's child placed before its parent while a migration
+/// places its lines; the slot reads the same, and the next run seals it again.
 ///
 /// # Errors
-/// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a copy of its
-/// words may still be on disk; the next sweep tries again.
+/// [`StoreError::Unwritable`] naming every key kept because a copy of its words may still be on
+/// disk; the next sweep tries again.
 pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
     sweep_knowing(conversations, &Known::default())
 }
 
 /// What a writer that has just opened or sealed slots knows of them, so the sweep after it opens
-/// none of them again. The sweep trusts it, so only the migration makes one
-/// ([`crate::secretary::rescrub::run`]).
+/// none of them again. The sweep trusts it, so only the migration makes one.
 #[derive(Debug, Default)]
 pub(crate) struct Known {
-    /// The blocks the words under each key were rendered to ([`fed`]).
+    /// The blocks the words under each key were rendered to.
     pub(crate) fed: BTreeMap<KeyName, Vec<suzatary_base::answer::Renderable>>,
     /// The keys of seals the writer made: each opens its slot, whose words it sealed.
     pub(crate) sealed: BTreeSet<KeyName>,
@@ -1546,11 +1457,8 @@ pub(crate) fn sweep_knowing(
 
 /// The key of every reseal outside the history whose slot the history reads without it: a seal
 /// of that slot in the history opens as `slots` reads it, or an erasure in the history names the
-/// slot. That is a crash's case, where a hold kept a reseal and lost the line it rests on, and
-/// the next run sealed the slot again. A reseal is also left out when a line beneath it does not
-/// read, for a cause that can be mended; then the history holds no other seal that opens, and the
-/// key stays, the store's own finding naming what does not read. So a waiting reseal's key goes
-/// only where what it opens is held elsewhere, checked.
+/// slot. A reseal is also left out when a line beneath it does not read, for a cause that can be
+/// mended; then the history holds no other seal that opens, and the key stays.
 fn waiting_reseals(
     lines: &dyn Prodrome<LineEvent>,
     history: &suzatary_store::store::Graph<LineEvent>,
@@ -1653,9 +1561,8 @@ fn sessions<'l>(
     sessions
 }
 
-/// [`sweep`] of `slots` and of the `waiting` reseals' keys: every holder but the key store
-/// emptied of each, then every key whose holders are empty destroyed in one batch, so the key
-/// store syncs once.
+/// [`sweep`] of `slots` and of the `waiting` reseals' keys: every holder but the key store emptied
+/// of each, then every key whose holders are empty destroyed in one batch.
 fn destroy<'l>(
     conversations: Conversations<'_>,
     sessions: &BTreeMap<&ConversationId, BTreeSet<(&SessionId, &str)>>,
@@ -1729,8 +1636,7 @@ fn destroy<'l>(
 ///
 /// # Errors
 /// [`StoreError::NotAppended`] for no keys, or a key that is not the first key of a slot of `id`:
-/// an erasure erases only its own conversation's words, and names a slot sealed again by the key
-/// it was first sealed under, which erases every seal of it. And [`push`]'s.
+/// an erasure names a slot by the key it was first sealed under, which erases every seal of it.
 pub fn erase(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1764,7 +1670,7 @@ pub fn erase(
         )?;
     }
     // The erasure stands whatever the sweep does: a key it could not destroy yet is destroyed by
-    // the next sweep (an erasure, a forget, a start), which owes every key an erasure names.
+    // the next sweep.
     Ok(sweep(conversations).unwrap_or_else(|failed| {
         tracing::warn!(refused = %failed, "the sweep after an erasure kept keys");
         0
@@ -1781,7 +1687,7 @@ pub fn writer() -> Actor {
 /// Open conversation `id` with its first line.
 ///
 /// # Errors
-/// [`StoreError::Taken`] for an id already started, and [`push`]'s.
+/// [`StoreError::Taken`] for an id already started.
 pub fn start(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1797,12 +1703,12 @@ pub fn start(
     write(conversations, id, 0, first)
 }
 
-/// Begin a new conversation with `first`, its id a function of that line
-/// ([`LineEvent::begun_id`]), as a tab's opening line is; answers the id.
+/// Begin a new conversation with `first`, its id a function of that line ([`LineEvent::begun_id`]);
+/// answers the id.
 ///
 /// # Errors
-/// [`StoreError::Taken`] where the store holds a line of that id already, an entry the door or
-/// the schema refuses, and the stores' own.
+/// [`StoreError::Taken`] where the store holds a line of that id already, or an entry the door
+/// or the schema refuses.
 pub fn begin(
     conversations: Conversations<'_>,
     first: &Entry,
@@ -1828,8 +1734,7 @@ pub fn begin(
 /// on every line the conversation holds.
 ///
 /// # Errors
-/// [`StoreError::Absent`] for an id never started, an entry the door or the schema refuses, and
-/// the stores' own.
+/// [`StoreError::Absent`] for an id never started, or an entry the door or the schema refuses.
 pub fn push(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1842,9 +1747,6 @@ pub fn push(
 
 /// The line `owed` answers on conversation `id`'s reading, appended under the lines' lock, where
 /// one is still owed: a line two writers both owe is written once. Whether one was written.
-///
-/// # Errors
-/// [`push`]'s.
 pub fn push_owed(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -1920,7 +1822,7 @@ pub fn judgments<'e>(entries: impl IntoIterator<Item = &'e Entry>) -> BTreeMap<H
 }
 
 /// `entry`, the line `name` that `actor` wrote, read with the stamp `judgments` give it: every
-/// reader of a turn's taint reads it so, the transcript and the digest alike.
+/// reader of a turn's taint reads it so.
 pub fn judge(
     name: &Hash,
     actor: &prodrome_core::event::Actor,

@@ -42,9 +42,6 @@ pub fn opened<'l>(
 }
 
 /// Every conversation the objects hold, read, whatever order they are handed over in.
-///
-/// # Errors
-/// [`ReadFailed`]: objects that are no prodrome, or lines the fold refuses.
 pub fn of_objects(
     objects: impl IntoIterator<Item = (Hash, Envelope<LineEvent>)>,
     slots: &impl Slots,

@@ -29,8 +29,7 @@ impl Conversations<'static> {
     }
 }
 
-/// Each key drawn one count past the last, so no two are equal: for tests, never a source of
-/// keys anyone relies on.
+/// Each key drawn one count past the last, so no two are equal.
 #[derive(Debug, Default)]
 pub struct Counting(std::sync::atomic::AtomicU64);
 
@@ -44,8 +43,8 @@ impl Entropy for Counting {
     }
 }
 
-/// Runs held in this process's memory, for tests and for a store no other process reads: a run is
-/// gone once its [`Held`] drops or [`InMemory::end`] ends it, as a process's death would.
+/// Runs held in this process's memory: a run is gone once its [`Held`] drops or
+/// [`InMemory::end`] ends it, as a process's death would.
 #[derive(Debug, Default, Clone)]
 pub struct InMemory {
     live: std::sync::Arc<

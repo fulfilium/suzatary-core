@@ -1,10 +1,9 @@
 //! The digest's stores as one value: its history, a prodrome at the [`DigestEvent`] schema that
-//! names each summary's words, its texts, the words themselves, and the conversations whose lines
-//! are the tree's leaves.
+//! names each summary's words, its texts, and the conversations whose lines are the tree's leaves.
 //!
-//! Reading takes no lock. Writing a summary asks a question that is not monotone, "is this node
-//! still pending?", and files a naming into a text store the sweep deletes from, so it is made
-//! under the memory's hold ([`Held`]), the one the sweep asks under.
+//! Reading takes no lock; writing a summary asks "is this node still pending?" and files a naming
+//! into a text store the sweep deletes from, so it is made under the memory's hold ([`Held`]), the
+//! one the sweep asks under.
 
 use crate::secretary::compacting::Compacting;
 use prodrome_core::event::{Actor, Hash};
@@ -26,11 +25,9 @@ use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_memory::secretary::texts::Naming;
 use suzatary_store::store::{Gets, Lists, Prodrome, Reads};
 
-/// Who every attempt is written as: the compactor, whose word binds about summaries alone.
+/// Who every attempt is written as; its word binds about summaries alone.
 pub(crate) const COMPACTOR: &str = "compactor";
 
-/// `COMPACTOR` as an actor.
-///
 /// # Panics
 /// Never: the constant is an actor's name.
 #[must_use]
@@ -38,39 +35,29 @@ pub fn compactor() -> Actor {
     Actor::new(COMPACTOR).expect("a constant actor name")
 }
 
-/// The digest: its history, its words and the lines it summarises.
 #[derive(Clone, Copy)]
 pub struct Digests<'a> {
     /// What was said of each node, by the node's name; never a summary's words.
     pub history: &'a dyn Prodrome<DigestEvent>,
-    /// Each summary's words, by the name its event gives them.
     pub texts: &'a dyn Lists<TextName, Text<Line>>,
-    /// The conversations, every line a leaf.
     pub lines: Conversations<'a>,
-    /// Whose retraction or erasure is believed: the deployment's writers
-    /// ([`suzatary_connect::deployment::Deployment::writers`]).
+    /// Whose retraction or erasure is believed: the deployment's writers.
     pub owners: &'a std::collections::BTreeSet<Actor>,
-    /// Whether the compactor runs and within what, so a reading can say what holds it back.
     pub compacting: &'a Compacting,
 }
 
 /// The digest as a reader holds it: no field reaches a write.
 #[derive(Clone, Copy)]
 pub struct ReadDigests<'a> {
-    /// What was said of each node, by the node's name.
     pub history: &'a dyn Reads<DigestEvent>,
-    /// Each summary's words, by the name its event gives them.
     pub texts: &'a dyn Gets<TextName, Text<Line>>,
-    /// The conversations, every line a leaf.
     pub lines: ReadConversations<'a>,
     /// Whose retraction or erasure is believed.
     pub owners: &'a std::collections::BTreeSet<Actor>,
-    /// Whether the compactor runs and within what.
     pub compacting: &'a Compacting,
 }
 
 impl<'a> Digests<'a> {
-    /// The stores as a reader holds them.
     #[must_use]
     pub fn reads(&self) -> ReadDigests<'a> {
         ReadDigests {
@@ -84,28 +71,17 @@ impl<'a> Digests<'a> {
 }
 
 impl ReadDigests<'_> {
-    /// The reading.
-    ///
-    /// # Errors
-    /// The stores' own; [`Refusal::internal`] for lines in a cycle, which no store can hold.
     pub fn read(&self) -> Result<Digest, Refusal> {
         self.read_under(&*self.lines.fold(HeldLines::gathered)?)
     }
 
-    /// The conversations' lines as the store's graph, shared by every reader at the same heads.
-    ///
-    /// # Errors
-    /// The store's own.
+    /// The conversations' lines, shared by every reader at the same heads.
     pub(crate) fn line_graph(
         &self,
     ) -> Result<std::sync::Arc<suzatary_store::store::Graph<LineEvent>>, Refusal> {
         Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
     }
 
-    /// The reading of the history over the lines `gathered` holds.
-    ///
-    /// # Errors
-    /// As [`ReadDigests::read`].
     pub(crate) fn read_under(&self, gathered: &Gathered) -> Result<Digest, Refusal> {
         let shape = parts::part("shape", || digest::Shape::over(gathered)).map_err(|cycle| {
             Refusal::internal(format!(
@@ -143,9 +119,6 @@ impl ReadDigests<'_> {
     }
 
     /// Every retraction an owner wrote, by object name, without reading the lines.
-    ///
-    /// # Errors
-    /// The history's store's own.
     pub fn retractions(&self) -> Result<std::collections::BTreeSet<Hash>, Refusal> {
         let policy = crate::secretary::digest_policy::Owners(self.owners);
         Ok(self
@@ -164,19 +137,12 @@ impl ReadDigests<'_> {
             .collect())
     }
 
-    /// The texts the history names, each live or past ([`Digest::naming`]).
-    ///
-    /// # Errors
-    /// As [`ReadDigests::read`].
     pub fn naming(&self) -> Result<Naming<Line>, Refusal> {
         let read = self.read()?;
         Ok(parts::part("naming", || read.naming()))
     }
 
     /// Refuse unless the history and the lines both read whole.
-    ///
-    /// # Errors
-    /// As [`crate::secretary::memories`]'s sweep: naming the store and what it left out.
     pub fn whole(&self) -> Result<(), Refusal> {
         timed(Phase::Whole, || {
             crate::secretary::memories::whole(self.history, "digests")?;
@@ -185,24 +151,19 @@ impl ReadDigests<'_> {
     }
 
     /// The words kept under `name`; `None` once deleted.
-    ///
-    /// # Errors
-    /// The text store unreadable.
     pub fn words(&self, name: &TextName) -> Result<Option<Line>, Refusal> {
         Ok(self.texts.get(name)?.map(|text| text.words().clone()))
     }
 }
 
 impl Held<'_> {
-    /// Record `line` as the compactor's summary of `node`, written by `model` from `over`: its
-    /// words kept first, then the event naming them, and the words removed again if the event is
-    /// refused. The event's taint, and the class whose asking it is recorded under, are the
-    /// node's, read off the reading here and never an argument, so no caller can label a summary
-    /// cleaner than its lines.
+    /// Record `line` as the compactor's summary of `node`: its words kept first, then the event
+    /// naming them, and the words removed again if the event is refused. The event's taint is the
+    /// node's, never an argument, so no caller can label a summary cleaner than its lines.
     ///
     /// # Errors
     /// [`Refusal::conflict`] for a node that is not pending (holding a current summary, holding
-    /// the last line, or not in the tree); [`ReadDigests::whole`]'s; the salt's and the stores' own.
+    /// the last line, or not in the tree).
     pub fn summarize(
         &self,
         node: &Hash,
@@ -232,18 +193,13 @@ impl Held<'_> {
         match digests.history.append(event) {
             Ok(object) => Ok(object),
             Err(refused) => {
-                // Its words never stood, so they are not kept.
                 let _ = digests.texts.remove(&name);
                 Err(refused.into())
             }
         }
     }
 
-    /// Record that `model` found no line for `node`, its shortest answer `shortest` bytes: the
-    /// node stays unsummarized, and the history says why.
-    ///
-    /// # Errors
-    /// As [`Held::summarize`].
+    /// Record that `model` found no line for `node`, its shortest answer `shortest` bytes.
     pub fn unfit(
         &self,
         node: &Hash,
@@ -257,14 +213,11 @@ impl Held<'_> {
         Ok(self.digests().history.append(event)?)
     }
 
-    /// Retract the summary `node` shows, as the owner who tapped `tap`: the node reads
-    /// unsummarized and is pending again, every summary above it reads stale until its node is
-    /// asked again, so the compactor redoes the spine, and the sweep after the write deletes the
-    /// retracted words.
+    /// Retract the summary `node` shows, as the owner who tapped `tap`; the sweep after the write
+    /// deletes the retracted words.
     ///
     /// # Errors
-    /// [`Refusal::not_found`] for a node that shows no summary; [`ReadDigests::whole`]'s; the
-    /// stores' own.
+    /// [`Refusal::not_found`] for a node that shows no summary; [`ReadDigests::whole`]'s.
     pub fn retract(
         &self,
         node: &Hash,

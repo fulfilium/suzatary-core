@@ -1,8 +1,5 @@
-//! One file on a proposed email, as the card showed it.
-//!
-//! Only the source, name, type, size and SHA-256 are stored (a proposal is hashed into its id);
-//! the tap fetches again and [`checked`] passes only the recorded digest, so what leaves is what
-//! the card showed or nothing.
+//! One file on a proposed email, as the card showed it: the tap fetches again and [`checked`]
+//! passes only the recorded digest, so what leaves is what the card showed or nothing.
 
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
@@ -16,12 +13,10 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 /// the common transports accept once base64 has grown it by a third.
 pub const MAX_TOTAL: u64 = 20 * 1024 * 1024;
 
-/// One attachment, recorded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attached {
     /// Where the bytes are read from, at proposal time and at the tap.
     pub source: AttachmentSource,
-    /// What the recipient sees it called.
     pub name: String,
     /// Its `type/subtype`.
     pub media: String,
@@ -30,24 +25,19 @@ pub struct Attached {
     pub sha256: AttachmentId,
 }
 
-/// Why an attachment was not recorded, or not sent.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unattachable {
-    /// The source did not answer with bytes.
     #[error("{from}: {why}")]
     Unreadable {
         /// The source, as a sentence names it.
         from: String,
-        /// Its own words.
         why: String,
     },
-    /// Nothing is there.
     #[error("{0} is empty")]
     Empty(String),
     /// The name or type cannot go on a MIME part.
     #[error("{0}")]
     Unnamed(String),
-    /// The whole message would carry too much.
     #[error(
         "the attachments come to {total} bytes; one message carries at most {MAX_TOTAL} \
          (20 MB)"
@@ -104,7 +94,7 @@ impl Attached {
     /// file, which only the tap that sends it reads.
     ///
     /// # Errors
-    /// [`Unattachable::Unnamed`] as for [`Attached::of`].
+    /// [`Unattachable::Unnamed`].
     pub fn known(
         source: AttachmentSource,
         name: &str,
@@ -153,9 +143,6 @@ impl Attached {
 }
 
 /// Refuse a set whose total is over [`MAX_TOTAL`].
-///
-/// # Errors
-/// [`Unattachable::TooLarge`].
 pub fn within_cap(attached: &[Attached]) -> Result<(), Unattachable> {
     let total = attached.iter().map(|one| one.size).sum();
     if total > MAX_TOTAL {
@@ -178,7 +165,6 @@ impl Checked {
         self.0
     }
 
-    /// Whether there are none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -239,7 +225,6 @@ fn is_media(media: &str) -> bool {
         .is_some_and(|(kind, sub)| token(kind) && token(sub))
 }
 
-/// `Attached(source, name, media, size, sha256)`.
 pub const ATTACHED: Constructor = ("Attached", &["source", "name", "media", "size", "sha256"]);
 
 // By hand: its reads refuse as `Fields` does.

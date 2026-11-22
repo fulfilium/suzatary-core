@@ -1,61 +1,14 @@
-//! Held numbers never reach a transcript, and neither does a link's credential.
+//! Held numbers never reach a transcript, and neither does a link's credential: [`redact`] is the
+//! only constructor of [`Redacted`], and [`Scrubbed::of`] of a stored line's [`Scrubbed`].
 //!
-//! [`Redacted`] is the only type a document read answers in, and [`redact`] is its only
-//! constructor, so text that skipped the pass does not typecheck. [`Scrubbed`] is the same
-//! promise for a stored conversation line: every string in it went through [`redact`] and the
-//! link pass, and [`Scrubbed::of`] is its only constructor. [`Rules`] names the patterns a scrub
-//! applies, so a stored line can record which rules its words passed.
+//! A document read keeps its links, since a sign-in link is no identity number; a conversation
+//! line is stored and pushed, so it loses them.
 //!
-//! These shapes are held numbers, replaced with `REDACTED`:
-//!
-//! - an SSN or ITIN written out, `ddd-dd-dddd` or `ddd dd dddd`, anywhere;
-//! - nine digits in a row (single hyphens or spaces between them allowed, so
-//!   an EIN's `dd-ddddddd` counts) within [`NEAR`] characters of a label:
-//!   SSN, social security, TIN, ITIN or EIN;
-//! - a card number anywhere: 13 to 19 digits, in groups or not, with an issuer's prefix at one
-//!   of its lengths and a valid Luhn check digit, never after a `+`;
-//! - an IBAN anywhere, in either case, whose mod-97 check holds;
-//! - a verification code: four to eight digits, or `ddd ddd`, after a label that names the code
-//!   with its noun (verification code, security code, one-time password, and the words for a
-//!   verification code in Portuguese, Spanish, French, German and Arabic) within `STRONG_NEAR`
-//!   characters on its line, or within [`NEAR`] of such a label or of verification, verify,
-//!   passcode, OTP, 2FA or MFA; four or five digits right after `code` or `code:`; six to eight
-//!   digits within [`NEAR`] of code, codes or PIN, unless the word before makes it a postal, zip,
-//!   promo, error or dialling code. A label claims only the first number beside it, a claiming
-//!   word closer before it takes it from code, codes or PIN, and a year or date is not a code;
-//! - a bank account number: six to seventeen digits, in a row or in groups, within [`NEAR`]
-//!   characters of account, acct, a/c, checking or savings, unless an order, invoice, tracking,
-//!   booking, telephone or help label is closer, and not grouped as a phone number or a date;
-//! - a routing number: nine digits whose ABA checksum holds, within [`NEAR`] characters of
-//!   routing, ABA, RTN or transit;
-//! - a passport number: six to nine capital letters and digits, at least six of them digits, at
-//!   most three letters, eight or nine digits when there is no letter, and no date, within
-//!   [`NEAR`] characters of passport or its word in French, Portuguese, Spanish, German or Arabic;
-//! - an A-number: seven to nine digits, in a row or as `ddd-ddd-ddd` or `ddd ddd ddd`, after an
-//!   optional `A` and one hyphen or space, and no date, within [`NEAR`] characters of `A-number`,
-//!   `A-No`, `A#`, alien number or alien registration number.
-//!
-//! An account number, a passport number and an A-number are held only when no order, invoice,
-//! tracking, booking, telephone or help word before it is closer. A labelled code, account, routing,
-//! passport or A-number stands alone: no `+` or currency beside it, no
-//! digit beside it across a hyphen, dot, comma or slash, and no run of three digits or more
-//! across one space. When matches overlap, a code wins, then a kind whose checksum held, then the
-//! closest label. No label is read inside a placeholder `crate::held_value` printed.
-//!
-//! The link pass replaces, anywhere in the text:
-//!
-//! - the value of a query or fragment parameter whose name ends in one of
-//!   `CREDENTIAL_PARAMETERS`, percent-encoded separators included, since a
-//!   sign-in link is often wrapped inside a tracking link's own parameter;
-//! - any JWT, three or more base64url segments the first of which opens `eyJ`;
-//! - the password of a `scheme://user:password@host` link.
-//!
-//! A document read keeps its links: a sign-in link is not an identity number, and a PDF is
-//! withheld on what [`redact`] finds. A conversation line is stored and pushed, so it loses them;
-//! the mail it quotes keeps the working link.
+//! When matches overlap, a code wins, then a kind whose checksum held, then the closest label; no
+//! label is read inside a placeholder `crate::held_value` printed.
 //!
 //! Over-redaction is the safe failure: a false match costs the owner a look at the file, a miss
-//! costs the number; so a `zipcode=` parameter loses its value too.
+//! costs the number.
 
 use std::borrow::Cow;
 use std::cell::LazyCell;
@@ -66,15 +19,13 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use suzatary_base::rule_version::{Version, Versioned};
 
-/// What a redacted number becomes.
 pub(crate) const REDACTED: &str = "[redacted]";
 
 /// How close, in characters, a nine-digit run must be to a label.
 pub const NEAR: usize = 20;
 
 /// How far, in characters and on the same line, a label that names a code with its noun
-/// ("verification code") reaches forward to the code: a message often names the service between
-/// the two.
+/// ("verification code") reaches forward to the code.
 pub(crate) const STRONG_NEAR: usize = 60;
 
 /// Text with every identity number this module recognises replaced.
@@ -82,13 +33,11 @@ pub(crate) const STRONG_NEAR: usize = 60;
 pub struct Redacted(String);
 
 impl Redacted {
-    /// The text, safe to show.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// The text, owned.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -113,8 +62,7 @@ static LABEL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:ssn|social\s+security|itin|tin|ein)\b").expect("a valid pattern")
 });
 
-/// The endings, compared without case, of a parameter name that carries a credential: `token`
-/// covers `access_token`, `id_token` and `X-Amz-Security-Token`, `code` an OAuth or reset code.
+/// The endings, compared without case, of a parameter name that carries a credential.
 pub(crate) const CREDENTIAL_PARAMETERS: &[&str] = &[
     "token",
     "code",
@@ -141,7 +89,9 @@ pub(crate) const CREDENTIAL_PARAMETERS: &[&str] = &[
 ];
 
 /// A credential parameter: a separator (`?`, `&`, `#`, `;`, or one percent-encoded), the name,
-/// `=` (or `%3D`), then the value up to the next separator, quote, bracket or space.
+/// `=` (or `%3D`), then the value up to the next separator, quote, bracket or space. A separator
+/// is read percent-encoded too, since a sign-in link is often wrapped in a tracking link's own
+/// parameter.
 static CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
         r#"(?i)((?:[?&#;]|%3f|%26|%23)[a-z0-9_.\-]*(?:{})(?:=|%3d))[^&#;\s"'`<>()\[\]\\]+"#,
@@ -164,8 +114,7 @@ static USERINFO: LazyLock<Regex> = LazyLock::new(|| {
 /// Replace every link credential this module recognises in `text`.
 ///
 /// Each pattern runs only on a text holding a substring every match of it holds, so a text
-/// without one costs a substring search, not a scan by the regex crate's slower engines, which a
-/// Unicode `\b` sends a non-ASCII text to.
+/// without one costs a substring search, not a regex scan.
 pub(crate) fn unlink(text: &str) -> String {
     let mut text = Cow::Borrowed(text);
     if text.contains("://") && text.contains('@') {
@@ -195,8 +144,7 @@ pub(crate) fn unlink(text: &str) -> String {
 
 /// The scrub as a versioned rule: its version is the SHA-256, in lowercase hex, of every pattern
 /// it applies in the order it applies them, then its distances, its currency words, the
-/// replacement and [`Versioned::REVISION`]. A stored line records it, so a change to the rules
-/// can find every line scrubbed under older ones.
+/// replacement and [`Versioned::REVISION`].
 #[derive(Debug)]
 pub struct Scrub;
 
@@ -283,13 +231,11 @@ impl<T: Serialize + DeserializeOwned> Scrubbed<T> {
 }
 
 impl<T> Scrubbed<T> {
-    /// The value, safe to store.
     #[must_use]
     pub fn get(&self) -> &T {
         &self.0
     }
 
-    /// The value, owned.
     #[must_use]
     pub fn into_inner(self) -> T {
         self.0
@@ -300,8 +246,7 @@ thread_local! {
     static SCRUBS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many values this thread has scrubbed, so a test can show a path scrubs none: the core's
-/// tests, and the browser scenes, which read it from the tab's core worker (its one thread).
+/// How many values this thread has scrubbed, so a test can show a path scrubs none.
 #[must_use]
 pub fn scrubs() -> usize {
     SCRUBS.with(std::cell::Cell::get)
@@ -328,32 +273,23 @@ fn scrubbed(tree: serde_json::Value) -> serde_json::Value {
 #[serde(rename_all = "snake_case")]
 #[ts(rename = "HeldKind")]
 pub enum Kind {
-    /// A Social Security number.
     Ssn,
-    /// An Individual Taxpayer Identification Number.
     Itin,
     /// A Taxpayer Identification Number of no narrower kind.
     Tin,
-    /// An Employer Identification Number.
     Ein,
     /// A verification or two-factor code.
     Code,
-    /// A payment card number.
     Card,
-    /// A bank account number.
     Account,
-    /// A US bank routing number.
     Routing,
-    /// An International Bank Account Number.
     Iban,
-    /// A passport number.
     Passport,
     /// A US immigration A-number (Alien Registration Number).
     ANumber,
 }
 
 impl Kind {
-    /// Every kind.
     pub const ALL: [Kind; 11] = [
         Kind::Ssn,
         Kind::Itin,
@@ -427,17 +363,13 @@ impl suzatary_base::finite::Finite for Kind {
 /// One held number in a text: its byte range and its kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Found {
-    /// Where it starts.
     pub start: usize,
-    /// Where it ends.
     pub end: usize,
-    /// What it is.
     pub kind: Kind,
 }
 
 /// How strongly a match claims its kind, strongest first: when matches overlap, the strongest
-/// decides the kind. A code wins, since its last digits are most of it and no other kind hides
-/// them; a checksum that held beats a label; a closer label beats a farther one.
+/// decides the kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Strength {
     Code,
@@ -494,7 +426,6 @@ static CODE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:[0-9]{4,8}|[0-9]{3}[ -][0-9]{3})\b").expect("a valid pattern")
 });
 
-/// The labels of a bank account number.
 static ACCOUNT_LABEL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:account|acct|a/c|checking|savings)\b").expect("a valid pattern")
 });
@@ -514,7 +445,6 @@ static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:[0-9]{6,17}|[0-9]{2,6}(?:[ -][0-9]{2,6}){1,4})\b").expect("a valid pattern")
 });
 
-/// The labels of a routing number.
 static ROUTING_LABEL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\b(?:routing|aba|rtn|transit)\b").expect("a valid pattern"));
 
@@ -554,7 +484,7 @@ static A_NUMBER: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Runs of digit groups with one space or hyphen between groups; [`cards`] tries each stretch of
-/// groups in a run, since a card's groups often sit beside an expiry date or a phone number.
+/// groups in a run.
 static GROUPS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b[0-9]+(?:[ -][0-9]+)*\b").expect("a valid pattern"));
 
@@ -928,8 +858,7 @@ fn ignorable(c: char) -> bool {
 /// No digit pattern matches either byte, and `\b` falls where it falls in `text`, so every match
 /// is the same, at the same byte range; the IBAN pattern's `(?i)` folds `S` and `K` onto `ſ` and
 /// the Kelvin sign, which the [`Normal`] copy has already made `s` and `K`. The copy is ASCII,
-/// which lets the regex crate's fast engine run: that engine gives up at the first non-ASCII byte
-/// under a Unicode `\b`.
+/// which lets the regex crate's fast engine run: that engine gives up at the first non-ASCII byte.
 fn ascii(text: &str) -> Cow<'_, str> {
     if text.is_ascii() {
         return Cow::Borrowed(text);
@@ -1150,7 +1079,7 @@ const CURRENCIES: &[&str] = &[
 /// Whether a labelled match stands alone, so it is not a piece of a phone number, a price, an
 /// amount or a date: no `+` or currency symbol right before it, no currency word beside it, no
 /// digit beside it across a hyphen, dot, comma or slash, and no run of three digits or more beside
-/// it across one space ("code 482913 10 minutes" stays a code, "617 555 1234" a phone number).
+/// it across one space.
 fn alone(text: &str, start: usize, end: usize) -> bool {
     let joins = |c: char| matches!(c, '-' | '.' | ',' | '/');
     let money = |c: char| matches!(c, '$' | '€' | '£' | '¥' | '₹' | '+');
@@ -1225,8 +1154,7 @@ fn aba(text: &str) -> bool {
 }
 
 /// Whether a match of [`PASSPORT`] is a passport number: at least six digits, at most three
-/// letters, eight or nine digits when it has no letter, and no date. A US passport is nine digits
-/// or a letter and eight; most others are a few letters and six to eight digits.
+/// letters, eight or nine digits when it has no letter, and no date.
 fn passport(text: &str) -> bool {
     let digits = digits_of(text);
     let letters = text.len() - digits.len();
@@ -1655,8 +1583,8 @@ mod tests {
         assert_eq!(kinds, vec![Kind::Account, Kind::Routing]);
     }
 
-    /// Dates, prices, phone numbers and order numbers beside the new labels, or with a card's
-    /// length, stay as written.
+    /// Dates, prices, phone numbers and order numbers beside the labels, or with a card's length,
+    /// stay as written.
     #[test]
     fn dates_prices_and_phone_numbers_near_the_new_labels_are_not_held() {
         for text in [
@@ -1694,7 +1622,7 @@ mod tests {
     }
 
     /// The cost of denying by default: a number a strong code label reaches is held even where a
-    /// claiming word labels it as something else, so these, kept before, are redacted now.
+    /// claiming word labels it as something else.
     #[test]
     fn a_strong_label_holds_a_number_a_claiming_word_also_labels() {
         for (text, held) in [
@@ -1724,7 +1652,7 @@ mod tests {
     #[test]
     fn a_claiming_word_labels_a_number_only_from_before_it_on_its_clause() {
         for (text, shown_as) in [
-            // The case the line law found: a word after the number decided nothing before.
+            // A word after the number decides nothing.
             (
                 "Your verification code is 482913. fee",
                 "Your verification code is [redacted]. fee",
@@ -1900,8 +1828,7 @@ mod tests {
         assert_eq!(unlinked(&unlinked(text)), unlinked(text));
     }
 
-    // The scrub's number patterns as they were before the fast path, verbatim but for the names:
-    // the reference the fast path is checked against.
+    // The scrub's number patterns without the fast path: the reference it is checked against.
     /// Every code in `text`, by [`Labels`]' code labels.
     fn codes_before(text: &str, labels: &Labels) -> Vec<Candidate> {
         let Labels {
@@ -1946,10 +1873,8 @@ mod tests {
             .collect()
     }
 
-    /// Every held number this module recognises in `text`, in order and never overlapping: two
-    /// matches that overlap are one, from the first one's start to the later end, of the kind of
-    /// the strongest: a code, then a kind whose checksum held, then the closest label.
-    /// The patterns read straight over the [`Normal`] copy, with no ASCII copy and no lazy labels.
+    /// [`identity_numbers`] read straight over the [`Normal`] copy, with no ASCII copy and no lazy
+    /// labels.
     fn identity_numbers_before(text: &str) -> Vec<Found> {
         let normal = Normal::of(text);
         normal.back(numbers_before(&normal.text))
@@ -2041,8 +1966,7 @@ mod tests {
         merged.into_iter().map(|one| one.found).collect()
     }
 
-    /// Every card number in `text`: a stretch of digit groups of a card's length that starts with an
-    /// issuer's prefix and passes the Luhn check. A run after a `+` is a phone number.
+    /// Every card number in `text`.
     fn cards_before(text: &str) -> Vec<Candidate> {
         let mut found = Vec::new();
         for run in GROUPS.find_iter(text) {
@@ -2078,7 +2002,7 @@ mod tests {
         found
     }
 
-    /// The scrub before the fast path, as it was.
+    /// The scrub without the fast path.
     fn scrubbed_before(text: &str) -> String {
         let mut out = String::with_capacity(text.len());
         let mut at = 0;
@@ -2293,7 +2217,7 @@ mod tests {
         }
     }
 
-    /// The input that once mapped two matches back onto overlapping ranges.
+    /// An input whose two matches map back onto overlapping ranges.
     #[test]
     fn a_fraction_between_two_numbers_is_one_held_range() {
         assert_eq!(shown("123-45-678\u{bd}34-56-7890"), "[redacted]");
@@ -2301,8 +2225,7 @@ mod tests {
 
     proptest::proptest! {
         #![proptest_config(proptest::prelude::ProptestConfig::with_cases(2048))]
-        /// The fast path changes no result: the ASCII copy, the prefilters and the labels read
-        /// lazily scrub every mixed text as the scrub before them did.
+        /// The fast path changes no result: every mixed text scrubs as the reference scrub does.
         #[test]
         fn the_fast_scrub_is_the_scrub_before_it(text in mixed()) {
             proptest::prop_assert_eq!(unlink(redact(&text).as_str()), scrubbed_before(&text));
@@ -2396,7 +2319,7 @@ mod tests {
     }
 
     /// An IBAN-shaped match holding a letter outside ASCII is no IBAN, and is never split inside
-    /// that letter (the scrub once panicked on this text, the property's shrunk case).
+    /// that letter (a property's shrunk case).
     #[test]
     fn an_iban_match_holding_a_letter_outside_ascii_is_none() {
         let text = "\u{17f}\u{212a}378282246310005code: ";

@@ -1,37 +1,24 @@
-//! The lines' own rule for what a tab posts to them ([`Admission`]): a tab writes a rename, an
-//! opening, a setup, a person's turn, a stop and an `Again`, each sealed as the box seals it,
-//! under the current redaction rules, by the actor its signer proves, and each opening under its
-//! own conversation's id.
+//! The lines' own rule for what a tab posts to them: a tab writes a rename, an opening, a setup,
+//! a person's turn, a stop and an `Again`, each sealed as the box seals it, under the current
+//! redaction rules, by the actor its signer proves, and each opening under its own conversation's
+//! id.
 //!
-//! What it checks is what the post proves, never what a line claims: a line is written here,
-//! never carried from an earlier store; each slot is opened with the key posted beside it and
-//! scrubbed again, so no unscrubbed word is taken; a stamp names the poster at the seat its signer
-//! speaks from; an attachment is the one the uploads hold; an opening's id is computed again
-//! from its clear fields ([`LineEvent::begun_id`]). What it reads of a conversation (what is owed,
-//! what a claim covers, what descends from a question) is the transcript's reading of the lines
-//! held, made for the conversations a post names and nothing else.
+//! What it checks is what the post proves, never what a line claims: a line is written here and
+//! never carried; each slot is opened with the key posted beside it and scrubbed again; a stamp
+//! names the poster at its signer's seat; an attachment is one the uploads hold; an opening's id
+//! is recomputed; only the conversations a post names are read.
 //!
-//! The rule answers for one line against what the store holds: the shared layer folds it over a
-//! post one line at a time, parents first and ties by name, each line it takes held before the
-//! next is judged ([`Admission::take`]). It never reads the rest of a post. So every invariant it
-//! keeps for one line holds for any post, however a writer splits or orders its lines: a
-//! conversation is opened once, no two lines it takes share a key, and the owed never pass
-//! [`queue::MAX_PENDING`] from within it. A line resting on one the box does not hold yet waits,
-//! and one resting on a refused line is refused with it, both in the shared layer.
+//! Each line taken is held before the next is judged, so what the rule keeps for one line holds
+//! for any post, however a writer splits or orders its lines.
 //!
-//! What is not invariant, by design: of two concurrent lines that conflict (two openings of one
-//! id, two lines under one key, two questions where the queue has room for one), the one taken is
-//! the one the box judges first, by arrival, and within one post by name. A writer's own lines,
-//! each resting on the one before, are taken alike however they are split.
-//! A line dated past the box's clock by more than the bound of [`crate::secretary::skew`] is
-//! refused for now and posted again later; a device whose clock is far behind is not refused, and
-//! its questions come to the claims already past reach, so the box closes them unanswered.
+//! A line resting on an unheld line waits, and one resting on a refused line is refused with it.
+//! Of two conflicting concurrent lines the first by arrival is taken, within one post the first by
+//! name.
 //!
 //! By design, and not a gap:
-//! - a tab may say, stop or ask again in any conversation the store holds, the box's own kinds
-//!   (a brief, a set-up) included: the store is the owner's, and so is every trusted device;
-//! - a stop settles everything beneath it, other devices' questions included, as a stop the box
-//!   writes does;
+//! - a tab may say, stop or ask again in any conversation the store holds: the store is the
+//!   owner's;
+//! - a stop settles everything beneath it, other devices' questions included;
 //! - an attachment is matched by its id against the whole upload store, not against uploads of
 //!   the posting device.
 
@@ -65,13 +52,11 @@ use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_memory::secretary::carried::Carried;
 use suzatary_memory::secretary::line_words::LineWords;
 
-/// The most files one person's turn holds.
 pub const MAX_ATTACHMENTS_PER_TURN: usize = 4;
 
 /// The most bytes of words one person's turn holds.
 pub const MAX_SAID_BYTES: usize = 32_768;
 
-/// The lines' rule.
 #[derive(Debug, Clone, Copy)]
 pub enum LinesRule {}
 
@@ -86,7 +71,6 @@ impl SlotKeys {
         self.0.get(name).map_or(&[], Vec::as_slice)
     }
 
-    /// The name of every object a key is posted beside.
     pub fn names(&self) -> impl Iterator<Item = &Hash> {
         self.0.keys()
     }
@@ -112,17 +96,15 @@ impl Beside for SlotKeys {
 
 /// What the lines' rule reads of the lines: every conversation they hold, the name of every key a
 /// line of theirs was sealed under (the keys an erasure destroyed among them), and each
-/// conversation a post names read as a transcript, read again once a line of it is taken.
+/// conversation a post names read as a transcript.
 pub struct Held<'e> {
     conversations: BTreeSet<ConversationId>,
     keys: BTreeSet<KeyName>,
     lines: BTreeMap<&'e ConversationId, Vec<(&'e Hash, &'e Change<LineEvent>)>>,
     copied: RefCell<BTreeMap<ConversationId, Rc<Lines>>>,
-    /// The post's lines taken so far.
     taken: Lines,
     read: RefCell<BTreeMap<ConversationId, Option<Rc<Transcript>>>>,
-    /// The line being judged, by name, and its conversation as read with it taken: read once for
-    /// every check that asks.
+    /// The line being judged, by name, and its conversation as read with it taken.
     after: RefCell<Option<(Hash, Option<Rc<Transcript>>)>>,
 }
 
@@ -195,7 +177,6 @@ impl Held<'_> {
         }
     }
 
-    /// How many turns conversation `id` owes the secretary as held.
     fn owed(&self, id: &ConversationId) -> usize {
         self.transcript(id).map_or(0, |read| read.owed().len())
     }
@@ -203,7 +184,6 @@ impl Held<'_> {
 
 /// What the lines' rule reads beyond the lines.
 pub trait World {
-    /// The box's clock, now.
     fn now(&self) -> Datetime;
 
     /// The seat a line signed by `signer` speaks from: the operator's for the deployment's root
@@ -211,9 +191,6 @@ pub trait World {
     fn seat(&self, signer: &prodrome_core::sign::PublicKey) -> Seat;
 
     /// The upload `id` as a person's turn holds it, or none where the box holds no such upload.
-    ///
-    /// # Errors
-    /// The uploads' own, in a sentence.
     fn upload(&self, id: &AttachmentId) -> Result<Option<Upload>, String>;
 }
 
@@ -287,8 +264,8 @@ impl Admission for LinesRule {
     }
 }
 
-/// Whether `line` was written here: a line carried from an earlier store is the box's migration,
-/// and the digest reads the object it names as the line's leaf.
+/// Whether `line` was written here and not carried: the digest reads the object a carried line
+/// names as the line's leaf.
 fn written(line: &LineEvent) -> Result<(), Inadmissible> {
     match line.carried() {
         Carried::Written => Ok(()),
@@ -298,11 +275,8 @@ fn written(line: &LineEvent) -> Result<(), Inadmissible> {
     }
 }
 
-/// Whether `line` is dated no further ahead of the box's clock than [`Skew`] allows: its instant
-/// orders it among concurrent lines and bounds when its question may be answered. A line
-/// dated in the past is taken as it is: an own line from an earlier visit is closed by the answer's
-/// bound, and so is every question of a device whose clock is behind by more than that bound
-/// ([`Skew::Behind`]).
+/// Whether `line` is dated no further ahead of the box's clock than [`Skew`] allows; a line dated
+/// in the past is taken as it is.
 fn early(line: &LineEvent, world: &dyn World) -> Result<(), Inadmissible> {
     let ahead = micros(line.at())
         .zip(micros(world.now()))
@@ -321,12 +295,8 @@ fn micros(at: Datetime) -> Option<i64> {
 }
 
 /// Whether every key `line` was sealed under is fresh: one no line the store holds names, nor
-/// another slot of this line.
-///
-/// A key a held line names is a key the box keeps for that line's words, or one an erasure
-/// destroyed; taking it again would open those words to whoever posted it, so no post brings a
-/// key back. Two slots under one key would be one slot's words twice over: erasing either would
-/// destroy the other, and an erasure names its words by the key alone.
+/// another slot of this line. A held key taken again would open its words to whoever posted it,
+/// and an erasure names its words by the key alone.
 fn fresh(line: &LineEvent, held: &Held<'_>) -> Result<(), Inadmissible> {
     if line.keys().any(|key| held.keys.contains(key)) {
         return Err(Inadmissible::finally(
@@ -414,8 +384,7 @@ fn begins(line: &LineEvent, held: &Held<'_>) -> Result<(), Inadmissible> {
     }
 }
 
-/// Whether a line other than an opening rests on its conversation's opening: a line of a
-/// conversation that rests on none reads before the conversation is opened.
+/// Whether a line other than an opening rests on its conversation's opening.
 fn opened(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible> {
     let line = &change.event;
     let conversation = line.conversation();
@@ -445,7 +414,7 @@ fn opened(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissibl
 /// Whether `line`'s stamp is what its signer proves: a rename, a stop and an `Again` name their
 /// poster, the actor the shared rule took the change as; a person's turn is stamped as the poster
 /// at the seat its signer speaks from, never as the box's or as pointing at an unconfirmed
-/// todo, which the box judges at the claim. An opening carries no stamp.
+/// todo, which the box judges at the claim.
 fn stamped(
     line: &LineEvent,
     change: &Change<LineEvent>,
@@ -528,8 +497,8 @@ fn sealed(line: &LineEvent, keys: &[TextKey]) -> Result<(), Inadmissible> {
 }
 
 /// Whether `words` are what a line of `shape` says, read as the box reads it: a rename's are a
-/// [`Title`]; an opening's are empty or a [`Title`]; a setup's are its template's own name, which
-/// the box gave it when it set one up; a person's are a turn's ([`said`] reads the rest).
+/// [`Title`]; an opening's are empty or a [`Title`]; a setup's are its template's own name; a
+/// person's are a turn's ([`said`] reads the rest).
 fn fits(shape: &LineShape, words: &LineWords) -> Result<(), Inadmissible> {
     if let (LineShape::Said { .. }, LineWords::Person { .. }) = (shape, words) {
         return Ok(());
@@ -620,8 +589,7 @@ fn said(
 }
 
 /// Whether the conversation has room for what `change` makes owed: a line that leaves more turns
-/// owed than before (a person's turn, an `Again` that makes its question owed again) is taken only
-/// while the owed stay within [`queue::MAX_PENDING`]. The one count every such line asks.
+/// owed than before is taken only while the owed stay within [`queue::MAX_PENDING`].
 fn room(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(), Inadmissible> {
     if !matches!(
         change.event.shape(),
@@ -690,10 +658,7 @@ fn stops(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
 
 /// Whether a line that asks again does so of a conversation as the tab read it: a regenerate's
 /// `Again`, an edit's, and the person's turn that takes up an edit's `Again` (only that turn sets
-/// anything aside, so it is judged by its `Again`'s checks as it arrives). The question a live
-/// person's turn, every live line that descends from it beneath the `Again`, no running round
-/// covering it, nothing it sets aside a write, for a regenerate an answered question, and no
-/// other question settled before the line and owed after it.
+/// anything aside, so it is judged by its `Again`'s checks as it arrives).
 fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(), Inadmissible> {
     let refused = |why: &str| Err(Inadmissible::finally(why));
     let id = change.event.conversation();
@@ -704,7 +669,6 @@ fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(
         };
     };
     let lines = read.lines();
-    // The question, how, and the names the `Again` rests on.
     let (question, how, deps): (
         &prodrome_core::event::Hash,
         Rewind,
@@ -712,8 +676,7 @@ fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(
     ) = if let LineShape::Again { question, how, .. } = change.event.shape() {
         (question, *how, change.deps.clone())
     } else {
-        // The fold's own question, asked over the reading after the line: does it make an edit's
-        // `Again` that read as nothing set its question aside? Only a person's turn may.
+        // Only a person's turn may take up an edit's `Again` that read as nothing.
         let Some((edit, question)) = taken_up(&read, change, post) else {
             return Ok(());
         };
@@ -787,8 +750,7 @@ fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(
 }
 
 /// The position, in `read`, of an edit's `Again` that read as nothing before `change` and sets its
-/// question aside with `change` taken, beside that question: what the fold reads as `change`
-/// taking it up.
+/// question aside with `change` taken, beside that question.
 fn taken_up<'r>(
     read: &'r Transcript,
     change: &Change<LineEvent>,
@@ -817,9 +779,9 @@ fn taken_up<'r>(
 }
 
 /// Whether taking `change` leaves owed a live question other than `question` that the conversation
-/// held settled before: a close or a stop set aside withdraws what it settled, and its rounds spend
-/// no attempt, so only the question asked again may be owed again, else a question two runs already
-/// sent could be sent a third time, or one the person stopped asked anyway.
+/// held settled before, which a third run could send or the person had stopped. Only the question
+/// asked again may be owed again: a close or stop set aside withdraws what it settled and spends
+/// no attempt.
 fn reopens(
     read: &Transcript,
     change: &Change<LineEvent>,
@@ -877,7 +839,6 @@ fn writes(
     }
 }
 
-/// Whether a line is a turn.
 fn is_turn(entry: &Entry) -> bool {
     matches!(entry, Entry::Said { .. } | Entry::Stopped { .. })
 }

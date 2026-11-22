@@ -1,6 +1,5 @@
 //! A file the box holds back (`crate::held_value`): one of the three sources a reader hands a
-//! model a withheld file from, and never a kept copy or a repository's file, which no reader
-//! withholds.
+//! model a withheld file from.
 
 use prodrome_core::literal::codec::Literal as _;
 use prodrome_core::literal::{Table, parse_literal, print_literal};
@@ -12,14 +11,10 @@ use suzatary_base::drive_path::DrivePath;
 /// A held file, by where the box reads it again.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HeldFile {
-    /// An attachment of a message, by the id the `attachments` verb took and its name.
     Mail {
-        /// The message.
         message: String,
-        /// The attachment's filename.
         name: String,
     },
-    /// A file in the owner's Drive.
     Drive {
         /// Its full path.
         path: DrivePath,
@@ -56,10 +51,6 @@ impl HeldFile {
         print_literal(&self.source().to_value())
     }
 
-    /// Read [`HeldFile::print`]'s text form.
-    ///
-    /// # Errors
-    /// [`NotHeld`] for anything but the print of a mail, Drive or upload source.
     pub fn parse(text: &str) -> Result<Self, NotHeld> {
         let refused = || NotHeld(text.chars().take(64).collect());
         let value = parse_literal(text, &Table(&[FROM_MAIL, FROM_DRIVE, FROM_UPLOAD]))

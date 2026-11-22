@@ -1,19 +1,9 @@
 //! The lines a replica or the box holds, read through the Prodrome's memoised fold, so a reading
-//! costs what changed since the last one and its value is the plain reading's: every print decoded
-//! at once, its largest down-set read by [`transcript::transcripts`] (`tests/held_lines.rs` states
-//! the law).
+//! costs what changed since the last one and its value is the plain reading's
+//! (`tests/held_lines.rs` states the law).
 //!
-//! Each print is decoded once, when it arrives. The history is the objects whose every ancestor
-//! is held, kept as prints arrive, as a store's down-set is. The tree the fold walks has three
-//! levels: the store, one node per conversation, and one leaf per line of the history. A leaf's
-//! name covers the line, the reseals of its slots, and for each slot of them whether an erasure
-//! line erased it and whether its key is held, and a conversation's covers its leaves, so a new
-//! line renames its leaf, its conversation and the store, and every other node is one cache hit.
-//! Words are opened at the leaves, the expensive step, each sealed text at most once, and a slot a
-//! reseal that opens supersedes is read from that reseal and never from its own seal; a
-//! conversation folds its opened lines to its transcript, and the store keeps every line's entry
-//! by name. A round read on its own is a node over the
-//! leaves of the lines it reads, named by them, so a round read again is one cache hit.
+//! Words are opened at the leaves, each sealed text at most once, and a slot a reseal that opens
+//! supersedes is read from that reseal and never from its own seal.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -42,8 +32,7 @@ thread_local! {
     static HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many prints this thread's held lines have decoded, so a test can show what a reading
-/// decodes: the core's tests, and the browser scenes, which read it from the tab's core worker.
+/// How many prints this thread's held lines have decoded.
 #[must_use]
 pub fn decodes() -> usize {
     DECODES.with(std::cell::Cell::get)
@@ -81,8 +70,7 @@ pub enum Held<L> {
     Lacking(Hash),
 }
 
-/// The lines held: every print decoded once, the history, and the fold's cache over it, each
-/// conversation folded as `F` says.
+/// The lines held: every print decoded once, the history, and the fold's cache over it.
 pub struct HeldLines<F: Folds = Replica> {
     prints: BTreeMap<Hash, Print>,
     /// Every name a held object rests on, with the objects resting on it directly.
@@ -163,7 +151,6 @@ struct Conversation {
     built: Built,
 }
 
-/// A conversation's node, current or not.
 enum Built {
     /// Never built.
     Unbuilt,
@@ -197,7 +184,7 @@ enum Node {
 }
 
 /// One line of the history, with how each slot of it reads, and the reseals of its slots (by the
-/// key of the slot each seals), whose own slots `slots` reads too.
+/// key of the slot each seals).
 struct Leaf {
     object: Hash,
     line: Arc<LineEvent>,
@@ -207,8 +194,7 @@ struct Leaf {
 }
 
 /// What a leaf's reading of one slot rests on: whether an erasure line erased it, and whether its
-/// key is held. Whether a reseal supersedes it is a function of its reseals' slots, which the
-/// leaf's name covers too, so the leaf's fold decides it.
+/// key is held.
 #[derive(PartialEq, Eq)]
 struct Slot {
     standing: Standing,
@@ -274,25 +260,19 @@ pub struct OpenedLine {
     entry: Entry,
 }
 
-/// What a conversation's node folds its opened lines to, and what the store's node gathers of
-/// them: each folds a conversation to its [`Transcript`], the same reading on both sides; a tab
-/// gathers nothing ([`Replica`]), and the box gathers every line's entry ([`TheBox`]), which a tab
-/// never pays for.
+/// What a conversation's node folds its opened lines to, and what the store's node gathers of them:
+/// the same transcript on both sides; a tab gathers nothing, and the box gathers every line's
+/// entry.
 pub trait Folds: std::fmt::Debug + Clone + Eq {
-    /// A conversation's lines, closed.
     type Closed: Clone + std::fmt::Debug + Eq;
     /// What the store keeps beside its conversations.
     type Gathered: Clone + std::fmt::Debug + Eq + Default;
     /// The fold's name, in the algebra's.
     const NAME: &'static str;
-    /// Conversation `id`'s opened lines, closed.
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed;
-    /// What the store gathers of its conversations.
     fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered;
-    /// The conversation's transcript, or why its lines are none.
     fn read(closed: Self::Closed) -> Result<Arc<Transcript>, NotAConversation>;
 
-    /// The conversation's fold, or why its lines are none.
     fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
         Self::read(closed).map(|read| Arc::clone(read.shared()))
     }
@@ -350,8 +330,7 @@ pub struct Closed {
 }
 
 /// What the box's store node gathers: every line's entry by name, and what a reader derives from
-/// them ([`Gathered::derived`]), built on its first ask and kept with them, so a reader of
-/// transcripts alone never builds it.
+/// them, built on its first ask and kept with them.
 #[derive(Default)]
 pub struct Gathered {
     entries: BTreeMap<Hash, Entry>,
@@ -378,7 +357,6 @@ impl std::fmt::Debug for Gathered {
 }
 
 impl Gathered {
-    /// Every line's entry, by name.
     #[must_use]
     pub fn entries(&self) -> &BTreeMap<Hash, Entry> {
         &self.entries
@@ -532,7 +510,6 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
                 read
             }
             Node::Line { leaf, .. } => {
-                // The key ring as the leaf's name says it, each text opened once.
                 let slots = Once {
                     slots: |name: &KeyName| -> Words<TextKey> {
                         match leaf.slots.get(name) {
@@ -628,7 +605,6 @@ impl<F: Folds> HeldLines<F> {
         self.prints.contains_key(name)
     }
 
-    /// The name of every print held.
     pub fn names(&self) -> impl Iterator<Item = &Hash> {
         self.prints.keys()
     }
@@ -639,17 +615,15 @@ impl<F: Folds> HeldLines<F> {
         self.moves
     }
 
-    /// The keys held.
     #[must_use]
     pub fn key_ring(&self) -> &KeyRing {
         &self.keys
     }
 
-    /// `add`, each print beside the name it is claimed to have, hashed against it and decoded
-    /// once, and `drop` let go. A print whose bytes are not an object at the schema is held as
-    /// unread, and what rests on it stays out of the history. Each is read as a stranger's, so a
-    /// print that does not hash to its name is unread: a husk comes only through
-    /// [`crate::secretary::held_replica::HeldReplica::take_husks`], checked against its node.
+    /// `add`, each print beside the name it is claimed to have, hashed against it and decoded once,
+    /// and `drop` let go. A print whose bytes are not an object at the schema is held as unread,
+    /// and what rests on it stays out of the history. Each is read as a stranger's, so a print that
+    /// does not hash to its name is unread.
     pub fn hold(&mut self, add: Vec<(Hash, Vec<u8>)>, drop: &[Hash]) {
         let add = add
             .into_iter()
@@ -735,7 +709,6 @@ impl<F: Folds> HeldLines<F> {
         self.swapped(add, &names);
     }
 
-    /// Whether the line named `name` is held as its husk.
     #[must_use]
     pub fn husked(&self, name: &Hash) -> bool {
         self.husks.contains(name)
@@ -805,15 +778,14 @@ impl<F: Folds> HeldLines<F> {
     }
 
     /// The keys `given` joined in and `gone` taken out: each conversation a line of which names a
-    /// key whose standing moved is read again. What was opened with a key taken out is forgotten
-    /// at once, not at the next reading: the leaves naming it, their conversations and the store.
+    /// key whose standing moved is read again. What was opened with a key taken out is forgotten at
+    /// once, not at the next reading.
     pub fn keys(&mut self, given: &BTreeMap<KeyName, String>, gone: &[KeyName]) {
         let moved = self.keys.change(given, gone);
         self.rekeyed(&moved);
     }
 
-    /// The keys replaced by `ring`, read as [`HeldLines::keys`] reads a change; the prints stay.
-    /// The names held before or after and not both.
+    /// The keys replaced by `ring`; the prints stay. The names held before or after and not both.
     pub(crate) fn rekey(&mut self, ring: KeyRing) -> BTreeSet<KeyName> {
         let moved = self.keys.replace(ring);
         self.rekeyed(&moved);
@@ -865,8 +837,7 @@ impl<F: Folds> HeldLines<F> {
 
     /// The lines `objects` of conversation `id`, each opened as the conversation opens it, for the
     /// round it opens at turn `turn`: a slot read from its own seal, the reseals among `objects`
-    /// that seal it and the erasures among them that name it. Only those prints are read, and the
-    /// fold's cache answers a round read before with the same lines and keys.
+    /// that seal it and the erasures among them that name it. Only those prints are read.
     pub fn round(
         &mut self,
         id: &ConversationId,
@@ -940,11 +911,8 @@ impl<F: Folds> HeldLines<F> {
     }
 
     /// Every conversation, newest first, each its fold or why its lines are none; the first such
-    /// refusal, by id, stands for the store, as the plain reading's does. Beside it, what the fold
-    /// computed and what it found in the cache.
-    ///
-    /// # Errors
-    /// The first conversation, by id, whose lines do not fold.
+    /// refusal, by id, stands for the store. Beside it, what the fold computed and what it found in
+    /// the cache.
     pub fn read(&mut self) -> (Result<Vec<Arc<Stored>>, NotAConversation>, Report) {
         let (read, report) = self.store();
         let stored = read
@@ -994,8 +962,8 @@ impl<F: Folds> HeldLines<F> {
         self.closed(id).map(F::stored)
     }
 
-    /// Conversation `id` read as its transcript, claims and all, or why its lines are none; none
-    /// for a conversation not held.
+    /// Conversation `id` read as its transcript, or why its lines are none; none for a conversation
+    /// not held.
     pub fn transcript(
         &mut self,
         id: &ConversationId,
@@ -1051,7 +1019,7 @@ impl<F: Folds> HeldLines<F> {
 
     /// Every key an erasure of its own conversation names, and every key in `told` a line names,
     /// each with the blocks its words were rendered to where `keys` opens it: what a replica
-    /// forgets, its rendered blocks first, then the key, as the box's sweep does.
+    /// forgets, its rendered blocks first, then the key.
     #[must_use]
     pub fn erased(
         &self,
@@ -1085,11 +1053,11 @@ impl<F: Folds> HeldLines<F> {
         dead
     }
 
-    /// What the history leaves out, as the Prodrome's DAG says it (`Dag::excluded`), less the
-    /// names the store holds and no reading fetched: each print held that is not an object, with
-    /// why, and each name a held object rests on that `stored` does not name, and what rests on
-    /// each. A reading fetches only the lines it reads (a round's, without what they rest on), so
-    /// a name the store holds and this replica does not is no hole.
+    /// What the history leaves out, as the Prodrome's DAG says it (`Dag::excluded`), less the names
+    /// the store holds and no reading fetched: each print held that is not an object, with why, and
+    /// each name a held object rests on that `stored` does not name, and what rests on each. A
+    /// reading fetches only the lines it reads, so a name the store holds and this replica does not
+    /// is no hole.
     #[must_use]
     pub fn excluded(&self, stored: impl Fn(&Hash) -> bool) -> Vec<Excluded> {
         self.lacking
@@ -1337,8 +1305,7 @@ impl HeldLines<TheBox> {
     }
 }
 
-/// The node of conversation `id` over its lines in the history, and each line's leaf, the one it
-/// had wherever its slots read the same.
+/// The node of conversation `id` over its lines in the history, and each line's leaf.
 fn build(
     prints: &BTreeMap<Hash, Print>,
     keys: &KeyRing,
@@ -1366,8 +1333,8 @@ fn build(
     (node, leaves)
 }
 
-/// Each of `lines`' leaf, reading its slots as one conversation holding exactly `lines` reads
-/// them, the leaf in `kept` wherever its slots read the same. Nothing is opened here.
+/// Each of `lines`' leaf, reading its slots as one conversation holding exactly `lines` reads them.
+/// Nothing is opened here.
 fn leaves(
     keys: &KeyRing,
     lines: &[HeldLine<'_>],

@@ -1,8 +1,7 @@
 //! A conversation's rounds without their words: the turn that opens each and when, what the stream
-//! counts and chooses by, and the lines that hold each round's words. [`of_steps`] folds it from
-//! each line's [`Step`], which the skeleton carries, and [`of_stored`] reads the openings off the
-//! whole conversation; the two agree for every conversation (`tests/transcript.rs`), so the stream
-//! chooses its rounds, and the objects it reads, before it reads one.
+//! counts and chooses by, and the lines that hold each round's words. [`of_steps`] (from the
+//! skeleton) and [`of_stored`] (from the whole conversation) agree for every conversation
+//! (`tests/transcript.rs`), so the stream chooses its rounds before it reads one.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,7 +23,6 @@ pub type Outline = Result<Rounds, NotAConversation>;
 pub struct Opening {
     /// Its index among the conversation's turns.
     pub turn: usize,
-    /// When it was said.
     pub at: Datetime,
 }
 
@@ -32,15 +30,11 @@ pub struct Opening {
 #[derive(Debug, Clone, Copy)]
 pub struct Line<'a> {
     pub name: &'a Hash,
-    /// When it was written.
     pub at: Datetime,
-    /// What it rests on.
     pub parents: &'a [Hash],
     /// The key of each slot of its words.
     pub keys: &'a [KeyName],
-    /// What it does to the conversation's reading.
     pub step: &'a Step,
-    /// Whose line it is.
     pub writer: &'a LineWriter,
 }
 
@@ -54,7 +48,6 @@ pub struct Rounds {
     keys: BTreeMap<Hash, Vec<KeyName>>,
     /// The reseals of each slot, by the slot's first key.
     reseals: BTreeMap<KeyName, BTreeSet<Hash>>,
-    /// The erasures naming each key.
     erasures: BTreeMap<KeyName, BTreeSet<Hash>>,
 }
 
@@ -64,7 +57,6 @@ pub struct Round {
     pub opening: Opening,
     /// Its turns, the opening first.
     pub turns: Vec<(usize, Hash)>,
-    /// Who says its turns.
     pub voices: Voices,
 }
 
@@ -121,16 +113,13 @@ impl Rounds {
         self.live.iter().map(|round| round.opening).collect()
     }
 
-    /// The line whose words title the conversation.
     #[must_use]
     pub fn title(&self) -> &Hash {
         &self.title
     }
 
     /// Every line whose words `round` reads: the title's, its turns', every reseal of their slots,
-    /// and every erasure naming a key of those, as a conversation's reading opens them. A slot is
-    /// read from its own seal, its reseals and its erasures alone, so these lines open as the whole
-    /// conversation opens them.
+    /// and every erasure naming a key of those, as a conversation's reading opens them.
     #[must_use]
     pub fn objects(&self, round: &Round) -> BTreeSet<Hash> {
         let mut objects: BTreeSet<Hash> = std::iter::once(&self.title)
@@ -185,11 +174,7 @@ fn again_aside(
 }
 
 /// The outline of conversation `id` from its lines, in any order: put in the order the
-/// conversation's own reading puts them ([`crate::secretary::sequence::sequenced`], the box's lines
-/// its spine), then folded as `Stored::fold` folds their turns and title.
-///
-/// # Errors
-/// [`NotAConversation`], as the conversation's own fold refuses its lines.
+/// conversation's own reading puts them, then folded as `Stored::fold` folds their turns and title.
 pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
     let order = crate::secretary::transcript::sequenced(
         &lines
@@ -207,10 +192,8 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
         Some(first) if *first.step == Step::Opened => first.name,
         Some(_) | None => return Err(NotAConversation::Unopened(id.clone())),
     };
-    // Each turn's instant, its step and its line; the spans set aside; how many proposals.
     let mut turns: Vec<(Datetime, &Step, &Hash)> = Vec::new();
     let mut aside: BTreeSet<usize> = BTreeSet::new();
-    // Each line's turn, by its place in the order.
     let mut turn_at: Vec<Option<usize>> = vec![None; order.len()];
     let mut proposals = 0;
     let mut reseals: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();

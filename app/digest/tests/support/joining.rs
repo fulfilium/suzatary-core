@@ -1,5 +1,5 @@
-//! The fake compactor every test uses: no model, the span's lines joined and cut to a node, as
-//! the digest post's own test (`OptMem`) compresses. Test support, never production.
+//! The fake compactor every test uses, never production: the span's lines joined and cut to a
+//! node.
 
 use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;

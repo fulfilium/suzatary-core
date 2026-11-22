@@ -1,6 +1,5 @@
 //! The owner's private files: an upload whose text names an identity number is kept in his
-//! Drive, never on the box, and only his confirm puts it there. A model reads its text with
-//! each number a placeholder; reading the file again or sending it is a tap.
+//! Drive, never on the box, and only his confirm puts it there.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,12 +18,10 @@ pub struct PrivateCopy {
     pub text: String,
 }
 
-/// The folder private files are kept in. `suzatary_services::drive::allowed` never answers yes inside
-/// it, whatever `drive_allow` says, so reading one is always a tap.
+/// The folder private files are kept in: `suzatary_services::drive::allowed` never answers yes
+/// inside it, whatever `drive_allow` says, so reading one is always a tap.
 pub const FOLDER: &str = "/my-files/Suzatary/Private";
 
-/// The folder, parsed.
-///
 /// # Panics
 /// Never: [`FOLDER`] is a valid path, which a test pins.
 #[must_use]
@@ -32,9 +29,8 @@ pub fn folder() -> DrivePath {
     FOLDER.parse().expect("FOLDER is a Drive path")
 }
 
-/// Whether `path` is the private folder or under it, its names compared without case: a Drive
-/// that matches names case-insensitively would read `/my-files/Suzatary/PRIVATE` as the folder,
-/// so a check that keeps the model out of it folds case, and refuses more, never less.
+/// Whether `path` is the private folder or under it, its names compared without case, so the
+/// check refuses more, never less.
 #[must_use]
 pub fn holds(path: &DrivePath) -> bool {
     path.is_under_ignoring_case(&folder())
@@ -44,8 +40,5 @@ pub fn holds(path: &DrivePath) -> bool {
 /// is its one caller.
 pub trait Vault: Send + Sync {
     /// Keep `bytes` in [`FOLDER`] under `name`, one path segment, answering where.
-    ///
-    /// # Errors
-    /// [`DriveFailure`].
     fn keep(&self, name: &str, bytes: &[u8]) -> Result<DrivePath, DriveFailure>;
 }

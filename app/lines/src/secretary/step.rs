@@ -1,6 +1,6 @@
 //! What one line does to its conversation's reading, read off its shape: what the rounds' outline
-//! folds (`outline`). Every line's skeleton node carries it, so a reader counts and chooses rounds,
-//! and names the lines that hold each round's words, from the skeleton without the line's object.
+//! folds. Every line's skeleton node carries it, so a reader counts and chooses rounds, and names
+//! the lines that hold each round's words, from the skeleton without the line's object.
 
 use std::collections::BTreeSet;
 
@@ -50,7 +50,6 @@ pub enum Step {
     },
     /// Erases the words of every slot `keys` names.
     Erased {
-        /// The keys.
         #[ts(as = "Vec<String>")]
         keys: BTreeSet<KeyName>,
     },
@@ -76,7 +75,7 @@ pub enum Step {
 
 impl Step {
     /// Whether a line of this step by `writer` takes up the edit of an `Again` it rests on: a
-    /// round-opening turn not the box's ([`crate::secretary::again::aside`]).
+    /// round-opening turn not the box's.
     #[must_use]
     pub(crate) fn takes_up(&self, writer: crate::wire::lines::LineWriter) -> bool {
         *self == Step::Asks && writer == crate::wire::lines::LineWriter::Other

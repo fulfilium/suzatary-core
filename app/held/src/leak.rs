@@ -1,27 +1,17 @@
 //! THE LEAK GUARD'S MATCHER: whether a file of a tree that may be published names anything of
-//! this deployment. `scripts/public-tree.sh --check` hands it every file through `suzatary
-//! leaks`; a hit is a file and a line number, never the text, so the guard never prints what it
-//! guards. Secrets are not its business: gitleaks reads the same files for them, with its own
-//! maintained rules and its own decoding (`scripts/secret-rules.toml`).
+//! this deployment; a hit is a file and a line number, never the text, so the guard never prints
+//! what it guards.
 //!
-//! THE INVARIANT the two hold together: every byte of a published tree is either text both of
-//! them read, or in a file a person admitted by its path and SHA-256 at a terminal
-//! ([`Admitted`]). So the matcher decodes nothing. A file it cannot read as words ([`Opaque`]) is
-//! a hit until it is admitted, and what an admitted file encodes is the admitting person's to see.
-//!
-//! Text is read as words ([`Words`], over [`fold`]), every run of whitespace one space. A term of
-//! the lists, or a name of this deployment, leaks where it stands as a whole word, at the line it
-//! starts on. Outside [`Scope::Lists`], so does a line, as written or `spelled`, holding a path
-//! of the private history beside a docs reference, a home path other than the cast's, a `.ts.net`
-//! name that is no placeholder, an address outside the reserved domains, a tailnet node's address
-//! or a telephone number.
+//! THE INVARIANT it holds with gitleaks: every byte of a published tree is either text both of
+//! them read, or in a file a person admitted by its path and SHA-256 at a terminal ([`Admitted`]),
+//! so the matcher decodes nothing: a file it cannot read as words ([`Opaque`]) is a hit until it is
+//! admitted.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use regex::Regex;
 
-/// Which rules a scan applies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
     /// Every rule: the check a public tree passes.
@@ -67,7 +57,7 @@ impl std::fmt::Display for Layer {
 }
 
 /// What a scan matches against, read once: the private lists, this deployment's names and the
-/// private history's paths, each read as words with the layer it is.
+/// private history's paths.
 #[derive(Debug, Clone)]
 pub struct Matcher {
     terms: Vec<(String, Layer)>,
@@ -160,7 +150,6 @@ static MARKER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(?://[/!]?|#+|\*+|--|;+|>+)").expect("a valid pattern"));
 
 impl Words {
-    /// `text` read as words.
     #[must_use]
     pub fn of(text: &str) -> Self {
         let mut words = Words {
@@ -188,8 +177,7 @@ impl Words {
     }
 
     /// The lines on which `term`, already read as words, starts as a whole word: no letter or
-    /// digit of any script on either side. An underscore is a boundary, as a calendar export
-    /// writes an address (`ADA_AT_EXAMPLE_COM`).
+    /// digit of any script on either side. An underscore is a boundary.
     fn find<'a>(&'a self, term: &'a str) -> impl Iterator<Item = usize> + 'a {
         let wordy = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
         self.text
@@ -235,7 +223,8 @@ pub enum Opaque {
     /// Text holding base64 or hex: tokens of [`TOKEN`] or more characters whose case and digits
     /// alternate as base64's do, [`ENCODED`] characters of them in all (a token that is exactly
     /// an integrity hash, `sha256-…` or Go's `h1:…`, not counted while its bytes are no text, nor
-    /// a sealed slot's box of ciphertext); a hex
+    /// a sealed slot's box of ciphertext, though a box of another length, a textual one, one
+    /// outside a call or a payload glued after the call is counted); a hex
     /// token of [`HEX`] or more digits whose bytes, read from either digit, are `textual`; or
     /// [`PAIRS`] hex pairs in a row, separated by `:`, `-` or a space.
     Encoded,
@@ -244,8 +233,8 @@ pub enum Opaque {
     /// quoted-printable's `=XX`; or two quoted-printable escapes in a row, or an escaped `=`.
     Escaped,
     /// An SVG image: text whose first element, past a byte-order mark, an XML declaration,
-    /// comments and a doctype, is `svg`, whatever its prefix. An image's words can be shapes
-    /// (typst draws every glyph as an outline), which no reading of its text finds.
+    /// comments and a doctype, is `svg`, whatever its prefix. An image's words can be shapes,
+    /// which no reading of its text finds.
     Drawn,
 }
 
@@ -279,18 +268,15 @@ pub const ESCAPES: usize = 16;
 
 /// The shortest run of hex digits after `=` read as one value, a commit id or a digest after a
 /// name (`rev=` and forty digits), and not as a quoted-printable escape of its first two digits.
-/// The hex rule still reads the run.
 pub const VALUE: usize = 40;
 
 /// A token of base64's alphabet, standard or URL-safe, padding included.
 static ALPHABET: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[A-Za-z0-9+/_=\-]+").expect("a valid pattern"));
 
-/// A hex token.
 static HEXES: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"[0-9a-fA-F]{{{HEX},}}")).expect("a valid pattern"));
 
-/// Hex pairs in a row behind separators.
 static PAIRED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
         r"[0-9a-fA-F]{{2}}(?:[: \-][0-9a-fA-F]{{2}}){{{},}}",
@@ -390,8 +376,7 @@ pub fn placeheld(text: &str) -> String {
 }
 
 /// Bytes that read as text: at least 95 in 100 printable ASCII or whitespace, at least half
-/// letters, and four different bytes or more. Random bytes (a digest, a hash) are not printable,
-/// a placeholder of digits is not letters, and one of a repeated byte (`0707…`) spells nothing.
+/// letters, and four different bytes or more.
 #[must_use]
 pub(crate) fn textual(bytes: &[u8]) -> bool {
     let printable = bytes
@@ -446,8 +431,7 @@ enum Class {
 }
 
 /// Does this token hold all three classes (upper case, lower case, digit) and change class at
-/// least once every three characters, as base64 does? A path or a name
-/// (`docs/PLAN-2026-09-16`) changes rarely, and a lowercase hex digest holds two classes.
+/// least once every three characters, as base64 does?
 fn alternates(token: &str) -> bool {
     let classes: Vec<Class> = token
         .chars()
@@ -601,17 +585,12 @@ pub struct Admitted(BTreeSet<(String, String)>);
 pub struct Malformed(pub usize);
 
 impl Admitted {
-    /// Each admitted file as its path and digest.
     pub fn admissions(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0
             .iter()
             .map(|(digest, path)| (path.as_str(), digest.as_str()))
     }
 
-    /// The manifest's admissions.
-    ///
-    /// # Errors
-    /// [`Malformed`] at the first line that is not one.
     pub fn parse(manifest: &str) -> Result<Self, Malformed> {
         manifest
             .lines()
@@ -644,23 +623,18 @@ impl Admitted {
 
 /// The files holding a secret scanner's finding a person vouched for: the paths the tree's
 /// `.gitleaksignore` names, each line a fingerprint `<path>:<rule>:<line>` with no space at
-/// either end, empty and `#` lines skipped. A fingerprint names a path, a rule and a line, never the bytes, so the bytes of
-/// each such file are admitted by the manifest as an opaque file's are.
+/// either end, empty and `#` lines skipped. A fingerprint names a path, a rule and a line, never
+/// the bytes, so the bytes of each such file are admitted by the manifest as an opaque file's are.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Findings(BTreeSet<(String, String)>);
 
 impl Findings {
-    /// Each fingerprint, by the path it names: what a person vouched for, one at a time.
     pub fn admissions(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0
             .iter()
             .map(|(path, line)| (path.as_str(), line.as_str()))
     }
 
-    /// The paths `.gitleaksignore` names.
-    ///
-    /// # Errors
-    /// [`Malformed`] at the first line that is not a fingerprint.
     pub fn parse(ignore: &str) -> Result<Self, Malformed> {
         ignore
             .lines()
@@ -690,7 +664,6 @@ impl Findings {
 /// Why the guard asks for a file's exact bytes to be admitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vouch {
-    /// The matcher cannot read it as words.
     Opaque(Opaque),
     /// It holds a finding a person vouched for by fingerprint.
     Finding,
@@ -739,7 +712,6 @@ static EMAIL: LazyLock<Regex> = LazyLock::new(|| {
 static USERINFO: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-z][a-z0-9+.\-]*://[^/ ]*$").expect("a valid pattern"));
 
-/// A dotted IPv4 address.
 static IPV4: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b").expect("a valid pattern")
 });
@@ -875,9 +847,8 @@ mod tests {
     }
 
     /// A term is a word of the text however it is spelled: with an accent, written or left out,
-    /// a full-width letter, an invisible format character (a zero-width space, a soft hyphen, a
-    /// joiner) inside it, or any whitespace, a line break included, between its words. It is
-    /// still a whole word.
+    /// a full-width letter, an invisible format character inside it, or any whitespace between
+    /// its words.
     #[test]
     fn a_spelling_hides_no_term() {
         let lists = matcher(Scope::Lists);
@@ -1097,8 +1068,7 @@ mod tests {
     }
 
     /// A run of [`VALUE`] or more hex digits after `=` is a value, such as the commit id of a lock's
-    /// git source, and no escape of its first two digits: the hex rule still reads it, and a
-    /// shorter run or an escape inside a word is read as before.
+    /// git source, and no escape of its first two digits: the hex rule still reads it.
     #[test]
     fn a_commit_id_after_a_name_is_a_value() {
         let id = |len: usize| -> String {
@@ -1155,8 +1125,7 @@ mod tests {
     }
 
     /// A sealed slot's box is ciphertext, recognised only in its exact shape: the box of a whole
-    /// `Locked(key='…', box='…')` call, 256·k + 16 bytes that are no text. A box of another
-    /// length, a textual one, one outside a call, or a payload glued after the call is counted.
+    /// `Locked(key='…', box='…')` call, 256·k + 16 bytes that are no text.
     #[test]
     fn a_sealed_box_is_ciphertext_in_its_shape_alone() {
         use base64::Engine as _;
@@ -1202,9 +1171,7 @@ mod tests {
     }
 
     /// The scanner's copy hides a recognised slot and nothing else: a key before or after it on
-    /// its line stays, and a near miss (a box of another length, an upper-case key name, a
-    /// textual box, a call whose name only ends in `Locked`) is left as written, for the scanner
-    /// to read.
+    /// its line stays, and a near miss is left as written, for the scanner to read.
     #[test]
     fn a_placeholder_hides_the_recognised_slot_alone() {
         use base64::Engine as _;

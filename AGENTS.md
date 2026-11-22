@@ -358,9 +358,9 @@ sentence. Write a comment for one of these:
 - an invariant that is not obvious.
 
 Do not put dates, plan references, chain references, quotes or history in a comment. Put them
-in a changelog fragment or `docs/`, or leave them out. Do not repeat the code in words. Give every
-public Rust item a doc comment, because `missing_docs` warns. Use one line when one line is
-enough.
+in a changelog fragment or `docs/`, or leave them out. Do not repeat the code in words. The
+workspace allows `missing_docs` (`app/Cargo.toml`), so give a public Rust item a doc comment only
+when its name and type do not say what it is. Use one line when one line is enough.
 
 - Good, from `secretary::acts::Act::Secret`: "No `value` field on purpose: the value travels
   only in the tap's body, never stored."

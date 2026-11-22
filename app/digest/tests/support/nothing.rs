@@ -8,7 +8,6 @@ static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =
     std::collections::BTreeSet::new();
 
 impl crate::secretary::memories::Memories<'static> {
-    /// The memory and the digest, inert: no fact, no line and no summary.
     #[must_use]
     pub fn nothing() -> Self {
         crate::secretary::memories::Memories {

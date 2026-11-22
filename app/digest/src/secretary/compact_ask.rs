@@ -1,17 +1,8 @@
-//! What the compactor is asked: the log as it stands and one node's children, each rendered as
-//! one line of text with no id and no object name, and every answer it gave that did not fit.
+//! What the compactor is asked: the log as it stands and one node's children, and every answer
+//! it gave that did not fit.
 //!
-//! A call renders as its verb's name and never its arguments ([`digest_view::rendered`]), so a
-//! remember card's words, which a `remember` call carries and every later line names only by a
-//! salted name, never reach a compactor. The log, while over its budget, keeps its earliest
-//! parts and says how many later ones it left out, so its first lines, the prefix a model's cache
-//! keeps, stay as they were. It hides the words of every tainted part, so a clean node's summary is
-//! written from clean words alone, and for a node of nothing but the owner's words it hides every
-//! other part too, so that summary is written from the owner's words alone: either way its label,
-//! the join of its lines', is true of what the compactor read.
-//!
-//! How a node is asked is a versioned rule, [`Asking`], and every summary records the version it
-//! was asked under, so a change to the asking finds every summary asked the old way.
+//! The log hides the words of every tainted part, and for a node of nothing but the owner's words
+//! every other part too, so a node's label is true of what the compactor read.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -29,13 +20,9 @@ use suzatary_base::rule_version::{Version, Versioned};
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::taint::Taint;
 
-/// The compactor's rules, the file the code sends: `app/digest/src/secretary/compact.md`.
 pub const PROMPT: &str = include_str!("compact.md");
 
-/// How a node is asked for its summary, as a rule whose version each summary records, one
-/// version for each [`Beside`]: the prompt, the question's text, what the log shows a node of
-/// that class, and the sizes that cut them. A change to what one class is shown leaves the other
-/// class's summaries current.
+/// How a node is asked for its summary, as a rule whose version each summary records.
 #[derive(Debug)]
 pub struct Asking;
 
@@ -49,15 +36,13 @@ impl Versioned for Asking {
 
     const WHAT: &'static str = "the compactor's asking";
 
-    /// Raise it when the code that builds a question changes in a way the probe does not show
-    /// (which children a span holds, or which parts a log keeps), or when the redaction rules'
-    /// name, which every line's handle carries, moves the pinned questions.
+    /// Raise it when the code that builds a question changes in a way the probe does not show,
+    /// or when the redaction rules' name, which every line's handle carries, moves the pinned
+    /// questions.
     const REVISION: u32 = 3;
 
     fn parts(beside: Beside) -> Vec<String> {
-        // What the rule does on a fixed probe, not a list of what it reads: the question's text
-        // stands for its template, and the probe's log as this class is shown it stands for
-        // which parts it reads, how each line and summary renders and the note a cut log ends in.
+        // What the rule does on a fixed probe, not a list of what it reads.
         let question = Ask::new(vec!["log".to_owned()], vec!["span".to_owned()])
             .tried(
                 "answer".to_owned(),
@@ -91,11 +76,10 @@ impl Versioned for Asking {
     }
 }
 
-/// The bytes the probe's log is cut at, so its note is part of the version.
+/// The bytes the probe's log is cut at.
 const PROBE_CUT: usize = 160;
 
-/// Parts of every shape a log shows, each labelled as the digest labels it: a line of each kind
-/// of turn, clean and tainted, a summary, and a node not summarised yet.
+/// Parts of every shape a log shows, each labelled as the digest labels it.
 fn probe() -> Vec<(Label, Body)> {
     use suzatary_conversations::secretary::model::{ToolCall, Turn};
     use suzatary_conversations::secretary::outcome::Outcome;
@@ -159,15 +143,13 @@ fn probe() -> Vec<(Label, Body)> {
 /// Which parts of the log a node is asked beside, by its label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Beside {
-    /// The owner's words alone: a node of nothing but the owner's words, so its summary,
-    /// labelled as nothing but theirs, is written from nothing but theirs.
+    /// The owner's words alone, so a summary labelled as nothing but theirs is written from
+    /// nothing but theirs.
     OwnersWords,
-    /// Every clean part's words.
     CleanWords,
 }
 
 impl Beside {
-    /// What a node labelled `label` is asked beside.
     #[must_use]
     pub fn of(label: &Label) -> Self {
         if label.is_owners() {
@@ -177,7 +159,6 @@ impl Beside {
         }
     }
 
-    /// The parts it shows in words.
     fn reads(self) -> fn(&Label) -> bool {
         match self {
             Beside::OwnersWords => OwnersWords::shows,
@@ -186,7 +167,6 @@ impl Beside {
     }
 }
 
-/// One question to the compactor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ask {
     log: Vec<String>,
@@ -194,21 +174,16 @@ pub struct Ask {
     tries: Vec<Try>,
 }
 
-/// An answer that did not fit, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Try {
     /// What was said, its spaces joined.
     pub answer: String,
-    /// Why it is no summary.
     pub unfit: Unfit,
 }
 
-/// Why an answer is no summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unfit {
-    /// Longer than a node holds: its length, and the answer cut at the limit.
     Long {
-        /// Its bytes.
         bytes: usize,
         /// Its first `NODE_BYTES` bytes, at a character's edge.
         cut: String,
@@ -218,7 +193,6 @@ pub enum Unfit {
 }
 
 impl Ask {
-    /// The log `log` and the span `span`, each a line per element, nothing tried yet.
     #[must_use]
     pub fn new(log: Vec<String>, span: Vec<String>) -> Self {
         Self {
@@ -228,28 +202,24 @@ impl Ask {
         }
     }
 
-    /// The span's lines, in order.
     #[must_use]
     pub fn span(&self) -> &[String] {
         &self.span
     }
 
-    /// The answers already given that did not fit, in order.
     #[must_use]
     pub fn tries(&self) -> &[Try] {
         &self.tries
     }
 
-    /// The same question, with `answer` tried and found `unfit`.
     #[must_use]
     pub fn tried(mut self, answer: String, unfit: Unfit) -> Self {
         self.tries.push(Try { answer, unfit });
         self
     }
 
-    /// What the compactor reads after [`PROMPT`], as plain text with no speaker labelled: the
-    /// log and the span, then each answer that did not fit and why. The log comes first and
-    /// changes least between questions, so it is the prefix a model's cache can keep.
+    /// What the compactor reads after [`PROMPT`]. The log comes first and changes least, so it is
+    /// the prefix a model's cache can keep.
     #[must_use]
     pub fn text(&self) -> String {
         let mut text = format!(
@@ -281,9 +251,8 @@ impl Ask {
         u64::try_from(PROMPT.len() + self.text().len()).unwrap_or(u64::MAX)
     }
 
-    /// The question for `node` of `digest`, whose lines are `lines`, and what it is written
-    /// from: each child's line, or the object of the summary of it that is shown. `None` for a
-    /// node the tree does not hold or a child with no summary to show.
+    /// The question for `node` of `digest`, and what it is written from. `None` for a node the
+    /// tree does not hold or a child with no summary to show.
     #[must_use]
     pub fn of(
         digest: &Digest,
@@ -311,8 +280,7 @@ impl Ask {
     }
 }
 
-/// The view under [`VIEW_BYTES`] as [`digest_view::view`] shows it to a reader that `reads`, its
-/// earliest parts kept while the rendering is over the budget.
+/// The view under [`VIEW_BYTES`] shown to a reader that `reads`, its earliest parts kept.
 fn log(
     digest: &Digest,
     entries: &BTreeMap<&Hash, &Entry>,

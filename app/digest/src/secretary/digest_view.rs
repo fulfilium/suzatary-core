@@ -1,11 +1,8 @@
-//! The digest's view as a reader is shown it: each part of the cut ([`Digest::view`]) one line,
-//! a line as itself, a summary as derived words, and a tainted part by its size and kinds alone,
-//! never its words. The compactor's log and the secretary's context are the same rendering,
-//! printed two ways.
+//! The digest's view as a reader is shown it: a tainted part by its size and kinds alone, never
+//! its words.
 //!
-//! Every part prints on exactly one line: a line's spaces are joined, and a summary is one line
-//! by its type ([`Line`]). So a part's words cannot reach past its own line, and a marker at the
-//! head of a line fences what follows it on that line.
+//! Every part prints on exactly one line, so a part's words cannot reach past its own line, and
+//! a marker at the head of a line fences what follows it on that line.
 
 use std::collections::BTreeMap;
 
@@ -22,45 +19,36 @@ use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
 
-/// One part as shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shown {
-    /// The part: its node, and the lines it spans.
     pub part: Part,
-    /// What stands for it.
     pub body: Body,
 }
 
-/// What stands for a part.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Body {
-    /// One line, as it was said.
     Said(String),
     /// A summary: words a compactor derived from the lines beneath it, nobody's own.
     Derived(Line),
     /// A part its reader is not shown the words of, by its kinds.
     Hidden(Label),
-    /// A node no summary stands for yet, by its kinds.
     Unsummarised(Label),
 }
 
 /// The most bytes one rendered or opened line holds; a longer one is cut and says so.
 pub const LINE_BYTES: usize = 4_096;
 
-/// The most bytes a view is shown in: the view's budget (the owner's answer 8, 128 KB).
 pub const VIEW_BYTES: usize = 131_072;
 
-/// Which end of a view over its budget is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keep {
     /// The oldest parts: a prefix a model's cache keeps.
     Earliest,
-    /// The newest parts: what was said last.
     Latest,
 }
 
-/// The view of `digest` under `budget` bytes, shown: a part `shows` reads as its words, any other
-/// hidden by its kinds. A part whose words do not read is left out.
+/// The view of `digest` under `budget` bytes: a part `shows` reads as its words, any other
+/// hidden by its kinds.
 #[must_use]
 pub fn view(
     digest: &Digest,
@@ -82,12 +70,9 @@ pub fn view(
         .collect()
 }
 
-/// What lies beneath the lines `handle` names (`first+lines`, as [`Part::handle`] prints it), a
-/// part `reads` admits as it is, a line whole, and any other hidden by its kinds: the children of
-/// the node spanning them, the deepest of a chain of single children, or the line itself;
-/// otherwise the nodes that tile them, so a run of parts a view merged opens too. With the join
-/// of the shown parts' labels, which is what the answer can carry. `None` for a handle naming no
-/// lines.
+/// What lies beneath the lines `handle` names (`first+lines`), a part `reads` admits as it is
+/// and any other hidden by its kinds, with the join of the shown parts' labels. `None` for a
+/// handle naming no lines.
 #[must_use]
 pub fn opened(
     digest: &Digest,
@@ -134,9 +119,8 @@ pub fn opened(
     Some((label, shown))
 }
 
-/// What stands for a part labelled `label` to a reader that `reads`: its words, as `words`
-/// gives them, when the reader reads the label, and otherwise its kinds alone. `None` when its
-/// words do not read. The one rule every rendering of the digest shows a part by.
+/// What stands for a part labelled `label` to a reader that `reads`: its words, or else its
+/// kinds alone. The one rule every rendering of the digest shows a part by.
 pub(crate) fn shown_as(
     label: Label,
     reads: fn(&Label) -> bool,
@@ -149,10 +133,8 @@ pub(crate) fn shown_as(
     }
 }
 
-/// The lines a handle names: `first+lines`.
-/// The node whose summary `handle` names: the one node spanning those lines, or the first of a
-/// chain of single children beneath it, that shows a summary ([`Digest::summary`]). `None` for a
-/// handle naming no such node, so nothing a reader is not shown can be named.
+/// The node whose summary `handle` names. `None` for a handle naming no node that shows a
+/// summary, so nothing a reader is not shown can be named.
 #[must_use]
 pub fn summarized(digest: &Digest, handle: &str) -> Option<Hash> {
     let &[mut node] = digest.tree()?.cover(span_of(handle)?)?.as_slice() else {
@@ -175,7 +157,6 @@ fn span_of(handle: &str) -> Option<std::ops::Range<usize>> {
     Some(first..first.checked_add(lines.parse().ok()?)?)
 }
 
-/// The part a node is.
 fn part(node: &Node<Label>) -> Part {
     Part {
         node: node.name().clone(),
@@ -183,7 +164,6 @@ fn part(node: &Node<Label>) -> Part {
     }
 }
 
-/// A node's words: a line as itself, an inner node as its summary; `None` for one with none.
 fn said(digest: &Digest, entries: &BTreeMap<&Hash, &Entry>, node: &Node<Label>) -> Option<Body> {
     if node.is_leaf() {
         entries
@@ -194,8 +174,7 @@ fn said(digest: &Digest, entries: &BTreeMap<&Hash, &Entry>, node: &Node<Label>) 
     }
 }
 
-/// `shown` within `budget` bytes, a line each, the end `keep` names kept; when parts are left
-/// out, a line where they were says how many.
+/// `shown` within `budget` bytes, the end `keep` names kept; a line says how many were left out.
 #[must_use]
 pub fn fit(shown: Vec<String>, budget: usize, keep: Keep) -> Vec<String> {
     let mut bytes = 0;
@@ -228,8 +207,7 @@ pub fn fit(shown: Vec<String>, budget: usize, keep: Keep) -> Vec<String> {
 }
 
 impl Body {
-    /// Its one line, with no handle: a line or a summary as its words, a part with none by its
-    /// size and kinds.
+    /// Its one line, with no handle.
     #[must_use]
     pub fn text(&self, lines: usize) -> String {
         match self {
@@ -246,7 +224,6 @@ impl Body {
     }
 }
 
-/// A label's kinds, in words.
 #[must_use]
 pub fn kinds(label: Label) -> String {
     label.kinds.iter().map(word).collect::<Vec<_>>().join(", ")
@@ -273,8 +250,7 @@ fn word(kind: Kind) -> &'static str {
     }
 }
 
-/// One stored line as one line of text: who said what, with no id, hash or object name, its
-/// spaces joined and cut at [`LINE_BYTES`].
+/// One stored line as one line of text, its spaces joined and cut at [`LINE_BYTES`].
 #[must_use]
 pub fn rendered(entry: &Entry) -> String {
     cut(&whole(entry)
@@ -283,7 +259,7 @@ pub fn rendered(entry: &Entry) -> String {
         .join(" "))
 }
 
-/// One stored line whole: who said what, with no id, hash or object name.
+/// One stored line whole, with no id, hash or object name.
 #[must_use]
 pub fn whole(entry: &Entry) -> String {
     match entry {
@@ -332,8 +308,8 @@ pub fn whole(entry: &Entry) -> String {
     }
 }
 
-/// A turn, a call as its verb's name and never its arguments, so a remember card's words, which
-/// a `remember` call carries, are never shown.
+/// A turn, a call as its verb's name and never its arguments, so a remember card's words are
+/// never shown.
 fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
     let acted = if Kind::act(by) == Kind::Noted {
         "The box noted"
@@ -379,7 +355,7 @@ fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
     }
 }
 
-/// `text` within [`LINE_BYTES`], cut at a character's edge, the cut said.
+/// `text` within [`LINE_BYTES`], cut at a character's edge.
 fn cut(text: &str) -> String {
     if text.len() <= LINE_BYTES {
         return text.to_owned();
@@ -395,7 +371,6 @@ mod tests {
     use super::*;
     use suzatary_conversations::secretary::model::ToolCall;
 
-    /// A call is its verb's name: a `remember` call's words are never shown.
     #[test]
     fn a_call_renders_as_its_verb_and_never_its_words() {
         let mut args = Map::new();

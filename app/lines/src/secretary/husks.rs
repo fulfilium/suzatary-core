@@ -73,7 +73,7 @@ pub fn husked(
 }
 
 /// Each line of `names` with words that no key opens now or later: every key of them is retired,
-/// erased or superseded by a reseal the box opens, and destroyed. Every one is among [`husks`].
+/// erased or superseded by a reseal the box opens, and destroyed.
 /// A key store that cannot be read refuses, and one that holds no keys at all leaves a line no
 /// erasure or reseal retires out.
 pub fn dead(

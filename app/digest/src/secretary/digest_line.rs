@@ -1,23 +1,20 @@
 //! A summary's words: one line of at most `NODE_BYTES`, through the redaction door.
 //!
 //! [`Line::new`] is the only door, for words read back from the text store as for words a model
-//! wrote, so a summary can hold no line break, no identity number and no link's credential: what
-//! a conversation line could not be stored with, its summary cannot either.
+//! wrote, so a summary can hold no line break, no identity number and no link's credential.
 
 use suzatary_held::redact::Scrubbed;
 use suzatary_memory::secretary::salted_text::Words;
 
-/// The most bytes a summary may hold: a node of the digest costs at most this in a view.
+/// The most bytes a summary may hold.
 pub(crate) const NODE_BYTES: usize = 512;
 
 /// One summary line, scrubbed, trimmed, nonempty, at most `NODE_BYTES`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line(String);
 
-/// Words that are no summary line.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotALine {
-    /// Nothing but space.
     #[error("a summary says something")]
     Empty,
     /// A line break or another control character.
@@ -26,16 +23,12 @@ pub enum NotALine {
     /// Longer than `NODE_BYTES` once scrubbed.
     #[error("a summary is at most {NODE_BYTES} bytes, got {0}")]
     TooLong(usize),
-    /// The redaction door refused it.
     #[error("{0}")]
     Unscrubbable(String),
 }
 
 impl Line {
     /// The words, trimmed and scrubbed.
-    ///
-    /// # Errors
-    /// [`NotALine`] naming the rule the words break.
     pub fn new(words: &str) -> Result<Self, NotALine> {
         let scrubbed = Scrubbed::of(&words.trim().to_owned())
             .map_err(|refused| NotALine::Unscrubbable(refused.to_string()))?
@@ -55,7 +48,6 @@ impl Line {
         Ok(Self(scrubbed))
     }
 
-    /// The words.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

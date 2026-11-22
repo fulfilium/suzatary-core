@@ -1,7 +1,7 @@
 //! What an `Again` line sets aside, read over descent: every line beneath it that descends from
-//! its question, and the question too for an edit. A line concurrent with the question, or with
-//! the `Again`, is never set aside; an edit's `Again` sets nothing aside until its own question
-//! takes it up. It names no type of this application but [`Rewind`].
+//! its question, and the question too for an edit; a line concurrent with the question, or with
+//! the `Again`, is never set aside, and an edit's `Again` sets nothing aside until its own
+//! question takes it up.
 
 use std::collections::BTreeSet;
 
@@ -31,8 +31,7 @@ pub fn aside<'a>(
             pending.extend(rests_on(at));
         }
     }
-    // A line descends from the question when it rests on it or on a line that does; the order
-    // places every line after what it rests on, so one pass forward finds them all.
+    // The order places every line after what it rests on, so one pass forward finds them all.
     let mut descends: BTreeSet<usize> = BTreeSet::from([question]);
     for at in question + 1..again {
         if rests_on(at).iter().any(|parent| descends.contains(parent)) {

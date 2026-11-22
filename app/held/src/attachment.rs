@@ -1,7 +1,5 @@
-//! A file attached to a person's turn, a photo or a PDF, named by its SHA-256.
-//!
-//! Types are recognised by their own magic bytes, never a browser's label, so no
-//! stored file can render as a page.
+//! A file attached to a person's turn, named by its SHA-256 and typed by its own magic bytes,
+//! never a browser's label, so no stored file can render as a page.
 
 use std::fmt;
 use std::str::FromStr;
@@ -11,8 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::enclosed::Enclosure;
 
-/// The largest image accepted: the model API's own per-image ceiling. A PDF's is
-/// [`crate::file_read::MAX_PDF`].
+/// The largest image accepted: the model API's own per-image ceiling.
 pub(crate) const MAX_BYTES: usize = 5 * 1024 * 1024;
 
 /// A file's name in the store: the SHA-256 of its bytes, as 64 lowercase hex digits.
@@ -21,13 +18,11 @@ pub(crate) const MAX_BYTES: usize = 5 * 1024 * 1024;
 pub struct AttachmentId(String);
 
 impl AttachmentId {
-    /// The id of these bytes.
     #[must_use]
     pub fn of(bytes: &[u8]) -> Self {
         Self(hex::encode(Sha256::digest(bytes)))
     }
 
-    /// The hex digits, which are also the file name in the store.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -76,13 +71,10 @@ pub enum MediaType {
     /// `image/jpeg`, what the browser re-encodes every photo to.
     #[serde(rename = "image/jpeg")]
     Jpeg,
-    /// `image/png`.
     #[serde(rename = "image/png")]
     Png,
-    /// `image/webp`.
     #[serde(rename = "image/webp")]
     Webp,
-    /// `image/gif`.
     #[serde(rename = "image/gif")]
     Gif,
 }
@@ -115,11 +107,8 @@ impl MediaType {
     }
 }
 
-/// A file on a turn: which one, what it is, and what the person called it. Storing one
-/// answers it unnamed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
-    /// Its name in the store.
     pub id: AttachmentId,
     /// Its type, as sniffed when it was stored.
     pub media_type: Enclosure,
@@ -137,9 +126,6 @@ pub const MAX_NAME: usize = 200;
 impl Attachment {
     /// Accept these bytes as a file: a PDF within [`crate::file_read::MAX_PDF`] or an image
     /// within `MAX_BYTES`, named by their hash.
-    ///
-    /// # Errors
-    /// Empty, too large, or neither a PDF nor one of the four image types.
     pub fn accept(bytes: &[u8]) -> Result<Self, AttachmentError> {
         if bytes.is_empty() {
             return Err(AttachmentError::Empty);
@@ -179,7 +165,6 @@ impl Attachment {
         })
     }
 
-    /// Its name, as [`called`] gives it.
     #[must_use]
     pub fn called(&self) -> String {
         called(&self.id, self.media_type, self.name.as_deref())
@@ -203,27 +188,21 @@ pub fn called(id: &AttachmentId, media: Enclosure, name: Option<&str>) -> String
     }
 }
 
-/// Why bytes or a name are not an attachment.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum AttachmentError {
-    /// Nothing was sent.
     #[error("the file is empty")]
     Empty,
-    /// Over its type's limit.
     #[error("the file is {size} bytes; the limit for its type is {limit}")]
     TooLarge {
         /// Its size.
         size: usize,
-        /// Its type's limit.
         limit: usize,
     },
-    /// Neither a PDF nor a JPEG, PNG, WebP or GIF by its own bytes.
     #[error("not a PDF, or a JPEG, PNG, WebP or GIF image")]
     Unreadable,
     /// Not 64 lowercase hex digits.
     #[error("not an attachment id")]
     NotAnId,
-    /// Too long, or holding a control character.
     #[error("a file name is at most {MAX_NAME} characters with no control characters")]
     BadName,
 }

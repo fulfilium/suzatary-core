@@ -72,7 +72,7 @@ impl Chain {
         at
     }
 
-    /// A model's or a verb's turn, which the box's reading lists among what a claim step reads.
+    /// A model's or a verb's turn.
     fn answer(&mut self) -> usize {
         let at = self.push(Mark::Answer);
         self.asked.push(Asked {
@@ -299,8 +299,7 @@ fn a_lost_round_is_retried_once_then_closed() {
     );
 }
 
-/// With no claim anywhere, a close settles everything beneath it, as every close did before
-/// claims were written.
+/// With no claim anywhere, a close settles everything beneath it.
 #[test]
 fn a_close_with_no_claim_settles_what_it_rests_on() {
     let mut held = Chain::default();

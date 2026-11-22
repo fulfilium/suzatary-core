@@ -1,22 +1,9 @@
 //! The digest's schema: what was said of one node of the conversations' summary tree, keyed by
 //! the node's content name.
 //!
-//! A summary is an observation a model made of the lines a node spans, never a function of them,
-//! so it is an object: `Summarized` names its words by their [`TextName`] (the words live in the
-//! digest's own text store, box-local and erasable) and the objects it was written from; and
-//! `Retracted` says a summary is wrong, so the node reads as unsummarized and is offered again.
-//! A summary records the taint of the words it was written from, read off the reading by the
-//! one writer and never told by the model; an attempt whose every answer was too long is
-//! `Unfit`, so the node stays unsummarized and says why, and no cut line is ever stored as its
-//! summary. A summary records the version of the asking it was written under
-//! ([`Asking`]); one from before summaries recorded it prints as it always did and reads as
-//! unversioned. Every call to a model is an `Asked`, appended BEFORE the call is made, so what the
-//! compactor spent is a fold over these objects that no failure can leave uncounted; an `Asked`
-//! writes no register, so it never stands as a node's reading.
-//! Only a [`Tap`] makes a `Retracted`, and it is about standing (`Schema::asks`), so one
-//! written as anyone but an owner claims and moves nothing ([`crate::secretary::digest_policy`]).
-//! Every other event writes the node's one register, discrete ([`Whole`]):
-//! two summaries no later write descends from are a conflict, never settled by time.
+//! Every call to a model is an `Asked`, appended BEFORE the call is made, so no failure can
+//! leave a call uncounted. Two summaries no later write descends from are a conflict, never
+//! settled by time.
 
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
@@ -33,14 +20,10 @@ use suzatary_conversations::secretary::taint::Taint;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_signatures::signatures::Tap;
 
-/// One event about one node: which, when, who wrote it, and what it says.
 pub type DigestEvent = Event<Said>;
 
-/// What an event says of its node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Said {
-    /// A summary was written: its words by name, what it was written from, by which model, and
-    /// its length.
     Summarized {
         /// The name of its words in the digest's text store.
         text: TextName,
@@ -48,17 +31,14 @@ pub enum Said {
         /// it that was read.
         over: Vec<Hash>,
         model: ModelName,
-        /// Its words' length in bytes, at most `NODE_BYTES`: what it costs in a view.
+        /// Its words' length in bytes, at most `NODE_BYTES`.
         bytes: u32,
-        /// The node's taint when it was written: the join of the lines it spans, so tainted
-        /// whenever any of them is.
+        /// The node's taint when it was written: the join of the lines it spans.
         taint: Taint,
-        /// The version of the asking it was written under.
         asked: Under<Asking>,
     },
-    /// No answer of an attempt was a line of at most `limit` bytes, so the node has no summary
-    /// from `model`: it stays unsummarized, and this says why. Keyed by both, so another model,
-    /// or a larger `NODE_BYTES`, is owed the node again.
+    /// No answer of an attempt was a line of at most `limit` bytes; keyed by both, so another
+    /// model, or a larger `NODE_BYTES`, is owed the node again.
     Unfit {
         model: ModelName,
         /// The most bytes a line could hold when it was asked: `NODE_BYTES` then.
@@ -71,26 +51,20 @@ pub enum Said {
         /// The bytes sent: the whole system prompt and question.
         sent: u64,
     },
-    /// The node's summary is wrong: it reads as having none, and may be written again.
+    /// The node's summary is wrong: it reads as having none.
     Retracted,
 }
 
-/// An event that cannot be.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotADigestEvent {
-    /// A summary written from nothing.
     #[error("a summary is written from at least one line or summary")]
     FromNothing,
-    /// A length no [`Line`] has.
     #[error("a summary's length is 1 to {NODE_BYTES} bytes, got {0}")]
     Length(u32),
 }
 
-/// How a summary came to be written: from what, by which model, at what taint, asked beside
-/// what.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attempt {
-    /// What it was written from, in the log's order.
     pub over: Vec<Hash>,
     pub model: ModelName,
     pub taint: Taint,
@@ -98,9 +72,8 @@ pub struct Attempt {
     pub beside: Beside,
 }
 
-/// Node `node` summarized by `actor` as `text`, as `attempt` says, under the current asking.
-/// The name and length are the text's own, so an event cannot name one text and price
-/// another.
+/// Node `node` summarized by `actor` as `text`, under the current asking; the name and length
+/// are the text's own.
 ///
 /// # Errors
 /// [`NotADigestEvent::FromNothing`] for an attempt over nothing.
@@ -135,11 +108,7 @@ pub fn summarized(
 }
 
 /// Node `node` left unsummarized by `actor`'s attempt with `model`, whose shortest answer was
-/// `shortest` bytes, under today's `NODE_BYTES`.
-///
-/// # Errors
-/// None in practice: the schema refuses only a summary. The type is the schema's one door,
-/// [`Event::new`].
+/// `shortest` bytes.
 pub fn unfit(
     node: Hash,
     at: Datetime,
@@ -161,9 +130,6 @@ pub fn unfit(
 }
 
 /// A call of `sent` bytes about `node` that `actor` is about to make.
-///
-/// # Errors
-/// None in practice, as [`unfit`].
 pub fn asked(
     node: Hash,
     at: Datetime,
@@ -173,17 +139,12 @@ pub fn asked(
     Event::new(node, at, actor, Said::Asked { sent })
 }
 
-/// Node `node`'s summary retracted by whoever tapped `tap`: the actor is the gate's
-/// mapping of the peer, never an argument.
-///
-/// # Errors
-/// None in practice, as [`unfit`].
+/// The actor is the gate's mapping of the peer who tapped, never an argument.
 pub fn retracted(node: Hash, at: Datetime, tap: &Tap) -> Result<DigestEvent, NotADigestEvent> {
     Event::new(node, at, tap.who().clone(), Said::Retracted)
 }
 
 impl Said {
-    /// The bytes it sent, if it is a call.
     #[must_use]
     pub fn sent(&self) -> Option<u64> {
         match self {
@@ -193,8 +154,7 @@ impl Said {
     }
 }
 
-/// `Summarized(node, at, actor, text, over, model, bytes, taint)`: a summary from before
-/// summaries recorded their asking.
+/// `Summarized(node, at, actor, text, over, model, bytes, taint)`: a summary that names no asking.
 const SUMMARIZED: Constructor = (
     "Summarized",
     &[
@@ -217,7 +177,6 @@ const UNFIT: Constructor = (
 const ASKED: Constructor = ("Asked", &["node", "at", "actor", "sent"]);
 /// `Retracted(node, at, actor)`.
 const RETRACTED: Constructor = ("Retracted", &["node", "at", "actor"]);
-/// The constructors, in print order.
 const SIGNATURES: &[Constructor] = &[SUMMARIZED, SUMMARIZED_UNDER, UNFIT, ASKED, RETRACTED];
 
 /// The digest's whitelist: its constructors and nothing else, since no event nests a term.
@@ -239,13 +198,11 @@ impl Body for Said {
             .into_iter()
     }
 
-    /// A retraction is about standing ([`crate::secretary::digest_policy`]); an attempt binds
-    /// whoever wrote it.
+    /// A retraction is about standing; an attempt binds whoever wrote it.
     fn asks(&self) -> bool {
         matches!(self, Said::Retracted)
     }
 
-    /// A summary is written from something, and its length is within `NODE_BYTES`.
     fn admits(_: &Hash, said: &Said) -> Result<(), NotADigestEvent> {
         match said {
             Said::Summarized { over, .. } if over.is_empty() => Err(NotADigestEvent::FromNothing),
@@ -406,7 +363,6 @@ mod tests {
         }
     }
 
-    /// Every count prints as itself and reads back, at the widest it holds.
     #[test]
     fn every_count_round_trips_at_its_widest() {
         let ada = Actor::new("ada").expect("an actor");
@@ -458,7 +414,6 @@ mod tests {
         assert!(parse_event::<DigestEvent>(&DigestVocabulary::default(), &long).is_err());
     }
 
-    /// A call is counted and stands as no node's reading: it writes no register.
     #[test]
     fn a_call_writes_no_register() {
         let ada = Actor::new("ada").expect("an actor");

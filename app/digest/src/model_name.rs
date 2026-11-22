@@ -9,13 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct ModelName(String);
 
 impl ModelName {
-    /// Longest model name accepted.
     pub const MAX: usize = 128;
 
-    /// Parse one.
-    ///
-    /// # Errors
-    /// [`BadModel`] for an empty, overlong or out-of-class name.
     pub fn parse(text: &str) -> Result<Self, BadModel> {
         let fits = (1..=Self::MAX).contains(&text.len())
             && text.bytes().all(|b| {
@@ -28,7 +23,6 @@ impl ModelName {
         }
     }
 
-    /// The name, as the model's implementation takes it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -52,7 +46,6 @@ impl From<ModelName> for String {
     }
 }
 
-/// Why a model name did not parse, naming what was typed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0:?} is not a model name (1 to 128 of A-Z a-z 0-9 . _ : / -)")]
 pub struct BadModel(pub String);

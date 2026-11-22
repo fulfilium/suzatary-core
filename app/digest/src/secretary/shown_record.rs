@@ -27,7 +27,6 @@ use suzatary_conversations::secretary::search::Needle;
 use suzatary_memory::secretary::memory::Memory;
 use suzatary_topics::secretary::topics::reading::Reading as Topics;
 
-/// The record, shown as `S` reads it.
 pub struct ShownRecord<S: Shows> {
     reading: Reading,
     shows: PhantomData<S>,
@@ -35,7 +34,6 @@ pub struct ShownRecord<S: Shows> {
 
 /// Which parts of the record a reader reads in words; it reads every other part by its kinds.
 pub trait Shows {
-    /// Whether a part of `label` is read in words.
     fn shows(label: &Label) -> bool;
 }
 
@@ -48,7 +46,7 @@ impl Shows for OwnersWords {
     }
 }
 
-/// Every clean part: what the compactor is shown beside a node not of the owner's words alone.
+/// Every clean part.
 pub(crate) enum CleanWords {}
 
 impl Shows for CleanWords {
@@ -57,7 +55,7 @@ impl Shows for CleanWords {
     }
 }
 
-/// Every part: what the secretary opens, each answer carrying the taint of what it shows.
+/// Every part, each answer carrying the taint of what it shows.
 pub enum Everything {}
 
 impl Shows for Everything {
@@ -66,11 +64,9 @@ impl Shows for Everything {
     }
 }
 
-/// The record in the owner's words alone.
 pub type OwnersRecord = ShownRecord<OwnersWords>;
 
 impl<S: Shows> ShownRecord<S> {
-    /// `reading`, from now on shown as `S` reads it.
     #[must_use]
     pub fn of(reading: Reading) -> Self {
         Self {
@@ -79,23 +75,17 @@ impl<S: Shows> ShownRecord<S> {
         }
     }
 
-    /// Opening `handle`, as [`told::zoom`] answers it to this reader.
-    ///
-    /// # Errors
-    /// [`told::zoom`]'s.
     pub fn zoom(&self, handle: &str) -> Result<Value, Refusal> {
         told::zoom(&self.reading, handle, S::shows)
     }
 
-    /// The view within `budget` bytes, one line per part as a session opening is told it, oldest
-    /// first, before it is fitted ([`told()`]).
+    /// The view within `budget` bytes, one line per part, oldest first, before it is fitted.
     #[must_use]
     pub fn lines(&self, budget: usize) -> Vec<String> {
         told::record_lines(&self.reading, budget, None)
     }
 
-    /// The summaries this reader reads in words in the view a session opening is told, within
-    /// `budget` bytes, in the record's order, each with its part.
+    /// The summaries this reader reads in words in the view within `budget` bytes.
     #[must_use]
     pub fn summaries(&self, budget: usize) -> Vec<(Part, crate::secretary::digest_line::Line)> {
         digest_view::view(
@@ -115,7 +105,7 @@ impl<S: Shows> ShownRecord<S> {
     }
 
     /// The lines and summaries this reader reads in words that hold `needle`, the newest `limit`
-    /// of them, each by its handle and with its words around the match.
+    /// of them.
     #[must_use]
     pub fn find(&self, needle: &Needle, limit: usize) -> Vec<Value> {
         let digest = self.reading.digest();
@@ -154,10 +144,8 @@ impl<S: Shows> ShownRecord<S> {
     }
 }
 
-/// What a session opening over `memory` is told, with the newest of `lines` (the record's, as
-/// [`ShownRecord::lines`] reads them, or why it was not read) that fit `budget` bytes, as
-/// [`told::context_of`] tells it and with no topic, since a topic is the secretary's own word for
-/// a conversation.
+/// What a session opening over `memory` is told, with the newest of `lines` that fit `budget`
+/// bytes and with no topic, since a topic is the secretary's own word for a conversation.
 #[must_use]
 pub fn told(memory: &Memory, lines: Result<&[String], &Refusal>, budget: usize) -> Told {
     told::of(

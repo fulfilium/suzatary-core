@@ -1,11 +1,8 @@
-//! A held value: a number in mail or in a file that
-//! [`crate::redact`] recognises, or a file the box holds back, which the box keeps where it is
-//! and a model reads only as a [`Placeholder`].
+//! A held value: a number in mail or in a file that [`crate::redact`] recognises, or a file the
+//! box holds back, which the box keeps where it is and a model reads only as a [`Placeholder`].
 //!
-//! Every text a model reads goes through [`mask`], with the [`Holder`] it came from, or through
-//! [`withheld`] when no holder is known. A placeholder names the value's kind and a hint, never
-//! the value: a number's last digits, or a file's name and size. A [`Handle`] names the holder and
-//! the value's place in it, or the file itself, for a tap to reveal or [`fill`] to send.
+//! Every text a model reads goes through [`mask`], or through [`withheld`] when no holder is
+//! known. A placeholder names the value's kind and a hint, never the value.
 
 use std::sync::LazyLock;
 
@@ -17,7 +14,6 @@ pub use crate::held_file::HeldFile;
 use crate::mail_error::MailError;
 use crate::redact::{Kind, identity_numbers};
 
-/// The text form's prefix.
 pub(crate) const PREFIX: &str = "held:";
 
 /// The prefix of a file's part of a handle; a colon is no base64url character, so no message's
@@ -43,9 +39,7 @@ const MAX_FILE_NAME: usize = 80;
 /// reads it again from.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Holder {
-    /// A message in the mail index.
     Message(String),
-    /// A file's text: a PDF's text layer, or a text file's words.
     File(HeldFile),
 }
 
@@ -70,10 +64,6 @@ pub struct Place {
 }
 
 impl Place {
-    /// The `ordinal`th value of `holder`.
-    ///
-    /// # Errors
-    /// [`NotAHandle`] for a message id that is empty or overlong.
     pub fn new(holder: Holder, ordinal: u16) -> Result<Self, NotAHandle> {
         match &holder {
             Holder::Message(message) if message.is_empty() || message.len() > MAX_MESSAGE => Err(
@@ -83,29 +73,23 @@ impl Place {
         }
     }
 
-    /// What holds the value.
     #[must_use]
     pub fn holder(&self) -> &Holder {
         &self.holder
     }
 
-    /// Its place among the holder's [`Values`].
     #[must_use]
     pub fn ordinal(&self) -> u16 {
         self.ordinal
     }
 }
 
-/// One held value's name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Handle {
-    /// A number at its place.
     Value(Place),
-    /// A file the box holds back, as itself.
     File(HeldFile),
 }
 
-/// A text that is no [`Handle`]'s text form.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("not a held value's handle: {0}")]
 pub struct NotAHandle(String);
@@ -127,9 +111,6 @@ fn file_part(file: &HeldFile) -> String {
 
 impl Handle {
     /// The handle of the `ordinal`th value of `message`, a notmuch id.
-    ///
-    /// # Errors
-    /// [`NotAHandle`] for an empty or overlong id.
     pub fn new(message: &str, ordinal: u16) -> Result<Self, NotAHandle> {
         Place::new(Holder::Message(message.to_owned()), ordinal).map(Self::Value)
     }
@@ -137,9 +118,6 @@ impl Handle {
     /// Read the text form [`Handle::print`] writes: `held:<message id in base64url>.<ordinal>`,
     /// `held:file:<the file's source in base64url>.<ordinal>`, or `held:file:<…>.file` for the
     /// file itself.
-    ///
-    /// # Errors
-    /// [`NotAHandle`] for any other text.
     pub fn parse(text: &str) -> Result<Self, NotAHandle> {
         let refused = || NotAHandle(text.chars().take(64).collect());
         if text.len() > MAX_HANDLE {
@@ -168,7 +146,6 @@ impl Handle {
         }
     }
 
-    /// The text form.
     #[must_use]
     pub fn print(&self) -> String {
         match self {
@@ -189,7 +166,6 @@ impl Handle {
 /// for a file, or never.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reach<H> {
-    /// On a tap, by this.
     Revealable(H),
     /// Never: the text came from nothing the box can read again (Junk read from the server, a
     /// calendar, a page on the web), or its holder no longer reads as holding it.
@@ -198,28 +174,21 @@ pub enum Reach<H> {
 
 /// What a model reads in a value's place.
 ///
-/// A placeholder itself never reads as a number: [`crate::redact`] skips a number's hint, a
-/// file's name is shown with every number in it removed and its size never stands alone, and a
-/// handle's base64 of ASCII text has a letter in every fourth place, so it holds no run of four
-/// digits.
+/// A placeholder itself never reads as a number: a handle's base64 of ASCII text has a letter in
+/// every fourth place, so it holds no run of four digits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Placeholder {
-    /// A number.
     Number {
-        /// What kind of number it is.
         kind: Kind,
         /// Its last `HINT_DIGITS` digits, `""` for a value too short to show any.
         digits: String,
-        /// How a tap reaches it.
         reach: Reach<Place>,
     },
-    /// A file.
     File {
         /// Its name, as [`Placeholder::file`] shows it.
         name: String,
         /// Its size, as `file_size` words it.
         size: String,
-        /// How a tap reaches it.
         reach: Reach<HeldFile>,
     },
 }
@@ -300,7 +269,6 @@ pub(crate) fn file_name(name: &str) -> String {
 }
 
 impl Placeholder {
-    /// The placeholder for `value`, a number of `kind`.
     #[must_use]
     pub fn of(kind: Kind, value: &str, reach: Reach<Place>) -> Self {
         Self::Number {
@@ -311,7 +279,7 @@ impl Placeholder {
     }
 
     /// The placeholder of the file `source` reads, called `name`, of `size` bytes: revealable,
-    /// unless its handle would carry a number (see [`Holder::named`]).
+    /// unless its handle would carry a number.
     #[must_use]
     pub fn file(source: &HeldFile, name: &str, size: u64) -> Self {
         let holder = Holder::File(source.clone());
@@ -338,8 +306,7 @@ impl Placeholder {
         format!("[{} · {reach}]", self.described())
     }
 
-    /// The kind and hint as a person reads them: `SSN ending 3456`, `verification code`, `file
-    /// w2.pdf, 48.2 KB`.
+    /// The kind and hint as a person reads them.
     #[must_use]
     pub fn described(&self) -> String {
         match self {
@@ -349,7 +316,6 @@ impl Placeholder {
         }
     }
 
-    /// Whether a tap can reach it, and by which handle.
     #[must_use]
     pub fn reach(&self) -> Reach<Handle> {
         match self {
@@ -392,7 +358,6 @@ impl Placeholder {
         })
     }
 
-    /// Read one match of [`WRITTEN`], its handle included.
     fn read(captures: &regex::Captures<'_>) -> Result<Self, Malformed> {
         let whole = captures.get(0).map_or("", |whole| whole.as_str());
         let malformed = || Malformed(whole.to_owned());
@@ -421,12 +386,9 @@ impl Placeholder {
     }
 }
 
-/// One stretch of a [`Written`] text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Part {
-    /// Text as written.
     Text(String),
-    /// A placeholder, read.
     Held(Placeholder),
 }
 
@@ -441,10 +403,6 @@ pub struct Written(Vec<Part>);
 pub struct Malformed(pub String);
 
 impl Written {
-    /// Read `text`.
-    ///
-    /// # Errors
-    /// [`Malformed`] for the first placeholder whose handle does not decode.
     pub fn parse(text: &str) -> Result<Self, Malformed> {
         let mut parts = Vec::new();
         let mut at = 0;
@@ -493,7 +451,6 @@ fn foreign_withheld(text: &str, holder: &Holder) -> String {
         .into_owned()
 }
 
-/// The kinds of value a holder holds.
 pub type Kinds = suzatary_base::finite::Set<Kind>;
 
 /// One holder's held numbers as written, each once with the kind it was first found as, in the
@@ -519,7 +476,6 @@ impl Values {
         Self(values)
     }
 
-    /// The value at `ordinal`, and its kind.
     #[must_use]
     pub fn get(&self, ordinal: u16) -> Option<(Kind, &str)> {
         self.0
@@ -546,7 +502,6 @@ impl Values {
         ))
     }
 
-    /// Whether there are none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -576,7 +531,6 @@ impl Values {
 /// value.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Held {
-    /// What kind of number it is.
     pub kind: Kind,
     /// Its last `HINT_DIGITS` digits, `""` for a value too short to show any.
     pub hint: String,
@@ -595,7 +549,6 @@ impl Held {
     }
 }
 
-/// `Held(kind, hint)`.
 pub const HELD: prodrome_core::literal::codec::Constructor = ("Held", &["kind", "hint"]);
 
 // By hand: its reads refuse as `Fields` does.
@@ -679,7 +632,6 @@ fn replaced(text: &str, placeholder: impl Fn(Kind, &str) -> String) -> String {
 pub struct Masked(String);
 
 impl Masked {
-    /// `text`, the words of the file `file` reads, masked.
     #[must_use]
     pub fn of(file: &HeldFile, text: &str) -> Self {
         Self(mask(text, &Holder::File(file.clone()), &Values::of([text])))
@@ -693,13 +645,11 @@ impl Masked {
         (Self(text), truncated)
     }
 
-    /// The text, safe to show.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// The text, owned.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -746,7 +696,6 @@ impl Shown {
         self.value
     }
 
-    /// The placeholder the box prints for it.
     #[must_use]
     pub fn placeholder(&self, reach: Reach<Place>) -> Placeholder {
         Placeholder::of(self.kind, &self.value, reach)
@@ -763,11 +712,9 @@ impl std::fmt::Debug for Shown {
 /// its bytes in a log line or a `{:?}`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Opened {
-    /// Its name, as its source holds it.
     pub name: String,
     /// Its `type/subtype`.
     pub media: String,
-    /// Its bytes.
     pub bytes: Vec<u8>,
 }
 
@@ -786,12 +733,9 @@ impl std::fmt::Debug for Opened {
 /// The largest file a reveal answers, in bytes: what one message may carry, before base64.
 pub const MAX_OPENED: u64 = crate::secretary::attached::MAX_TOTAL;
 
-/// What reading one handle found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Revealed {
-    /// A number.
     Value(Shown),
-    /// A file.
     File(Opened),
     /// A file over [`MAX_OPENED`], which a reveal does not answer, of this many bytes.
     TooLarge(u64),
@@ -804,31 +748,19 @@ pub enum Revealed {
 pub trait Reveal {
     /// The value at `ordinal` among the values of `message`, a notmuch id; `None` when the message
     /// is gone or holds no value there.
-    ///
-    /// # Errors
-    /// The mail index's own failure.
     fn value(&self, message: &str, ordinal: u16) -> Result<Option<Shown>, MailError>;
 
     /// The message `message`, a notmuch id, unmasked, for the tap that forwards it, read only
     /// when its file is still `size` bytes long.
-    ///
-    /// # Errors
-    /// The mail index's own failure.
     fn original(&self, message: &str, size: u64) -> Result<Reopened, MailError>;
 }
 
 /// The held files as a tap reads them: the file, and a PDF's text layer.
 pub trait Files {
     /// The file `file` names, as its source holds it now; `None` when the source holds none.
-    ///
-    /// # Errors
-    /// The source's own sentence.
     fn open(&self, file: &HeldFile) -> Result<Option<Opened>, String>;
 
     /// A PDF's text layer, read as the readers that masked a file's text read it.
-    ///
-    /// # Errors
-    /// The reader's sentence.
     fn layer(&self, pdf: &[u8]) -> Result<crate::file_read::Layer, String>;
 }
 
@@ -841,17 +773,11 @@ pub struct Unreadable(pub String);
 /// hold one, and no record does.
 #[derive(Clone, Copy)]
 pub struct Holders<'a> {
-    /// The mail's values.
     pub mail: &'a dyn Reveal,
-    /// The files, by their sources, and the PDF reader.
     pub files: &'a dyn Files,
 }
 
 impl Holders<'_> {
-    /// What `handle` names now.
-    ///
-    /// # Errors
-    /// [`Unreadable`].
     pub fn read(&self, handle: &Handle) -> Result<Revealed, Unreadable> {
         match handle {
             Handle::Value(place) => Ok(self.value(place)?.map_or(Revealed::Gone, Revealed::Value)),
@@ -867,9 +793,6 @@ impl Holders<'_> {
 
     /// The number at `place`, read again from its holder as the mask read it; `None` when the
     /// holder holds none there.
-    ///
-    /// # Errors
-    /// [`Unreadable`].
     pub fn value(&self, place: &Place) -> Result<Option<Shown>, Unreadable> {
         match place.holder() {
             Holder::Message(message) => self
@@ -890,14 +813,11 @@ impl Holders<'_> {
     }
 }
 
-/// What the tap's read of a forwarded message found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reopened {
-    /// The corpus no longer holds it.
     Gone,
     /// Its file is no longer the size the proposal recorded, so it was not read.
     Resized,
-    /// The file, read once.
     Read(Original),
 }
 
@@ -909,7 +829,6 @@ pub struct Original {
     pub raw: Vec<u8>,
     /// The headers a page shows.
     pub headers: Vec<crate::message_part::MailHeader>,
-    /// The body as text.
     pub body: String,
     /// Every attachment, in the file's order.
     pub parts: Vec<crate::message_part::Attachment>,
@@ -935,7 +854,6 @@ impl Filled {
         self
     }
 
-    /// The body to put on the wire.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -955,29 +873,21 @@ pub enum Unfilled {
     /// A code, which the owner types themselves and the box never sends.
     #[error("a verification code is never sent: the owner types it where it is asked for")]
     Code,
-    /// A placeholder no tap reaches.
     #[error("the {0} is withheld, so the box cannot write it into a message")]
     Withheld(String),
-    /// Its holder is gone, or holds no value at that place.
     #[error("the {0} is no longer held: its message or file is gone or no longer names it")]
     Gone(String),
-    /// The value at that place is not the one the card described.
     #[error(
         "the message or file now holds a different value where the {0} was, so the card no longer describes what would be sent"
     )]
     Changed(String),
-    /// The holder's reader failed.
     #[error("could not read the {0}: {1}")]
     Unreadable(String, String),
 }
 
 /// `written` with every number's placeholder replaced by the value it names, read now through
-/// `holders`, and every file's by the name of its record in `attached`, the draft's attachments,
-/// which carry the file itself and which its card listed; a file's placeholder must still print
-/// as its record does. The owner's tap on Send is its only caller.
-///
-/// # Errors
-/// [`Unfilled`] for the first placeholder that is a code, withheld, gone, changed or unreadable.
+/// `holders`, and every file's by the name of its record in `attached`; a file's placeholder
+/// must still print as its record does. The owner's tap on Send is its only caller.
 pub fn fill(
     written: &Written,
     holders: &Holders<'_>,

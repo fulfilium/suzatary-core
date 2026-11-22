@@ -1,7 +1,5 @@
-//! A turn without its words: who said it, what it pointed at, which verbs it named, which files
-//! it held. Everything that reads a turn for what it IS (its taint, whether it closes a round,
-//! whether a rewind may hide it) reads this, so a turn whose words are gone reads as it read
-//! whole.
+//! A turn without its words, which everything that reads a turn for what it IS reads, so a turn
+//! whose words are gone reads as it read whole.
 //!
 //! [`split`] and [`join`] are a lawful pair: `join(split(t)) == t` for every turn, and a slot
 //! that did not open joins as [`Turn::Erased`], its shape intact.
@@ -17,31 +15,22 @@ use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_memory::secretary::line_words::{AttachmentWords, LineWords};
 use suzatary_memory::secretary::words::{Gone, Words};
 
-/// A turn's shape, by who said it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "who", rename_all = "lowercase")]
 pub enum TurnShape {
-    /// A person's: what they pointed at, and each attachment's id and type.
     Person {
-        /// What they pointed at.
         references: Vec<Reference>,
-        /// Each attachment, in order.
         attachments: Vec<AttachmentShape>,
     },
-    /// The model's: the verb of each call it asked for, in order.
     Model {
         /// The calls' verbs.
         calls: Vec<ToolName>,
     },
-    /// A verb's answer: which verb, how the call ended, each file it handed over.
     Tool {
         verb: ToolName,
-        /// How the call ended, a remembered fact's receipt included.
         outcome: Outcome,
-        /// Each file, in order.
         files: Vec<FileShape>,
     },
-    /// An act: what it was about.
     Act {
         /// What it was about.
         references: Vec<Reference>,
@@ -51,18 +40,14 @@ pub enum TurnShape {
 /// An attachment without its words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttachmentShape {
-    /// Its name in the store.
     pub id: AttachmentId,
-    /// Its type.
     pub media_type: Enclosure,
 }
 
 /// A file a verb handed over, without its name or its text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileShape {
-    /// Its name in the store.
     pub id: AttachmentId,
-    /// What it is.
     pub media: Enclosure,
     pub size: u64,
 }
@@ -178,7 +163,6 @@ pub fn join(shape: TurnShape, mut words: Vec<Words<LineWords>>) -> Turn {
     }
 }
 
-/// Whether `words` are words of slot `slot` of a turn shaped `shape`.
 fn fits(shape: &TurnShape, slot: usize, words: &LineWords) -> bool {
     match (shape, slot, words) {
         (TurnShape::Person { attachments, .. }, 0, LineWords::Person { attachments: w, .. }) => {

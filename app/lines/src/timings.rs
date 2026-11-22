@@ -1,13 +1,10 @@
-//! How long each phase of a costly read took, as `tracing` events at the target
-//! [`TARGET`]. `RUST_LOG=warn,suzatary::timings=info` makes a binary print them to stderr, one
-//! plain line per phase.
-//!
-//! The clock is read only when a subscriber listens at the target, so a build with none, such as
-//! the browser's module, where `std::time::Instant` does not exist, never reads it.
+//! How long each phase of a costly read took, as `tracing` events at the target [`TARGET`]
+//! (`RUST_LOG=warn,suzatary::timings=info` prints them to stderr); the clock is read only when a
+//! subscriber listens, so the browser's module, where `std::time::Instant` does not exist, never
+//! reads it.
 
 use std::time::Instant;
 
-/// The target every timing is logged at.
 pub const TARGET: &str = "suzatary::timings";
 
 /// A phase of a costly read, as its timing names it: the secretary's memory, or Settings'
@@ -27,7 +24,7 @@ pub enum Phase {
     Fold,
     /// Reading the standing facts.
     Facts,
-    /// Fitting the facts and the record into the agent's answer, which builds a view per probe.
+    /// Fitting the facts and the record into the agent's answer.
     Remembered,
     /// The agent's whole `context` call.
     Context,
@@ -91,7 +88,7 @@ impl Phase {
 }
 
 /// `run`'s answer, its time logged as `phase`'s when a subscriber listens, and summed as a part of
-/// that name into the scopes open on this thread ([`crate::parts`]).
+/// that name into the scopes open on this thread.
 pub fn timed<T>(phase: Phase, run: impl FnOnce() -> T) -> T {
     crate::parts::part(phase.name(), || {
         if !tracing::enabled!(target: "suzatary::timings", tracing::Level::INFO) {

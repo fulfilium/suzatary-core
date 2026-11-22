@@ -1,10 +1,6 @@
 //! What a tab wrote to the lines and the box has not served back yet: each line it sealed, with
-//! its node as the box computes it ([`line_form::skeleton_node`]), its print and its slots' keys,
-//! and each signature of one by the device's key. A reading reads an own line where the rows do
-//! not hold it yet, so a rename draws at once.
-//!
-//! An own line reads back from its print and its keys alone ([`OwnLine::read`]), which is all the
-//! device keeps of it beside the box's rows: no form of this build's is needed to hand it over.
+//! its node as the box computes it, its print and its slots' keys, and each signature of one by
+//! the device's key; an own line reads back from its print and its keys alone ([`OwnLine::read`]).
 
 use std::collections::BTreeMap;
 
@@ -53,18 +49,15 @@ impl Words {
 /// One object a tab wrote to the lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnLine {
-    /// A line: its node, its print, and the key of each of its slots.
     Line {
         /// Its node, as the box would serve it.
         node: Box<Parsed>,
         /// Its canonical print.
         print: String,
-        /// Its slots' keys.
         keys: KeyRing,
     },
     /// The device's signature of a line.
     Signature {
-        /// Its name.
         name: Hash,
         /// The line it signs, the one name it rests on.
         signs: [Hash; 1],
@@ -75,10 +68,6 @@ pub enum OwnLine {
 
 impl OwnLine {
     /// The object `print` is, with the keys `keys` (by name, in hex) of a line's slots.
-    ///
-    /// # Errors
-    /// Why `print` is no line or signature of the lines, or why `keys` do not open each of its
-    /// slots.
     pub fn read(print: String, keys: &BTreeMap<KeyName, String>) -> Result<Self, String> {
         let name = Hash::new(hex::encode(Sha256::digest(print.as_bytes())))
             .unwrap_or_else(|_| unreachable!("a SHA-256 in lowercase hex is a name"));
@@ -121,7 +110,6 @@ impl OwnLine {
         Self::read(prodrome_core::event::canonical_envelope(line), &keys)
     }
 
-    /// Its canonical print.
     #[must_use]
     pub fn print(&self) -> &str {
         match self {
@@ -178,7 +166,6 @@ impl OwnLine {
         }
     }
 
-    /// Whether it opens its conversation.
     #[must_use]
     pub fn opens(&self) -> bool {
         matches!(

@@ -13,17 +13,12 @@ use crate::secretary::taint::Taint;
 pub struct RunId(String);
 
 impl RunId {
-    /// A fresh run, its digits from `entropy`.
-    ///
-    /// # Errors
-    /// The entropy's.
     pub fn drawn(entropy: &dyn suzatary_base::capability::Entropy) -> Result<Self, String> {
         let mut bytes = [0u8; 16];
         entropy.fill(&mut bytes)?;
         Ok(Self::of(bytes))
     }
 
-    /// The run `bytes` name.
     #[must_use]
     pub fn of(bytes: [u8; 16]) -> Self {
         Self(hex::encode(bytes))

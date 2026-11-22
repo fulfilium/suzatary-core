@@ -1,6 +1,5 @@
 //! What asking again keeps of the last round.
 
-/// What asking again keeps of the last round.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Rewind {

@@ -27,7 +27,6 @@ pub enum Taint {
 impl Taint {
     pub const ALL: [Taint; 2] = [Taint::Clean, Taint::Tainted];
 
-    /// The least taint above both.
     #[must_use]
     pub fn join(self, other: Self) -> Self {
         self.max(other)
@@ -94,7 +93,7 @@ fn zoomed(answer: &str) -> Taint {
 
 /// One stored line's class: a said line as its turn's; a line of the box's own bookkeeping,
 /// which holds only ids, counts and names the box chose, clean; and a line holding free text a
-/// model or a review wrote (a title, a review's reason, a coding session's report), tainted.
+/// model or a review wrote, tainted.
 #[must_use]
 pub fn line(entry: &Entry) -> Taint {
     match entry {
@@ -150,8 +149,8 @@ pub fn rounds<'e>(id: &ConversationId, lines: impl IntoIterator<Item = &'e Entry
         .collect()
 }
 
-/// What a model asked as `stored` records holds of it now ([`queue::held`]), joined. A rewound
-/// turn is on no window's path, so a window never counts it.
+/// What a model asked as `stored` records holds of it now, joined. A rewound turn is on no
+/// window's path, so a window never counts it.
 #[must_use]
 pub fn held(stored: &Stored) -> Taint {
     queue::held(stored)
@@ -167,7 +166,7 @@ fn opens(entry: &Entry) -> bool {
     )
 }
 
-/// Whether anything the model now holds is tainted ([`held`]).
+/// Whether anything the model now holds is tainted.
 #[must_use]
 pub fn tainted(stored: &Stored) -> bool {
     held(stored) == Taint::Tainted
@@ -355,9 +354,8 @@ mod tests {
         assert!(opener(&now).is_some(), "his round, holding what it read");
     }
 
-    /// The box's own notes (a noted dismissal, a key set, a restart) carry nobody's words: a
-    /// clean round the owner opens after them still writes the memory, and none of them opens a
-    /// round as his.
+    /// The box's own notes carry nobody's words: a clean round the owner opens after them still
+    /// writes the memory, and none of them opens a round as his.
     #[test]
     fn the_boxs_own_notes_leave_his_round_clean() {
         let noted = |text: &str| {
@@ -435,8 +433,7 @@ mod tests {
         })
     }
 
-    /// A session line that recorded no first turn, from before `Kept` was written, is read as
-    /// holding every turn: a read eighty turns before it still makes `remember` a card.
+    /// A session line that recorded no first turn is read as holding every turn.
     #[test]
     fn a_session_line_from_before_kept_holds_every_turn() {
         let legacy: Vec<Entry> = read()
@@ -456,9 +453,7 @@ mod tests {
     }
 
     /// What a model holds is what it is sent, and every live turn from the first its kept
-    /// session's opening sent: a mail read in the window, in that opening window, or anywhere
-    /// since the session opened makes `remember` a card; one that aged out before the session
-    /// opened, or one set aside by a rewind, does not.
+    /// session's opening sent.
     #[test]
     fn a_read_counts_while_the_model_holds_it() {
         let within: Vec<Entry> = read().into_iter().chain(chat(20)).chain(ask()).collect();
@@ -516,10 +511,8 @@ mod tests {
         assert!(!tainted(&stored(rewound)), "set aside: written");
     }
 
-    /// An owner's act on a todo the agent wrote and nobody confirmed is stamped so where the box
-    /// writes it, and taints what its model holds even when nothing loaded the todo (an act noted
-    /// before another in one batch, whose references the box never loads): `remember` is then a
-    /// card, and still his round. The same act stamped his own leaves the round clean.
+    /// An owner's act on a todo the agent wrote and nobody confirmed taints what its model holds
+    /// even when nothing loaded the todo.
     #[test]
     fn an_act_on_an_unconfirmed_todo_makes_remember_a_card() {
         let act = |by: Stamp| Entry::Said {

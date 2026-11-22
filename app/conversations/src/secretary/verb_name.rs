@@ -9,7 +9,7 @@ pub struct Powers {
     pub taint: Taint,
 }
 
-/// What a verb does to the world, so a round scoped to fewer powers is a set of effects.
+/// What a verb does to the world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
     /// Reads, or runs something that writes neither a chain nor a proposal.
@@ -78,7 +78,6 @@ macro_rules! verb_names {
 }
 
 impl VerbName {
-    /// The verb `name` names, or `None`.
     #[must_use]
     pub fn named(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|verb| verb.name() == name)

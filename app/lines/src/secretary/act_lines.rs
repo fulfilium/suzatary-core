@@ -14,9 +14,6 @@ const RESTARTED: &str = "the box restarted while this act was waiting; the devic
                           and was never written down — Try again asks for a fresh one";
 
 /// At serve startup, end every running act nobody owns with [`Tried::NotSent`], idempotently.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn reconcile(
     conversations: crate::secretary::conversations::Conversations<'_>,
     inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
@@ -55,7 +52,7 @@ pub fn describe_act(actor: &str, verb: &str, note: &str) -> String {
     format!("{actor} {verb} it: {note}")
 }
 
-/// One act turn, built: what [`note_act`] appends and [`heard_from_objects`] computes.
+/// One act turn, built.
 #[derive(Debug, Clone)]
 pub struct ActLine {
     /// The event's own instant, never the clock's.
@@ -72,9 +69,6 @@ pub struct ActLine {
 
 /// Append an act's note as a [`Turn::Act`](suzatary_conversations::secretary::model::Turn::Act) stamped `by`, or
 /// nothing when the note is empty.
-///
-/// # Errors
-/// The store's own failures.
 pub fn note_act(
     conversations: crate::secretary::conversations::Conversations<'_>,
     id: &ConversationId,

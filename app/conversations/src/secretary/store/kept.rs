@@ -4,11 +4,8 @@ use super::Entry;
 use crate::secretary::model::{Session, SessionId};
 use suzatary_base::capability::Datetime;
 
-/// A session this conversation keeps, and the first turn it holds: its identity, and what it was
-/// sent when it opened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kept {
-    /// The session.
     pub session: Session,
     /// The first turn its opening ask sent it; it has been sent every live turn since.
     pub from: usize,
@@ -37,7 +34,6 @@ impl Kept {
         }
     }
 
-    /// The line that records it at `at`.
     #[must_use]
     pub fn line(&self, at: Datetime) -> Entry {
         Entry::Kept {

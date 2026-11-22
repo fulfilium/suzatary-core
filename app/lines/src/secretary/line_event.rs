@@ -1,17 +1,10 @@
-//! The conversations' schema since their words were locked: one line of one conversation, its
-//! shape in the clear and each slot of its words locked under a key of its own.
+//! The conversations' schema: one line of one conversation, its shape in the clear and each slot
+//! of its words locked under a key of its own.
 //!
-//! A line is `Kind(conversation, at, actor, held, carried, <shape fields>, words)`: the head every
-//! line has, the shape of its kind ([`LineShape`]), and `words`, one `Scrubbed(key, box, rules)`
-//! per slot: the key's name, the ciphertext in base64, and the redaction rules the words passed
-//! ([`ScrubbedUnder`]). A slot locked before lines recorded their rules is `Locked(key, box)`.
 //! Each slot's associated data is the line's own print without its words, with the slot's number
-//! and its rules (`LineSlot`), so a ciphertext moved to another slot, line or store does not
-//! open, and a slot cannot claim other rules. Every line writes its conversation's one register,
-//! the transcript, so a line rests on the lines its writer held and the lines are causally
-//! ordered. Nothing in an object is words: the redaction door is applied to the words in `seal`,
-//! before they are locked. Opening a slot locked under the current rules only parses it; a slot
-//! locked under any other rules is scrubbed again as it opens (`SealedSlot::open`).
+//! and its rules (`LineSlot`), so a ciphertext moved to another slot, line or store does not open,
+//! and a slot cannot claim other rules. Nothing in an object is words: the redaction door is
+//! applied in `seal`, before the words are locked.
 
 use std::collections::BTreeSet;
 
@@ -37,9 +30,6 @@ use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_memory::secretary::slots::Slots;
 use suzatary_memory::secretary::words::{Gone, Words};
 
-/// One line: which conversation, when, who wrote it, how many lines its writer held, where it
-/// came from, its shape, and its words locked.
-///
 /// `held` tells a line said twice from a line written twice: the Prodrome writes nothing for an
 /// event it already holds, and the same words said twice in one second are two lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,13 +68,10 @@ impl Seal {
 }
 
 impl SealedSlot {
-    /// The words, opened by `key` for `binding`: as locked when they passed the current rules,
-    /// and scrubbed under the current rules now when they passed any other, so no reader sees
-    /// what the current rules catch; withheld when they no longer pass the door at all. `None`
-    /// for a key that does not open them. A reader that keeps what it opens
-    /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once, and no reader opens
-    /// a seal a reseal supersedes ([`crate::secretary::transcript::Through`]). `binding` is
-    /// printed only for a seal that has bytes.
+    /// The words, opened by `key` for `binding`: as locked when they passed the current rules, and
+    /// scrubbed under the current rules now when they passed any other, so no reader sees what the
+    /// current rules catch; withheld when they no longer pass the door at all. `None` for a key
+    /// that does not open them. No reader opens a seal a reseal supersedes.
     fn open(&self, binding: impl FnOnce() -> LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
         let Seal::Locked(locked) = &self.seal else {
             return None;
@@ -116,27 +103,21 @@ impl Shape for LineSlot {
 /// An entry that cannot be a stored line.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotALine {
-    /// Some of its words are already gone: a line is written with its words.
     #[error("a line is written with its words, and some of these are gone")]
     Gone,
-    /// Its words do not pass the redaction door whole.
     #[error("its words do not pass the redaction door: {0}")]
     Unscrubbable(String),
-    /// The generator gave no key.
     #[error("no key for its words: {0}")]
     NoKey(String),
 }
 
-/// The domain of a conversation's id ([`LineEvent::begun_id`]).
+/// The domain of a conversation's id.
 const CONVERSATION: &[u8] = b"suzatary conversation v1\n";
 
 impl LineEvent {
     /// Line `entry` of `conversation`, written here by `actor` holding `held` lines, each slot of
     /// its words through the redaction door and locked under a key drawn from `entropy`; the keys
     /// that open them are the only thing to keep.
-    ///
-    /// # Errors
-    /// [`NotALine`] for words already gone, words the door refuses, or no key.
     pub fn write(
         conversation: ConversationId,
         actor: Actor,
@@ -151,9 +132,6 @@ impl LineEvent {
     /// The first line of a new conversation, `entry`, written here by `actor`: the
     /// conversation is [`LineEvent::begun_id`] of the line, set before its words are sealed,
     /// since each slot is bound to it.
-    ///
-    /// # Errors
-    /// [`LineEvent::write`]'s.
     pub fn begin(
         actor: Actor,
         entry: &Entry,
@@ -165,12 +143,10 @@ impl LineEvent {
         line.sealed(&words, entropy)
     }
 
-    /// The conversation a line that begins one names: the first 32 hex digits of a SHA-256 over
-    /// a domain string and the line's print without its words and with its conversation printed
-    /// as `''`. So it is a pure function of the line's clear fields (`at`, `actor`, `held`,
-    /// `carried` and its shape), never of its conversation or its words, which are erasable while
-    /// an id is kept forever; and, 32 hex digits with no `-`, it is never an id the box mints by
-    /// day (the daily rounds) or by name (`default`, `setup`).
+    /// The conversation a line that begins one names: the first 32 hex digits of a SHA-256 over a
+    /// domain string and the line's print without its words and with its conversation printed as
+    /// `''`. It is a pure function of the line's clear fields, never of its words, which are
+    /// erasable while an id is kept forever; and it is never an id the box mints by day or by name.
     #[must_use]
     pub fn begun_id(&self) -> ConversationId {
         use sha2::{Digest as _, Sha256};
@@ -240,13 +216,9 @@ impl LineEvent {
         Ok((self, keys))
     }
 
-    /// The words of slot `of` of a line of `conversation`, sealed again from the seal locked
-    /// under `from`: `words`, already through the redaction door, locked under a key drawn from
-    /// `entropy`, as a line written here by `actor` holding `held` lines at `at`; answers the key
-    /// that opens it.
-    ///
-    /// # Errors
-    /// [`NotALine`] for no key.
+    /// The words of slot `of` of a line of `conversation`, sealed again from the seal locked under
+    /// `from`: `words`, already through the redaction door, locked under a key drawn from
+    /// `entropy`; answers the key that opens it.
     #[expect(
         clippy::too_many_arguments,
         reason = "a line's head, the slot, and its words"
@@ -276,11 +248,7 @@ impl LineEvent {
     }
 
     /// Line `entry` locked as scrubbed `under` rules other than the current ones, its words not
-    /// scrubbed: a line scrubbed under rules that missed what is in it, for the tests of reading
-    /// and of the migration, and the fixture's stale store.
-    ///
-    /// # Errors
-    /// [`NotALine`] for words already gone, or no key.
+    /// scrubbed, for the tests and the fixture's stale store.
     #[cfg(any(test, feature = "nothing", feature = "fixture"))]
     pub fn written_under(
         under: &ScrubbedUnder,
@@ -314,12 +282,8 @@ impl LineEvent {
         Ok((line, keys))
     }
 
-    /// A line of `shape` holding `words`, through the door and sealed as [`LineEvent::write`]
-    /// seals, with no entry to say the words are what the shape reads: a line a writer that is
-    /// not the box's could post, for the tests of the lines' rule.
-    ///
-    /// # Errors
-    /// [`NotALine`] for words the door refuses, or no key.
+    /// A line of `shape` holding `words`, through the door and sealed, with no entry to say the
+    /// words are what the shape reads: a line a writer that is not the box's could post.
     #[cfg(any(test, feature = "nothing", feature = "fixture"))]
     pub fn sealed_as(
         conversation: ConversationId,
@@ -343,7 +307,7 @@ impl LineEvent {
     }
 
     /// The line as if carried from `object` of an earlier store, its words as they were: what no
-    /// tab may post, for the tests of the lines' rule.
+    /// tab may post.
     #[cfg(any(test, feature = "nothing", feature = "fixture"))]
     #[must_use]
     pub fn carried_from(mut self, object: Hash) -> Self {
@@ -351,7 +315,6 @@ impl LineEvent {
         self
     }
 
-    /// An erasure of `keys` in `conversation`, at `at`, written by `actor` holding `held` lines.
     #[must_use]
     pub fn erasure(
         conversation: ConversationId,
@@ -372,7 +335,6 @@ impl LineEvent {
         }
     }
 
-    /// The conversation.
     #[must_use]
     pub fn conversation(&self) -> &ConversationId {
         &self.conversation
@@ -384,13 +346,11 @@ impl LineEvent {
         self.at
     }
 
-    /// How many lines its writer held.
     #[must_use]
     pub fn held(&self) -> u32 {
         self.held
     }
 
-    /// Where it came from.
     #[must_use]
     pub fn carried(&self) -> &Carried {
         &self.carried
@@ -406,7 +366,6 @@ impl LineEvent {
         }
     }
 
-    /// Its shape.
     #[must_use]
     pub fn shape(&self) -> &LineShape {
         &self.shape
@@ -429,19 +388,17 @@ impl LineEvent {
         self.read(slot, key).and_then(Words::into_kept)
     }
 
-    /// Slot `slot`'s words, opened by `key` and read under the current rules (`SealedSlot`'s
-    /// door): kept, or withheld when they no longer pass it; `None` for a slot the line does not
-    /// hold or a key that does not open it.
+    /// Slot `slot`'s words, opened by `key` and read under the current rules: kept, or withheld
+    /// when they no longer pass it; `None` for a slot the line does not hold or a key that does not
+    /// open it.
     #[must_use]
     pub fn read(&self, slot: usize, key: &TextKey) -> Option<Words<LineWords>> {
         let sealed = self.words.get(slot)?;
         sealed.open(|| self.slot(slot, &sealed.under), key)
     }
 
-    /// Slot `slot`'s words as they were locked, under whatever rules: for sealing them again
-    /// through the door ([`LineEvent::reseal`]), for naming the blocks they were rendered to
-    /// ([`crate::secretary::transcript::fed`]) and for whether a key opens them, never for a
-    /// reader.
+    /// Slot `slot`'s words as they were locked, under whatever rules: for sealing them again and
+    /// naming their blocks, never for a reader.
     pub(crate) fn unscrubbed(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
         let sealed = self.words.get(slot)?;
         let Seal::Locked(locked) = &sealed.seal else {
@@ -450,8 +407,8 @@ impl LineEvent {
         locked.open(&self.slot(slot, &sealed.under), key)
     }
 
-    /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's
-    /// binding for that slot ([`LineEvent::read`]); missing for a slot the line does not hold.
+    /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's binding
+    /// for that slot; missing for a slot the line does not hold.
     #[must_use]
     pub(crate) fn slot_words(&self, slot: usize, slots: &impl Slots) -> Words<LineWords> {
         let Some(sealed) = self.words.get(slot) else {
@@ -460,9 +417,9 @@ impl LineEvent {
         slots.words(sealed.seal.key(), &|key| self.read(slot, key))
     }
 
-    /// Whether slot `slot` opens as `slots` reads it by its key's name ([`Slots::opens`]): its
-    /// words are not read where `slots` can say so by its key alone, so a slot under older rules
-    /// is not scrubbed to answer.
+    /// Whether slot `slot` opens as `slots` reads it by its key's name: its words are not read
+    /// where `slots` can say so by its key alone, so a slot under older rules is not scrubbed to
+    /// answer.
     pub(crate) fn slot_opens(&self, slot: usize, slots: &impl Slots) -> bool {
         let Some(sealed) = self.words.get(slot) else {
             return false;
@@ -743,17 +700,16 @@ fn signature(shape: &LineShape) -> Constructor {
 /// base64, and the rules the words passed.
 const SCRUBBED: Constructor = ("Scrubbed", &["key", "box", "rules"]);
 
-/// `Locked(key, box)`: a slot locked before lines recorded their rules.
+/// `Locked(key, box)`: a slot that records no rules.
 const LOCKED: Constructor = ("Locked", &["key", "box"]);
 
 /// `Dropped(key, rules)`: a husk's slot, its words dropped, the key's name and the rules they had
 /// passed. No store's vocabulary reads it: a husk is the device's, and never an object.
 const DROPPED: Constructor = ("Dropped", &["key", "rules"]);
 
-/// `DroppedLocked(key)`: a husk's slot locked before lines recorded their rules.
+/// `DroppedLocked(key)`: a husk's slot that records no rules.
 const DROPPED_LOCKED: Constructor = ("DroppedLocked", &["key"]);
 
-/// A slot's words as stored.
 impl Literal for SealedSlot {
     fn to_value(&self) -> Value {
         let key = self.seal.key().to_value();
@@ -798,7 +754,6 @@ fn has_words(signature: Constructor) -> bool {
     signature.1.contains(&"words")
 }
 
-/// `Opened(conversation, at, actor, held, carried, model, kind, words)`.
 const OPENED: Constructor = (
     "Opened",
     &[
@@ -812,7 +767,6 @@ const OPENED: Constructor = (
         "words",
     ],
 );
-/// `SetUp(conversation, at, actor, held, carried, template, words)`.
 const SET_UP: Constructor = (
     "SetUp",
     &[
@@ -825,7 +779,6 @@ const SET_UP: Constructor = (
         "words",
     ],
 );
-/// `Titled(conversation, at, actor, held, carried, by, words)`.
 const TITLED: Constructor = (
     "Titled",
     &[
@@ -838,7 +791,6 @@ const TITLED: Constructor = (
         "words",
     ],
 );
-/// `Said(conversation, at, actor, held, carried, turn, by, words)`.
 const SAID: Constructor = (
     "Said",
     &[
@@ -852,7 +804,6 @@ const SAID: Constructor = (
         "words",
     ],
 );
-/// `Proposed(conversation, at, actor, held, carried, object, revises)`.
 const PROPOSED: Constructor = (
     "Proposed",
     &[
@@ -865,7 +816,6 @@ const PROPOSED: Constructor = (
         "revises",
     ],
 );
-/// `Reviewed(conversation, at, actor, held, carried, chain, batch, decision, objects, words)`.
 const REVIEWED: Constructor = (
     "Reviewed",
     &[
@@ -881,7 +831,6 @@ const REVIEWED: Constructor = (
         "words",
     ],
 );
-/// `ReviewFailed(conversation, at, actor, held, carried, standing, words)`.
 const REVIEW_FAILED: Constructor = (
     "ReviewFailed",
     &[
@@ -894,22 +843,18 @@ const REVIEW_FAILED: Constructor = (
         "words",
     ],
 );
-/// `Stopped(conversation, at, actor, held, carried, by)`.
 const STOPPED: Constructor = (
     "Stopped",
     &["conversation", "at", "actor", "held", "carried", "by"],
 );
-/// `Rewound(conversation, at, actor, held, carried, to, by)`.
 const REWOUND: Constructor = (
     "Rewound",
     &["conversation", "at", "actor", "held", "carried", "to", "by"],
 );
-/// `MemorySeen(conversation, at, actor, held, carried, version)`.
 const MEMORY_SEEN: Constructor = (
     "MemorySeen",
     &["conversation", "at", "actor", "held", "carried", "version"],
 );
-/// `Session(conversation, at, actor, held, carried, session, model, cwd, surface)`.
 const SESSION: Constructor = (
     "Session",
     &[
@@ -924,7 +869,6 @@ const SESSION: Constructor = (
         "surface",
     ],
 );
-/// `Unheard(conversation, at, actor, held, carried, session, model)`.
 const UNHEARD: Constructor = (
     "Unheard",
     &[
@@ -937,7 +881,6 @@ const UNHEARD: Constructor = (
         "model",
     ],
 );
-/// `Kept(conversation, at, actor, held, carried, session, model, cwd, surface, from)`.
 const KEPT: Constructor = (
     "Kept",
     &[
@@ -953,12 +896,10 @@ const KEPT: Constructor = (
         "from",
     ],
 );
-/// `Scoped(conversation, at, actor, held, carried, scope)`.
 const SCOPED: Constructor = (
     "Scoped",
     &["conversation", "at", "actor", "held", "carried", "scope"],
 );
-/// `Coding(conversation, at, actor, held, carried, proposal, session, words)`.
 const CODING: Constructor = (
     "Coding",
     &[
@@ -972,7 +913,6 @@ const CODING: Constructor = (
         "words",
     ],
 );
-/// `Erased(conversation, at, actor, held, carried, keys, erasure)`.
 const ERASED: Constructor = (
     "Erased",
     &[
@@ -986,7 +926,6 @@ const ERASED: Constructor = (
     ],
 );
 
-/// `Resealed(conversation, at, actor, held, carried, of, from, words)`.
 const RESEALED: Constructor = (
     "Resealed",
     &[
@@ -1001,7 +940,6 @@ const RESEALED: Constructor = (
     ],
 );
 
-/// `Began(conversation, at, actor, held, carried, covers, run)`.
 const BEGAN: Constructor = (
     "Began",
     &[
@@ -1015,7 +953,6 @@ const BEGAN: Constructor = (
     ],
 );
 
-/// `Again(conversation, at, actor, held, carried, question, how, by)`.
 const AGAIN: Constructor = (
     "Again",
     &[
@@ -1080,10 +1017,9 @@ impl Schema for LineEvent {
         vec![Only]
     }
 
-    /// A conversation's one register, its transcript. A new line rests on every line no later
-    /// line rests on, so the lines are causally ordered and the frontier is the heads. Its
-    /// reading is the heads' distinct events ([`Whole`]); two heads that print alike are one
-    /// line written twice.
+    /// A conversation's one register, its transcript. A new line rests on every line no later line
+    /// rests on, so the frontier is the heads; two heads that print alike are one line written
+    /// twice.
     type Registers<'a> = One<'a, Whole<Self>>;
 
     fn to_value(&self) -> Value {
@@ -1121,9 +1057,6 @@ impl Schema for LineEvent {
     }
 }
 
-/// A part of a line still spelled as JSON inside its literal: a turn's shape, who named a
-/// conversation, a coding session, an erasure. Changing it moves each slot's binding, so it
-/// changes only with a carry that locks every slot again.
 /// The line `value` prints, its words read by `words` from its fields.
 fn line_of(
     value: &Value,
@@ -1155,9 +1088,8 @@ fn line_of(
     })
 }
 
-/// A line every key of whose words is let go is kept as its husk ([`prodrome_core::store::Husk`]): each
-/// slot's words dropped, the name of the key they were locked under all that is left of them. No
-/// store's vocabulary reads a dropped slot, so a husk is never read as a whole object.
+/// A line every key of whose words is let go is kept as its husk: each slot's words dropped, the
+/// name of the key they were locked under all that is left of them.
 impl prodrome_core::store::Husking for LineEvent {
     type Seal = KeyName;
     type Husks = HuskVocabulary;
@@ -1228,6 +1160,8 @@ impl Literal for DroppedSlot {
     }
 }
 
+/// A part of a line spelled as JSON inside its literal: changing it moves each slot's binding, so
+/// it changes only with a carry that locks every slot again.
 fn json(value: &impl Serialize) -> Value {
     Value::str(serde_json::to_string(value).expect("a line's parts are plain data"))
 }
@@ -1299,10 +1233,8 @@ mod tests {
         .expect("a line")
     }
 
-    /// Whether a slot opens is the same question asked either way: `slot_opens`, which reads no
-    /// words where the key store can say, answers as `slot_words` is not missing, for a slot
-    /// under the current rules and one under older rules, with its key, with another slot's key,
-    /// and with none.
+    /// Whether a slot opens is the same question asked either way: `slot_opens` answers as
+    /// `slot_words` is not missing.
     #[test]
     fn a_slot_opens_exactly_where_its_words_are_not_missing() {
         let entry = Entry::Said {
@@ -1375,8 +1307,7 @@ mod tests {
         assert_eq!(read.entry(&opened_by(&keys)), model());
     }
 
-    /// A line's instant is the entry's, to the microsecond: nothing about an instant is
-    /// refused on the way in, and it reads back as the same value.
+    /// A line's instant is the entry's, to the microsecond, and reads back as the same value.
     #[test]
     fn a_line_keeps_its_entrys_instant() {
         let at = Datetime::new(2026, 10, 9, 9, 0, 1, 250_000).expect("an instant");
@@ -1521,8 +1452,7 @@ mod tests {
 
     proptest::proptest! {
         /// The law of the one locking path: every slot of a written line opens to the words
-        /// written, scrubbed under the rules it records, and those are the current rules. So no
-        /// stored line holds what the rules it records catch, and reading it scrubs nothing.
+        /// written, scrubbed under the rules it records, and those are the current rules.
         #[test]
         fn a_written_line_holds_its_words_scrubbed(text in said_text(), fact in said_text()) {
             let entry = Entry::Said {
@@ -1550,8 +1480,7 @@ mod tests {
         }
 
         /// The law of reading: a slot locked under any rules but the current ones opens to its
-        /// words scrubbed under the current rules, by `open` and through a reading alike, so no
-        /// reader sees what the current rules catch before the migration locks it again.
+        /// words scrubbed under the current rules, by `open` and through a reading alike.
         #[test]
         fn a_slot_under_older_rules_reads_scrubbed_under_the_current(
             text in said_text(),
@@ -1585,9 +1514,8 @@ mod tests {
         }
     }
 
-    /// A conversation set up from a template is a line of its own, `SetUp`, that prints, parses
-    /// back to itself and reads its start as a topic of that template, titled by its one slot;
-    /// a template this build does not hold is no line at all.
+    /// A conversation set up from a template is a line of its own, `SetUp`, that prints and parses
+    /// back to itself; a template this build does not hold is no line at all.
     #[test]
     fn a_set_up_line_reads_back_and_an_unknown_template_is_no_line() {
         use suzatary_connect::connect::TemplateId;

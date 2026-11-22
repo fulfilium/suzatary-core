@@ -1,6 +1,5 @@
-//! A reading over every conversation: what the ones that read hold, and each one that does not,
-//! named with why, so one unreadable conversation costs only itself and is never a conversation
-//! of nothing.
+//! A reading over every conversation, so one unreadable conversation costs only itself and is
+//! never a conversation of nothing.
 
 use suzatary_base::conversation_id::ConversationId;
 
@@ -8,7 +7,6 @@ use suzatary_base::conversation_id::ConversationId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unreadable {
     pub id: ConversationId,
-    /// The reader's words for why.
     pub why: String,
 }
 
@@ -18,11 +16,9 @@ impl std::fmt::Display for Unreadable {
     }
 }
 
-/// What a reading over every conversation found: its items, from the conversations that read,
-/// and each conversation that did not.
+/// What a reading over every conversation found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Found<T> {
-    /// What the readable conversations hold.
     pub items: Vec<T>,
     /// Every conversation that does not read, in the store's order.
     pub unreadable: Vec<Unreadable>,

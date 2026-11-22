@@ -2,8 +2,7 @@
 //! nodes that rest on one another, some of them the spine's (the box's lines), concurrent ones
 //! included. The laws:
 //! - it is a linear extension of the causal order, and a function of the set;
-//! - restricted to the spine, it is [`causal`]'s order, so a store whose every turn the box wrote
-//!   reads its turns as it read them before;
+//! - restricted to the spine, it is [`causal`]'s order;
 //! - a node that arrives later, that nothing rests on and that is not the spine's, moves no other
 //!   node, and lands after the spine's last; one that is the spine's, written over every node
 //!   held as the box writes under its lock, moves no node at or before the spine's last;
@@ -85,7 +84,6 @@ fn spine(writer: Writer) -> bool {
     }
 }
 
-/// The names, in order.
 fn names(nodes: &[Generated], order: &Order) -> Vec<u16> {
     order.iter().map(|(at, _)| nodes[*at].name).collect()
 }
@@ -291,7 +289,7 @@ fn a_tab_s_line_stands_before_the_box_line_that_rests_on_it() {
             writer: Writer::Other,
         },
     ];
-    // Today's order puts 4 (its clock 1) and then 2 ahead of 1: the clock places a tab's line
+    // `causal` puts 4 (its clock 1) and then 2 ahead of 1: the clock places a tab's line
     // among the box's.
     assert_eq!(names(&nodes, &causal(&view(&nodes))), [0, 4, 2, 1, 3]);
     assert_eq!(ordered(&nodes), [0, 2, 1, 3, 4]);
@@ -307,9 +305,7 @@ fn node(name: u16, at: u8, parents: &[u16], writer: Writer) -> Generated {
 }
 
 /// Two writers' chains written before the box placed either line of them interleave by their
-/// clocks, as a messaging app orders two people typing at once: A1 → A2 and B1 → B2, written in
-/// turn, read A1, B1, A2, B2. Each chain stays in its own order, and no line stands before what it
-/// rests on; the clock orders nothing else.
+/// clocks: A1 → A2 and B1 → B2, written in turn, read A1, B1, A2, B2.
 #[test]
 fn two_tabs_chains_before_the_box_read_by_their_clocks() {
     let nodes = [
@@ -324,8 +320,7 @@ fn two_tabs_chains_before_the_box_read_by_their_clocks() {
 
 /// Two lines that rest on nothing of each other, after the box's last line, read by their clocks
 /// until the box writes over one of them alone: X and Y read X, Y, then Y, S, X once the box writes
-/// S over Y (it did not hold X when it wrote). They are two writers' lines: one writer's lines are
-/// a chain, which never flips (`a_writer_s_chain_reads_in_its_order_however_the_box_interleaves`).
+/// S over Y (it did not hold X when it wrote).
 #[test]
 fn two_writers_lines_can_change_order_when_the_box_writes_over_one() {
     let mut nodes = vec![

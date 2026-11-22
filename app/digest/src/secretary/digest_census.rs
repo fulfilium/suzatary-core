@@ -1,6 +1,4 @@
-//! The digest's summaries counted, for the operator: every inner node of the tree by its label's
-//! group, its level and how its summary stands, and the name of each node no model of the
-//! ladder found a line for. Counts and names only, never a word.
+//! The digest's summaries counted, for the operator: counts and names only, never a word.
 
 use std::collections::BTreeMap;
 
@@ -11,10 +9,8 @@ use crate::secretary::compaction::{Compaction, Rung, short};
 use crate::secretary::digest::{Digest, Standing};
 use crate::secretary::digest_label::Label;
 
-/// Who a node's label says its lines can be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Group {
-    /// The owner's words alone ([`Label::is_owners`]).
     Owners,
     /// Clean, and more than the owner's words.
     Clean,
@@ -23,7 +19,6 @@ pub enum Group {
 }
 
 impl Group {
-    /// The group of a node labelled `label`.
     #[must_use]
     pub fn of(label: &Label) -> Self {
         if label.is_owners() {
@@ -44,10 +39,8 @@ impl Group {
     }
 }
 
-/// How a node's summary stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum State {
-    /// A summary true to how the node is asked now.
     Current,
     /// A summary owed again, a summary written over a retracted one among them.
     Stale,
@@ -65,7 +58,6 @@ pub struct Census {
 }
 
 impl Census {
-    /// The census of `digest`, a node's fit judged by `rule`'s ladder.
     #[must_use]
     pub fn of<R: Rung>(digest: &Digest, rule: &Compaction<R>) -> Self {
         fn walk(digest: &Digest, unfit: &[Hash], node: &Node<Label>, census: &mut Census) -> usize {
@@ -101,7 +93,6 @@ impl Census {
         census
     }
 
-    /// How many nodes `keep` admits.
     #[must_use]
     pub fn count(&self, keep: impl Fn(Group, usize, State) -> bool) -> usize {
         self.counts

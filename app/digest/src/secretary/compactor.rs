@@ -1,10 +1,8 @@
 //! The size loop: ask, and while the answer is no line of at most `NODE_BYTES`, show the
 //! compactor its answer cut at the limit and ask again, at most [`TRIES`] times.
 //!
-//! The first answer that fits is kept, the shortest that fits since each retry asks for less. If
-//! none fits, the attempt is [`Outcome::Unfit`] and says why: a summary is never an answer cut
-//! short and stored as though it had been said. Each call is first handed to `before`, which
-//! records it durably and may refuse it, so a call that then fails was still counted.
+//! A summary is never an answer cut short and stored as though it had been said. Each call is
+//! recorded durably before it is made, so a call that then fails was still counted.
 
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::{Ask, Unfit};
@@ -14,12 +12,10 @@ use suzatary_base::refusal::Refusal;
 /// The most calls one attempt makes.
 pub const TRIES: u32 = 5;
 
-/// What an attempt came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     /// A line that fits.
     Fits { line: Line },
-    /// No answer fitted.
     Unfit {
         /// The shortest answer's length, its spaces joined.
         shortest: u32,
@@ -111,7 +107,6 @@ mod tests {
         Ask::new(Vec::new(), vec!["Owner: hi".to_owned()])
     }
 
-    /// Every call's size, as `before` was handed them.
     fn counted(compactor: &Lengths) -> (Result<Outcome, Refusal>, Vec<u64>) {
         let mut sent = Vec::new();
         let outcome = compact(compactor, ask(), &mut |bytes| {

@@ -9,10 +9,9 @@ use crate::nonempty::NonEmpty;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Settle {
-    /// Adopted onto the chain: a triage batch, before the agent filed cards (2026-10-24).
+    /// Adopted onto the chain: a triage batch.
     Accepted,
-    /// Withdrawn by the review: a triage card, or before 2026-10-24 a batch deleted from the
-    /// agent's replica.
+    /// Withdrawn by the review: a triage card, or a batch deleted from the agent's replica.
     Rejected,
 }
 
@@ -28,19 +27,12 @@ impl Settle {
 }
 
 /// What a review did about one batch: settled some of its objects one way, or held it whole.
-///
-/// Holding is an answer: a batch left standing on purpose is a different fact from one nobody
-/// looked at, and the Inbox shows the reason above it. A hold names no object and a settle names
-/// at least one, so neither can be written with the other's half.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(tag = "decision", rename_all = "lowercase")]
 #[ts(rename = "ReviewDecision")]
 pub enum Decision {
-    /// These objects, accepted or rejected.
     Settled {
-        /// Which way.
         how: Settle,
-        /// The objects settled.
         #[ts(type = "Array<string>")]
         objects: NonEmpty<String>,
     },
@@ -51,9 +43,7 @@ pub enum Decision {
 /// The three answers as words, without the objects: what a list of decisions is grouped by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// Accepted or rejected.
     Settled(Settle),
-    /// Held.
     Held,
 }
 
@@ -67,7 +57,6 @@ impl Outcome {
 }
 
 impl Decision {
-    /// Which of the three answers it is.
     #[must_use]
     pub fn outcome(&self) -> Outcome {
         match self {

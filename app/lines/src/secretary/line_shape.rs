@@ -31,8 +31,8 @@ pub enum LineShape {
     Opened {
         /// The model's name for itself.
         model: String,
-        /// What it is for; `None` on a line written before a kind was stored, whose kind
-        /// [`unkinded`] reads off its conversation's id.
+        /// What it is for; `None` on a line that stores no kind, whose kind [`unkinded`] reads
+        /// off its conversation's id.
         kind: Option<Kind>,
     },
     /// A conversation begun on a template's opening, for a topic. Words: its title.
@@ -41,9 +41,7 @@ pub enum LineShape {
     Titled { by: Namer },
     /// Something said. Words: the turn's slots.
     Said { turn: TurnShape, by: Option<Stamp> },
-    /// A proposal made.
     Proposed {
-        /// The inbox object.
         object: ProposalId,
         /// The proposal it replaces.
         revises: Option<usize>,
@@ -53,7 +51,6 @@ pub enum LineShape {
         chain: String,
         /// What was reviewed: a card's reference, or an older batch's head.
         batch: String,
-        /// What was decided, and the objects it settled.
         decision: Decision,
     },
     /// A review that could not run. Words: why.
@@ -71,7 +68,6 @@ pub enum LineShape {
     },
     /// The memory's version told.
     MemorySeen { version: u64 },
-    /// A session opened.
     Session {
         session: SessionId,
         model: String,
@@ -129,7 +125,6 @@ pub enum LineShape {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum CodingShape {
-    /// Fired.
     Fired {
         id: suzatary_inbox::coding::SessionId,
         /// Where it is watched.
@@ -141,13 +136,11 @@ pub enum CodingShape {
         id: suzatary_inbox::coding::SessionId,
         branch: Branch,
     },
-    /// Merged.
     Merged {
         id: suzatary_inbox::coding::SessionId,
         /// The tip merged.
         sha: CommitId,
     },
-    /// Dropped.
     Dropped {
         id: suzatary_inbox::coding::SessionId,
     },
@@ -387,7 +380,6 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
     }
 }
 
-/// A coding session's shape and its words.
 fn coding(session: &Session) -> (CodingShape, Option<Vec<LineWords>>) {
     match session {
         Session::Fired { id, url, at } => (
@@ -427,9 +419,8 @@ fn coding(session: &Session) -> (CodingShape, Option<Vec<LineWords>>) {
     }
 }
 
-/// What a conversation opened before kinds were stored is for, read off its id: the box's rounds
-/// are `<day>-review` and `<day>-sweep`, and any other but [`DEFAULT`] a person opened. Only the
-/// readers of such a line ask; every line written since prints its kind.
+/// What a conversation whose opening stores no kind is for, read off its id: the box's rounds
+/// are `<day>-review` and `<day>-sweep`, and any other but [`DEFAULT`] a person opened.
 #[must_use]
 pub fn unkinded(id: &ConversationId) -> Kind {
     if id == &*DEFAULT {
@@ -600,8 +591,8 @@ fn take<T>(
 mod tests {
     use super::*;
 
-    /// A line written before kinds were stored reads its kind off its conversation's id; every
-    /// line written since prints the kind it was opened with.
+    /// A line that stores no kind reads its kind off its conversation's id; one that stores a
+    /// kind prints it.
     #[test]
     fn an_unkinded_opening_reads_its_kind_off_its_id() {
         let opened = |id: &str| {

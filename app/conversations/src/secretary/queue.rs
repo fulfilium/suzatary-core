@@ -14,10 +14,9 @@ pub const MAX_PENDING: usize = 16;
 /// What the next `resume` sends: every live turn after the last one that closes a round, with its
 /// index.
 ///
-/// A round is closed exactly by a turn that [closes](Stored::closes) it: a `Turn::Model` with no
-/// calls, or a stop, so a stopped question is never owed again, not even between two writes. A
-/// view, never a mark: once a round's own turn is appended the boundary moves past what it read. A
-/// turn a rewind set aside is on no path, so a regenerate's question is pending again.
+/// A round is closed exactly by a turn that [closes](Stored::closes) it, so a stopped question is
+/// never owed again. A view, never a mark: once a round's own turn is appended the boundary moves
+/// past what it read.
 #[must_use]
 pub fn delta(stored: &Stored) -> Vec<(usize, &Said)> {
     let live = stored.live();
@@ -29,8 +28,7 @@ pub fn delta(stored: &Stored) -> Vec<(usize, &Said)> {
 }
 
 /// Whether `said` starts a round: anything but an act line the gate did not stamp as the
-/// owner's. The box's lines (a card it filed, a restart, a sign-in's link) are sent with the next
-/// round, and wake no model alone.
+/// owner's; the box's lines are sent with the next round, and wake no model alone.
 #[must_use]
 pub fn wakes(said: &Said) -> bool {
     match said.turn {
@@ -39,8 +37,7 @@ pub fn wakes(said: &Said) -> bool {
     }
 }
 
-/// What a round answers: [`delta`], never empty and holding a turn that [`wakes`], so a resumed
-/// session is always sent something and a nudge that added no turn asks no model.
+/// What a round answers: [`delta`], never empty and holding a turn that [`wakes`].
 #[derive(Debug, Clone)]
 pub struct Pending<'a> {
     first: &'a Said,
@@ -104,21 +101,19 @@ pub fn headed(heading: Option<Turn>, turns: &[(usize, &Said)]) -> Vec<Turn> {
         .collect()
 }
 
-/// How many turns a model without a session is sent: the conversation page's
-/// own default, so what the owner sees and what the model reads are one window.
+/// How many turns a model without a session is sent: the conversation page's own default.
 pub const MODEL_WINDOW: usize = 60;
 
 /// What a model without a session is sent: the last [`MODEL_WINDOW`] live turns, starting at the
 /// first round boundary inside them.
 ///
-/// A window cut mid-round is malformed (a tool answer without its call), so it starts where
-/// [`delta`] cuts; a round longer than the window is sent whole, from its own start.
+/// A window cut mid-round is malformed, so it starts where [`delta`] cuts; a round longer than
+/// the window is sent whole.
 #[must_use]
 pub fn for_model(stored: &Stored) -> Vec<(usize, &Said)> {
     window_of(stored, &stored.live(), MODEL_WINDOW).to_vec()
 }
 
-/// [`for_model`] over any window size, so a test can use six turns, not sixty.
 fn window_of<'a, 'b>(
     stored: &Stored,
     turns: &'a [(usize, &'b Said)],
@@ -133,16 +128,15 @@ fn window_of<'a, 'b>(
     &turns[start..]
 }
 
-/// Every turn a model asked as `stored` records ([`Stored::scope`]) holds now ([`sent`]).
+/// Every turn a model asked as `stored` records holds now.
 #[must_use]
 pub fn held(stored: &Stored) -> Vec<(usize, &Said)> {
     sent(stored, stored.scope)
 }
 
-/// Every turn a model asked over `scope` holds: for a transcript, every stored turn, which is what
-/// it is sent; for a window, what [`for_model`] sends and, when a session is kept, every live turn
-/// from the first one its opening sent, since a resumed session is sent only what it has not read
-/// and keeps all it has.
+/// Every turn a model asked over `scope` holds: for a transcript, every stored turn; for a window,
+/// what [`for_model`] sends and, when a session is kept, every live turn from the first one its
+/// opening sent.
 #[must_use]
 pub fn sent(stored: &Stored, scope: Scope) -> Vec<(usize, &Said)> {
     match scope {
@@ -165,7 +159,6 @@ pub fn sent(stored: &Stored, scope: Scope) -> Vec<(usize, &Said)> {
     }
 }
 
-/// How many lines are still queued: [`delta`]'s length, for the `MAX_PENDING` refusal and a badge.
 #[must_use]
 pub fn pending(stored: &Stored) -> usize {
     delta(stored).len()
@@ -228,13 +221,11 @@ mod tests {
         Stored::of(&id(), entries).expect("a conversation")
     }
 
-    /// `delta`'s bare turns, without each `Said`'s `at`.
     fn turns<'a>(delta: &[(usize, &'a Said)]) -> Vec<&'a Turn> {
         delta.iter().map(|(_, said)| &said.turn).collect()
     }
 
-    /// The box's own notes wake no model: a conversation holding only them waits for nothing,
-    /// and the owner's next turn is sent with them, in order.
+    /// The box's own notes wake no model, and the owner's next turn is sent with them, in order.
     #[test]
     fn the_boxs_notes_wait_for_the_owners_turn() {
         let noted = |at: &str, text: &str| {
@@ -284,8 +275,8 @@ mod tests {
         }
     }
 
-    /// A conversation stored before a stop closed by itself holds the stop then an empty end; it
-    /// reads exactly as it did: nothing queued, and the empty end opens no round of its own.
+    /// A stop then an empty end reads as nothing queued, and the empty end opens no round of its
+    /// own.
     #[test]
     fn a_stored_stop_with_its_empty_end_reads_as_it_did() {
         let lines = [
@@ -310,11 +301,7 @@ mod tests {
         );
     }
 
-    // --- The property: every person turn is delivered exactly once. -------
-
-    /// One step of a simulated conversation: the owner says something, dismisses a proposal, a
-    /// round asks for a verb, a round completes, delivering whatever is queued, or the owner stops
-    /// the round, closing whatever is queued unanswered: in one line, or as stored conversations
+    /// One step of a simulated conversation; a stop comes in one line, or as stored conversations
     /// hold it, the stop then an empty end.
     #[derive(Debug, Clone, Copy)]
     enum Step {
@@ -339,7 +326,6 @@ mod tests {
         )
     }
 
-    /// The lines a script comes to.
     fn script_lines(script: &[Step]) -> Vec<Entry> {
         let mut entries = vec![opened()];
         let mut person_count = 0usize;
@@ -389,7 +375,6 @@ mod tests {
                 let closing = matches!(line, Entry::Stopped { .. })
                     || matches!(line, Entry::Said { turn: Turn::Model { calls, .. }, .. } if calls.is_empty());
                 if closing {
-                    // The batch as it stood right before the closing line joined it.
                     let before = Stored::of(&id(), &lines[..at]).expect("a conversation");
                     delivered.extend(
                         delta(&before).iter().filter_map(|(_, said)| person_index(&said.turn)),
@@ -398,7 +383,6 @@ mod tests {
             }
             let entries = lines;
 
-            // Whatever is still queued at the end is the current, not yet answered delta.
             let after = Stored::of(&id(), &entries).expect("a conversation");
             let still_queued: Vec<usize> = delta(&after).iter().filter_map(|(_, said)| person_index(&said.turn)).collect();
 

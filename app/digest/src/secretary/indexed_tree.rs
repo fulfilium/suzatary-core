@@ -1,9 +1,5 @@
 //! A summary tree with an index from each node's name to its place, so finding a node by name
-//! costs the tree's depth. The Prodrome's [`Tree::node`] searches the whole tree, and a reading
-//! that asks it once for each node costs the square of the tree's size.
-//!
-//! Nothing here names a Suzatary type: it is the Prodrome's tree, indexed, and it belongs in
-//! `prodrome_core::digest` beside [`Tree`].
+//! costs the tree's depth; asking [`Tree::node`] once for each node costs the square of the tree.
 
 use std::collections::BTreeMap;
 
@@ -18,8 +14,7 @@ pub(crate) struct IndexedTree<M> {
 }
 
 impl<M> IndexedTree<M> {
-    /// `tree`, indexed. Where two nodes share a name, the index keeps the one [`Tree::node`]
-    /// finds: it visits the nodes in that search's order and keeps the first.
+    /// Where two nodes share a name, the index keeps the one [`Tree::node`] finds.
     #[must_use]
     pub fn of(tree: Tree<M>) -> Self {
         let mut paths = BTreeMap::new();
@@ -35,13 +30,11 @@ impl<M> IndexedTree<M> {
         Self { tree, paths }
     }
 
-    /// The tree.
     #[must_use]
     pub fn tree(&self) -> &Tree<M> {
         &self.tree
     }
 
-    /// The node named `name`, as [`Tree::node`] answers, in the tree's depth.
     #[must_use]
     pub fn node(&self, name: &Hash) -> Option<&Node<M>> {
         self.paths
@@ -81,8 +74,7 @@ mod tests {
             .expect("lines")
     }
 
-    /// The index is a cache of [`Tree::node`]: for every name in the tree, and one it does not
-    /// hold, both find the same node.
+    /// The index is a cache of [`Tree::node`]: for every name, held or not, both answer alike.
     #[test]
     fn the_index_finds_what_the_tree_finds() {
         let absent = prodrome_core::memo::name(b"no line", []);

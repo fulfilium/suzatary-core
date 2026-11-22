@@ -1,25 +1,9 @@
 //! The digest as a reading: every conversation's lines as ONE summary tree, read under the
-//! summaries the digest's history records.
+//! summaries the digest's history records. Nothing here calls a model or reads a clock: the
+//! reading is a function of the two object sets and the words.
 //!
-//! What it means: the tree is the Prodrome's [`prodrome_core::digest::tree`] over the set of
-//! lines, every line a leaf labelled by [`Label::of`] with its round's taint, so its shape is a function of the lines
-//! and not of when each arrived; each node's summary is its register's reading in the history
-//! ([`crate::secretary::digest_event`]), a discrete register, so two summaries of one node are a
-//! conflict, shown whole, and a reading that can show one takes the candidate of the least object
-//! name. A summary whose words no longer read is no summary. Nothing here calls a model or reads
-//! a clock: the reading is a function of the two object sets and the words.
-//!
-//! A node is named by the lines it spans, so a line arriving late renames the spine above it,
-//! and every summary of a renamed node stops being named by the tree. Those words are then dead
-//! ([`Digest::naming`]), and the one sweep deletes them: an erasure needs no case of its own.
-//!
-//! A leaf is the line a line carries ([`Carried::From`](suzatary_memory::secretary::carried::Carried::From)), or the line itself, so a store carried
-//! forward reads as the same tree and every summary stands. A line whose words are erased stays in
-//! the order, its leaf renamed over the keys that went
-//! and its label marked erased, so the nodes above it rename, and with them, where a renamed node
-//! moves a chunk's cut (a name ends a chunk one time in four), the chunk after it at that level:
-//! no summary written while the words stood is named by the tree, every other summary stands, and
-//! the compactor summarises again from what is left.
+//! A node is named by the lines it spans, so a summary of a renamed node is dead
+//! ([`Digest::naming`]) and the one sweep deletes its words.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -55,14 +39,12 @@ thread_local! {
     static VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many views this thread has built ([`Digest::view`]), so a reader's cost can be counted:
-/// a view costs a pass over the whole tree.
+/// How many views this thread has built ([`Digest::view`]).
 #[must_use]
 pub fn views() -> usize {
     VIEWS.with(std::cell::Cell::get)
 }
 
-/// The conversations read through their summaries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Digest {
     shape: Arc<Shape>,
@@ -72,20 +54,18 @@ pub struct Digest {
     /// Every call's object, instant and what it spent, in the history's order.
     attempts: Vec<(Hash, Datetime, Spent)>,
     /// The models each node's history records as finding no line at today's [`NODE_BYTES`] or
-    /// above, from every outcome and not only the reading's, since a later outcome supersedes it.
+    /// above, from every outcome and not only the reading's.
     unfit: BTreeMap<Hash, BTreeSet<ModelName>>,
     /// Every summary object written over a retracted summary, at any depth: stale until its node
     /// is asked again.
     over_retracted: BTreeSet<Hash>,
-    /// How each node's least-named candidate stands, where it is a summary ([`standing`]): read
-    /// once here, since a view asks it of every node of the tree.
+    /// How each node's least-named candidate stands, where it is a summary ([`standing`]).
     standings: BTreeMap<Hash, Standing>,
 }
 
 /// One write of a node's reading: a summary, or its retraction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
-    /// The object that wrote it.
     pub object: Hash,
     pub said: Written,
 }
@@ -106,7 +86,6 @@ pub enum Standing {
 /// What a candidate says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Written {
-    /// A summary.
     Summary(Summary),
     /// No answer fitted a node.
     Unfit {
@@ -116,24 +95,21 @@ pub enum Written {
         /// The shortest answer's length.
         shortest: u32,
     },
-    /// The summary is wrong.
     Retracted,
 }
 
-/// A summary as the history records it. Its words are private to this module, so a reader
-/// reaches them only through [`Digest::summary`], which shows no stale summary of an owner's node.
+/// A summary as the history records it; its words are reached only through
+/// [`Digest::summary`], which shows no stale summary of an owner's node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Summary {
     /// Its words, `None` once deleted or lost.
     words: Option<Line>,
     pub text: TextName,
-    /// What it was written from.
     pub over: Vec<Hash>,
     pub model: ModelName,
     pub bytes: u32,
     /// The node's taint when it was written.
     pub taint: Taint,
-    /// The version of the asking it was written under.
     pub asked: Under<Asking>,
 }
 
@@ -141,8 +117,7 @@ pub struct Summary {
 pub type Placed<'l> = (&'l Hash, &'l LineEvent, &'l [Hash]);
 
 /// The digest's lines: the tree over them, each leaf labelled, and the line of each leaf renamed
-/// because words of it were erased. A function of the lines and their entries alone, so a summary
-/// written moves none of it; the box keeps it in the lines' fold.
+/// because words of it were erased; a summary written moves none of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Shape {
     tree: Option<IndexedTree<Label>>,
@@ -162,9 +137,6 @@ impl Shape {
     }
 
     /// The shape over the lines `gathered` holds, built on the first ask and kept with them.
-    ///
-    /// # Errors
-    /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
     pub fn over(gathered: &Gathered) -> Result<Arc<Shape>, Cycle> {
         gathered.derived(|kept: &mut KeptShape| {
             kept.0
@@ -175,11 +147,7 @@ impl Shape {
         })
     }
 
-    /// The tree over `lines`, each conversation's in its causal order, read as `opened` reads
-    /// them.
-    ///
-    /// # Errors
-    /// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
+    /// The tree over `lines`, each conversation's in its causal order.
     pub fn of(lines: &[Placed<'_>], opened: &BTreeMap<Hash, Entry>) -> Result<Self, Cycle> {
         let taints = taints(lines, opened);
         let (carries, leaf_of) = leaves_of(lines);
@@ -203,8 +171,8 @@ impl Shape {
                         .map(|before| leaf_of[&order[before]].0.clone())
                         .into_iter()
                         .collect(),
-                    // What showing the line costs is its words as the view prints them, never the
-                    // sealed print, so a store reads alike whether its words are locked or not.
+                    // The words as the view prints them, never the sealed print, so a locked
+                    // store costs the same.
                     bytes: u32::try_from(crate::secretary::digest_view::rendered(line).len())
                         .unwrap_or(u32::MAX),
                     measure: if *erased {
@@ -226,30 +194,25 @@ impl Shape {
     }
 }
 
-/// Each node's stream read, kept across readings: its candidates and the summaries retracted in
-/// it, named by the node, the stream's objects and whether the tree holds the node, whose words
-/// alone are read. An entry whose node leaves the history is dropped. One serves one deployment's
-/// owners.
+/// Each node's stream read, kept across readings, named by the node, the stream's objects and
+/// whether the tree holds the node. One serves one deployment's owners.
 #[derive(Debug, Default)]
 pub struct Kept(BTreeMap<Hash, (Hash, Arc<NodeSaid>)>);
 
 impl Kept {
-    /// Nothing kept.
     pub fn clear(&mut self) {
         self.0.clear();
     }
 }
 
-/// One node's stream, read.
 #[derive(Debug)]
 pub struct NodeSaid {
     candidates: Vec<Candidate>,
     retracted: Vec<Hash>,
 }
 
-/// The digest of the lines `shape` holds under `history`, each summary's words read by `words`,
-/// a retraction believed only from one of `owners`, and each node's stream read through `kept`:
-/// read again only where its name moved.
+/// The digest of the lines `shape` holds under `history`, a retraction believed only from one
+/// of `owners`, and each node's stream read again only where its name in `kept` moved.
 pub fn under_kept(
     shape: Arc<Shape>,
     history: &[Node<DigestEvent>],
@@ -377,8 +340,7 @@ fn unfit(history: &[Node<DigestEvent>]) -> BTreeMap<Hash, BTreeSet<ModelName>> {
 }
 
 /// How the least-named candidate's summary of `node` stands, when it is a summary of a node of
-/// `tree`: current when it was asked under its node's class's current asking over what the
-/// node's children read now and over no retracted summary.
+/// `tree`.
 fn standing(
     tree: &IndexedTree<Label>,
     said: &BTreeMap<Hash, Vec<Candidate>>,
@@ -399,7 +361,6 @@ fn standing(
     })
 }
 
-/// What a summary of `node` is written over now, as [`Digest::over`] answers.
 fn written_over(
     tree: &IndexedTree<Label>,
     said: &BTreeMap<Hash, Vec<Candidate>>,
@@ -418,8 +379,7 @@ fn written_over(
         .collect()
 }
 
-/// Every summary in `history` written over one of `retracted`, or over a summary that is, so
-/// a retraction reads as stale every summary of the spine above it.
+/// Every summary in `history` written over one of `retracted`, or over a summary that is.
 fn over_retracted(history: &[Node<DigestEvent>], retracted: &BTreeSet<Hash>) -> BTreeSet<Hash> {
     let overs: BTreeMap<&Hash, &[Hash]> = history
         .iter()
@@ -436,8 +396,8 @@ fn over_retracted(history: &[Node<DigestEvent>], retracted: &BTreeSet<Hash>) -> 
         .collect()
 }
 
-/// Whether `summary` is written over one of `retracted`, at any depth, each answer kept in
-/// `known`. A summary is written over objects that exist before it, so the walk down ends.
+/// Whether `summary` is written over one of `retracted`, at any depth. A summary is written
+/// over objects that exist before it, so the walk down ends.
 fn stale<'h>(
     summary: &'h Hash,
     overs: &BTreeMap<&'h Hash, &'h [Hash]>,
@@ -455,8 +415,6 @@ fn stale<'h>(
     read
 }
 
-/// Every call `history` records: its object, instant and what it spent, in the history's order.
-/// The budget's fold, read without the lines.
 #[must_use]
 pub fn attempts(history: &[Node<DigestEvent>]) -> Vec<(Hash, Datetime, Spent)> {
     history
@@ -469,8 +427,8 @@ pub fn attempts(history: &[Node<DigestEvent>]) -> Vec<(Hash, Datetime, Spent)> {
         .collect()
 }
 
-/// Each line's place in the tree: the line it carries, and its leaf, that line renamed over its
-/// keys an erasure names, and whether it was.
+/// Each line's place in the tree: the line it carries, and its leaf, renamed over its keys an
+/// erasure names, and whether it was.
 #[expect(
     clippy::type_complexity,
     reason = "two maps over the same lines, read together"
@@ -510,10 +468,9 @@ fn leaves_of<'l>(
     (carries, leaves)
 }
 
-/// Every line's taint in its round ([`suzatary_conversations::secretary::taint::rounds`]), each
-/// conversation's lines in the order its transcript reads in ([`transcript::sequenced`]), so the
-/// taints are a function of the set of lines, whatever order they are given in. A line whose
-/// words are erased still counts: a mail read whose words went still taints the answer after it.
+/// Every line's taint in its round, a function of the set of lines whatever order they are
+/// given in. A line whose words are erased still counts: a mail read still taints the answer
+/// after it.
 fn taints<'l>(
     lines: &[Placed<'l>],
     opened: &'l BTreeMap<Hash, Entry>,
@@ -545,8 +502,7 @@ fn taints<'l>(
                     )
                     .collect::<Vec<_>>(),
             );
-            // Each turn read with the stamp its claims judged, as the transcript reads it: a
-            // tab's turn no claim judged clean is tainted here too.
+            // A tab's turn no claim judged clean is tainted here too, as the transcript reads it.
             let judgments = suzatary_lines::secretary::transcript::judgments(
                 said.iter().map(|(_, entry)| *entry),
             );
@@ -576,12 +532,7 @@ fn taints<'l>(
         .collect()
 }
 
-/// The lines in the crate's one causal order ([`topo::linear`]) over the lines they carry, so a
-/// carried store reads in its old order. Each line rests on the one before it, so the tree reads
-/// exactly this order.
-///
-/// # Errors
-/// [`Cycle`] for lines in a cycle, which no store of objects can hold.
+/// The lines in the crate's one causal order ([`topo::linear`]) over the lines they carry.
 fn line_order<'l>(
     lines: &[Placed<'l>],
     carries: &BTreeMap<&'l Hash, &'l Hash>,
@@ -625,7 +576,6 @@ fn line_order<'l>(
         .collect())
 }
 
-/// Whether `line` seals another slot's words again.
 fn resealing(line: &LineEvent) -> bool {
     matches!(
         line.shape(),
@@ -680,7 +630,6 @@ impl Digest {
         self.shape.tree.as_ref().map(IndexedTree::tree)
     }
 
-    /// The node of the tree named `name`, found in the tree's depth.
     #[must_use]
     pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
         self.shape.tree.as_ref()?.node(name)
@@ -704,9 +653,8 @@ impl Digest {
     /// The summary a single-record reading shows: the least-named candidate's, when it is a
     /// summary whose words read, unless it is stale and its node is labelled the owner's alone,
     /// or it is written over a retracted summary. The first may have been asked beside more than
-    /// the owner's words, and the second from the line he said was wrong, so no reader, the
-    /// compactor included, is shown either: the node reads as unsummarized until it is asked
-    /// again.
+    /// the owner's words, and the second from the line he said was wrong. No reader, the
+    /// compactor included, is shown either.
     #[must_use]
     pub fn summary(&self, node: &Hash) -> Option<&Line> {
         let (words, standing) = self.shown(node)?;
@@ -720,15 +668,14 @@ impl Digest {
         }
     }
 
-    /// How the summary [`Digest::summary`] would show stands, when its words read, whether it
-    /// is shown or not: the census's reading, which names no word.
+    /// How the summary [`Digest::summary`] would show stands, whether it is shown or not.
     #[must_use]
     pub fn standing(&self, node: &Hash) -> Option<Standing> {
         self.shown(node).map(|(_, standing)| standing)
     }
 
-    /// The least-named candidate's summary, when its words read, and how it stands
-    /// ([`standing`]). Private, so a stale summary of an owner's node reaches no reader.
+    /// The least-named candidate's summary and how it stands. Private, so a stale summary of an
+    /// owner's node reaches no reader.
     fn shown(&self, node: &Hash) -> Option<(&Line, Standing)> {
         let Written::Summary(Summary { words, .. }) = &self.candidates(node).first()?.said else {
             return None;
@@ -736,17 +683,15 @@ impl Digest {
         Some((words.as_ref()?, *self.standings.get(node)?))
     }
 
-    /// What a summary of `node` is written over now, in the log's order: each child line's
-    /// leaf, and each inner child's least-named candidate. `None` for a node the tree does not
-    /// hold, or one with an inner child nothing was said of.
+    /// What a summary of `node` is written over now, in the log's order. `None` for a node the
+    /// tree does not hold, or one with an inner child nothing was said of.
     #[must_use]
     pub fn over(&self, node: &Hash) -> Option<Vec<Hash>> {
         written_over(self.shape.tree.as_ref()?, &self.said, node)
     }
 
-    /// The taint of the summary [`Digest::summary`] shows: the taint its event records joined
-    /// with the node's own, so neither a summary written before a line's class was known nor one
-    /// whose record says less than its lines reads cleaner than the lines it stands for.
+    /// The taint of the summary [`Digest::summary`] shows, joined with the node's own, so no
+    /// summary reads cleaner than the lines it stands for.
     #[must_use]
     pub fn summary_taint(&self, node: &Hash) -> Option<Taint> {
         self.summary(node)?;
@@ -758,9 +703,8 @@ impl Digest {
         Some(recorded.join(spans))
     }
 
-    /// The reading's content name: the tree as read under its summaries
-    /// ([`digest::read`]), every candidate of every node and every call, so any object the
-    /// history gains that moves a register, or counts a call, moves the name.
+    /// The reading's content name: any object the history gains that moves a register, or
+    /// counts a call, moves it.
     #[must_use]
     pub fn name(&self) -> ReadingName {
         let tree = self
@@ -779,7 +723,6 @@ impl Digest {
         )
     }
 
-    /// Every call the history records, by its instant and what it spent: what a budget folds.
     pub fn attempts(&self) -> impl Iterator<Item = (Datetime, Spent)> + '_ {
         self.attempts.iter().map(|(_, at, spent)| (*at, *spent))
     }
@@ -792,9 +735,7 @@ impl Digest {
     }
 
     /// The nodes whose summary can be written now ([`digest::pending`]), reading a stale
-    /// summary as none: a node with no current summary whose children are lines or have current
-    /// ones. So a stale node is asked again only over current children, lowest level first, and
-    /// a parent written over a child's older summary is stale once the child is asked again.
+    /// summary as none.
     #[must_use]
     pub fn pending(&self) -> Vec<Hash> {
         self.tree().map_or_else(Vec::new, |tree| {
@@ -816,8 +757,7 @@ impl Digest {
     }
 
     /// The texts the history names: a summary's, live while its node is in the tree and the
-    /// summary is a candidate of the node's reading; past once superseded, retracted, or written
-    /// of a node the lines no longer name.
+    /// summary is a candidate of the node's reading.
     #[must_use]
     pub fn naming(&self) -> Naming<Line> {
         let mut in_tree = BTreeSet::new();

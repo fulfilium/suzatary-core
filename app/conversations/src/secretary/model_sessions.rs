@@ -2,8 +2,8 @@
 
 use crate::secretary::model::SessionId;
 
-/// The model CLI's session files: every turn a session was sent and every answer, in the clear,
-/// so a session is a copy of its conversation's words and goes before the keys that open them.
+/// The model CLI's session files: every turn and answer in the clear, so a session goes before
+/// the keys that open its conversation's words.
 pub trait ModelSessions: Sync {
     /// Delete every file the CLI keeps for session `id`, opened in directory `cwd`; deleting a
     /// session it keeps nothing of succeeds.

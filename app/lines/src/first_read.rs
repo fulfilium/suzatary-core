@@ -1,9 +1,7 @@
-//! A process's first whole read of a store, timed once, and split into its parts ([`crate::parts`])
-//! when asked.
+//! A process's first whole read of a store, timed once, and split into its parts when asked.
 
-/// The target a process's first read is logged at, once, part by part, so a cold read on a box
-/// can be split without a debugger. It names no store's content: no word, no name, only parts and
-/// milliseconds.
+/// The target a process's first read is logged at, once, part by part; it names no store's
+/// content, only parts and milliseconds.
 pub const FIRST_READ: &str = "suzatary::first_read";
 
 /// Told what a process's first read was and how long it took; unset, nobody is.
@@ -17,8 +15,7 @@ pub fn tell(teller: impl Fn(&'static str, std::time::Duration) + Send + Sync + '
     let _ = TOLD.set(Box::new(teller));
 }
 
-/// `run`'s answer; where it is this process's first read, told ([`tell`]) and logged at
-/// [`FIRST_READ`].
+/// `run`'s answer; where it is this process's first read, told and logged at [`FIRST_READ`].
 #[cfg(not(target_arch = "wasm32"))]
 pub fn first<T>(what: &'static str, run: impl FnOnce() -> T) -> T {
     static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

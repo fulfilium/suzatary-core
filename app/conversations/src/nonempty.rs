@@ -5,7 +5,6 @@
 pub struct NonEmpty<T>(Vec<T>);
 
 impl<T> NonEmpty<T> {
-    /// `first`, then `rest`.
     #[must_use]
     pub fn new(first: T, rest: Vec<T>) -> Self {
         let mut items = vec![first];
@@ -13,13 +12,11 @@ impl<T> NonEmpty<T> {
         Self(items)
     }
 
-    /// The first item.
     #[must_use]
     pub fn first(&self) -> &T {
         &self.0[0]
     }
 
-    /// Each item through `f`, in order.
     #[must_use]
     pub fn map<U>(&self, f: impl FnMut(&T) -> U) -> NonEmpty<U> {
         NonEmpty(self.0.iter().map(f).collect())
@@ -31,13 +28,11 @@ impl<T> NonEmpty<T> {
         (!items.is_empty()).then_some(Self(items))
     }
 
-    /// Every item, in order.
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
         &self.0
     }
 
-    /// The items of `held`, none for `None`.
     #[must_use]
     pub fn listed(held: Option<&Self>) -> &[T] {
         held.map_or(&[], Self::as_slice)

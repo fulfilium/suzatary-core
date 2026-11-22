@@ -2,8 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// What a conversation is for: the list pins the default, sorts topics by their last turn, and
-/// files the box's own rounds behind a filter.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ts_rs::TS,
 )]
@@ -19,7 +17,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Every kind.
     pub const ALL: [Kind; 3] = [Kind::Default, Kind::Topic, Kind::Review];
 
     /// The name a stored line prints.
@@ -33,7 +30,6 @@ impl Kind {
     }
 }
 
-// Its literal is its text, as a stored line prints it.
 prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
 
 #[cfg(test)]

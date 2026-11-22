@@ -1,13 +1,6 @@
 //! What a forgetting takes from the conversation a fact was said in, read from the lines and
 //! never searched for: the copies the remembering provably made, which it erases, and the turns
 //! around them, which it can only offer.
-//!
-//! The `remember` or `consolidate` call's answer names the fact (`remembered`), or `remember`'s
-//! the card it filed (`proposed`);
-//! the model turn that asked for it is the last before the answer, and the call is the one the
-//! answers between them have not yet answered. That call's arguments hold the fact's words, and
-//! its answer is the receipt; both are erased. The owner's opening turn and the model's prose
-//! may restate the fact in other words, which no reading can prove, so they are offered.
 
 use std::collections::BTreeSet;
 
@@ -23,7 +16,6 @@ use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::memory::{FactId, Origin};
 
-/// The keys a forgetting erases, and those it offers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Caused {
     /// The remember call's arguments and its answer.
@@ -33,9 +25,8 @@ pub(crate) struct Caused {
 }
 
 impl Caused {
-    /// What forgetting `fact`, said at `origin`, takes from `transcript`, its conversation: keys
-    /// an erasure already names are neither erased nor offered again, so a forgetting read twice
-    /// owes nothing the second time.
+    /// What forgetting `fact`, said at `origin`, takes from `transcript`: keys an erasure already
+    /// names are neither erased nor offered again.
     #[must_use]
     pub fn of(transcript: &Transcript, fact: FactId, origin: &Origin) -> Self {
         let lines = transcript.lines();
@@ -124,7 +115,6 @@ fn receipt(entry: &Entry, fact: FactId, origin: &Origin) -> bool {
     }
 }
 
-/// The turn a said line holds; `None` for any other line.
 fn said(line: &line_event::LineEvent) -> Option<&TurnShape> {
     if let LineShape::Said { turn, .. } = line.shape() {
         Some(turn)
@@ -133,7 +123,6 @@ fn said(line: &line_event::LineEvent) -> Option<&TurnShape> {
     }
 }
 
-/// A model turn's calls, by verb; `None` for any other line.
 fn model_calls(line: &line_event::LineEvent) -> Option<&[tool_name::ToolName]> {
     if let Some(TurnShape::Model { calls }) = said(line) {
         Some(calls)

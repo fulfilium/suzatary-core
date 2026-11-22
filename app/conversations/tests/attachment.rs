@@ -1,5 +1,5 @@
 //! A transcript's person turn with and without photos, as `secretary::model::Turn` reads and
-//! writes it; the attachment's own laws stay beside it in `suzatary_held::attachment`.
+//! writes it.
 
 use suzatary_held::attachment::{Attachment, AttachmentId};
 

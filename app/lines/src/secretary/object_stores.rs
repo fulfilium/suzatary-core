@@ -1,7 +1,5 @@
-//! The inbox and the two topic stores as a device holds them: each a replica of objects
-//! ([`Objects`](suzatary_store::replica::objects::Objects)) at its own schema. This reads the box's
-//! answers into what such a replica takes: a pull's piece ([`said`]) and a post's receipt
-//! ([`answers`]).
+//! The inbox and the two topic stores as a device holds them: each a replica of objects at its own
+//! schema.
 
 use std::collections::BTreeSet;
 

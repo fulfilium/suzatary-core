@@ -108,8 +108,8 @@ proptest! {
         }
     }
 
-    /// No opening line's id is one the box mints: a day's daily rounds, a dated id of the form
-    /// the box once minted, `default` or `setup`. An id is 32 lowercase hex digits with no `-`.
+    /// No opening line's id is one the box mints: a day's daily rounds, a dated id, `default` or
+    /// `setup`. An id is 32 lowercase hex digits with no `-`.
     #[test]
     fn law_no_conversation_s_id_is_one_the_box_mints(o in opening(), day in 0u32..400, n in 1u32..50) {
         let id = written(&o, &DEFAULT).begun_id();

@@ -1,14 +1,8 @@
-//! What reading one file for the model answers: the file itself, or its text.
-//!
-//! No held number the box can find reaches a model: a PDF whose text layer names one
-//! ([`crate::redact`]) is withheld, and answered by its placeholder (`crate::held_value`), which
-//! reveals or sends the file on the owner's tap, and by its text with each number a placeholder
-//! naming the file and the number's place in it. [`FileRead::of`] is the only way to a
-//! [`Readable`], so a file that skipped the check does not typecheck.
+//! What reading one file for the model answers: no held number the box can find reaches a model,
+//! since a PDF whose text layer names one is withheld and answered by its placeholder.
 //!
 //! A scan's pixels cannot be redacted: a PDF with no text layer, and an image, are handed over
-//! as they are, by the owner's choice. A filled form field is in no text layer, so a PDF that holds
-//! a form is withheld whatever its text says.
+//! as they are, by the owner's choice.
 
 use crate::enclosed::Enclosure;
 use crate::held_file::HeldFile;
@@ -24,14 +18,10 @@ pub(crate) const MAX_PAGES: usize = 100;
 /// The most characters of text a read answers, with the cut declared.
 pub(crate) const MAX_CHARS: usize = crate::message_part::MAX_ATTACHMENT_CHARS;
 
-/// What a read answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileRead {
-    /// The file itself, for the model to read.
     File(Readable),
-    /// A text file's words.
     Text {
-        /// The words, masked.
         text: Masked,
         /// Whether they were cut at `MAX_CHARS`.
         truncated: bool,
@@ -40,11 +30,9 @@ pub enum FileRead {
     Withheld {
         /// The file's placeholder, which reveals it on the owner's device or sends it on a tap.
         held: Placeholder,
-        /// Its text layer, masked.
         text: Masked,
         /// Whether the text was cut at `MAX_CHARS`.
         truncated: bool,
-        /// Why the file itself is not handed over.
         why: Withheld,
         /// Its size in bytes, which the box keeps and never tells a model.
         size: u64,
@@ -69,10 +57,10 @@ pub enum Withheld {
     /// Over [`MAX_PDF`], in bytes.
     #[error("it is {}, over the 20 MB a model reads", megabytes(*.0))]
     TooLarge(usize),
-    /// Over `MAX_PAGES`.
     #[error("it has {0} pages, over the {MAX_PAGES} a model reads")]
     TooManyPages(usize),
-    /// It holds a form, whose filled values its text layer does not carry.
+    /// It holds a form, whose filled values its text layer does not carry, so it is withheld
+    /// whatever its text says.
     #[error("it holds a form, and the values filled into a form are not checked")]
     Form,
 }
@@ -88,20 +76,17 @@ pub struct Layer {
 /// Whether a PDF holds an interactive form (`AcroForm` or XFA).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Form {
-    /// None.
     Absent,
     /// One, filled or not, a signature's or not: no reader here prints a field's type or value.
     Present,
 }
 
 impl Layer {
-    /// What a PDF reader read.
     #[must_use]
     pub fn read(text: String, form: Form) -> Self {
         Self { text, form }
     }
 
-    /// The text layer.
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
@@ -117,13 +102,11 @@ pub struct Readable {
 }
 
 impl Readable {
-    /// What it is.
     #[must_use]
     pub fn media(&self) -> Enclosure {
         self.media
     }
 
-    /// Its bytes.
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
@@ -140,9 +123,6 @@ impl FileRead {
     /// Read `bytes`, the file `file` names and calls `name`, which its source calls `mime`.
     /// `layer` reads a PDF; it is asked for every PDF and for nothing else, so no PDF skips the
     /// held-number check.
-    ///
-    /// # Errors
-    /// `layer`'s.
     pub fn of<E>(
         file: &HeldFile,
         name: &str,
@@ -197,9 +177,6 @@ fn words<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<Layer, E>) -> Resu
 
 /// The held numbers of a file's words as [`FileRead::of`] masked them, in the order a
 /// placeholder's handle counts them.
-///
-/// # Errors
-/// `layer`'s.
 pub fn values<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<Layer, E>) -> Result<Values, E> {
     Ok(Values::of([words(bytes, layer)?.as_str()]))
 }
@@ -243,7 +220,6 @@ fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, read: &Layer) -> FileRead {
     }
 }
 
-/// A size as a sentence names it.
 fn megabytes(size: usize) -> String {
     suzatary_base::spelling::bytes(size as u64)
 }

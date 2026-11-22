@@ -1,27 +1,23 @@
 //! What one compaction attempt spent: its calls to the model and the bytes it sent.
 //!
-//! A commutative monoid under addition, so what a window of attempts spent is the sum of
-//! theirs whatever order the history holds them in: the compactor's budget is a fold over the
-//! digest's own objects, kept nowhere else.
+//! A commutative monoid under addition, so the compactor's budget is a fold over the digest's
+//! own objects.
 
 /// Calls made and bytes sent; the unit spends nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Spent {
-    /// Calls to the model.
     pub calls: u32,
-    /// Bytes sent to it, every call's whole prompt.
+    /// Bytes sent, every call's whole prompt.
     pub sent: u64,
 }
 
 impl Spent {
-    /// One call that sends `sent` bytes.
     #[must_use]
     pub fn call(sent: u64) -> Self {
         Self { calls: 1, sent }
     }
 
-    /// What both spent. Saturating, which keeps the sum associative over counts that never
-    /// reach the bound.
+    /// Saturating, which keeps the sum associative over counts that never reach the bound.
     #[must_use]
     pub fn join(self, other: Self) -> Self {
         Self {

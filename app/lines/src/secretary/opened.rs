@@ -1,9 +1,7 @@
-//! The box's lines read through the fold a tab reads through ([`HeldLines`]), fed the store's
-//! graph as its heads move and each new line's keys. It is the holder an erasure empties
-//! ([`suzatary_memory::secretary::holder::Holder::Opened`]): [`Opened::forget`] drops a key and what it
-//! opened at once, and a line that kills a key drops it at the next feed, in any process. Beside
-//! the lines it keeps what readers derive from their words ([`Derived`]), such as the digest's
-//! history read per node, which holds summaries' words, so a forgetting drops it too.
+//! The box's lines read through the fold a tab reads through, and the holder an
+//! erasure empties ([`suzatary_memory::secretary::holder::Holder::Opened`]): [`Opened::forget`]
+//! drops a key and what it opened at once, and a line that kills a key drops it at the next feed.
+//! What readers derive from the words is dropped by a forgetting too.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -76,14 +74,13 @@ impl Opened {
         crate::secretary::held_lines::says(&mut self.fold().lines, text)
     }
 
-    /// Whether the key `name` is held.
     #[must_use]
     pub fn holds(&self, name: &KeyName) -> bool {
         self.fold().lines.key_ring().holds(name)
     }
 
     /// `read` of the fold once it holds `graph`'s objects. A feed that drops a key forgets every
-    /// summary's words kept too, as [`Opened::forget`] does, before the fold is read.
+    /// summary's words kept too, before the fold is read.
     ///
     /// # Errors
     /// The key store unreadable; nothing is fed then.

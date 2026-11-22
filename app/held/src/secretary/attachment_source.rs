@@ -1,7 +1,5 @@
-//! Where a proposed email's attachment comes from: only the owner's own things.
-//!
-//! There is no arm for a URL or for bytes, so nothing from the web and nothing a model wrote can
-//! be attached; a source is a name the box resolves itself, at proposal time and at the tap.
+//! Where a proposed email's attachment comes from: only the owner's own things, by a name the box
+//! resolves itself, so nothing from the web and nothing a model wrote can be attached.
 
 use prodrome_core::literal::{ProdromeError, Value as LiteralValue};
 use serde::{Deserialize, Serialize};
@@ -16,7 +14,6 @@ use suzatary_base::repo_ids::{RepoName, RepoPath, Rev};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "from", rename_all = "lowercase")]
 pub enum AttachmentSource {
-    /// An attachment of a message in the corpus.
     Mail {
         /// The message's notmuch id, which names it whether or not triage has seen it.
         message: String,
@@ -25,8 +22,7 @@ pub enum AttachmentSource {
     },
     /// A file in the owner's Drive.
     Drive { path: DrivePath },
-    /// A photo or PDF the owner uploaded into a conversation, kept on the box or privately in
-    /// his Drive.
+    /// A photo or PDF the owner uploaded into a conversation.
     Upload {
         /// Its name in the upload store.
         id: AttachmentId,
@@ -61,9 +57,6 @@ const MAX_NAME: usize = 512;
 
 impl AttachmentSource {
     /// Parse one entry of a model's `attach` array.
-    ///
-    /// # Errors
-    /// [`NotASource`] for anything but exactly one of the four shapes.
     pub fn parse(entry: &Value) -> Result<Self, NotASource> {
         let Some(object) = entry.as_object() else {
             return Err(NotASource(format!("{entry} is not an object")));
@@ -151,15 +144,10 @@ fn named(text: &str, key: &str) -> Result<String, NotASource> {
     }
 }
 
-/// `FromMail(message, name)`.
 pub const FROM_MAIL: Constructor = ("FromMail", &["message", "name"]);
-/// `FromDrive(path)`.
 pub const FROM_DRIVE: Constructor = ("FromDrive", &["path"]);
-/// `FromUpload(id)`.
 pub const FROM_UPLOAD: Constructor = ("FromUpload", &["id"]);
-/// `FromKept(id)`.
 pub const FROM_KEPT: Constructor = ("FromKept", &["id"]);
-/// `FromRepo(repo, path, at)`.
 pub const FROM_REPO: Constructor = ("FromRepo", &["repo", "path", "at"]);
 
 // By hand: its reads refuse as `Fields` does.

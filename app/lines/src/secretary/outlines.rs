@@ -21,7 +21,7 @@ pub struct Outlines {
     nodes: BTreeMap<Hash, Node>,
     conversations: BTreeMap<ConversationId, Conversation>,
     given: BTreeMap<Hash, wire::SkeletonNode>,
-    /// What each node held rests on, parsed once, a structure node's included.
+    /// What each node held rests on, a structure node's included.
     parents: BTreeMap<Hash, Vec<Hash>>,
     /// The lines held resting on each name.
     children: BTreeMap<Hash, BTreeSet<Hash>>,
@@ -42,7 +42,6 @@ pub enum Frontier<'o> {
 /// What a reading reads of the skeleton.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
-    /// Every node.
     Whole,
     /// These conversations, each with every node its lines rest on.
     Conversations(BTreeSet<ConversationId>),
@@ -67,7 +66,6 @@ enum Read {
     Structure(Hash, Vec<Hash>),
 }
 
-/// One line node, parsed once where it arrives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node {
     name: Hash,
@@ -79,16 +77,11 @@ pub struct Node {
     writer: wire::LineWriter,
 }
 
-/// A skeleton node that does not read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a node of the lines does not read: {0}")]
 pub struct NotANode(String);
 
 impl Parsed {
-    /// The node `node` is.
-    ///
-    /// # Errors
-    /// [`NotANode`] for a name, a conversation, an instant or a key that does not read.
     pub fn of(node: wire::SkeletonNode) -> Result<Self, NotANode> {
         let name = |text: &str| Hash::new(text).map_err(|e| NotANode(e.to_string()));
         let read = match &node.header {
@@ -131,7 +124,6 @@ impl Parsed {
 }
 
 impl Parsed {
-    /// The node's name.
     #[must_use]
     pub fn name(&self) -> &Hash {
         match &self.read {
@@ -140,7 +132,6 @@ impl Parsed {
         }
     }
 
-    /// What the node rests on.
     #[must_use]
     pub fn parents(&self) -> &[Hash] {
         match &self.read {
@@ -149,7 +140,6 @@ impl Parsed {
         }
     }
 
-    /// The node as it was given.
     #[must_use]
     pub fn given(&self) -> &wire::SkeletonNode {
         &self.given
@@ -197,7 +187,6 @@ impl Outlines {
     /// or went is folded again at its next reading, and named in the answer.
     pub fn hold(&mut self, add: Vec<Parsed>, drop: &[Hash]) -> BTreeSet<ConversationId> {
         let mut moved = BTreeSet::new();
-        // Each name whose standing as a head or as lacking in a conversation may have changed.
         let mut touched: BTreeSet<(Hash, ConversationId)> = BTreeSet::new();
         for name in drop {
             self.given.remove(name);
@@ -434,13 +423,11 @@ impl Outlines {
         out
     }
 
-    /// Whether the skeleton holds a node named `name`.
     #[must_use]
     pub fn holds(&self, name: &Hash) -> bool {
         self.given.contains_key(name)
     }
 
-    /// The name of every node held.
     pub fn names(&self) -> impl Iterator<Item = &Hash> {
         self.given.keys()
     }
@@ -557,7 +544,6 @@ fn retired<'n>(
     out
 }
 
-/// The conversations whose `lines` name one of `keys`.
 fn naming<'n>(
     lines: impl IntoIterator<Item = &'n Node>,
     keys: &BTreeSet<KeyName>,

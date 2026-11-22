@@ -1,9 +1,5 @@
-//! What a log line may quote of a failure it did not write: a child's stderr, a provider's
-//! error body, a browser's message.
-//!
-//! An [`Excerpt`] is bounded, holds no identity number, address, link credential or JWT, and
-//! prints as one line. Its constructors are the only way to one, so a log site that quotes an
-//! `Excerpt` cannot quote the raw text.
+//! What a log line may quote of a failure it did not write: an [`Excerpt`] is bounded, holds no
+//! identity number, address, link credential or JWT, and prints as one line.
 
 use std::fmt;
 use std::sync::LazyLock;
@@ -14,12 +10,10 @@ use regex::Regex;
 /// last sentence, never a body.
 pub(crate) const CHARS: usize = 500;
 
-/// What an address becomes.
 pub(crate) const ADDRESS: &str = "[address]";
 
-/// Bounded, scrubbed words of a failure. [`fmt::Display`] prints them as one line, control
-/// characters escaped; [`Excerpt::as_str`] keeps their line breaks for a reader that is not a
-/// log.
+/// Bounded, scrubbed words of a failure; [`fmt::Display`] prints them as one line, control
+/// characters escaped.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Excerpt(String);
 
@@ -28,9 +22,8 @@ static EMAIL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)[a-z0-9._%+\-]+@[a-z0-9\-]+(?:\.[a-z0-9\-]+)+").expect("a valid pattern")
 });
 
-/// What might be an IP address: dotted digits, or hex groups joined by colons. A candidate is
-/// replaced only where it parses as one and, for IPv6, also holds a digit or three groups
-/// ([`is_ip`]), so a clock's `12:30` and a Rust path's `a::b` or `core::excerpt` stay.
+/// What might be an IP address: dotted digits, or hex groups joined by colons, replaced only
+/// where [`is_ip`] holds.
 static IP: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:\d{1,3}\.){3}\d{1,3}\b|(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}")
         .expect("a valid pattern")
@@ -90,7 +83,6 @@ impl Excerpt {
         self.0.contains(Excerpt::of(text).as_str())
     }
 
-    /// Is there nothing to quote?
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -187,8 +179,8 @@ mod tests {
 
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(20_000))]
-        /// The model client knows a lost session by its id in the CLI's stderr, read through an
-        /// excerpt, whose scrub redacts an id of digits alone: the excerpt still quotes it.
+        /// The model client knows a lost session by its id in the CLI's stderr: the excerpt still
+        /// quotes it.
         #[test]
         fn a_session_id_survives_the_scrub(id in prop_oneof![
             "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",

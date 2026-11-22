@@ -4,14 +4,10 @@ use super::Asking;
 use suzatary_base::capability::Datetime;
 use suzatary_inbox::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
-/// A proposal's conversation line joined with its inbox object.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Standing {
-    /// The proposal as its conversation records it.
     pub asking: Asking,
-    /// Its inbox object.
     pub object: suzatary_inbox::secretary::inbox::Object,
-    /// The proposal it replaces.
     pub revises: Option<Revised>,
 }
 

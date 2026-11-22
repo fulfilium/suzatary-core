@@ -12,44 +12,36 @@ use crate::secretary::turn_shape::TurnShape;
 use suzatary_base::capability::Datetime;
 use suzatary_memory::secretary::words::Words;
 
-/// A whole conversation as a reader gets one: the fold of its lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stored {
-    /// Its name.
     pub id: ConversationId,
-    /// When it was opened.
     pub opened: Datetime,
-    /// What it is about: the last [`Entry::Titled`](super::Entry::Titled), else the opening line's; empty for an untitled
-    /// topic.
+    /// The last [`Entry::Titled`](super::Entry::Titled), else the opening line's; empty for an
+    /// untitled topic.
     pub title: Words<String>,
-    /// What it is for.
     pub kind: Kind,
-    /// Which model is behind it, for the page's tooltip: the one its opening named, or, where the
-    /// opening names none (a tab's, and a setup's), the first that opened a session in it; empty
-    /// until one does.
+    /// The model behind it: the one its opening named, else the first that opened a session in
+    /// it; empty until one does.
     pub model: String,
-    /// Every turn, oldest first, each with the instant it was said.
+    /// Every turn, oldest first.
     pub turns: Vec<Said>,
     /// Every proposal, in the order made; the index is the tap's.
     pub proposals: Vec<Asking>,
-    /// Every card this conversation withdrew or held, in the order it did.
     pub reviews: Vec<Review>,
-    /// Every time a review was asked for here and could not run, in order; usually empty.
     pub failures: Vec<ReviewFailure>,
-    /// The session a [`SessionModel`](crate::secretary::model::SessionModel) caller should `resume`: the
-    /// last [`Entry::Kept`](super::Entry::Kept) or [`Entry::Session`](super::Entry::Session) line, or `None` when none was ever opened or a
-    /// stop, a rewind or an [`Entry::Unheard`](super::Entry::Unheard) line since ended it.
+    /// The session a [`SessionModel`](crate::secretary::model::SessionModel) caller should
+    /// `resume`, or `None` when none was opened or a stop, a rewind or an
+    /// [`Entry::Unheard`](super::Entry::Unheard) line since ended it.
     pub session: Option<Kept>,
-    /// How its model is asked: the last [`Entry::Scoped`](super::Entry::Scoped) line, a window when there is none.
+    /// The last [`Entry::Scoped`](super::Entry::Scoped) line, a window when there is none.
     pub scope: Scope,
     /// The memory's version this conversation was last told; `None` for one never told.
     pub memory_seen: Option<u64>,
-    /// Every span of turns a rewind set aside, in the order it did.
-    /// `turns` keeps them, so every index stays the one the page and a render
-    /// URL name; [`Stored::live`] is the path a model reads.
+    /// Every span of turns a rewind set aside; `turns` keeps them, so every index stays the one
+    /// the page and a render URL name.
     pub aside: Vec<Aside>,
-    /// The index of every act an [`Entry::Stopped`](super::Entry::Stopped) folded into, known by its line and never its
-    /// words, so [`Stored::rewind`] cannot take another act for one.
+    /// The index of every act an [`Entry::Stopped`](super::Entry::Stopped) folded into, known by
+    /// its line and never its words, so [`Stored::rewind`] cannot take another act for one.
     pub stops: Vec<usize>,
     /// Each coding session a tap started, by the proposal's index: the last
     /// [`Entry::Coding`](super::Entry::Coding) line for it.
@@ -67,8 +59,7 @@ pub fn heading(title: &Words<String>) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// The act an [`Entry::Stopped`](super::Entry::Stopped) line reads as, in the box's words, so the model reading it back
-/// is told who did what.
+/// The act an [`Entry::Stopped`](super::Entry::Stopped) line reads as, in the box's words.
 #[must_use]
 pub fn stopped_by(by: &str) -> String {
     format!(
@@ -80,42 +71,28 @@ pub fn stopped_by(by: &str) -> String {
 /// A conversation's file said something this program does not understand.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotAConversation {
-    /// No `Opened` line: every file this program writes starts with one.
     #[error("{0} has no opening line — a conversation starts with one")]
     Unopened(ConversationId),
-    /// A `Rewound` naming a turn past the end of the file.
     #[error("{id} records a rewind to turn {to}, which was never said")]
     Unsaid {
         /// The conversation.
         id: ConversationId,
-        /// The turn it named.
         to: usize,
     },
-    /// A `Coding` line naming a proposal that was never made.
     #[error("{id} records a session for proposal {index}, which was never proposed")]
     Phantom {
         /// The conversation.
         id: ConversationId,
-        /// The index it named.
         index: usize,
     },
 }
 
 impl Stored {
-    /// Fold the lines into the conversation: the one function between the file and the value, so a
-    /// transcript's reader and its route cannot disagree.
-    ///
-    /// # Errors
-    /// [`NotAConversation`] for a file with no opening line, or one recording
-    /// a session for a proposal nothing proposed.
+    /// Fold the lines into the conversation: the one function between the file and the value.
     pub fn of(id: &ConversationId, entries: &[Entry]) -> Result<Self, NotAConversation> {
         Self::of_lines(id, entries)
     }
 
-    /// [`Stored::of`] over lines in order.
-    ///
-    /// # Errors
-    /// As [`Stored::of`].
     pub fn of_lines<'e>(
         id: &ConversationId,
         entries: impl IntoIterator<Item = &'e Entry>,
@@ -126,9 +103,6 @@ impl Stored {
     /// [`Stored::of`] over lines in order, each beside the turns it sets aside when it is an
     /// [`Entry::Again`](super::Entry::Again), which only a reader holding the lines' descent can
     /// say; empty for every other line.
-    ///
-    /// # Errors
-    /// As [`Stored::of`].
     pub fn of_read<'e>(
         id: &ConversationId,
         lines: impl IntoIterator<Item = (&'e Entry, Vec<usize>)>,
@@ -141,21 +115,17 @@ impl Stored {
         Ok(stored)
     }
 
-    /// Fold one more line in: what [`Stored::of`] does to every line after the opening. An
-    /// [`Entry::Again`](super::Entry::Again) folded here sets nothing aside ([`Stored::of_read`]).
-    ///
-    /// # Errors
-    /// [`NotAConversation`] for a coding line no proposal asked for, or a rewind past the end.
+    /// Fold one more line in; an [`Entry::Again`](super::Entry::Again) folded here sets nothing
+    /// aside.
     pub fn fold(&mut self, entry: &Entry) -> Result<(), NotAConversation> {
         self.fold_read(entry, Vec::new())
     }
 
     fn fold_read(&mut self, entry: &Entry, aside: Vec<usize>) -> Result<(), NotAConversation> {
         match entry {
-            // A second opening line is ignored, not refused: the first is the fact, and one
-            // stray line must not cost a whole transcript. An erasure's slots were read as gone
-            // where they stood, and a reseal's words where the slot it seals stands. A claim is
-            // the transcript's reading of who answers, never a turn.
+            // A second opening line is ignored, not refused, so one stray line does not cost a
+            // whole transcript; an erasure's slots were read as gone where they stood, a reseal's
+            // words where its slot stands, and a claim is never a turn.
             Entry::Opened { .. }
             | Entry::SetUp { .. }
             | Entry::Erased { .. }
@@ -219,8 +189,7 @@ impl Stored {
                 cwd,
                 surface,
             } => {
-                // A line from before the opening window was recorded: what it was sent is not
-                // known, so it is read as holding every turn.
+                // What a session line was sent is not known, so it is read as holding every turn.
                 self.session = Some(Kept::of(session, model, cwd, *at, surface.clone(), 0));
                 self.named(model);
             }
@@ -250,8 +219,6 @@ impl Stored {
         Ok(())
     }
 
-    /// A conversation of `kind` opened at `opened` with no line yet: what a fold begins from
-    /// before its opening line.
     #[must_use]
     pub fn empty(id: &ConversationId, kind: Kind, opened: Datetime) -> Self {
         Self {
@@ -319,23 +286,21 @@ impl Stored {
 
     /// Whether position `at` of `live` (this conversation's [`Stored::live`]) opens a round: the
     /// first turn, or the turn after one that [closes](Stored::closes), unless it is the empty
-    /// answer a round once wrote after its stop.
+    /// answer a round wrote after its stop.
     #[must_use]
     pub fn opens(&self, live: &[(usize, &Said)], at: usize) -> bool {
         at == 0 || (self.closes(live[at - 1].0) && !self.ends_its_stop(live, at))
     }
 
-    /// Whether position `at` of `live` is the empty answer a round wrote after its stop before a
-    /// stop closed its question by itself. Stored conversations hold one, and it belongs to its
-    /// stop: it closes nothing more and opens no round of its own.
+    /// Whether position `at` of `live` is the empty answer a round wrote after its stop, which
+    /// belongs to its stop: it closes nothing more and opens no round of its own.
     fn ends_its_stop(&self, live: &[(usize, &Said)], at: usize) -> bool {
         at.checked_sub(1)
             .is_some_and(|before| self.stops.contains(&live[before].0))
             && matches!(&live[at].1.turn, Turn::Model { text, calls } if text.is_empty() && calls.is_empty())
     }
 
-    /// The live path: every turn no rewind set aside, with its index; what the queue delivers, a
-    /// model is sent and the state reads.
+    /// The live path: every turn no rewind set aside, with its index.
     #[must_use]
     pub fn live(&self) -> Vec<(usize, &Said)> {
         self.turns
@@ -347,15 +312,11 @@ impl Stored {
 
     /// Where a rewind of the last round starts, or why there is none.
     ///
-    /// The last round must be finished (a running round is the worker's; stop it first) and opened
-    /// by a question: an edit replaces it, a regenerate leaves it pending.
+    /// The last round must be finished and opened by a question.
     ///
     /// A rewind never hides a write: only model turns, verbs whose [`Effect`] is [`Effect::Reads`]
     /// or which were refused, a stop, and for an edit the question may go aside. Anything else in
     /// the round refuses the rewind.
-    ///
-    /// # Errors
-    /// [`Refusal::conflict`](suzatary_base::refusal::Refusal::conflict) naming which rule it broke.
     ///
     /// [`Effect`]: crate::secretary::verb_name::Effect
     /// [`Effect::Reads`]: crate::secretary::verb_name::Effect::Reads
@@ -425,14 +386,12 @@ impl Stored {
         Ok(to)
     }
 
-    /// The name a list draws: [`Stored::title`], "New topic" while the title job is owed, or the
-    /// box's sentence for a name whose words are gone.
     #[must_use]
     pub fn heading(&self) -> std::borrow::Cow<'_, str> {
         heading(&self.title)
     }
 
-    /// Whether the conversation is named: a title whose words are gone was a name.
+    /// Whether the conversation is untitled: a title whose words are gone was a name.
     #[must_use]
     pub fn untitled(&self) -> bool {
         self.title
@@ -518,7 +477,6 @@ fn joined(
     })
 }
 
-/// Fold one [`Entry::Proposed`](super::Entry::Proposed): push the new [`Asking`](super::Asking).
 fn proposed(
     stored: &mut Stored,
     at: Datetime,
@@ -534,7 +492,7 @@ fn proposed(
     });
 }
 
-/// Fold one [`Entry::Rewound`](super::Entry::Rewound): the turns from `to` go aside, and the session with them.
+/// The turns from `to` go aside, and the session with them.
 fn rewound(stored: &mut Stored, to: usize, at: Datetime, by: &str) -> Result<(), NotAConversation> {
     if to > stored.turns.len() {
         return Err(NotAConversation::Unsaid {
@@ -551,8 +509,6 @@ fn rewound(stored: &mut Stored, to: usize, at: Datetime, by: &str) -> Result<(),
     Ok(())
 }
 
-/// The [`Asking`](super::Asking) a `Coding` line names, or the refusal that says it names
-/// nothing.
 fn answered<'a>(
     stored: &'a mut Stored,
     id: &ConversationId,

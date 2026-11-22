@@ -20,7 +20,6 @@ impl Derived {
         }
     }
 
-    /// Nothing kept.
     pub fn clear(&mut self) {
         self.0.clear();
     }

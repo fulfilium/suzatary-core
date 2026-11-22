@@ -1,6 +1,5 @@
 //! What pruning the lines lets go: every line no key opens a word of, now or later, is kept as its
-//! husk ([`crate::secretary::husks::dead`]). The census reads the lines and writes nothing; the store's
-//! prune (`prodrome_core::store::EventStore::husk`) writes what it names.
+//! husk. The census reads the lines and writes nothing; the store's prune writes what it names.
 
 use std::collections::{BTreeMap, BTreeSet};
 

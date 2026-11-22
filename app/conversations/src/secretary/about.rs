@@ -1,8 +1,5 @@
-//! The conversation about a thing: a query over the one transcript (the rounds that touch it),
-//! not a second chat.
-//!
-//! A person's turn or an act opens a round, the same partition `web/src/chat/rounds.ts` draws;
-//! `app/conversations/tests/about-fixture.json` is read by both sides' tests so the two cannot drift.
+//! The conversation about a thing: a query over the one transcript, not a second chat; a
+//! person's turn or an act opens a round, the same partition `web/src/chat/rounds.ts` draws.
 
 use crate::secretary::model::Turn;
 use crate::secretary::store::Said;
@@ -29,7 +26,7 @@ pub fn round_spans(turns: &[Said]) -> Vec<(usize, usize)> {
 }
 
 /// Whether the round at `span` touches `reference`: its opening turn carries it, or a model
-/// turn in it names it in prose (so a round with no opening, like the brief, can still touch).
+/// turn in it names it in prose.
 #[must_use]
 pub fn round_touches(turns: &[Said], span: (usize, usize), reference: &Reference) -> bool {
     let (start, end) = span;
@@ -46,7 +43,7 @@ pub fn round_touches(turns: &[Said], span: (usize, usize), reference: &Reference
 }
 
 /// The span owning turn index `target`, clamped to the nearest end; mirrors the page's proposal
-/// placement, so a proposal kept for `about` is the one the page draws in a touched round.
+/// placement.
 #[must_use]
 pub fn owning_span(spans: &[(usize, usize)], target: usize) -> usize {
     match spans
@@ -65,8 +62,8 @@ mod tests {
     use serde::Deserialize;
     use suzatary_base::reference::Reference;
 
-    /// One row of `app/conversations/tests/about-fixture.json`, the file `web/test/rounds.test.ts` also
-    /// reads.
+    /// One row of `app/conversations/tests/about-fixture.json`, which `web/test/rounds.test.ts`
+    /// also reads.
     #[derive(Deserialize)]
     struct FixtureTurn {
         who: String,
