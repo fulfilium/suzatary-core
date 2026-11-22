@@ -258,6 +258,18 @@ of heads is older than its objects. `scripts/bootstrap-box.sh` restores before t
 deployed, so it prints this step and does not run it. `scripts/roadmap-push.sh` runs the verb
 itself after it joins origin's commits into a public store's clone.
 
+A write to a live store by a binary of another pin (a build from a checkout with
+`scripts/app-bin.sh` and no `--deployed`, or a deployed app from before the Prodrome at
+`85e5083`) is seen by no reader that had read the store, and `prodrome record` does not cure it:
+such a binary writes a true record of heads, which the app's memo then keys a stale reading on
+until the store's next append. Restart the server (`systemctl --user restart suzatary-web`). A
+live store is written only by a binary at the deployed pin of the store library.
+
+A deploy pauses every timer and the mail watcher while it moves the app, and starts them again
+before it pushes, however it ends. It prints each one's state and ends non-zero naming any that
+is not running; a kill it cannot catch leaves them stopped, and its "paused" line names the
+`systemctl --user start` that starts them.
+
 ## A deploy restarts every unit that runs the app
 
 The units that run the app for longer than one job are the ones part of

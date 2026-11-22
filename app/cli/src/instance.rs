@@ -310,6 +310,8 @@ impl Instance {
             Kind::Topics => once(secretary.topics.memberships.clone()),
             Kind::TopicAliases => once(secretary.topics.aliases.clone()),
             Kind::Asks => once(self.asks()),
+            // Each declared plugin's store, and each mail account's Google calendars, which are
+            // learned as a plugin's are (`suzatary_io::google::learn`).
             Kind::Plugin => self
                 .plugins
                 .manifests
@@ -318,6 +320,10 @@ impl Instance {
                     let name = format!("{} {}", kind.name(), manifest.name());
                     (name, self.plugins.store(manifest.name()))
                 })
+                .chain(self.mail.accounts.accounts().iter().map(|account| {
+                    let name = format!("{} google {}", kind.name(), account.subdir);
+                    (name, self.google_calendar(account))
+                }))
                 .collect(),
             Kind::Triage => once(self.mail.state.clone()),
             Kind::Local => once(self.local.path().to_path_buf()),

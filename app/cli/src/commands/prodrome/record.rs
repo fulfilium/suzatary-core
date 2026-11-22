@@ -99,8 +99,10 @@ fn recorded(kind: Kind, root: &Path) -> anyhow::Result<String> {
             suzatary_topics::secretary::topics::reading::AliasEvent,
         >::open(root)),
         Kind::Asks => heads(&Objects::<suzatary_stores::asks::AskEvent>::open(root)),
-        Kind::Plugin => match PluginStore::at(root).read()? {
-            Some(store) => heads(&store),
+        // Under the sync's hold, so the record never lands while a sync at another schema
+        // empties the store.
+        Kind::Plugin => match PluginStore::at(root).read_held()? {
+            Some(begun) => heads(begun.store()),
             None => Ok(format!(
                 "no schema beside it, nothing to record — {}",
                 root.display()

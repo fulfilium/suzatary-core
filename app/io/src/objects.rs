@@ -111,9 +111,13 @@ impl Objects<Declared> {
 }
 
 impl<E: Schema> Objects<E> {
-    fn new(events: EventStore<E, Untrusted>) -> Self {
+    /// Opened with the doors its kind says ([`suzatary_stores::stores::Kind::doors`]).
+    fn new(events: EventStore<E, Untrusted>) -> Self
+    where
+        E: Store,
+    {
         Self {
-            events,
+            events: events.with_doors(E::KIND.doors()),
             remembered: Mutex::new(None),
             reentrant: Reentrant::default(),
             door: Door::Open,
@@ -236,9 +240,13 @@ impl<E: Store> Objects<E> {
     ///
     /// The record is only the key: what is kept is read from the files themselves, so a handle's
     /// first read is what the files hold, whatever the record says. A door that changes
-    /// `objects/` without the store reads, through a handle that already read, as the recorded
-    /// heads until the record moves (the Prodrome's law 62), and through a new handle as the
-    /// files: a process that opens a store never serves a reading older than its files.
+    /// `objects/` without the store (a pull, a copy, a binary of a pin before the mark of the last
+    /// hold) reads, through a handle that already read, as it was until a hold of the store's
+    /// lock lists `objects/` (`prodrome record` takes one), and through a new handle as the files:
+    /// a process that opens a store never serves a reading older than its files. A door that also
+    /// writes a true record (an older binary's write) moves the key while the handle, trusting the
+    /// mark, reads the old history, which is then kept under the new heads until the store's next
+    /// append: only a new handle, a restart of the process, reads it.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
         let heads =
             parts::part("record", || self.events.heads()).map_err(|e| Self::unreadable(e))?;
@@ -588,6 +596,8 @@ mod tests {
 
         let first_bytes = std::fs::read(file(&first)).expect("the file");
         std::fs::remove_file(file(&first)).expect("removed");
+        // A removal by hand is a door the store does not own, read at the next hold that lists.
+        store.inner().record_heads().expect("recorded");
         assert_eq!(
             store
                 .literals(&[first.clone(), second.clone()])
@@ -916,6 +926,7 @@ mod tests {
                 ".gitignore",
                 ".heads",
                 ".lock",
+                ".writes",
                 "memory.lock",
                 "objects"
             ]

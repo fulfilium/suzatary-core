@@ -41,12 +41,11 @@ draw() {
   "${git[@]}" add -- roadmap.svg roadmap-dark.svg
 }
 
-# The store's own `.gitignore`, staged where `suzatary migrate-ignores` changed it: a public
-# charter's form before the mark of the last hold or after it, and nothing else.
+# The store's own `.gitignore`, staged where it changed: a public charter's, and nothing else.
 ignore() {
   "${git[@]}" diff --quiet -- .gitignore && return 0
   case "$(cat "$clone/.gitignore")" in
-    $'/.heads\n/.lock\n/_site' | $'/.heads\n/.lock\n/_site\n/.writes') "${git[@]}" add -- .gitignore ;;
+    $'/.heads\n/.lock\n/_site\n/.writes') "${git[@]}" add -- .gitignore ;;
     *) die "the clone's .gitignore is not a public store's own, so nothing is committed: look at it." ;;
   esac
 }

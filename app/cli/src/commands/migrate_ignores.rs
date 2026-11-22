@@ -42,11 +42,11 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         let lacked = step(&root)
             .map_err(|error| anyhow::anyhow!("{name}: {}/.gitignore: {error}", root.display()))?;
         let said = match (&lacked, args.check) {
-            (Lacks::NoStore, _) => "no objects/, so no store; left alone".to_owned(),
-            (Lacks::NoFile, _) => {
-                "no .gitignore; the store writes its own at its next write".to_owned()
-            }
+            (Lacks::NoStore, _) => "does not read as a store; left alone".to_owned(),
             (Lacks::Linked, _) => ".gitignore is a symbolic link; left alone".to_owned(),
+            (Lacks::Chartered, _) => {
+                "chartered, with no .gitignore; left alone: its form is its charter's".to_owned()
+            }
             (Lacks::Nothing, _) => "names every local file".to_owned(),
             (Lacks::Lines(lines), true) => format!("lacks {}", lines.join(" ")),
             (Lacks::Lines(lines), false) => format!("added {}", lines.join(" ")),

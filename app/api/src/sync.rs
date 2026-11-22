@@ -957,7 +957,7 @@ fn about(finding: &prodrome_core::dag::Finding) -> Option<&Hash> {
         F::Below { write, .. } => Some(write),
         F::Incomplete { snapshot, .. } => Some(snapshot),
         // The proof's; or a name no object is (a missing parent, which a door refuses first), or
-        // the store's files.
+        // the store's files, which `suzatary verify` reports.
         F::Unsigned { .. }
         | F::Forged { .. }
         | F::Broken { .. }
@@ -966,6 +966,7 @@ fn about(finding: &prodrome_core::dag::Finding) -> Option<&Hash> {
         | F::Garbage(_)
         | F::Leftover(_)
         | F::Quarantined(_)
+        | F::Unignored(_)
         | F::StaleHeads { .. } => None,
     }
 }

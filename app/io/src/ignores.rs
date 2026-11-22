@@ -24,10 +24,11 @@ const FILE: &str = ".gitignore";
 /// What one store's `.gitignore` lacks of its present form.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lacks {
-    /// No `objects/`: no store, left alone.
+    /// No store: no record of heads and no file in `objects/` named as an object; left alone.
     NoStore,
-    /// The store writes its own at its next hold.
-    NoFile,
+    /// A chartered store (`suzatary prodrome init`) with no `.gitignore`, left alone: its own
+    /// form is its charter's, which `prodrome init` writes.
+    Chartered,
     /// A symbolic link, left alone: [`bring`] would replace the link, not its target.
     Linked,
     /// It names every local file, in a form a push commits.
@@ -42,12 +43,12 @@ pub enum Lacks {
 
 impl Lacks {
     /// Whether the store needs nothing more: it names every local file in a form a push
-    /// commits, writes its own `.gitignore`, or is no store.
+    /// commits, or is no store.
     #[must_use]
     pub fn settled(&self) -> bool {
         match self {
-            Lacks::NoStore | Lacks::NoFile | Lacks::Nothing => true,
-            Lacks::Linked | Lacks::Lines(_) | Lacks::Other(_) => false,
+            Lacks::NoStore | Lacks::Nothing => true,
+            Lacks::Chartered | Lacks::Linked | Lacks::Lines(_) | Lacks::Other(_) => false,
         }
     }
 }
@@ -69,14 +70,45 @@ fn brought(text: &str) -> (String, Vec<&'static str>) {
     (out, lacking)
 }
 
+/// Whether `root` reads as a Prodrome store of files: it holds a record of heads, or a file in
+/// `objects/` named as the Prodrome names an object (`<64 lowercase hex digits>.py`).
+fn reads_as_store(root: &Path) -> io::Result<bool> {
+    if root.join(".heads").exists() {
+        return Ok(true);
+    }
+    let Some(entries) = std::fs::read_dir(root.join("objects")).present()? else {
+        return Ok(false);
+    };
+    for entry in entries {
+        let name = entry?.file_name();
+        let named = name
+            .to_str()
+            .and_then(|name| name.strip_suffix(".py"))
+            .is_some_and(|hash| {
+                hash.len() == 64 && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+            });
+        if named {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The file `suzatary prodrome init` charters a store with.
+pub const CHARTER: &str = "charter.toml";
+
 /// What the `.gitignore` of the store at `root` lacks, and the bytes it holds once brought.
 fn found(root: &Path) -> io::Result<(Lacks, Option<String>)> {
-    if !root.join("objects").is_dir() {
+    if !reads_as_store(root)? {
         return Ok((Lacks::NoStore, None));
     }
     let path = root.join(FILE);
     match std::fs::symlink_metadata(&path).present()? {
-        None => return Ok((Lacks::NoFile, None)),
+        None if root.join(CHARTER).exists() => return Ok((Lacks::Chartered, None)),
+        // The Prodrome writes a `.gitignore` only beside a record of heads it writes, and a hold
+        // that finds the record true writes none, so a store with no `.gitignore` can hold a
+        // `.writes` nothing ignores: it is given the store's form.
+        None => return Ok((Lacks::Lines(LOCAL.to_vec()), Some(STORE.to_owned()))),
         Some(meta) if meta.file_type().is_symlink() => return Ok((Lacks::Linked, None)),
         Some(_) => {}
     }
@@ -122,6 +154,13 @@ mod tests {
     fn store(text: Option<&str>) -> tempfile::TempDir {
         let dir = suzatary_testkit::scratch("ignores");
         std::fs::create_dir(dir.path().join("objects")).expect("a store");
+        std::fs::write(
+            dir.path()
+                .join("objects")
+                .join(format!("{}.py", "a".repeat(64))),
+            "",
+        )
+        .expect("an object's name");
         if let Some(text) = text {
             std::fs::write(dir.path().join(FILE), text).expect("written");
         }
@@ -157,9 +196,69 @@ mod tests {
         }
     }
 
+    /// LAW: the Prodrome writes [`STORE`] for a store it begins, and a store of the form before
+    /// the mark, once brought, is one its `verify` finds nothing in. A store with no `.gitignore`
+    /// and a true record of heads gets none from a hold, which leaves a `.writes` that `verify`
+    /// reports, and bringing it ends that.
+    #[test]
+    fn a_brought_store_holds_what_the_prodrome_writes_and_verify_finds_nothing() {
+        use prodrome_core::store::EventStore;
+        use suzatary_record::record::{GENESIS, TodoEvent};
+        let dir = suzatary_testkit::scratch("ignores");
+        let fresh = dir.path().join("fresh");
+        EventStore::<TodoEvent, _>::new(&fresh, prodrome_core::policy::Untrusted::none())
+            .init(GENESIS)
+            .expect("begins");
+        assert_eq!(
+            std::fs::read_to_string(fresh.join(FILE)).expect("written"),
+            STORE
+        );
+
+        let old = dir.path().join("old");
+        let store = EventStore::<TodoEvent, _>::new(&old, prodrome_core::policy::Untrusted::none());
+        store.init(GENESIS).expect("begins");
+        std::fs::write(old.join(FILE), "/.heads\n").expect("the old form");
+        assert!(
+            store.verify().iter().any(|finding| matches!(
+                finding,
+                prodrome_core::dag::Finding::Unignored(".writes")
+            )),
+            "{:?}",
+            store.verify()
+        );
+        assert_eq!(
+            bring(&old).expect("brought"),
+            Lacks::Lines(vec!["/.writes"])
+        );
+        assert_eq!(store.verify(), Vec::new());
+
+        let bare = dir.path().join("bare");
+        let store =
+            EventStore::<TodoEvent, _>::new(&bare, prodrome_core::policy::Untrusted::none());
+        store.init(GENESIS).expect("begins");
+        std::fs::remove_file(bare.join(FILE)).expect("no .gitignore");
+        store
+            .record_heads()
+            .expect("a hold that finds the record true");
+        assert!(!bare.join(FILE).exists(), "the hold writes none");
+        assert!(bare.join(".writes").exists());
+        assert!(
+            store.verify().iter().any(|finding| matches!(
+                finding,
+                prodrome_core::dag::Finding::Unignored(".writes")
+            )),
+            "{:?}",
+            store.verify()
+        );
+        assert_eq!(bring(&bare).expect("brought"), Lacks::Lines(LOCAL.to_vec()));
+        assert_eq!(store.verify(), Vec::new());
+    }
+
     /// A `.gitignore` in a form no push commits, with the lines or without them, is left as it
-    /// is: written, it would be staged and stop every push. A store with no `.gitignore`, a
-    /// directory with no `objects/` and a `.gitignore` that is a symbolic link are left alone.
+    /// is: written, it would be staged and stop every push. A store with no `.gitignore` is given
+    /// the store's form; a chartered one is left alone, as are a directory that does not read as
+    /// a store (no `objects/`, or one holding nothing named as an object, as a git directory
+    /// does) and a `.gitignore` that is a symbolic link.
     #[test]
     fn bringing_writes_only_a_form_a_push_commits() {
         for (held_before, lacking) in [
@@ -173,13 +272,30 @@ mod tests {
         }
 
         let dir = store(None);
-        assert_eq!(bring(dir.path()).expect("nothing to bring"), Lacks::NoFile);
-        assert!(!dir.path().join(FILE).exists());
+        assert_eq!(
+            bring(dir.path()).expect("brought"),
+            Lacks::Lines(LOCAL.to_vec())
+        );
+        assert_eq!(
+            held(&dir),
+            STORE,
+            "a store with none is given the store's form"
+        );
 
         let tier = suzatary_testkit::scratch("ignores");
         std::fs::write(tier.path().join(FILE), "*\n").expect("a tier's");
         assert_eq!(bring(tier.path()).expect("no store"), Lacks::NoStore);
         assert_eq!(held(&tier), "*\n");
+
+        let git = suzatary_testkit::scratch("ignores");
+        std::fs::create_dir_all(git.path().join("objects/ab")).expect("a git directory's");
+        assert_eq!(bring(git.path()).expect("no store"), Lacks::NoStore);
+        assert!(!git.path().join(FILE).exists());
+
+        let chartered = store(None);
+        std::fs::write(chartered.path().join(CHARTER), "public = true\n").expect("a charter");
+        assert_eq!(bring(chartered.path()).expect("left"), Lacks::Chartered);
+        assert!(!chartered.path().join(FILE).exists());
 
         let dir = store(None);
         let target = dir.path().join("elsewhere");

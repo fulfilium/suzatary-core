@@ -2768,7 +2768,7 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     )
     .expect("appends");
     write(&roadmap, "charter.toml", "public = true\n");
-    write(&roadmap, ".gitignore", "/.heads\n/.lock\n/_site\n");
+    write(&roadmap, ".gitignore", suzatary_io::ignores::PUBLIC_CHARTER);
     write(&roadmap, "flake.lock", &pinned("0".repeat(40).as_str()));
     write(
         &roadmap,
@@ -3600,6 +3600,31 @@ fn roadmap_push_refuses_a_range_door_2_refuses() {
     );
 }
 
+/// The public store's `.gitignore` as it was before the mark of the last hold, committed and
+/// pushed, so a migration changes it and a push commits it.
+fn before_the_mark(roadmap: &Path) {
+    write(roadmap, ".gitignore", "/.heads\n/.lock\n/_site\n");
+    run_git(
+        roadmap,
+        &["commit", "-q", "-m", "before the mark", "--", ".gitignore"],
+    );
+    run_git(roadmap, &["push", "-q", "origin", "HEAD:master"]);
+    run_git(roadmap, &["fetch", "-q", "origin"]);
+}
+
+/// The file `roadmap-push.sh` keeps while a join's record is owed.
+fn owed_record(roadmap: &Path) -> PathBuf {
+    PathBuf::from(run_git(
+        roadmap,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "suzatary-record-owed",
+        ],
+    ))
+}
+
 /// A push that joins origin's commits records the clone's heads after the merge, so a reader
 /// that has read the store reads the merged objects, and a record left owed is done by the next
 /// pass, even one with nothing to push; the push commits the store's `.gitignore` as
@@ -3614,6 +3639,7 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     let instance = a_release_deployment(&data);
     let env = release_env(&instance);
     let roadmap = data.join("roadmap");
+    before_the_mark(&roadmap);
     let elsewhere = published_roadmap(&data, "elsewhere");
     let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
     suzatary_record::record::EventStore::new(&elsewhere, prodrome_core::policy::Untrusted::none())
@@ -3667,15 +3693,7 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
         suzatary_io::ignores::PUBLIC_CHARTER.trim_end(),
     );
 
-    let owed = PathBuf::from(run_git(
-        &roadmap,
-        &[
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-path",
-            "suzatary-record-owed",
-        ],
-    ));
+    let owed = owed_record(&roadmap);
     assert!(!owed.exists(), "a record done is owed no more");
     std::fs::remove_file(roadmap.join(".heads")).expect("the record goes");
     std::fs::write(&owed, "").expect("a record left owed by a pass that failed");

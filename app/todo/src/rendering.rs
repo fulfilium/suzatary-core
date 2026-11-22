@@ -20,7 +20,7 @@ use suzatary_base::answer::Renderable;
 /// `the_typesetter_is_the_one_cargo_lock_links`, fails when the lock moves without this, and
 /// prints what it must say.
 pub(crate) const LINKED: &str =
-    "prodrome-typst-wasm 9fe98a47b769e0cb8964d00dcbda58947d0593e2, typst 0.15.1";
+    "prodrome-typst-wasm 85e50838003ce3c82c18bc05c8c73d43c47f29fc, typst 0.15.1";
 
 /// [`LINKED`]'s name, which every template's function and the closed world's answers carry.
 pub(crate) static TYPESETTER: LazyLock<Hash> = LazyLock::new(|| named(LINKED));

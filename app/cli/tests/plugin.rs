@@ -178,22 +178,21 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         first.line
     );
     assert!(!first.line.contains("s3cret"), "the link is never said");
+    let ics = plugins.cache.join("plugins/ics");
     assert_eq!(
-        files(&plugins.cache.join("plugins/ics/store")),
+        files(&ics.join("store")),
         [
             ".gitattributes",
             ".gitignore",
             ".heads",
             ".lock",
+            ".writes",
             "objects",
             "schema",
             "store.lock"
         ]
     );
-    assert_eq!(
-        files(&plugins.cache.join("plugins/ics")),
-        [".store.lock", "cursor", "store"]
-    );
+    assert_eq!(files(&ics), [".store.lock", "cursor", "store"]);
     let healths = health.healths().expect("the health reads");
     assert!(synced(&healths, manifest.name(), "PLUGIN_ICS_HOME").is_some());
     assert_eq!(synced(&healths, manifest.name(), "PLUGIN_ICS_WORK"), None);

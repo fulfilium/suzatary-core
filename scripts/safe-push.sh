@@ -118,7 +118,10 @@ data_push() {
   fi
 
   # The stores' fsck; any problem aborts.
-  app verify
+  app verify || {
+    echo "safe-push: verify found the above, so nothing is committed; a .gitignore that does not name .writes is brought by: scripts/app-bin.sh --deployed migrate-ignores" >&2
+    exit 1
+  }
   # A new line is a whole: a husk enters history only in place of the whole a commit held.
   for path in $(git status --porcelain --untracked-files=all -- secretary-lines/objects \
     | grep -E '^(\?\?|A ) ' | cut -c4-); do
@@ -162,16 +165,15 @@ data_push() {
     echo "$REFUSED" >&2
     exit 1
   fi
-  # A store writes its own `.gitignore` (the Prodrome's SPEC §3), so its record of heads and the
-  # mark of its last hold stay on the box: `/.heads`, or `/.heads` and `/.writes`, which
-  # `suzatary migrate-ignores` brings an older store to. One that ignored more could keep the
-  # store's objects out of every push, so a staged one holding anything else commits nothing.
+  # A store writes its own `.gitignore` (the Prodrome's SPEC §3), `/.heads` and `/.writes`, so its
+  # record of heads and the mark of its last hold stay on the box. One that ignored more could keep
+  # the store's objects out of every push, so a staged one holding anything else commits nothing.
   for ignore in $(GIT_INDEX_FILE="$JUDGED" git diff --cached --no-renames --name-only \
     | grep -E '^[a-z-]+/\.gitignore$' | grep -v '^requests/' || true); do
     case "$(GIT_INDEX_FILE="$JUDGED" git show ":$ignore" 2>/dev/null)" in
-      "/.heads" | $'/.heads\n/.writes') ;;
+      $'/.heads\n/.writes') ;;
       *)
-        echo "safe-push: $ignore is not the store's own \`/.heads\` (and \`/.writes\`), so nothing is committed" >&2
+        echo "safe-push: $ignore is not the store's own \`/.heads\` and \`/.writes\`, so nothing is committed; scripts/app-bin.sh --deployed migrate-ignores --check says what each store lacks" >&2
         exit 1
         ;;
     esac

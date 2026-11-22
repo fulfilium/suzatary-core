@@ -1685,37 +1685,33 @@ fn safe_push_carries_each_store_s_own_gitignore_and_never_its_record() {
     }
 }
 
-/// A store's `.gitignore` is committed while it holds `/.heads`, or `/.heads` and `/.writes`, and
-/// the record and the mark it keeps out stay on the box; one that ignores more commits nothing,
-/// since it could keep the store's objects out of every push.
+/// A store's `.gitignore` is committed while it holds `/.heads` and `/.writes`, and the record and
+/// the mark it keeps out stay on the box; one that ignores more commits nothing, since it could
+/// keep the store's objects out of every push, and neither does the form before the mark.
 #[test]
 fn safe_push_commits_a_store_s_gitignore_only_as_the_store_writes_it() {
+    let ignore = "/.heads\n/.writes\n";
+    let fixture = PushFixture::new("push-gitignore-marked", Verification::Passes);
+    fixture.write(&format!("inbox/objects/{}.py", "a".repeat(64)));
+    std::fs::write(fixture.data().join("inbox/.gitignore"), ignore).expect("written");
+    std::fs::write(
+        fixture.data().join("inbox/.heads"),
+        "Heads(count=1, tips=())",
+    )
+    .expect("written");
+    let out = fixture.push();
+    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    assert_eq!(code(&out), 0, "{ignore:?}: {said}");
+    assert_eq!(fixture.commits(), 2, "{said}");
+    let tracked = git(&fixture.data(), &["ls-files", "inbox"], None);
+    let tracked = String::from_utf8_lossy(&tracked.stdout).into_owned();
+    assert!(tracked.contains("inbox/.gitignore"), "{tracked}");
+    assert!(
+        !tracked.contains("inbox/.heads"),
+        "the record was committed: {tracked}"
+    );
     for (at, ignore) in [
-        ("push-gitignore", "/.heads\n"),
-        ("push-gitignore-marked", "/.heads\n/.writes\n"),
-    ] {
-        let fixture = PushFixture::new(at, Verification::Passes);
-        fixture.write(&format!("inbox/objects/{}.py", "a".repeat(64)));
-        std::fs::write(fixture.data().join("inbox/.gitignore"), ignore).expect("written");
-        std::fs::write(
-            fixture.data().join("inbox/.heads"),
-            "Heads(count=1, tips=())",
-        )
-        .expect("written");
-        let out = fixture.push();
-        let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
-        assert_eq!(code(&out), 0, "{ignore:?}: {said}");
-        assert_eq!(fixture.commits(), 2, "{said}");
-        let tracked = git(&fixture.data(), &["ls-files", "inbox"], None);
-        let tracked = String::from_utf8_lossy(&tracked.stdout).into_owned();
-        assert!(tracked.contains("inbox/.gitignore"), "{tracked}");
-        assert!(
-            !tracked.contains("inbox/.heads"),
-            "the record was committed: {tracked}"
-        );
-    }
-    for (at, ignore) in [
-        ("push-gitignore-wider", "/.heads\nobjects/\n"),
+        ("push-gitignore-before-the-mark", "/.heads\n"),
         (
             "push-gitignore-marked-wider",
             "/.heads\n/.writes\nobjects/\n",
@@ -1726,7 +1722,7 @@ fn safe_push_commits_a_store_s_gitignore_only_as_the_store_writes_it() {
         std::fs::write(wider.data().join("inbox/.gitignore"), ignore).expect("written");
         let out = wider.push();
         let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
-        assert_ne!(code(&out), 0, "a wider ignore was committed: {said}");
+        assert_ne!(code(&out), 0, "{ignore:?} was committed: {said}");
         assert!(
             said.contains("inbox/.gitignore is not the store's own"),
             "{said}"

@@ -26,12 +26,18 @@
 # linking the locked app, lets the units restart.
 #
 # It try-restarts every unit in suzatary-app.target's ConsistsOf; a stopped one stays down. A
-# timer's oneshot reads the lock at each start.
+# timer's oneshot reads the lock at each start. No run of one app overlaps a unit of the other:
+# before the move it waits for each run of another app to end, stops every timer and the mail
+# watcher (which starts the triage), looks once more, and starts them again before any push,
+# however it ends; it then prints each one's state and ends non-zero if one is not running. A kill
+# it cannot catch (SIGKILL) leaves them stopped: `systemctl --user start` the units its "paused"
+# line names.
 #
 # Environment (seconds unless named):
 #   SUZATARY_APP_URL                 where /api/about answers; default: `app_url` in suzatary-web's instance
 #   SUZATARY_DEPLOY_ROOTS_TIMEOUT    the roots run (600); the build itself has no timeout
 #   SUZATARY_DEPLOY_UNITS_TIMEOUT    the restarted units to run the new app (600)
+#   SUZATARY_DEPLOY_RUNS_TIMEOUT     the runs under way of another app to end before the move (1800)
 #   SUZATARY_DEPLOY_CACHE_TIMEOUT    the publication run filling the binary cache (1200)
 #   SUZATARY_DEPLOY_CACHE_APPEAR     such a run to appear (120); past either it builds here
 #   SUZATARY_DEPLOY_CACHE_POLL       between two questions about that run (10)
@@ -45,6 +51,7 @@ cache_appear="${SUZATARY_DEPLOY_CACHE_APPEAR:-120}"
 cache_poll="${SUZATARY_DEPLOY_CACHE_POLL:-10}"
 roots_timeout="${SUZATARY_DEPLOY_ROOTS_TIMEOUT:-600}"
 units_timeout="${SUZATARY_DEPLOY_UNITS_TIMEOUT:-600}"
+runs_timeout="${SUZATARY_DEPLOY_RUNS_TIMEOUT:-1800}"
 revert_timeout="${SUZATARY_DEPLOY_REVERT_TIMEOUT:-600}"
 
 trap 'exit 143' TERM
@@ -75,11 +82,36 @@ while (($#)); do
   esac
   shift 2
 done
+say "bounds: the binary cache ${cache_timeout}s, each of three looks for a run of another app ${runs_timeout}s, the roots run ${roots_timeout}s, the restarted units ${units_timeout}s, a revert's relink ${revert_timeout}s; the build has none"
 # Removed on every exit, signals included.
 scratch="$(mktemp -d)"
 beside=""
 cleanup() { rm -rf "$scratch"; [[ -z "$beside" ]] || rm -f "$beside"; }
-trap cleanup EXIT
+# The timers and the watcher the deploy stopped, started again when it ends. Each start is tried
+# whatever the others did, and no signal cuts the starts short. False when one is not running
+# again, after saying which and how to start it.
+paused=() paused_at=0 unstarted=()
+resume() {
+  local unit state signals
+  ((${#paused[@]})) || return 0
+  signals="$(trap -p TERM HUP INT)"
+  trap '' TERM HUP INT
+  for unit in "${paused[@]}"; do
+    systemctl --user start "$unit" || true
+  done
+  for unit in "${paused[@]}"; do
+    state="$(systemctl --user show -p ActiveState --value "$unit" 2>/dev/null)" || state=unknown
+    say "$unit is $state"
+    [[ "$state" == active || "$state" == activating ]] || unstarted+=("$unit")
+  done
+  say "${paused[*]} were paused for $((SECONDS - paused_at))s"
+  paused=()
+  eval "$signals"
+  ((${#unstarted[@]} == 0)) && return 0
+  say "${unstarted[*]} did not start again; run: systemctl --user start ${unstarted[*]}"
+  return 1
+}
+trap 'status=$?; cleanup; resume || exit 1; exit "$status"' EXIT
 # A carried file is read once, here: what is checked is what is committed.
 if [[ -n "$carried" ]]; then
   cat "$carried" >"$scratch/instance.toml" 2>/dev/null || die "no readable instance file at $carried to carry. Nothing moved."
@@ -216,15 +248,6 @@ say "building ${rev:0:12} ($app) before moving the lock"
 "$here/scripts/app-builds.sh" "$app" "$roots/deploy-" \
   || die "the build of ${rev:0:12} failed; see nix's message above. Nothing moved."
 
-# A store's record of its heads (`.heads`, the Prodrome's SPEC §3) is written by every binary from
-# the Prodrome pin cdf394c on and by none before it, so after a rollback the record can be older than
-# the objects the older binary wrote, and `verify` below would report it. Deleting every record is
-# always safe: the next reader derives the heads and the next write of the store records them.
-# Only a store's record: a `.heads` beside an `objects/` directory, and nothing else of that name.
-find "$user" -path '*/.git' -prune -o -type d -name objects -print \
-  | while IFS= read -r dir; do rm -f "${dir%/objects}/.heads"; done \
-  || die "could not delete the stores' records of heads under $user. Nothing moved."
-
 # `verify` writes nothing. An instance or store the new app refuses would crash-loop every unit
 # once the web restarted. A carried file is checked beside the live one, so its relative paths
 # resolve alike.
@@ -240,6 +263,17 @@ said="$(SUZATARY_REPO="$app" "$roots/deploy-bin/bin/suzatary" --instance "$check
 ((status == 0)) \
   || die "${rev:0:12} refuses the ${carried:+carried }instance ${carried:-$unit_instance} or one of the stores it names, in its own words:\n$said\nNothing moved. A refusal of the instance (a section or plugin world ${rev:0:12} does not read) means the instance must change in the same deploy: write what ${rev:0:12} reads and pass it with --instance <file>. A store that is not in the form ${rev:0:12} reads needs its migration first; a store finding needs clearing first."
 say "${rev:0:12} reads ${carried:-$unit_instance} and the stores it names"
+
+# The library's `verify` reports a `.gitignore` that does not name `.writes` only once a hold has
+# written `.writes`, so before the first hold of the new pin it passes whatever the files say; the
+# new binary's own check of every store's `.gitignore` is the proof that the migration ran.
+# It is asked again once the timers stop, since a run of the older app can begin a store until then.
+migrated() {
+  local said
+  said="$(SUZATARY_REPO="$app" "$roots/deploy-bin/bin/suzatary" --instance "$unit_instance" migrate-ignores --check 2>&1)" \
+    || die "a store's .gitignore is not in its present form, in ${rev:0:12}'s words:\n$said\nNothing moved. Bring them first: SUZATARY_REPO=$app $(readlink -f "$roots/deploy-bin")/bin/suzatary --instance $unit_instance migrate-ignores"
+}
+migrated
 
 # Read by the binary just built: the deployed one may not have the verb yet.
 if [[ -n "${SUZATARY_APP_URL:-}" ]]; then
@@ -314,6 +348,59 @@ record() {
   flock "$git_dir/suzatary-push.lock" git -C "$user" push --quiet \
     || say "the user repository would not push; run: git -C $user push"
 }
+
+# NO RUN OF ONE APP OVERLAPS A UNIT OF THE OTHER. A Prodrome before 85e5083 writes a store without
+# moving the mark of its last hold, which a handle of a later one that has read the store trusts:
+# such a reader would read none of the write until the store's next write, and the app's memo,
+# keyed on the record of heads the old write did move, would keep that stale history under the
+# new heads until then. So each run under way of another app ends first (the nightly gate's binary
+# is its checkout's, so it is waited for by name), every timer and the mail watcher stop, the
+# deploy looks again and again after the link (the old server can start a triage run on the old
+# app until it restarts), the units restart as fresh readers, and the timers start again.
+# drained <when> <what then>: once no run of another app is under way, within the bound; else the
+# deploy ends, saying what happens then.
+drained() {
+  local listed unit others deadline=$((SECONDS + runs_timeout))
+  while :; do
+    listed="$(systemctl --user list-units --type=service --state=activating,active,deactivating \
+      --plain --no-legend 'suzatary-*.service')" \
+      || die "could not list the running units from systemctl --user. Nothing moved."
+    others=()
+    while read -r unit _; do
+      [[ -n "$unit" && "$unit" != suzatary-roots.service && " ${app_units[*]} " != *" $unit "* ]] \
+        || continue
+      if [[ "$unit" == suzatary-nightly-gate.service ]]; then
+        others+=("$unit")
+      elif [[ -e "$roots/${unit%.service}-app" && "$(readlink -f "$roots/${unit%.service}-app")" != "$app" ]]; then
+        others+=("$unit")
+      fi
+    done <<<"$listed"
+    ((${#others[@]} == 0)) && return 0
+    ((SECONDS < deadline)) \
+      || die "${others[0]} still ran after ${runs_timeout}s $1: let it end (journalctl --user -u ${others[0]}) or stop it (systemctl --user stop ${others[0]}), then run scripts/deploy.sh $rev again. $2"
+    say "waiting for ${others[*]}, a run of another app, to end $1"
+    sleep 5
+  done
+}
+# Wait first, so nothing is stopped for a wait that cannot end; stop; then look once more, since
+# the old watcher or a timer can start a run between the wait's end and the stop.
+pause() {
+  local listed unit state stopping=()
+  drained "before the move" "Nothing moved, and nothing was stopped."
+  listed="$(systemctl --user list-units --type=timer --state=active --plain --no-legend 'suzatary-*.timer')" \
+    || die "could not list the timers from systemctl --user. Nothing moved."
+  while read -r unit _; do [[ -z "$unit" ]] || stopping+=("$unit"); done <<<"$listed"
+  state="$(systemctl --user show -p ActiveState --value suzatary-mail-idle.service)" \
+    || die "could not read suzatary-mail-idle from systemctl --user. Nothing moved."
+  [[ "$state" != active && "$state" != activating ]] || stopping+=(suzatary-mail-idle.service)
+  ((${#stopping[@]})) || return 0
+  paused=("${stopping[@]}") paused_at=$SECONDS
+  systemctl --user stop "${paused[@]}" || die "could not stop ${paused[*]}. Nothing moved."
+  say "paused ${paused[*]} until the deploy ends; if it is killed, run: systemctl --user start ${paused[*]}"
+  drained "after the stop" "Nothing moved; the paused units start again."
+  migrated
+}
+pause
 
 previous_rev="$(lock_read "$lock" revision)" || die "could not read the rev $lock names. Nothing moved."
 previous_ref="$(lock_read "$lock" lockedRef)" || die "could not read the branch $lock pinned. Nothing moved."
@@ -401,11 +488,12 @@ go_back() {
 }
 undo() {
   local status="$1"
-  [[ "$status" -ne 0 ]] || return 0
+  [[ "$status" -ne 0 && -z "$finished" ]] || return 0
   # A second signal must not cut the record short.
   trap '' TERM HUP INT
   # Once the units restarted, they run the new app, so the log keeps it.
   if [[ -n "$live" ]]; then
+    resume || late=yes
     [[ -z "$deployed" ]] || record
     say "${restarted[*]:-no unit} restarted onto ${rev:0:12}, but the deploy stopped before it was checked; re-run scripts/deploy.sh $rev to finish the about-check, or $(go_back)"
     return 0
@@ -447,9 +535,11 @@ undo() {
   else
     say "no run relinked the previous app; see journalctl --user -u suzatary-roots"
   fi
+  resume || late=yes
   record
 }
-trap 'status=$?; cleanup; undo "$status" || true' EXIT
+late="" finished=""
+trap 'status=$?; cleanup; undo "$status" || true; resume || late=yes; [[ -z "$late" ]] || exit 1; exit "$status"' EXIT
 
 # The epoch is the commit: a run that started before it read another lock.
 epoch_us="$(date +%s%6N)"
@@ -475,11 +565,16 @@ done
 rm -f "$roots"/deploy-*
 say "suzatary-roots run started $started linked $app and exactly the builds the deploy made"
 
+# The old server, until it restarts, can start a triage run on new mail, and a run started before
+# the link resolved the old app; one started since runs the new app and is not waited for.
+drained "after the link, before the units restart" "The deploy is reverted."
+
 # Every running unit is tried before a refusal fails the deploy, so one refusal never leaves the
 # others on the old app.
 restarted=() refused=()
 live=yes
 for unit in "${app_units[@]}"; do
+  [[ " ${paused[*]} " != *" $unit "* ]] || continue
   state="$(systemctl --user show -p ActiveState --value "$unit")" \
     || die "could not read $unit from systemctl --user."
   case "$state" in
@@ -509,8 +604,15 @@ while :; do
   sleep 3
 done
 
+# The timers and the watcher start again before any push.
+watcher=()
+[[ " ${paused[*]} " != *" suzatary-mail-idle.service "* ]] || watcher=(suzatary-mail-idle.service)
+resume || late=yes
+# A watcher that did not start roots no app: it is named above, not waited for.
+[[ " ${unstarted[*]} " != *" suzatary-mail-idle.service "* ]] || watcher=()
+
 # Each unit's wrapper roots the app it runs as <unit>-app (nix/services.nix `resolveApp`).
-for unit in "${restarted[@]}"; do
+for unit in "${restarted[@]}" "${watcher[@]}"; do
   until [[ "$(readlink -f "$roots/${unit%.service}-app" || true)" == "$app" ]]; do
     ((SECONDS < deadline)) \
       || die "$unit restarted but runs $(readlink -f "$roots/${unit%.service}-app" || echo nothing), not $app, the app the lock names; see journalctl --user -u $unit."
@@ -524,6 +626,15 @@ for pair in app-bin-serving:lock-bin web-dist-serving:lock-dist; do
     || die "suzatary-web answers but serves $(readlink -f "$roots/$link"), not $(readlink -f "$roots/$built"), the roots run's build."
 done
 
+# Every store's record of heads, written by the new binary once the units are up: a store with no
+# record lists objects/ at every read until its next hold, and a record an older binary left is
+# made true. This replaces the deletion of every record that kept `verify` from reporting one a
+# rollback left older than its objects.
+SUZATARY_REPO="$app" "$roots/lock-bin/bin/suzatary" --instance "$unit_instance" prodrome record \
+  || { say "not every store's heads were recorded (above); run: scripts/app-bin.sh --deployed prodrome record"; late=yes; }
+
 record
 rm -f "$roots"/previous-*
+finished=yes
 say "${rev:0:12} is live; $about answers 200 from the build the lock names"
+[[ -z "$late" ]] || die "${rev:0:12} is live, but a paused unit did not start again or a store's heads were not recorded (above)."

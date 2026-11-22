@@ -159,16 +159,20 @@ fn owner() -> Actor {
     Actor::new(CAST.owner.actor).expect("an actor")
 }
 
-/// Every file under `root`, by its path relative to it, but a store's record of its heads: a
-/// record is derived from the objects beside it and local to one machine, so it is checked
-/// against them ([`records_are_the_derived_heads`]) and never pinned or copied.
+/// Every file under `root`, by its path relative to it, but a store's record of its heads and
+/// the mark of its last hold: a record is derived from the objects beside it and local to one
+/// machine, so it is checked against them ([`records_are_the_derived_heads`]) and never pinned
+/// or copied, and a mark is drawn at random at each hold.
 fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, into: &mut BTreeMap<String, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).expect("a directory") {
             let path = entry.expect("an entry").path();
             if path.is_dir() {
                 walk(root, &path, into);
-            } else if path.file_name() != Some(std::ffi::OsStr::new(".heads")) {
+            } else if ![".heads", ".writes"]
+                .map(std::ffi::OsStr::new)
+                .contains(&path.file_name().unwrap_or_default())
+            {
                 let name = path.strip_prefix(root).expect("under root");
                 into.insert(
                     name.to_string_lossy().into_owned(),
@@ -724,7 +728,7 @@ fn every_store_writes_the_pinned_bytes() {
 
 /// Every store under `root` (a directory holding `objects/`) holds a record of its heads that
 /// parses, names a present file for each tip and counts as many objects as `objects/` holds,
-/// beside a `.gitignore` of `/.heads` alone.
+/// beside a `.gitignore` of `/.heads` and `/.writes` alone.
 fn records_are_the_derived_heads(root: &Path) {
     fn stores(dir: &Path, into: &mut Vec<PathBuf>) {
         for entry in std::fs::read_dir(dir).expect("a directory") {
@@ -763,7 +767,7 @@ fn records_are_the_derived_heads(root: &Path) {
         }
         assert_eq!(
             std::fs::read_to_string(store.join(".gitignore")).expect("its gitignore"),
-            "/.heads\n",
+            "/.heads\n/.writes\n",
             "{}",
             store.display()
         );
@@ -1723,7 +1727,7 @@ fn the_lines_store_records_the_derived_heads() {
     );
     assert_eq!(
         std::fs::read_to_string(root.join(".gitignore")).expect("its gitignore"),
-        "/.heads\n"
+        "/.heads\n/.writes\n"
     );
     assert!(writer.inner().verify().is_empty(), "no finding");
 }

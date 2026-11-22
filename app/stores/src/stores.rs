@@ -189,6 +189,39 @@ stores! {
 }
 
 impl Kind {
+    /// Who may change a store's `objects/` besides this application, which decides how
+    /// `Objects` opens it.
+    #[must_use]
+    pub const fn doors(self) -> prodrome_core::store::Doors {
+        use prodrome_core::store::Doors;
+        match self {
+            // In the data repository, which a pull, a checkout or a restore from git changes.
+            Kind::Chain
+            | Kind::Inbox
+            | Kind::Lines
+            | Kind::Memory
+            | Kind::Digests
+            | Kind::Decisions
+            // Restored from the vault by tar.
+            | Kind::Topics
+            | Kind::TopicAliases
+            | Kind::Asks
+            // No `objects/`: never opened as a store of files.
+            | Kind::LineKeys
+            | Kind::MemoryTexts
+            | Kind::DigestTexts
+            | Kind::Triage
+            | Kind::Local
+            | Kind::Uploads
+            | Kind::Kept
+            | Kind::Requests => Doors::Shared,
+            // Never pushed or vaulted, and written only under a sync's hold, whose one other act,
+            // a sync at another schema, removes the directory with its mark
+            // (`plugin_store::PluginStore::begin`).
+            Kind::Plugin => Doors::Alone,
+        }
+    }
+
     /// Whether its directory is a Prodrome store of files: `objects/` beside the store's own
     /// files (`.gitignore`, `.heads`, `.writes`).
     #[must_use]

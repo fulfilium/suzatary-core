@@ -24,7 +24,13 @@ use std::process::{Command, Output};
 /// `term-at-move` present (holding the lock it was set at), the first read of a run of another
 /// lock under way sends the deploy TERM, as a stop or a dropped session would mid-wait; with
 /// `term-at-restart`, the web's restart does. `consists`, when present, is what
-/// `suzatary-app.target`'s `ConsistsOf` names (else the web and the watcher); `state-<unit>`,
+/// `suzatary-app.target`'s `ConsistsOf` names (else the web and the watcher); `timers`, when
+/// present, is the active timers' listing (else the triage's), and each `run-<unit>` how many
+/// more listings of the running units name that unit's run, logged as listed, and
+/// `appear-<unit>` holding `<n> <count>` names it from the n-th listing on for that many (`term-at-wait`
+/// sends the deploy TERM at the next listing); a start of a service roots the linked app as
+/// `<unit>-app`, as its wrapper does, and a start of a unit named in `wont-start` fails and
+/// leaves it inactive; `state-<unit>`,
 /// when present, is that unit's `ActiveState` (else `active`); a unit named in `wont-restart`
 /// fails its restart, and any other unit's restart roots the linked app as `<unit>-app`, as its
 /// wrapper does.
@@ -81,6 +87,29 @@ case "$*" in
     cat "$s/consists" 2>/dev/null || echo "suzatary-web.service suzatary-mail-idle.service" ;;
   "--user show -p ActiveState --value "*)
     cat "$s/state-$6" 2>/dev/null || echo active ;;
+  "--user list-units --type=timer --state=active --plain --no-legend suzatary-*.timer")
+    cat "$s/timers" 2>/dev/null || echo "suzatary-triage.timer loaded active waiting Suzatary triage" ;;
+  "--user list-units --type=service --state=activating,active,deactivating --plain --no-legend suzatary-*.service")
+    [ ! -f "$s/term-at-wait" ] || { rm "$s/term-at-wait"; term_deploy; }
+    listing=$(($(cat "$s/listings" 2>/dev/null || echo 0) + 1))
+    echo "$listing" >"$s/listings"
+    for appear in "$s"/appear-*; do
+      [ -f "$appear" ] || continue
+      read -r at left <"$appear"
+      [ "$listing" -ge "$at" ] && [ "$left" -gt 0 ] || continue
+      echo "$at $((left - 1))" >"$appear"
+      echo "${appear##*/appear-} listed" >>"$s/log"
+      echo "${appear##*/appear-} loaded activating start a run"
+    done
+    for run in "$s"/run-*; do
+      [ -f "$run" ] || continue
+      n="$(cat "$run")"
+      [ "$n" -gt 0 ] || continue
+      echo $((n - 1)) >"$run"
+      echo "${run##*/run-} listed" >>"$s/log"
+      echo "${run##*/run-} loaded activating start a run"
+    done
+    echo "suzatary-web.service loaded active running Suzatary web" ;;
   "--user show suzatary-roots.service"*)
     echo "show lock=$lock" >>"$s/log"
     if [ -f "$s/starting" ]; then
@@ -114,6 +143,15 @@ case "$*" in
     rm -f "$s/pending" "$s/starting" ;;
   "--user start --no-block suzatary-roots.service")
     [ "$(cat "$s/busy")" -gt 0 ] || echo 1 >"$s/starting" ;;
+  "--user stop "*) ;;
+  "--user start "*)
+    for unit in "${@:3}"; do
+      if grep -qx "$unit" "$s/wont-start" 2>/dev/null; then
+        echo inactive >"$s/state-$unit"
+        exit 1
+      fi
+      case "$unit" in *.service) ln -sfn "$(readlink -f "$s/roots/app")" "$s/roots/${unit%.service}-app" ;; esac
+    done ;;
   "--user try-restart suzatary-web.service")
     if [ -f "$s/web-app" ]; then app="$(cat "$s/web-app")"; else app="$(readlink -f "$s/roots/app")"; fi
     ln -sfn "$app" "$s/roots/suzatary-web-app"
@@ -226,8 +264,9 @@ echo "https://github.test/runs/7 $(head -n 1 "$s/runs")"
 /// What [`GIT`] logs when the lock the path unit watches changed to a state no commit holds.
 const UNCOMMITTED: &str = "the lock holds a state no commit holds";
 
-/// The new app's binary: `instance get web.app_url` answers the file's, and `--instance <file>
-/// verify` reads the instance as the real one does
+/// The new app's binary: `instance get web.app_url` answers the file's; `migrate-ignores --check`
+/// fails while `unmigrated` is present, and `prodrome record` while `record-fails` is; and
+/// `--instance <file> verify` reads the instance as the real one does
 /// and refuses, in its own words, one naming a plugin world this host is past; with
 /// `term-at-verify`, it sends the deploy TERM while the carried copy stands beside the live
 /// instance.
@@ -235,6 +274,19 @@ const SUZATARY: &str = r#"#!/usr/bin/env bash
 echo "suzatary $* from $SUZATARY_REPO" >>"$DEPLOY_STATE/log"
 if [ "$1 $3 $4 $5" = "--instance instance get web.app_url" ]; then
   sed -n 's/^app_url = "\(.*\)"$/\1/p' "$2"
+  exit 0
+fi
+if [ "$1 $3 $4" = "--instance migrate-ignores --check" ]; then
+  if [ -f "$DEPLOY_STATE/unmigrated" ]; then
+    echo "events chain: lacks /.writes"
+    exit 1
+  fi
+  echo "events chain: names every local file"
+  exit 0
+fi
+if [ "$1 $3 $4" = "--instance prodrome record" ]; then
+  [ ! -f "$DEPLOY_STATE/record-fails" ] || { echo "events chain: refused" >&2; exit 1; }
+  echo "events chain: 2 objects, 1 heads recorded"
   exit 0
 fi
 [ "$1 $3" = "--instance verify" ] || exit 64
@@ -947,13 +999,280 @@ fn deploy_refuses_before_moving_anything() {
     assert_eq!(deployed.lock(), deployed.old);
 }
 
+/// NO RUN OF ONE APP OVERLAPS A UNIT OF THE OTHER: a run of another app under way ends before
+/// anything stops (the nightly gate's by name), the timers stop, nothing started since, the lock
+/// moves, the units restart, and the timers start again before the record of the deploy is
+/// pushed. A run already on the new app is not waited for. A run that does not end within the
+/// bound, or a signal during the wait, fails the deploy with nothing moved and nothing stopped.
+#[test]
+fn deploy_moves_nothing_while_a_run_of_another_app_runs() {
+    let timer = "suzatary-triage.timer";
+    for (case, run, root, listings) in [
+        ("ends", "suzatary-triage.service", Some(false), "2"),
+        ("nightly", "suzatary-nightly-gate.service", None, "2"),
+        (
+            "on-the-new-app",
+            "suzatary-triage.service",
+            Some(true),
+            "100000",
+        ),
+        (
+            "never-ends",
+            "suzatary-plugins.service",
+            Some(false),
+            "100000",
+        ),
+        (
+            "signalled",
+            "suzatary-plugins.service",
+            Some(false),
+            "100000",
+        ),
+    ] {
+        let deployed = Box_::new(&format!("runs-{case}"));
+        deployed.set("next-result", "success");
+        deployed.set(&format!("run-{run}"), listings);
+        if case == "signalled" {
+            deployed.set("term-at-wait", "");
+        }
+        if let Some(new) = root {
+            std::fs::create_dir_all(deployed.scratch.join("roots")).expect("the roots");
+            let app = deployed.store(if new { &deployed.new } else { &deployed.old });
+            std::os::unix::fs::symlink(
+                app,
+                deployed
+                    .scratch
+                    .join("roots")
+                    .join(format!("{}-app", run.trim_end_matches(".service"))),
+            )
+            .expect("the run's root");
+        }
+        let out = deployed.deploy(
+            &[&deployed.new],
+            &[
+                ("SUZATARY_DEPLOY_RUNS_TIMEOUT", "1"),
+                ("SUZATARY_DEPLOY_REVERT_TIMEOUT", "1"),
+            ],
+        );
+        let (stderr, log) = (text(&out.stderr), deployed.log());
+        if case == "never-ends" || case == "signalled" {
+            assert!(!out.status.success(), "{case}");
+            if case == "never-ends" {
+                assert!(
+                    stderr.contains(&format!("{run} still ran after 1s"))
+                        && stderr.contains("Nothing moved"),
+                    "{case}: {stderr}"
+                );
+            }
+            assert_eq!(deployed.lock(), deployed.old, "{case}");
+            assert!(!deployed.restarted(), "{case}: {log}");
+            assert!(
+                !log.contains(&format!("--user stop {timer}")),
+                "{case}: nothing stopped: {log}"
+            );
+            continue;
+        }
+        assert!(out.status.success(), "{case}: {stderr}");
+        let stopped = log.find(&format!("--user stop {timer}")).expect("stopped");
+        let started = log
+            .rfind(&format!("--user start {timer}"))
+            .expect("started again");
+        let ended = log.find("roots run ends").expect("the run ends");
+        let restart = log.find("try-restart suzatary-web").expect("restarted");
+        let pushed = log.rfind("prodrome record").expect("the stores recorded");
+        assert!(
+            stopped < ended && ended < restart && restart < started && started < pushed,
+            "{case}: {log}"
+        );
+        assert!(
+            stderr.contains(&format!("{timer} is active")),
+            "{case}: {stderr}"
+        );
+        let waited = stderr.contains("a run of another app, to end before the move");
+        assert_eq!(waited, case != "on-the-new-app", "{case}: {stderr}");
+        if waited {
+            let listed = log.rfind(&format!("{run} listed")).expect("listed");
+            assert!(
+                listed < stopped,
+                "{case}: waited before anything stopped: {log}"
+            );
+        }
+    }
+}
+
+/// A deploy that reverts, or that is terminated after the stop, starts the timers again.
+#[test]
+fn deploy_starts_the_timers_again_however_it_ends() {
+    let timer = "suzatary-triage.timer";
+    for (case, env) in [
+        ("reverted", vec![("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "1")]),
+        ("terminated", vec![("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "60")]),
+    ] {
+        let deployed = Box_::new(&format!("runs-{case}"));
+        if case == "terminated" {
+            deployed.set("next-result", "success");
+            deployed.set("long-run", &deployed.core(&deployed.new));
+            deployed.set("term-at-move", &deployed.core(&deployed.old));
+        }
+        let mut env = env;
+        env.push(("SUZATARY_DEPLOY_REVERT_TIMEOUT", "1"));
+        let out = deployed.deploy(&[&deployed.new], &env);
+        let log = deployed.log();
+        assert!(!out.status.success(), "{case}");
+        assert_eq!(deployed.lock(), deployed.old, "{case}: reverted");
+        let stopped = log.find(&format!("--user stop {timer}")).expect("stopped");
+        let started = log
+            .rfind(&format!("--user start {timer}"))
+            .expect("started again");
+        assert!(stopped < started, "{case}: {log}");
+    }
+}
+
+/// A run of the old app can begin after the first look: one the old watcher starts after the
+/// stop is waited for there, and one it starts after the second look, which resolved the old app
+/// before the link, is waited for after the link and before any unit restarts; one that does not
+/// end there reverts the deploy.
+#[test]
+fn deploy_looks_again_after_the_stop_and_after_the_link() {
+    for (case, at, left) in [
+        ("after-the-stop", "2", "1"),
+        ("after-the-second-look", "3", "1"),
+        ("never-ends-after-the-link", "3", "100000"),
+    ] {
+        let deployed = Box_::new(&format!("looks-{case}"));
+        deployed.set("next-result", "success");
+        deployed.set("appear-suzatary-triage.service", &format!("{at} {left}"));
+        std::fs::create_dir_all(deployed.scratch.join("roots")).expect("the roots");
+        std::os::unix::fs::symlink(
+            deployed.store(&deployed.old),
+            deployed.scratch.join("roots/suzatary-triage-app"),
+        )
+        .expect("the run's root");
+        let out = deployed.deploy(
+            &[&deployed.new],
+            &[
+                ("SUZATARY_DEPLOY_RUNS_TIMEOUT", "1"),
+                ("SUZATARY_DEPLOY_REVERT_TIMEOUT", "1"),
+            ],
+        );
+        let (stderr, log) = (text(&out.stderr), deployed.log());
+        let stopped = log
+            .find("--user stop suzatary-triage.timer")
+            .expect("stopped");
+        let listed = log.find("suzatary-triage.service listed").expect("listed");
+        match case {
+            "after-the-stop" => {
+                assert!(out.status.success(), "{case}: {stderr}");
+                assert!(stderr.contains("to end after the stop"), "{case}: {stderr}");
+                assert!(stopped < listed, "{case}: {log}");
+            }
+            "after-the-second-look" => {
+                assert!(out.status.success(), "{case}: {stderr}");
+                assert!(
+                    stderr.contains("to end after the link, before the units restart"),
+                    "{case}: {stderr}"
+                );
+                let ended = log.find("roots run ends").expect("linked");
+                let restart = log.find("try-restart suzatary-web").expect("restarted");
+                assert!(ended < listed && listed < restart, "{case}: {log}");
+            }
+            _ => {
+                assert!(!out.status.success(), "{case}");
+                assert!(
+                    stderr.contains("The deploy is reverted"),
+                    "{case}: {stderr}"
+                );
+                assert!(!deployed.restarted(), "{case}: {log}");
+                assert_eq!(deployed.lock(), deployed.old, "{case}");
+            }
+        }
+    }
+}
+
+/// A paused unit that does not start again is named, with the command that starts it, and the
+/// deploy, live by then, ends non-zero; so does a record of the stores' heads that fails. A
+/// store whose `.gitignore` the new binary's `migrate-ignores --check` refuses stops the deploy
+/// before anything stops or moves, naming the verb.
+#[test]
+fn deploy_says_what_it_left_undone() {
+    let unstarted = Box_::new("left-unstarted");
+    unstarted.set("next-result", "success");
+    unstarted.set("wont-start", "suzatary-triage.timer");
+    let out = unstarted.deploy(&[&unstarted.new], &[]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(unstarted.restarted(), "live: {}", unstarted.log());
+    assert!(
+        stderr.contains("suzatary-triage.timer is inactive")
+            && stderr
+                .contains("did not start again; run: systemctl --user start suzatary-triage.timer")
+            && stderr.contains("is live, but"),
+        "{stderr}"
+    );
+    assert!(
+        unstarted
+            .log()
+            .contains("--user start suzatary-mail-idle.service"),
+        "each start is tried: {}",
+        unstarted.log()
+    );
+
+    let watcher = Box_::new("left-watcher-unstarted");
+    watcher.set("next-result", "success");
+    watcher.set("wont-start", "suzatary-mail-idle.service");
+    let out = watcher.deploy(&[&watcher.new], &[("SUZATARY_DEPLOY_UNITS_TIMEOUT", "30")]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("suzatary-mail-idle.service did not start again")
+            && !stderr.contains("restarted but runs"),
+        "named, not waited for: {stderr}"
+    );
+    assert!(
+        watcher.log().contains("prodrome record"),
+        "the stores are still recorded"
+    );
+
+    let unrecorded = Box_::new("left-unrecorded");
+    unrecorded.set("next-result", "success");
+    unrecorded.set("record-fails", "");
+    let out = unrecorded.deploy(&[&unrecorded.new], &[]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("prodrome record") && stderr.contains("is live, but"),
+        "{stderr}"
+    );
+
+    let unmigrated = Box_::new("left-unmigrated");
+    unmigrated.set("next-result", "success");
+    unmigrated.set("unmigrated", "");
+    let out = unmigrated.deploy(&[&unmigrated.new], &[]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("lacks /.writes")
+            && stderr.contains("migrate-ignores")
+            && stderr.contains("Nothing moved"),
+        "{stderr}"
+    );
+    assert_eq!(unmigrated.lock(), unmigrated.old);
+    assert!(
+        !unmigrated.log().contains("--user stop"),
+        "{}",
+        unmigrated.log()
+    );
+}
+
 /// Once the roots run links the new app, every running unit of suzatary-app.target is
-/// restarted onto it and checked to run it; a stopped one stays down; one that will not
-/// restart, listed before the web, fails the deploy by name after the web restarted, and the
-/// deploy, live by then, is kept.
+/// restarted onto it and checked to run it, and the mail watcher, stopped with the timers before
+/// the move, starts with them after it; a stopped one stays down; one that will not restart,
+/// listed before the web, fails the deploy by name after the web restarted, and the deploy, live
+/// by then, is kept.
 #[test]
 fn deploy_restarts_every_running_unit_that_runs_the_app() {
     let watcher = "suzatary-mail-idle.service";
+    let other = "suzatary-other.service";
     for (case, state, refuses) in [
         ("watching", "active", false),
         ("crash-looping", "activating", false),
@@ -965,12 +1284,15 @@ fn deploy_restarts_every_running_unit_that_runs_the_app() {
         deployed.set("next-result", "success");
         deployed.set(&format!("state-{watcher}"), state);
         if refuses {
-            deployed.set("wont-restart", watcher);
-            deployed.set("consists", &format!("{watcher} suzatary-web.service"));
+            deployed.set("wont-restart", other);
+            deployed.set(
+                "consists",
+                &format!("{other} {watcher} suzatary-web.service"),
+            );
         }
         let out = deployed.deploy(&[&deployed.new], &[]);
         let (stderr, log) = (text(&out.stderr), deployed.log());
-        let restart = log.find(&format!("try-restart {watcher}"));
+        let started = log.find(&format!("--user start {watcher}"));
         let rooted = std::fs::canonicalize(
             deployed
                 .scratch
@@ -982,7 +1304,7 @@ fn deploy_restarts_every_running_unit_that_runs_the_app() {
         if refuses {
             assert!(!out.status.success(), "{case}");
             assert!(
-                stderr.contains(&format!("{watcher} would not restart")),
+                stderr.contains(&format!("{other} would not restart")),
                 "{case}: {stderr}"
             );
             assert!(
@@ -997,11 +1319,15 @@ fn deploy_restarts_every_running_unit_that_runs_the_app() {
         } else if state == "active" || state == "activating" {
             assert!(out.status.success(), "{case}: {stderr}");
             let ended = log.find("roots run ends").expect("the run ends");
-            assert!(restart.is_some_and(|at| ended < at), "{case}: {log}");
+            assert!(started.is_some_and(|at| ended < at), "{case}: {log}");
+            assert!(
+                !log.contains(&format!("try-restart {watcher}")),
+                "{case}: {log}"
+            );
             assert_eq!(rooted, Some(deployed.store(&deployed.new)), "{case}");
         } else {
             assert!(out.status.success(), "{case}: {stderr}");
-            assert!(restart.is_none(), "{case}: {log}");
+            assert!(started.is_none(), "{case}: {log}");
             assert!(
                 stderr.contains(&format!("left {watcher} {state}")),
                 "{case}: {stderr}"

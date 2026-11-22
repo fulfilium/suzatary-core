@@ -80,6 +80,23 @@ impl PluginStore {
         Ok(Some(Objects::plugin(&self.root, schema)))
     }
 
+    /// The store as written, at the schema beside it, held as a sync holds it, so no sync at
+    /// another schema empties it while the caller reads or records it; `None` where nothing was
+    /// ever learned.
+    ///
+    /// # Errors
+    /// The hold not taken, or what [`PluginStore::read`] refuses.
+    pub fn read_held(&self) -> Result<Option<Begun>, StoreError> {
+        let held = crate::durable::hold(&self.hold()).map_err(|why| {
+            StoreError::not_appended("plugin", format!("{}: {why}", self.root.display()))
+        })?;
+        Ok(self.read()?.map(|store| Begun {
+            how: How::Kept,
+            store,
+            _held: held,
+        }))
+    }
+
     /// The lock a sync holds from its `begin` to its last write: beside the store, never in it,
     /// since a `begin` at another schema removes the store's directory and every lock inside it.
     fn hold(&self) -> std::path::PathBuf {
@@ -189,6 +206,7 @@ mod tests {
                 ".gitignore",
                 ".heads",
                 ".lock",
+                ".writes",
                 "objects",
                 "schema",
                 "store.lock"
@@ -256,5 +274,47 @@ mod tests {
             (How::Afresh, 0),
             "emptied at the other schema, after"
         );
+    }
+
+    /// LAW: a plugin's store is opened `Doors::Alone`, and a handle that has read and written it
+    /// decides over what another handle wrote since: its write rests on that write, so the
+    /// register holds one candidate and the store one tip; and a handle that has read it reads
+    /// what a sync at another schema, which removes the directory, and the syncs after it wrote.
+    #[test]
+    fn a_warm_handle_decides_over_every_later_write() {
+        let dir = suzatary_testkit::scratch("plugin-store");
+        let place = PluginStore::at(dir.path().join("store"));
+        let schema = Declaration::admit(SCHEMA).expect("lawful");
+        let seen = |hour: u32, state: &str| {
+            parse_event(
+                &schema,
+                &format!(
+                    "Seen(door='front', at=datetime(2026, 10, 5, {hour}, 0, 0), actor='probe', \
+                     state='{state}')"
+                ),
+            )
+            .expect("an event")
+        };
+        drop(place.begin(&schema).expect("begins"));
+        let warm = place.read().expect("reads").expect("a store");
+        assert_eq!(warm.inner().doors(), prodrome_core::store::Doors::Alone);
+        learn(&warm, vec![seen(10, "open")]).expect("learns");
+        let other = place.read().expect("reads").expect("a store");
+        learn(&other, vec![seen(11, "shut")]).expect("learns elsewhere");
+        learn(&warm, vec![seen(12, "open")]).expect("learns over it");
+        let fresh = place.read().expect("reads").expect("a store");
+        assert_eq!(fresh.inner().tips().expect("tips").len(), 1, "one tip");
+        assert!(
+            fresh.inner().verify().is_empty(),
+            "{:?}",
+            fresh.inner().verify()
+        );
+
+        let other_schema = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");
+        drop(place.begin(&other_schema).expect("emptied"));
+        let begun = place.begin(&schema).expect("begun again");
+        learn(begun.store(), vec![seen(13, "shut")]).expect("learns");
+        drop(begun);
+        assert_eq!(warm.events().expect("reads"), vec![seen(13, "shut")]);
     }
 }

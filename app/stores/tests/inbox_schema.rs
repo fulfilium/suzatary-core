@@ -268,9 +268,10 @@ proptest! {
             std::fs::copy(&path, here.0.root().join("objects").join(path.file_name().expect("a name")))
                 .expect("copies");
         }
-        // A union by copy is a door the store does not own: its record of heads is deleted after,
-        // as the Prodrome's SPEC §3 asks of such a door, or `verify` reports it as stale.
-        let _ = std::fs::remove_file(here.0.root().join(".heads"));
+        // A union by copy is a door the store does not own: the store's heads are recorded after,
+        // as the Prodrome's SPEC §3 asks of such a door, or a handle that has read the store
+        // reads none of it and `verify` reports the record as stale.
+        here.0.record_heads().expect("recorded");
         let both: Vec<Phase> = a.iter().chain(&b).copied().collect();
         let joined: HashSet<Phase> = maximal(&both, |phase| phase).into_iter().collect();
         prop_assert_eq!(phases(&here.0), joined);
