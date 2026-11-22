@@ -36,13 +36,11 @@ POST /api/secretary/attachments write signed
 GET /api/secretary/attachments/{id} read -
 GET /api/secretary/conversations/{conversation}/blocks/{sha} read -
 GET /api/secretary/conversations/{conversation}/drawn read -
-POST /api/secretary/conversations/{conversation}/edit act signed
 POST /api/secretary/conversations/{conversation}/erase tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/acknowledge tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/dismiss tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/drop tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/tap tap signed
-POST /api/secretary/conversations/{conversation}/regenerate act signed
 GET /api/secretary/conversations/{conversation}/stream read -
 GET /api/secretary/memory read -
 POST /api/secretary/memory/{id}/forget act signed

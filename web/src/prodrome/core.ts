@@ -163,8 +163,16 @@ export interface LineStep {
 
 /** A line this tab sealed: the move of its own lines (as a `LineStep` reads), its name and its conversation. */
 export interface Sealed extends LineStep {
+  readonly type: "Sealed";
   readonly name: string;
   readonly conversation: string;
+}
+
+/** Nothing sealed, for a cause a pull may cure, in that cause's sentence. */
+export interface Unheld {
+  readonly type: "Unheld";
+  readonly why: string;
+  free: () => void;
 }
 
 /** The lines a tab holds; a slot without its key reads as missing. What this tab wrote is handed over as every
@@ -172,16 +180,17 @@ export interface Sealed extends LineStep {
 export interface Lines extends Written {
   /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once; or, where a pull
    * may cure what kept it from being sealed, that cause's sentence. */
-  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | string;
-  /** The device's record of own lines taken: `{moved, unread, taken}`. */
+  seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | Unheld;
+  /** The device's record of own lines taken: `{moved, unread, fresh}`, `fresh` how many were new here or raised an answer. */
   take_own: (records: string) => string;
-  /** `[{hash, literal, line, free}]`: each own write the box took, and whether its record may be let go. */
+  /** `[{hash, literal, line}]`: each own write the box took, by its answer or by the rows. */
   own_taken: () => string;
   /** The box's answer to an own line: `"Unsent"`, `{"Refused": {kind, reason}}` or `"Taken"`. */
   answer: (name: string) => string;
   /** The person acted on the refusals of the own lines `[<name>]`: what it moved. */
   acted: (names: string) => string;
-  /** `[<print>]`: every own record the device may let go, the told refusals `[<print>]` given. */
+  /** `{free: [<print>], refused: [<name>]}`: every own record the device may let go, and the names of those let go as
+   * refused, which it keeps as acted on; the told refusals `[<print>]` given. */
   releasable: (told: string) => string;
   /** The box's sentence where `id` is a topic this device began and the box refused. */
   refused_topic: (id: string) => string | undefined;

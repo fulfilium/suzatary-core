@@ -75,6 +75,13 @@ pub enum Step {
 }
 
 impl Step {
+    /// Whether a line of this step by `writer` takes up the edit of an `Again` it rests on: a
+    /// round-opening turn not the box's ([`crate::secretary::again::aside`]).
+    #[must_use]
+    pub(crate) fn takes_up(&self, writer: crate::wire::lines::LineWriter) -> bool {
+        *self == Step::Asks && writer == crate::wire::lines::LineWriter::Other
+    }
+
     /// The step of a line shaped `shape`, as `Stored::fold` folds the line.
     #[must_use]
     pub fn of(shape: &LineShape) -> Self {

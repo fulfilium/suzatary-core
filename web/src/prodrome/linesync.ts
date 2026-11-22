@@ -22,6 +22,7 @@ import serial from "../algebra/serial"
 import idb from "../app/idb"
 import type rendered from "../app/rendered"
 import time from "../app/time"
+import { measure } from "../app/perf"
 import http from "../wire/http"
 import storereads from "../wire/storereads"
 import type { SkeletonPayload } from "../wire/generated/wire"
@@ -53,8 +54,9 @@ export namespace linesync {
     // A move of what this tab wrote, its `delta` the device's record of those own lines, kept under the device's lock:
     // its moves heard.
     readonly ownStepped: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
-    // The same keep, by a caller that holds the device's lock (a seal).
-    readonly ownKeep: (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }) => Promise<void>
+    // The same keep of one move or more in one write of the row, by a caller that holds the device's lock (a seal: its
+    // lines and their signatures).
+    readonly ownKeep: (steps: readonly { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }[]) => Promise<void>
     // The device's row read again into the core and settled, in this tab's lane, after another tab of the device
     // kept a line in it: whether it brought anything this tab did not hold.
     readonly ownHeard: () => Promise<boolean>
@@ -179,11 +181,13 @@ export namespace linesync {
       quiet = undefined
       if (!idb.available()) return
       for (let tries = 0; tries < 2; tries += 1) {
+        const start = performance.now()
         const done = await log.compact(after, take, () => held.snapshot(), () => husksOf(held), kept => blocks.swept(kept, admitsOf(held, kept)))
         if (done.type === "Error") return
         if (done.v.type === "Through") {
           after = done.v.at
           mine.clear()
+          measure("compact:lines", start, { store: NAME })
           phases.mark("lines snapshot written")
           return
         }
@@ -325,19 +329,23 @@ export namespace linesync {
     }
     // A move of the own lines kept on the device before it is heard: a write the device could not keep is said, since a
     // reload would forget it.
-    const ownKeep = async (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> => {
-      const [delta, said] = [step.delta, step.moved]
-      step.free()
-      const records = ownlines.ofDelta(delta)
-      if (records.type === "Error") throw new Error(`a move of this tab's own lines: ${records.e}`)
-      if (idb.available() && records.v.length > 0) {
-        const kept = await ownlines.keep(records.v)
+    const ownKeep = async (steps: readonly { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }[]): Promise<void> => {
+      const read = steps.map(step => {
+        const [delta, said] = [step.delta, step.moved]
+        step.free()
+        const records = ownlines.ofDelta(delta)
+        if (records.type === "Error") throw new Error(`a move of this tab's own lines: ${records.e}`)
+        return { records: records.v, said }
+      })
+      const records = read.flatMap(r => r.records)
+      if (idb.available() && records.length > 0) {
+        const kept = await ownlines.keep(records)
         if (kept.type === "Error") fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines were not kept on this device (${kept.e}); a reload forgets them`))
       }
-      moved(said)
+      for (const r of read) moved(r.said)
     }
     const ownStepped = (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): Promise<void> =>
-      ownlines.device(ownlines.LOCK, () => ownKeep(step))
+      ownlines.device(ownlines.LOCK, () => ownKeep([step]))
 
     // One read of the device's log per page: the core loaded from it, before anything reads the lines.
     const restored = once.of(async (): Promise<void> => {

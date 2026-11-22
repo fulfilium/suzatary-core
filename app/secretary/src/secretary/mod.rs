@@ -46,10 +46,10 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::secretary::model::{Halt, Turn};
 use suzatary_conversations::secretary::store::{Entry, Stored};
-use suzatary_conversations::secretary::{store, tool_name};
+use suzatary_conversations::secretary::tool_name;
 use suzatary_digest::secretary::memories;
 use suzatary_inbox::secretary::proposal;
-use suzatary_inbox::secretary::{inbox, own_round, stamp};
+use suzatary_inbox::secretary::{inbox, own_round};
 use suzatary_lines::secretary::conversations::{append, read};
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Retry;
@@ -719,65 +719,6 @@ fn heard(
         },
     )?;
     Ok(true)
-}
-
-/// Ask the last round again.
-///
-/// # Errors
-/// [`Stored::rewind`]'s refusals and the store's own.
-pub fn regenerate(
-    conversations: Conversations<'_>,
-    clock: &dyn Clock,
-    by: &Actor,
-    id: &ConversationId,
-) -> Result<Stored, Refusal> {
-    let to = read(conversations, id)?.rewind(store::Rewind::Regenerate)?;
-    rewound(conversations, clock, by, id, to)?;
-    read(conversations, id)
-}
-
-/// Ask the last round again with `said` in place of its question.
-///
-/// # Errors
-/// [`Stored::rewind`]'s refusals, a last round no question opened, and the store's own.
-pub fn edit(
-    conversations: Conversations<'_>,
-    clock: &dyn Clock,
-    by: &Actor,
-    stamped: stamp::Stamp,
-    id: &ConversationId,
-    said: Turn,
-) -> Result<Stored, Refusal> {
-    let to = read(conversations, id)?.rewind(store::Rewind::Edit)?;
-    rewound(conversations, clock, by, id, to)?;
-    append(
-        conversations,
-        id,
-        &Entry::Said {
-            at: clock.now(),
-            turn: said,
-            by: Some(stamped),
-        },
-    )?;
-    read(conversations, id)
-}
-
-fn rewound(
-    conversations: Conversations<'_>,
-    clock: &dyn Clock,
-    by: &Actor,
-    id: &ConversationId,
-    to: usize,
-) -> Result<(), Refusal> {
-    append(
-        conversations,
-        id,
-        &Entry::Rewound {
-            to,
-            at: clock.now(),
-            by: by.as_str().to_owned(),
-        },
-    )
 }
 
 #[cfg(test)]

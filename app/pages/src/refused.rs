@@ -45,6 +45,21 @@ fn sent(words: &Given) -> Option<composer::Sent> {
             attachments: attachments.clone(),
             mode: composer::Mode::Asking,
         }),
+        Given::Edit {
+            question,
+            text,
+            references,
+            files,
+            attachments,
+        } => Some(composer::Sent {
+            text: text.clone(),
+            references: references.clone(),
+            files: files.clone(),
+            attachments: attachments.clone(),
+            mode: composer::Mode::Editing {
+                question: question.clone(),
+            },
+        }),
         Given::Title { .. } => None,
     }
 }
@@ -52,7 +67,7 @@ fn sent(words: &Given) -> Option<composer::Sent> {
 /// The words as they are copied.
 fn quoted(words: &Given) -> &str {
     match words {
-        Given::Question { text, .. } => text,
+        Given::Question { text, .. } | Given::Edit { text, .. } => text,
         Given::Title { title } => title,
     }
 }

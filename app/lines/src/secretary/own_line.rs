@@ -30,6 +30,13 @@ pub enum Words {
     },
     /// A title: a rename's, or a topic's.
     Title(String),
+    /// An edit's question whole, and the question it edits.
+    Edit {
+        question: Hash,
+        text: String,
+        references: Vec<suzatary_base::reference::Reference>,
+        attachments: Vec<suzatary_held::attachment::Attachment>,
+    },
 }
 
 impl Words {
@@ -37,7 +44,7 @@ impl Words {
     #[must_use]
     pub fn quoted(&self) -> &str {
         match self {
-            Words::Question { text, .. } => text,
+            Words::Question { text, .. } | Words::Edit { text, .. } => text,
             Words::Title(title) => title,
         }
     }
@@ -179,6 +186,22 @@ impl OwnLine {
             OwnLine::Line { node, .. }
                 if matches!(&node.given().header, crate::wire::lines::NodeHeader::Line { step: crate::secretary::step::Step::Opened, .. })
         )
+    }
+
+    /// The line its ruling is drawn on: an `Again`'s question, which it makes owed; else itself.
+    #[must_use]
+    pub fn drawn_on(&self) -> &Hash {
+        match self {
+            OwnLine::Line { node, .. } => match &node.given().header {
+                crate::wire::lines::NodeHeader::Line {
+                    step: crate::secretary::step::Step::Again { question, .. },
+                    ..
+                } => question,
+                crate::wire::lines::NodeHeader::Line { .. }
+                | crate::wire::lines::NodeHeader::Structure { .. } => node.name(),
+            },
+            OwnLine::Signature { name, .. } => name,
+        }
     }
 
     /// The conversation it is a line of; none for a signature.

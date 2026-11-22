@@ -9,18 +9,13 @@ use prodrome_core::event::Hash;
 use suzatary_api::wire::BlockRender;
 use suzatary_api::wire::Erasing;
 use suzatary_api::wire::RecordPayload;
-use suzatary_api::wire::Saying;
 use suzatary_api::wire::Uploaded;
 use suzatary_api::wire::Uploading;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::file_read::Withheld;
-use suzatary_inbox::secretary::stamp;
-use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_io::attachments::{Stored, UploadError};
-use suzatary_signatures::signatures::Seat;
 use suzatary_signatures::signatures::Tap;
 use suzatary_topics::secretary::readings;
 use suzatary_topics::wire::topics as wire;
@@ -29,19 +24,12 @@ use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
 use super::guard::{Reader, Writer};
 use super::params::{Asked, Params};
-use super::reply::Accepted;
 use super::{Chained, State};
 use suzatary_memory::secretary::memory::FactId;
 
 pub(crate) struct Block {
     id: ConversationId,
     sha: String,
-}
-
-pub(crate) struct Said {
-    say: String,
-    references: Vec<Reference>,
-    attachments: Vec<Attachment>,
 }
 
 /// A photo or PDF, decoded.
@@ -123,50 +111,6 @@ impl Body for Erasing {
 
     fn parse(erasing: Self, _: &State) -> Result<Self, Refusal> {
         Ok(erasing)
-    }
-}
-
-impl Body for Said {
-    const CAP: usize = suzatary_lines::secretary::lines_rule::MAX_SAID_BYTES;
-
-    type Wire = Saying;
-
-    /// Each photo's type is reread from the store.
-    fn parse(saying: Saying, state: &State) -> Result<Self, Refusal> {
-        let Saying {
-            say,
-            references,
-            attachments,
-        } = saying;
-        let attachments = if attachments.is_empty() {
-            Vec::new()
-        } else {
-            let store = &uploads(state)?.store;
-            attachments
-                .iter()
-                .map(|one| {
-                    let refused = |failed: &dyn std::fmt::Display| {
-                        Refusal::bad_request(format!("attachments: {failed}"))
-                    };
-                    match store
-                        .attachment(&one.id)
-                        .map_err(|failed| refused(&failed))?
-                        .ok_or_else(|| refused(&format!("no upload {} in the store", one.id)))?
-                    {
-                        Stored::Here { attachment, .. } => attachment
-                            .named(&one.name)
-                            .map_err(|failed| refused(&failed)),
-                        // Named when it was kept; the page cannot rename it.
-                        Stored::Private { attachment, .. } => Ok(attachment),
-                    }
-                })
-                .collect::<Result<_, _>>()?
-        };
-        Ok(Self {
-            say,
-            references,
-            attachments,
-        })
     }
 }
 
@@ -334,63 +278,6 @@ pub(crate) fn block(call: &Call<Reader, Block, ()>) -> Result<Json<BlockRender>,
             })
         })
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))
-}
-
-fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
-    let speaker = Speaker::at(call.guard.as_str(), Seat::of(&call.admitted));
-    if references
-        .iter()
-        .any(|reference| matches!(reference, Reference::Todo(_) | Reference::Global(_)))
-    {
-        let read = call.state.chains_read();
-        stamp::pointing(
-            speaker,
-            references,
-            &read.set(call.state.first.caps.secretary.clock.now()),
-        )
-    } else {
-        Stamp::Actor(speaker)
-    }
-}
-
-/// `POST …/regenerate`: 409 if the round wrote or runs.
-pub(crate) fn regenerate(
-    call: &Call<Actor, ConversationId, ()>,
-) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
-    let id = &call.params;
-    call.state
-        .with_cards(|caps, cards| secretary_routes::regenerate(caps, cards, id, &call.guard))
-        .inspect(|_| call.state.heard(id))
-        .map(Accepted)
-}
-
-/// `POST …/edit`.
-pub(crate) fn edit(
-    call: &Call<Actor, ConversationId, Said>,
-) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
-    let Said {
-        say,
-        references,
-        attachments,
-        ..
-    } = &call.body;
-    let id = &call.params;
-    let by = stamped(call, references);
-    call.state
-        .with_cards(|caps, cards| {
-            secretary_routes::edit(
-                caps,
-                cards,
-                id,
-                say,
-                references,
-                attachments,
-                &call.guard,
-                by,
-            )
-        })
-        .inspect(|_| call.state.heard(id))
-        .map(Accepted)
 }
 
 /// `POST …/attachments`.

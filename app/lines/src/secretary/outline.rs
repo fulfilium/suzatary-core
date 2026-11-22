@@ -159,6 +159,31 @@ impl Rounds {
     }
 }
 
+/// The places in `order` the `Again` at `place` sets aside ([`crate::secretary::again::aside`]);
+/// none where its question is no line here.
+fn again_aside(
+    lines: &[Line<'_>],
+    order: &crate::secretary::sequence::Order,
+    question: &Hash,
+    place: usize,
+    how: suzatary_conversations::secretary::store::Rewind,
+) -> BTreeSet<usize> {
+    let Some(question) = order.iter().position(|(at, _)| lines[*at].name == question) else {
+        return BTreeSet::new();
+    };
+    crate::secretary::again::aside(
+        |at| &order[at].1,
+        |at, again| {
+            let (line, edit) = (&lines[order[at].0], &lines[order[again].0]);
+            line.step.takes_up(*line.writer) && line.at == edit.at
+        },
+        order.len(),
+        question,
+        place,
+        how,
+    )
+}
+
 /// The outline of conversation `id` from its lines, in any order: put in the order the
 /// conversation's own reading puts them ([`crate::secretary::sequence::sequenced`], the box's lines
 /// its spine), then folded as `Stored::fold` folds their turns and title.
@@ -204,12 +229,11 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
             }
             Step::Rewound { to } => aside.extend(*to..turns.len()),
             Step::Again { question, how } => {
-                if let Some(question) = order.iter().position(|(at, _)| lines[*at].name == question)
-                {
-                    let set =
-                        crate::secretary::again::aside(|at| &order[at].1, question, place, *how);
-                    aside.extend(set.into_iter().filter_map(|at| turn_at[at]));
-                }
+                aside.extend(
+                    again_aside(lines, &order, question, place, *how)
+                        .into_iter()
+                        .filter_map(|at| turn_at[at]),
+                );
             }
             Step::Proposed => proposals += 1,
             Step::Coding { proposal } if *proposal >= proposals => {

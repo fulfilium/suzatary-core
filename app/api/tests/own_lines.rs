@@ -16,7 +16,7 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::DEFAULT;
 use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
 use suzatary_lines::secretary::conversations;
-use suzatary_lines::secretary::held_replica::{HeldReplica, NotAnAnswer, Sealing};
+use suzatary_lines::secretary::held_replica::{AskedAgain, HeldReplica, NotAnAnswer, Sealing};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_lines::secretary::own_line::OwnLine;
@@ -487,7 +487,7 @@ fn medians(steps: &[suzatary_lines::parts::Parts]) -> String {
 }
 
 /// A post from a device, of a box that keeps no uploads.
-struct OnADevice;
+pub(crate) struct OnADevice;
 
 impl suzatary_lines::secretary::lines_rule::World for OnADevice {
     fn now(&self) -> prodrome_core::literal::Datetime {
@@ -931,6 +931,19 @@ fn full_post_measured(lines: &InMemory, shape: &str) {
 
 /// A key seed of its own for each `n`.
 /// A question on the default conversation.
+/// Each ruling by the name of the own line it is of.
+fn names(
+    rulings: Vec<(&OwnLine, suzatary_lines::secretary::held_replica::Ruling)>,
+) -> Vec<(
+    prodrome_core::event::Hash,
+    suzatary_lines::secretary::held_replica::Ruling,
+)> {
+    rulings
+        .into_iter()
+        .map(|(own, ruling)| (own.name().clone(), ruling))
+        .collect()
+}
+
 fn say(text: &str) -> Sealing {
     Sealing::Say {
         conversation: DEFAULT.clone(),
@@ -981,7 +994,10 @@ fn a_line_the_rows_hold_has_no_ruling_whatever_its_answer() {
             &Fixed(AtomicU8::new(23)),
         )
         .expect("sealed");
-    assert_eq!(tab.rulings(&DEFAULT), [(name.clone(), Ruling::Unsent)]);
+    assert_eq!(
+        names(tab.rulings(&DEFAULT)),
+        [(name.clone(), Ruling::Unsent)]
+    );
     // The box takes it, and its answer never reaches the tab.
     handed_over(&lines, &owned[0].node, &ada);
     tab.piece(
@@ -991,7 +1007,120 @@ fn a_line_the_rows_hold_has_no_ruling_whatever_its_answer() {
     )
     .expect("a piece");
     let _ = tab.land();
-    assert_eq!(tab.rulings(&DEFAULT), [], "the landed rows hold it");
+    assert_eq!(names(tab.rulings(&DEFAULT)), [], "the landed rows hold it");
+}
+
+/// A line the box refused for good leaves the tab's transcript at once, as it leaves the
+/// skeleton's outlines: the reading is the box's again, and the words stay on the ruling. Before,
+/// its print stayed among the prints every transcript reads, so a refused question still read as
+/// a turn until the device evicted it.
+#[test]
+fn a_refused_own_line_leaves_the_tab_s_transcript() {
+    use suzatary_lines::secretary::held_replica::{Ruling, Whole};
+    use suzatary_store::replica::writes::{Answer, Refusal};
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let mut tab =
+        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let held: Vec<_> = lines.lines.objects().expect("held").into_iter().collect();
+    tab.lines.hold(
+        held.iter()
+            .map(|(name, object)| (name.clone(), canonical_envelope(object).into_bytes()))
+            .collect(),
+        &[],
+    );
+    let ada = Actor::new("ada").expect("an actor");
+    let (_, name, _) = tab
+        .seal(
+            say("Is the zephyr permit due this week?"),
+            at(1),
+            &ada,
+            &Fixed(AtomicU8::new(29)),
+        )
+        .expect("sealed");
+    let turns = |tab: &mut HeldReplica| match tab.transcript(&DEFAULT) {
+        Some(Whole::Read(Ok(read))) => read.stored().turns.len(),
+        other => panic!("the tab reads {other:?}"),
+    };
+    assert_eq!(turns(&mut tab), 1, "the question reads at once");
+    let never = Answer::Refused {
+        kind: Refusal::Final,
+        reason: "never".to_owned(),
+    };
+    let _ = tab.answered(vec![(name.clone(), never)]);
+    assert_eq!(turns(&mut tab), 0, "the refused question is no turn");
+    assert!(
+        matches!(names(tab.rulings(&DEFAULT)).as_slice(), [(n, Ruling::Refused { .. })] if *n == name),
+        "its words stay on its ruling"
+    );
+}
+
+/// An edit's question refused for good gives its words back as an edit of the question it edited,
+/// so the composer takes them back in its editing mode and Send seals a fresh pair.
+#[test]
+fn a_refused_edit_gives_its_words_back_as_an_edit() {
+    use suzatary_lines::secretary::held_replica::Ruling;
+    use suzatary_store::replica::writes::{Answer, Refusal};
+    let lines = InMemory::default();
+    let opened = Entry::Opened {
+        at: at(0),
+        title: Words::kept("Secretary".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: Kind::Default,
+    };
+    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
+    let mut tab =
+        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
+    let ada = Actor::new("ada").expect("an actor");
+    let (_, asked, _) = tab
+        .seal(
+            say("Is the zephyr permit due?"),
+            at(1),
+            &ada,
+            &Fixed(AtomicU8::new(31)),
+        )
+        .expect("sealed");
+    let (owned, again, _) = tab
+        .seal(
+            Sealing::Again {
+                conversation: DEFAULT.clone(),
+                question: asked.clone(),
+                how: AskedAgain::Edit(suzatary_lines::secretary::held_replica::Question {
+                    text: "Is the zephyr permit due this week?".to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                    seat: suzatary_signatures::signatures::Seat::Device,
+                }),
+                seen: vec![asked.clone()],
+            },
+            at(2),
+            &ada,
+            &Fixed(AtomicU8::new(37)),
+        )
+        .expect("sealed");
+    let edited = owned
+        .iter()
+        .find(|own| own.node.rests_on().contains(&again))
+        .map(|own| own.node.name().clone())
+        .expect("the edit's question");
+    let never = Answer::Refused {
+        kind: Refusal::Final,
+        reason: "never".to_owned(),
+    };
+    let _ = tab.answered(vec![(edited.clone(), never)]);
+    let ruled = names(tab.rulings(&DEFAULT));
+    assert!(
+        ruled.iter().any(|(name, ruling)| *name == edited
+            && matches!(ruling, Ruling::Refused { words: suzatary_lines::secretary::own_line::Words::Edit { question, text, .. }, .. }
+                if *question == asked && text == "Is the zephyr permit due this week?")),
+        "{ruled:?}"
+    );
 }
 
 /// A refused topic is defined by what the device wrote: a conversation whose opening is one of its
@@ -1303,8 +1432,7 @@ proptest::proptest! {
         let _ = reloaded.take_own(&kept);
         let _ = reloaded.acted(&acted);
         // Ruled on the topic's page, or on the page that begins topics where its opening was refused.
-        let ruled: BTreeSet<_> = reloaded
-            .rulings(&topic)
+        let ruled: BTreeSet<_> = names(reloaded.rulings(&topic))
             .into_iter()
             .chain(reloaded.refused_elsewhere())
             .map(|(name, _)| name)
@@ -1335,6 +1463,9 @@ enum Step {
     Settle,
     /// The row read, a question sealed over what the tab holds, and kept in the row.
     Seal,
+    /// The row read, the latest question either tab sealed asked again over itself, in new
+    /// words (`true`) or as it was, and kept in the row.
+    Again(bool),
     /// The box refuses the tab's first unsent question for good, and the tab keeps the answer; the
     /// person acts on it at once (`true`), or not yet.
     Refuse(bool),
@@ -1356,6 +1487,7 @@ fn step() -> impl proptest::strategy::Strategy<Value = (usize, Step)> {
         prop_oneof![
             Just(Step::Settle),
             Just(Step::Seal),
+            any::<bool>().prop_map(Step::Again),
             any::<bool>().prop_map(Step::Refuse),
             any::<bool>().prop_map(Step::Take),
             Just(Step::Land),
@@ -1368,12 +1500,14 @@ fn step() -> impl proptest::strategy::Strategy<Value = (usize, Step)> {
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
 
-    /// For any order of two tabs' reads, seals, takings (the answer lost or not), refusals,
+    /// For any order of two tabs' reads, seals (questions, regenerates and edits), takings (the
+    /// answer lost or not), refusals,
     /// landings and acts over one row: no record stays in the row whose line the rows hold once
     /// its keys are held, whatever answer it carries; no record let go as refused is posted again
-    /// by either tab; the box takes every line a tab hands over whose parents it holds; and every
-    /// line a tab seals rests on parents none of which lies beneath another, once the box holds
-    /// them all.
+    /// by either tab; every refusal for good with words the person has not acted on stays ruled
+    /// and is let go by no settle; the box takes every line a tab hands over whose parents it
+    /// holds; and every line a tab seals rests on parents none of which lies beneath another, once
+    /// the box holds them all.
     #[test]
     fn two_tabs_over_one_row_keep_no_taken_record_and_post_no_let_go_one(
         steps in proptest::collection::vec(step(), 1..24),
@@ -1472,7 +1606,30 @@ fn two_tabs(
         match step {
             Step::Settle => {
                 read(&mut tabs[t], &row, &acted_row);
+                // Every refusal for good with words the person has not acted on stays ruled.
+                let worded: Vec<OwnLine> = tabs[t]
+                    .own()
+                    .refusals()
+                    .into_iter()
+                    .filter(|(own, _, _)| own.words().is_some() && !tabs[t].holds(own.name()))
+                    .filter(|(own, _, _)| !acted_row.contains(own.name()))
+                    .map(|(own, _, _)| own.clone())
+                    .collect();
+                let ruled = names(tabs[t].rulings(&DEFAULT));
                 let released = tabs[t].releasable(&told);
+                for own in &worded {
+                    use suzatary_lines::secretary::held_replica::Ruling;
+                    proptest::prop_assert!(
+                        ruled.iter().any(|(name, ruling)| name == own.name()
+                            && matches!(ruling, Ruling::Refused { .. })),
+                        "a refusal with words not acted on is not ruled"
+                    );
+                    proptest::prop_assert!(
+                        !released.prints.contains(own.print())
+                            && !released.refused.contains(own.name()),
+                        "a refusal with words not acted on is let go"
+                    );
+                }
                 acted_row.extend(released.refused.iter().cloned());
                 let_go.extend(released.refused);
                 row = Writes::of(
@@ -1495,6 +1652,41 @@ fn two_tabs(
                 read(&mut tabs[t], &row, &acted_row);
                 if let Ok((owned, _, _)) = tabs[t].seal(
                     say(&format!("question {n}")),
+                    at(1 + u32::from(seq)),
+                    &ada,
+                    &Fixed(AtomicU8::new(seq.wrapping_mul(7).wrapping_add(3))),
+                ) {
+                    sealed.extend(owned.iter().take(1).map(|own| own.node.clone()));
+                    row.apply(&owned);
+                }
+            }
+            Step::Again(edit) => {
+                read(&mut tabs[t], &row, &acted_row);
+                let Some(asked) = sealed
+                    .iter()
+                    .rev()
+                    .find(|own| own.drawn_on() == own.name())
+                    .map(|own| own.name().clone())
+                else {
+                    continue;
+                };
+                let how = if edit {
+                    AskedAgain::Edit(suzatary_lines::secretary::held_replica::Question {
+                        text: format!("edited {n}"),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                        seat: suzatary_signatures::signatures::Seat::Device,
+                    })
+                } else {
+                    AskedAgain::Regenerate
+                };
+                if let Ok((owned, _, _)) = tabs[t].seal(
+                    Sealing::Again {
+                        conversation: DEFAULT.clone(),
+                        question: asked.clone(),
+                        how,
+                        seen: vec![asked],
+                    },
                     at(1 + u32::from(seq)),
                     &ada,
                     &Fixed(AtomicU8::new(seq.wrapping_mul(7).wrapping_add(3))),
@@ -1544,10 +1736,16 @@ fn two_tabs(
                     .into_iter()
                     .find(|line| line.rests_on().iter().all(|p| held.contains(p)));
                 if let Some(line) = takeable {
-                    handed_over(&lines, &line, &ada);
-                    if !lost {
-                        let (moved, _) =
-                            tabs[t].answered(vec![(line.name().clone(), Answer::Taken)]);
+                    // The door's answer: taken (and that answer lost, or not), or refused by the
+                    // rule, as a regenerate of a question with no answer is.
+                    let answers =
+                        crate::asked_again::handed(&lines, std::slice::from_ref(&line), &ada);
+                    let taken = answers.iter().all(|(_, answer)| *answer == Answer::Taken);
+                    if !taken {
+                        told.insert(line.print().to_owned());
+                    }
+                    if !lost || !taken {
+                        let (moved, _) = tabs[t].answered(answers);
                         row.apply(&moved);
                     }
                 }
@@ -1576,8 +1774,7 @@ fn two_tabs(
             }
             Step::Act => {
                 use suzatary_lines::secretary::held_replica::Ruling;
-                let names: BTreeSet<_> = tabs[t]
-                    .rulings(&DEFAULT)
+                let names: BTreeSet<_> = names(tabs[t].rulings(&DEFAULT))
                     .into_iter()
                     .filter(|(_, r)| matches!(r, Ruling::Refused { .. }))
                     .map(|(name, _)| name)

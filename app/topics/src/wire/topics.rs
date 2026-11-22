@@ -332,9 +332,12 @@ pub struct ConversationPayload {
     pub again: Option<usize>,
 }
 
-/// An own line the box does not hold, by name, and the box's last ruling on it.
+/// An own line the box does not hold, and the box's last ruling on it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Waiting {
+    /// The line the ruling is drawn on: the own line's name, or for an `Again`, which says no turn,
+    /// the question it asks again. An `Again` gives no words back, so a refusal for good names its
+    /// own line, which is what acting on it names.
     pub line: String,
     pub ruling: Ruling,
 }
@@ -370,6 +373,16 @@ pub enum Given {
     },
     /// A title, taken back where a title is edited.
     Title { title: String },
+    /// An edit's question whole, as [`Given::Question`], and the line of the question it edits:
+    /// taken back as an edit of that question, so Send seals a fresh edit.
+    Edit {
+        question: String,
+        text: String,
+        references: Vec<String>,
+        files: Vec<AttachmentRow>,
+        #[ts(type = "unknown[]")]
+        attachments: Vec<serde_json::Value>,
+    },
 }
 
 impl Ruling {
@@ -399,6 +412,21 @@ impl Ruling {
                             .collect(),
                     },
                     Words::Title(title) => Given::Title { title },
+                    Words::Edit {
+                        question,
+                        text,
+                        references,
+                        attachments,
+                    } => Given::Edit {
+                        question: question.as_str().to_owned(),
+                        text,
+                        references: references.iter().map(ToString::to_string).collect(),
+                        files: attachments.iter().map(AttachmentRow::from).collect(),
+                        attachments: attachments
+                            .iter()
+                            .filter_map(|a| serde_json::to_value(a).ok())
+                            .collect(),
+                    },
                 },
             },
         }

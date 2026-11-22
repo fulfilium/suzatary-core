@@ -28,8 +28,7 @@ use crate::part::Who;
 use crate::places::Place;
 use crate::refused;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Outcome, Question, Reach, Said, Scroll, Secret, Window,
-    answered, read,
+    self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, Window, answered, read,
 };
 use crate::slices::Slices;
 use crate::zone;
@@ -83,8 +82,8 @@ pub enum Hold {
 #[ts(rename = "ConversationAsk")]
 pub enum Ask {
     Said(Box<Spoken>),
-    /// A regenerate.
-    Round,
+    /// A regenerate sealed in the tab.
+    Regenerate,
     /// A stop sealed in the tab.
     Stop,
     Rename {
@@ -100,13 +99,13 @@ pub enum Ask {
     Search(chats::Asking),
 }
 
-/// A question as said, handed back to the composer if the box refuses it.
+/// A question as said, handed back to the composer, as an edit where it was one, if the seal fails.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub struct Spoken {
     pub text: String,
     pub references: Vec<String>,
     pub files: Vec<String>,
-    pub edit: bool,
+    pub mode: composer::Mode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -384,6 +383,15 @@ fn running(m: &Model) -> bool {
     payload(m).is_some_and(|p| p.state != ConversationState::Idle)
 }
 
+/// The question the box would ask again in the composer, named by its line: what ↑ and Edit do.
+fn edit(m: &mut Model) -> Vec<Effect> {
+    let Some((q, line)) = again(m).and_then(|q| Some((q.clone(), line_of(m, q.index)?))) else {
+        return Vec::new();
+    };
+    let outs = m.composer.edit(&q, line);
+    composed(m, outs)
+}
+
 /// The question the box would ask again: what ↑ and Edit bring back.
 fn again(m: &Model) -> Option<&TurnRow> {
     let p = payload(m)?;
@@ -533,14 +541,8 @@ impl Program for Conversation {
                 vec![Effect::Scroll { to: Scroll::End }]
             }
             Msg::Stop => stop(m),
-            Msg::Regenerate => vec![regenerate(m)],
-            Msg::Edit => match again(m).cloned() {
-                Some(q) => {
-                    let outs = m.composer.edit(&q);
-                    composed(m, outs)
-                }
-                None => Vec::new(),
-            },
+            Msg::Regenerate => regenerate(m),
+            Msg::Edit => edit(m),
             Msg::Erasing(turn) => {
                 m.erasing = turn;
                 Vec::new()
@@ -637,13 +639,8 @@ fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
     for t in then {
         match t {
             composer::Then::Stop => effects.extend(stop(m)),
-            composer::Then::Up => {
-                if let Some(q) = again(m).cloned() {
-                    let more = m.composer.edit(&q);
-                    effects.extend(composed(m, more));
-                }
-            }
-            composer::Then::Send(sent) => effects.extend(say(m, sent)),
+            composer::Then::Up => effects.extend(edit(m)),
+            composer::Then::Send(sent) => effects.extend(say(m, &sent)),
         }
     }
     effects
@@ -664,44 +661,45 @@ fn rename(m: &mut Model, title: String) -> Effect {
     }
 }
 
-fn say(m: &mut Model, sent: composer::Sent) -> Vec<Effect> {
+fn say(m: &mut Model, sent: &composer::Sent) -> Vec<Effect> {
     m.anchor = match m.anchor {
         Anchor::Asking(n) => Anchor::Asking(n + 1),
         Anchor::Newest | Anchor::Question(_) | Anchor::Drifted => Anchor::Asking(1),
     };
-    let edit = sent.mode == composer::Mode::Editing;
     let spoken = Spoken {
         text: sent.text.clone(),
         references: sent.references.clone(),
         files: sent.files.iter().map(|f| f.id.clone()).collect(),
-        edit,
+        mode: sent.mode.clone(),
     };
     m.sent = Some(sent.text.clone());
-    if !edit {
-        // Sealed in the tab and drawn at once; the box's acceptance of the line is its answer.
-        return vec![Effect::Core {
-            ask: Ask::Said(Box::new(spoken)),
-            question: runtime::Core::Line {
-                line: runtime::Sealing::Say {
-                    conversation: m.id.clone(),
-                    question: runtime::Asking::of(&sent),
-                },
-            },
-        }];
-    }
-    vec![Effect::Act {
-        ask: Ask::Said(Box::new(spoken)),
-        act: Act::Edit {
-            question: Question {
-                conversation: m.id.clone(),
-                after: u32::try_from(total(m)).unwrap_or(u32::MAX),
-                text: sent.text,
-                references: sent.references,
-                files: sent.files,
-            },
+    // Sealed in the tab and drawn at once; the box's acceptance of the line is its answer. An edit
+    // asks the question the person chose to edit again, in these words.
+    let asking = runtime::Asking::of(sent);
+    let line = match &sent.mode {
+        composer::Mode::Asking => runtime::Sealing::Say {
+            conversation: m.id.clone(),
+            question: asking,
         },
-        secret: Secret::None,
-        told: runtime::Told::Held,
+        composer::Mode::Editing { question } => runtime::Sealing::Again {
+            conversation: m.id.clone(),
+            question: question.clone(),
+            how: runtime::AskedAgain::Edit {
+                // The files no upload answered in this composer are the question's own, kept.
+                keeps: sent
+                    .files
+                    .iter()
+                    .filter(|file| !asking.files.iter().any(|filed| filed.id() == file.id))
+                    .map(|file| file.id.clone())
+                    .collect(),
+                say: asking,
+            },
+            seen: drawn_lines(m),
+        },
+    };
+    vec![Effect::Core {
+        ask: Ask::Said(Box::new(spoken)),
+        question: runtime::Core::Line { line },
     }]
 }
 
@@ -743,16 +741,29 @@ fn acted(lines: Vec<String>) -> Effect {
     }
 }
 
-fn regenerate(m: &Model) -> Effect {
-    Effect::Act {
-        ask: Ask::Round,
-        act: Act::Regenerate {
-            conversation: m.id.clone(),
-            after: u32::try_from(total(m)).unwrap_or(u32::MAX),
-        },
-        secret: Secret::None,
-        told: runtime::Told::Held,
-    }
+/// The lines of the turns drawn: what a rewind rests on, so it never sets aside a line the person
+/// did not see.
+fn drawn_lines(m: &Model) -> Vec<String> {
+    payload(m).map(|p| p.lines.clone()).unwrap_or_default()
+}
+
+/// The question the box would ask again, asked again as it was, by its line.
+fn regenerate(m: &Model) -> Vec<Effect> {
+    again(m)
+        .and_then(|q| line_of(m, q.index))
+        .map(|question| Effect::Core {
+            ask: Ask::Regenerate,
+            question: runtime::Core::Line {
+                line: runtime::Sealing::Again {
+                    conversation: m.id.clone(),
+                    question,
+                    how: runtime::AskedAgain::Regenerate,
+                    seen: drawn_lines(m),
+                },
+            },
+        })
+        .into_iter()
+        .collect()
 }
 
 fn row<'a>(m: &'a Model, key: &card::Key) -> Option<&'a ProposalRow> {
@@ -1184,11 +1195,8 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
         ) => None,
     };
     let refused = match &ask {
-        Ask::Said(spoken) if !spoken.edit => sealed(),
-        Ask::Stop => sealed(),
-        Ask::Said(_)
-        | Ask::Round
-        | Ask::Acted
+        Ask::Said(_) | Ask::Stop | Ask::Regenerate => sealed(),
+        Ask::Acted
         | Ask::Rename { .. }
         | Ask::Forget(_)
         | Ask::Erase
@@ -1199,7 +1207,7 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
     };
     match ask {
         Ask::Said(spoken) => answered_said(m, *spoken, refused),
-        Ask::Round | Ask::Stop | Ask::Erase | Ask::Acted => refused
+        Ask::Regenerate | Ask::Stop | Ask::Erase | Ask::Acted => refused
             .map(|words| Effect::Toast { words })
             .into_iter()
             .collect(),
@@ -1843,8 +1851,8 @@ fn transcript(m: &Model) -> Node<Msg> {
     ] }
 }
 
-/// The answer to a question said: its line kept in the tab (or the box's act taken), or refused
-/// with why, its words back where none were typed since.
+/// The answer to a question said or edited: its line kept in the tab, or refused with why, its
+/// words back where none were typed since.
 fn answered_said(m: &mut Model, spoken: Spoken, refused: Option<String>) -> Vec<Effect> {
     if let Some(e) = refused {
         m.sent = None;
@@ -1858,22 +1866,14 @@ fn answered_said(m: &mut Model, spoken: Spoken, refused: Option<String>) -> Vec<
             references: spoken.references,
             files: Vec::new(),
             attachments: Vec::new(),
-            mode: if spoken.edit {
-                composer::Mode::Editing
-            } else {
-                composer::Mode::Asking
-            },
+            mode: spoken.mode,
         });
         let mut effects = composed(m, outs);
         effects.push(Effect::Toast { words: e });
         return effects;
     }
     // A question kept in the tab: its words leave the box now.
-    let outs = if spoken.edit {
-        Vec::new()
-    } else {
-        m.composer.sealed()
-    };
+    let outs = m.composer.sealed();
     let mut effects = composed(m, outs);
     match payload_turn(m, &spoken.text) {
         Some(turn) if m.sent.as_deref() == Some(&spoken.text) => {
@@ -1952,6 +1952,16 @@ mod tests {
 
     /// [`window_waiting`] in conversation state `state`, its last turn queued where it is not idle.
     fn window_in(turns: usize, waiting: &serde_json::Value, state: &str) -> Msg {
+        window_again(turns, waiting, state, &serde_json::Value::Null)
+    }
+
+    /// [`window_in`], `again` the turn the box would ask again.
+    fn window_again(
+        turns: usize,
+        waiting: &serde_json::Value,
+        state: &str,
+        again: &serde_json::Value,
+    ) -> Msg {
         let rows: Vec<_> = (0..turns)
             .map(|i| json!({"index": i, "text": format!("t{i}"), "at": "", "attempt": "current", "gone": null,
                 "who": "person", "references": [], "attachments": [], "queued": state != "idle" && i + 1 == turns}))
@@ -1961,7 +1971,7 @@ mod tests {
             .collect();
         let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
             "lines": (0..turns).map(|i| format!("{i:064x}")).collect::<Vec<_>>(),
-            "proposals": [], "unplaced": [], "waiting": waiting, "state": state, "first": 0, "total": turns, "again": null, "rounds": rounds}, "html": {}, "drawn": []}});
+            "proposals": [], "unplaced": [], "waiting": waiting, "state": state, "first": 0, "total": turns, "again": again, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Window,
             reading: Reading::Val {
@@ -2149,6 +2159,153 @@ mod tests {
         );
         let (_, effects) = drawn_whole(&mut rt, Msg::Dismissed(nine.clone()));
         assert_eq!(acts(&effects), [vec![nine]], "dismissed is acted on");
+    }
+
+    /// Every line a page asks the core to seal.
+    fn sealings(effects: &[Effect]) -> Vec<runtime::Sealing> {
+        effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Core {
+                    question: runtime::Core::Line { line },
+                    ..
+                } => Some(line.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The names of the lines of `turns` turns, as [`window_in`] draws them.
+    fn drawn(turns: usize) -> Vec<String> {
+        (0..turns).map(|i| format!("{i:064x}")).collect()
+    }
+
+    /// A rewind names the question the person chose by its line, never "the last one", and rests
+    /// on the lines drawn: an edit begun on turn 1 asks turn 1 again in the new words, though the
+    /// conversation moved on before Send; a regenerate asks the turn the box would ask again, as
+    /// it was.
+    #[test]
+    fn a_rewind_names_the_question_the_person_chose() {
+        let mut rt = page();
+        rt.step(window_again(2, &json!([]), "idle", &json!(1)));
+        rt.step(Msg::Edit);
+        rt.step(window_again(3, &json!([]), "idle", &json!(2)));
+        rt.step(Msg::Composer(composer::Ev::Typed(
+            "t1, put better".to_owned(),
+        )));
+        let (_, effects) = rt.step(Msg::Composer(composer::Ev::Send));
+        assert_eq!(
+            sealings(&effects),
+            [runtime::Sealing::Again {
+                conversation: "c".to_owned(),
+                question: format!("{:064x}", 1),
+                how: runtime::AskedAgain::Edit {
+                    say: runtime::Asking {
+                        text: "t1, put better".to_owned(),
+                        references: Vec::new(),
+                        files: Vec::new(),
+                    },
+                    keeps: Vec::new(),
+                },
+                seen: drawn(3),
+            }]
+        );
+
+        let mut rt = page();
+        rt.step(window_again(3, &json!([]), "idle", &json!(2)));
+        let (_, effects) = rt.step(Msg::Regenerate);
+        assert_eq!(
+            sealings(&effects),
+            [runtime::Sealing::Again {
+                conversation: "c".to_owned(),
+                question: format!("{:064x}", 2),
+                how: runtime::AskedAgain::Regenerate,
+                seen: drawn(3),
+            }]
+        );
+    }
+
+    /// An edit's question the box refused comes back as an edit of the question it edited: in the
+    /// composer's editing mode, so Send seals a fresh `Again` and its question, never a plain one.
+    #[test]
+    fn a_refused_edit_comes_back_as_an_edit() {
+        let edit = json!({"type": "Edit", "question": format!("{:064x}", 1), "text": "t1, put better",
+            "references": [], "files": [], "attachments": []});
+        let waiting = json!([{"line": format!("{:064x}", 9), "ruling": {"type": "Refused", "why": "say something", "words": edit}}]);
+        let mut rt = page();
+        rt.step(Msg::Host(Box::new(Input::Held {
+            ask: Hold::Draft,
+            reading: Reading::Val {
+                v: Answer::Done {
+                    body: Text::printed(&json!({"text": "", "others": []})),
+                },
+            },
+            behind: None,
+        })));
+        drawn_whole(&mut rt, window_waiting(2, &waiting));
+        assert!(rt.model().composer.editing(), "taken back as an edit");
+        let (_, effects) = rt.step(Msg::Composer(composer::Ev::Send));
+        assert!(
+            matches!(sealings(&effects).as_slice(), [runtime::Sealing::Again { question, how: runtime::AskedAgain::Edit { .. }, .. }] if *question == format!("{:064x}", 1)),
+            "{:?}",
+            sealings(&effects)
+        );
+    }
+
+    /// A window of two turns, the box offering to ask turn 1 again, which holds `files` files.
+    fn window_with_files(files: usize) -> Msg {
+        let attachments: Vec<_> = (0..files)
+            .map(|f| json!({"id": format!("{f:064x}"), "media_type": "image/jpeg", "name": format!("f{f}.jpg"), "private": ""}))
+            .collect();
+        let rows: Vec<_> = (0..2)
+            .map(|i| json!({"index": i, "text": format!("t{i}"), "at": "", "attempt": "current", "gone": null,
+                "who": "person", "references": [], "attachments": if i == 1 { json!(attachments) } else { json!([]) }, "queued": false}))
+            .collect();
+        let rounds: Vec<_> = (0..2)
+            .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
+            .collect();
+        let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
+            "lines": drawn(2), "proposals": [], "unplaced": [], "waiting": [], "state": "idle", "first": 0, "total": 2, "again": 1, "rounds": rounds}, "html": {}, "drawn": []}});
+        Msg::Host(Box::new(Input::Held {
+            ask: Hold::Window,
+            reading: Reading::Val {
+                v: Answer::Done {
+                    body: Text::printed(&body),
+                },
+            },
+            behind: None,
+        }))
+    }
+
+    proptest! {
+        /// An edit keeps the files of the question it edits unless the person removes them: for
+        /// any turn's files and any edit of its words, what is sealed keeps each file not removed,
+        /// in the turn's order.
+        #[test]
+        fn an_edit_seals_the_question_s_files_less_those_removed(
+            files in 0usize..4,
+            removed in proptest::collection::btree_set(0usize..4, 0..4),
+            words in proptest::sample::select(vec!["", "t1, put better"]),
+        ) {
+            let mut rt = page();
+            rt.step(window_with_files(files));
+            rt.step(Msg::Edit);
+            for f in &removed {
+                rt.step(Msg::Composer(composer::Ev::Unfiled(format!("{f:064x}"))));
+            }
+            rt.step(Msg::Composer(composer::Ev::Typed(words.to_owned())));
+            let (_, effects) = rt.step(Msg::Composer(composer::Ev::Send));
+            let kept: Vec<String> = (0..files).filter(|f| !removed.contains(f)).map(|f| format!("{f:064x}")).collect();
+            let sealed = sealings(&effects);
+            if words.is_empty() && kept.is_empty() {
+                prop_assert!(sealed.is_empty(), "nothing to send seals nothing");
+            } else {
+                let [runtime::Sealing::Again { how: runtime::AskedAgain::Edit { keeps, .. }, .. }] = sealed.as_slice() else {
+                    return Err(TestCaseError::fail(format!("one edit sealed: {sealed:?}")));
+                };
+                prop_assert_eq!(keeps, &kept);
+            }
+        }
     }
 
     fn scrolled(at: &str) -> Msg {

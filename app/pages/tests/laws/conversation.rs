@@ -83,7 +83,7 @@ fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
         Just(Msg::Renamed("A name".to_owned())),
         prop::option::of(Just("A name".to_owned())).prop_map(Msg::Named),
         prop::sample::select(vec!["", "zephyr"]).prop_map(|t| Msg::Searched(t.to_owned())),
-        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Said(Box::new(conversation::Spoken { text: "hello".to_owned(), references: Vec::new(), files: Vec::new(), edit: false })), answer })),
+        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Said(Box::new(conversation::Spoken { text: "hello".to_owned(), references: Vec::new(), files: Vec::new(), mode: composer::Mode::Asking })), answer })),
         (prop::sample::select(vec!["A name", "Another"]), outcome()).prop_map(move |(title, answer)| host(Input::Answered { ask: Ask::Rename { title: title.to_owned() }, answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Upload(n)), answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Keep(n)), answer })),

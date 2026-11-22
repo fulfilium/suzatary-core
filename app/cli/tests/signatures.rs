@@ -776,37 +776,6 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
         "the tapped secret was set exactly once"
     );
 
-    // A round asked again and an edit: each once. A turn a tab says is its line, taken once.
-    let asked = r.open("A morning");
-    let path = |verb: &str| format!("/api/secretary/conversations/{asked}/{verb}");
-    let _ = common::say(&r.running.base, &asked, "what changed");
-    r.settled(&asked);
-    let sessions = r.fakes.model.opened().len();
-    r.twice(&path("regenerate"), &serde_json::json!({}), 202);
-    r.settled(&asked);
-    r.twice(
-        &path("edit"),
-        &serde_json::json!({ "say": "what changed today" }),
-        202,
-    );
-    let reading = r.settled(&asked);
-    let turns: Vec<_> = reading["turns"]
-        .as_array()
-        .expect("turns")
-        .iter()
-        .map(|turn| turn["text"].as_str().unwrap_or_default().to_owned())
-        .collect();
-    assert_eq!(
-        turns,
-        ["what changed", "one", "two", "what changed today", "three"],
-        "each said, asked again and edited once: {reading}"
-    );
-    assert_eq!(
-        r.fakes.model.opened().len(),
-        sessions + 2,
-        "one fresh session for the regenerate and one for the edit"
-    );
-
     // A device card dismissed once.
     let mut card = common::act_signed(
         &r.url("/api/act/key"),
@@ -957,7 +926,6 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
         "secretary/conversations/{conversation}/erase" => {
             serde_json::json!({ "lines": ["a".repeat(64)] })
         }
-        "secretary/conversations/{conversation}/edit" => serde_json::json!({ "say": MARKER }),
         "secretary/conversations/{conversation}/proposals/{index}/tap" => {
             serde_json::json!({ "value": SECRET })
         }

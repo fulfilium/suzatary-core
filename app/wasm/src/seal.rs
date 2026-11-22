@@ -17,7 +17,7 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::store::Title;
-use suzatary_lines::secretary::held_replica::{Moved, NotSealed, Question, Sealing};
+use suzatary_lines::secretary::held_replica::{AskedAgain, Moved, NotSealed, Question, Sealing};
 use suzatary_lines::secretary::object_stores;
 use suzatary_lines::secretary::own_line::OwnLine;
 use suzatary_lines::wire::lines::{NodeHeader, ReceiptPayload};
@@ -82,6 +82,23 @@ enum Asked {
     Stop {
         conversation: String,
     },
+    /// The question named `question` asked again, `how`, over the lines named `seen`, those the
+    /// page drew.
+    Again {
+        conversation: String,
+        question: String,
+        how: How,
+        seen: Vec<String>,
+    },
+}
+
+/// How a question is asked again, as the page spells it: an edit's words and new files, and the
+/// files of the question it keeps, by id.
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", deny_unknown_fields)]
+enum How {
+    Regenerate,
+    Edit { say: Asking, keeps: Vec<String> },
 }
 
 /// A question as the page spells it.
@@ -149,8 +166,8 @@ struct Record {
     answer: Answer,
 }
 
-/// A line sealed: its move (as a [`Step`] reads), its name and its conversation. Free it once
-/// read.
+/// A line sealed: its move (as a [`Step`] reads), its name and its conversation, tagged
+/// `type: "Sealed"`. Free it once read.
 #[wasm_bindgen(getter_with_clone)]
 pub struct Sealed {
     /// The device's record of the own lines it joined in.
@@ -164,14 +181,51 @@ pub struct Sealed {
 }
 
 #[wasm_bindgen]
+impl Sealed {
+    /// The tag a seal's answer is matched by.
+    #[wasm_bindgen(getter = type)]
+    #[must_use]
+    #[expect(
+        clippy::unused_self,
+        reason = "a getter of the class's own constant tag"
+    )]
+    pub fn tag(&self) -> String {
+        "Sealed".to_owned()
+    }
+}
+
+/// Nothing sealed, for a cause a pull may cure, in that cause's sentence; tagged `type: "Unheld"`.
+#[wasm_bindgen(getter_with_clone)]
+pub struct Unheld {
+    /// The cause's sentence.
+    pub why: String,
+}
+
+#[wasm_bindgen]
+impl Unheld {
+    /// The tag a seal's answer is matched by.
+    #[wasm_bindgen(getter = type)]
+    #[must_use]
+    #[expect(
+        clippy::unused_self,
+        reason = "a getter of the class's own constant tag"
+    )]
+    pub fn tag(&self) -> String {
+        "Unheld".to_owned()
+    }
+}
+
+#[wasm_bindgen]
 impl Lines {
     /// `asked` (`{type: "Rename", conversation, title}`, `{type: "Open", title}`,
     /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}`,
-    /// `{type: "Begin", title, say: {text, references, files}}` or `{type: "Stop", conversation}`)
-    /// sealed by `actor` at `at` (ISO), its keys drawn from `entropy`, bytes the worker drew: kept
-    /// unsent and read at once, a begun topic's two lines in one move. Where nothing was sealed for
-    /// a cause a pull may cure (no lines pulled since a reset, a conversation not read here, or one
-    /// a line of which rests on a line not read here), that cause's sentence, a string; any other
+    /// `{type: "Begin", title, say: {text, references, files}}`, `{type: "Stop", conversation}` or
+    /// `{type: "Again", conversation, question, how, seen}`, `how` `{type: "Regenerate"}` or
+    /// `{type: "Edit", say: {text, references, files}, keeps: [<file id>]}`) sealed by
+    /// `actor` at `at` (ISO), its keys drawn from `entropy`, bytes the worker drew: kept unsent and
+    /// read at once, a begun topic's two lines and an edit's in one move: [`Sealed`]. Where nothing
+    /// was sealed for a cause a pull may cure (no lines pulled since a reset, a conversation not
+    /// read here, or one a line of which rests on a line not read here), [`Unheld`]; any other
     /// refusal throws.
     pub fn seal(
         &mut self,
@@ -220,6 +274,12 @@ impl Lines {
                 conversation: ConversationId::new(conversation)
                     .map_err(|e| refused(e.to_string()))?,
             },
+            Asked::Again {
+                conversation,
+                question,
+                how,
+                seen,
+            } => self.again(&conversation, &question, how, seen)?,
         };
         let at = datetime_of(parse_instant("at", at).map_err(refused)?)
             .map_err(|e| refused(format!("at: {e}")))?;
@@ -228,7 +288,10 @@ impl Lines {
         let (owned, name, moved) = match self.0.seal(sealing, at, &actor, &drawn) {
             Ok(sealed) => sealed,
             Err(why @ (NotSealed::Unpulled | NotSealed::Unknown(_) | NotSealed::Unclosed(_))) => {
-                return Ok(JsValue::from_str(&why.to_string()));
+                return Ok(Unheld {
+                    why: why.to_string(),
+                }
+                .into());
             }
             Err(e) => return Err(refused(e.to_string())),
         };
@@ -458,6 +521,54 @@ impl Lines {
             return Ok(None);
         }
         own_step(&owned, &moved).map(Some)
+    }
+}
+
+impl Lines {
+    /// An `Again` as the core seals it: an edit's kept files read off the question it edits, as the
+    /// turn holds them, before its new ones.
+    fn again(
+        &mut self,
+        conversation: &str,
+        question: &str,
+        how: How,
+        seen: Vec<String>,
+    ) -> Result<Sealing, JsError> {
+        let conversation = ConversationId::new(conversation).map_err(|e| refused(e.to_string()))?;
+        let question = Hash::new(question).map_err(|e| refused(format!("question: {e}")))?;
+        let how = match how {
+            How::Regenerate => AskedAgain::Regenerate,
+            How::Edit { say, keeps } => {
+                let mut edited = say.question()?;
+                let held = if keeps.is_empty() {
+                    Vec::new()
+                } else {
+                    self.0.files_of(&conversation, &question).ok_or_else(|| {
+                        refused("the question edited does not read on this device")
+                    })?
+                };
+                let kept = keeps
+                    .iter()
+                    .map(|id| {
+                        held.iter()
+                            .find(|file| file.id.as_str() == id)
+                            .cloned()
+                            .ok_or_else(|| refused(format!("no file {id} on the question edited")))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                edited.attachments.splice(0..0, kept);
+                AskedAgain::Edit(edited)
+            }
+        };
+        Ok(Sealing::Again {
+            conversation,
+            question,
+            how,
+            seen: seen
+                .into_iter()
+                .map(|name| Hash::new(name).map_err(|e| refused(format!("seen: {e}"))))
+                .collect::<Result<_, _>>()?,
+        })
     }
 }
 

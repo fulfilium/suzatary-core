@@ -1,9 +1,8 @@
 // Every act a page takes, in data: a closed vocabulary, what of the history holds each, and how each reaches the box.
 // A monotone act is sealed into the tab's own replica; every other is a request the box answers under its lock.
 
-import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
-import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseLines, fixProposal, forgetFact, regenerate, retractSummary, tapProposal } from "../wire/api"
-import { parsed } from "../chat/refs"
+import type { ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
+import { acknowledgeProposal, dismissProposal, dropSession, eraseLines, fixProposal, forgetFact, retractSummary, tapProposal } from "../wire/api"
 import type vouch from "./vouch"
 import type topics from "./topics"
 
@@ -17,22 +16,12 @@ export namespace asks {
     | { readonly type: "Acknowledge" }
     | { readonly type: "Drop"; readonly reason: string }
     | { readonly type: "Fix" }
-  // An edited question: the box's line for it is at or past `after`.
-  export type Question = {
-    readonly conversation: string
-    readonly after: number
-    readonly text: string
-    readonly references: readonly string[]
-    readonly files: readonly AttachmentRow[]
-  }
 
   export type Ask =
     | { readonly type: "Seal"; readonly chain: string; readonly event: string }
     // `at` makes the same write asked again after the history took the first a new ask.
     | { readonly type: "Topic"; readonly write: topics.Write; readonly at: string }
     | { readonly type: "Answer"; readonly at: Proposal; readonly answer: Answer }
-    | { readonly type: "Edit"; readonly question: Question }
-    | { readonly type: "Regenerate"; readonly conversation: string; readonly after: number }
     | { readonly type: "Rename"; readonly conversation: string; readonly title: string }
     | { readonly type: "Forget"; readonly fact: FactId }
     | { readonly type: "Retract"; readonly node: string }
@@ -46,8 +35,6 @@ export namespace asks {
       case "Seal": return alg.Seal(a)
       case "Topic": return alg.Topic(a)
       case "Answer": return alg.Answer(a)
-      case "Edit": return alg.Edit(a)
-      case "Regenerate": return alg.Regenerate(a)
       case "Rename": return alg.Rename(a)
       case "Forget": return alg.Forget(a)
       case "Retract": return alg.Retract(a)
@@ -72,8 +59,6 @@ export namespace asks {
       Seal: () => false,
       Topic: () => false,
       Answer: a => moved(a.at, read(a.at.conversation)?.proposals.find(p => p.index === a.at.index)),
-      Edit: ({ question: q }) => read(q.conversation)?.turns.some(t => t.index >= q.after && t.who === "person" && t.text === q.text) === true,
-      Regenerate: a => (read(a.conversation)?.total ?? 0) > a.after,
       Rename: a => read(a.conversation)?.title === a.title,
       Forget: () => false,
       Retract: () => false,
@@ -92,8 +77,6 @@ export namespace asks {
     Seal: () => null,
     Topic: () => null,
     Answer: a => a.at.conversation,
-    Edit: a => a.question.conversation,
-    Regenerate: a => a.conversation,
     Rename: a => a.conversation,
     Forget: () => null,
     Retract: () => null,
@@ -107,14 +90,10 @@ export namespace asks {
     : a.type === "Fix" ? fixProposal(c, i)
     : dropSession(c, i, a.reason)
 
-  const edited = ({ conversation: c, text, references, files }: Question): Promise<unknown> => editQuestion(c, text, parsed(references), files)
-
   // A secret's value travels beside the ask, never in it, so no key, set or log holds it. A seal, a topic and a rename
   // are the shell's, since each writes the tab's own replica.
   export const send = (a: Exclude<Ask, { type: "Seal" | "Topic" | "Rename" }>, secret?: string): Promise<unknown> =>
     a.type === "Answer" ? answered(a.at, a.answer, secret)
-    : a.type === "Edit" ? edited(a.question)
-    : a.type === "Regenerate" ? regenerate(a.conversation)
     : a.type === "Erase" ? eraseLines(a.conversation, a.lines)
     : a.type === "Retract" ? retractSummary(a.node)
     : forgetFact(a.fact)

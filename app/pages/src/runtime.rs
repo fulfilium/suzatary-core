@@ -231,6 +231,25 @@ pub(crate) enum Sealing {
     Begin { title: String, say: Asking },
     /// The answer of `conversation` stopped.
     Stop { conversation: String },
+    /// The question of `conversation` whose line is named `question` asked again, over the lines
+    /// named `seen`, those the page drew.
+    Again {
+        conversation: String,
+        question: String,
+        how: AskedAgain,
+        seen: Vec<String>,
+    },
+}
+
+/// How a page asks a question again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "type")]
+pub(crate) enum AskedAgain {
+    /// As it was.
+    Regenerate,
+    /// In the words the person edited it to, with its new files, and the question's own files it
+    /// keeps, by id.
+    Edit { say: Asking, keeps: Vec<String> },
 }
 
 /// A question as a tab seals it: its words, what it points at, and each file as the upload
@@ -248,6 +267,16 @@ pub(crate) struct Filed {
     #[ts(type = "unknown")]
     pub(crate) attachment: serde_json::Value,
     pub(crate) name: String,
+}
+
+impl Filed {
+    /// The upload's id, as its answer names it.
+    pub(crate) fn id(&self) -> &str {
+        self.attachment
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    }
 }
 
 impl Asking {
@@ -620,15 +649,6 @@ pub(crate) enum Act {
         at: Asked,
         answer: Answering,
     },
-    /// The last question replaced (`POST …/edit`).
-    Edit {
-        question: Question,
-    },
-    /// The last round asked again (`POST …/regenerate`).
-    Regenerate {
-        conversation: String,
-        after: u32,
-    },
     Rename {
         conversation: String,
         title: String,
@@ -701,16 +721,6 @@ pub(crate) enum Answering {
 pub(crate) struct Endorsement {
     pub(crate) key: String,
     pub(crate) signature: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub(crate) struct Question {
-    pub(crate) conversation: String,
-    pub(crate) after: u32,
-    pub(crate) text: String,
-    pub(crate) references: Vec<String>,
-    /// Already kept on the box.
-    pub(crate) files: Vec<suzatary_topics::wire::topics::AttachmentRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

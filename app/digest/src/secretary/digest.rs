@@ -183,7 +183,12 @@ impl Shape {
     pub fn of(lines: &[Placed<'_>], opened: &BTreeMap<Hash, Entry>) -> Result<Self, Cycle> {
         let taints = taints(lines, opened);
         let (carries, leaf_of) = leaves_of(lines);
-        let order = line_order(lines, &carries)?;
+        // An edit's `Again` nothing takes up reads as nothing, here as in the transcript.
+        let inert = suzatary_lines::secretary::transcript::inert_edits(lines);
+        let order: Vec<_> = line_order(lines, &carries)?
+            .into_iter()
+            .filter(|name| !inert.contains(name))
+            .collect();
         let leaves = order
             .iter()
             .enumerate()

@@ -397,32 +397,6 @@ pub struct PostedObjects {
     pub keys: std::collections::BTreeMap<String, Vec<String>>,
 }
 
-/// `POST …/edit`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(deny_unknown_fields)]
-pub struct Saying {
-    pub say: String,
-    /// In its one text form (`todo:life/x`).
-    #[serde(default)]
-    #[ts(as = "Option<Vec<String>>", optional)]
-    pub references: Vec<suzatary_base::reference::Reference>,
-    #[serde(default)]
-    #[ts(as = "Option<Vec<PickedFile>>", optional)]
-    pub attachments: Vec<PickedFile>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(deny_unknown_fields)]
-pub struct PickedFile {
-    /// 64 hex.
-    #[ts(as = "String")]
-    pub id: suzatary_held::attachment::AttachmentId,
-    /// `""` for a photo.
-    #[serde(default)]
-    #[ts(as = "Option<String>", optional)]
-    pub name: String,
-}
-
 /// `POST /api/secretary/attachments`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -1025,7 +999,6 @@ fn bodies(visit: &mut impl TypeVisitor) {
     visit.visit::<Authoring>();
     visit.visit::<WrittenName>();
     visit.visit::<Erasing>();
-    visit.visit::<Saying>();
     visit.visit::<Uploading>();
     visit.visit::<Tapping>();
     visit.visit::<Reasoning>();
@@ -1172,7 +1145,6 @@ mod tests {
                 "{extra}: {refused:?}"
             );
         }
-        let hash = "a".repeat(64);
         reads::<PostedObjects>(&serde_json::json!({"objects": ["Created(...)"]}));
         reads::<Authoring>(&serde_json::json!({"update": {"todo": "t", "body": "b", "note": "n"}}));
         reads::<Authoring>(&serde_json::json!({"confirm": {"todo": "t"}}));
@@ -1180,8 +1152,6 @@ mod tests {
             "body": "b", "category": "home", "rationale": "r",
             "priority": {"how": "flat", "percent": 75},
         }}));
-        reads::<Saying>(&serde_json::json!({"say": "s"}));
-        reads::<PickedFile>(&serde_json::json!({"id": hash}));
         reads::<Uploading>(&serde_json::json!({"file": "AAAA", "private": true}));
         reads::<Tapping>(&serde_json::json!({"note": "n", "always": true}));
         reads::<Endorsing>(&serde_json::json!({"key": "k", "signature": "s"}));

@@ -72,9 +72,14 @@ export class Proposals extends ObjectStore {
 /** The lines a tab holds, each print decoded once, read by what moved since the last reading. */
 export class Lines {
   constructor();
-  /** A line sealed as this tab's, unsent, and read at once; or, where a pull may cure what kept it from being sealed, that cause's sentence. */
-  seal(asked: string, at: string, actor: string, entropy: Uint8Array): (Step & { readonly name: string; readonly conversation: string }) | string;
-  /** The device's record of own lines, `[{literal, keys, answer}]`, taken: `{moved, unread}`. */
+  /** A line sealed as this tab's, unsent, and read at once (`Sealed`); or, where a pull may cure what kept it from being sealed, that cause's sentence (`Unheld`). */
+  seal(
+    asked: string,
+    at: string,
+    actor: string,
+    entropy: Uint8Array,
+  ): (Step & { readonly type: "Sealed"; readonly name: string; readonly conversation: string }) | { readonly type: "Unheld"; readonly why: string; free(): void };
+  /** The device's record of own lines, `[{literal, keys, answer}]`, taken: `{moved, unread, fresh}`. */
   take_own(records: string): string;
   own_taken(): string;
   answer(name: string): string;
@@ -88,7 +93,7 @@ export class Lines {
   waiting(): string;
   /** The person acted on the refusals of the own lines `[<name>]`: what it moved. */
   acted(names: string): string;
-  /** `[<print>]`: every own record the device may let go, the told refusals `[<print>]` given. */
+  /** `{free: [<print>], refused: [<name>]}`: every own record the device may let go, and those let go as refused, the told refusals `[<print>]` given. */
   releasable(told: string): string;
   refused_in(asks: ObjectStore): Step | undefined;
   /** `[{hash, text}]` held, each hashed against its name, and `[<name>]` let go. */

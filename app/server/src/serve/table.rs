@@ -114,16 +114,6 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             get(stream::conversation),
         ),
-        Route::post(
-            "/api/secretary/conversations/{conversation}/regenerate",
-            Scope::Box,
-            secretary::regenerate,
-        ),
-        Route::post(
-            "/api/secretary/conversations/{conversation}/edit",
-            Scope::Box,
-            secretary::edit,
-        ),
         // Named by its sha, never by text: rendering is asked by content.
         Route::get(
             "/api/secretary/conversations/{conversation}/blocks/{sha}",

@@ -55,10 +55,10 @@ pub const CLIENT_HEADER: &str = "x-suzatary-client";
 
 /// The oldest write contract the box takes from a page; an older page is refused before it writes
 /// and reloads. Raise it in the same series as a change to what a page writes.
-pub const CLIENT_MIN: u32 = 15;
+pub const CLIENT_MIN: u32 = 16;
 
 /// The contract this build's own page writes by: what a test writes as.
-pub const CLIENT: &str = "15";
+pub const CLIENT: &str = "16";
 
 /// A page keeps [`CLIENT_MIN`] or later.
 fn current(client: Option<&str>) -> Result<(), Refusal> {
@@ -159,6 +159,7 @@ mod tests {
             Some("12"),
             Some("13"),
             Some("14"),
+            Some("15"),
             Some("not a number"),
         ] {
             let refused = check_csrf(&page(stale)).unwrap_err();
@@ -166,10 +167,9 @@ mod tests {
         }
         assert_eq!(
             check_csrf(&page(None)).unwrap_err().message(),
-            "this page writes by contract none, and the box takes 15 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
+            "this page writes by contract none, and the box takes 16 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
         );
-        assert_eq!(check_csrf(&page(Some("15"))), Ok(()));
-        assert_eq!(check_csrf(&page(Some("15"))), Ok(()));
+        assert_eq!(check_csrf(&page(Some("16"))), Ok(()));
         assert_eq!(
             check_csrf(&ActHeaders {
                 site: None,

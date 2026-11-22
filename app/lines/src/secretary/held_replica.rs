@@ -83,14 +83,92 @@ pub enum Sealing {
         conversation: ConversationId,
         question: Question,
     },
-    /// A topic opened under `title` (none leaves it for the title job) and its first question,
-    /// resting on the opening: one act of the person, so one move of the own writes.
+    /// A topic opened under `title` (none leaves it to the title job) and its first question over
+    /// the opening, in one move.
     Begin {
         title: Option<Title>,
         question: Question,
     },
     /// The answer of a conversation the tab reads stopped.
     Stop { conversation: ConversationId },
+    /// The question named `question` asked again over the lines `seen`, those the page drew.
+    Again {
+        conversation: ConversationId,
+        question: Hash,
+        how: AskedAgain,
+        seen: Vec<Hash>,
+    },
+}
+
+/// How a question is asked again: as it was, or in new words resting on the `Again`, one move.
+#[derive(Debug, Clone)]
+pub enum AskedAgain {
+    Regenerate,
+    Edit(Question),
+}
+
+impl AskedAgain {
+    /// What the `Again` line keeps of its question.
+    fn rewind(&self) -> suzatary_conversations::secretary::store::Rewind {
+        match self {
+            AskedAgain::Regenerate => suzatary_conversations::secretary::store::Rewind::Regenerate,
+            AskedAgain::Edit(_) => suzatary_conversations::secretary::store::Rewind::Edit,
+        }
+    }
+}
+
+/// What every line of one seal shares: its store, its writer and the bytes its keys are drawn
+/// from.
+struct Writer<'s> {
+    genesis: Hash,
+    actor: &'s Actor,
+    entropy: &'s dyn Entropy,
+}
+
+impl Writer<'_> {
+    /// `entry` as line `held` of `conversation`, resting on `deps`.
+    fn line(
+        &self,
+        conversation: ConversationId,
+        held: u32,
+        entry: &Entry,
+        deps: Vec<Hash>,
+    ) -> Result<OwnLine, NotSealed> {
+        let (line, keys) =
+            LineEvent::write(conversation, self.actor.clone(), held, entry, self.entropy)?;
+        self.own(line, &keys, deps)
+    }
+
+    /// `entry` opening a conversation of its own: its id, and the line.
+    fn opening(&self, entry: &Entry) -> Result<(ConversationId, OwnLine), NotSealed> {
+        let (line, keys) = LineEvent::begin(self.actor.clone(), entry, self.entropy)?;
+        Ok((line.begun_id(), self.own(line, &keys, Vec::new())?))
+    }
+
+    fn own(
+        &self,
+        line: LineEvent,
+        keys: &[suzatary_memory::secretary::locked_text::TextKey],
+        deps: Vec<Hash>,
+    ) -> Result<OwnLine, NotSealed> {
+        let change = prodrome_core::change::mk_change(self.genesis.clone(), deps, line)
+            .map_err(|e| NotSealed::Change(e.to_string()))?;
+        Ok(
+            OwnLine::sealed(&Envelope::Change(change), keys).unwrap_or_else(|_| {
+                unreachable!("a line this tab sealed reads back with the keys it sealed it under")
+            }),
+        )
+    }
+}
+
+/// A topic's opening under `title`; none leaves it to the title job.
+fn topic(title: Option<Title>, at: Datetime) -> Entry {
+    Entry::Opened {
+        at,
+        title: Words::kept(title.map_or_else(String::new, String::from)),
+        model: String::new(),
+        kind: Kind::Topic,
+    }
 }
 
 /// A person's question as a tab seals it.
@@ -154,6 +232,10 @@ pub enum NotSealed {
     /// The change over it.
     #[error("no change of the lines: {0}")]
     Change(String),
+    #[error("the page drew {0}, which this device does not hold")]
+    Unseen(Hash),
+    #[error("the page drew no line of the conversation, so nothing is asked again")]
+    Undrawn,
 }
 
 /// Which conversations a move of the landed row moved: every one, where the row was reset or
@@ -171,9 +253,8 @@ pub enum Moved {
 /// another tab of the device told the person, who acted on it, or let it go.
 pub const LET_GO: &str = "the box refused it for good, and another tab of this device let it go";
 
-/// What the device may let go of its own records ([`HeldReplica::releasable`]): every record by
-/// its print, and the names of those let go as refused, which the device keeps as acted on, so a
-/// tab still holding one as unsent never posts it again.
+/// What the device may let go of its own records ([`HeldReplica::releasable`]); those let go as
+/// refused are kept as acted on, so a tab still holding one as unsent never posts it again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Released {
     /// Every record let go, by print.
@@ -255,12 +336,12 @@ impl HeldReplica {
         self.kept.rows.holding().replica().read().holds(name)
     }
 
-    /// Each own line of conversation `id` the box does not hold ([`HeldReplica::holds`]), by name,
-    /// with the box's last ruling on it. A line refused for good, or resting on one, is ruled only
-    /// while it gives the person words back and they have not acted on them; one with none is told
-    /// and let go.
+    /// Each own line of conversation `id` the box does not hold ([`HeldReplica::holds`]), with the
+    /// box's last ruling on it. A line refused for good, or resting on one, is ruled only while it
+    /// gives the person words back and they have not acted on them; one with none is told and let
+    /// go.
     #[must_use]
-    pub fn rulings(&self, id: &ConversationId) -> Vec<(Hash, Ruling)> {
+    pub fn rulings(&self, id: &ConversationId) -> Vec<(&OwnLine, Ruling)> {
         use suzatary_store::replica::writes::Refusal;
         let held_back: BTreeMap<&Hash, String> = self
             .own
@@ -278,7 +359,22 @@ impl HeldReplica {
                     Some(_) if self.acted.contains(name) => return None,
                     Some(why) => Ruling::Refused {
                         why: why.clone(),
-                        words: own.node.words()?,
+                        words: match (own.node.words()?, self.edit_of(&own.node)) {
+                            (
+                                crate::secretary::own_line::Words::Question {
+                                    text,
+                                    references,
+                                    attachments,
+                                },
+                                Some(question),
+                            ) => crate::secretary::own_line::Words::Edit {
+                                question,
+                                text,
+                                references,
+                                attachments,
+                            },
+                            (words, _) => words,
+                        },
                     },
                     None => match &own.answer {
                         Answer::Taken => return None,
@@ -293,15 +389,67 @@ impl HeldReplica {
                         },
                     },
                 };
-                Some((name.clone(), ruling))
+                Some((&own.node, ruling))
             })
             .collect()
     }
 
+    /// The question an own line edits, where it is an edit's own question: it rests on that edit's
+    /// `Again` alone and was sealed at its instant; the `Again` held as the device's or in its rows.
+    fn edit_of(&self, own: &OwnLine) -> Option<Hash> {
+        let header = |name: &Hash| {
+            self.own
+                .iter()
+                .find_map(|record| match &record.node {
+                    OwnLine::Line { node, .. } if node.name() == name => {
+                        Some(node.given().header.clone())
+                    }
+                    OwnLine::Line { .. } | OwnLine::Signature { .. } => None,
+                })
+                .or_else(|| self.outlines.node(name).map(|node| node.header.clone()))
+        };
+        // Its line parents, the store's genesis left out.
+        let lines: Vec<crate::wire::lines::NodeHeader> = own
+            .rests_on()
+            .iter()
+            .filter_map(header)
+            .filter(|header| matches!(header, crate::wire::lines::NodeHeader::Line { .. }))
+            .collect();
+        let [
+            crate::wire::lines::NodeHeader::Line {
+                step:
+                    crate::secretary::step::Step::Again {
+                        question,
+                        how: suzatary_conversations::secretary::store::Rewind::Edit,
+                    },
+                at,
+                ..
+            },
+        ] = lines.as_slice()
+        else {
+            return None;
+        };
+        // Only the edit's own question, sealed with it at its instant. It is given back plain only
+        // where the rows hold the question's line and no round holds it (set aside since); a
+        // question whose row has not landed is not judged gone by its absence.
+        let in_a_round = self
+            .outlines
+            .outlines()
+            .filter(|(id, _)| Some(id.as_str()) == own.conversation())
+            .filter_map(|(_, outline)| outline.as_ref().ok())
+            .any(|rounds| {
+                rounds
+                    .rounds()
+                    .iter()
+                    .any(|round| round.turns.iter().any(|(_, line)| line == question))
+            });
+        let gone = self.holds(question) && !in_a_round;
+        (own.at() == Some(at.as_str()) && !gone).then(|| question.clone())
+    }
+
     /// The topics this device began that the box refused: each conversation whose opening is one
     /// of this device's own lines refused for good, beside the box's sentence for it, while a line
-    /// of it still gives the person words back they have not acted on; one they acted on whole is
-    /// absent. Defined by what the device wrote, never by what the rows lack, which a reset or a
+    /// of it still gives the person words back they have not acted on. Defined by what the device wrote, never by what the rows lack, which a reset or a
     /// pull in progress also lacks.
     #[must_use]
     pub fn refused_topics(&self) -> BTreeMap<ConversationId, String> {
@@ -330,14 +478,14 @@ impl HeldReplica {
             .keys()
             .flat_map(|id| self.rulings(id))
             .filter(|(_, ruling)| matches!(ruling, Ruling::Refused { .. }))
+            .map(|(own, ruling)| (own.name().clone(), ruling))
             .collect()
     }
 
     /// The person acted on the refusals of the own lines `names`, or the device let them go as
-    /// refused (the device's row keeps them by name): what it moved. Only a refusal for good is
-    /// acted on or let go as refused, so a record this tab still holds as unsent, or refused for
-    /// now, because it missed the wake that told it otherwise is raised to a refusal for good
-    /// ([`LET_GO`]): it is never posted again, and what rests on it is held back with it.
+    /// refused: what it moved. A record this tab still holds as unsent or refused for now (it
+    /// missed the wake) is raised to a refusal for good ([`LET_GO`]): never posted again, and what
+    /// rests on it is held back with it.
     pub fn acted(&mut self, names: &BTreeSet<Hash>) -> Moved {
         use suzatary_store::replica::writes::Refusal;
         let mut touched = BTreeSet::new();
@@ -409,35 +557,14 @@ impl HeldReplica {
             .word()
             .and_then(|word| word.geneses.first().cloned())
             .ok_or(NotSealed::Unpulled)?;
-        let own = |line: LineEvent,
-                   keys: Vec<suzatary_memory::secretary::locked_text::TextKey>,
-                   deps: Vec<Hash>|
-         -> Result<OwnLine, NotSealed> {
-            let change = prodrome_core::change::mk_change(genesis.clone(), deps, line)
-                .map_err(|e| NotSealed::Change(e.to_string()))?;
-            Ok(
-                OwnLine::sealed(&Envelope::Change(change), &keys).unwrap_or_else(|_| {
-                    unreachable!(
-                        "a line this tab sealed reads back with the keys it sealed it under"
-                    )
-                }),
-            )
+        let writer = Writer {
+            genesis,
+            actor,
+            entropy,
         };
         let onto = |conversation: ConversationId, entry: Entry| {
             let (deps, held) = self.heads(&conversation)?;
-            let (line, keys) =
-                LineEvent::write(conversation, actor.clone(), held, &entry, entropy)?;
-            own(line, keys, deps)
-        };
-        let opening = |title: Option<Title>| {
-            let entry = Entry::Opened {
-                at,
-                title: Words::kept(title.map_or_else(String::new, String::from)),
-                model: String::new(),
-                kind: Kind::Topic,
-            };
-            let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
-            Ok::<_, NotSealed>((line.begun_id(), own(line, keys, Vec::new())?))
+            writer.line(conversation, held, &entry, deps)
         };
         let lines = match sealing {
             Sealing::Rename {
@@ -458,11 +585,14 @@ impl HeldReplica {
                 question,
             } => vec![onto(conversation, question.said(at, actor))?],
             Sealing::Begin { title, question } => {
-                let (id, opened) = opening(title)?;
+                let (id, opened) = writer.opening(&topic(title, at))?;
                 // The question is the new conversation's second line, over its opening alone.
-                let (line, keys) =
-                    LineEvent::write(id, actor.clone(), 1, &question.said(at, actor), entropy)?;
-                let said = own(line, keys, vec![opened.name().clone()])?;
+                let said = writer.line(
+                    id,
+                    1,
+                    &question.said(at, actor),
+                    vec![opened.name().clone()],
+                )?;
                 vec![opened, said]
             }
             Sealing::Stop { conversation } => vec![onto(
@@ -472,16 +602,22 @@ impl HeldReplica {
                     by: actor.as_str().to_owned(),
                 },
             )?],
-            Sealing::Open { title } => vec![opening(title)?.1],
-            Sealing::SetUp(template) => {
-                let entry = Entry::SetUp {
-                    at,
-                    title: Words::kept(template.template().called()),
-                    template,
-                };
-                let (line, keys) = LineEvent::begin(actor.clone(), &entry, entropy)?;
-                vec![own(line, keys, Vec::new())?]
-            }
+            Sealing::Again {
+                conversation,
+                question,
+                how,
+                seen,
+            } => self.again(&writer, conversation, (question, how), &seen, at)?,
+            Sealing::Open { title } => vec![writer.opening(&topic(title, at))?.1],
+            Sealing::SetUp(template) => vec![
+                writer
+                    .opening(&Entry::SetUp {
+                        at,
+                        title: Words::kept(template.template().called()),
+                        template,
+                    })?
+                    .1,
+            ],
         };
         let name = lines[0].name().clone();
         self.lines.hold(
@@ -495,6 +631,40 @@ impl HeldReplica {
         owned.extend(self.rested_on(&owned));
         let moved = self.moving(|_| ()).1;
         Ok((owned, name, moved))
+    }
+
+    /// The lines of `question` asked again `how` in `conversation`: the `Again` over the
+    /// conversation's heads, and for an edit the new question, the line after it, over it alone.
+    fn again(
+        &self,
+        writer: &Writer<'_>,
+        conversation: ConversationId,
+        (question, how): (Hash, AskedAgain),
+        seen: &[Hash],
+        at: Datetime,
+    ) -> Result<Vec<OwnLine>, NotSealed> {
+        let (_, held) = self.heads(&conversation)?;
+        let deps = self.seen_heads(seen)?;
+        let entry = Entry::Again {
+            at,
+            question,
+            how: how.rewind(),
+            by: writer.actor.as_str().to_owned(),
+        };
+        let again = writer.line(conversation.clone(), held, &entry, deps)?;
+        Ok(match how {
+            AskedAgain::Regenerate => vec![again],
+            AskedAgain::Edit(asked) => {
+                let rests_on = vec![again.name().clone()];
+                let said = writer.line(
+                    conversation,
+                    held + 1,
+                    &asked.said(at, writer.actor),
+                    rests_on,
+                )?;
+                vec![again, said]
+            }
+        })
     }
 
     /// Every own write the box has not taken that `owned` rests on, near or far, as it is held: kept
@@ -528,6 +698,67 @@ impl HeldReplica {
             .filter(|own| !taken(own))
             .map(|own| (*own).clone())
             .collect()
+    }
+
+    /// The lines of `seen` no other line of it rests on, near or far: what a line resting on the
+    /// lines a page drew rests on.
+    fn seen_heads(&self, seen: &[Hash]) -> Result<Vec<Hash>, NotSealed> {
+        if seen.is_empty() {
+            return Err(NotSealed::Undrawn);
+        }
+        let mut beneath: BTreeSet<Hash> = BTreeSet::new();
+        let mut pending: Vec<Hash> = Vec::new();
+        for name in seen {
+            let node = self
+                .outlines
+                .node(name)
+                .ok_or_else(|| NotSealed::Unseen(name.clone()))?;
+            pending.extend(
+                node.parents
+                    .iter()
+                    .filter_map(|p| Hash::new(p.clone()).ok()),
+            );
+        }
+        while let Some(name) = pending.pop() {
+            if beneath.insert(name.clone())
+                && let Some(node) = self.outlines.node(&name)
+            {
+                pending.extend(
+                    node.parents
+                        .iter()
+                        .filter_map(|p| Hash::new(p.clone()).ok()),
+                );
+            }
+        }
+        let heads: BTreeSet<Hash> = seen
+            .iter()
+            .filter(|name| !beneath.contains(*name))
+            .cloned()
+            .collect();
+        Ok(heads.into_iter().collect())
+    }
+
+    /// The files of the person's turn on line `question` of `conversation`, as it holds them.
+    pub fn files_of(
+        &mut self,
+        conversation: &ConversationId,
+        question: &Hash,
+    ) -> Option<Vec<suzatary_held::attachment::Attachment>> {
+        let Some(Whole::Read(Ok(read))) = self.transcript(conversation) else {
+            return None;
+        };
+        let written = read
+            .lines()
+            .iter()
+            .find(|written| written.name == *question)?;
+        let Entry::Said {
+            turn: suzatary_conversations::secretary::model::Turn::Person { attachments, .. },
+            ..
+        } = &written.entry
+        else {
+            return None;
+        };
+        Some(attachments.clone())
     }
 
     /// The heads of `conversation` among the lines read, own lines included, and how many lines
@@ -573,11 +804,10 @@ impl HeldReplica {
         (owned, moved)
     }
 
-    /// Each own write the box took, by its answer or because the rows hold it ([`HeldReplica::holds`],
-    /// the answer of a post that reached the box may be lost), beside whether the device may let
-    /// its own record of it go:
-    /// once the landed rows hold every key of a line, or the box retired it, since its record is
-    /// the one other place they are kept; a signature's at once.
+    /// Each own write the box took, by its answer or by the rows ([`HeldReplica::holds`]: a post's
+    /// answer may be lost), beside whether its record may go: once the landed rows hold every key
+    /// of a line or the box retired it, since the record is the one other place they are kept; a
+    /// signature's at once.
     #[must_use]
     pub fn own_taken(&self) -> Vec<(&OwnLine, bool)> {
         let landed = self.kept.rows.landed();
@@ -988,6 +1218,19 @@ impl HeldReplica {
             .filter(|name| !reading.holds(name) && !own.contains_key(name))
             .cloned()
             .collect();
+        // An own line the reading no longer stands on (refused, or resting on a refusal) is let go
+        // of the prints too, which every transcript reads: its record still holds its words.
+        let fallen: Vec<Hash> = self
+            .own
+            .iter()
+            .map(|line| line.node.name())
+            .filter(|name| !reading.holds(name) && !own.contains_key(name))
+            .filter(|name| self.lines.holds(name))
+            .cloned()
+            .collect();
+        if !fallen.is_empty() {
+            self.lines.hold(Vec::new(), &fallen);
+        }
         let mut touched = if came.is_empty() && went.is_empty() {
             BTreeSet::new()
         } else {

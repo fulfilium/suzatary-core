@@ -4,6 +4,8 @@
 //! target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
 //! cli's tests fails when one is missing.
 
+#[path = "asked_again.rs"]
+mod asked_again;
 #[path = "chain_acceptance.rs"]
 mod chain_acceptance;
 #[path = "door_findings.rs"]

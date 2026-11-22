@@ -40,9 +40,16 @@
 # and `Trust`'s vouched set), by the same rule.
 # tapsecretflake keeps a value field's place (viewtree's slot): merged with 2.1.192, views
 # 3,711,939 (+4,889 over master's 3,707,050), so both views lines rise by 10,000.
+# localwrites stage 3 (the tab's `Again`, the one-step seal, and the rule asking the fold's question
+# of an edit), merged with 2.1.200 (prodrome 5,024,801, views 3,711,939): prodrome 5,066,712
+# (+41,911: the `Again` seal and its edit's two lines, the rule's reading after a line and the
+# edit it takes up, the seal's tagged answer, the line a ruling is drawn on, a refused edit given
+# back whole, and a refused own line's print let go), so its lines rise by 40,000; views 3,716,279
+# (+4,340: the composer's edit mode, its kept files and the drawn lines it seals over, less the
+# routes' edit and regenerate acts), within its lines.
 views_bg.wasm x86_64-linux 3720000
-prodrome_bg.wasm x86_64-linux 5030000
+prodrome_bg.wasm x86_64-linux 5070000
 typst_bg.wasm x86_64-linux 22020000
 views_bg.wasm aarch64-linux 3730000
-prodrome_bg.wasm aarch64-linux 5040000
+prodrome_bg.wasm aarch64-linux 5080000
 typst_bg.wasm aarch64-linux 22090000

@@ -836,6 +836,29 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
    and `head_set` are gone and the DAG is built once. A conversation's first read on the same
    store, `causal` then `sequenced` as the transcript's order: 288 and 292 ms, then 324 and 290
    ms; the order alone over all 100 conversations, 6.1 ms by `causal` and 6.6 ms by `sequenced`.
+   *Closing note (2.1.195 with this stage's last change: the tab writes `Again`, the edit and
+   regenerate routes are gone, and a seal is one step that answers at its keep).* Measured as before:
+   `topicdraw`, `bigstore`, 400 ms each way, the fixture's debug build, two runs of 7 Sends (median,
+   slowest).
+   - **Send to the question drawn:** 179, 232 ms and 166, 263 ms, against 2,843 and 5,148 ms median
+     before the stage. The seal's own parts on a later Send: the core's seal 20 to 29 ms, the
+     signatures, now inside the seal and before the draw, 19 to 38 ms, the keep 2 to 4 ms, the
+     row's read 1 to 2 ms (29 and 43 ms on each run's first Send).
+   - **Send to the first answer drawn:** 4,934, 7,134 ms and 4,873, 6,257 ms, against 5,121 and
+     5,180 ms median before; the fixture's model takes most of it.
+   - **The warm snapshot's rewrite after a conversation:** 75 and 93 ms, written 30.1 and 31.1 s
+     after the last Send (`linesync.QUIET_MS`), for a snapshot of 3,546,845 bytes.
+   - **The box's acceptance of one posted line** (release build, 14,122 objects, the store read
+     once per post): a question 160 ms median (slowest 163), the lock held 100 ms; its steps the
+     store's read 57, the rule's held reading 16, the rule 0.25, the take 23, the check 1.5, the
+     receipt's DAG 16 and the frontier's answer 26 ms. A rename 150 ms. With 5,000 of the lines in
+     the one conversation posted to, a question 162 ms and a rename 261 ms (the check 54 ms of it).
+     Against stage 2c's 273 ms and (a)'s 89 to 147 ms.
+   - **A second tab of the device** draws a question this tab sealed before the box holds it: with
+     no post of the lines reaching the box from either tab, Send to the question drawn in the
+     second tab is 273, 1,930 ms and 261, 1,807 ms; the first two Sends of each run take 1.1 to
+     1.9 s, the rest 213 to 289 ms. The scene "a question sent in one tab is drawn in a second tab
+     before the box holds it" pins it.
 4. **Taps as inbox objects, claimed per proposal.** `Tapped`, `Dismissed`,
    `Checked`, `Dropped`; the performer's claim (§4.5); the sending rule at
    admission; secret values sealed to the card's key (§4.6). The four

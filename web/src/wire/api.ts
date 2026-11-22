@@ -1,9 +1,7 @@
 // Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, Saying, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
-import { print } from "../chat/refs";
-import type { Reference } from "../chat/refs";
+import type { AboutPayload, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
 import heads from "../prodrome/heads";
 import http from "./http";
 import storereads from "./storereads";
@@ -90,24 +88,6 @@ const proposalPath = (id: string, index: number, verb: string): string =>
 /** The owner's tap: the words are destroyed on the box and, at their next pull, on every device. */
 export const eraseLines = (id: string, lines: readonly string[]): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/erase"), { lines: [...lines] } satisfies Erasing, payload.ConversationPayload);
-
-/** A question replacing the last: the old question and all after it are set aside first. */
-export const editQuestion = (
-  id: string,
-  text: string,
-  references: readonly Reference[] = [],
-  attachments: readonly AttachmentRow[] = [],
-): Promise<ConversationPayload> =>
-  http.act(conversationPath(id, "/edit"), asked(text, references, attachments), payload.ConversationPayload);
-
-const asked = (text: string, references: readonly Reference[], attachments: readonly AttachmentRow[]): Saying => ({
-  say: text,
-  references: references.map(print),
-  attachments: attachments.map(({ id, name }) => ({ id, name })),
-});
-
-export const regenerate = (id: string): Promise<ConversationPayload> =>
-  http.act(conversationPath(id, "/regenerate"), {}, payload.ConversationPayload);
 
 /** Drawn by the box, since no replica in the tab holds the todo chains whole. */
 export const drawnProposals = (id: string, indices: readonly number[]): Promise<DrawnPayload> =>

@@ -27,6 +27,10 @@ export namespace written {
   export type T<N extends stores.Written> = {
     // Every unsigned change of `name` signed, so a write made keyless is signed later.
     readonly sign: (name: N) => Promise<void>
+    // The same signatures as moves the caller keeps, with whatever else it keeps in the same write: none where the
+    // device keeps no key. A signature that fails stops it: the moves made before are answered with why, for the caller
+    // to keep, since the core holds them already.
+    readonly signatures: (name: N) => Promise<Signed>
     // What `name` holds unsent, signed and posted; an answer kept, a refusal said.
     readonly handOver: (name: N) => Promise<void>
     // The asks' refusals of every store's writes, held as refused.
@@ -34,6 +38,8 @@ export namespace written {
     // Each refusal of `name` the person was not told of yet, said with their words: what a load found.
     readonly said: (name: N) => Promise<void>
   }
+
+  export type Signed = { readonly type: "Signed"; readonly steps: readonly LineStep[] } | { readonly type: "Partly"; readonly steps: readonly LineStep[]; readonly why: string }
 
   // In posts the box takes whole, each change beside its signatures, and each line beside its slots' keys, which
   // travel beside the objects and never in one.
@@ -151,13 +157,25 @@ export namespace written {
       retried(name)
     }
 
-    const sign = async (name: N): Promise<void> => {
+    const signatures = async (name: N): Promise<Signed> => {
       const e = entry(name)
-      const unsigned = read("unsigned", Names(e.store.unsigned()))
-      if (unsigned.length === 0) return
-      const key = await signer.existing()
-      if (key === null) return
-      for (const hash of unsigned) await e.stepped(e.store.signed(signedObject(core, hash, key.public, await signer.sign(key, hash)).literal))
+      const steps: LineStep[] = []
+      try {
+        const unsigned = read("unsigned", Names(e.store.unsigned()))
+        if (unsigned.length === 0) return { type: "Signed", steps }
+        const key = await signer.existing()
+        if (key === null) return { type: "Signed", steps }
+        for (const hash of unsigned) steps.push(e.store.signed(signedObject(core, hash, key.public, await signer.sign(key, hash)).literal))
+        return { type: "Signed", steps }
+      } catch (x: unknown) {
+        return { type: "Partly", steps, why: lo.reason(x) }
+      }
+    }
+    // Every move made is kept, a signature that failed after them too; the failure is then thrown.
+    const sign = async (name: N): Promise<void> => {
+      const signed = await signatures(name)
+      for (const step of signed.steps) await entry(name).stepped(step)
+      if (signed.type === "Partly") throw new Error(signed.why)
     }
 
     // Each piece posted in turn, its receipt kept. An answer that is no receipt is read by `failed`: one for later stops
@@ -201,7 +219,7 @@ export namespace written {
       for (const e of Object.values<Entry>(entries)) await settled(e, () => e.store.refused_in(asks))
     }
 
-    return { sign, handOver, refusedIn, said }
+    return { sign, signatures, handOver, refusedIn, said }
   }
 }
 export default written

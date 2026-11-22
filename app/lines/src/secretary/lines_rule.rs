@@ -121,6 +121,9 @@ pub struct Held<'e> {
     /// The post's lines taken so far.
     taken: Lines,
     read: RefCell<BTreeMap<ConversationId, Option<Rc<Transcript>>>>,
+    /// The line being judged, by name, and its conversation as read with it taken: read once for
+    /// every check that asks.
+    after: RefCell<Option<(Hash, Option<Rc<Transcript>>)>>,
 }
 
 type Lines = Vec<(Hash, Change<LineEvent>)>;
@@ -175,6 +178,21 @@ impl Held<'_> {
             .collect();
         let keyless = |_: &KeyName| -> Words<TextKey> { Gone::Missing.into() };
         Transcript::of(id, &writes, &keyless).ok()
+    }
+
+    /// The conversation of the line `name` judges, as read with that line taken; read once a line.
+    fn after(&self, name: &Hash, change: &Change<LineEvent>) -> Option<Rc<Transcript>> {
+        let mut after = self.after.borrow_mut();
+        match after.as_ref() {
+            Some((judged, read)) if judged == name => read.clone(),
+            Some(_) | None => {
+                let read = self
+                    .read_with(change.event.conversation(), Some((name, change)))
+                    .map(Rc::new);
+                *after = Some((name.clone(), read.clone()));
+                read
+            }
+        }
     }
 
     /// How many turns conversation `id` owes the secretary as held.
@@ -237,6 +255,7 @@ impl Admission for LinesRule {
             copied: RefCell::new(BTreeMap::new()),
             taken: Vec::new(),
             read: RefCell::new(BTreeMap::new()),
+            after: RefCell::new(None),
         }
     }
 
@@ -245,6 +264,7 @@ impl Admission for LinesRule {
         held.conversations.insert(conversation.clone());
         held.keys.extend(change.event.keys().cloned());
         held.read.borrow_mut().remove(conversation);
+        *held.after.borrow_mut() = None;
         held.taken.push((name.clone(), change.clone()));
     }
 
@@ -262,7 +282,7 @@ impl Admission for LinesRule {
             .or_else(|| sealed(line, keys).err())
             .or_else(|| said(change, keys, post).err())
             .or_else(|| stops(change, held).err())
-            .or_else(|| again(change, held).err())
+            .or_else(|| again(change, post).err())
             .or_else(|| room(change, post).err())
     }
 }
@@ -616,7 +636,7 @@ fn room(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<()
     let owed = post.held.owed(id);
     let after = post
         .held
-        .read_with(id, Some((post.name, change)))
+        .after(post.name, change)
         .map_or(owed, |read| read.owed().len());
     if after > owed && after > queue::MAX_PENDING {
         return Err(Inadmissible::finally(format!(
@@ -668,18 +688,54 @@ fn stops(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
     if waiting { Ok(()) } else { Err(nothing()) }
 }
 
-/// Whether an `Again` asks again of a conversation as the tab read it: its question a live
+/// Whether a line that asks again does so of a conversation as the tab read it: a regenerate's
+/// `Again`, an edit's, and the person's turn that takes up an edit's `Again` (only that turn sets
+/// anything aside, so it is judged by its `Again`'s checks as it arrives). The question a live
 /// person's turn, every live line that descends from it beneath the `Again`, no running round
-/// covering it, nothing it sets aside a write, and for a regenerate an answered question.
-fn again(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible> {
-    let LineShape::Again { question, how, .. } = change.event.shape() else {
-        return Ok(());
-    };
+/// covering it, nothing it sets aside a write, for a regenerate an answered question, and no
+/// other question settled before the line and owed after it.
+fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(), Inadmissible> {
     let refused = |why: &str| Err(Inadmissible::finally(why));
-    let Some(read) = held.transcript(change.event.conversation()) else {
-        return refused("no conversation to ask again in");
+    let id = change.event.conversation();
+    let Some(read) = post.held.transcript(id) else {
+        return match change.event.shape() {
+            LineShape::Again { .. } => refused("no conversation to ask again in"),
+            _ => Ok(()),
+        };
     };
     let lines = read.lines();
+    // The question, how, and the names the `Again` rests on.
+    let (question, how, deps): (
+        &prodrome_core::event::Hash,
+        Rewind,
+        Vec<prodrome_core::event::Hash>,
+    ) = if let LineShape::Again { question, how, .. } = change.event.shape() {
+        (question, *how, change.deps.clone())
+    } else {
+        // The fold's own question, asked over the reading after the line: does it make an edit's
+        // `Again` that read as nothing set its question aside? Only a person's turn may.
+        let Some((edit, question)) = taken_up(&read, change, post) else {
+            return Ok(());
+        };
+        if !matches!(
+            change.event.shape(),
+            LineShape::Said {
+                turn: TurnShape::Person { .. },
+                ..
+            }
+        ) {
+            return refused(
+                "it would take up an edit in its question's place; only the edit's own question \
+                 does",
+            );
+        }
+        let deps = lines[edit]
+            .rests_on
+            .iter()
+            .map(|&at| lines[at].name.clone())
+            .collect();
+        (question, Rewind::Edit, deps)
+    };
     let Some(asked) = lines.iter().position(|written| written.name == *question) else {
         return refused("its question is no line of this conversation");
     };
@@ -700,10 +756,10 @@ fn again(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
     if matches!(read.claims().standing(asked), Standing::Claimed { .. }) {
         return refused("the answer is still coming: stop it first");
     }
-    if *how == Rewind::Regenerate && read.claims().standing(asked) != Standing::Settled {
+    if how == Rewind::Regenerate && read.claims().standing(asked) != Standing::Settled {
         return refused("this question has no answer yet to ask again");
     }
-    let beneath = read.beneath_names(&change.deps);
+    let beneath = read.beneath_names(&deps);
     let descends = read.descending(asked);
     let moved_on = descends
         .iter()
@@ -721,7 +777,80 @@ fn again(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
              message, and asking again never hides one",
         );
     }
+    if reopens(&read, change, post, question) {
+        return refused(
+            "the answer it sets aside also settled another question, and asking again \
+             reopens no other",
+        );
+    }
     Ok(())
+}
+
+/// The position, in `read`, of an edit's `Again` that read as nothing before `change` and sets its
+/// question aside with `change` taken, beside that question: what the fold reads as `change`
+/// taking it up.
+fn taken_up<'r>(
+    read: &'r Transcript,
+    change: &Change<LineEvent>,
+    post: &Post<'_, '_, LinesRule>,
+) -> Option<(usize, &'r prodrome_core::event::Hash)> {
+    let after = post.held.after(post.name, change)?;
+    let lines = read.lines();
+    (0..lines.len()).find_map(|at| {
+        if let LineShape::Again {
+            question,
+            how: Rewind::Edit,
+            ..
+        } = lines[at].line.shape()
+            && crate::secretary::transcript::inert(lines, at)
+            && after
+                .lines()
+                .iter()
+                .position(|written| written.name == lines[at].name)
+                .is_some_and(|then| !crate::secretary::transcript::inert(after.lines(), then))
+        {
+            Some((at, question))
+        } else {
+            None
+        }
+    })
+}
+
+/// Whether taking `change` leaves owed a live question other than `question` that the conversation
+/// held settled before: a close or a stop set aside withdraws what it settled, and its rounds spend
+/// no attempt, so only the question asked again may be owed again, else a question two runs already
+/// sent could be sent a third time, or one the person stopped asked anyway.
+fn reopens(
+    read: &Transcript,
+    change: &Change<LineEvent>,
+    post: &Post<'_, '_, LinesRule>,
+    question: &prodrome_core::event::Hash,
+) -> bool {
+    let Some(after) = post.held.after(post.name, change) else {
+        return false;
+    };
+    let stored = read.stored();
+    let lines = read.lines();
+    let settled: BTreeSet<&prodrome_core::event::Hash> = read
+        .turn_lines()
+        .into_iter()
+        .enumerate()
+        .filter(|&(turn, name)| {
+            *name != *question
+                && stored.is_live(turn)
+                && lines
+                    .iter()
+                    .position(|written| written.name == *name)
+                    .is_some_and(|at| read.claims().standing(at) == Standing::Settled)
+        })
+        .map(|(_, name)| name)
+        .collect();
+    after.owed().iter().any(|(turn, _)| {
+        after
+            .turn_lines()
+            .get(*turn)
+            .is_some_and(|name| settled.contains(name))
+    })
 }
 
 /// Whether a turn set aside would hide a write: a verb that writes, an act that is no stop, or a

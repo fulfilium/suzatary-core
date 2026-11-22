@@ -27,7 +27,7 @@ export namespace http {
 
   // The write contract this build keeps: a page reloads when the box's `gate::CLIENT_MIN` passes this number.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 15
+  export const CLIENT = 16
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."

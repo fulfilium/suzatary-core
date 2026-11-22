@@ -21,14 +21,12 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_connect::secrets::Secrets;
 use suzatary_connect::settings::{Declaration, Help, Verify};
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Lines;
 use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_digest::secretary::memories::{Held, Memories};
 use suzatary_google::google::RedirectUri;
 use suzatary_google::google::ical::Linked;
 use suzatary_health::health::plugin::{Origin, PluginName};
-use suzatary_held::attachment::Attachment;
 use suzatary_held::held_value::Reopened;
 use suzatary_held::held_value::{self, Filled, Reveal};
 use suzatary_held::secretary::attached::{self, Checked};
@@ -426,72 +424,6 @@ pub fn drawn(
         title: stored.heading().into_owned(),
         proposals,
     })
-}
-
-use suzatary_lines::secretary::lines_rule::MAX_ATTACHMENTS_PER_TURN;
-
-fn question(
-    said: &str,
-    references: &[Reference],
-    attachments: &[Attachment],
-) -> Result<Turn, Refusal> {
-    if said.trim().is_empty() && attachments.is_empty() {
-        return Err(Refusal::bad_request("say something"));
-    }
-    if attachments.len() > MAX_ATTACHMENTS_PER_TURN {
-        return Err(Refusal::bad_request(format!(
-            "at most {MAX_ATTACHMENTS_PER_TURN} files in one turn"
-        )));
-    }
-    Ok(Turn::Person {
-        text: said.to_owned(),
-        references: references.to_vec(),
-        attachments: attachments.to_vec(),
-    })
-}
-
-/// `POST …/<id>/regenerate`: ask the last round again.
-///
-/// # Errors
-/// [`suzatary_secretary::secretary::regenerate`]'s.
-pub fn regenerate(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    id: &ConversationId,
-    by: &Actor,
-) -> Answered<wire::ConversationPayload> {
-    let stored = secretary::regenerate(caps.secretary.conversations, caps.secretary.clock, by, id)?;
-    payload(&stored.id, caps, cards)
-}
-
-/// `POST …/<id>/edit`: replace the last round's question, under `say`'s rules.
-///
-/// # Errors
-/// `question`'s and [`suzatary_secretary::secretary::edit`]'s.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a turn's parts, who set the last round aside and the stamp it is written with"
-)]
-pub fn edit(
-    caps: &Server<'_>,
-    cards: &Cards<'_>,
-    id: &ConversationId,
-    said: &str,
-    references: &[Reference],
-    attachments: &[Attachment],
-    by: &Actor,
-    stamped: Stamp,
-) -> Answered<wire::ConversationPayload> {
-    let turn = question(said, references, attachments)?;
-    let stored = secretary::edit(
-        caps.secretary.conversations,
-        caps.secretary.clock,
-        by,
-        stamped,
-        id,
-        turn,
-    )?;
-    payload(&stored.id, caps, cards)
 }
 
 /// What a tap can act through.

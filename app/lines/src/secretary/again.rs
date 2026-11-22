@@ -1,20 +1,29 @@
 //! What an `Again` line sets aside, read over descent: every line beneath it that descends from
 //! its question, and the question too for an edit. A line concurrent with the question, or with
-//! the `Again`, is never set aside. It names no type of this application but [`Rewind`].
+//! the `Again`, is never set aside; an edit's `Again` sets nothing aside until its own question
+//! takes it up. It names no type of this application but [`Rewind`].
 
 use std::collections::BTreeSet;
 
 use suzatary_conversations::secretary::store::Rewind;
 
-/// The positions the `Again` at `again` sets aside, `question` asked again `how`, over lines in
-/// an order that extends their causal order, each resting on the positions `rests_on` gives.
+/// The positions the `Again` at `again` sets aside, `question` asked again `how`, over `len` lines
+/// in causal order, each resting on what `rests_on` gives; `takes_up(line, again)`: whether a line
+/// resting on it alone is the edit's own question.
 #[must_use]
 pub fn aside<'a>(
     rests_on: impl Fn(usize) -> &'a [usize],
+    takes_up: impl Fn(usize, usize) -> bool,
+    len: usize,
     question: usize,
     again: usize,
     how: Rewind,
 ) -> BTreeSet<usize> {
+    if how == Rewind::Edit
+        && !(again + 1..len).any(|at| rests_on(at) == [again] && takes_up(at, again))
+    {
+        return BTreeSet::new();
+    }
     let mut beneath = BTreeSet::new();
     let mut pending: Vec<usize> = rests_on(again).to_vec();
     while let Some(at) = pending.pop() {

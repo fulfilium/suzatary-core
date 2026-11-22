@@ -697,7 +697,7 @@ async function sendsFrom(scope: string, said: string, by: "button" | "Enter" | "
 /**
  * A PHOTO SENT IN THE CHAT IS DRAWN ON ITS TURN, at its own size: the store, the say, the wire and the read route.
  */
-app.scene("a photo sent in the chat is drawn on its turn", async () => {
+app.scene("a photo sent in the chat is drawn on its turn, and an edit of its question keeps it", async () => {
   await app.page.navigate(`${WRITE_BASE}/#/`);
   const conversation = await app.page.evaluate<string>(`(async () => {
     const post = ${SIGNED_POST};
@@ -736,6 +736,23 @@ app.scene("a photo sent in the chat is drawn on its turn", async () => {
   await app.page.click(".composesend");
   await app.page.waitFor(
     `[...document.querySelectorAll(".turnphoto")].some((img) => img.complete && img.naturalWidth === 8)`,
+    { timeout: 20000 },
+  );
+
+  // AN EDIT KEEPS THE QUESTION'S FILES: the question reworded is sealed with its photo, and drawn with it.
+  await app.page.waitFor(shown(".againbutton"), { timeout: 20000 });
+  await app.page.clickText(".againbutton", "Edit question");
+  await app.page.waitFor(`document.querySelector(".composebox").value === "what is in this photo"`, { timeout: 5000 });
+  await app.page.evaluate(`(() => {
+    const box = document.querySelector(".composebox");
+    box.value = "";
+    box.dispatchEvent(new Event("input"));
+    return true;
+  })()`);
+  await app.page.type(".composebox", "what colour is this photo");
+  await app.page.click(".composesend");
+  await app.page.waitFor(
+    `[...document.querySelectorAll(".turns .turn-person")].some((t) => t.closest(".earlierattempt") === null && t.textContent.includes("what colour is this photo") && t.querySelector(".turnphoto") !== null)`,
     { timeout: 20000 },
   );
 });
@@ -1189,6 +1206,33 @@ app.scene("a question sent in one tab is one bubble in both tabs, through its an
     await other.waitFor(`document.querySelector(".turnanswer") !== null`, { timeout: 20000 });
     assert.equal(await app.page.evaluate<number>(bubbles(said)), 1, "the sending tab draws it once");
     assert.equal(await other.evaluate<number>(bubbles(said)), 1, "the other tab draws it once");
+  } finally {
+    await other.close();
+  }
+});
+
+/**
+ * A SECOND TAB SEES THE QUESTION BEFORE THE BOX DOES: the line is the device's once sealed, so another tab of the device
+ * draws it from the device's row while no post of the lines reaches the box from either tab.
+ */
+app.scene("a question sent in one tab is drawn in a second tab before the box holds it", async () => {
+  const said = "drawn from the device";
+  const id = await freshConversation(WRITE_BASE);
+  await app.page.navigate("about:blank");
+  await app.page.attachWorkers();
+  await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  const other = await app.tab();
+  try {
+    await other.attachWorkers();
+    await other.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+    await other.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+    for (const tab of [app.page, other]) await tab.block(["*/api/stores/lines/objects*"]);
+    await app.page.type(".composebox", said);
+    await app.page.click(".composesend");
+    await other.waitFor(`${bubbles(said)} === 1`, { timeout: 8000 });
+    await app.page.block([]);
+    await other.block([]);
   } finally {
     await other.close();
   }

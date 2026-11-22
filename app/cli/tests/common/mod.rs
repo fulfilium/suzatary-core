@@ -2332,6 +2332,35 @@ pub fn stop(base: &str, id: &str) -> prodrome_core::event::Hash {
     )
 }
 
+/// The poster's `Again` of the question whose line is `question`, asked again `how`.
+#[must_use]
+pub fn again_line(
+    base: &str,
+    question: &prodrome_core::event::Hash,
+    how: suzatary_conversations::secretary::store::Rewind,
+) -> suzatary_conversations::secretary::store::Entry {
+    suzatary_conversations::secretary::store::Entry::Again {
+        at: next_instant(),
+        question: question.clone(),
+        how,
+        by: poster(base).as_str().to_owned(),
+    }
+}
+
+/// The question whose line is `question` asked again `how` as a tab asks it: an [`again_line`]
+/// over the conversation's heads the box serves, handed to the lines.
+///
+/// # Panics
+/// If the box serves no line of `id`, or does not take the line.
+pub fn asked_again(
+    base: &str,
+    id: &str,
+    question: &prodrome_core::event::Hash,
+    how: suzatary_conversations::secretary::store::Rewind,
+) -> prodrome_core::event::Hash {
+    line_written(base, id, &again_line(base, question, how))
+}
+
 /// `entry` written to conversation `id` by the poster, over the heads of the conversation the
 /// box serves, and handed to the lines: its line's name.
 fn line_written(
@@ -2340,6 +2369,15 @@ fn line_written(
     entry: &suzatary_conversations::secretary::store::Entry,
 ) -> prodrome_core::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
+    let (heads, count) = served_heads(base, id);
+    let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
+    let (line, keys) =
+        LineEvent::write(conversation, poster(base), count, entry, &Drawing).expect("a line");
+    handed(base, line, &keys, heads)
+}
+
+/// The heads of conversation `id` the box serves, and how many lines it serves of it.
+fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) {
     let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
     let skeleton = body_json(&mut answer);
     let nodes: Vec<&serde_json::Value> = skeleton["nodes"]
@@ -2360,11 +2398,46 @@ fn line_written(
         .filter(|n| !under.contains(n))
         .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
         .collect();
+    (heads, u32::try_from(nodes.len()).expect("a count"))
+}
+
+/// The question whose line is `question` edited to `text` as a tab edits it: an edit's `Again`
+/// over the heads the box serves, and the new question resting on it alone at its instant, both
+/// handed to the lines. The new question's name.
+///
+/// # Panics
+/// If the box does not take either line.
+pub fn edited(
+    base: &str,
+    id: &str,
+    question: &prodrome_core::event::Hash,
+    text: &str,
+) -> prodrome_core::event::Hash {
+    use suzatary_conversations::secretary::store::Entry;
+    use suzatary_lines::secretary::line_event::LineEvent;
+    let edit = again_line(
+        base,
+        question,
+        suzatary_conversations::secretary::store::Rewind::Edit,
+    );
+    let Entry::Again { at, .. } = edit else {
+        unreachable!("an again line")
+    };
+    let again = line_written(base, id, &edit);
+    let Entry::Said { turn, by, .. } = self::question(base, text, Vec::new(), Vec::new()) else {
+        unreachable!("a person's turn")
+    };
+    let (_, count) = served_heads(base, id);
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
-    let count = u32::try_from(nodes.len()).expect("a count");
-    let (line, keys) =
-        LineEvent::write(conversation, poster(base), count, entry, &Drawing).expect("a line");
-    handed(base, line, &keys, heads)
+    let (line, keys) = LineEvent::write(
+        conversation,
+        poster(base),
+        count,
+        &Entry::Said { at, turn, by },
+        &Drawing,
+    )
+    .expect("a line");
+    handed(base, line, &keys, vec![again])
 }
 
 /// The actor `base` maps this test's peer to.

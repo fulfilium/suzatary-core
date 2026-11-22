@@ -9,8 +9,10 @@
  * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
  * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write: its duration, and for a
  * step of the page `<step>@`, when it began after the tap. A second scene times a rename's Enter to its title drawn, and
- * writes it to `$SUZATARY_RENAMEDRAW`; a third times Send to the question drawn and to its answer drawn, written to
- * `$SUZATARY_SENDDRAW`.
+ * writes it to `$SUZATARY_RENAMEDRAW`; a third times Send to the question drawn and to its answer drawn, and then the
+ * warm snapshot's rewrite once the lines are quiet, written to `$SUZATARY_SENDDRAW`; a fourth times Send in one tab to
+ * the question drawn in a second tab of the device while no post of the lines reaches the box, written to
+ * `$SUZATARY_SECONDTAB`.
  */
 
 import assert from "node:assert/strict"
@@ -189,6 +191,16 @@ const sendSteps = (drawn: number): string => `(() => {
   return steps
 })()`
 
+// The bytes of the lines' snapshot the device keeps.
+const SNAPSHOT_BYTES = `new Promise((ok, no) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => no(String(r.error))
+  r.onsuccess = () => {
+    const q = r.result.transaction("replica").objectStore("replica").get("lines/snapshot")
+    q.onsuccess = () => (r.result.close(), ok(q.result?.bytes?.byteLength ?? -1))
+  }
+})`
+
 app.scene("measured: Send to the question drawn and to its answer drawn, over a slow network", async () => {
   await app.page.navigate(`${BULK}/#/secretary`)
   await app.page.waitFor(`document.querySelector(".streamround .streammeta a") !== null`, { timeout: 30 * 60_000 })
@@ -208,8 +220,65 @@ app.scene("measured: Send to the question drawn and to its answer drawn, over a 
     runs.push({ ...run, seal: await app.page.inWorker<Steps>("prodromework", SEAL_STEPS), page: await app.page.evaluate<Steps>(sendSteps(run.question)) })
   }
   await app.page.network(null)
-  const report = { latency: LATENCY_MS, questionDrawn: summary(runs.map(r => r.question)), answerDrawn: summary(runs.map(r => r.answer)), runs }
+  // The warm snapshot, deleted by every row write, is written again once the lines are quiet (`linesync.QUIET_MS`):
+  // what that rewrite costs after a conversation, and its bytes.
+  const compactions = await app.page.inWorker<number>("prodromework", `performance.getEntriesByName("compact:lines", "measure").length`)
+  const quiet = Date.now()
+  while ((await app.page.inWorker<number>("prodromework", `performance.getEntriesByName("compact:lines", "measure").length`)) === compactions && Date.now() - quiet < 120_000)
+    await new Promise(done => setTimeout(done, 1000))
+  const snapshot = {
+    ms: Math.round(await app.page.inWorker<number>("prodromework", `performance.getEntriesByName("compact:lines", "measure").at(-1)?.duration ?? -1`)),
+    afterQuietMs: Date.now() - quiet,
+    bytes: await app.page.evaluate<number>(SNAPSHOT_BYTES),
+  }
+  const report = { latency: LATENCY_MS, questionDrawn: summary(runs.map(r => r.question)), answerDrawn: summary(runs.map(r => r.answer)), snapshot, runs }
   console.log(JSON.stringify(report, null, 2))
   const out = process.env["SUZATARY_SENDDRAW"]
   if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
+})
+
+// In a second tab: when a turn holding `said` is drawn, as an instant both tabs read alike.
+const drawnAt = (said: string): string => `new Promise((done) => {
+  const start = performance.now()
+  const look = () => {
+    const now = performance.now()
+    if ([...document.querySelectorAll("#view .turn-person")].some((t) => t.textContent.includes(${JSON.stringify(said)}))) return done(performance.timeOrigin + now)
+    if (now - start > 60000) return done(-1)
+    requestAnimationFrame(look)
+  }
+  requestAnimationFrame(look)
+})`
+
+app.scene("measured: Send in one tab to the question drawn in a second tab, before the box holds it", async () => {
+  await app.page.navigate(`${BULK}/#/secretary`)
+  await app.page.waitFor(`document.querySelector(".streamround .streammeta a") !== null`, { timeout: 30 * 60_000 })
+  const href = await app.page.evaluate<string>(`document.querySelector(".streamround .streammeta a").getAttribute("href").replace(/\\?.*$/, "")`)
+  await app.page.navigate("about:blank")
+  await app.page.attachWorkers()
+  await app.page.navigate(`${BULK}/${href}`)
+  await app.page.waitFor(`document.querySelector("#view .composebox") !== null`, { timeout: 60_000 })
+  const other = await app.tab()
+  try {
+    await other.attachWorkers()
+    await other.navigate(`${BULK}/${href}`)
+    await other.waitFor(`document.querySelector("#view .composebox") !== null`, { timeout: 60_000 })
+    // No post of the lines reaches the box from either tab, so what the second tab draws is the device's own row.
+    for (const tab of [app.page, other]) await tab.block(["*/api/stores/lines/objects*"])
+    const runs: number[] = []
+    for (let n = 0; n < RUNS; n++) {
+      const said = `seen in the other tab ${Date.now()} ${n}`
+      await other.evaluate(`(window.e2eDrawn = ${drawnAt(said)}, true)`)
+      await app.page.type("#view .composebox", said)
+      const sent = await app.page.evaluate<number>(`(document.querySelector("#view .composesend").click(), performance.timeOrigin + performance.now())`)
+      const drawn = await other.evaluate<number>(`window.e2eDrawn`, 90_000)
+      assert.ok(drawn >= 0, `${said} was drawn in the second tab`)
+      runs.push(drawn - sent)
+    }
+    const report = { secondTabDrawn: summary(runs), runs: runs.map(Math.round) }
+    console.log(JSON.stringify(report, null, 2))
+    const out = process.env["SUZATARY_SECONDTAB"]
+    if (out !== undefined && out !== "") writeFileSync(out, JSON.stringify(report, null, 2))
+  } finally {
+    await other.close()
+  }
 })

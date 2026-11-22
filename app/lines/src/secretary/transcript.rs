@@ -142,12 +142,23 @@ impl Transcript {
             .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
             .map(|(at, _)| at)
             .collect();
+        // An edit's `Again` folds at its own question's place, where it takes effect: a session
+        // line written between them is dropped with what the edit sets aside. One nothing takes up
+        // folds nowhere.
+        let edits = takers(lines.len(), |at| &lines[at].line, |at| &lines[at].rests_on);
+        // The edit each line takes up, by the line's position.
+        let mut takes = vec![None; lines.len()];
+        for (at, edit) in edits.iter().enumerate() {
+            if let EditAt::TakenBy(then) = *edit {
+                takes[then] = Some(at);
+            }
+        }
         let stored = Stored::of_read(
             id,
-            lines
-                .iter()
-                .enumerate()
-                .map(|(at, w)| (&w.entry, set_aside(&lines, &turns, at))),
+            (0..lines.len())
+                .filter(|&at| edits[at] == EditAt::Neither)
+                .flat_map(|at| takes[at].into_iter().chain([at]))
+                .map(|at| (&lines[at].entry, set_aside(&lines, &turns, at))),
         )?;
         let marks = marks(&lines, &stored, &turns);
         let claims = Claims::of(
@@ -391,8 +402,11 @@ impl Transcript {
     pub(crate) fn asked(&self, now: Datetime) -> Vec<Asked> {
         let now = prodrome_core::fpl::instant_of(now);
         let mut afresh: BTreeMap<&Hash, Datetime> = BTreeMap::new();
-        for written in &self.lines {
+        for (place, written) in self.lines.iter().enumerate() {
             if let Entry::Again { at, question, .. } = &written.entry {
+                if inert(&self.lines, place) {
+                    continue;
+                }
                 let latest = afresh.entry(question).or_insert(*at);
                 *latest = (*latest).max(*at);
             }
@@ -732,13 +746,130 @@ fn set_aside(lines: &[Written], turns: &[usize], at: usize) -> Vec<usize> {
     let Some(question) = lines.iter().position(|written| written.name == *question) else {
         return Vec::new();
     };
-    let aside = crate::secretary::again::aside(|line| &lines[line].rests_on, question, at, *how);
+    let aside = crate::secretary::again::aside(
+        |line| &lines[line].rests_on,
+        |line, again| {
+            takes_up(
+                &lines[line].line,
+                &lines[line].rests_on,
+                again,
+                &lines[again].line,
+            )
+        },
+        lines.len(),
+        question,
+        at,
+        *how,
+    );
     turns
         .iter()
         .enumerate()
         .filter(|(_, line)| aside.contains(line))
         .map(|(turn, _)| turn)
         .collect()
+}
+
+/// Whether `line` is an edit's `Again`.
+fn edit(line: &LineEvent) -> bool {
+    matches!(
+        line.shape(),
+        LineShape::Again {
+            how: suzatary_conversations::secretary::store::Rewind::Edit,
+            ..
+        }
+    )
+}
+
+/// The one question every reader asks of an edit: whether `later`, resting on the lines at
+/// `rests_on` (positions among the conversation's lines, the genesis left out), takes up the edit
+/// `again` at `at`. It rests on that `Again` alone, is a round-opening turn of a writer other than
+/// the box ([`Step::takes_up`]), and was sealed at the `Again`'s instant, as the tab seals the
+/// pair in one move.
+fn takes_up(later: &LineEvent, rests_on: &[usize], at: usize, again: &LineEvent) -> bool {
+    rests_on == [at]
+        && edit(again)
+        && crate::secretary::step::Step::of(later.shape()).takes_up(LineWriter::of(later.actor()))
+        && later.at() == again.at()
+}
+
+/// What a line is to the edits: an edit's `Again` nothing takes up, one the line at a position
+/// takes up, or neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditAt {
+    Neither,
+    Inert,
+    TakenBy(usize),
+}
+
+/// What each of `len` lines is to the edits, by position: the first line that takes an edit's
+/// `Again` up ([`takes_up`]) takes it. One pass over the lines.
+fn takers<'l>(
+    len: usize,
+    line: impl Fn(usize) -> &'l LineEvent,
+    rests_on: impl Fn(usize) -> &'l [usize],
+) -> Vec<EditAt> {
+    let mut edits: Vec<EditAt> = (0..len)
+        .map(|at| {
+            if edit(line(at)) {
+                EditAt::Inert
+            } else {
+                EditAt::Neither
+            }
+        })
+        .collect();
+    for later in 0..len {
+        if let [at] = rests_on(later)
+            && let Some(slot) = edits.get_mut(*at)
+            && *slot == EditAt::Inert
+            && takes_up(line(later), rests_on(later), *at, line(*at))
+        {
+            *slot = EditAt::TakenBy(later);
+        }
+    }
+    edits
+}
+
+/// The edits' `Again` lines among `lines` (a name, a line, the names it rests on) that no line
+/// takes up, for a reader that folds no transcript: the fold's own pass, `takers`.
+#[must_use]
+pub fn inert_edits<'l>(lines: &[(&'l Hash, &'l LineEvent, &'l [Hash])]) -> BTreeSet<&'l Hash> {
+    let index: BTreeMap<&Hash, usize> = lines
+        .iter()
+        .enumerate()
+        .map(|(at, (name, _, _))| (*name, at))
+        .collect();
+    let rests_on: Vec<Vec<usize>> = lines
+        .iter()
+        .map(|(_, _, parents)| {
+            parents
+                .iter()
+                .filter_map(|parent| index.get(parent).copied())
+                .collect()
+        })
+        .collect();
+    takers(lines.len(), |at| lines[at].1, |at| &rests_on[at])
+        .into_iter()
+        .zip(lines)
+        .filter(|(edit, _)| *edit == EditAt::Inert)
+        .map(|(_, (name, _, _))| *name)
+        .collect()
+}
+
+/// The position of the line that takes up the edit's `Again` at `at`; none for any other line.
+fn taker(lines: &[Written], at: usize) -> Option<usize> {
+    (at + 1..lines.len()).find(|&later| {
+        takes_up(
+            &lines[later].line,
+            &lines[later].rests_on,
+            at,
+            &lines[at].line,
+        )
+    })
+}
+
+/// Whether the line at `at` is an edit's `Again` no line takes up: it reads as nothing.
+pub(crate) fn inert(lines: &[Written], at: usize) -> bool {
+    edit(&lines[at].line) && taker(lines, at).is_none()
 }
 
 /// A conversation's reading is named by its heads, the lines no other line rests on: the down-set

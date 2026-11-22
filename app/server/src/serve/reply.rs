@@ -32,15 +32,6 @@ impl Outcome for StatusCode {
     }
 }
 
-/// A JSON 202: the work goes on after the answer.
-pub(crate) struct Accepted<T>(pub T);
-
-impl<T: Serialize> IntoResponse for Accepted<T> {
-    fn into_response(self) -> Response {
-        (StatusCode::ACCEPTED, axum::Json(self.0)).into_response()
-    }
-}
-
 /// An answer that is a function of its URL alone, kept for good by the browser for this person
 /// alone. [`kept`], outside the API's `no-store` layer, marks only this one, so every other
 /// answer stays `no-store`. A wipe's `Clear-Site-Data` clears what was kept.

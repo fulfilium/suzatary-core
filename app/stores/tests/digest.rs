@@ -555,6 +555,77 @@ fn order(read: &Digest) -> Vec<Hash> {
     out
 }
 
+/// An edit's `Again` is no leaf of the digest until its own question takes it up, as the
+/// transcript reads it: the fold's own pass, over the parents that are lines. The question rests
+/// on the `Again` and on the store's genesis, as every line does, and still takes it up.
+#[test]
+fn an_edit_s_again_is_a_leaf_only_once_its_own_question_takes_it_up() {
+    let the_box = Box::default();
+    the_box.say("ask", 1);
+    let leaves = |read: &Digest| -> Vec<Hash> {
+        order(read)
+            .iter()
+            .map(|leaf| read.line(leaf).clone())
+            .collect()
+    };
+    let read = the_box.read();
+    let Ok([question]) = <[Hash; 1]>::try_from(leaves(&read)) else {
+        panic!("one line: {:?}", leaves(&read));
+    };
+    let id = ConversationId::new("ask").expect("a slug");
+    let again = Entry::Again {
+        at: at(1),
+        question: question.clone(),
+        how: suzatary_conversations::secretary::store::Rewind::Edit,
+        by: "ada".to_owned(),
+    };
+    write_line_as(&the_box.lines, id.clone(), ada(), 1, &again);
+    assert_eq!(
+        leaves(&the_box.read()),
+        vec![question.clone()],
+        "an edit's Again nothing takes up reads as nothing"
+    );
+    let edited = Entry::Said {
+        at: at(1),
+        turn: Turn::Person {
+            text: "ask line 0, edited".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some("ada".into()),
+    };
+    write_line_as(&the_box.lines, id, ada(), 2, &edited);
+    assert_eq!(
+        leaves(&the_box.read()).len(),
+        3,
+        "the edit's own question takes its Again up: both are leaves"
+    );
+}
+
+/// `entry` written in `conversation` by `actor`, over the store's heads.
+fn write_line_as(
+    lines: &suzatary_stores::stores::conversations::InMemory,
+    conversation: ConversationId,
+    actor: Actor,
+    held: u32,
+    entry: &Entry,
+) {
+    use suzatary_store::store::Doc as _;
+    let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::written_under(
+        &fixture_rules(),
+        conversation,
+        actor,
+        held,
+        entry,
+        &lines.entropy,
+    )
+    .expect("a line");
+    for key in keys {
+        lines.keys.set(&key.name(), &key).expect("kept");
+    }
+    lines.lines.append(line).expect("said");
+}
+
 /// Every summarised node, with the lines it spans and its height.
 fn summarised(read: &Digest) -> Vec<(Hash, std::ops::Range<usize>)> {
     let mut found = Vec::new();

@@ -1,11 +1,13 @@
-//! Asking again over a real server: `POST …/regenerate` and `POST …/edit` set the last round
-//! aside and the worker answers in a fresh session; a round that wrote anything is refused.
+//! Asking again over a real server, as a tab asks it: an `Again` line handed to the lines sets the
+//! last round aside and the worker answers in a fresh session; an edit is that line and the new
+//! question resting on it; a round that wrote anything is refused.
 
 use crate::common;
 
 use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
+use suzatary_conversations::secretary::store::Rewind;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -23,13 +25,6 @@ fn serving(tag: &str, model: FakeModel) -> (String, Arc<Fakes>) {
 
 fn open(base: &str) -> String {
     common::opened(base, "A morning")
-}
-
-fn post(base: &str, id: &str, verb: &str, body: &serde_json::Value) -> u16 {
-    common::status(&common::act(
-        &format!("{base}/api/secretary/conversations/{id}/{verb}"),
-        body,
-    ))
 }
 
 /// Each turn as (who, text, set aside).
@@ -55,7 +50,7 @@ fn row(who: &str, text: &str, aside: bool) -> (String, String, bool) {
 /// Regenerate, then edit: each sets the last round aside, keeps every turn
 /// and index, and the next answer comes from a fresh session.
 #[test]
-fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
+fn a_regenerate_and_an_edit_ask_again_over_the_tab_s_lines() {
     let (base, fakes) = serving(
         "rewind-again",
         FakeModel::saying([
@@ -65,14 +60,14 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
         ]),
     );
     let id = open(&base);
-    let _ = common::say(&base, &id, "what changed");
+    let question = common::say(&base, &id, "what changed");
     assert_eq!(
         common::settled(&base, &id)["again"],
         0,
         "the box offers the question it would ask again"
     );
 
-    assert_eq!(post(&base, &id, "regenerate", &serde_json::json!({})), 202);
+    let _ = common::asked_again(&base, &id, &question, Rewind::Regenerate);
     let regenerated = common::settled(&base, &id);
     assert_eq!(
         shape(&regenerated),
@@ -97,15 +92,7 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
         "the set-aside answer is never delivered"
     );
 
-    assert_eq!(
-        post(
-            &base,
-            &id,
-            "edit",
-            &serde_json::json!({"say": "what changed today"})
-        ),
-        202
-    );
+    let _ = common::edited(&base, &id, &question, "what changed today");
     let edited = common::settled(&base, &id);
     assert_eq!(
         shape(&edited),
@@ -133,29 +120,13 @@ fn a_round_that_remembered_is_refused() {
         ]),
     );
     let id = open(&base);
-    let _ = common::say(&base, &id, "I moved to Oslo, remember that");
+    let question = common::say(&base, &id, "I moved to Oslo, remember that");
     common::settled(&base, &id);
-    let mut refused = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/regenerate"),
-        &serde_json::json!({}),
-    );
-    assert_eq!(common::status(&refused), 409);
-    let said = common::body_json(&mut refused);
-    assert!(
-        said["error"]
-            .as_str()
-            .is_some_and(|error| error.contains("ask again")),
-        "{said}"
-    );
-    assert_eq!(
-        post(
-            &base,
-            &id,
-            "edit",
-            &serde_json::json!({"say": "forget that"})
-        ),
-        409
-    );
+    for how in [Rewind::Regenerate, Rewind::Edit] {
+        let sealed = common::sealed(&base, &id, &common::again_line(&base, &question, how));
+        let refused = common::refused_line(&base, &sealed);
+        assert!(refused.contains("never hides one"), "{refused}");
+    }
     let after = common::settled(&base, &id);
     assert!(
         shape(&after).iter().all(|(_, _, aside)| !aside),

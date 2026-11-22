@@ -20,6 +20,9 @@ use crate::chrome::mark;
 use crate::places::Place;
 use crate::runtime::{Answer, Local, Reach, Register, answered, read};
 
+/// The most files one turn holds, as the box takes it.
+const MAX_FILES: usize = suzatary_lines::secretary::lines_rule::MAX_ATTACHMENTS_PER_TURN;
+
 /// A file the box held back until the owner says to keep it private in their Drive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Withheld {
@@ -43,10 +46,14 @@ impl Held {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Mode {
+/// What a Send asks: a question, or the question whose line the person chose to edit asked again
+/// in the box's words, named as they chose it, never as "the last one".
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+#[ts(rename = "ComposerMode")]
+pub enum Mode {
     Asking,
-    Editing,
+    Editing { question: String },
 }
 
 /// `Local::Draft`: the box's words, and other words a conflict sets beside them.
@@ -243,7 +250,7 @@ impl Composer {
 
     #[must_use]
     pub(crate) fn editing(&self) -> bool {
-        self.mode == Mode::Editing
+        matches!(self.mode, Mode::Editing { .. })
     }
 
     fn typed(&mut self, text: String) -> Vec<Out> {
@@ -299,7 +306,8 @@ impl Composer {
         out
     }
 
-    pub(crate) fn edit(&mut self, question: &TurnRow) -> Vec<Out> {
+    /// `question`, the turn of the line named `line`, in the box to be edited.
+    pub(crate) fn edit(&mut self, question: &TurnRow, line: String) -> Vec<Out> {
         let suzatary_topics::wire::topics::Speaker::Person {
             references,
             attachments,
@@ -308,7 +316,7 @@ impl Composer {
         else {
             return Vec::new();
         };
-        self.mode = Mode::Editing;
+        self.mode = Mode::Editing { question: line };
         self.references = references.iter().map(ToString::to_string).collect();
         self.files.clone_from(attachments);
         let mut out = self.typed(question.text.clone());
@@ -325,6 +333,7 @@ impl Composer {
                 self.references.clear();
                 self.files.clear();
                 self.kept.clear();
+                self.mode = Mode::Asking;
                 vec![self.keep("Settled")]
             }
             None => Vec::new(),
@@ -355,22 +364,36 @@ impl Composer {
     pub(crate) fn update(&mut self, ev: Ev) -> Vec<Out> {
         match ev {
             Ev::Typed(text) => self.typed(text),
-            Ev::Picked(files) => files
-                .into_iter()
-                .map(|f| {
-                    self.picks += 1;
-                    let post = Out::Upload(
-                        Asking::Upload(self.picks),
-                        Uploading {
-                            file: f.base64.clone(),
-                            name: f.name.clone(),
-                            private: false,
-                        },
-                    );
-                    self.uploading.push((self.picks, f));
-                    post
-                })
-                .collect(),
+            Ev::Picked(files) => {
+                // The box takes at most this many files in one turn: a turn past it is refused,
+                // so no more are taken here.
+                let room = MAX_FILES
+                    .saturating_sub(self.files.len() + self.uploading.len() + self.held.len());
+                let over = files.len() > room;
+                let mut out: Vec<Out> = files
+                    .into_iter()
+                    .take(room)
+                    .map(|f| {
+                        self.picks += 1;
+                        let post = Out::Upload(
+                            Asking::Upload(self.picks),
+                            Uploading {
+                                file: f.base64.clone(),
+                                name: f.name.clone(),
+                                private: false,
+                            },
+                        );
+                        self.uploading.push((self.picks, f));
+                        post
+                    })
+                    .collect();
+                if over {
+                    out.push(Out::Toast(format!(
+                        "At most {MAX_FILES} files in one turn."
+                    )));
+                }
+                out
+            }
             Ev::Detached(r) => {
                 self.references.retain(|x| *x != r);
                 Vec::new()
@@ -449,15 +472,9 @@ impl Composer {
                 .collect(),
             mode: self.mode.clone(),
         };
-        // A question is sealed in the tab: its words stay until it is kept. An edit is the box's
-        // act, and empties the box at once.
-        if self.mode == Mode::Asking {
-            self.sealing = Some(sent.text.clone());
-            return vec![Out::Send(sent)];
-        }
-        let mut out = self.emptied();
-        out.insert(0, Out::Send(sent));
-        out
+        // A question and an edit are sealed in the tab: the words stay until the line is kept.
+        self.sealing = Some(sent.text.clone());
+        vec![Out::Send(sent)]
     }
 
     pub(crate) fn answered(&mut self, ask: Asking, a: Answer) -> Vec<Out> {

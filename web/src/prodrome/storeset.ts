@@ -51,7 +51,7 @@ export namespace storeset {
     readonly reset: (store: stores.Name) => Promise<readonly string[]>
     // `w` written into its store as `actor` and signed, settled before the box hears of it; a refusal arrives as a move.
     readonly write: (w: topics.Write, at: string, actor: string) => Promise<void>
-    // `line` sealed as `actor`'s, read at once and signed, handed over behind the answer.
+    // `line` sealed as `actor`'s and signed, kept and read at once, handed over behind the answer.
     readonly seal: (line: sealing.Sealing, at: string, actor: string) => Promise<sealing.Sealed>
     // The person acted on the refusals of the own lines named `lines`: the device lets their words go.
     readonly acted: (lines: readonly string[]) => Promise<void>
@@ -74,7 +74,7 @@ export namespace storeset {
     ),
   )
   // The bytes a seal draws its keys from: one key of 32 for each slot. A line this tab writes holds one, and a seal
-  // makes at most two lines (a begun topic's opening and question).
+  // makes at most two lines (a begun topic's opening and question, an edit's `Again` and question).
   const ENTROPY = 64
   // The topic stores this tab writes, each with the noun a refusal names.
   const NOUNS: { readonly [N in topics.Store]: string } = { topics: "topic", "topic-aliases": "topic's new name" }
@@ -227,8 +227,9 @@ export namespace storeset {
     }
 
     // Sealed in the worker: the first seal compiles the scrub's patterns, paid off the page's thread. A rename, a question,
-    // a stop and a topic begun with its question are answered at once and handed over behind the answer, all a seal made
-    // in one post. A setup is answered once the box holds it, since what a page does next (the setup's note) is the box's.
+    // a stop, an `Again` and a topic begun with its question are answered at once and handed over behind the answer, all
+    // a seal made in one post. A setup is answered once the box holds it, since what a page does next (the setup's note)
+    // is the box's.
     const seal = async (line: sealing.Sealing, at: string, actor: string): Promise<sealing.Sealed> => {
       const start = performance.now()
       // Each part of a seal timed on its own (`seal:*`), so a slow Send says which part it waited on.
@@ -239,34 +240,45 @@ export namespace storeset {
         return a
       }
       await part("ready", () => readies.All.get())
-      // A SEAL, whole under the device's lock: the device's row read into the core (its records, then the acts), then
-      // whether the conversation is held, the seal and its keep, with no wait between that question and the seal, so a
-      // reset that lands meanwhile is seen. A line rests on what every other tab of the device wrote: the device's lines
-      // are one chain, which no later line of the box reorders. Where the lock is not had (no Web Locks, or a holder
-      // frozen past `ownlines.LOCK_MS`) this is per tab: two tabs sealing at once write two lines that rest on nothing
-      // of each other, read by their clocks as two devices' are.
+      // A SEAL, one step under the device's lock: the device's row read into the core (its records, then the acts), the
+      // core's seal, which asks whether the conversation is held with no wait before it, so a reset that lands meanwhile
+      // is seen, then the new lines signed, and the lines and their signatures kept in one write of the row, which
+      // publishes their move. The seal answers once that write is done: no draw sees a line kept and not signed, and the
+      // answer leaves before any page has read the move. A line rests on what every other tab of the device wrote: the
+      // device's lines are one chain, which no later line of the box reorders. Where the lock is not had (no Web Locks,
+      // or a holder frozen past `ownlines.LOCK_MS`) this is per tab: two tabs sealing at once write two lines that rest
+      // on nothing of each other, read by their clocks as two devices' are.
       //
       // A seal answers which: sealed, or not sealed for a cause a pull may cure (a conversation the tab does not hold:
       // opened a moment ago, by another device, or a reset that landed meanwhile; one resting on a line the tab does not
-      // hold; or no pull landed since a reset, which a topic begun or a setup needs), when nothing was sealed. That one is pulled and the seal tried again,
-      // once, outside the lock. Anything else is the seal's own failure, never tried again: after the core sealed, a
-      // second try would seal a second line.
+      // hold; or no pull landed since a reset, which a topic begun or a setup needs). That one is pulled and the seal tried
+      // again, once, outside the lock. Anything else is the seal's own failure, never tried again: after the core sealed,
+      // a second try would seal a second line. A signature that fails is no failure of the seal: the line is kept
+      // unsigned, and the hand-over signs it.
       type Attempt = { readonly type: "Sealed"; readonly sealed: sealing.Sealed } | { readonly type: "Unheld"; readonly why: string }
-      const conversation = line.type === "Say" || line.type === "Stop" || line.type === "Rename" ? line.conversation : null
       const sealOnce = (): Promise<Attempt> => {
         const asked = performance.now()
         return ownlines.device(ownlines.LOCK, async (): Promise<Attempt> => {
           measure("seal:lock", asked, { store: "lines" })
           await part("row", () => lines.ownNow())
-          if (conversation !== null && !lines.holds(conversation)) return { type: "Unheld", why: `no conversation ${conversation} on this device to write to` }
-          // Its keys drawn here; kept on the device and read at once, a begun topic's two lines in one move.
+          // Its keys drawn here; kept on the device and read at once, a begun topic's two lines and an edit's in one move.
           const sealing = performance.now()
           const sealed = held.seal(JSON.stringify(line), at, actor, crypto.getRandomValues(new Uint8Array(ENTROPY)))
           measure("seal:core", sealing, { store: "lines" })
-          if (typeof sealed === "string") return { type: "Unheld", why: sealed }
-          const kept = { name: sealed.name, conversation: sealed.conversation }
-          await part("keep", () => lines.ownKeep(sealed))
-          return { type: "Sealed", sealed: kept }
+          switch (sealed.type) {
+            case "Unheld": {
+              const why = sealed.why
+              sealed.free()
+              return { type: "Unheld", why }
+            }
+            case "Sealed": {
+              const kept = { name: sealed.name, conversation: sealed.conversation }
+              const signed = await part("sign", () => writes.signatures("lines"))
+              if (signed.type === "Partly") say({ type: "Refused", why: `This tab's ${LINE} was kept unsigned (${signed.why}); the next sync signs it.` })
+              await part("keep", () => lines.ownKeep([sealed, ...signed.steps]))
+              return { type: "Sealed", sealed: kept }
+            }
+          }
         })
       }
       const first = await sealOnce()
@@ -275,7 +287,6 @@ export namespace storeset {
       if (attempt.type === "Unheld") throw new Error(attempt.why)
       const answer = attempt.sealed
       measure("write:seal", start, { store: "lines" })
-      await writes.sign("lines")
       if (line.type !== "SetUp") {
         void handOverLines().catch(failed("lines"))
         return answer

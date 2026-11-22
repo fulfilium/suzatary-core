@@ -222,17 +222,17 @@ impl Lines {
         };
         let mut payload = readings::conversation(&read, &inbox.fold()?, &window, &dress);
         // Its own lines the box does not hold, each with the box's last ruling: one of a turn drawn
-        // on it, one refused for good beside the transcript.
+        // on the line it names, one refused for good beside the transcript.
         let drawn: BTreeSet<&str> = payload.lines.iter().map(String::as_str).collect();
         let waiting = self
             .0
             .rulings(&id)
             .into_iter()
-            .filter(|(line, ruling)| {
-                matches!(ruling, Ruling::Refused { .. }) || drawn.contains(line.as_str())
+            .filter(|(own, ruling)| {
+                matches!(ruling, Ruling::Refused { .. }) || drawn.contains(own.drawn_on().as_str())
             })
-            .map(|(line, ruling)| suzatary_topics::wire::topics::Waiting {
-                line: line.as_str().to_owned(),
+            .map(|(own, ruling)| suzatary_topics::wire::topics::Waiting {
+                line: own.drawn_on().as_str().to_owned(),
                 ruling: suzatary_topics::wire::topics::Ruling::of(ruling),
             })
             .collect();
