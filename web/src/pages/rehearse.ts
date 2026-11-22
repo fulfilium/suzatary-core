@@ -1,17 +1,17 @@
 // The rehearsal worker drives each page's class through its rehearsal (`Hosted::rehearsal`) as `painter/run.ts` does.
-// V8 compiles a wasm function at its first call, into the module every thread shares. No page is drawn before the
-// rehearsal ends (`program.module` awaits it), so a visit finds compiled what the rehearsal's inputs reach: each hold's
-// `Loading` before its answer, and a stream reading holding a store's window of blocks' HTML. What only a later reading
-// reaches compiles on the page's thread. It always says it is done and closes: a failed rehearsal costs only warmth.
+// V8 compiles a wasm function at its first call, into the module every thread shares, so a visit finds compiled what
+// the rehearsal's inputs reach; what only a later reading reaches compiles on the page's thread.
 
 import deliver, { type Written, written } from "../painter/deliver"
+import time from "../app/time"
+import rehearsal from "./rehearsal"
 
 type Glue = typeof import("./views.js")
 
 // The worker's own scope, typed by what this file uses of it (the program's lib is the DOM's).
 type Scope = {
-  addEventListener: (t: "message", f: (e: MessageEvent<WebAssembly.Module>) => void) => void
-  postMessage: (said: null) => void
+  addEventListener: (t: "message", f: (e: MessageEvent<rehearsal.Said>) => void) => void
+  postMessage: (told: rehearsal.Told) => void
 }
 const scope: Scope = self
 
@@ -43,11 +43,17 @@ const rehearse = async (module: WebAssembly.Module): Promise<void> => {
   }
 }
 
-scope.addEventListener("message", e =>
-  void rehearse(e.data)
-    .catch((err: unknown) => console.warn("rehearsal", err))
-    .finally(() => {
-      scope.postMessage(null)
-      close()
-    }),
-)
+scope.addEventListener("message", e => {
+  const said = e.data
+  switch (said.type) {
+    case "Zone":
+      return scope.postMessage({ type: "Offsets", zone: said.zone, offsets: time.offsets({ name: said.zone }, ...rehearsal.span(said.now)) })
+    case "Module":
+      return void rehearse(said.module)
+        .catch((err: unknown) => console.warn("rehearsal", err))
+        .finally(() => {
+          scope.postMessage({ type: "Rehearsed" })
+          close()
+        })
+  }
+})

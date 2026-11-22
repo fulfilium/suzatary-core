@@ -41,10 +41,10 @@ const LINES_INSTANCE = process.env["E2E_LINES_INSTANCE"] ?? ""
 const OUT = process.env["SUZATARY_OPENPROF"] ?? ""
 const VISITS = Number(process.env["SUZATARY_OPENPROF_VISITS"] ?? "6")
 const RATE = Number(process.env["SUZATARY_OPENPROF_RATE"] ?? "1")
-type Phase = "opening" | "stream"
+type Phase = "opening" | "stream" | "first"
 const PHASE: Phase = ((p: string): Phase => {
-  if (p === "opening" || p === "stream") return p
-  throw new Error(`SUZATARY_OPENPROF_PHASE is opening or stream, not ${p}`)
+  if (p === "opening" || p === "stream" || p === "first") return p
+  throw new Error(`SUZATARY_OPENPROF_PHASE is opening, stream or first, not ${p}`)
 })(process.env["SUZATARY_OPENPROF_PHASE"] ?? "opening")
 // Marked as the phase starts: the trace is read from it on.
 const OPEN = "openprof:open"
@@ -57,6 +57,11 @@ const LATE_FONT = process.env["SUZATARY_OPENPROF_LATE_FONT"] ?? ""
 // Each warm visit a new document (a query of its own), or, by default, the same query again, which changes only the
 // fragment: then what one opening left in the document (a dropped font, say) meets the next opening.
 const NEW_DOCUMENT = process.env["SUZATARY_OPENPROF_NEW_DOCUMENT"] === "1"
+// A zone the device remembers before its first visit (`app/ownerzone.ts`), as a device that met the box in another zone
+// does: the box's own zone then arrives while the views module loads.
+const REMEMBERED_ZONE = process.env["SUZATARY_OPENPROF_REMEMBERED_ZONE"] ?? ""
+// Each visit's whole trace, as `<TRACE>.<load>.json`, which DevTools' Performance panel opens.
+const TRACE = process.env["SUZATARY_OPENPROF_TRACE"] ?? ""
 
 const app = await suite("openprof", PHONE)
 
@@ -463,11 +468,22 @@ type Opening = {
   readonly uses: { readonly before: unknown; readonly after: unknown }
   readonly compiled: Compiled
   readonly stepped: Steps
+  // The document's `views:load` in ms (the module fetched, compiled, instantiated and rehearsed), and each zone whose
+  // offsets a draw read itself (`page:offsets`) because the rehearsal worker had not told them.
+  readonly viewsLoad: readonly number[]
+  readonly offsetsInDraw: readonly string[]
 } & Broken
 
 const visit = async (load: string): Promise<Opening> => {
   if (LATE_FONT !== "") await app.page.cold(true)
   const release = LATE_FONT === "" ? null : await app.page.holdRequests([LATE_FONT])
+  // The stream as the document's first page: traced from the navigation, the document's start its mark.
+  if (PHASE === "first") {
+    const stop = await app.page.trace(CATEGORIES)
+    await app.page.navigate(`${LINES_BASE}/?${load}#/secretary`)
+    await settle(BULK)
+    return measuredVisit(load, stop, 0, release, null)
+  }
   await app.page.navigate(`${LINES_BASE}/?${load}#/`)
   await settle(`document.querySelectorAll(".tree .row").length > 0`)
   const [to, drawn] = await (async (): Promise<readonly [string, string]> => {
@@ -489,6 +505,11 @@ const visit = async (load: string): Promise<Opening> => {
   const since = await app.page.evaluate<number>(`performance.now()`)
   await app.page.evaluate(`void (performance.mark(${JSON.stringify(OPEN)}), (location.hash = ${JSON.stringify(to)}))`)
   await settle(drawn)
+  return measuredVisit(load, stop, since, release, before)
+}
+
+// The visit's trace from `since` (the page's clock) on, read once the phase settled.
+const measuredVisit = async (load: string, stop: () => Promise<readonly TraceEvent[]>, since: number, release: (() => Promise<void>) | null, before: unknown): Promise<Opening> => {
   if (release !== null) {
     await release()
     await app.page.cold(false)
@@ -500,6 +521,7 @@ const visit = async (load: string): Promise<Opening> => {
     await settle(`performance.now() - ${at} > ${PRESSURE_MS}`)
   }
   const events = await stop()
+  if (TRACE !== "") writeFileSync(`${TRACE}.${load}.json`, JSON.stringify({ traceEvents: events }))
   const fonts = await app.page.evaluate<unknown[]>(`window.__fonts.map(([at, type, faces]) => [at - ${since}, type, faces])`)
   const faces = await app.page.evaluate<unknown[]>(`[...document.fonts].map((f) => f.family + " " + f.style + " " + f.status)`)
   const uses = { before, after: await app.page.evaluate<unknown>(FACES) }
@@ -517,7 +539,9 @@ const visit = async (load: string): Promise<Opening> => {
   .map((m) => [m.name, Math.round(m.duration)])`)
   const broken = await analyse(events)
   const shape = await app.page.evaluate<Shape>(SHAPE)
-  const opening = { load, longtaskMs: Math.round(longest?.[1] ?? 0), within, shape, order: order(events), largest, censuses, fonts, faces, uses, compiled: compiledOf(events), stepped: await steppedOf(events), ...broken }
+  const viewsLoad = await app.page.evaluate<number[]>(`performance.getEntriesByName("views:load").map((m) => Math.round(m.duration))`)
+  const offsetsInDraw = await app.page.evaluate<string[]>(`performance.getEntriesByName("page:offsets").map((m) => m.detail.zone)`)
+  const opening = { load, viewsLoad, offsetsInDraw, longtaskMs: Math.round(longest?.[1] ?? 0), within, shape, order: order(events), largest, censuses, fonts, faces, uses, compiled: compiledOf(events), stepped: await steppedOf(events), ...broken }
   console.log(`openprof: ${JSON.stringify(opening)}`)
   return opening
 }
@@ -525,11 +549,13 @@ const visit = async (load: string): Promise<Opening> => {
 app.scene(`measured: what the page's thread runs inside the longest task of a phase (${PHASE})`, async () => {
   assert.notEqual(LINES_BASE, "", "E2E_BASE_LINES is unset — scripts/web-e2e.sh sets it")
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
-  const unobserve = await app.page.beforeEveryDocument(`${LONG}; ${OBSERVE}`)
+  if (REMEMBERED_ZONE !== "") await app.page.evaluate(`localStorage.setItem("suzatary.zone", ${JSON.stringify(REMEMBERED_ZONE)})`)
+  // The first page's phase begins with the document.
+  const unobserve = await app.page.beforeEveryDocument(`${LONG}; ${OBSERVE}${PHASE === "first" ? `; performance.mark(${JSON.stringify(OPEN)})` : ""}`)
   await app.page.throttle(RATE)
   try {
     const openings: Opening[] = [await visit("cold")]
-    for (let i = 0; i < VISITS; i += 1) openings.push(await visit(NEW_DOCUMENT || PHASE === "stream" ? `warm${i}` : "warm"))
+    for (let i = 0; i < VISITS; i += 1) openings.push(await visit(NEW_DOCUMENT || PHASE !== "opening" ? `warm${i}` : "warm"))
     if (OUT !== "") writeFileSync(OUT, `${JSON.stringify(openings, null, 2)}\n`)
   } finally {
     await app.page.throttle(1)

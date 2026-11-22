@@ -35,6 +35,7 @@ import parts from "./parts"
 import type { KeyTarget } from "../shell/keyboard"
 import { clearKeyTarget, setKeyTarget } from "../shell/keyboard"
 import local from "./local"
+import rehearsal from "./rehearsal"
 import { measure } from "../app/perf"
 import text from "../wire/text"
 
@@ -42,31 +43,30 @@ export namespace program {
   // Once per tab; the load is a User Timing measure the bench reads.
   export const module = once.of(async () => {
     const t0 = performance.now()
-    const [glue, compiled] = await Promise.all([
-      import("./views.js"),
-      WebAssembly.compileStreaming(fetch(new URL("./views_bg.wasm", import.meta.url).href)),
-    ])
-    // The rehearsal worker makes each function's first call, so V8 has compiled it before a page's first input.
-    await Promise.all([glue.default({ module_or_path: compiled }), rehearsed(compiled)])
-    performance.measure("views:load", { start: t0, end: performance.now() })
-    return glue
+    const worker = new Worker(new URL("./pagework.js", import.meta.url), { type: "module" })
+    const work = rehearsal.start(worker, app.now().zone, time.now(), (zone, os) => void (offsets.has(zone) || offsets.set(zone, os)))
+    return work.loading(async () => {
+      const [glue, compiled] = await Promise.all([
+        import("./views.js"),
+        WebAssembly.compileStreaming(fetch(new URL("./views_bg.wasm", import.meta.url).href)),
+      ])
+      await Promise.all([glue.default({ module_or_path: compiled }), work.rehearse(compiled), work.offsets])
+      performance.measure("views:load", { start: t0, end: performance.now() })
+      return glue
+    })
   }).get
 
-  // A rehearsal that fails costs the page only its warmth.
-  const rehearsed = (compiled: WebAssembly.Module): Promise<void> =>
-    new Promise(done => {
-      const worker = new Worker(new URL("./pagework.js", import.meta.url), { type: "module" })
-      worker.addEventListener("message", () => done())
-      worker.addEventListener("error", () => done())
-      worker.postMessage(compiled)
-    })
-
-  // Once per zone, ten years back to a day ahead: an instant from older mail is read at the oldest offset.
+  // The worker reads a zone's offsets (a zone's first read loads the browser's zone data: 100 ms at a CPU throttle of 4)
+  // and makes each function's first call, so V8 compiles it before a page's first input. It reads the zone the device
+  // holds as the load starts: where the box names another (a device that remembered none, UTC, or another), the first
+  // draw reads that zone's offsets itself, measured as `page:offsets`.
   const offsets = new Map<string, readonly time.Offset[]>()
-  export const offsetsOf = (z: time.Zone): readonly time.Offset[] => {
+  const offsetsOf = (z: time.Zone): readonly time.Offset[] => {
     const known = offsets.get(z.name)
     if (known !== undefined) return known
-    const made = time.offsets(z, time.now() - 10 * 365 * 86_400_000, time.now() + 86_400_000)
+    const t0 = performance.now()
+    const made = time.offsets(z, ...rehearsal.span(time.now()))
+    performance.measure("page:offsets", { start: t0, end: performance.now(), detail: { zone: z.name } })
     offsets.set(z.name, made)
     return made
   }
@@ -224,7 +224,7 @@ export namespace program {
         })
         return () => ((gone = true), unheard())
       }
-      const handle: run.Handler<In, Out> = (e, send, stepped) => {
+      const handle: run.Handler<In, Out> = (e, send) => {
         const answered = (name: unknown) => (a: Answer): void => send({ type: "Answered", ask: name, answer: a })
         switch (e.type) {
           case "Hold": {
@@ -318,7 +318,7 @@ export namespace program {
             return field.scrollIntoView({ block: "nearest" })
           }
           case "Scroll":
-            return scroll.move(box(), root, e.to, stepped.fromEnd)
+            return e.to.type === "Keep" ? undefined : scroll.move(box(), root, e.to)
           case "Copy":
             return void navigator.clipboard.writeText(e.text).then(() => toast("Copied"), (x: unknown) => toast(lo.reason(x)))
           case "Go":
@@ -352,7 +352,8 @@ export namespace program {
       const t1 = performance.now()
       const program = new glue[page](flags)
       const t2 = performance.now()
-      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box, parts.refresh)
+      const keeps = (e: Out): boolean => e.type === "Scroll" && e.to.type === "Keep"
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh)
       const t3 = performance.now()
       performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
       const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)

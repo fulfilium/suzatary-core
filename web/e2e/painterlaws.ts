@@ -21,7 +21,7 @@ export namespace painterlaws {
 
   // The first law that failed, at which step and where in the tree, or none.
   export type Report =
-    | { readonly type: "Held"; readonly steps: number; readonly nodes: number; readonly effects: number }
+    | { readonly type: "Held"; readonly steps: number; readonly nodes: number; readonly effects: number; readonly kept: number }
     | { readonly type: "Broke"; readonly law: string; readonly step: number; readonly at: string; readonly painted: string; readonly expected: string };
 
   // A node as a reader of the page sees it: its tag, attributes and the field's value, or its text; never an id.
@@ -70,6 +70,7 @@ export namespace painterlaws {
   // again.
   type Ran = {
     readonly root: HTMLElement;
+    readonly box: Box;
     readonly effects: readonly unknown[];
     readonly program: Program;
     readonly step: (s: Step) => void;
@@ -80,15 +81,29 @@ export namespace painterlaws {
   // The device holds no block: a block shows its plain text, in both draws alike.
   const held: painter.Blocks = () => Promise.resolve(null);
 
-  const started = (make: () => Program): Ran => {
+  // A scroll box whose height is ten times the nodes painted under `root`, and which logs every read of its height and
+  // place and every place set, with the values: `[h, height]`, `[t, top]`, `[set, top]`.
+  type Box = { readonly element: HTMLElement; readonly log: (readonly [string, number])[] };
+  const boxOf = (root: HTMLElement): Box => {
+    const element = document.createElement("div");
+    const log: (readonly [string, number])[] = [];
+    let top = 0;
+    Object.defineProperty(element, "scrollHeight", { get: () => { const h = count(root) * 10; log.push(["h", h]); return h; } });
+    Object.defineProperty(element, "scrollTop", { get: () => (log.push(["t", top]), top), set: (v: number) => void (log.push(["set", v]), (top = v)) });
+    return { element, log };
+  };
+
+  // `keeps`: the effects whose step holds the box's place across its patches.
+  const started = (make: () => Program, keeps: (e: unknown) => boolean): Ran => {
     const root = document.createElement("div");
+    const box = boxOf(root);
     const program = make();
     const effects: unknown[] = [];
     const waiting: Ask[] = [];
     const page = run.start(root, program, foreign, held, e => {
       effects.push(e);
       if (isAsk(e)) waiting.push(e);
-    }, undefined, () => document.scrollingElement ?? document.documentElement);
+    }, keeps, undefined, () => box.element);
     const step = (s: Step): void => {
       switch (s.type) {
         case "input":
@@ -113,7 +128,7 @@ export namespace painterlaws {
     };
     // The bytes an input handed a second time patches: none, if painting a view again patches nothing.
     const again = (input: Written): number => deliver(program, written(input)).length;
-    return { root, effects, program, step, again, destroy: page.destroy };
+    return { root, box, effects, program, step, again, destroy: page.destroy };
   };
 
   const drawnFresh = (p: Program): HTMLElement => {
@@ -124,15 +139,29 @@ export namespace painterlaws {
 
   const count = (n: Node): number => 1 + [...n.childNodes].reduce((k, c) => k + count(c), 0);
 
+  // The log read as keeps, each `h, t` before the patches and `h, set` after; the first that breaks, printed, or null.
+  const keptBroken = (log: readonly (readonly [string, number])[]): string | null => {
+    for (let i = 0; i < log.length; i += 4) {
+      const [h0, t0, h1, s] = log.slice(i, i + 4);
+      const shape = [h0?.[0], t0?.[0], h1?.[0], s?.[0]].join(",");
+      if (shape !== "h,t,h,set" || h0 === undefined || t0 === undefined || h1 === undefined || s === undefined) return `reads ${shape} at ${i}`;
+      if (s[1] !== h1[1] - (h0[1] - t0[1])) return JSON.stringify(log.slice(i, i + 4));
+    }
+    return null;
+  };
+
   /**
    * The laws over one run of `steps`:
    * 1. a patch applied equals a fresh draw of the new view, after every step;
    * 2. the view is a function of the model: a second run of the same steps paints the same DOM and asks the same effects;
-   * 3. painting a view again patches nothing: an input handed twice patches nothing the second time.
+   * 3. painting a view again patches nothing: an input handed twice patches nothing the second time;
+   * 4. a step none of whose effects keeps the box's place reads neither its height nor its place (run `a` keeps none);
+   *    a keeping step reads both before its patches and leaves the box as far from its end after them (run `b` keeps
+   *    the place at every ask).
    */
   export const check = (make: () => Program, steps: readonly Step[]): Report => {
-    const a = started(make);
-    const b = started(make);
+    const a = started(make, () => false);
+    const b = started(make, isAsk);
     let nodes = 0;
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i];
@@ -149,11 +178,15 @@ export namespace painterlaws {
         const [x, y] = [a.again(s.input), b.again(s.input)];
         if (x !== 0 || y !== 0) return { type: "Broke", law: "painting a view again patches nothing", step: i, at: "", painted: `${x} and ${y} bytes`, expected: "0 bytes" };
       }
+      if (a.box.log.length > 0) return { type: "Broke", law: "a step that keeps no place reads no layout", step: i, at: "", painted: JSON.stringify(a.box.log), expected: "[]" };
+      const kept = keptBroken(b.box.log);
+      if (kept !== null) return { type: "Broke", law: "a keeping step holds the box as far from its end", step: i, at: "", painted: kept, expected: "set = h after - (h before - t before)" };
       nodes = Math.max(nodes, count(a.root));
     }
     const effects = a.effects.length;
+    const kept = b.box.log.filter(([k]) => k === "set").length;
     for (const r of [a, b]) r.destroy();
-    return { type: "Held", steps: steps.length, nodes, effects };
+    return { type: "Held", steps: steps.length, nodes, effects, kept };
   };
 }
 export default painterlaws;

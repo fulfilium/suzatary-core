@@ -15,9 +15,7 @@ export namespace run {
     readonly effects: () => string
     readonly free: () => void
   }
-  // `stepped.fromEnd`: the scroll box's distance from its end before the step's patches.
-  export type Handler<I, E> = (effect: E, send: (input: I) => void, stepped: Stepped) => void
-  export type Stepped = { readonly fromEnd: number }
+  export type Handler<I, E> = (effect: E, send: (input: I) => void) => void
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
   // An input as its step's measure names it: its type, and the ask it answers.
@@ -27,13 +25,16 @@ export namespace run {
   // Serde prints the `Effect` sum the handler's type is generated from, so it needs no decoder.
   const parse = <E>(json: string): readonly E[] => JSON.parse(json)
 
-  // A `Keep` restores the place of the scroll box `box` finds (one a page draws itself is there once drawn).
+  // A step with an effect that `keeps` holds the box `box` finds (a page's own once drawn) at its distance from the end
+  // across its patches, before any of its effects is handled (a `Focus` of the same step moves the box after); only such
+  // a step reads layout before its patches, so the others' patches are laid out by the frame.
   export const start = <I extends Input<unknown, unknown, unknown>, E>(
     root: HTMLElement,
     page: Module,
     foreign: painter.Foreign,
     blocks: painter.Blocks,
     handle: Handler<I, E>,
+    keeps: (effect: E) => boolean,
     gone: ((n: Node) => void) | undefined,
     box: () => Element,
     refresh?: painter.Refresh,
@@ -44,15 +45,15 @@ export namespace run {
       inputs.turn(() => {
         if (!live) return false
         const t0 = performance.now()
-        const b = box()
-        const fromEnd = b.scrollHeight - b.scrollTop
         const bytes = patches()
         if (bytes === undefined) return false
+        const effects = parse<E>(page.effects())
+        const kept = effects.some(keeps) ? scroll.anchor(box()) : null
         dom.apply(bytes)
         scroll.settle(box())
-        const effects = parse<E>(page.effects())
+        if (kept !== null) scroll.keep(kept)
         performance.measure("painter:step", { start: t0, end: performance.now(), detail: { step: name, bytes: bytes.length, effects: effects.length } })
-        for (const e of effects) handle(e, send, { fromEnd })
+        for (const e of effects) handle(e, send)
         return true
       })
     const send = inputs.send

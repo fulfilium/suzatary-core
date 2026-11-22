@@ -157,8 +157,8 @@ app.scene("a frame of the stream lays out one slice, and the rehearsal compiled 
     const drawn = measured(events, "page:draw").find(([, , d]) => (JSON.parse(d) as { readonly page?: string } | null)?.page === "SecretaryPage")
     assert.ok(drawn !== undefined, "the stream's page was drawn")
     const slices = measured(events, "painter:step").filter(([, , d]) => (JSON.parse(d) as { readonly step?: string } | null)?.step === `Answered {"type":"Slice"}`)
-    // What each slice's patches dirtied: the layouts of its frame after its step. A layout inside the step lays out what
-    // an earlier step left, read before the patches are applied.
+    // What each slice's patches dirtied: the layouts of its frame after its step. A layout inside the step is a keeping
+    // step's (`run.start`), which reads the place before its patches and so lays out what an earlier step left.
     const frames = slices.map(([, end]) => {
       const task = complete.find((t) => t.name === "RunTask" && t.ts <= end && end <= t.ts + (t.dur ?? 0))
       const after = complete.filter((e) => task !== undefined && e.ts >= end && e.ts + (e.dur ?? 0) <= task.ts + (task.dur ?? 0))

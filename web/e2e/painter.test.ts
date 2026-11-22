@@ -107,10 +107,11 @@ const steps = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): pai
       : { type: "answer", at: r.int(3), body: { id: `setup-${r.int(3)}` }, refused: r.bool() ? null : "The box refused it." };
   });
 
-app.scene("a patch applied equals a fresh draw, and the same steps paint the same DOM, for Settings' program", async () => {
+app.scene("a patch applied equals a fresh draw, the same steps paint the same DOM, and only a keeping step reads the scroll box, for Settings' program", async () => {
   await app.page.navigate(`${BASE}/#/about`);
   await app.page.evaluate(install);
   let nodes = 0;
+  let kept = 0;
   for (let seed = 1; seed <= RUNS; seed++) {
     const r = rng(seed);
     const lines = pool(r);
@@ -122,6 +123,8 @@ app.scene("a patch applied equals a fresh draw, and the same steps paint the sam
     );
     if (report.type === "Broke") assert.fail(`seed ${seed}, step ${report.step}: ${report.law} fails at ${report.at || "the root"}: painted ${report.painted}, expected ${report.expected}`);
     nodes = Math.max(nodes, report.nodes);
+    kept += report.kept;
   }
   assert.ok(nodes > 20, `the readings drew pages of some size (${nodes} nodes at most)`);
+  assert.ok(kept > 0, "some step kept the box's place");
 });

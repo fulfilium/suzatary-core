@@ -86,12 +86,20 @@ export namespace scroll {
   // After a step's patches.
   export const settle = (box: Element): void => fit(of_(box))
 
-  // `Keep` at once; the rest next frame, and only if the reader has not moved the box since: the compositor may be
-  // scrolling for a wheel the page has not heard yet. The sticky header covers the box's top.
-  export const move = (box: Element, root: Element, to: Scroll, fromEnd: number): void => {
+  // Read before a step's patches; `keep` restores it after them.
+  export type Anchor = { readonly box: Element; readonly fromEnd: number }
+  export const anchor = (box: Element): Anchor => ({ box, fromEnd: box.scrollHeight - box.scrollTop })
+
+  // A page's move is the page's: it ends the run of scrolls counted as the reader's for following one.
+  export const keep = (p: Anchor): void => {
+    of_(p.box).readerAt = Number.NEGATIVE_INFINITY
+    p.box.scrollTop = p.box.scrollHeight - p.fromEnd
+  }
+
+  // Next frame, and only if the reader has not moved the box since: the compositor may be scrolling for a wheel the page
+  // has not heard yet. The sticky header covers the box's top. `Keep` is `run.start`'s.
+  export const move = (box: Element, root: Element, to: Exclude<Scroll, { readonly type: "Keep" }>): void => {
     const b = of_(box)
-    // A page's move is the page's: it ends the run of scrolls counted as the reader's for following one.
-    if (to.type === "Keep") return void ((b.readerAt = Number.NEGATIVE_INFINITY), (box.scrollTop = box.scrollHeight - fromEnd))
     const asked = performance.now()
     requestAnimationFrame(() => {
       if (b.readerAt >= asked) return
