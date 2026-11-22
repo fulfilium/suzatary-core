@@ -6,9 +6,18 @@
 # heavy step runs. The `quiet` lane runs last, alone: the browser suite's waits are budgets
 # judged on an idle machine.
 #
-# Two halves, each step in exactly one:
-#   tree  a function of the checked-out tree alone; runs with SUZATARY_INSTANCE naming nothing.
-#   live  the tests that read the owner's data tree, so on the box only.
+# Three halves, each step in exactly one:
+#   tree     a function of the checked-out tree alone; runs with SUZATARY_INSTANCE naming nothing.
+#   live     the tests that read the owner's data tree, so on the box only.
+#   history  what the commit messages since the merge base with origin/master declare, a check
+#            that compiles nothing; the train runs the same check in its tool before its halves,
+#            and a refusal there writes no verdict.
+#
+# Each step says what it reads beside the tree (`--list`'s second column): `nothing`, or any of
+# `stores` (the owner's stores), `history` (the commits since the merge base) and `runners` (Nix
+# outputs GitHub's runners or the publication run may have built); a tree step that reads the
+# history is unkept. The train hands the live half SUZATARY_GATE_DATA, a digest of the stores
+# taken before the run, which is in the key of every kept live step and of no other.
 #
 # A pass is kept in .git/gate/<step>/<key>, the key hashing HEAD's tree entries outside the
 # step's `all-but:` paths, the environment the steps read, and proptest's saved
@@ -18,12 +27,12 @@
 # steps run every time.
 #
 # In `nix develop .#triage -c`:
-#   scripts/merge-gate.sh               both halves
-#   scripts/merge-gate.sh --no-live     the tree half (--only-live: the live half)
+#   scripts/merge-gate.sh               every half
+#   scripts/merge-gate.sh --no-live     the tree half (--only-live: the live half; --only-history)
 #   scripts/merge-gate.sh --full ...    every step and every unit, no pass read
 #   scripts/merge-gate.sh --nightly ... --full, every zone and the live half's web suite whole
 #   scripts/merge-gate.sh --no-live --steps fmt,doc   those steps alone
-#   scripts/merge-gate.sh --list        every step: half, lane, reads (needs no shell)
+#   scripts/merge-gate.sh --list        every step: half, reads beside the tree, lane, reads (needs no shell)
 #
 # --steps runs only the named steps (an unknown name is 64); name a step's writers beside it.
 #
@@ -38,22 +47,22 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: scripts/merge-gate.sh [--full | --nightly] [--no-live | --only-live] [--steps <name>[,<name>...]] (in any order) | --list" >&2
+  echo "usage: scripts/merge-gate.sh [--full | --nightly] [--no-live | --only-live | --only-history] [--steps <name>[,<name>...]] (in any order) | --list" >&2
   exit 64
 }
-halves=(tree live) list=0 full=0 nightly=0 half="" only="" given=$#
+halves=(tree live history) list=0 full=0 nightly=0 half="" only="" given=$#
 while (($#)); do
   case "$1" in
     --full) ((!full)) || usage; full=1 ;;
     --nightly) ((!full)) || usage; full=1 nightly=1 ;;
-    --no-live | --only-live) [[ -z "$half" ]] || usage; half="$1" ;;
+    --no-live | --only-live | --only-history) [[ -z "$half" ]] || usage; half="$1" ;;
     --steps) [[ -z "$only" && -n "${2:-}" ]] || usage; only="$2"; shift ;;
     --list) list=1 ;;
     *) usage ;;
   esac
   shift
 done
-case "$half" in --no-live) halves=(tree) ;; --only-live) halves=(live) ;; esac
+case "$half" in --no-live) halves=(tree) ;; --only-live) halves=(live) ;; --only-history) halves=(history) ;; esac
 ((!list || (given == 1))) || usage
 # Unset after reading so no key names it: the order changes no verdict.
 case "${SUZATARY_GATE_SERIAL:-}" in
@@ -134,7 +143,7 @@ keeping() {
 
 environment() {
   env | grep -E '^(PATH|SUZATARY_|CARGO|RUST|NODE|NIX_(CFLAGS|LDFLAGS)|CC|CXX|LD_|LIBRARY_PATH|PKG_CONFIG|FONTCONFIG|TYPST|TZ|LANG|LC_)[A-Z_]*=' \
-    | grep -vE '^SUZATARY_(INSTANCE|GATE_UNITS|GUARD_FULL|GUARD_PASSES|GATE_EVIDENCE)=' | LC_ALL=C sort
+    | grep -vE '^SUZATARY_(INSTANCE|GATE_UNITS|GUARD_FULL|GUARD_PASSES|GATE_EVIDENCE|GATE_DATA)=' | LC_ALL=C sort
 }
 
 # Proptest's saved counterexamples change the cases `test` runs.
@@ -164,7 +173,8 @@ kept_at() {
         return 0
       }
       mode == "all" || (mode == "skip") != named($2)
-    ' "$logs/tree" && cat "$logs/env"
+    ' "$logs/tree" && cat "$logs/env" &&
+      { [[ "${s_half_of[$name]:-}" != live ]] || echo "data ${SUZATARY_GATE_DATA:-}"; }
   } | sha256sum | cut -c1-40)" && printf '%s/%s/%s%s\n' "$kept_dir" "$name" "${unit:+${unit//\//%}/}" "$key"
 }
 
@@ -190,19 +200,36 @@ reads_of() {
   esac
 }
 
+# `nothing`, or what a step reads beside the tree: some of `stores`, `history` and `runners`.
+beside_of() {
+  local what
+  [[ "$1" != nothing ]] || { echo "$1"; return; }
+  for what in ${1//,/ }; do
+    case "$what" in
+      stores | history | runners) ;;
+      *) echo "merge-gate.sh: a step reads nothing, or stores, history and runners beside the tree, not $1" >&2; exit 64 ;;
+    esac
+  done
+  echo "$1"
+}
+
+declare -A s_half_of=()
 s_half=() s_lane=() s_name=() s_reads=() s_cmd=() s_group=()
 lane=""
+# step <half> <name> <reads> <beside> <command>...
 step() {
-  local half="$1" name="$2" reads
+  local half="$1" name="$2" reads beside
   reads="$(reads_of "${3//,/ }")" || exit 64
-  shift 3
+  beside="$(beside_of "$4")" || exit 64
+  shift 4
   if ((list)); then
     # `<reads>~<fallback>`, a format the tests parse.
     local shown="$reads"
     [[ -z "${unit_fallback[$reads]:-}" ]] || shown+="~${unit_fallback[$reads]}"
-    printf '%-5s %-6s %-16s %-50s %s\n' "$half" "$lane" "$name" "${shown// /,}" "$*"
+    printf '%-7s %-15s %-7s %-16s %-50s %s\n' "$half" "$beside" "$lane" "$name" "${shown// /,}" "$*"
     return
   fi
+  s_half_of[$name]="$half"
   s_half+=("$half") s_lane+=("$lane") s_name+=("$name") s_reads+=("$reads") s_cmd+=("$(printf '%q ' "$@")")
   s_group+=("$name")
 }
@@ -398,10 +425,10 @@ clippy_all() {
 }
 
 lane=check
-step tree fmt             $rust   cargo fmt --manifest-path app/Cargo.toml --all --check
-step tree clippy          $rust   clippy_all
-step tree clippy-fixture  $rust   clippy_all --features suzatary/fixture --features suzatary-tooling/seams
-step tree doc             $rust   env RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/Cargo.toml -q --workspace --no-deps --features suzatary/fixture
+step tree fmt             $rust nothing   cargo fmt --manifest-path app/Cargo.toml --all --check
+step tree clippy          $rust nothing   clippy_all
+step tree clippy-fixture  $rust nothing   clippy_all --features suzatary/fixture --features suzatary-tooling/seams
+step tree doc             $rust nothing   env RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/Cargo.toml -q --workspace --no-deps --features suzatary/fixture
 lane=tests
 # Every test executable the tree half runs, in one step; `--workspace` everywhere, since a `-p`
 # resolves other features and rebuilds wasmtime and the wit crates.
@@ -413,7 +440,7 @@ build_once() {
     cargo_app test -q --workspace --no-run --test guards --test fence --test plugin &&
     cargo_app test -q --workspace --no-run "${fixture_tests[@]}"
 }
-step tree build           $rust   build_once
+step tree build           $rust nothing   build_once
 # The plugin host's fences against hostile components (app/plugin/tests/fence.rs); loopback only.
 # shellcheck disable=SC2329
 suzatary_fence() {
@@ -421,7 +448,7 @@ suzatary_fence() {
     { [[ -n "${SUZATARY_PLUGINS:-}" ]] || SUZATARY_PLUGINS="$(nix_out suzatary-plugins)"; } &&
     export SUZATARY_FENCE_PLUGINS SUZATARY_PLUGINS
 }
-step tree fence-plugin    unkept  suzatary_fence
+step tree fence-plugin    unkept runners  suzatary_fence
 # shellcheck disable=SC2329
 units_test() {
   local host
@@ -438,19 +465,19 @@ rust_test() {
   cargo_app test -q --workspace --no-fail-fast --doc || code=$?
   return "$code"
 }
-step tree test            crates  rust_test
+step tree test            crates nothing  rust_test
 # shellcheck disable=SC2329
 rust_test_fixture() {
   [[ -n "${SUZATARY_GATE_UNITS:-}" ]] || { cargo_app test -q --workspace --no-fail-fast "${fixture_tests[@]}"; return; }
   units_test "${fixture_tests[@]}"
 }
-step tree test-fixture    crates  rust_test_fixture
+step tree test-fixture    crates nothing  rust_test_fixture
 # The script guards build their crate and the testkit: they skip other members but manifests.
 script_guards_reads="$rust,$(git ls-files -- app | awk -F/ 'NF > 2 && $2 != "script-guards" && $2 != "testkit" && $3 != "Cargo.toml" { print $1 "/" $2 "/" $3 }' | LC_ALL=C sort -u | paste -sd, -)"
-step tree script-guards   "$script_guards_reads" cargo_app test -q --workspace --test script-guards
-step tree guards          all     cargo_app test -q --workspace --test guards
-step tree plugin-fence    $rust   cargo_app test -q --workspace --test fence
-step tree plugin-sync     $rust   cargo_app test -q --workspace --test plugin
+step tree script-guards   "$script_guards_reads" nothing cargo_app test -q --workspace --test script-guards
+step tree guards          all nothing     cargo_app test -q --workspace --test guards
+step tree plugin-fence    $rust nothing   cargo_app test -q --workspace --test fence
+step tree plugin-sync     $rust nothing   cargo_app test -q --workspace --test plugin
 lane=web
 # Exported to the lane's later steps; Nix builds them, outside the cargo lock. The dependency
 # builds the store holds are rooted too: no output holds them.
@@ -480,12 +507,12 @@ in_build() { case "$1 $2" in "development suzatary-wasm" | "development suzatary
 declare -A builds=([fixture]=suzatary-fixture)
 for o in "${web_outputs[@]#*=}"; do builds[web]+=" $o" builds[web-dev]+=" $(in_build development "$o")"; done
 ((!list)) || for name in "${!builds[@]}"; do echo "build $name ${builds[$name]# }"; done
-step tree web-inputs      $web    web_inputs
+step tree web-inputs      $web runners    web_inputs
 # One zone on a train (UTC+14, where a test reading the device's zone fails most hours), all nightly.
 # shellcheck disable=SC2329
 web_units() { if ((nightly)); then scripts/web-test.sh; else SUZATARY_WEB_ZONES=Pacific/Kiritimati scripts/web-test.sh; fi; }
-step tree web-test        files:web/test web_units
-step tree build-web       $web    scripts/build-web.sh
+step tree web-test        files:web/test runners web_units
+step tree build-web       $web runners    scripts/build-web.sh
 lane=quiet
 # The store's fixture binary when it holds this tree's, else cargo's (web-e2e.sh links it).
 # shellcheck disable=SC2329
@@ -494,7 +521,7 @@ e2e_scenes() {
   for unit in ${SUZATARY_GATE_UNITS:-}; do scenes+=("$(basename "$unit" .test.ts)"); done
   SUZATARY_FIXTURE="${SUZATARY_FIXTURE:-$(nix_held suzatary-fixture)}" scripts/web-e2e.sh "${scenes[@]}"
 }
-step tree e2e             files:web/e2e e2e_scenes
+step tree e2e             files:web/e2e runners e2e_scenes
 # web-inputs writes web/src/wire/generated, which web-test and build-web read, and e2e serves the
 # bundle build-web writes to web/dist: none of it is in the tree.
 together web-inputs web-test build-web e2e
@@ -516,18 +543,18 @@ public_tree() {
     SUZATARY_DEPLOY_TREE="$tree" &&
     export SUZATARY_DEPLOY_BIN SUZATARY_DEPLOY_TREE
 }
-step tree public-tree     "$public_reads" public_tree
+step tree public-tree     "$public_reads" runners public_tree
 # shellcheck disable=SC2329
 nix_web() { nix_out suzatary-web >/dev/null; }
-step tree nix-web         $web    nix_web
+step tree nix-web         $web runners    nix_web
 # shellcheck disable=SC2329
 nix_module() {
   nix build --no-link ".#checks.$(nix eval --impure --raw --expr builtins.currentSystem).suzatary-module"
 }
-step tree nix-module      all     nix_module
-step tree release-free    $rust   scripts/release-free.sh
+step tree nix-module      all runners     nix_module
+step tree release-free    $rust nothing   scripts/release-free.sh
 # Unkept: it reads the store and the daemon and writes under the cache.
-step tree deployed-shape  unkept  scripts/deployed-shape.sh
+step tree deployed-shape  unkept runners  scripts/deployed-shape.sh
 lane=history
 # Unkept: its answer is a function of origin/master, not of the tree; without it, it passes.
 # shellcheck disable=SC2329
@@ -568,11 +595,14 @@ changelog_entry() {
   fi
   echo "changelog: $added rides the change"
 }
-step tree changelog       unkept  changelog_entry
+step tree changelog       unkept history  changelog_entry
+# What the commit messages since the merge base declare of the reading set and the wasm budget,
+# by the train's tool (a build of seconds, no workspace compile).
+step history growth       unkept history  scripts/context.sh growth
 
 lane=live
-# Kept by the code that reads the data, not by the data (the nightly reruns them); merge_gate.rs
-# holds the list to the paths their sources name.
+# Kept by the code that reads the data and, under the train, by the stores' digest it hands
+# (SUZATARY_GATE_DATA); merge_gate.rs holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/base app/record app/release
   app/store app/signatures app/todo app/plan app/held app/memory app/mail app/health app/triage
   app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/io app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
@@ -584,14 +614,14 @@ live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/base app/record 
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"
 if ((${#live_pins[@]})); then
-  step live live            $live_only cargo_app test -q --workspace --test live
+  step live live            $live_only stores cargo_app test -q --workspace --test live
   heavy live
 fi
-step live live-all        $live_only cargo_app test -q --workspace --test all -- "${live_modules[@]/%/::}"
+step live live-all        $live_only stores cargo_app test -q --workspace --test all -- "${live_modules[@]/%/::}"
 # The guards that read beyond the public tree (merge_gate.rs holds the list); gate.yml judges the
 # rest. Unkept: the leak guard reads every tracked file.
 mapfile -t box_guards < <(grep -v '^#' app/cli/tests/guards/on-the-box.txt)
-step live live-guards     unkept  cargo_app test -q --workspace --test guards --test script-guards -- --exact "${box_guards[@]}"
+step live live-guards     unkept stores  cargo_app test -q --workspace --test guards --test script-guards -- --exact "${box_guards[@]}"
 # A smoke per gate: the unit tests that read the live chain (`live_web_units`, which merge_gate.rs
 # holds) and the scenes over a copy of the data tree; --nightly runs every unit test. The scenes
 # read the server's code, so this is kept by all but docs/, memory/, android/ and `cli_only`.
@@ -619,11 +649,11 @@ web_live() (
   public_fixture || exit
   scripts/build-web.sh >/dev/null && SUZATARY_E2E_LIVE="$instance" scripts/web-e2e.sh "${live_scenes[@]}"
 )
-step live web-live        all-but:android,docs,memory,$cli_only web_live
+step live web-live        all-but:android,docs,memory,$cli_only stores,runners web_live
 lane=deploy
 # The deploy's build, so the deploy of this commit finds every output in the store. The two steps
 # after it run $SUZATARY_DEPLOY_BIN in a subshell, so a missing binary fails the step, not the lane.
-step live deploy-build    unkept  public_tree
+step live deploy-build    unkept runners  public_tree
 # Dry: it commits nothing and reaches no remote.
 # shellcheck disable=SC2329
 push_dry() (
@@ -632,7 +662,7 @@ push_dry() (
   SUZATARY_INSTANCE="$instance" SUZATARY_BIN="${SUZATARY_DEPLOY_BIN:?deploy-build made no binary}" \
       scripts/safe-push.sh --dry
 )
-step live push-dry        unkept  push_dry
+step live push-dry        unkept stores  push_dry
 # As a publish checks it, the deployed app the matcher, so no leaking tree lands and none weakens it.
 # shellcheck disable=SC2329
 public_check() (
@@ -642,7 +672,7 @@ public_check() (
   SUZATARY_INSTANCE="$instance" SUZATARY_BIN="$bin" \
     scripts/public-tree.sh --check --strict "${SUZATARY_DEPLOY_TREE:?deploy-build made no tree}"
 )
-step live public-check    unkept  public_check
+step live public-check    unkept stores  public_check
 
 # In the order they take the machine: the one with the most work behind it in its lane first.
 heavy build web-inputs public-tree clippy clippy-fixture doc live-all live-guards web-live deploy-build
@@ -803,9 +833,10 @@ for i in "${!s_name[@]}"; do
   fi
 done
 case "${halves[*]}" in
-  tree) echo "halves: tree ran; live skipped (it reads the owner's data tree: --only-live on the box)" >&2 ;;
-  live) echo "halves: live ran; tree skipped (--no-live, here or on GitHub's runners)" >&2 ;;
-  *) echo "halves: tree and live ran" >&2 ;;
+  tree) echo "halves: tree ran; live and history skipped (live reads the owner's data tree: --only-live on the box)" >&2 ;;
+  live) echo "halves: live ran; tree and history skipped (--no-live, here or on GitHub's runners)" >&2 ;;
+  history) echo "halves: history ran; tree and live skipped" >&2 ;;
+  *) echo "halves: tree, live and history ran" >&2 ;;
 esac
 if ((${#failures[@]})); then
   # A test run's last lines are its passing tail, so the lines naming a failure come first.

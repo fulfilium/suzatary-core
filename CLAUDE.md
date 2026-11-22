@@ -365,14 +365,25 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   `worktreenotsandbox`).
 - **The merge gate is `scripts/merge-gate.sh`**, and a branch reaches master
   only through a green run of it (→ `mergegate`). `--no-live` is the tree half,
-  `--only-live` the live half that reads the owner's data; `--list` names each
-  step's half and reads (→ `gatehalves`). A tree step's pass is kept by what it
-  reads; `memory/` and `docs/` are among the paths the cargo and web steps never
-  read (→ `gatekeptpasses`, `gatebuildonce`, `codespacewarm`).
+  `--only-live` the live half that reads the owner's stores, `--only-history`
+  the check of what the commit messages since the merge base declare; `--list`
+  names each step's half, what it reads beside the tree, and its reads (→
+  `gatehalves`). A step's pass is kept by what it reads, a kept live step's,
+  under the train, also by the stores' digest; `memory/` and `docs/` are among
+  the paths the cargo and web steps never read (→ `gatekeptpasses`,
+  `gatebuildonce`, `codespacewarm`).
 - **The merge queue is `scripts/train.sh`**: reviewed PRs ride a TRAIN (`build`,
   `gate`, `land`); a STACKED PR lands with its base or after it. Nobody merges a
-  train by hand (→ `train`). `land` publishes the landed commit's public tree to
-  suzatary-core, which every deployment runs (→ `publication`).
+  train by hand. A live row names a digest of the stores beside the instance
+  file, taken before the run; a land reads the live half at its newest row's
+  digest (each file's last), a red and a green are a finding only at one digest,
+  and the land prints every set-aside and each red the stores moved past. The
+  growth check runs first: an undeclared growth, a malformed declaration or a
+  change that writes `reading` refuses the train, with no row; a check that
+  compared nothing lets the halves go on and fails the nightly. A red traced
+  outside the tree is set aside only at a terminal, naming one row and a roadmap
+  task (→ `train`). `land` publishes the landed commit's public
+  tree to suzatary-core, which every deployment runs (→ `publication`).
 - **Deploy is a commit to the user repository, by `scripts/deploy.sh`, and
   nothing else.** A rollback is a deploy of an earlier rev; committing or
   pushing in a dev checkout deploys nothing. Never hand-roll the deploy's wait

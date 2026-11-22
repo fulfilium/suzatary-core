@@ -13,13 +13,18 @@
 #   check <pr>       the runners' jobs over <pr>'s head merged on master, posted on the PR; no lock
 #   publish [--skip <sha>]... [--admit <path>]... [<rev>]
 #                    core's master += the public tree of each landed commit up to <rev>
+#   set-aside <half> --because <task> "<words>"
+#                    the newest red row of <half> where a land reads it set aside, at a terminal,
+#                    for the reason an open or completed roadmap task gives; a land prints it
 #
 # `--remote github` runs the tree half on core's runners (only a public tree the tool finds
 # publishable leaves the box: its leak guard passed, and it holds no admission core lacks); the box keeps the steps that read this repository and the live half. Run inside
 # `nix develop .#triage`, from a clean checkout; it never touches the data repository.
 #
-# Verdicts go to .git/train/gates/, keyed by half and tree, and only the train's tool reads or
-# writes them (app/tooling, `train table`); a key holding both is a finding.
+# Verdicts go to .git/train/gates/, keyed by half and tree, the live half's also by a digest of the
+# owner's stores read before the run, and only the train's tool reads or writes them (app/tooling,
+# `train table`). A land reads the live half at its newest row's digest; a key holding both a green
+# and a red that no person set aside is a finding.
 #
 # `gate`, `bisect`, `nightly` and `check` are the tool's (app/tooling, `gate_run.rs`); every other
 # verb runs under the train's lock, which only the tool holds (`train locked`).
@@ -34,7 +39,7 @@ die() {
 }
 say() { printf 'train: %s\n' "$*" >&2; }
 usage() {
-  echo "usage: scripts/train.sh build <pr>... | gate [--full] [--remote github] | bisect [--remote github] | land | record [<rev>] | nightly | check <pr> | publish [--skip <sha>]... [--admit <path>]... [<rev>]" >&2
+  echo "usage: scripts/train.sh build <pr>... | gate [--full] [--remote github] | bisect [--remote github] | land | record [<rev>] | nightly | check <pr> | publish [--skip <sha>]... [--admit <path>]... [<rev>] | set-aside <tree|live> --because <task> \"<words>\"" >&2
   exit 64
 }
 
@@ -576,17 +581,9 @@ land() {
   clean
   sync
   on_train
-  local short
-  short="$(git rev-parse --short HEAD)"
-  local h v all missing=()
-  for h in "${halves[@]}"; do reading v HEAD --half "$h"; [[ "$v" == ok ]] || missing+=("$h: $v"); done
-  reading all HEAD
-  case "$all" in
-    ok) ;;
-    unknown) die "the gate has not passed the train's HEAD ($short) in both halves (${missing[*]}): scripts/train.sh gate first. Nothing landed." ;;
-    failed) die "the gate failed on the train's HEAD ($short) (${missing[*]}): scripts/train.sh bisect, build without the merge it names, gate again. Nothing landed." ;;
-    finding) die "the gate both passed and failed the train's tree ($short) (${missing[*]}), so neither verdict lands: it read something beyond the tree. Nothing landed." ;;
-  esac
+  # Each half's reading and every set-aside and lapsed red it prints, from one read of the table;
+  # a refusal is the tool's own words.
+  "$tool" table land HEAD || exit 1
   # A moved master makes another tree, so the train is built and gated again.
   git fetch --quiet origin master
   if ! git merge-base --is-ancestor origin/master HEAD; then
@@ -627,10 +624,34 @@ land() {
   printf '  scripts/deploy.sh %s\n' "$landed"
 }
 
+# set-aside <half> --because <task> "<words>": the task read on the roadmap's head by master's app, as
+# a build reads a `Completes:` todo, and taken only open or completed; the tool sets the train's
+# newest red row of <half> aside, and refuses unless its stdin is a terminal.
+set_aside() {
+  (($# == 4)) && [[ "$2" == --because ]] || usage
+  local half="$1" task="$3" words="$4" dir shown failed=0
+  # As completes_of takes a todo id, before the id reaches a pattern.
+  [[ "$task" =~ ^[a-z0-9_-]+$ ]] || die "\"$task\" is not a todo id. Nothing is set aside."
+  find_roadmap origin/master
+  [[ -n "$roadmap" ]] || die "the deployment mounts no roadmap, so no task can say why a red is set aside. Nothing is set aside."
+  dir="$(mktemp -d)"
+  # In a subshell, so the directory goes whatever stops the read.
+  shown="$(store_at "$(tasks_head)" "$dir" && "$app_bin" todo show --store "$dir" "$task" 2>&1)" || failed=$?
+  rm -rf "$dir"
+  ((failed == 0)) || die "the roadmap could not be read, or holds no task $task ($shown). Nothing is set aside."
+  # `todo show` prints the todo's id, then its state, in one JSON object.
+  shown="$(sed -n "s/.*\"todo\":\"$task\",\"state\":\"\\([^\"]*\\)\".*/\\1/p" <<<"$shown")"
+  case "$shown" in
+    open | completed) ;;
+    *) die "the roadmap's $task is ${shown:-unreadable}, and only an open or completed task says why a red is set aside. Nothing is set aside." ;;
+  esac
+  "$tool" table set-aside "$half" "$task" "$words"
+}
+
 # The train's tool, built from this checkout before anything else into its own target under .git,
 # so a train that changes the tool is gated and landed by it; under a test seam, apart, with seams.
 case "${1:-}" in
-  build | gate | bisect | land | record | nightly | check | publish | sync | nightly-report)
+  build | gate | bisect | land | record | nightly | check | publish | sync | nightly-report | set-aside)
     tool="$(git -C "$scripts" rev-parse --path-format=absolute --git-common-dir)/train/tool" features=()
     if [[ -n "${!SUZATARY_TRAIN_*}" ]]; then tool+=-seams && features=(--features seams); fi
     # `check` takes no lock, so it never builds into the target whose binary a locked train execs.
@@ -665,7 +686,7 @@ esac
 # A verb of this script runs as a child of the tool, which holds the lock; a gate's `sync` and
 # `nightly-report` are the tool's own children, under its lock.
 case "${1:-}" in
-  build | land | record | publish | sync | nightly-report)
+  build | land | record | publish | sync | nightly-report | set-aside)
     [[ -n "${SUZATARY_LOCK_HOLDER:-}" ]] || exec "$tool" locked "$1" -- "$scripts/train.sh" "$@"
     ;;
 esac
@@ -677,6 +698,7 @@ case "${1:-}" in
   publish) shift && fetch_origin && "$tool" publish "$@" && record_origin ;;
   sync) shift && { (($# == 0)) || usage; } && sync ;;
   nightly-report) shift && report_nightly "$@" ;;
+  set-aside) shift && set_aside "$@" ;;
   gate | bisect | nightly | check) SUZATARY_SCRIPTS="$scripts" exec "$tool" "$@" ;;
   *) usage ;;
 esac

@@ -51,6 +51,8 @@ pub enum Ended { Judged(Outcome), Unjudged, Refused(Check) }   // T3: a lost run
 pub enum Reading { Unjudged, Agreed(Outcome), Finding }   // a diamond: the join of the rows
 pub enum LandOrder { Green, Unjudged, Red, Finding }       // the chain a land reads
 pub struct Table { .. }                            // .git/train/gates/<gate>/<half>[-full]/<tree>
+pub enum Line { Row(Row), SetAside(SetAside) }     // gateverdicts: a set-aside is a row of its own
+pub enum Beside { Nothing, Data(Data) }            // a key: the tree, and a live row's stores' digest
 
 pub struct Built { base: Commit, merges: Vec<Merge>, release: Option<Release>, head: Commit }
 pub struct Landable { built: Built, tree: TreeId } // made only by Table::landable; land takes it
@@ -79,7 +81,10 @@ guard's matcher stays the deployed binary.
 ## 4. The laws, as tests
 
 1. **The reading.** `reading(rows ++ rows') = reading(rows) ⊔ reading(rows')` in the diamond; no
-   rows read Unjudged; Finding absorbs; it gives what the shell's `verdict` gave.
+   rows read Unjudged; Finding absorbs; it gives what the shell's `verdict` gave. Since
+   `gateverdicts`, a key's reading is the join of the rows that stand at it: judged at its data,
+   and named by no set-aside (`the_land_order_with_set_asides`,
+   `a_land_reads_the_live_half_at_its_newest_row`); the live half's key is its newest row's data.
    `law_1_a_reading_is_the_join_of_its_rows`, and the land's order:
    `a_trains_verdict_is_the_greatest_half_in_the_land_order` (both in T1).
 2. **The stop.** For every sequence of `Msg` with a `Stop` in it, the effects after the `Stop`

@@ -2,14 +2,17 @@
 #![forbid(unsafe_code)]
 
 use std::process::ExitCode;
+use suzatary_tooling::admitted::Terminal;
 use suzatary_tooling::command::{Command, Of};
 use suzatary_tooling::core_rows::{CORE_MASTER, Core};
+
 use suzatary_tooling::gate::Gate;
 use suzatary_tooling::gate_run::Train;
+use suzatary_tooling::land_order::Land;
 use suzatary_tooling::matcher::Matcher;
 use suzatary_tooling::public_tree::Script;
 use suzatary_tooling::publication::{self, Guard};
-use suzatary_tooling::{Error, Half, LandOrder, Table, git};
+use suzatary_tooling::{Error, Half, LandOrder, Seen, Table, git};
 
 fn main() -> ExitCode {
     if let Err(e) = suzatary_tooling::supervisor::keep_children() {
@@ -38,15 +41,53 @@ fn run(command: Command) -> Result<u8, Error> {
         Command::Read { commit, of, seen } => {
             let table = table()?;
             let tree = git::tree(&commit)?;
+            let read = |half| table.read(half, seen, &tree);
             let reading = match of {
-                Of::Half(half) => table.read(half, seen, &tree)?,
+                Of::Half(half) => read(half)?,
                 Of::Train => {
-                    let [tree_half, live_half] =
-                        Half::BOTH.map(|half| table.read(half, seen, &tree));
+                    let [tree_half, live_half] = Half::BOTH.map(read);
                     LandOrder::verdict([tree_half?, live_half?])
                 }
             };
             println!("{reading}");
+            Ok(0)
+        }
+        Command::SetAside { half, task, words } => {
+            let Some(terminal) = Terminal::stdin() else {
+                return Err(Error::Said(
+                    "a red row is set aside by a person at a terminal, and stdin is none.".into(),
+                ));
+            };
+            let table = table()?;
+            let commit = git::commit("train")?;
+            let tree = git::tree(&commit.to_string())?;
+            let Some((red, aside)) = table.set_aside(half, &tree, (task, words), &terminal)? else {
+                return Err(Error::Said(format!(
+                    "no red row of the {} half of the train {} stands where a land reads it.",
+                    half.name(),
+                    commit.short()
+                )));
+            };
+            println!("set aside: the {} half's {red}", half.name());
+            println!("because {}: {}", aside.task, aside.words);
+            Ok(0)
+        }
+        Command::Land { commit } => {
+            let table = table()?;
+            let oid = git::commit(&commit)?;
+            let tree = git::tree(&commit)?;
+            let [tree_half, live_half] =
+                Half::BOTH.map(|half| table.judged(half, Seen::Any, &tree));
+            let land = Land {
+                tree: tree_half?,
+                live: live_half?,
+            };
+            if let Some(refusal) = land.refusal(oid.short()) {
+                return Err(Error::Said(refusal));
+            }
+            for line in land.record() {
+                println!("{line}");
+            }
             Ok(0)
         }
         Command::Publish { skips, admits, rev } => {

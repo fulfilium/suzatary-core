@@ -8,6 +8,8 @@ use std::process::Command;
 /// One step of `scripts/merge-gate.sh --list`.
 pub struct Step {
     pub half: String,
+    /// What it reads beside the tree: `nothing`, or some of `stores`, `history` and `runners`.
+    pub beside: String,
     /// The steps of one half and lane run one after another; the lanes run side by side.
     pub lane: String,
     pub name: String,
@@ -82,12 +84,17 @@ pub fn steps() -> Vec<Step> {
         .map(|line| {
             let mut words = line.split_whitespace();
             let half = words.next().expect("a half").to_owned();
+            let beside = words
+                .next()
+                .expect("what it reads beside the tree")
+                .to_owned();
             let lane = words.next().expect("a lane").to_owned();
             let name = words.next().expect("a name").to_owned();
             let reads = words.next().expect("its reads").to_owned();
             let command = words.collect::<Vec<_>>().join(" ");
             Step {
                 half,
+                beside,
                 lane,
                 name,
                 reads,

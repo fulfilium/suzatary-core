@@ -2,8 +2,9 @@
 //! (`locked`), and what each reports.
 
 use crate::bisect::{Search, Stuck};
+use crate::data::Data;
 use crate::gate_branch::GateBranch;
-use crate::gate_run::{Depth, HOLDER, Logs, Ran, TRAIN_READS, Train, said};
+use crate::gate_run::{Depth, Growth, HOLDER, Kept, Logs, Ran, TRAIN_READS, Train, said};
 use crate::gating::{OnRed, Plan, Push};
 use crate::lock::Holder;
 use crate::oid::Oid;
@@ -12,11 +13,12 @@ use crate::{Ended, Error, Half, LandOrder, Outcome, Reading, git, process};
 use std::process::Command;
 
 impl Train {
-    /// A gate's start: inside `.#triage` with nothing beside it, the lock taken, origin synced.
-    fn begin(&mut self, verb: &str, depth: Depth) -> Result<(), Error> {
+    /// A gate's start: inside `.#triage` with nothing beside it, the lock taken, origin synced,
+    /// and the data its live rows are judged at read once.
+    fn begin(&mut self, verb: &str, kept: Kept) -> Result<(), Error> {
         self.environment(verb)?;
         self.lock = Some(match self.holder(verb).take() {
-            Err(Error::Busy(_)) if depth == Depth::Nightly => {
+            Err(Error::Busy(_)) if kept == Kept::Nightly => {
                 eprintln!("train: a train is running here: the nightly gate waits for it");
                 let state = self.state.clone();
                 let wait = move || {
@@ -32,11 +34,16 @@ impl Train {
             }
             held => held?,
         });
-        self.depth = depth;
-        match self.shell(&["sync"])? {
-            0 => Ok(()),
-            _ => Err(said("origin could not be fetched (above).")),
+        if self.shell(&["sync"])? != 0 {
+            return Err(said("origin could not be fetched (above)."));
         }
+        let data = Data::of_checkout(&self.root)?;
+        eprintln!(
+            "train: the live half is judged at the stores' digest {}",
+            data.short()
+        );
+        self.depth = Depth::Kept(kept, data);
+        Ok(())
     }
 
     /// Refused outside `.#triage` or with an inherited variable a gate's steps read; the data
@@ -100,10 +107,27 @@ impl Train {
             .ok_or_else(|| said("there is no train; scripts/train.sh build <pr>... first."))
     }
 
-    /// `gate [--full] [--remote github]`: both halves of the train, and the report.
+    /// `gate [--full] [--remote github]`: the growth check, then both halves of the train, and the
+    /// report.
     pub fn gate(&mut self, full: bool, remote: bool) -> Result<u8, Error> {
-        self.begin("gate", if full { Depth::Full } else { Depth::Selective })?;
+        self.begin("gate", if full { Kept::Full } else { Kept::Selective })?;
         let commit = Self::train_commit()?;
+        match self.history(&commit) {
+            Growth::Within => {}
+            Growth::Refused(refused) => {
+                for growth in &refused {
+                    eprintln!("train: growth: {growth}");
+                }
+                return Err(said(
+                    "the train's commits do not declare the growth above: build again with the \
+                     pull request's description mended, or without it. Nothing was gated, and no \
+                     row was written.",
+                ));
+            }
+            Growth::Unrun(why) => {
+                eprintln!("train: the growth check did not run ({why}); the halves go on");
+            }
+        }
         if remote {
             self.repo()?;
             self.sweep()?;
@@ -133,15 +157,16 @@ impl Train {
                 Ok(0)
             }
             LandOrder::Finding => Err(said(format!(
-                "red, where a half once passed this tree: the gate is not a function of the \
-                 tree. The logs are in {logs}/."
+                "red, where a half once passed this tree at the same stores, and no person set the \
+                 red aside: the gate is not a function of the tree. {ASIDE} The logs are in \
+                 {logs}/."
             ))),
             LandOrder::Unjudged => Err(said(format!(
                 "a half has no verdict on {short}: gate again."
             ))),
             LandOrder::Red => Err(said(format!(
-                "red: scripts/train.sh bisect finds the merge that broke it. The logs are in \
-                 {logs}/."
+                "red: scripts/train.sh bisect finds the merge that broke it. {ASIDE} The logs \
+                 are in {logs}/."
             ))),
         }
     }
@@ -149,13 +174,16 @@ impl Train {
     /// `bisect [--remote github]`: the longest prefix of a red train's merges its first red half
     /// passes, assuming red stays red.
     pub fn bisect(&mut self, remote: bool) -> Result<u8, Error> {
-        self.begin("bisect", Depth::Selective)?;
+        self.begin("bisect", Kept::Selective)?;
         if remote {
             self.repo()?;
             self.sweep()?;
         }
         let train = Self::train_commit()?;
         let half = self.red_half(&train)?;
+        if half == Half::Live {
+            self.say_moved_stores(&train)?;
+        }
         let base = git::out(&["merge-base", "origin/master", &train.to_string()])?;
         let range = format!("{base}..{train}");
         let mut merges = Vec::new();
@@ -257,11 +285,13 @@ impl Train {
         }
     }
 
-    /// `nightly`: origin/master in both halves, full, neither stopping the other; a red one files
-    /// a todo (`train.sh nightly-report`). It waits for a running train's lock.
+    /// `nightly`: origin/master's growth check, then both halves, full, neither stopping the other;
+    /// a red half files a todo (`train.sh nightly-report`), and a refused growth fails it after the
+    /// halves. It waits for a running train's lock.
     pub fn nightly(&mut self) -> Result<u8, Error> {
-        self.begin("nightly", Depth::Nightly)?;
+        self.begin("nightly", Kept::Nightly)?;
         let commit = git::commit("origin/master")?;
+        let growth = self.history(&commit);
         let prefix = self.repo.is_some().then_some("gate/nightly-");
         let plan = self.plan(&commit, &Half::BOTH, prefix, OnRed::GoOn)?;
         self.run(plan)?;
@@ -283,7 +313,17 @@ impl Train {
                 self.state.join("logs").display()
             )));
         }
-        Ok(status)
+        match growth {
+            Growth::Within => Ok(status),
+            Growth::Refused(refused) => Err(said(format!(
+                "origin/master's commits do not declare their growth: {}",
+                refused.join("; ")
+            ))),
+            Growth::Unrun(why) => Err(said(format!(
+                "the growth check did not run on origin/master ({why}), so no train's growth is \
+                 checked until it does"
+            ))),
+        }
     }
 
     /// `check <pr>`: the runners' run of the pull request's head merged on origin/master, posted on
@@ -422,6 +462,10 @@ impl From<Stuck> for Error {
     }
 }
 
+/// How a red traced to a cause outside the tree stops stopping a land.
+const ASIDE: &str = "A red whose cause is outside the tree is set aside at a terminal: \
+                     scripts/train.sh set-aside <half> --because <task> \"<words>\".";
+
 /// What `check` posts of the runners' end of the tree half.
 fn verdict(what: &str, tree: Ended, url: &str, log: &str) -> String {
     let nothing = "nothing went to GitHub.";
@@ -484,7 +528,7 @@ fn uncoloured(line: &str) -> String {
 /// Per `--- job` section of a log: the gate's failing-steps block, else its last twenty error
 /// lines, each once, uncoloured.
 #[must_use]
-pub fn failing_lines(log: &str) -> String {
+pub(crate) fn failing_lines(log: &str) -> String {
     let mut out = String::new();
     let (mut block, mut inside, mut under) = (false, false, 0);
     let mut errors: Vec<String> = Vec::new();

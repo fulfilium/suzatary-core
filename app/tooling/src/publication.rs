@@ -17,7 +17,7 @@ use crate::repo_path::RepoPath;
 use crate::{Error, git, process};
 
 /// The publications' author and committer: no person's name rides a publication.
-pub const AUTHOR: [(&str, &str); 4] = [
+pub(crate) const AUTHOR: [(&str, &str); 4] = [
     ("GIT_AUTHOR_NAME", "Suzatary"),
     ("GIT_AUTHOR_EMAIL", "publish@suzatary.invalid"),
     ("GIT_COMMITTER_NAME", "Suzatary"),

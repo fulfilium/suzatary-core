@@ -55,10 +55,10 @@ pub fn keep_children() -> std::io::Result<()> {
 
 /// The time the rest of a group has, after its leader ends or a stop, before KILL: above the
 /// gate's own, so a gate told to stop has stopped its lanes before the train kills it.
-pub const GRACE: Duration = Duration::from_secs(10);
+pub(crate) const GRACE: Duration = Duration::from_secs(10);
 
 /// Where a child's output goes.
-pub enum Capture {
+pub(crate) enum Capture {
     /// Stdout kept for its `Exited`, stderr shown.
     Out,
     /// Stdout and stderr written to the file and shown on stderr, as `tee`.
@@ -91,7 +91,7 @@ impl Child {
     }
 }
 
-pub struct Supervisor<K, A> {
+pub(crate) struct Supervisor<K, A> {
     to: Sender<Mail<K, A>>,
     mail: Receiver<Mail<K, A>>,
     alarms: Vec<(Instant, A)>,

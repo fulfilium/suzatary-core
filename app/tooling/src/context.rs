@@ -9,6 +9,7 @@ pub mod measure;
 pub mod plan;
 pub mod tokens;
 pub mod tree;
+mod wasm;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -30,6 +31,8 @@ pub enum Act {
     /// List the files a unit's USE and DEVELOP read (the reading set's with none), largest first.
     Files(Option<String>),
     Record(Recording),
+    /// The growth check (`growth`).
+    Growth,
     /// Measure the external library `name`'s USE from a checkout of its pinned revision.
     External {
         name: String,
@@ -81,12 +84,33 @@ pub fn run(repo: &Path, act: &Act) -> anyhow::Result<()> {
         Act::Show => {
             let (table, found) = check(root)?;
             print!("{table}");
+            let grown = growth(root).unwrap_or_else(|e| {
+                eprintln!("context: the growth check did not run: {e:#}");
+                Vec::new()
+            });
+            let found: Vec<String> = found.iter().map(ToString::to_string).chain(grown).collect();
             for finding in &found {
                 eprintln!("context: {finding}");
             }
             if !found.is_empty() {
                 bail!("{} finding(s) against {FILE}", found.len());
             }
+            Ok(())
+        }
+        Act::Growth => {
+            let refused = growth(root)?;
+            for growth in &refused {
+                eprintln!("growth: {growth}");
+            }
+            if !refused.is_empty() {
+                bail!(
+                    "{} growth(s) the commits since the merge base do not declare",
+                    refused.len()
+                );
+            }
+            println!(
+                "growth: the reading set and the wasm budget are within what the commits declare"
+            );
             Ok(())
         }
         Act::Files(unit) => {
@@ -539,33 +563,43 @@ pub fn check(root: &Path) -> anyhow::Result<(String, Vec<Finding>)> {
     let report = measure(&plan, &tree);
     Ok((
         table(&plan, &report, &base(root, &plan)),
-        findings(&plan, &tree, &report, &allowed(root, &plan)),
+        findings(&plan, &tree, &report),
     ))
 }
 
-/// What the reading set may be at `root`, against the merge base with `origin/master`: its ratchet,
-/// the pull requests merged since it and the growths declared since it; with no merge base, the
-/// tree's own ratchet and one allowance.
-fn allowed(root: &Path, plan: &Plan) -> Allowed {
-    let since = |base: &str| -> anyhow::Result<Allowed> {
-        let was = Plan::parse(&git(root, &["show", &format!("{base}:{FILE}")])?)?;
-        let range = format!("{base}..HEAD");
-        let declared = crate::git::declared(root, &range, "Reading-growth")
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let subjects = git(root, &["log", "--first-parent", "--format=%s", &range])?;
-        let merges = subjects
-            .lines()
-            .filter(|s| s.starts_with("Merge #"))
-            .count();
-        let allowance = plan.budget.allowance;
-        Ok(Allowed::of(
-            was.ratchet.reading,
-            allowance,
-            merges as u64,
-            &declared,
-        ))
-    };
-    git(root, &["merge-base", "HEAD", "origin/master"])
-        .and_then(|base| since(base.trim()))
-        .unwrap_or_else(|_| Allowed::of(plan.ratchet.reading, plan.budget.allowance, 1, &[]))
+/// Each growth of the reading set or a wasm line the commits since the merge base do not declare,
+/// and each declaration not in its form.
+///
+/// # Errors
+/// When the plan, the tree or git cannot be read, or there is no merge base with `origin/master`:
+/// a check that compared nothing is never a pass.
+pub(crate) fn growth(root: &Path) -> anyhow::Result<Vec<String>> {
+    let plan = read_plan(root)?;
+    let report = measure(&plan, &Tree::checkout(root)?);
+    let base = git(root, &["merge-base", "HEAD", "origin/master"])
+        .context("no merge base with origin/master to compare the growth with")?;
+    let base = base.trim();
+    let was = Plan::parse(&git(root, &["show", &format!("{base}:{FILE}")])?)
+        .with_context(|| format!("reading {FILE} at the merge base"))?;
+    let range = format!("{base}..HEAD");
+    let declared =
+        crate::git::declared(root, &range, "Reading-growth").map_err(|e| anyhow::anyhow!("{e}"))?;
+    let merges = git(root, &["log", "--first-parent", "--format=%s", &range])?
+        .lines()
+        .filter(|s| s.starts_with("Merge #"))
+        .count();
+    let allowed = Allowed::of(
+        was.ratchet.reading,
+        plan.budget.allowance,
+        merges as u64,
+        &declared,
+    );
+    let mut refused = finding::malformed(&declared);
+    refused.extend(
+        finding::reading(plan.ratchet.reading, report.reading.total(), &allowed)
+            .iter()
+            .map(ToString::to_string),
+    );
+    refused.extend(wasm::refused(root, base)?);
+    Ok(refused)
 }

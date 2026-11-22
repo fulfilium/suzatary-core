@@ -87,7 +87,7 @@ pub fn hash_object(path: &Path) -> Result<Oid, Error> {
 }
 
 /// The first-parent chain of `name`, newest first.
-pub fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
+pub(crate) fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
     out(&["rev-list", "--first-parent", name])?
         .lines()
         .map(Oid::parse)
@@ -97,18 +97,33 @@ pub fn first_parents(name: &str) -> Result<Vec<Oid>, Error> {
 /// The values of `key` among `message`'s trailers, read as git reads them
 /// (`git interpret-trailers --parse`): a line of prose that begins with the key is none.
 pub fn trailers(key: &str, message: &str) -> Result<Vec<String>, Error> {
-    let mut parse = cmd(&["interpret-trailers", "--parse"]);
-    parse.stdin(Stdio::piped()).stdout(Stdio::piped());
+    Ok(fed(&["interpret-trailers", "--parse"], message)?
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(name, _)| name.trim().eq_ignore_ascii_case(key))
+        .map(|(_, value)| value.trim().to_owned())
+        .collect())
+}
+
+/// The name git gives `text` as a blob, written nowhere.
+pub(crate) fn hash_text(text: &str) -> Result<Oid, Error> {
+    Oid::parse(fed(&["hash-object", "--stdin"], text)?.trim())
+}
+
+/// `git <args>`'s stdout, `text` its stdin.
+fn fed(args: &[&str], text: &str) -> Result<String, Error> {
+    let mut git = cmd(args);
+    git.stdin(Stdio::piped()).stdout(Stdio::piped());
     let failed = |why: String| Error::Run {
-        command: "git interpret-trailers --parse".into(),
+        command: format!("git {}", args.join(" ")),
         why,
     };
-    let mut child = parse.spawn().map_err(|e| failed(e.to_string()))?;
+    let mut child = git.spawn().map_err(|e| failed(e.to_string()))?;
     let mut stdin = child
         .stdin
         .take()
         .ok_or_else(|| failed("no stdin".into()))?;
-    let text = message.to_owned();
+    let text = text.to_owned();
     let writer = std::thread::spawn(move || std::io::Write::write_all(&mut stdin, text.as_bytes()));
     let out = child
         .wait_with_output()
@@ -117,12 +132,7 @@ pub fn trailers(key: &str, message: &str) -> Result<Vec<String>, Error> {
     if !out.status.success() {
         return Err(failed(format!("exited {}", out.status)));
     }
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter_map(|line| line.split_once(':'))
-        .filter(|(name, _)| name.trim().eq_ignore_ascii_case(key))
-        .map(|(_, value)| value.trim().to_owned())
-        .collect())
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// The values of `key` among the trailers of each commit of `range` in the repository at `root`.

@@ -11,6 +11,8 @@ runs, and the lock.
   `unknown` or `finding`. With `--half`, the word is that half's `Reading` of the commit's tree.
   Without it, the word is the train's verdict, the half that weighs more in the `LandOrder`
   (ok < unknown < failed < finding). With `--full`, the rows of full gates alone count.
+- `train table land <commit>` and `train table set-aside <half> <task> <words>` (at a terminal):
+  `reading::Judged`.
 - `train publish [--skip <sha>]... [--admit <path>]... [<rev>]`: core's master gains the public
   tree of each landed commit after the newest it publishes, through `<rev>` (origin's master),
   oldest first, one row each (`Source:`, `Skipped:`, `Admitted:` trailers). `--admit` is taken
@@ -25,11 +27,13 @@ runs, and the lock.
   `scripts/train.sh` did: the rows go to the table, a red half stops the other (not on a nightly),
   and HUP, INT or TERM stop every half before anything waits, write no row, close the gate branch
   and exit 128 plus the signal. `nightly` waits for a running train's lock; `check` takes none and
-  writes no row. Each gate half runs as a process group whose id the train prints.
+  writes no row. Each gate half runs as a process group whose id the train prints. `gate` and
+  `nightly` run `train context growth` first; a refusal stops a gate with no row, and an unrun
+  check fails the nightly. A live `bisect` names the stores its probes run at.
 - `train locked <verb> -- <command>...` runs `scripts/train.sh <verb>` under the lock, and passes
   a signal on to it; another train's lock refuses with exit 1, naming its holder.
-- Every verb exits 64 on a usage error and 3 when a step it needs could not run. A row that is
-  not `<ok|failed> <commit> <instant>` is an error that names its file and line.
+- Every verb exits 64 on a usage error and 3 when a step it needs could not run. A line of the
+  table that does not parse (`row::Line`) is an error that names its file and line.
 - The `seams` feature reads the guards' `SUZATARY_TRAIN_GATE`, `SUZATARY_TRAIN_PUBLIC`,
   `SUZATARY_TRAIN_BIN`, `SUZATARY_TRAIN_GH`, `SUZATARY_TRAIN_POLL` and
   `SUZATARY_TRAIN_CACHE_TIMEOUT`. The train's own build has no `seams`: its leak guard's matcher is the

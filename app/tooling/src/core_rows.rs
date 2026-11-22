@@ -97,7 +97,7 @@ impl Rows {
 
     /// The row whose `Skipped:` names `rev`.
     #[must_use]
-    pub fn skipped_by(&self, rev: &Oid) -> Option<&Oid> {
+    pub(crate) fn skipped_by(&self, rev: &Oid) -> Option<&Oid> {
         self.0
             .iter()
             .find(|row| row.skipped.contains(rev))

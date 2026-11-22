@@ -15,7 +15,7 @@ pub const BOX_BEFORE: &str = "fmt,changelog";
 pub const BOX_AFTER: &str = "public-tree,deployed-shape";
 pub const LIVE_EARLY: &str = "live,live-all,live-guards";
 pub const LIVE_AFTER: &str = "web-live,deploy-build,push-dry,public-check";
-pub const BOX_BUILDS: &str = "the box builds the public tree itself, about 45 minutes of release \
+pub(crate) const BOX_BUILDS: &str = "the box builds the public tree itself, about 45 minutes of release \
                           build beside the app it serves";
 
 /// Which of a half's gate steps one run of `merge-gate.sh` runs.

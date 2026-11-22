@@ -9,6 +9,7 @@ pub mod bisect;
 pub mod command;
 pub mod context;
 pub mod core_rows;
+pub mod data;
 pub mod error;
 pub mod fresh;
 pub mod gate;

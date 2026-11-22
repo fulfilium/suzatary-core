@@ -1,6 +1,7 @@
 //! The edge of a gate run: each `Effect` of [`gating::step`] done, and each child's end parsed
 //! into its message. The verbs that run plans are in `verbs.rs`.
 
+use crate::data::{Beside, Data};
 use crate::gate_branch::GateBranch;
 use crate::gating::{self, Alarm, Dispatch, Done, Effect, Exit, Gating, Job, Msg, OnRed};
 use crate::gating::{Plan, Push, Runs, Steps};
@@ -18,9 +19,10 @@ use std::time::Duration;
 
 /// The train's own test seams and signing keys, and the variables it hands its own children: a
 /// gate is handed none.
-pub const TRAIN_READS: [&str; 12] = [
+pub(crate) const TRAIN_READS: [&str; 13] = [
     "SUZATARY_TRAIN_BIN",
     "SUZATARY_TRAIN_GATE",
+    "SUZATARY_TRAIN_GROWTH",
     "SUZATARY_TRAIN_GH",
     "SUZATARY_TRAIN_POLL",
     "SUZATARY_TRAIN_PIN",
@@ -35,29 +37,46 @@ pub const TRAIN_READS: [&str; 12] = [
 /// The directory of the `train.sh` that ran the tool, whose scripts the train runs.
 const SCRIPTS: &str = "SUZATARY_SCRIPTS";
 /// Set in what the train runs under its lock, so `train.sh` knows it holds it.
-pub const HOLDER: &str = "SUZATARY_LOCK_HOLDER";
+pub(crate) const HOLDER: &str = "SUZATARY_LOCK_HOLDER";
 /// A gate run not ended in six hours (GitHub's job limit) says nothing.
 const RUN_SECONDS: u64 = 6 * 3600;
 
+/// What the growth check found of the commits since the merge base.
+pub(crate) enum Growth {
+    Within,
+    Refused(Vec<String>),
+    /// It compared nothing, and says why: never a pass.
+    Unrun(String),
+}
+
 /// Who a child is: a half's job, or a command the train runs on its own behalf.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Key {
+pub(crate) enum Key {
     Job(Half, Job),
     Attended,
 }
 
-/// The gates' flag, and the rows they write: none for a `check`, which runs no gate here.
+/// The gates' flag, and the rows they write.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Depth {
+pub(crate) enum Kept {
     Selective,
     Full,
     Nightly,
+}
+
+/// Whether a run writes rows: a gate's, at the data read when it began, or none, for a `check`,
+/// which runs no gate here, and a train that began none.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Depth {
+    Kept(Kept, Data),
     Unkept,
 }
 
 /// The guards' seams (`seams`), else the deployed train's own.
 pub(crate) struct Seams {
     pub(crate) gate: Option<PathBuf>,
+    /// A program in the growth check's place: exit 0 within, 1 refused (its lines on stdout).
+    pub(crate) growth: Option<PathBuf>,
     pub(crate) gh: OsString,
     pub(crate) poll: Duration,
     pub(crate) cache_timeout: u64,
@@ -74,6 +93,7 @@ fn seams() -> Seams {
         };
         Seams {
             gate: var("SUZATARY_TRAIN_GATE").map(PathBuf::from),
+            growth: var("SUZATARY_TRAIN_GROWTH").map(PathBuf::from),
             gh: var("SUZATARY_TRAIN_GH").unwrap_or_else(|| "gh".into()),
             poll: Duration::from_secs(number("SUZATARY_TRAIN_POLL", 60)),
             cache_timeout: number("SUZATARY_TRAIN_CACHE_TIMEOUT", 12_000),
@@ -82,6 +102,7 @@ fn seams() -> Seams {
     #[cfg(not(feature = "seams"))]
     Seams {
         gate: None,
+        growth: None,
         gh: "gh".into(),
         poll: Duration::from_mins(1),
         cache_timeout: 12_000,
@@ -133,7 +154,7 @@ impl Train {
             repo: url.as_deref().and_then(github_repo),
             instance: None,
             lock: None,
-            depth: Depth::Selective,
+            depth: Depth::Unkept,
             logs: Logs::ByTree,
             root,
         })
@@ -158,12 +179,29 @@ impl Train {
 
     /// Every gate's rows, as a land reads them; the nightly asks of full gates' alone.
     pub(crate) fn reading(&self, half: Half, commit: &Oid) -> Result<Reading, Error> {
-        let seen = match self.depth {
-            Depth::Nightly => Seen::Full,
-            Depth::Selective | Depth::Full | Depth::Unkept => Seen::Any,
+        let seen = match &self.depth {
+            Depth::Kept(Kept::Nightly, _) => Seen::Full,
+            Depth::Kept(Kept::Selective | Kept::Full, _) | Depth::Unkept => Seen::Any,
         };
         self.table
             .read(half, seen, &git::tree(&commit.to_string())?)
+    }
+
+    /// A live red judged at other stores than this run's, said before its probes run here.
+    pub(crate) fn say_moved_stores(&self, commit: &Oid) -> Result<(), Error> {
+        let tree = git::tree(&commit.to_string())?;
+        let key = self.table.judged(Half::Live, Seen::Any, &tree)?.key;
+        if let (Some(Beside::Data(red)), Depth::Kept(_, now)) = (key, &self.depth)
+            && red != *now
+        {
+            eprintln!(
+                "train: the live half's red was judged at the stores {}; the probes run at the \
+                 stores as they stand, {}, so each prefix's verdict is of those",
+                red.short(),
+                now.short()
+            );
+        }
+        Ok(())
     }
 
     pub(crate) fn repo(&self) -> Result<&str, Error> {
@@ -287,12 +325,12 @@ impl Train {
         children: &mut [Option<Child>; 2],
         found: &mut Option<RunRef>,
     ) -> Result<(), Error> {
-        let scope = match self.depth {
-            Depth::Selective => Some(Scope::Selective),
-            Depth::Full | Depth::Nightly => Some(Scope::Full),
+        let kept = match &self.depth {
+            Depth::Kept(Kept::Selective, data) => Some((Scope::Selective, data.clone())),
+            Depth::Kept(Kept::Full | Kept::Nightly, data) => Some((Scope::Full, data.clone())),
             Depth::Unkept => None,
         };
-        match (effect, scope) {
+        match (effect, kept) {
             // A piece that could not start has ended, its status unread: the run reaches `Done`.
             (Effect::Start(half, job), _) => match self.start(half, job.clone(), commit) {
                 Ok(child) => children[slot(half)] = child,
@@ -312,12 +350,12 @@ impl Train {
                 };
                 self.sup.wake(after, alarm);
             }
-            (Effect::Write(half, outcome), Some(scope)) => {
-                let at = crate::instant::Instant::now();
+            (Effect::Write(half, outcome), Some((scope, data))) => {
                 let row = Row {
                     outcome,
                     commit: commit.clone(),
-                    at,
+                    at: crate::instant::Instant::now(),
+                    beside: Beside::of(half, &data),
                 };
                 let tree = git::tree(&commit.to_string())?;
                 self.table.write(half, scope, &tree, &row)?;
@@ -407,10 +445,10 @@ impl Train {
         let worktree = self.state.join("worktree");
         let gate = self.seams.gate.clone();
         let mut cmd = Command::new(gate.unwrap_or_else(|| worktree.join("scripts/merge-gate.sh")));
-        cmd.args(match self.depth {
-            Depth::Full => &["--full"][..],
-            Depth::Nightly => &["--nightly"],
-            Depth::Selective | Depth::Unkept => &[],
+        cmd.args(match &self.depth {
+            Depth::Kept(Kept::Full, _) => &["--full"][..],
+            Depth::Kept(Kept::Nightly, _) => &["--nightly"],
+            Depth::Kept(Kept::Selective, _) | Depth::Unkept => &[],
         });
         cmd.arg(match half {
             Half::Tree => "--no-live",
@@ -425,9 +463,49 @@ impl Train {
         if let Some(instance) = &self.instance {
             cmd.env("SUZATARY_INSTANCE", instance);
         }
+        // In every live step's pass key, so a pass is kept for the data it was judged at.
+        if let (Half::Live, Depth::Kept(_, data)) = (half, &self.depth) {
+            cmd.env("SUZATARY_GATE_DATA", data.to_string());
+        }
         cmd.env("SUZATARY_GATE_EVIDENCE", self.state.join("logs/evidence"));
         cmd.current_dir(worktree);
         cmd
+    }
+
+    /// What the commits since the merge base declare of the growth of `commit` (`context::growth`),
+    /// read in its worktree.
+    pub(crate) fn history(&mut self, commit: &Oid) -> Growth {
+        if !self.worktree_open(commit) {
+            return Growth::Unrun(format!("no worktree could be made at {}", commit.short()));
+        }
+        let worktree = self.state.join("worktree");
+        let found = match &self.seams.growth {
+            Some(stub) => {
+                let mut cmd = Command::new(stub);
+                cmd.current_dir(&worktree);
+                match process::output(&mut cmd) {
+                    Ok(out) if out.status.code() == Some(1) => {
+                        Ok(String::from_utf8_lossy(&out.stdout)
+                            .lines()
+                            .map(str::to_owned)
+                            .collect())
+                    }
+                    Ok(out) if out.status.success() => Ok(Vec::new()),
+                    Ok(out) => Err(anyhow::anyhow!(
+                        "{}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    )),
+                    Err(e) => Err(anyhow::anyhow!("{e}")),
+                }
+            }
+            None => crate::context::growth(&worktree),
+        };
+        self.worktree_close();
+        match found {
+            Ok(refused) if refused.is_empty() => Growth::Within,
+            Ok(refused) => Growth::Refused(refused),
+            Err(e) => Growth::Unrun(format!("{e:#}")),
+        }
     }
 
     /// `gh`, bounded by 60 s, as every call the train makes to GitHub.

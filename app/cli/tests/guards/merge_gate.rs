@@ -51,19 +51,56 @@ fn all_modules() -> Vec<(String, String)> {
         .collect()
 }
 
+/// Every step is in one of three halves and says what it reads beside the tree, and its half
+/// follows from that: the tree half reads no store and no commit but in `changelog`, unkept; the live
+/// half reads no commit, and the history half reads the commits alone, by the train's tool, which
+/// compiles nothing, so its red is about the commits' messages and never the tree's.
 #[test]
-fn merge_gate_has_two_halves_and_every_step_is_in_one() {
+fn merge_gate_every_step_is_in_one_half_and_says_what_it_reads_beside_the_tree() {
     let steps = steps();
-    assert!(!steps.is_empty());
     for step in &steps {
+        let beside: BTreeSet<&str> = match step.beside.as_str() {
+            "nothing" => BTreeSet::new(),
+            some => some.split(',').collect(),
+        };
         assert!(
-            step.half == "tree" || step.half == "live",
-            "{}'s half is {:?}",
+            !beside.is_empty() || step.beside == "nothing",
+            "{} reads {:?} beside the tree",
             step.name,
-            step.half
+            step.beside
+        );
+        assert!(
+            beside
+                .iter()
+                .all(|what| ["stores", "history", "runners"].contains(what)),
+            "{} reads {:?} beside the tree",
+            step.name,
+            step.beside
+        );
+        let fits = match step.half.as_str() {
+            "tree" => {
+                !beside.contains("stores")
+                    && (!beside.contains("history")
+                        || (step.name == "changelog" && step.reads == "unkept"))
+            }
+            "live" => !beside.contains("history"),
+            "history" => {
+                beside == BTreeSet::from(["history"]) && step.command == "scripts/context.sh growth"
+            }
+            other => panic!("{}'s half is {other:?}", step.name),
+        };
+        assert!(
+            fits,
+            "{} is in the {} half and reads {} beside the tree",
+            step.name, step.half, step.beside
         );
     }
-    assert!(steps.iter().any(|s| s.half == "tree") && steps.iter().any(|s| s.half == "live"));
+    for half in ["tree", "live", "history"] {
+        assert!(
+            steps.iter().any(|s| s.half == half),
+            "no step in the {half} half"
+        );
+    }
 }
 
 #[test]

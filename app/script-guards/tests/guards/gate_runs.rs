@@ -367,6 +367,16 @@ fn merge_gate_runs_only_the_steps_named() {
         ),
         (true, names(&["fmt", "doc", "e2e", "changelog"])),
     );
+    let history: BTreeSet<String> = steps()
+        .into_iter()
+        .filter(|s| s.half == "history")
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(
+        gate.run_args("stub", &["--only-history"], &[]),
+        (true, history),
+        "the history half runs its steps alone"
+    );
     gate.write("red", "clippy\n");
     assert_eq!(
         gate.run_args("stub", &["--no-live", "--steps", "clippy"], &[]),
@@ -1279,5 +1289,38 @@ fn merge_gate_a_scene_is_kept_by_what_it_fetched() {
         e2e(&gate),
         Some(names(&["web/e2e/list.test.ts"])),
         "the scene that recorded nothing runs again, and the one that did keeps its pass"
+    );
+}
+
+/// THE STORES' DIGEST KEYS THE KEPT LIVE STEPS ALONE: `SUZATARY_GATE_DATA`, which the train hands
+/// the live half, is in the key of every kept live step and of no other, so a live half at the
+/// same stores keeps its passes, one at other stores runs its kept steps again, and the tree half
+/// keeps its passes whatever the digest.
+#[test]
+fn merge_gate_keys_the_kept_live_steps_by_the_stores_digest() {
+    let gate = Gate::new();
+    let live =
+        |digest: &str| gate.run_args("stub", &["--only-live"], &[("SUZATARY_GATE_DATA", digest)]);
+    let (green, every) = live(&"a".repeat(40));
+    assert!(green && !every.is_empty(), "the live half runs: {every:?}");
+    let unkept = live(&"a".repeat(40)).1;
+    assert!(
+        unkept.len() < every.len(),
+        "the same stores keep the kept steps' passes"
+    );
+    assert_eq!(
+        live(&"b".repeat(40)).1,
+        every,
+        "other stores run the kept steps again"
+    );
+    assert_eq!(live(&"b".repeat(40)).1, unkept);
+
+    let tree = gate.run(&[]).1;
+    let tree_unkept = gate.run(&[]).1;
+    assert!(tree_unkept.len() < tree.len());
+    assert_eq!(
+        gate.run(&[("SUZATARY_GATE_DATA", &"c".repeat(40))]).1,
+        tree_unkept,
+        "the digest moves no tree step's key"
     );
 }

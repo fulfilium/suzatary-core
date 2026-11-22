@@ -2,9 +2,12 @@
 
 use crate::gate_branch::GateBranch;
 use crate::repo_path::RepoPath;
+use crate::row::{Task, Words};
 use crate::{Error, Half, Seen};
 
-pub const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--full]
+pub(crate) const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--full]
+       train table set-aside <half> <task> <words>
+       train table land <commit>
        train publish [--skip <sha>]... [--admit <path>]... [<rev>]
        train publishable <commit>
        train push-gate <commit> gate/<name> <subject> <trailer>
@@ -14,7 +17,7 @@ pub const USAGE: &str = "usage: train table read <commit> [--half tree|live] [--
        train nightly
        train check <pr>
        train locked <verb> -- <command>...
-       train context [--repo <dir>] [files [<unit>] | record [--merged] | external <name> <dir>]";
+       train context [--repo <dir>] [files [<unit>] | record [--merged] | growth | external <name> <dir>]";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -29,6 +32,15 @@ pub enum Command {
         commit: String,
         of: Of,
         seen: Seen,
+    },
+    /// The train's newest red row of `half` set aside, at a terminal.
+    SetAside {
+        half: Half,
+        task: Task,
+        words: Words,
+    },
+    Land {
+        commit: String,
     },
     /// Core's master gains the public tree of each landed commit up to `rev`, origin's master
     /// where it is `None`.
@@ -147,6 +159,7 @@ impl Command {
             ["files", unit] => Act::Files(Some((*unit).to_owned())),
             ["record"] => Act::Record(Recording::Lowered),
             ["record", "--merged"] => Act::Record(Recording::Merged),
+            ["growth"] => Act::Growth,
             ["external", name, checkout] => Act::External {
                 name: (*name).to_owned(),
                 checkout: checkout.into(),
@@ -176,6 +189,14 @@ impl Command {
                 commit: commit.to_owned(),
                 of: Of::Half(Half::parse(half)?),
                 seen,
+            }),
+            ["set-aside", half, task, words] if !full => Ok(Command::SetAside {
+                half: Half::parse(half)?,
+                task: Task::parse(task)?,
+                words: Words::parse(words)?,
+            }),
+            ["land", commit] if !full => Ok(Command::Land {
+                commit: commit.to_owned(),
             }),
             _ => Err(usage("unknown arguments")),
         }

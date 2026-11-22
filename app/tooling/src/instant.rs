@@ -5,7 +5,7 @@ use std::fmt;
 
 /// A UTC second since the Unix epoch, printed as `date -u +%FT%TZ` prints it
 /// (`2026-11-19T10:03:00Z`), the form train.sh's rows were written in.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Instant(pub u64);
 
 const DAY: u64 = 86_400;

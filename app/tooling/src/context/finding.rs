@@ -103,12 +103,7 @@ impl fmt::Display for Finding {
 
 /// Every refusal of `report`, measured over `tree` by `plan`.
 #[must_use]
-pub(crate) fn findings(
-    plan: &Plan,
-    tree: &Tree,
-    report: &Report,
-    allowed: &Allowed,
-) -> Vec<Finding> {
+pub(crate) fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding> {
     let mut found = Vec::new();
     for (unit, measured) in plan.units.iter().zip(&report.units) {
         let limit = plan.ratchet.use_limit(&unit.name, &plan.budget);
@@ -139,11 +134,6 @@ pub(crate) fn findings(
             }
         }
     }
-    found.extend(reading(
-        plan.ratchet.reading,
-        report.reading.total(),
-        allowed,
-    ));
     found.extend(
         plan.in_force
             .iter()
@@ -231,15 +221,7 @@ impl Allowed {
     /// declares nothing.
     #[must_use]
     pub(crate) fn of(ratchet: u64, allowance: u64, merges: u64, declared: &[String]) -> Self {
-        let declared = declared
-            .iter()
-            .filter_map(|value| value.trim().strip_prefix('+'))
-            .filter_map(|said| {
-                said.split_once(':')
-                    .filter(|(_, why)| !why.trim().is_empty())
-            })
-            .filter_map(|(tokens, _)| tokens.trim().parse::<u64>().ok())
-            .sum();
+        let declared = declared.iter().filter_map(|value| tokens(value)).sum();
         Self {
             ratchet,
             allowance: allowance * merges.max(1),
@@ -250,6 +232,26 @@ impl Allowed {
     const fn limit(&self) -> u64 {
         self.ratchet + self.allowance + self.declared
     }
+}
+
+/// The tokens a `Reading-growth: +<tokens>: <reason>` value declares, or none when it is not in
+/// that form.
+fn tokens(value: &str) -> Option<u64> {
+    let (tokens, why) = value.trim().strip_prefix('+')?.split_once(':')?;
+    (!why.trim().is_empty()).then_some(())?;
+    tokens.trim().parse().ok()
+}
+
+/// Each declared value not in the form, refused, so a declaration is never read as what it does
+/// not say.
+pub(crate) fn malformed(declared: &[String]) -> Vec<String> {
+    declared
+        .iter()
+        .filter(|value| tokens(value).is_none())
+        .map(|value| {
+            format!("`Reading-growth: {value}` is not `Reading-growth: +<tokens>: <reason>`")
+        })
+        .collect()
 }
 
 /// The refusals of a reading set of `measured` tokens whose ratchet says `written`.
@@ -270,7 +272,20 @@ pub(crate) fn reading(written: u64, measured: u64, allowed: &Allowed) -> Vec<Fin
 
 #[cfg(test)]
 mod tests {
-    use super::{Allowed, reading};
+    use super::{Allowed, malformed, reading};
+
+    /// A declaration not in its form declares nothing and is refused, so it is never read as what
+    /// it does not say.
+    #[test]
+    fn a_malformed_growth_is_refused() {
+        let said = |values: &[&str]| -> Vec<String> {
+            malformed(&values.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>())
+        };
+        assert!(said(&["+600: the laws"]).is_empty());
+        for wrong in ["600 tokens", "+600:", "+six hundred: the laws"] {
+            assert_eq!(said(&[wrong]).len(), 1, "{wrong}");
+        }
+    }
 
     /// Over a merge base's ratchet of 1,000 and 2,000 for each merge: a growth past it with no
     /// declared line is refused and names the line to write; a declared one goes through; a

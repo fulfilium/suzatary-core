@@ -118,6 +118,8 @@ esac
 /// environment, arguments and directory beside `<TRAIN_PROBES>`. `GATE_HOLD` (a tree half),
 /// `GATE_HOLD_LIVE` (a live half) and `GATE_HOLD_ARGS` (the run whose arguments are exactly these,
 /// held on `GATE_HOLD_AT`) hold a half on a fifo until the test lets it go on, its pid in `<fifo>.pid`.
+/// `GATE_RED_TREE` makes a tree half red whatever its tree, and a file `nothing-needs-attention`
+/// beside `SUZATARY_INSTANCE` makes a live half red, as a scene that finds no row to open.
 /// `GATE_LEAVE=group` leaves a sleeper in the gate's group, its output elsewhere, and
 /// `GATE_LEAVE=outside` one in a session of its own that holds the gate's stderr; each pid is a line
 /// of `<TRAIN_PROBES>.left`.
@@ -147,6 +149,8 @@ case "$1" in
     case "$2 $3" in "--steps live,"*) bad=broken-live-early ;; esac ;;
   *) exit 64 ;;
 esac
+[ -z "$GATE_RED_TREE" ] || [ "$1" != --no-live ] || bad=.
+[ "$1" != --only-live ] || [ ! -e "${SUZATARY_INSTANCE%/*}/nothing-needs-attention" ] || bad=/
 [ -z "$GATE_HOLD_LIVE" ] || [ "$bad" != broken-live ] || held "$GATE_HOLD_LIVE"
 [ -z "$GATE_RED_TEXT" ] || [ "$1" != --no-live ] || ! grep -qs "$GATE_RED_TEXT" CHANGELOG.md || bad=CHANGELOG.md
 test -e "$bad" || exit 0
@@ -171,6 +175,17 @@ if [ "$1" = --check ]; then
   exit 1
 fi
 mkdir -p "$1" && git archive "$2" | tar -x -C "$1" && rm -rf "$1/private"
+"#;
+
+/// The stub growth check, run in the gate's worktree: within, unless `GROWTH=refused` (a refusal on
+/// stdout, exit 1) or `GROWTH=broken` (a check that compared nothing, exit 2). Each run is a line of
+/// `<TRAIN_PROBES>.growth`.
+const GROWTH: &str = r#"#!/bin/sh
+echo "$(git rev-parse HEAD)" >>"$TRAIN_PROBES.growth"
+case "$GROWTH" in
+  refused) echo "the reading set grows 900 tokens past what the commits declare"; exit 1 ;;
+  broken) echo "no merge base with origin/master" >&2; exit 2 ;;
+esac
 "#;
 
 const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0]\n\n- the first release\n";
@@ -259,7 +274,12 @@ impl Train {
         // The tree half is green unless the tree holds `broken`, the live half unless it
         // holds `broken-live`; every run is counted by its flag. A red half ends with the
         // real gate's last section.
-        for (stub, body) in [("gh", GH), ("gate", GATE), ("public", PUBLIC)] {
+        for (stub, body) in [
+            ("gh", GH),
+            ("gate", GATE),
+            ("public", PUBLIC),
+            ("growth", GROWTH),
+        ] {
             let _ = suzatary_testkit::fake_program(&bin, stub, body);
         }
         train
@@ -417,6 +437,7 @@ impl Train {
             .env("SUZATARY_SHELL", "triage")
             .env("SUZATARY_SHELL_SETS", "")
             .env("SUZATARY_TRAIN_GATE", bin.join("gate"))
+            .env("SUZATARY_TRAIN_GROWTH", bin.join("growth"))
             .env("SUZATARY_TRAIN_GH", bin.join("gh"))
             .env("SUZATARY_TRAIN_PUBLIC", bin.join("public"))
             .env("SUZATARY_TRAIN_BIN", super::binary::path())
@@ -428,10 +449,15 @@ impl Train {
 
     /// `train` through a pseudo-terminal (`script`), as the operator runs it at one.
     fn at_a_terminal(&self, args: &[&str]) -> Output {
-        let train = self.command(args, &[]);
+        self.at_a_terminal_with(args, &[])
+    }
+
+    /// `at_a_terminal` with `env` set too.
+    fn at_a_terminal_with(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
+        let train = self.command(args, env);
         let line = std::iter::once(train.get_program())
             .chain(train.get_args())
-            .map(|word| format!("'{}'", word.to_string_lossy()))
+            .map(|word| format!("'{}'", word.to_string_lossy().replace('\'', "'\\''")))
             .collect::<Vec<_>>()
             .join(" ");
         let mut cmd = isolated(Command::new("script"));
@@ -3813,6 +3839,182 @@ fn train_full_red_beside_a_selective_green_is_a_finding() {
     );
 }
 
+/// A train over the fixture's deployment, master holding a release, with `pr` built: the train,
+/// its data root and the environment its runs read.
+fn on_the_deployment(name: &str) -> (Train, PathBuf, Vec<(&'static str, String)>) {
+    let t = Train::new(name);
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let files = release_files("1.1.0");
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+    t.master_moves(&files);
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    (t, data, env)
+}
+
+/// A LIVE VERDICT IS OF THE TREE AND THE STORES IT READ: the live half's row names a digest of the
+/// stores taken before the run (and nothing of them); a land reads the live half at its newest
+/// row, so the stores moving after a green gate change nothing, and a red at stores the next green
+/// moved past is no finding: the land goes through and prints it, and prints a red set aside at
+/// such stores too.
+#[test]
+fn train_land_reads_the_live_half_at_its_newest_row() {
+    let (t, data, env) = on_the_deployment("data");
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    assert!(t.train_with(&["build", "1"], &env).status.success());
+    write(&data, "nothing-needs-attention", "");
+    let red = t.train_with(&["gate"], &env);
+    assert!(!red.status.success(), "the live half finds no row to open");
+    let handed = std::fs::read_to_string(t.probes_file().with_extension("env")).expect("the env");
+    let digest = handed
+        .lines()
+        .find_map(|line| line.strip_prefix("SUZATARY_GATE_DATA="))
+        .expect("the live half is handed the stores' digest")
+        .to_owned();
+    assert!(!t.train_with(&["land"], &env).status.success());
+    let aside = t.at_a_terminal_with(
+        &["set-aside", "live", "--because", "bravo", "no row to open"],
+        &env,
+    );
+    assert!(aside.status.success(), "set-aside: {}", text(&aside.stdout));
+
+    write(&data, &format!("inbox/objects/{}.py", "d".repeat(64)), "x");
+    assert!(
+        !t.train_with(&["gate"], &env).status.success(),
+        "red again, at other stores"
+    );
+    std::fs::remove_file(data.join("nothing-needs-attention")).expect("a row needs attention");
+    write(&data, &format!("inbox/objects/{}.py", "e".repeat(64)), "x");
+    let green = t.train_with(&["gate"], &env);
+    assert!(green.status.success(), "gate: {}", text(&green.stderr));
+    let rows = verdict_rows(&t);
+    let live: Vec<&str> = rows.lines().filter(|l| l.contains(" data:")).collect();
+    let reds: Vec<&&str> = live.iter().filter(|l| l.starts_with("failed ")).collect();
+    assert!(
+        reds.len() == 2
+            && reds[0].ends_with(&format!(" data:{digest}"))
+            && live
+                .last()
+                .is_some_and(|l| l.starts_with("ok ") && !l.ends_with(&digest)),
+        "{rows}"
+    );
+    assert!(
+        !rows.contains("inbox") && !rows.contains(&data.display().to_string()),
+        "a row holds a digest, never a name of the stores: {rows}"
+    );
+
+    write(&data, &format!("inbox/objects/{}.py", "f".repeat(64)), "x");
+    let landed = t.train_with(&["land"], &env);
+    assert!(
+        landed.status.success(),
+        "the stores moved after the green gate, and the land reads its row: {}",
+        text(&landed.stderr)
+    );
+    let printed = text(&landed.stdout);
+    assert!(
+        printed.contains("stands, and a green came after the stores moved")
+            && printed.contains("because bravo: no row to open"),
+        "the red that lapsed and the red set aside at stores moved past are both printed: {printed}"
+    );
+}
+
+/// A RED CAN BE SET ASIDE ON THE RECORD: by a person at a terminal, naming an open or completed
+/// roadmap task and some words; it names the one red row it sets aside, a land over it prints it,
+/// and without it a red beside a green is a finding that lands nothing.
+#[test]
+fn train_sets_a_red_aside_at_a_terminal_for_a_roadmap_task() {
+    let (t, data, env) = on_the_deployment("set-aside");
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    assert!(t.train_with(&["build", "1"], &env).status.success());
+    let red_env: Vec<(&str, &str)> = env
+        .iter()
+        .copied()
+        .chain([("GATE_RED_TREE", "1")])
+        .collect();
+    assert!(!t.train_with(&["gate"], &red_env).status.success());
+    assert!(!t.train_with(&["gate"], &env).status.success(), "a finding");
+    let finding = t.train_with(&["land"], &env);
+    assert!(!finding.status.success());
+    assert!(
+        text(&finding.stderr).contains("no person set the red aside"),
+        "{}",
+        text(&finding.stderr)
+    );
+
+    let why = "the runners' cache job failed";
+    let unattended = t.train_with(&["set-aside", "tree", "--because", "bravo", why], &env);
+    assert!(!unattended.status.success(), "no terminal, no set-aside");
+    assert!(
+        text(&unattended.stderr).contains("terminal"),
+        "{}",
+        text(&unattended.stderr)
+    );
+    for (task, said) in [("nosuch", "holds no task"), ("opsonly", "holds no task")] {
+        let out = t.at_a_terminal_with(&["set-aside", "tree", "--because", task, why], &env);
+        assert!(!out.status.success(), "{task} is no roadmap task");
+        assert!(
+            text(&out.stdout).contains(said),
+            "{task}: {}",
+            text(&out.stdout)
+        );
+    }
+    let cancelled = crate::binary::keyed()
+        .args(["--instance", &data.join("instance.toml").to_string_lossy()])
+        .args([
+            "todo",
+            "--chain",
+            "roadmap",
+            "cancel",
+            "calendarlinks",
+            "--actor",
+            "ada",
+        ])
+        .output()
+        .expect("the binary runs");
+    assert!(cancelled.status.success(), "{}", text(&cancelled.stderr));
+    let pushed = isolated(Command::new(repo().join("scripts/roadmap-push.sh")))
+        .arg(data.join("roadmap"))
+        .envs(env.iter().copied())
+        .env("SUZATARY_BIN", drawing(&data))
+        .output()
+        .expect("roadmap-push.sh runs");
+    assert!(pushed.status.success(), "{}", text(&pushed.stderr));
+    let out = t.at_a_terminal_with(
+        &["set-aside", "tree", "--because", "calendarlinks", why],
+        &env,
+    );
+    assert!(!out.status.success(), "a cancelled task says nothing");
+    assert!(
+        text(&out.stdout).contains("is cancelled"),
+        "{}",
+        text(&out.stdout)
+    );
+    let out = t.at_a_terminal_with(&["set-aside", "tree", "--because", "a.b*", why], &env);
+    assert!(
+        text(&out.stdout).contains("is not a todo id"),
+        "{}",
+        text(&out.stdout)
+    );
+    assert!(
+        !verdict_rows(&t).contains("set-aside"),
+        "nothing set aside yet"
+    );
+
+    let aside = t.at_a_terminal_with(&["set-aside", "tree", "--because", "bravo", why], &env);
+    assert!(aside.status.success(), "set-aside: {}", text(&aside.stdout));
+    let rows = verdict_rows(&t);
+    assert_eq!(rows.matches("set-aside ").count(), 1, "{rows}");
+    let landed = t.train_with(&["land"], &env);
+    assert!(landed.status.success(), "land: {}", text(&landed.stderr));
+    assert!(
+        text(&landed.stdout).contains("set aside at")
+            && text(&landed.stdout).contains(&format!("because bravo: {why}")),
+        "the land prints the set-aside: {}",
+        text(&landed.stdout)
+    );
+}
+
 /// THE TRAIN'S APP IS THE ONE THE GATE BUILT: `scripts/app-bin.sh` takes a named commit's
 /// (`SUZATARY_APP_REV`) from that commit's public tree (`scripts/public-tree.sh --store`), the
 /// store path the merge gate's deploy-build and publication.yml build, never from `git+file` of
@@ -3947,6 +4149,95 @@ fn train_nightly_gates_master_whole_and_files_nothing_when_green() {
         "both halves of master, nightly"
     );
     assert!(Train::nightly_todos(&data).is_empty());
+}
+
+/// THE GROWTH CHECK REFUSES A TRAIN, AND ONLY A REFUSAL DOES: a refused declaration stops the
+/// gate before either half, writes no row and names what it refused; a check that compared
+/// nothing says so with its cause, and the halves go on.
+#[test]
+fn train_gate_is_refused_by_an_undeclared_growth_and_goes_on_when_none_was_checked() {
+    let t = Train::new("growth");
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    let train = t.git(&["rev-parse", "train"]);
+
+    let refused = t.train_with(&["gate"], &[("GROWTH", "refused")]);
+    let said = text(&refused.stderr);
+    assert!(!refused.status.success(), "a refused growth gates nothing");
+    assert!(
+        said.contains("growth: the reading set grows 900 tokens")
+            && said.contains("no row was written"),
+        "{said}"
+    );
+    let checked =
+        std::fs::read_to_string(t.probes_file().with_extension("growth")).expect("the check ran");
+    assert_eq!(
+        checked.trim(),
+        train,
+        "in the train's worktree, at its commit"
+    );
+    assert_eq!(
+        t.probes("--no-live") + t.probes("--only-live"),
+        0,
+        "no half ran"
+    );
+    assert_eq!(verdict_rows(&t), "", "and no row was written");
+    assert!(text(&t.train(&["land"]).stderr).contains("gate first"));
+
+    let unrun = t.train_with(&["gate"], &[("GROWTH", "broken")]);
+    let said = text(&unrun.stderr);
+    assert!(
+        unrun.status.success(),
+        "a check that did not run stops nothing: {said}"
+    );
+    assert!(
+        said.contains(
+            "the growth check did not run (no merge base with origin/master); the halves go on"
+        ),
+        "{said}"
+    );
+    assert_eq!(
+        t.probes("--no-live") + t.probes("--only-live"),
+        2,
+        "both halves ran"
+    );
+}
+
+/// The nightly runs both halves whatever the growth check found, then fails on a refusal and on a
+/// check that compared nothing, so a check that never runs is seen within a day.
+#[test]
+fn train_nightly_fails_after_its_halves_on_a_growth_it_could_not_pass() {
+    let t = Train::new("nightly-growth");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    t.master_moves(&[("a.txt", "a\n")]);
+    for (growth, said) in [
+        (
+            "refused",
+            "origin/master's commits do not declare their growth",
+        ),
+        ("broken", "the growth check did not run on origin/master"),
+    ] {
+        let env: Vec<(&str, &str)> = env
+            .iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .chain([("GROWTH", growth)])
+            .collect();
+        let before = t.full_runs().len();
+        let out = t.train_with(&["nightly"], &env);
+        assert!(!out.status.success(), "{growth}: the nightly fails");
+        assert!(
+            text(&out.stderr).contains(said),
+            "{growth}: {}",
+            text(&out.stderr)
+        );
+        assert_eq!(
+            t.full_runs().len(),
+            before + 2,
+            "{growth}: both halves ran first"
+        );
+    }
 }
 
 /// A red night runs both halves whatever the first says, files one todo for the tree naming the
