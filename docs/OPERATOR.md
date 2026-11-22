@@ -242,6 +242,22 @@ builds, and says which way it went:
 A commit deployed with `--ref <branch>` is not on `master`, so no run builds
 it and the box does.
 
+## After a restore, a pull or a merge of the data tree
+
+A store reads what changed in its `objects/` by a door it does not own (the vault's restore, a
+`git pull` or merge of the data repository, a copy of files) only once a hold of its lock lists
+them. After any of them, run
+
+```
+scripts/app-bin.sh --deployed prodrome record
+```
+
+which records every store's heads under its lock and ends non-zero naming any store it could
+not record. `scripts/app-bin.sh --deployed verify` is the evidence: it names a store whose record
+of heads is older than its objects. `scripts/bootstrap-box.sh` restores before the app is
+deployed, so it prints this step and does not run it. `scripts/roadmap-push.sh` runs the verb
+itself after it joins origin's commits into a public store's clone.
+
 ## A deploy restarts every unit that runs the app
 
 The units that run the app for longer than one job are the ones part of

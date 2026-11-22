@@ -29,7 +29,7 @@ use suzatary_memory::secretary::salted_text::TextName;
 use suzatary_record::record::{MarkupSource, TodoEvent};
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::{Hold, Prodrome};
-use suzatary_stores::stores::{Files, Kind, Store};
+use suzatary_stores::stores::{Kind, Store};
 use suzatary_todo::decisions::{DecisionEvent, DecisionId, Statement, decided, revised, withdrawn};
 use suzatary_topics::secretary::topics::reading::AliasEvent;
 use suzatary_topics::secretary::topics::reading::MembershipEvent;
@@ -211,7 +211,7 @@ fn every_prodrome_keeps_the_store_laws() {
     let prodromes: BTreeSet<Kind> = Kind::ALL
         .iter()
         .copied()
-        .filter(|kind| matches!(kind.files(), Files::Chain | Files::Objects))
+        .filter(|kind| kind.holds_objects())
         .collect();
     assert_eq!(covered, prodromes);
 }

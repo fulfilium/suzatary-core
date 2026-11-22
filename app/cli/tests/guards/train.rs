@@ -3600,6 +3600,118 @@ fn roadmap_push_refuses_a_range_door_2_refuses() {
     );
 }
 
+/// A push that joins origin's commits records the clone's heads after the merge, so a reader
+/// that has read the store reads the merged objects, and a record left owed is done by the next
+/// pass, even one with nothing to push; the push commits the store's `.gitignore` as
+/// `suzatary migrate-ignores` brought it (whose `--check` ends non-zero until it is), and a
+/// `.gitignore` in another form, which the verb leaves alone and ends non-zero over, commits
+/// nothing.
+#[test]
+fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
+    let t = Train::new("roadmap-push-join");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let env = release_env(&instance);
+    let roadmap = data.join("roadmap");
+    let elsewhere = published_roadmap(&data, "elsewhere");
+    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
+    suzatary_record::record::EventStore::new(&elsewhere, prodrome_core::policy::Untrusted::none())
+        .append(
+            prodrome_core::event::mk_completed("calendarlinks", at, "ada", "").expect("an event"),
+        )
+        .expect("appended elsewhere");
+    let drawn = Command::new(drawing(&data))
+        .args(["prodrome", "draw", "--store", &elsewhere.to_string_lossy()])
+        .output()
+        .expect("the binary runs");
+    assert!(drawn.status.success(), "{}", text(&drawn.stderr));
+    run_git(
+        &elsewhere,
+        &["add", "objects", "roadmap.svg", "roadmap-dark.svg"],
+    );
+    run_git(&elsewhere, &["commit", "-q", "-m", "elsewhere"]);
+    run_git(&elsewhere, &["push", "-q", "origin", "HEAD:master"]);
+    let migrate = |args: &[&str]| {
+        crate::binary::keyed()
+            .arg("migrate-ignores")
+            .args(args)
+            .args(["--store", &roadmap.to_string_lossy()])
+            .output()
+            .expect("the binary runs")
+    };
+    assert!(!migrate(&["--check"]).status.success(), "it lacks the line");
+    let brought = migrate(&[]);
+    assert!(brought.status.success(), "{}", text(&brought.stderr));
+    assert!(migrate(&["--check"]).status.success(), "settled");
+    let push = || {
+        isolated(Command::new(repo().join("scripts/roadmap-push.sh")))
+            .arg(&roadmap)
+            .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
+            .env("SUZATARY_BIN", drawing(&data))
+            .output()
+            .expect("roadmap-push.sh runs")
+    };
+    let out = push();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let recorded = prodrome_core::dag::Heads::parse(
+        &std::fs::read_to_string(roadmap.join(".heads")).expect("a record"),
+    )
+    .expect("parses");
+    let held = std::fs::read_dir(roadmap.join("objects"))
+        .expect("objects")
+        .count();
+    assert_eq!(recorded.count(), held, "the merged object is in the record");
+    assert_eq!(
+        roadmap_origin(&data, &["show", "master:.gitignore"]),
+        suzatary_io::ignores::PUBLIC_CHARTER.trim_end(),
+    );
+
+    let owed = PathBuf::from(run_git(
+        &roadmap,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "suzatary-record-owed",
+        ],
+    ));
+    assert!(!owed.exists(), "a record done is owed no more");
+    std::fs::remove_file(roadmap.join(".heads")).expect("the record goes");
+    std::fs::write(&owed, "").expect("a record left owed by a pass that failed");
+    let again = push();
+    assert!(again.status.success(), "{}", text(&again.stderr));
+    assert!(text(&again.stderr).contains("nothing to push"));
+    assert!(
+        roadmap.join(".heads").exists(),
+        "the owed record is done first"
+    );
+    assert!(!owed.exists());
+
+    write(
+        &roadmap,
+        ".gitignore",
+        "/.heads\n/.lock\n/_site\n/.writes\n/notes.md\n",
+    );
+    let left = migrate(&[]);
+    assert!(
+        !left.status.success(),
+        "a form no push commits is no settled store"
+    );
+    assert!(
+        text(&left.stdout).contains("left alone"),
+        "{}",
+        text(&left.stdout)
+    );
+    let refused = push();
+    assert_ne!(refused.status.code(), Some(0));
+    assert!(
+        text(&refused.stderr).contains("not a public store's own"),
+        "{}",
+        text(&refused.stderr)
+    );
+}
+
 /// A pass with nothing new costs nothing: a clone holding no new object and no commit its origin
 /// lacks returns at once, reaching no remote (its origin here is gone) and drawing nothing.
 #[test]

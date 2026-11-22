@@ -25,6 +25,7 @@ pub mod instance;
 pub mod leaks;
 pub mod mail;
 pub mod mcp;
+pub mod migrate_ignores;
 pub mod notify;
 pub mod outbound;
 pub mod plugin;

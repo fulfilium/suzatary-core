@@ -6,8 +6,8 @@ use clap::Subcommand;
 
 use crate::commands::{
     call, coding, context, decision, device, doctor, follow, heartbeat, init, instance, leaks,
-    mail, mcp, notify, plugin, prodrome, ran, release, secretary, secretspec, serve, tap, todo,
-    todos, typeset, up, vault, verify, weather,
+    mail, mcp, migrate_ignores, notify, plugin, prodrome, ran, release, secretary, secretspec,
+    serve, tap, todo, todos, typeset, up, vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -93,6 +93,9 @@ pub enum Verb {
     Leaks(leaks::Args),
     /// Check the store: every object rehashed, every parent present, every head reachable.
     Verify(verify::Args),
+    /// Add to each store's `.gitignore` the lines of its files local to this machine that it
+    /// lacks (`/.writes`, since the Prodrome at 85e5083), as `verify` asks.
+    MigrateIgnores(migrate_ignores::Args),
     /// Print the file `secretspec set <NAME> --file` takes: every secret name this deployment
     /// may set, the code root's own and the ones its tables derive.
     Secretspec,
@@ -116,7 +119,7 @@ impl Verb {
             Verb::Todos(args) => todos::run(path, &args),
             Verb::Follow(args) => follow::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
-            Verb::Prodrome(args) => prodrome::run(&args),
+            Verb::Prodrome(args) => prodrome::run(path, &args),
             Verb::Release(args) => release::run(path, &args),
             Verb::Device(args) => device::run(path, &args),
             Verb::Sync => mail::sync(path),
@@ -144,6 +147,7 @@ impl Verb {
             Verb::Context(args) => context::run(&args),
             Verb::Leaks(args) => leaks::run(&args),
             Verb::Verify(args) => verify::run(path, &args),
+            Verb::MigrateIgnores(args) => migrate_ignores::run(path, &args),
             Verb::Secretspec => secretspec::run(path),
             Verb::Typeset => typeset::run(),
         }

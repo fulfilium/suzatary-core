@@ -41,12 +41,24 @@ draw() {
   "${git[@]}" add -- roadmap.svg roadmap-dark.svg
 }
 
-# Commits what the box wrote (new objects, a moved pin) with the pictures; nothing when nothing.
+# The store's own `.gitignore`, staged where `suzatary migrate-ignores` changed it: a public
+# charter's form before the mark of the last hold or after it, and nothing else.
+ignore() {
+  "${git[@]}" diff --quiet -- .gitignore && return 0
+  case "$(cat "$clone/.gitignore")" in
+    $'/.heads\n/.lock\n/_site' | $'/.heads\n/.lock\n/_site\n/.writes') "${git[@]}" add -- .gitignore ;;
+    *) die "the clone's .gitignore is not a public store's own, so nothing is committed: look at it." ;;
+  esac
+}
+
+# Commits what the box wrote (new objects, a moved pin, the store's .gitignore) with the
+# pictures; nothing when nothing.
 commit() {
   local path
   for path in objects flake.lock; do
     [[ ! -e "$clone/$path" ]] || "${git[@]}" add -- "$path"
   done
+  ignore
   "${git[@]}" diff --cached --quiet && return 0
   draw
   local message="$subject"
@@ -54,10 +66,22 @@ commit() {
   "${git[@]}" commit --quiet -m "$message" || die "the clone did not commit (a hook?)."
 }
 
+# A join is a door the store does not own, so its heads are recorded under the store's lock
+# after it, which a reader that has read the clone then reads. The record is owed from the merge
+# until it is done: a pass whose record failed leaves the merge committed, and the next pass
+# records first, before it can find nothing to push. It lists the clone's objects/ once.
+owed="$("${git[@]}" rev-parse --path-format=absolute --git-path suzatary-record-owed)"
+record() {
+  "$bin" prodrome record --store "$clone" >/dev/null \
+    || die "the joined store's heads were not recorded (above); the next pass records them."
+  rm -f "$owed"
+}
+
 # Origin's commits joined in: objects only ever add, so only the pictures can conflict, and the
 # draw of the joined store settles them.
 join() {
   "${git[@]}" merge-base --is-ancestor origin/master HEAD && return 0
+  : >"$owed"
   if ! "${git[@]}" merge --quiet --no-edit origin/master >/dev/null 2>&1; then
     local conflicted
     conflicted="$("${git[@]}" diff --name-only --diff-filter=U | grep -vxE 'roadmap(-dark)?\.svg' || true)"
@@ -66,13 +90,15 @@ join() {
       die "origin's roadmap conflicts with the clone in $(paste -sd' ' <<<"$conflicted"), which a store never does: look at the clone."
     fi
   fi
+  record
   draw
   "${git[@]}" diff --cached --quiet && [[ ! -e "$("${git[@]}" rev-parse --git-path MERGE_HEAD)" ]] && return 0
   "${git[@]}" commit --quiet --no-edit -m "Join origin's roadmap" || die "the join did not commit."
 }
 
+[[ ! -e "$owed" ]] || record
 # Read against the local origin/master, so a quiet pass reaches no remote and draws nothing.
-if [[ -z "$("${git[@]}" status --porcelain --untracked-files=all -- objects flake.lock)" &&
+if [[ -z "$("${git[@]}" status --porcelain --untracked-files=all -- objects flake.lock .gitignore)" &&
   -z "$("${git[@]}" rev-list origin/master..HEAD)" ]]; then
   say "nothing to push"
   exit 0

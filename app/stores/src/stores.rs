@@ -189,6 +189,16 @@ stores! {
 }
 
 impl Kind {
+    /// Whether its directory is a Prodrome store of files: `objects/` beside the store's own
+    /// files (`.gitignore`, `.heads`, `.writes`).
+    #[must_use]
+    pub const fn holds_objects(self) -> bool {
+        match self.files() {
+            Files::Chain | Files::Objects => true,
+            Files::Records | Files::File | Files::Directory => false,
+        }
+    }
+
     /// Whether the data push refuses a change or deletion of a file it already holds.
     #[must_use]
     pub const fn append_only(self) -> bool {

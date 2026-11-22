@@ -269,6 +269,20 @@ impl Instance {
         self.roots.data.under(Path::new("decisions"))
     }
 
+    /// Where each Prodrome store of files of this deployment lives, by its kind and fsck name.
+    #[must_use]
+    pub fn object_stores(&self) -> Vec<(Kind, String, PathBuf)> {
+        Kind::ALL
+            .iter()
+            .filter(|kind| kind.holds_objects())
+            .flat_map(|kind| {
+                self.directories(*kind)
+                    .into_iter()
+                    .map(|(name, root)| (*kind, name, root))
+            })
+            .collect()
+    }
+
     /// Where each store of `kind` lives, by its fsck name.
     #[must_use]
     pub fn directories(&self, kind: Kind) -> Vec<(String, PathBuf)> {

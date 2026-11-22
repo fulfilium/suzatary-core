@@ -45,8 +45,10 @@ snapshots() {
 # The box-local stores (`suzatary_stores::stores::Kind`); app/cli/tests/guards/lists.rs pins this list.
 VAULTED='secretary-lines-keys secretary-memory-texts secretary-digest-texts secretary-topics secretary-topic-aliases secretary-asks local secretary/attachments secretary/files'
 # Claude Code names a project's directory by its path with every `/` a `-`. A store's record of
-# its heads (`.heads`) stays out: the tar takes no store's lock, and a restored store derives it.
-tar czf "$WORK/state.tar.gz" --exclude="*.lock" --exclude=".heads" -C "$HOME" \
+# its heads (`.heads`) and the mark of its last hold (`.writes`) stay out: both are local to one
+# machine, and the tar takes no store's lock. A restore unpacks objects without the store, so it
+# is followed by `suzatary prodrome record`, which a running reader then reads.
+tar czf "$WORK/state.tar.gz" --exclude="*.lock" --exclude=".heads" --exclude=".writes" -C "$HOME" \
   .password-store \
   .gnupg \
   ".claude/projects/${HOME//\//-}/memory" \

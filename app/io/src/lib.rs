@@ -24,6 +24,7 @@ pub mod gmail;
 pub mod google;
 pub mod health_file;
 pub mod http;
+pub mod ignores;
 pub mod imap;
 pub mod junk;
 pub mod lines;

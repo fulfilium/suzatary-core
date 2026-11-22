@@ -1,9 +1,10 @@
-//! `suzatary prodrome init|draw|pages|texts`: a todo store begun at a path, such as a project's
+//! `suzatary prodrome init|draw|pages|texts|record`: a todo store begun at a path, such as a project's
 //! roadmap, its open list drawn, the store written as static pages, and what door 1 reads of its
 //! objects written out for door 2.
 
 mod pages;
 mod picture;
+mod record;
 
 use std::path::Path;
 
@@ -35,6 +36,13 @@ pub enum Action {
     Draw(picture::Drawing),
     /// Write a store as static pages: the open list and each todo's page, at one instant.
     Pages(pages::Paging),
+    /// Record each store's heads under its lock after a program changed its `objects/` by
+    /// another door: a `git pull` or merge, a copy, a restore. Run after any of them; `verify`
+    /// names a store left behind (its record of heads is stale).
+    Record {
+        #[command(flatten)]
+        store: super::store_at::StoreAt,
+    },
     /// For door 2: write what door 1 reads of each object file (`door::Reading`) beside it as
     /// `<object>.texts`, and print each object one of whose markup fields does not draw.
     Texts {
@@ -44,7 +52,7 @@ pub enum Action {
     },
 }
 
-pub fn run(args: &Args) -> anyhow::Result<()> {
+pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.action {
         Action::Init { store, public } => init(
             store,
@@ -57,6 +65,7 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
         Action::Draw(drawing) => picture::run(drawing),
         Action::Pages(paging) => pages::run(paging),
         Action::Texts { objects } => texts(objects),
+        Action::Record { store } => record::run(path, store),
     }
 }
 
@@ -113,8 +122,8 @@ fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     unless_there(
         &dir.join(".gitignore"),
         match charter {
-            Charter::Public => "/.heads\n/.lock\n/_site\n",
-            Charter::Private => "/.heads\n/.lock\n",
+            Charter::Public => suzatary_io::ignores::PUBLIC_CHARTER,
+            Charter::Private => suzatary_io::ignores::PRIVATE_CHARTER,
         },
     )?;
     unless_there(&dir.join(".gitattributes"), ATTRIBUTES)?;

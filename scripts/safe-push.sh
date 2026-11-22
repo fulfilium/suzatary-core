@@ -162,15 +162,19 @@ data_push() {
     echo "$REFUSED" >&2
     exit 1
   fi
-  # A store writes its own `.gitignore` (the Prodrome's SPEC §3) holding `/.heads` alone, so its
-  # record of heads stays on the box; one that ignored more could keep the store's objects out of
-  # every push, so a staged one holding anything else commits nothing.
+  # A store writes its own `.gitignore` (the Prodrome's SPEC §3), so its record of heads and the
+  # mark of its last hold stay on the box: `/.heads`, or `/.heads` and `/.writes`, which
+  # `suzatary migrate-ignores` brings an older store to. One that ignored more could keep the
+  # store's objects out of every push, so a staged one holding anything else commits nothing.
   for ignore in $(GIT_INDEX_FILE="$JUDGED" git diff --cached --no-renames --name-only \
     | grep -E '^[a-z-]+/\.gitignore$' | grep -v '^requests/' || true); do
-    if [ "$(GIT_INDEX_FILE="$JUDGED" git show ":$ignore" 2>/dev/null)" != "/.heads" ]; then
-      echo "safe-push: $ignore holds more than the store's \`/.heads\`, so nothing is committed" >&2
-      exit 1
-    fi
+    case "$(GIT_INDEX_FILE="$JUDGED" git show ":$ignore" 2>/dev/null)" in
+      "/.heads" | $'/.heads\n/.writes') ;;
+      *)
+        echo "safe-push: $ignore is not the store's own \`/.heads\` (and \`/.writes\`), so nothing is committed" >&2
+        exit 1
+        ;;
+    esac
   done
   # Else an empty commit would fail a clean run.
   if GIT_INDEX_FILE="$JUDGED" git diff --cached --quiet; then

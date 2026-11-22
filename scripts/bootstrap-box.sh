@@ -112,3 +112,4 @@ done
 echo
 echo "bootstrap: done. Restored: pass store, GPG keys, OAuth caches, lieer creds, Bridge state, assistant memory; cloned: ${REPOS[*]:-nothing}."
 echo "bootstrap: 'suzatary up' will refuse unless this box is named in the data repository's FETCHER — that refusal is the single-fetcher invariant working."
+echo "bootstrap: once the app is deployed, run 'scripts/app-bin.sh --deployed prodrome record': a restored store reads what was unpacked into it once its heads are recorded."

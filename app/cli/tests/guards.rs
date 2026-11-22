@@ -1685,39 +1685,54 @@ fn safe_push_carries_each_store_s_own_gitignore_and_never_its_record() {
     }
 }
 
-/// A store's `.gitignore` is committed while it holds `/.heads` alone, and the record it keeps
-/// out stays on the box; one that ignores more commits nothing, since it could keep the store's
-/// objects out of every push.
+/// A store's `.gitignore` is committed while it holds `/.heads`, or `/.heads` and `/.writes`, and
+/// the record and the mark it keeps out stay on the box; one that ignores more commits nothing,
+/// since it could keep the store's objects out of every push.
 #[test]
 fn safe_push_commits_a_store_s_gitignore_only_as_the_store_writes_it() {
-    let fixture = PushFixture::new("push-gitignore", Verification::Passes);
-    fixture.write(&format!("inbox/objects/{}.py", "a".repeat(64)));
-    std::fs::write(fixture.data().join("inbox/.gitignore"), "/.heads\n").expect("written");
-    std::fs::write(
-        fixture.data().join("inbox/.heads"),
-        "Heads(count=1, tips=())",
-    )
-    .expect("written");
-    let out = fixture.push();
-    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
-    assert_eq!(code(&out), 0, "{said}");
-    assert_eq!(fixture.commits(), 2, "{said}");
-    let tracked = git(&fixture.data(), &["ls-files", "inbox"], None);
-    let tracked = String::from_utf8_lossy(&tracked.stdout).into_owned();
-    assert!(tracked.contains("inbox/.gitignore"), "{tracked}");
-    assert!(
-        !tracked.contains("inbox/.heads"),
-        "the record was committed: {tracked}"
-    );
-
-    let wider = PushFixture::new("push-gitignore-wider", Verification::Passes);
-    wider.write(&format!("inbox/objects/{}.py", "b".repeat(64)));
-    std::fs::write(wider.data().join("inbox/.gitignore"), "/.heads\nobjects/\n").expect("written");
-    let out = wider.push();
-    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
-    assert_ne!(code(&out), 0, "a wider ignore was committed: {said}");
-    assert!(said.contains("inbox/.gitignore holds more"), "{said}");
-    assert_eq!(wider.commits(), 1, "{said}");
+    for (at, ignore) in [
+        ("push-gitignore", "/.heads\n"),
+        ("push-gitignore-marked", "/.heads\n/.writes\n"),
+    ] {
+        let fixture = PushFixture::new(at, Verification::Passes);
+        fixture.write(&format!("inbox/objects/{}.py", "a".repeat(64)));
+        std::fs::write(fixture.data().join("inbox/.gitignore"), ignore).expect("written");
+        std::fs::write(
+            fixture.data().join("inbox/.heads"),
+            "Heads(count=1, tips=())",
+        )
+        .expect("written");
+        let out = fixture.push();
+        let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+        assert_eq!(code(&out), 0, "{ignore:?}: {said}");
+        assert_eq!(fixture.commits(), 2, "{said}");
+        let tracked = git(&fixture.data(), &["ls-files", "inbox"], None);
+        let tracked = String::from_utf8_lossy(&tracked.stdout).into_owned();
+        assert!(tracked.contains("inbox/.gitignore"), "{tracked}");
+        assert!(
+            !tracked.contains("inbox/.heads"),
+            "the record was committed: {tracked}"
+        );
+    }
+    for (at, ignore) in [
+        ("push-gitignore-wider", "/.heads\nobjects/\n"),
+        (
+            "push-gitignore-marked-wider",
+            "/.heads\n/.writes\nobjects/\n",
+        ),
+    ] {
+        let wider = PushFixture::new(at, Verification::Passes);
+        wider.write(&format!("inbox/objects/{}.py", "b".repeat(64)));
+        std::fs::write(wider.data().join("inbox/.gitignore"), ignore).expect("written");
+        let out = wider.push();
+        let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+        assert_ne!(code(&out), 0, "a wider ignore was committed: {said}");
+        assert!(
+            said.contains("inbox/.gitignore is not the store's own"),
+            "{said}"
+        );
+        assert_eq!(wider.commits(), 1, "{said}");
+    }
 }
 
 /// The cache tier never leaves the box through the push: a plugin's store, cursor and ledger
