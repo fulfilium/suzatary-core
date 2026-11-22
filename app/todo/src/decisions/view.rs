@@ -11,9 +11,7 @@ use super::{Decision, DecisionId, Ledger};
 /// evaluated in the closed world as its parts were.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct DecisionsPage {
-    /// How many are recorded.
     pub recorded: usize,
-    /// How many are in force.
     pub in_force: usize,
     /// The lineages, each newest first.
     pub lineages: Vec<Vec<Shown>>,
@@ -22,13 +20,11 @@ pub struct DecisionsPage {
 /// One decision as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Shown {
-    /// Its id.
     pub id: String,
     /// What was decided, in one line.
     pub title: String,
     /// The day it was decided.
     pub decided: String,
-    /// Where it stands.
     pub standing: Vec<Standing>,
     /// Whether two writers each superseded the other through it.
     pub cycle: bool,
@@ -36,9 +32,7 @@ pub struct Shown {
     pub conflict: Option<usize>,
     /// Its body: markup the door admitted.
     pub body: String,
-    /// Why.
     pub rationale: String,
-    /// What it supersedes.
     pub supersedes: Vec<String>,
 }
 
@@ -47,17 +41,9 @@ pub struct Shown {
 #[serde(tag = "type")]
 pub enum Standing {
     /// Withdrawn on a day, for a reason.
-    Withdrawn {
-        /// The day.
-        day: String,
-        /// Why.
-        reason: String,
-    },
+    Withdrawn { day: String, reason: String },
     /// Superseded by these.
-    Superseded {
-        /// The decisions that supersede it.
-        by: Vec<String>,
-    },
+    Superseded { by: Vec<String> },
 }
 
 /// The decisions as one page.

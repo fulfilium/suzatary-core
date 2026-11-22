@@ -12,13 +12,11 @@ use super::{DecisionEvent, DecisionId, DecisionRegisters, Said, Statement};
 /// Every decision the history holds, as one value: its statement, its life and its links.
 ///
 /// SUPERSESSION IS AN ORDER on decisions: `a ≤ b` when `b`, or a decision `b` supersedes, names
-/// `a` among what it supersedes, so a superseding decision reads above what it supersedes. It is
-/// read off the links, which only grow, and nothing else orders two decisions: a clock or a name
-/// never says which is the newer word. Concurrent links can close a cycle, which no write here
-/// makes (the store's writer refuses one); the reading names it rather than pick an order.
+/// `a` among what it supersedes; no clock or name orders two decisions. Concurrent links can close
+/// a cycle (the store's writer refuses one), which the reading names rather than pick an order.
 ///
-/// A decision IN FORCE is one neither withdrawn nor superseded. Both only ever become true, so
-/// "out of force" is monotone in the history and needs no coordination to read.
+/// A decision IN FORCE is one neither withdrawn nor superseded; both only become true, so "out of
+/// force" is monotone in the history and needs no coordination to read.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Ledger {
     decisions: BTreeMap<DecisionId, Decision>,
@@ -37,20 +35,15 @@ pub struct Decision {
     /// When it was first decided: the earliest stamp among its statements, data and never an
     /// order.
     pub decided: Datetime,
-    /// Every decision it supersedes.
     pub supersedes: BTreeSet<DecisionId>,
-    /// Its withdrawal, if it was withdrawn.
     pub withdrawn: Option<Withdrawal>,
 }
 
 /// A withdrawal, as its event wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Withdrawal {
-    /// When.
     pub at: Datetime,
-    /// Who.
     pub by: Actor,
-    /// Why.
     pub reason: String,
 }
 
@@ -71,7 +64,6 @@ impl Ledger {
         Self { decisions }
     }
 
-    /// What it holds, as its order sees it.
     #[must_use]
     pub fn held(&self) -> Held {
         Held(
@@ -87,24 +79,20 @@ impl Ledger {
         )
     }
 
-    /// One decision.
     #[must_use]
     pub fn get(&self, id: &DecisionId) -> Option<&Decision> {
         self.decisions.get(id)
     }
 
-    /// Every decision, by id.
     pub fn iter(&self) -> impl Iterator<Item = (&DecisionId, &Decision)> {
         self.decisions.iter()
     }
 
-    /// How many decisions there are.
     #[must_use]
     pub fn len(&self) -> usize {
         self.decisions.len()
     }
 
-    /// Whether there are none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.decisions.is_empty()
@@ -148,8 +136,8 @@ impl Ledger {
             && self.superseded_by(id).is_empty()
     }
 
-    /// The decisions on a cycle of links, which concurrent writers can close and none here
-    /// does: each stands above itself, so the order is not antisymmetric among them.
+    /// The decisions on a cycle of links: each stands above itself, so the order is not
+    /// antisymmetric among them.
     #[must_use]
     pub fn cycles(&self) -> BTreeSet<&DecisionId> {
         self.decisions

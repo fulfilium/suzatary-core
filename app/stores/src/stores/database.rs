@@ -47,7 +47,6 @@ pub struct Database<'a> {
     pub decisions: &'a dyn Prodrome<DecisionEvent>,
     /// The topics on the secretary's rounds and notes.
     pub topics: &'a dyn Prodrome<MembershipEvent>,
-    /// The topics' aliases.
     pub topic_aliases: &'a dyn Prodrome<AliasEvent>,
     /// The box's refusals of what a tab posted.
     pub asks: &'a dyn Prodrome<AskEvent>,
@@ -59,7 +58,6 @@ pub struct Database<'a> {
     pub triage_local: &'a dyn Doc<(), LocalState>,
     /// Each actor's phones.
     pub devices: &'a dyn Log<String, Device>,
-    /// The owner's uploads.
     pub uploads: &'a dyn Gets<AttachmentId, Upload>,
     /// The files a verb kept for the model.
     pub kept: &'a dyn Doc<AttachmentId, Vec<u8>>,

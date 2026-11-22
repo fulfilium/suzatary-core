@@ -3,13 +3,10 @@
 //! earlier one decided. Specs and laws stay files; a decision names the file it summarises.
 //!
 //! Not a `decision` todo, which is a choice awaiting the owner's tap: a recorded decision is one
-//! already made. Its schema ([`DecisionEvent`]) is keyed by [`DecisionId`] and writes three
-//! registers: the [`Statement`] (discrete, so two concurrent revisions are a conflict shown
-//! whole), the [`Life`] (inflationary, withdrawn the top, so a withdrawn decision never stands
-//! again), and the links it supersedes, a grow-only set read by union. What a decision MEANS at
-//! a moment is the [`Ledger`]: every decision with its statement and life, ordered by
-//! supersession, a superseding decision above what it supersedes. Every reading is a function of
-//! the object set.
+//! already made. Its registers: the [`Statement`] (discrete, so two concurrent revisions are a
+//! conflict shown whole), the [`Life`] (inflationary, so a withdrawn decision never stands again)
+//! and the links it supersedes (grow-only, read by union); what a decision MEANS at a moment is
+//! the [`Ledger`], a function of the object set.
 
 mod draft;
 mod event;

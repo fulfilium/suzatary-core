@@ -1,10 +1,8 @@
 //! A browser's failure, told to the box as one warning line and never stored, so there is
 //! nothing to read back, age out or leak.
-//!
-//! Every field is an [`Excerpt`], so the line is bounded, one line whatever the tab sends (a
-//! stack cannot forge a second log entry) and names no address or key; the page is the route's
-//! KIND alone, since an address can carry a todo's text or a mail search. Each login has a
-//! [`Limiter`] budget.
+//! Every field is an [`Excerpt`], so the line is bounded, one line (a stack cannot forge a
+//! second log entry) and names no address or key; the page is the route's KIND alone, since an
+//! address can carry a todo's text or a mail search.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -16,7 +14,6 @@ use suzatary_held::excerpt::Excerpt;
 /// The most a report's body may carry, in bytes.
 pub const MAX_BODY_BYTES: usize = 16_384;
 
-/// What failed in the tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(rename = "ClientErrorKind")]
@@ -48,15 +45,12 @@ impl Kind {
 #[serde(deny_unknown_fields)]
 #[ts(rename = "ClientReport")]
 pub struct Sent {
-    /// What failed.
     pub kind: Kind,
-    /// The failure's words.
     pub message: String,
     /// The build the tab runs, `""` when it does not know.
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
     pub build: String,
-    /// The device's user agent.
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
     pub agent: String,
@@ -110,10 +104,6 @@ const MESSAGE_CHARS: usize = 500;
 const STACK_CHARS: usize = 1_500;
 
 impl Report {
-    /// A report out of what the tab sent, each field cut to its bound.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] naming the field: `message` blank, `page` not a route's kind.
     pub fn of(sent: &Sent) -> Result<Self, Refusal> {
         if sent.message.trim().is_empty() {
             return Err(Refusal::bad_request("message is required"));
@@ -158,9 +148,7 @@ fn or_unknown(text: &Excerpt) -> String {
 /// How many reports a login may make in how long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Budget {
-    /// Reports admitted per window.
     pub most: u32,
-    /// The window.
     pub per: Duration,
 }
 
@@ -171,10 +159,8 @@ pub const BUDGET: Budget = Budget {
     per: Duration::from_mins(10),
 };
 
-/// What the limiter answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Log it.
     Admit,
     /// Past the budget: 429.
     Refuse,
@@ -188,7 +174,6 @@ pub struct Limiter {
 }
 
 impl Limiter {
-    /// An empty limiter over a budget.
     #[must_use]
     pub fn new(budget: Budget) -> Self {
         Limiter {
@@ -197,8 +182,7 @@ impl Limiter {
         }
     }
 
-    /// Count one report from `login` at `now`. Closed windows are dropped, so the table holds
-    /// only logins heard from lately.
+    /// Closed windows are dropped, so the table holds only logins heard from lately.
     pub fn admit(&mut self, login: &Login, now: Instant) -> Verdict {
         let per = self.budget.per;
         self.windows

@@ -16,15 +16,10 @@ use suzatary_store::store::Prodrome;
 /// restatement of a withdrawn decision whatever was asked.
 #[derive(Clone, Copy)]
 pub struct Decisions<'a> {
-    /// The objects.
     pub store: &'a dyn Prodrome<DecisionEvent>,
 }
 
 impl Decisions<'_> {
-    /// The reading.
-    ///
-    /// # Errors
-    /// The store's own.
     pub fn ledger(&self) -> Result<Ledger, Refusal> {
         Ok(Ledger::of(&self.store.nodes()?))
     }
@@ -56,9 +51,6 @@ impl Decisions<'_> {
     /// Whether [`Decisions::decide`] would record `draft` now: what a proposal is checked by
     /// before it is stored, so a card the owner taps is one that would land. A non-monotone
     /// answer, asked again under the hold when the tap decides.
-    ///
-    /// # Errors
-    /// As [`Decisions::decide`].
     pub fn admits(&self, draft: &Draft, typeset: &dyn Typeset) -> Result<(), Refusal> {
         fresh(&self.ledger()?, draft, typeset).map(drop)
     }

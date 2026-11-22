@@ -23,12 +23,11 @@ pub struct Schema {
     /// Each named type's module of accessors, by its [`path`].
     pub(crate) modules: BTreeMap<String, String>,
     /// Values of `T` as serde prints them ([`super::example`]), which together take every arm
-    /// of every sum and leave every option empty once. Typst asks for a name only on the branch
-    /// it takes, so a template is checked against them all.
+    /// of every sum and leave every option empty once; the typesetter asks for a name only on the
+    /// branch it takes, so a template is checked against every arm.
     pub(crate) examples: Vec<Value>,
 }
 
-/// `T`'s schema.
 #[must_use]
 pub fn of<T: JsonSchema>() -> Schema {
     let root = schemars::SchemaGenerator::default().into_root_schema_for::<T>();

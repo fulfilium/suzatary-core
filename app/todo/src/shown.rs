@@ -41,7 +41,6 @@ pub enum Priority {
     Unlinked,
 }
 
-/// `entry`'s price.
 #[must_use]
 pub fn price(entry: &Entry) -> Priority {
     match entry.value() {
@@ -60,8 +59,8 @@ pub fn percent(value: f64) -> String {
 }
 
 /// Every open todo with content beside its record, ascending in fulfillment (low is urgent), ties
-/// by id, then every row with no number. The Inbox's held-batch decisions fold like todos and are
-/// left out, as the web app leaves them out. `todos open`, the pages and `prodrome draw` read it.
+/// by id, then every row with no number; the Inbox's held-batch decisions are left out, as the web
+/// app leaves them out.
 #[must_use]
 pub fn open<'a>(
     entries: &'a [Entry],
@@ -77,7 +76,6 @@ pub fn open<'a>(
     open
 }
 
-/// [`open`] as `todos open` prints it.
 #[must_use]
 pub fn open_rows(entries: &[Entry], records: &BTreeMap<Hash, &Authored>) -> Vec<OpenRow> {
     open(entries, records)
@@ -86,7 +84,6 @@ pub fn open_rows(entries: &[Entry], records: &BTreeMap<Hash, &Authored>) -> Vec<
         .collect()
 }
 
-/// One open todo beside its record, as a row.
 #[must_use]
 pub fn open_row(entry: &Entry, record: &Authored) -> OpenRow {
     OpenRow {
@@ -119,7 +116,6 @@ pub struct Shown {
     pub history: Vec<Event>,
 }
 
-/// One content record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Candidate {
     pub object: String,
@@ -146,10 +142,8 @@ pub struct Event {
     pub changed: Vec<FieldChange>,
 }
 
-/// `entry` whole, or `None` for a todo no record has authored.
-///
-/// # Errors
-/// A candidate the block grammar cannot show.
+/// `entry` whole, or `None` for a todo no record has authored; refused for a candidate the block
+/// grammar cannot show.
 pub fn shown(entry: &Entry, by_hash: &BTreeMap<Hash, &Envelope>) -> Result<Option<Shown>, Refusal> {
     let state = one_outcome(entry.outcome());
     let value = entry.value().ok().flatten();

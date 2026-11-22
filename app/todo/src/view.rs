@@ -63,7 +63,6 @@ pub fn link(name: &Hash, envelope: &Envelope) -> wire::Link {
     }
 }
 
-/// An event's own `note` field.
 fn note_of(event: &TodoEvent) -> String {
     match event {
         TodoEvent::Created(e) => e.note.clone(),
@@ -92,8 +91,7 @@ pub fn events_of(nodes: &[Node]) -> Vec<TodoEvent> {
 /// One todo's own events beside their hashes, as undo and redo read them: causal, and among
 /// writes nothing orders by the instant stamped, then the name.
 ///
-/// # Panics
-/// Never: ancestry is acyclic, so some write always waits on nothing.
+/// Never panics: ancestry is acyclic, so some write always waits on nothing.
 #[must_use]
 pub fn stream_of(nodes: &[Node], todo: &str) -> Vec<(Hash, TodoEvent)> {
     let parents: BTreeMap<&Hash, &[Hash]> = nodes
@@ -256,7 +254,6 @@ fn rich<R: Render + ?Sized>(render: &R, record: &Authored, untrusted: &Untrusted
     }
 }
 
-/// A content record on the wire.
 pub fn authored<R: Render + ?Sized>(
     render: &R,
     record: &Authored,
@@ -379,7 +376,6 @@ pub fn content_of<'a>(
     candidates_of(entry, by_hash).into_iter().next()
 }
 
-/// Every candidate content record an entry names, by name.
 #[must_use]
 pub(crate) fn candidates_of<'a>(
     entry: &Entry,
@@ -395,7 +391,6 @@ pub(crate) fn candidates_of<'a>(
         .collect()
 }
 
-/// A todo as a neighbour reads it.
 #[must_use]
 pub fn neighbour(entry: &Entry) -> wire::Neighbour {
     wire::Neighbour {
@@ -416,9 +411,6 @@ const MIN_MENTION: usize = 8;
 
 /// Which todos each todo refers to, by `#link("todo:<id>")` or by spelling another's id: one
 /// alternation, longest first, scanned once per record.
-///
-/// # Errors
-/// The alternation past the regex engine's size limit.
 pub fn references(
     entries: &[Entry],
     by_hash: &BTreeMap<Hash, &Envelope>,
@@ -594,7 +586,6 @@ pub fn explain(entry: &Entry, now: Datetime, env: &Env) -> Option<fpl::Explanati
 /// One node of the list's tree: where it sits, its term, and the core's value of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
-    /// The group or todo.
     pub place: Place,
     /// Its term: `Ref(todo)`, or the `Conj` of its children.
     pub term: Term,
@@ -735,7 +726,6 @@ fn urgency(
         .then_with(|| left.1.total_cmp(&right.1))
 }
 
-/// Every object by name, for the lookups above.
 #[must_use]
 pub fn by_hash(objects: &[(Hash, Envelope)]) -> BTreeMap<Hash, &Envelope> {
     objects
@@ -753,7 +743,6 @@ pub fn named(objects: &[Envelope]) -> Vec<(Hash, &Envelope)> {
         .collect()
 }
 
-/// The `Quoted` a stored `waiting_on` stands for.
 #[must_use]
 pub fn quoted(source: &str) -> Quoted {
     Quoted::from_chain(source.to_owned())
@@ -879,10 +868,8 @@ mod tests {
         assert_eq!(shown.state, wire::EntryState::Completed);
     }
 
-    /// A completion a tab stamped in its device's zone before this series can read hours
-    /// before the todo it completes was authored, though it rests on it. Every reading answers
-    /// and none panics: before the act's stamp the todo reads as the chain without the act does,
-    /// from the stamp it is done, unpriced until its record is believed and 100% after.
+    /// A completion stamped hours before the todo it rests on: before the stamp the todo reads
+    /// as the chain without the act, from it done, unpriced until its record is believed.
     #[test]
     fn an_act_stamped_before_its_todos_first_event_is_read_without_misfiling() {
         let root = mk_sealed(None, TodoEvent::Authored(Box::new(record("permit", "ada"))));
@@ -1037,7 +1024,6 @@ mod tests {
         assert_eq!(joined.parents.len(), 2);
     }
 
-    /// What an event's link reverses; an envelope reverses nothing, being no event.
     fn reverses(link: &wire::Link) -> Option<&wire::Reverses> {
         match &link.holds {
             wire::Holds::Event { reverses, .. } => Some(reverses),
@@ -1045,8 +1031,6 @@ mod tests {
         }
     }
 
-    /// A link says what its event reverses as a value read from the note, and an ordinary
-    /// event's link reverses nothing.
     #[test]
     fn a_link_names_what_its_undo_or_redo_reverses() {
         let target = Hash::new("c".repeat(64)).expect("hex");

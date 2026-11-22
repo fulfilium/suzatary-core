@@ -1,9 +1,8 @@
 //! The templates that turn values into HTML, and the names of the code every key is made from.
 //!
 //! A rendered value is kept by (its template's function, its value's name), on the box and in a
-//! tab alike ([`crate::template`]). A template's function is named by its files, its type's
-//! schema, the typesetter and the code that narrows a document, so a change to any of them is a
-//! new function whose values nothing has yet, never a second value under an old name.
+//! tab alike ([`crate::template`]), so a change to its code is a new function, never a second
+//! value under an old name.
 
 use std::sync::LazyLock;
 
@@ -16,9 +15,8 @@ use crate::template::{Checked, Kept, Library, Output, Template, named};
 use suzatary_base::answer::Renderable;
 
 /// The typesetter every template compiles with: the Prodrome's `prodrome-typst-wasm` at the
-/// revision `app/Cargo.lock` links, and the typst it links. A test,
-/// `the_typesetter_is_the_one_cargo_lock_links`, fails when the lock moves without this, and
-/// prints what it must say.
+/// revision `app/Cargo.lock` links; `the_typesetter_is_the_one_cargo_lock_links` fails when the lock
+/// moves without this.
 pub(crate) const LINKED: &str =
     "prodrome-typst-wasm 85e50838003ce3c82c18bc05c8c73d43c47f29fc, typst 0.15.1";
 
@@ -48,7 +46,6 @@ pub static CLOSED: LazyLock<Hash> =
 /// Markup a trusted writer typed: a todo's field, a saved briefing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Markup {
-    /// The markup, as the door admitted it.
     pub source: suzatary_base::escape::Escaped,
 }
 
@@ -82,7 +79,6 @@ pub fn kept() -> [&'static Hash; 2] {
     [MARKUP.function(), ANSWER.function()]
 }
 
-/// The calendar's days.
 pub static CALENDAR: Template<crate::reading::CalendarPage> = Template::new(
     "/calendar.typ",
     &[
@@ -144,8 +140,6 @@ pub fn all() -> [&'static dyn Checked; 6] {
 mod tests {
     use super::LINKED;
 
-    /// The typesetter named here is the one `app/Cargo.lock` links, so a bump of either moves
-    /// every template's key and never leaves a stale value under the old one.
     #[test]
     fn the_typesetter_is_the_one_cargo_lock_links() {
         let lock = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.lock"))

@@ -245,7 +245,7 @@ pub struct Entry {
     pub states: Vec<EntryState>,
     /// `""` while open.
     pub at: String,
-    /// Shown, never applied: the containment asymmetry made visible.
+    /// Shown, never applied.
     pub claimed: ClaimedState,
     /// `null` where it does not link.
     pub value: Option<Fulfillment>,

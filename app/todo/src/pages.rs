@@ -48,14 +48,14 @@ pub struct Drawn {
     pub refers: Vec<Linked>,
 }
 
-/// One markup field on a todo's page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(tag = "type")]
 pub enum Field {
-    /// It is empty, and draws nothing.
     Empty,
     /// It draws; its drawing replaces the element whose `data-drawn` is `marker`.
-    Drawn { marker: String },
+    Drawn {
+        marker: String,
+    },
     /// It does not draw in the closed world, so its source is shown as text.
     Source,
 }

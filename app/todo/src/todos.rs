@@ -1,9 +1,8 @@
-//! A record as the agent reads it: `render_todo` and [`render_current`] give the block that
-//! shows it, through the one block renderer, and [`open_todos`] is the dedup reference.
+//! A record as the agent reads it, as the block that shows it, and [`open_todos`], the dedup
+//! reference.
 //!
-//! Absence is openness: "open" is the todos with an open world, so there is no open record to
-//! keep in sync. `untrusted` is required so a provisional triage event cannot close or reprice a
-//! todo; content is folded from every actor, and `authored_by` says whose text it is.
+//! Absence is openness, so there is no open record to keep in sync. `untrusted` is required so a
+//! provisional triage event cannot close or reprice a todo; content is folded from every actor.
 
 use prodrome_core::event::TodoId;
 use prodrome_core::fpl::Outcome;
@@ -21,14 +20,11 @@ use suzatary_record::decoration::{
     DecorationError, block, kind_category, render_verified, shown_of,
 };
 
-// One record as a block.
-
 /// [`block::raise_block`]'s refusal is the caller's request being wrong.
 fn refusal_of(DecorationError(message): &DecorationError) -> Refusal {
     Refusal::bad_request(message.clone())
 }
 
-/// One record as verified block text, through [`shown_of`] and [`block::raise_block`].
 pub(crate) fn render_todo(
     a: &Authored,
     state: Option<Outcome>,
@@ -39,8 +35,7 @@ pub(crate) fn render_todo(
     render_verified(&call, &leading)
 }
 
-/// `a` as its block shows it now, priced against the chain's history with its
-/// lifecycle; what write verbs hand back instead of an echo of their arguments.
+/// `a` as its block shows it now, priced against the chain's history with its lifecycle.
 pub fn render_current(
     nodes: &[Node],
     at: Datetime,
@@ -56,37 +51,26 @@ pub fn render_current(
     )
 }
 
-/// The record one id shows, or `None`.
 #[must_use]
 pub fn current(nodes: &[Node], at: Datetime, todo: &str) -> Option<Authored> {
     let id = TodoId::new(todo).ok()?;
     records(nodes, at).remove(&id)?.into_iter().next()
 }
 
-// The open list.
-
-/// One open todo as the agent sees it, the dedup reference row.
-///
-/// `body` and `waiting_on` are plain text, since this row is read, not rendered; `spec` is the
-/// latest revision and `priority` its value at the query moment, never a compiled number.
+/// One open todo as the agent sees it: `body` and `waiting_on` are plain text, since this row is
+/// read, not rendered, and `priority` is its value at the query moment, never a compiled number.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpenTodo {
-    /// The handle every other verb takes.
     pub id: String,
-    /// The block kind.
     pub kind: String,
-    /// The section it lands in.
     pub category: String,
     /// The evaluated fulfillment as `"12.34%"`, or `None` where there is no
     /// number: a record with no spec (`∅`), or one that does not link.
     pub priority: Option<String>,
-    /// The action line, as plain text.
     pub body: String,
-    /// The effective spec.
+    /// The latest revision.
     pub spec: Option<Term>,
-    /// What it is blocked on, as plain text.
     pub waiting_on: Option<String>,
-    /// Whose text this is.
     pub authored_by: String,
 }
 
@@ -99,7 +83,6 @@ pub fn open_todos(
 ) -> Result<Vec<OpenTodo>, Refusal> {
     let believed = Believed::of(nodes, at, untrusted)
         .map_err(|e| Refusal::internal(format!("the chain's specs could not be folded: {e}")))?;
-    // One link table for the whole list rather than one per todo.
     let linkable = believed.linkable();
     let now = fpl::instant_of(at);
     Ok(believed

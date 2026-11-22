@@ -5,9 +5,8 @@
 //! them: the closed world it compiles in, not the writer, is what keeps a text to typst's own
 //! elements. A blocker stays a string, escaped as data.
 //!
-//! `build_todo`, `update_todo` and `confirm_todo` are one function each for every caller: what
-//! differs between callers is the actor only, and a second spelling of a refusal is a second
-//! policy waiting to disagree.
+//! `build_todo`, `update_todo` and `confirm_todo` are one function each for every caller, which
+//! differ in the actor only, so a refusal has one spelling.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
@@ -36,7 +35,6 @@ use suzatary_record::todo::{Patch, TodoFields, TodoPatch};
 static ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\A[a-z][a-z0-9]{2,63}\z").expect("a literal pattern"));
 
-/// How long a derived id may be.
 pub(crate) const ID_CHARS: usize = 24;
 
 /// A todo id from its action line: its words, lowercased, run together and cut, since the body is
@@ -57,9 +55,8 @@ pub fn slug(body: &str) -> Result<String, Refusal> {
     Ok(trimmed.chars().take(ID_CHARS).collect())
 }
 
-/// `base`, or the first `base<n>` the chain has never mentioned. Suffixing beats refusing: two
-/// todos about the same thing is a normal week, and no id is used twice, a cancelled todo's
-/// included.
+/// `base`, or the first `base<n>` the chain has never mentioned: no id is used twice, a cancelled
+/// todo's included.
 pub fn fresh_id(base: &str, known: &std::collections::BTreeSet<String>) -> Result<String, Refusal> {
     if !known.contains(base) {
         return Ok(base.to_owned());
@@ -85,8 +82,7 @@ use suzatary_record::decoration::KINDS;
 use suzatary_record::decoration::takes_category;
 
 /// The recurrence in force in `term` at `now`, in words ("every 60 days after a pass, from
-/// 100% to 30%"). The inverse of [`Price::term`](suzatary_record::todo::Price::term)'s cyclic arms; `None` where nothing recurs or
-/// the body is not a ramp `Cycle::ramp` wrote.
+/// 100% to 30%"); `None` where nothing recurs or the body is not a ramp `Cycle::ramp` wrote.
 #[must_use]
 pub fn recurrence_words(term: &Term, now: fpl::Instant) -> Option<String> {
     match term.out() {
@@ -106,7 +102,6 @@ pub fn recurrence_words(term: &Term, now: fpl::Instant) -> Option<String> {
     }
 }
 
-/// A two-point ramp's length in days and its two ends in words.
 fn ramp_words(body: &Term) -> Option<(i64, String)> {
     let TermF::Curve { points } = body.out() else {
         return None;
@@ -124,16 +119,12 @@ fn ramp_words(body: &Term) -> Option<(i64, String)> {
     ))
 }
 
-/// A new todo: its id, its fields, and where it came from.
 #[derive(Debug, Clone)]
 pub struct NewTodo {
     /// The id, checked against `ID`.
     pub todo: String,
-    /// What it says and what it is worth.
     pub fields: TodoFields,
-    /// The message it came from.
     pub source: Option<Source>,
-    /// The checklist.
     pub subtodos: Vec<SubTodo>,
 }
 
@@ -166,10 +157,7 @@ pub(crate) fn wrap(rationale: &str) -> Result<Vec<String>, Refusal> {
 }
 
 /// A field's markup through the one door, or the refusal naming the field and where typst
-/// stopped. Every writer's markup comes here: a todo's, and a recorded decision's body.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for markup the door does not admit.
+/// stopped; every writer's markup comes here.
 pub fn admitted(field: &str, text: &str, typeset: &dyn Typeset) -> Result<MarkupSource, Refusal> {
     MarkupSource::checked(text, typeset).map_err(|refused| {
         Refusal::bad_request(format!(
@@ -179,7 +167,6 @@ pub fn admitted(field: &str, text: &str, typeset: &dyn Typeset) -> Result<Markup
     })
 }
 
-/// The checks that make a todo referenceable and well-kinded.
 fn category(kind: &str, todo: &str, named: &str, known: &[&str]) -> Result<String, Refusal> {
     if !KINDS.contains(&kind) {
         return Err(Refusal::bad_request(format!(
@@ -199,8 +186,8 @@ fn category(kind: &str, todo: &str, named: &str, known: &[&str]) -> Result<Strin
     category_named(kind, named, known)
 }
 
-/// Just the category half of [`category`]: an existing todo's kind and id are not rechecked,
-/// or edits to todos created before [`ID`] tightened would be refused.
+/// An existing todo's kind and id are not rechecked, or edits to todos created before [`ID`]
+/// tightened would be refused.
 fn category_named(kind: &str, named: &str, known: &[&str]) -> Result<String, Refusal> {
     if named.is_empty() {
         return Ok(String::new());
@@ -226,7 +213,7 @@ fn sorted(names: &[&str]) -> Vec<String> {
     out
 }
 
-/// A new todo's `Authored` record, created on the day of `at`, the file it renders into.
+/// A new todo's `Authored` record, created on the day of `at`.
 pub fn build_todo(
     new: &NewTodo,
     now: Moment,
@@ -276,33 +263,25 @@ pub fn build_todo(
 /// What a held batch supplies to author the decision it asks for.
 #[derive(Debug, Clone)]
 pub struct NewDecision {
-    /// The one sentence a person decides on.
     pub body: String,
     /// Why it matters, in one sentence; becomes `rationale`.
     pub why: String,
     /// What performs it, printed on `detail`'s first line so [`decision_reference`] can read it
-    /// back: a `batch:` (or, on older records, a `proposal:`), never a todo.
+    /// back: a `batch:` or a `proposal:`, never a todo.
     pub performs: Reference,
-    /// The full text a person reads before deciding, as prose after the reference line.
+    /// Prose after the reference line.
     pub detail: String,
     /// A fulfillment, 0..100, priced against the same table as every writer; `None` is 55.
     pub priority: Option<u32>,
-    /// One of this deployment's categories, or "" for none.
+    /// "" for none.
     pub category: String,
-    /// The message it came from, when it came from one. "" is absent.
+    /// The message it came from; "" is absent.
     pub source: String,
 }
 
-/// Fields → a decision record: the dullest cousin of [`build_todo`], with the same escaping,
-/// the same midnight `created`, flat pricing, and an id derived by [`slug`] then [`fresh_id`]
-/// since a held batch supplies none. Nothing but the tap unblocks one, so `waiting_on` is
-/// always absent, and it has no checklist.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for an empty `body` or `detail`, an empty `why`
-/// (wrapped through `wrap`, which is `rationale`'s own refusal), a category
-/// this deployment does not know, an out-of-range `priority`, or an id this
-/// chain has already mentioned ninety-nine times over.
+/// Fields → a decision record, escaped and created as [`build_todo`] does, flat-priced, its id
+/// derived by [`slug`] then [`fresh_id`]; nothing but the tap unblocks one, so `waiting_on` is
+/// always absent.
 pub fn build_decision(
     new: &NewDecision,
     now: Moment,
@@ -333,8 +312,7 @@ pub fn build_decision(
     let source = if new.source.is_empty() {
         None
     } else {
-        // Only the hash is known, so the rest of `Source` is "" (absent), and `date` is the
-        // decision's own `created` rather than an invented one.
+        // Only the hash is known, so `date` is the decision's own `created`, not an invented one.
         Some(mk_source("", "", created, &new.source, "", ""))
     };
     mk_authored(
@@ -364,7 +342,7 @@ pub fn decision_reference(record: &Record) -> Option<Reference> {
     record.detail.as_str().lines().next()?.parse().ok()
 }
 
-/// The day a todo is created on, the owner's, stored as that day's midnight: `created` is a day.
+/// The owner's day, stored as that day's midnight: `created` is a day.
 fn created_on(now: Moment) -> Result<Datetime, Refusal> {
     fpl::datetime_of(now.today().and_time(chrono::NaiveTime::MIN))
         .map_err(|e| Refusal::bad_request(e.to_string()))
@@ -373,8 +351,8 @@ fn created_on(now: Moment) -> Result<Datetime, Refusal> {
 /// A price and the reason for it, which move together or not at all.
 type Priced = (Term, Vec<String>);
 
-/// The new price and its reason, if the change moves either. A new price needs a fresh rationale:
-/// the old sentence beside a new number reads as reviewed reasoning and is not.
+/// The new price and its reason, if the change moves either; a new price needs a fresh rationale,
+/// since the old sentence beside a new number reads as reviewed reasoning and is not.
 fn repricing(
     before: &Authored,
     own: &Term,
@@ -424,13 +402,9 @@ fn repricing(
 }
 
 /// A deferral, as a curve and never a flag: `Piecewise(Flat(1.0), [(to, term)])` with `term`
-/// unshifted, because a deadline does not move when work on it is postponed (so never a
-/// `Shift`, and never a fresh `Decay`). Deferring again replaces the outer deferral rather than
-/// nesting one.
-///
-/// # Errors
-/// `to` is not strictly after `today`, or `to` is past a `Decay` this term carries: postponing
-/// past the deadline is a reprice, not a deferral.
+/// unshifted, because a deadline does not move when work on it is postponed; deferring again
+/// replaces the outer deferral rather than nesting one. Refused for a day not after today, and
+/// past a `Decay`'s deadline, since postponing past the deadline is a reprice, not a deferral.
 pub fn defer(term: &Term, to: NaiveDate, now: Moment) -> Result<Term, Refusal> {
     let today = now.today();
     if to <= today {
@@ -490,13 +464,9 @@ fn already_deferred(term: &Term) -> Option<&Term> {
 
 /// A whole new record for the same todo with the patch's fields changed, built through
 /// `mk_authored` again so a change cannot make a record the constructor would refuse. Prose is
-/// escaped as on the way in, and a category checked against `categories` as [`build_todo`] does.
+/// escaped as on the way in.
 ///
 /// `note` is the write's own why (`Record.note`); only `POST /api/author` passes a person's.
-///
-/// # Errors
-/// Nothing in `edit` differs from `before`; a reprice with no fresh rationale;
-/// a body blanked to nothing; a category this deployment does not know.
 pub fn update_todo(
     before: &Authored,
     edit: &TodoPatch,
@@ -595,10 +565,9 @@ pub fn update_todo(
 
 /// A spec as a parent reads it: `Conj[own, Ref(c1), …, Ref(cn)]` at p = −4, `own` FPL's
 /// `Absent` for a parent that is only its subtodos and left out of the conjunction then; any
-/// other shape is all `own`. An edit reprices `own`; the subtodo act adds to `children`.
+/// other shape is all `own`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Composed {
-    /// The todo's own term.
     pub own: Term,
     /// Its subtodos, in the order they were added.
     pub children: Vec<String>,
@@ -643,7 +612,6 @@ impl Composed {
         }
     }
 
-    /// The spec it reads.
     #[must_use]
     pub fn spec(self) -> Term {
         if self.children.is_empty() {
@@ -663,11 +631,9 @@ impl Composed {
     }
 }
 
-/// A subtodo, authored as one act: the child, and the parent's revision whose
-/// spec gains `Ref(child)`. `functions` are every todo's function as
-/// `fold::link_specs` spells them; a parent the child already reaches is
-/// refused, since the new reference would close a loop. A child with no
-/// category takes the parent's, so it groups where the parent does.
+/// A subtodo, authored as one act: the child, and the parent's revision whose spec gains
+/// `Ref(child)`; a parent the child already reaches is refused, since the new reference would
+/// close a loop. `functions` are every todo's function as `fold::link_specs` spells them.
 pub fn build_subtodo(
     new: &NewTodo,
     parent: &Authored,
@@ -694,8 +660,6 @@ pub fn build_subtodo(
     Ok((child, revision))
 }
 
-/// The parent's half of [`build_subtodo`]: the same record with `Ref(child)`
-/// added to its spec, refused when `child` already reaches it.
 pub(crate) fn add_subtodo(
     parent: &Authored,
     child: &str,
@@ -731,13 +695,9 @@ pub(crate) fn add_subtodo(
     )
 }
 
-/// `parent` with `add` attached as subtodos and `remove` detached, as one revision of its
-/// spec: how a release is rescoped. Each added todo must not already be a subtodo nor reach the
-/// parent; each removed one must be a subtodo; a change of nothing is refused. Detaching is a
-/// revision, never a rewrite: what an earlier spec named stays named in the history.
-///
-/// # Errors
-/// A refusal naming the todo it is about.
+/// `parent` with `add` attached as subtodos and `remove` detached, as one revision of its spec:
+/// how a release is rescoped. Detaching is a revision, never a rewrite: what an earlier spec named
+/// stays named in the history.
 pub fn rescope(
     parent: &Authored,
     add: &[String],
@@ -820,9 +780,8 @@ fn reaching(
         })
 }
 
-/// A confirmation: the latest provisional record re-appended, same content, by a trusted actor.
-/// No new event kind or flag, since the authorship projection reads the latest writer; the
-/// provisional record stays on the chain.
+/// A confirmation: the latest provisional record re-appended, same content, by a trusted actor,
+/// with no new event kind or flag, since the authorship projection reads the latest writer.
 ///
 /// The two refusals are the policy: content a trusted actor already wrote has nothing in
 /// doubt, and a provisional actor confirming is an agent agreeing with itself.
@@ -861,7 +820,6 @@ pub fn revise(
     respecified(before, before.payload.spec.clone(), at, actor, note)
 }
 
-/// [`revise`] with a new spec.
 fn respecified(
     before: &Authored,
     spec: Term,
@@ -893,14 +851,9 @@ fn respecified(
     .map_err(|e| Refusal::bad_request(e.to_string()))
 }
 
-// Undo and redo: the chain never rewrites, so both are appends.
-//
-// Undoing the last event on a todo appends its inverse; the folds are functions of the event
-// set, and an undo is one more member of it. Undo is an involution over a todo's own stream,
-// so `redo` is `undo` run again after a structural check (no stored marker) that the last
-// event was itself an undo: its own inverse equals the event before it.
+// Undo and redo are appends, since the chain never rewrites: undo is an involution over a todo's
+// own stream, so `redo` is `undo` again once the last event's inverse equals the event before it.
 
-/// The refusal when the stream has no event to invert.
 fn nothing_to_undo(todo: &str) -> Refusal {
     Refusal::conflict(format!(
         "nothing to undo for {} — its stream carries no event to invert",
@@ -908,8 +861,7 @@ fn nothing_to_undo(todo: &str) -> Refusal {
     ))
 }
 
-/// `Created` cannot be undone: the id would dangle with no record at all. A
-/// cancel is the honest act for a todo that should not have stood.
+/// `Created` cannot be undone: the id would dangle with no record at all.
 fn created_cannot_be_undone(todo: &str) -> Refusal {
     Refusal::conflict(format!(
         "Created cannot be undone: undoing {}'s Created would leave the id \
@@ -927,8 +879,6 @@ fn tended_cannot_be_undone(todo: &str) -> Refusal {
     ))
 }
 
-/// `redo`'s structural check failed: the last event was not itself produced
-/// by an undo, so there is nothing to redo.
 fn not_an_undo(todo: &str) -> Refusal {
     Refusal::conflict(format!(
         "the last act on {} is not an undo — there is nothing to redo",
@@ -936,19 +886,15 @@ fn not_an_undo(todo: &str) -> Refusal {
     ))
 }
 
-/// What an undo or a redo reverses: the object it names, which its note spells as
-/// `undo of <hash>` or `redo of <hash>`. Printed by [`Reversal::note`] alone and read back by
-/// [`Reversal::of_note`] alone, so the note has one spelling.
+/// What an undo or a redo reverses, as its note spells it: `undo of <hash>` or `redo of <hash>`,
+/// printed by [`Reversal::note`] alone and read back by [`Reversal::of_note`] alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reversal {
-    /// The inverse of the object named.
     Undo {
-        /// The object it inverts.
         of: Hash,
     },
     /// The object an undo undid, again: the undo named.
     Redo {
-        /// The undo it reverses.
         of: Hash,
     },
 }
@@ -957,7 +903,6 @@ impl Reversal {
     const UNDO: &'static str = "undo of ";
     const REDO: &'static str = "redo of ";
 
-    /// The note the appended event carries.
     #[must_use]
     pub fn note(&self) -> String {
         match self {
@@ -966,7 +911,6 @@ impl Reversal {
         }
     }
 
-    /// The reversal a note names, or `None` for an ordinary event's note.
     #[must_use]
     pub fn of_note(note: &str) -> Option<Self> {
         if let Some(of) = note.strip_prefix(Self::UNDO) {
@@ -984,7 +928,6 @@ enum Resolution {
     Cancelled,
 }
 
-/// The nearest `Completed` or `Cancelled` before a `Reopened`.
 fn resolution_before(prefix: &[(Hash, TodoEvent)]) -> Option<Resolution> {
     prefix.iter().rev().find_map(|(_, event)| match event {
         TodoEvent::Completed(_) => Some(Resolution::Completed),
@@ -1018,7 +961,6 @@ fn spec_before(prefix: &[(Hash, TodoEvent)], untrusted: &Untrusted) -> Option<Te
     spec
 }
 
-/// The content, read over the same kind of prefix.
 fn authored_before(prefix: &[(Hash, TodoEvent)]) -> Option<Authored> {
     prefix.iter().rev().find_map(|(_, event)| match event {
         TodoEvent::Authored(record) => Some((**record).clone()),
@@ -1057,7 +999,6 @@ fn same_act(a: &TodoEvent, b: &TodoEvent) -> bool {
     }
 }
 
-/// Replace an event's `note` field.
 fn with_note(event: TodoEvent, note: String) -> TodoEvent {
     match event {
         TodoEvent::Created(mut e) => {
@@ -1091,8 +1032,7 @@ fn with_note(event: TodoEvent, note: String) -> TodoEvent {
     }
 }
 
-/// The inverse of the stream's last event, with an empty note: `undo`'s core, and how
-/// [`redo`] recognises its target.
+/// The inverse of the stream's last event, with an empty note.
 fn inverse_of_last(
     stream: &[(Hash, TodoEvent)],
     todo: &str,
@@ -1131,14 +1071,11 @@ fn inverse_of_last(
     }
 }
 
-/// Undo: the inverse of the last event on this todo, appended.
+/// The inverse of the last event on this todo.
 ///
-/// `stream` is this todo's own events with their hashes, in causal order, never filtered by
-/// a moment: undo reads what the chain holds, not what an instant believes. `untrusted` says
-/// which earlier revision binds when undoing a `SpecRevised`.
-///
-/// The refusals ([`Refusal::conflict`], since the chain refuses a well-formed request): nothing
-/// to invert, a `Created` or `Tended` last, or no earlier state to restore.
+/// `stream` is this todo's own events in causal order, never filtered by a moment: undo reads
+/// what the chain holds, not what an instant believes. `untrusted` says which earlier revision
+/// binds when undoing a `SpecRevised`.
 pub fn undo(
     stream: &[(Hash, TodoEvent)],
     todo: &str,
@@ -1155,11 +1092,8 @@ pub fn undo(
     Ok(with_note(inverse, Reversal::Undo { of: hash }.note()))
 }
 
-/// Redo: the undone event, appended again.
-///
-/// Recognised structurally, with no stored marker: the last event is a redo target exactly
-/// when its own inverse is the same act as the event before it, and since undo is an
-/// involution that inverse is the event to re-append.
+/// The undone event, again: the last event is a redo target exactly when its own inverse is the
+/// same act as the event before it, with no stored marker.
 pub fn redo(
     stream: &[(Hash, TodoEvent)],
     todo: &str,
@@ -1184,7 +1118,6 @@ pub fn redo(
 mod tests {
     use chrono::NaiveDateTime;
 
-    /// Noon UTC on `day`, with days read in UTC.
     fn on(day: NaiveDate) -> Moment {
         Moment {
             at: fpl::datetime_of(
@@ -1255,7 +1188,6 @@ mod tests {
             .expect("a record"),
         );
         assert_eq!(record.payload.body.as_str(), "File the *permit* renewal");
-        // `created` is the DAY of `at`, which is the file it renders into.
         assert_eq!(
             fpl::iso(fpl::instant_of(record.payload.created)),
             "2026-09-07T00:00:00"
@@ -1519,8 +1451,6 @@ mod tests {
         );
     }
 
-    // --- undo and redo ---------------------------------------------------
-
     fn hash_of(i: usize) -> Hash {
         Hash::new(format!("{i:064x}")).expect("64 lowercase hex")
     }
@@ -1608,8 +1538,6 @@ mod tests {
         assert_eq!(revised.spec, first);
     }
 
-    // --- detail_append --------------------------------------------------
-
     /// A todo authored directly with real typst markup in `detail`.
     fn hand_authored_detail(detail: &str) -> Authored {
         authored_of(
@@ -1668,8 +1596,6 @@ mod tests {
         mk_reopened(id, at(day), "ada", "").expect("valid")
     }
 
-    // --- the properties, over random streams ------------------------------
-
     /// One step of a todo's history. `ResolveThenReopen` is one step, so no generated
     /// `Reopened` is groundless: that would test a refusal, not the restoration law.
     #[derive(Debug, Clone)]
@@ -1693,8 +1619,7 @@ mod tests {
     }
 
     /// [`step`] without `Reprice` and with every `Author` spec `None`: the spec register reads
-    /// any `Authored` spec, so undoing a content-only edit could expose an older spec. These
-    /// properties stay about content and lifecycle; reprice undo has its own test.
+    /// any `Authored` spec, so undoing a content-only edit could expose an older spec.
     fn step_no_reprice() -> impl proptest::strategy::Strategy<Value = Step> {
         use proptest::prelude::*;
         prop_oneof![
@@ -1727,7 +1652,6 @@ mod tests {
             .collect()
     }
 
-    /// The seed plus every step, as events with synthetic hashes.
     fn stream_of(id: &str, steps: &[Step]) -> Vec<(Hash, TodoEvent)> {
         let mut out: Vec<(Hash, TodoEvent)> = Vec::new();
         let push = |event: TodoEvent, out: &mut Vec<(Hash, TodoEvent)>| {
@@ -1804,8 +1728,8 @@ mod tests {
         stream.iter().map(|(_, event)| event.clone()).collect()
     }
 
-    /// What the folds say about this one todo: its outcome's kind (a fresh append never
-    /// claims the same instant), its spec, and its content without `note`.
+    /// What the folds say about this one todo: its outcome's kind (a fresh append never claims the
+    /// same instant), its spec, and its content.
     #[derive(Debug, PartialEq)]
     struct Reading {
         state: &'static str,
@@ -1917,8 +1841,6 @@ mod tests {
         }
     }
 
-    // --- `defer`: a curve, never a flag ---------------------------------------
-
     fn day(text: &str) -> NaiveDate {
         NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a real day")
     }
@@ -1940,8 +1862,6 @@ mod tests {
         let reparsed = fpl::parse_term(&printed).expect("prints as valid FPL");
         assert_eq!(reparsed, deferred);
     }
-
-    // --- build_decision ------------------------------------------------------
 
     fn performs() -> Reference {
         Reference::Proposal(suzatary_base::reference::ProposalRef {
@@ -2007,8 +1927,6 @@ mod tests {
         // Escaping neutralises structure without dropping characters.
         assert_eq!(record.body.as_str(), r"Apply \*3\* changes \#now");
     }
-
-    // --- subtodos ------------------------------------------------------------
 
     fn child(id: &str) -> NewTodo {
         let mut child = a_todo_at(Price::Flat { percent: 50 });

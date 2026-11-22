@@ -32,10 +32,6 @@ struct Fields {
 
 impl Draft {
     /// Parse one: the id and each link checked, the title, body and rationale trimmed.
-    ///
-    /// # Errors
-    /// `NotADecision::Id` for an id or link of the wrong shape, and `NotADecision::Itself`
-    /// for a decision naming itself.
     pub fn new<'s>(
         id: &str,
         title: &str,
@@ -62,13 +58,11 @@ impl Draft {
         })
     }
 
-    /// The decision.
     #[must_use]
     pub fn id(&self) -> &DecisionId {
         &self.id
     }
 
-    /// The title.
     #[must_use]
     pub fn title(&self) -> &str {
         &self.title
@@ -80,13 +74,11 @@ impl Draft {
         &self.body
     }
 
-    /// Why.
     #[must_use]
     pub fn rationale(&self) -> &str {
         &self.rationale
     }
 
-    /// What it supersedes.
     #[must_use]
     pub fn supersedes(&self) -> &BTreeSet<DecisionId> {
         &self.supersedes

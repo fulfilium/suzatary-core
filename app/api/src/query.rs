@@ -57,10 +57,8 @@ pub fn limit(raw: Option<&str>) -> Result<usize, Refusal> {
     }
 }
 
-/// `/api/fold`'s `limit`: how many of the lowest-fulfillment todos to answer with, capped.
-///
-/// Unlike the mail's [`limit`], absent means the whole fold, so no existing caller is quietly
-/// truncated.
+/// `/api/fold`'s `limit`, capped; unlike the mail's [`limit`], absent means the whole fold, so no
+/// caller is quietly truncated.
 pub fn fold_limit(raw: Option<&str>) -> Result<Option<usize>, Refusal> {
     let Some(text) = raw.filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -98,11 +96,6 @@ pub const MOST_HASHES: usize = 64;
 pub struct Hashes(Vec<Hash>);
 
 impl Hashes {
-    /// The names `raw` spells, comma-separated.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] for none, more than [`MOST_HASHES`], a name that is not 64 hex
-    /// digits, and names out of ascending order or named twice.
     pub fn parse(raw: Option<&str>) -> Result<Self, Refusal> {
         let names: Vec<&str> = raw.unwrap_or_default().split(',').collect();
         if names.len() > MOST_HASHES {
@@ -186,9 +179,6 @@ pub fn turn_limit(raw: Option<&str>, default: usize) -> Result<usize, Refusal> {
 
 /// `?about=<reference>` on a conversation window: only the rounds that touch one thing, or
 /// `None` for the unfiltered window.
-///
-/// # Errors
-/// [`Refusal::bad_request`] naming the text a [`Reference`] refused.
 pub fn about(raw: Option<&str>) -> Result<Option<Reference>, Refusal> {
     let Some(text) = raw.filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -217,9 +207,8 @@ pub fn before(raw: Option<&str>) -> Result<Option<Datetime>, Refusal> {
     })
 }
 
-/// The notmuch query of `/api/mail/search`.
-///
-/// Passed through verbatim, so the only check is that it is a query and not a document.
+/// The notmuch query of `/api/mail/search`, passed through verbatim, so the only check is that it
+/// is a query and not a document.
 pub fn search_query(raw: Option<&str>) -> Result<String, Refusal> {
     let text = raw.unwrap_or_default().trim();
     if text.is_empty() {
@@ -240,7 +229,6 @@ pub fn search_query(raw: Option<&str>) -> Result<String, Refusal> {
 mod tests {
     use super::*;
 
-    /// One set of objects has one spelling: one to the most, ascending, none twice.
     #[test]
     fn hashes_are_one_to_the_most_ascending_and_none_twice() {
         let names: Vec<String> = (0..=MOST_HASHES).map(|n| format!("{n:064x}")).collect();
@@ -260,7 +248,6 @@ mod tests {
         }
     }
 
-    /// The fold's limit defaults to the whole fold, not a screenful.
     #[test]
     fn a_fold_limit_is_absent_by_default_and_capped_when_it_is_not() {
         assert_eq!(fold_limit(None), Ok(None));

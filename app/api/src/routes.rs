@@ -64,7 +64,6 @@ pub(crate) fn head_set<E: Schema>(store: &dyn Prodrome<E>) -> Result<Vec<String>
         .collect())
 }
 
-/// Names as the wire spells them, in the set's order.
 fn names(set: &std::collections::BTreeSet<Hash>) -> Vec<String> {
     set.iter().map(|h| h.as_str().to_owned()).collect()
 }
@@ -85,9 +84,6 @@ pub fn chain(store: &dyn Prodrome<TodoEvent>, chain: &ChainPolicy) -> Answered<w
 }
 
 /// The heads and nothing else, for a phone polling whether anything changed.
-///
-/// # Errors
-/// The chain unreadable.
 pub fn tip(store: &dyn Prodrome<TodoEvent>) -> Answered<wire::TipPayload> {
     Ok(wire::TipPayload {
         heads: head_set(store)?,
@@ -341,7 +337,6 @@ fn check_thread_id(value: &str) -> Answered<&str> {
     }
 }
 
-/// One message, and the todos it produced.
 pub fn message(
     mail: &dyn Mailbox,
     render: &dyn Render,
@@ -454,16 +449,11 @@ pub fn now(clock: &dyn Clock) -> Datetime {
 /// What a pull records beside its answer.
 #[derive(Clone, Copy)]
 pub struct Books<'a> {
-    /// Each store's epoch.
     pub epochs: &'a Epochs,
-    /// Each store's recorded frontiers.
     pub frontiers: &'a Frontiers,
 }
 
 /// `GET /api/objects?since=<frontier>`: the objects the frontier does not reach.
-///
-/// # Errors
-/// The store's own, and the books'.
 pub fn objects_since(
     store: &dyn Prodrome<TodoEvent>,
     chain: &ChainPolicy,
@@ -494,7 +484,6 @@ pub fn objects_since(
 /// How much of what a caller lacks one answer carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cut {
-    /// All of it.
     Whole,
     /// The longest run, parents first, whose literals fit this many bytes; at least one object.
     Bytes(usize),
@@ -506,9 +495,6 @@ impl Cut {
 }
 
 /// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica lacks, cut by `cut`.
-///
-/// # Errors
-/// The store's own, and the books'.
 pub fn store_objects_since<E: Store>(
     store: &dyn Prodrome<E>,
     since: &Since,
@@ -603,7 +589,6 @@ struct Piece<T> {
 }
 
 impl<T> Piece<T> {
-    /// Nothing lacked.
     fn none() -> Self {
         Self {
             sent: Vec::new(),
@@ -613,7 +598,6 @@ impl<T> Piece<T> {
         }
     }
 
-    /// The items, unnamed.
     fn items(self) -> Vec<T> {
         self.sent.into_iter().map(|(_, item)| item).collect()
     }
@@ -621,13 +605,10 @@ impl<T> Piece<T> {
 
 /// What a pull sends of each object.
 trait Sends<E: Schema> {
-    /// One object as sent.
     type Item;
     /// The key of the weights, read once per head set.
     const WEIGHTS: &'static str;
-    /// The item and its weight.
     fn emit(&self, name: &Hash, envelope: &event::Envelope<E>) -> (Self::Item, usize);
-    /// Its weight alone.
     fn weigh(&self, name: &Hash, envelope: &event::Envelope<E>) -> usize;
     /// The order to send `lacking` in, as its indices: a linear extension of the causal order,
     /// so each prefix joined to what the asker holds is closed under parents. The store's linear
@@ -637,7 +618,6 @@ trait Sends<E: Schema> {
     }
 }
 
-/// Each object with its literal.
 struct Literals;
 
 impl<E: Schema> Sends<E> for Literals {
@@ -675,14 +655,12 @@ impl Sends<line_event::LineEvent> for Nodes {
         weight(&node_of(name, envelope, 0))
     }
 
-    /// The newest conversation first: conversations by their latest line, latest first, each in
-    /// the store's linear order, every object after the ancestors it lacks; then what is no line.
-    /// So a device draws the conversation it opens to from the first piece.
+    /// The newest conversation first, each in the store's linear order, every object after the
+    /// ancestors it lacks, then what is no line, so a device draws the conversation it opens to
+    /// from the first piece.
     ///
-    /// That order over every object is a function of the head set, kept once for it; a piece's is
-    /// its restriction to what the piece lacks. What the asker holds is closed under parents, so
-    /// a walk to an object's ancestors never passes through a held one to a lacking one, and the
-    /// order over `lacking` alone is that restriction (the law
+    /// That order is a function of the head set, kept once for it; since what the asker holds is
+    /// closed under parents, a piece's order is its restriction to what it lacks (the law
     /// `law_a_piece_is_sent_in_the_whole_order_less_what_is_held`).
     fn order(
         &self,
@@ -697,9 +675,8 @@ impl Sends<line_event::LineEvent> for Nodes {
                 .map(|(place, at)| (every[at].0.clone(), place))
                 .collect::<std::collections::HashMap<_, _>>()
         });
-        // Each place looked up once, then sorted. Every lacking object is the graph's, so each has
-        // a place; `closed_order` makes the answer a linear extension whatever the places say, and
-        // the store's own order after them sends any object without one, last.
+        // `closed_order` makes the answer a linear extension whatever the places say, and the
+        // store's own order after them sends any object without one, last.
         let mut placed: Vec<(usize, usize)> = lacking
             .iter()
             .enumerate()
@@ -781,12 +758,11 @@ fn closed_order<E>(
 }
 
 /// An answer of `store`, read under its epoch's lock so the epoch and the objects are one
-/// snapshot: every head, the prodromes it serves, and what `sends` makes of each object the
-/// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in the
-/// order `sends` gives, a linear extension, so a receiver can apply them as they arrive. The frontier the asker holds
-/// once it has taken the answer is recorded, and named in it. The store is read through the graph
-/// it keeps by its heads, so an answer at heads already read reads no object; one to a `since` at
-/// the store's heads also walks none, and sends nothing.
+/// snapshot: what `sends` makes of each object `since` does not reach, cut by `cut`, in `sends`'s
+/// order, a linear extension, so a receiver can apply them as they arrive. The frontier the asker
+/// holds once it has taken the answer is recorded, and named in it. The store is read through the
+/// graph it keeps by its heads, so an answer at heads already read reads no object, and one to a
+/// `since` at the store's heads walks none and sends nothing.
 fn answered<E, S>(
     store: &dyn Prodrome<E>,
     key: &str,
@@ -878,7 +854,6 @@ where
     })
 }
 
-/// One answer, and its graph.
 struct Pulled<E: Schema, T> {
     snapshot: Snapshot,
     piece: Piece<T>,
@@ -893,7 +868,6 @@ fn since_read(reached: Reached<'_>) -> SinceRead {
     }
 }
 
-/// The frontier an answer recorded.
 fn frontier_of(recorded: &frontier::Recorded) -> Frontier {
     Frontier {
         digest: recorded.token.as_str().to_owned(),
@@ -902,9 +876,6 @@ fn frontier_of(recorded: &frontier::Recorded) -> Frontier {
 }
 
 /// `GET /api/stores/lines/skeleton?since=<heads>`: the lines' pull, as nodes.
-///
-/// # Errors
-/// The stores' own.
 pub fn lines_skeleton(
     conversations: conversations::Conversations<'_>,
     since: &Since,
@@ -915,8 +886,7 @@ pub fn lines_skeleton(
     let started = std::time::Instant::now();
     let (piece, parts) = parts::scoped(|| skeleton(conversations, since, books, now, cut));
     if let Ok(piece) = &piece {
-        // One line a piece, so the box's log says where a slow piece spent its time: the parts,
-        // their sum, and the whole call beside it, so what no part names shows as their difference.
+        // The whole call beside the parts' sum, so what no part names shows as their difference.
         let (total, whole) = (parts.sum().as_millis(), started.elapsed().as_millis());
         tracing::info!(
             target: "suzatary::skeleton",
@@ -995,12 +965,11 @@ fn skeleton(
     })
 }
 
-/// Each node, named `names`, sized by the bytes [`content`] sends of it, which are the store's own
-/// print and not its reprint, so a tab that batches its asks by these sizes never asks for more
-/// than one answer carries.
+/// Each node sized by the bytes [`content`] sends of it, the store's own print and not its
+/// reprint, so a tab that batches its asks by these sizes never asks for more than one answer
+/// carries.
 ///
-/// A node the store holds no print of refuses the piece rather than being sized by its reprint.
-/// That holds while every object has its file; a prune of the box's disk that keeps a husk in a
+/// A node with no print refuses the piece; a prune of the box's disk that keeps a husk in a
 /// literal's place has to answer this case again.
 fn held_sizes(
     lines: &dyn Prodrome<line_event::LineEvent>,
@@ -1106,7 +1075,7 @@ pub fn asks<'n>(nodes: impl IntoIterator<Item = (&'n str, usize)>) -> Vec<Vec<&'
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a hash the store does not hold; [`Refusal::bad_request`] past the
-/// bound; the store's own.
+/// bound; the store's own failures.
 pub fn content<E: Schema>(
     store: &dyn Prodrome<E>,
     hashes: &query::Hashes,
@@ -1178,9 +1147,6 @@ fn answer<E: Schema>(
 }
 
 /// `GET /api/waiting`: the Inbox badge's count, the lines read through the box's memoised fold.
-///
-/// # Errors
-/// A store that does not read, a chain the set does not hold, and lines the fold refuses.
 pub fn waiting(
     inbox: &suzatary_inbox::secretary::inbox::Fold,
     conversations: conversations::ReadConversations<'_>,
@@ -1313,7 +1279,6 @@ pub fn receive_objects(
 pub struct Posted<'a> {
     /// Canonical prints.
     pub objects: &'a [String],
-    /// The poster's frontier.
     pub since: &'a Since,
 }
 
@@ -1322,25 +1287,20 @@ pub struct Posted<'a> {
 pub struct Writer<'a> {
     /// The gate's actor.
     pub actor: &'a Actor,
-    /// The keyed chains.
     pub chains: &'a signatures::Keeping<signatures::Keeper<'a>>,
-    /// The deployment's root.
     pub root: &'a prodrome_core::sign::PublicKey,
 }
 
 /// Where and when a post records its refusals.
 #[derive(Clone, Copy)]
 pub struct Recording<'a> {
-    /// The asks store.
     pub asks: &'a dyn Prodrome<AskEvent>,
-    /// Now.
     pub at: Datetime,
 }
 
 /// What a post carries beside its objects for a store, parsed at the door, and what keeps it for
 /// the objects the store takes, under the store's lock and before they are taken.
 pub struct Beside<'a, A: Admission> {
-    /// What travels beside the objects.
     pub posted: &'a A::Beside,
     /// Keeps it for the names taken; a failure takes nothing.
     pub keep: &'a dyn Fn(&[Hash]) -> Result<(), Refusal>,
@@ -1409,9 +1369,8 @@ where
     )
 }
 
-/// The store as a post left it: `dag`, the objects read under the store's lock, and `taken`,
-/// the prints the post took while it held the lock. So a receipt answers what this post's
-/// write made of the store, read once. A taken print was parsed as this schema to be taken.
+/// The store as a post left it: `dag`, read under the store's lock, and `taken`, the prints the
+/// post took while it held the lock; a taken print was parsed as this schema to be taken.
 fn left<E: Schema>(mut dag: Dag<E>, taken: &[(Hash, String)]) -> Dag<E>
 where
     E::Vocabulary: Default,
@@ -1501,9 +1460,6 @@ fn receipt<E: Schema>(
 }
 
 /// `GET /api/about`: the release this binary runs and the todos it completed; `dev` unstamped.
-///
-/// # Errors
-/// The plan store held and not read.
 pub fn about(
     released: Option<&Released>,
     build: &str,
@@ -1562,9 +1518,6 @@ fn held_todos(
 }
 
 /// `GET /api/releases`: `plan`'s releases as `set` reads the plan store `name`.
-///
-/// # Errors
-/// The store held and not read.
 pub fn releases(
     name: &ChainName,
     plan: &Plan,
@@ -2034,7 +1987,6 @@ mod tests {
     /// A value that looks leaked, so a leak would show.
     const LEAKED: &str = "sk-do-not-print-this-key";
 
-    /// What the overview's tests declare.
     struct Instance {
         deployment: Deployment,
         settables: suzatary_connect::settings::Settables,

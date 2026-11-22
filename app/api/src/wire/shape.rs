@@ -11,15 +11,11 @@ use std::fmt::Write as _;
 /// One TypeScript type former among those ts-rs prints: the JSON values of that type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Shape {
-    /// `string`.
     Str,
-    /// `number`.
     Num,
-    /// `boolean`.
     Bool,
     /// `unknown`: any value, kept whole.
     Unknown,
-    /// `null`.
     Null,
     /// A string literal: that string alone.
     Lit(String),
@@ -40,9 +36,7 @@ pub enum Shape {
 /// A field of an [`Shape::Object`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
-    /// Its name on the wire.
     pub name: String,
-    /// What its value may be.
     pub shape: Shape,
     /// `a?: A`: it may be left out.
     pub optional: bool,
@@ -271,9 +265,6 @@ impl Parser {
 }
 
 /// `type Name = …;`, as ts-rs's `decl` prints it, read as its name and shape.
-///
-/// # Errors
-/// Text that is not one such declaration, or a generic one, which no one decoder decodes.
 pub fn declaration(text: &str) -> Result<(String, Shape), ShapeError> {
     let mut parser = Parser {
         tokens: tokens(text)?.into_iter().peekable(),
@@ -334,9 +325,6 @@ pub fn decoders<'a>(
 
 /// Where `value`, read as the declared `name`, holds a map: at each path its keys are its data,
 /// never fields, so a key left out or added is not a field missing or extra.
-///
-/// # Errors
-/// A declaration [`declaration`] cannot read.
 pub fn maps<'a>(
     declarations: impl IntoIterator<Item = &'a str>,
     name: &str,

@@ -496,8 +496,6 @@ pub enum RevealPayload {
 }
 
 impl RevealPayload {
-    /// # Errors
-    /// A file over [`suzatary_held::held_value::MAX_OPENED`], which no answer carries.
     pub fn of(read: Revealed) -> Result<Self, Refusal> {
         use base64::Engine as _;
         match read {
@@ -900,9 +898,6 @@ pub fn exported(out: &mut String, declarations: impl IntoIterator<Item = String>
 }
 
 /// `web/src/wire/generated/payload.ts`, folded from the declarations [`typescript`] prints.
-///
-/// # Errors
-/// A declaration with no decoder, as [`shape::decoders`] says.
 pub fn decoders() -> Result<String, shape::ShapeError> {
     let declared = declared();
     shape::decoders(
@@ -920,9 +915,6 @@ pub fn answer_names() -> Vec<String> {
 }
 
 /// Where `value`, an answer named `name`, holds a map, whose keys are data and never fields.
-///
-/// # Errors
-/// A declaration with no shape, as [`shape::maps`] says.
 pub fn maps(
     name: &str,
     value: &serde_json::Value,
@@ -1046,7 +1038,6 @@ mod tests {
     use suzatary_signatures::wire::signatures::Registering;
     use suzatary_todo::wire::todo::{Block, Fulfillment};
 
-    /// `decision` alone is a decision; every other name a todo that keeps its name for the chip.
     #[test]
     fn a_block_is_a_decision_or_a_named_todo() {
         assert_eq!(Block::of("decision"), Block::Decision);
@@ -1086,7 +1077,6 @@ mod tests {
         assert!(serde_json::from_str::<Fulfillment>("\"none\"").is_err());
     }
 
-    /// The stores the tab hands its writes to are exactly the rows whose writer is `Tab`.
     #[test]
     fn the_written_names_are_the_rows_a_tab_writes() {
         use suzatary_stores::stores::Writer;
@@ -1101,7 +1091,6 @@ mod tests {
         assert_eq!(named, rows);
     }
 
-    /// Every answer has a decoder, folded from the text `wire.ts` holds.
     #[test]
     fn generates_the_frontend_s_wire_types() {
         let types = typescript();
@@ -1163,7 +1152,6 @@ mod tests {
         reads::<crate::clienterror::Sent>(&serde_json::json!({"kind": "error", "message": "m"}));
     }
 
-    /// An erasure names its lines, at least one, or says yes to the whole; never a turn's index.
     #[test]
     fn an_erasure_is_some_lines_or_the_whole() {
         let read = |body: serde_json::Value| serde_json::from_value::<Erasing>(body);

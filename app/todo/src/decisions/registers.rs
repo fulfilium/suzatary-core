@@ -8,7 +8,6 @@ use super::{DecisionEvent, DecisionId, Life, Said, Statement};
 /// A register a write supersedes in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DecisionRegister {
-    /// What it says.
     Content,
     /// Whether it still stands.
     Life,
@@ -45,7 +44,6 @@ impl RegisterType<DecisionEvent> for LifeRegister {
 /// One decision's registers, so folding its events in any order is one value.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DecisionRegisters<'a> {
-    /// What it says.
     pub content: Frontier<'a, DecisionEvent>,
     /// Whether it still stands.
     pub life: Climb<'a, DecisionEvent>,

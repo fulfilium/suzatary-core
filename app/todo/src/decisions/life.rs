@@ -7,7 +7,6 @@ use prodrome_core::fold::{Inflationary, Order};
 pub enum Life {
     /// Stated, by a `Decided` or a `Revised`.
     Stated,
-    /// Withdrawn.
     Withdrawn,
 }
 

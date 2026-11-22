@@ -1,5 +1,4 @@
-//! What a page reads, as typed values: a todo's "Why this number", which the todo page draws,
-//! and the calendar's days, which `rendering::CALENDAR` draws.
+//! What a page reads, as typed values: a todo's "Why this number" and the calendar's days.
 //!
 //! Every datum is a string in the value, read as data, so it is text whatever it spells. The
 //! HTML carries classes and no colour, so one render serves both themes.
@@ -15,9 +14,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use suzatary_base::zone::Zone;
 
-/// What a page shows of a fulfillment: tenths of a percent, to the nearest. A page is printed from
-/// this observation of every price on it, so its bytes, and the memo that keys a page by them,
-/// move only where the observed value does, whatever the clock says between.
+/// What a page shows of a fulfillment: tenths of a percent, to the nearest, so a page's bytes, and
+/// the memo that keys a page by them, move only where the observed value does.
 pub(crate) const SHOWN: Observation = Observation::new(
     match NonZeroU32::new(1000) {
         Some(levels) => levels,
@@ -26,7 +24,7 @@ pub(crate) const SHOWN: Observation = Observation::new(
     Rounding::Nearest,
 );
 
-/// A fulfillment as a page prints one: [`SHOWN`], "62.3%".
+/// "62.3%".
 fn pct(value: f64) -> String {
     let step = SHOWN.observe(Some(value)).unwrap_or_default();
     format!("{}.{}%", step / 10, step % 10)
@@ -43,7 +41,6 @@ fn reads(value: Option<f64>) -> String {
 pub struct Explained(Explanation);
 
 impl Explained {
-    /// The explanation, to be read.
     #[must_use]
     pub fn of(explanation: Explanation) -> Self {
         Self(explanation)
@@ -386,7 +383,6 @@ fn says(z: Zone, node: &Explanation) -> String {
     }
 }
 
-/// What a reference names: a todo of this chain, or an entity of another store.
 fn referred(store: Option<&String>, entity: &str) -> String {
     store.map_or_else(
         || format!("todo {entity}"),
@@ -394,12 +390,9 @@ fn referred(store: Option<&String>, entity: &str) -> String {
     )
 }
 
-/// One part of a price and its own parts, each in one sentence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ts_rs::TS)]
 pub struct Part {
-    /// Its label and its sentence.
     pub says: String,
-    /// Its parts.
     pub parts: Vec<Part>,
 }
 
@@ -413,25 +406,19 @@ fn part(z: Zone, label: &str, node: &Explanation) -> Part {
     }
 }
 
-/// "Why this number": the price in one sentence, then its parts in words, or the sentence for
-/// a todo with none.
+/// "Why this number": the price in one sentence, then its parts in words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ts_rs::TS)]
 #[serde(tag = "type")]
 pub enum Why {
-    /// The todo has no number, and the sentence says why.
     Unpriced {
-        /// Why.
         says: String,
     },
-    /// The piece in force's sentence, which piece that is and the last pass, and its parts.
     Priced {
         /// The heading, with the price.
         heading: String,
-        /// The sentence.
         says: String,
         /// Which spec prices it, and its last pass, a line each.
         passes: Vec<String>,
-        /// Its parts.
         parts: Vec<Part>,
     },
 }
@@ -471,24 +458,20 @@ pub fn why(z: Zone, tree: Option<&Explained>) -> Why {
     }
 }
 
-/// The days of the calendar, one section each. Every title, place and name is data, so a
-/// stranger's invite is text whatever it spells.
+/// The days of the calendar: every title, place and name is data, so a stranger's invite is text
+/// whatever it spells.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct CalendarPage {
-    /// The days.
     pub days: Vec<CalendarDay>,
 }
 
-/// One day of the calendar.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct CalendarDay {
     /// "Monday 5 October".
     pub heading: String,
-    /// What is on it.
     pub entries: Vec<CalendarRow>,
 }
 
-/// One entry of a day.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct CalendarRow {
     /// When, on the owner's clock.
@@ -497,7 +480,6 @@ pub struct CalendarRow {
     pub title: String,
     /// Its place, where it has one.
     pub place: Option<String>,
-    /// The calendar it is on.
     pub calendar: String,
     /// Its status, as its class.
     pub status: String,

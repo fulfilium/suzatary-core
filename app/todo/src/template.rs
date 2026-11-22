@@ -2,10 +2,9 @@
 //! the type's generated schema ([`schema`]), and every output kept under the name of the code and
 //! the data that made it.
 //!
-//! A template's function is named by every byte that produced its output: the template's files,
-//! the schema generated from its type, the typesetter `app/Cargo.lock` links, and the code that
-//! turns a compiled document into what is kept. Its argument is named by the value's JSON. An edit
-//! to a template misses every output it made, and nothing else moves a key.
+//! A template's function is named by the template's files, the schema generated from its type,
+//! the typesetter the lock file links, and the code that turns a compiled document into what is
+//! kept; an edit to a template misses every output it made, and nothing else moves a key.
 
 pub mod example;
 pub mod schema;
@@ -33,11 +32,9 @@ pub enum Library {
 /// `/state.json`. A world holds these files and nothing else.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Job {
-    /// The library.
     pub library: Library,
     /// The key of the file compiled.
     pub main: String,
-    /// Every file, by key.
     pub files: BTreeMap<String, String>,
     /// The value, as JSON.
     pub state: String,
@@ -58,7 +55,6 @@ impl Job {
         }
     }
 
-    /// The text of the file compiled.
     #[must_use]
     pub fn main_text(&self) -> &str {
         self.files.get(&self.main).map_or("", String::as_str)
@@ -129,7 +125,6 @@ impl<T: Serialize + JsonSchema> Template<T> {
         }
     }
 
-    /// The schema generated from `T`.
     pub fn schema(&self) -> &schema::Schema {
         self.schema.get_or_init(schema::of::<T>)
     }
@@ -168,10 +163,6 @@ impl<T: Serialize + JsonSchema> Template<T> {
         })
     }
 
-    /// The template called with `value`.
-    ///
-    /// # Errors
-    /// `value` does not print as JSON.
     pub fn call(&self, value: &T) -> Result<Called, Unprintable> {
         let state = state(value)?;
         Ok(Called {
@@ -187,18 +178,11 @@ impl<T: Serialize + JsonSchema> Template<T> {
         })
     }
 
-    /// The key `value`'s output is kept under.
-    ///
-    /// # Errors
-    /// `value` does not print as JSON.
     pub fn key_of(&self, value: &T) -> Result<Key, Unprintable> {
         Ok(self.keyed(&state(value)?))
     }
 
     /// The key `value`'s output is kept under, printed as the box sends it beside its HTML.
-    ///
-    /// # Errors
-    /// `value` does not print as JSON.
     pub fn key(&self, value: &T) -> Result<String, Unprintable> {
         self.key_of(value).map(|key| printed(&key))
     }
@@ -226,25 +210,21 @@ pub struct Called {
 }
 
 impl Called {
-    /// The key its output is kept under.
     #[must_use]
     pub fn key(&self) -> &Key {
         &self.key
     }
 
-    /// What to compile.
     #[must_use]
     pub fn job(&self) -> &Job {
         &self.job
     }
 
-    /// What is kept of the document.
     #[must_use]
     pub fn output(&self) -> Output {
         self.output
     }
 
-    /// Where its output is kept.
     #[must_use]
     pub fn kept(&self) -> Kept {
         self.kept

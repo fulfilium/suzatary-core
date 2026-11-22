@@ -19,18 +19,15 @@ impl Html {
         Self(html.into())
     }
 
-    /// The HTML, for the wire.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Turning markup into the HTML a browser is allowed to parse.
-///
-/// It takes an [`Escaped`], which only confirmed content yields, so rendered means confirmed.
-/// A renderer is a [`Typeset`] too: a fragment is compiled in the closed world, the same one
-/// the markup door admits a text through.
+/// Turning markup into the HTML a browser may parse: it takes an [`Escaped`], which only confirmed
+/// content yields, so rendered means confirmed, and compiles a fragment in the closed world the
+/// markup door admits a text through.
 pub trait Render: Typeset {
     /// Render one fragment, compiling it if this box has never seen it.
     fn html(&self, markup: &Escaped) -> Result<Html, RenderError>;
@@ -46,8 +43,7 @@ pub trait Render: Typeset {
     fn page(&self, page: &Called) -> Result<Html, RenderError>;
 
     /// Every key this renderer's tabulation holds two values for: a render that was not a
-    /// function of its source, or a value another writer left. None, for a renderer that keeps
-    /// nothing.
+    /// function of its source, or a value another writer left.
     fn findings(&self) -> Vec<Finding> {
         Vec::new()
     }
@@ -71,7 +67,6 @@ impl<T: Typeset> Remembered<T> {
         }
     }
 
-    /// Every text whose tabulation holds two answers.
     #[must_use]
     pub fn findings(&self) -> Vec<Finding> {
         self.answers.findings()

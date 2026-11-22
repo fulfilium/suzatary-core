@@ -18,29 +18,20 @@ pub type DecisionEvent = Event<Said>;
 pub enum Said {
     /// It was decided: its statement, and the decisions it is the newer word on.
     Decided {
-        /// What it says.
         statement: Statement,
-        /// What it supersedes.
         supersedes: BTreeSet<DecisionId>,
     },
     /// It was restated, superseding its earlier statement; its links join the earlier ones.
     Revised {
-        /// What it says now.
         statement: Statement,
         /// What it supersedes, beside what it already did.
         supersedes: BTreeSet<DecisionId>,
     },
     /// It no longer holds, and nothing replaces it.
-    Withdrawn {
-        /// Why.
-        reason: String,
-    },
+    Withdrawn { reason: String },
 }
 
 /// Decision `decision` decided by `actor`.
-///
-/// # Errors
-/// `NotADecision::Itself` where it names itself among what it supersedes.
 pub fn decided(
     decision: DecisionId,
     at: Datetime,
@@ -60,9 +51,6 @@ pub fn decided(
 }
 
 /// Decision `decision` restated by `actor`.
-///
-/// # Errors
-/// `NotADecision::Itself` where it names itself among what it supersedes.
 pub fn revised(
     decision: DecisionId,
     at: Datetime,
@@ -81,10 +69,7 @@ pub fn revised(
     )
 }
 
-/// Decision `decision` withdrawn by `actor`, for `reason`.
-///
-/// # Errors
-/// `NotADecision::Empty` for an empty or untrimmed reason.
+/// Decision `decision` withdrawn by `actor`, for `reason`, which must be trimmed and not empty.
 pub fn withdrawn(
     decision: DecisionId,
     at: Datetime,

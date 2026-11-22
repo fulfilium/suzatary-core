@@ -11,10 +11,6 @@ use super::NotADecision;
 pub struct DecisionId(String);
 
 impl DecisionId {
-    /// Check and build one.
-    ///
-    /// # Errors
-    /// `NotADecision::Id` for anything else.
     pub fn new(text: impl Into<String>) -> Result<Self, NotADecision> {
         let text = text.into();
         let shaped = (3..=64).contains(&text.len())
@@ -34,7 +30,6 @@ impl DecisionId {
             .map_err(|failed| prodrome_core::literal::ProdromeError::invalid(failed.to_string()))
     }
 
-    /// The id.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
