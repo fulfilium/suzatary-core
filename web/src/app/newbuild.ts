@@ -141,12 +141,16 @@ export namespace newbuild {
     }
   }
 
-  // A dev box keeps nothing: its workers and their caches go.
+  // A dev box keeps no file: its workers go, with every build's cache and the content cache.
   const forget = async (sw: ServiceWorkerContainer): Promise<void> => {
     const regs = await sw.getRegistrations()
     await Promise.all(regs.map(r => r.unregister()))
     const names = await caches.keys()
-    await Promise.all(names.filter(n => n.startsWith(shell.PREFIX)).map(n => caches.delete(n)))
+    const kept = (n: string): boolean => {
+      const c = shell.cache(n)
+      return c.type === "Build" || c.type === "Content"
+    }
+    await Promise.all(names.filter(kept).map(n => caches.delete(n)))
   }
 
   // The box's build as heard, kept where the worker answers `b/current` (`app/worker.ts`), so the next start runs it

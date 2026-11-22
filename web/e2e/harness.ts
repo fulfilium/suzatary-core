@@ -26,7 +26,7 @@
 import assert from "node:assert/strict";
 import { after } from "node:test";
 import { test } from "node:test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, join, normalize } from "node:path";
@@ -35,6 +35,14 @@ import type { Browser, Journal, Page } from "./cdp";
 import { WAIT_MS, launch } from "./cdp";
 import type { Fulfillment } from "../src/wire/generated/wire";
 import http from "../src/wire/http";
+import shell from "../src/app/shell";
+
+// The Typst module's name in the build under test, which names it by its bytes (`shell.BY_CONTENT`).
+export const TYPST_MODULE: string = (() => {
+  const named = readdirSync("web/dist").find((f) => shell.byContent(f)?.plain === "typst_bg.wasm");
+  if (named === undefined) throw new Error("web/dist holds no Typst module named by its bytes — run scripts/build-web.sh");
+  return named;
+})();
 
 function required(name: string): string {
   const value = process.env[name];

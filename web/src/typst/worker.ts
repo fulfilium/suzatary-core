@@ -6,7 +6,8 @@ import edit from "./edit"
 type Glue = typeof import("./typst.js")
 
 const ready: Promise<{ glue: Glue; project: InstanceType<Glue["Project"]> }> = (async () => {
-  const bytes = await fetch(new URL("./typst_bg.wasm", import.meta.url).href).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`typst_bg.wasm: HTTP ${r.status}`))))
+  const file = __CONTENT__["typst_bg.wasm"]
+  const bytes = await fetch(new URL(`./${file}`, import.meta.url).href).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${file}: HTTP ${r.status} ${r.statusText}`))))
   const glue = await import("./typst.js")
   await glue.default({ module_or_path: bytes })
   return { glue, project: glue.Project.restricted() }

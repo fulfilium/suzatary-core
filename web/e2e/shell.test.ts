@@ -4,7 +4,7 @@
 import assert from "node:assert/strict"
 import { copyFileSync, existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs"
 
-import { DESKTOP, PHONE, WRITE_BASE, suite, trustThisDevice } from "./harness"
+import { DESKTOP, PHONE, TYPST_MODULE, WRITE_BASE, suite, trustThisDevice } from "./harness"
 import shell from "../src/app/shell"
 
 const need = (name: string): string => {
@@ -27,6 +27,7 @@ const kept = (name: string) =>
 const logged = (fragment: string) => readFileSync(LOG, "utf8").includes(fragment)
 // This build's chunks, as its bundling named them: `<name>-<hash>.js`.
 const CHUNKS = readdirSync(DIST).filter(shell.chunk)
+const inContent = (file: string) => `caches.open(${JSON.stringify(shell.CONTENT)}).then((c) => c.match(${JSON.stringify(shell.contentKey(file))})).then((r) => r !== undefined)`
 
 app.scene("a stamped build keeps its whole shell in the cache named by it, and never the API", async () => {
   writeFileSync(BUILD, "e2e-1\n")
@@ -45,7 +46,7 @@ app.scene("a stamped build keeps its whole shell in the cache named by it, and n
   // The build's directories (its fonts, its Typst kit, `.well-known`) have no extension; a file of it has one.
   const loose = readdirSync(DIST)
     .filter(f => !f.startsWith(".") && f.includes(".") && !f.endsWith(".br") && !f.endsWith(".map"))
-    .filter(f => !served.includes(f) && !shell.FILES.includes(f) && !shell.KEPT.includes(f) && !shell.chunk(f))
+    .filter(f => !served.includes(f) && !shell.FILES.includes(f) && !shell.KEPT.includes(f) && !shell.chunk(f) && shell.byContent(f) === null)
   assert.deepEqual(loose, [], "a file the build ships that no build's worker keeps")
   for (const f of ["views.js", "views_bg.wasm", "pagework.js"]) assert.ok(paths.includes(`/b/e2e-1/${f}`), `${f} is kept: ${paths.join(", ")}`)
   // A serif face is kept on first use, never at install: one in the cache is one this page drew in (the list's muted
@@ -75,28 +76,29 @@ app.scene("the API goes to the box without the worker, and a shell file and the 
   assert.equal((await routed("/b/current")).matched, "", "the build the box serves is the worker's to answer as last heard")
 })
 
-app.scene("today's list fetches no Typst; the first Typst view keeps the module in the build's cache", async () => {
+app.scene("today's list fetches no Typst; the first Typst view keeps the module in the content cache, under no build's name", async () => {
   await app.open(SHELL)
   await app.page.waitFor(controlledBy("e2e-1"), { timeout: 20000 })
-  const fetchedTypst = () => app.page.evaluate<boolean>(`performance.getEntriesByType("resource").some((e) => e.name.endsWith("/typst_bg.wasm"))`)
-  assert.equal(await fetchedTypst(), false, "today's list asked for typst_bg.wasm")
-  assert.ok(!(await kept("suzatary-shell-e2e-1")).includes("/b/e2e-1/typst_bg.wasm"), "the install precached typst_bg.wasm")
+  const fetchedTypst = () => app.page.evaluate<boolean>(`performance.getEntriesByType("resource").some((e) => e.name.endsWith(${JSON.stringify(`/${TYPST_MODULE}`)}))`)
+  assert.equal(await fetchedTypst(), false, "today's list asked for the Typst module")
+  assert.equal(await app.page.evaluate<boolean>(inContent(TYPST_MODULE)), false, "the install precached the Typst module")
   await app.page.navigate(`${SHELL}/#/typst`)
   await app.page.waitFor(`document.querySelector(".typstframe .tview") !== null`, { timeout: 30000 })
-  await app.page.waitFor(`caches.open("suzatary-shell-e2e-1").then((c) => c.match("/b/e2e-1/typst_bg.wasm")).then((r) => r !== undefined)`, { timeout: 20000 })
+  await app.page.waitFor(inContent(TYPST_MODULE), { timeout: 20000 })
+  assert.deepEqual((await kept("suzatary-shell-e2e-1")).filter(p => p.includes("typst_bg")), [], "the build's cache holds no module")
   await app.page.navigate(`${SHELL}/#/`)
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`)
 })
 
-app.scene("a second visit takes the core and typst-wasm from the build's cache, not the box", async () => {
+app.scene("a second visit takes the core and typst-wasm from the worker's caches, not the box", async () => {
   await app.page.waitFor(controlledBy("e2e-1"), { timeout: 20000 })
-  const seen = await app.page.answeredBy(["/prodrome_bg.wasm", "/typst_bg.wasm"])
+  const seen = await app.page.answeredBy(["/prodrome_bg.wasm", `/${TYPST_MODULE}`])
   await app.page.navigate("about:blank")
   await app.page.navigate(`${SHELL}/#/typst`)
   await app.page.waitFor(`document.querySelector(".typstframe .tview") !== null`, { timeout: 30000 })
   assert.deepEqual(
     seen().map(r => `${new URL(r.url).pathname} ${r.by}`).sort(),
-    ["/b/e2e-1/prodrome_bg.wasm cache-storage", "/b/e2e-1/typst_bg.wasm cache-storage"],
+    ["/b/e2e-1/prodrome_bg.wasm cache-storage", `/b/e2e-1/${TYPST_MODULE} cache-storage`],
   )
   await app.page.navigate(`${SHELL}/#/`)
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`)
@@ -211,7 +213,7 @@ app.scene("a running page hears a new build on a reconnect and as it comes back,
   assert.equal(await app.page.evaluate<boolean>(marked), true, "coming back offers a newer build, and reloads nothing")
   await app.page.click(".updatedreload")
   await land("e2e-3")
-  await app.page.waitFor(`caches.keys().then((ns) => ns.filter((n) => n.startsWith(${JSON.stringify(shell.PREFIX)})).join() === "suzatary-shell-e2e-3")`, { timeout: 20000 })
+  await app.page.waitFor(`caches.keys().then((ns) => ns.filter((n) => n.startsWith(${JSON.stringify(shell.cacheOf(""))})).join() === "suzatary-shell-e2e-3")`, { timeout: 20000 })
   await app.page.waitFor(`!${line}.hidden`, { timeout: 20000 })
   assert.match(await lineSays(), /^Updated to Suzatary \S+ \(e2e-3\)Dismiss$/)
   await app.page.click(".updateddismiss")
@@ -292,7 +294,7 @@ app.scene("the line sits across the top at phone and desktop width", async () =>
 app.scene("a tab on an old build loads only that build's files, though the box moved and its worker was stopped before its first Typst view", async () => {
   await app.page.navigate(`${SHELL}/#/`)
   await app.page.waitFor(`${controlledBy("e2e-5")} && document.querySelectorAll(".tree .row").length > 0`, { timeout: 20000 })
-  assert.ok(!(await kept("suzatary-shell-e2e-5")).includes("/b/e2e-5/typst_bg.wasm"), "this build never drew a Typst view")
+  assert.ok(!(await kept("suzatary-shell-e2e-5")).includes("/b/e2e-5/typst.js"), "this build never drew a Typst view")
   await app.page.evaluate(MARK)
   deploy("e2e-6")
   // A browser stops an idle worker; nothing it held in memory is left to say which build this tab runs.
@@ -300,7 +302,7 @@ app.scene("a tab on an old build loads only that build's files, though the box m
   const seen = await app.page.answeredBy([...shell.FILES, ...shell.KEPT])
   await app.page.evaluate(`(location.hash = "#/typst", true)`)
   // The Typst view's module and kit are asked for; the old build's are gone from the box and were never kept.
-  await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.endsWith("typst_bg.wasm") || e.name.endsWith("typst.js"))`, { timeout: 20000 })
+  await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.endsWith(${JSON.stringify(TYPST_MODULE)}) || e.name.endsWith("typst.js"))`, { timeout: 20000 })
   await app.page.waitFor(`new Promise((ok) => setTimeout(() => ok(true), 1500))`)
   // `b/current` is the loader's ask of the box's build, as the page loaded: a name, no build's file.
   const asked = await app.page.evaluate<string[]>(`performance.getEntriesByType("resource").map((e) => new URL(e.name).pathname).filter((p) => p.startsWith("/b/") && p !== "/b/current")`)
@@ -323,6 +325,56 @@ const startOn = async (id: string): Promise<void> => {
   }
   await land(id)
 }
+
+app.scene("a new build that names the same Typst module draws a Typst view with no fetch of it, and the content cache keeps only what the build names", async () => {
+  await startOn("e2e-6")
+  await app.page.evaluate(`(location.hash = "#/typst", true)`)
+  await app.page.waitFor(`document.querySelector(".typstframe .tview") !== null`, { timeout: 30000 })
+  // Another typesetter's module, as an older build would have kept it.
+  const older = `typst_bg-${"0".repeat(64)}.wasm`
+  await app.page.evaluate(`caches.open(${JSON.stringify(shell.CONTENT)}).then((c) => c.put(${JSON.stringify(shell.contentKey(older))}, new Response("older", { headers: { "content-type": "application/wasm" } }))).then(() => true)`)
+  deploy("e2e-9")
+  try {
+    // The new build's worker takes this page of the old build over and sweeps; the page still runs e2e-6, so nothing goes.
+    await app.page.evaluate(`navigator.serviceWorker.register(${JSON.stringify(shell.script("e2e-9"))}).then(() => true)`)
+    await app.page.waitFor(`${controlledBy("e2e-9")} && navigator.serviceWorker.controller.state === "activated"`, { timeout: 30000 })
+    assert.equal(await app.page.evaluate<boolean>(inContent(older)), true, "a module stays while a page of another build is open")
+    const seen = await app.page.answeredBy([`/${TYPST_MODULE}`])
+    await startOn("e2e-9")
+    await app.page.evaluate(`(location.hash = "#/typst", true)`)
+    await app.page.waitFor(`document.querySelector(".typstframe .tview") !== null`, { timeout: 30000 })
+    assert.deepEqual(seen().map(r => `${new URL(r.url).pathname} ${r.by}`), [`/b/e2e-9/${TYPST_MODULE} cache-storage`], "the module is the content cache's, never the box's")
+    await app.page.waitFor(`${inContent(older)}.then((held) => !held)`, { timeout: 20000 })
+    assert.equal(await app.page.evaluate<boolean>(inContent(TYPST_MODULE)), true, "the module the build names stays")
+  } finally {
+    deploy("e2e-6")
+  }
+})
+
+app.scene("a Typst module whose bytes are not the ones its name promises is never kept, and the page says Typst did not load", async () => {
+  await startOn("e2e-6")
+  await app.page.evaluate(`caches.open(${JSON.stringify(shell.CONTENT)}).then((c) => c.delete(${JSON.stringify(shell.contentKey(TYPST_MODULE))})).then(() => true)`)
+  // The module cut short under its full name; the box serves a file's .br before the file, so that goes aside.
+  const module = `${DIST}/${TYPST_MODULE}`
+  renameSync(module, `${module}.kept`)
+  renameSync(`${module}.br`, `${module}.br.kept`)
+  writeFileSync(module, readFileSync(`${module}.kept`).subarray(0, 4096))
+  try {
+    await app.page.navigate("about:blank")
+    await app.page.navigate(`${SHELL}/#/typst`)
+    await app.page.waitFor(`document.querySelector(".typstframe .problem") !== null`, { timeout: 30000 })
+    const said = await app.page.evaluate<string>(`document.querySelector(".typstframe .problem").textContent`)
+    assert.match(said, /^Typst did not load: .*HTTP 502 Not the bytes its name promises$/, said)
+    assert.equal(await app.page.evaluate<boolean>(inContent(TYPST_MODULE)), false, "the cut module is kept nowhere")
+  } finally {
+    renameSync(`${module}.kept`, module)
+    renameSync(`${module}.br.kept`, `${module}.br`)
+  }
+  await app.page.navigate("about:blank")
+  await app.page.navigate(`${SHELL}/#/typst`)
+  await app.page.waitFor(`document.querySelector(".typstframe .tview") !== null`, { timeout: 30000 })
+  await app.page.waitFor(inContent(TYPST_MODULE), { timeout: 20000 })
+})
 
 app.scene("an old build's files are the box's 404 once it moved, and a tab on that build still draws a page from its cache", async () => {
   await startOn("e2e-6")

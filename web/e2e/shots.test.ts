@@ -27,7 +27,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, suite, switchChain, topicRounds, WIDE, WRITE_BASE, opened } from "./harness";
+import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, suite, switchChain, topicRounds, TYPST_MODULE, WIDE, WRITE_BASE, opened } from "./harness";
 import type { Page } from "./cdp";
 import cast from "../test/cast";
 
@@ -413,7 +413,7 @@ const SHOTS: readonly Shot[] = [
     ready: `document.querySelectorAll(".tree .row").length > 0`,
     base: WRITE_BASE,
     act: async (page: Page): Promise<void> => {
-      held = await page.holdRequests(["typst_bg.wasm"]);
+      held = await page.holdRequests([TYPST_MODULE]);
       await page.navigate(`${WRITE_BASE}/?fresh=${Date.now()}#/typst`);
       await page.waitFor(`getComputedStyle(document.querySelector(".typstframe .placeholder") ?? document.body).visibility === "visible" && document.querySelector(".typstframe .placeholder") !== null`, { timeout: 15000 });
     },

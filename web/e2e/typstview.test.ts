@@ -13,7 +13,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, DESKTOP, PHONE, WRITE_BASE, row, suite, untilReplica, pickCategory } from "./harness";
+import { BASE, DESKTOP, PHONE, TYPST_MODULE, WRITE_BASE, row, suite, untilReplica, pickCategory } from "./harness";
 import type { Computed, Redraw } from "./typstdraw";
 import { bench, entries, fixtureState, redraw, retitled, sized } from "./typstdraw";
 
@@ -274,7 +274,7 @@ app.scene("the core, typst-wasm and the pages compile while they stream, as appl
     // The popup loads the pages' module once the screen is drawn and the tab idle, which may be after the Typst view.
     await app.page.waitFor(`window.__wasm.streamed.some((s) => s.startsWith("/b/dev/views_bg.wasm"))`);
     const got = await app.page.evaluate<{ streamed: string[]; whole: number }>(`window.__wasm`);
-    assert.deepEqual([...got.streamed].sort(), ["/b/dev/prodrome_bg.wasm application/wasm", "/b/dev/typst_bg.wasm application/wasm", "/b/dev/views_bg.wasm application/wasm"], "each under its build's name: the pages too, since the popup of what newly waits is one on every screen");
+    assert.deepEqual([...got.streamed].sort(), ["/b/dev/prodrome_bg.wasm application/wasm", `/b/dev/${TYPST_MODULE} application/wasm`, "/b/dev/views_bg.wasm application/wasm"], "each under its build's name: the pages too, since the popup of what newly waits is one on every screen");
     assert.equal(got.whole, 0, "a module was instantiated from bytes read whole");
   } finally {
     await app.page.cold(false);

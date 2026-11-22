@@ -10,6 +10,7 @@ import shell from "../src/app/shell"
 
 const SCOPE = "https://box.example.invalid/"
 const CHUNKS = ["chain-AAAA1111.js", "chunk-BBBB2222.js"]
+const MANIFEST: shell.Manifest = { "typst_bg.wasm": `typst_bg-${"a".repeat(64)}.wasm` }
 
 // The browser's CacheStorage, in memory: what a worker keeps between starts.
 const storage = () => {
@@ -19,6 +20,7 @@ const storage = () => {
     match: (u: RequestInfo | URL) => Promise.resolve(m.get(urlOf(u))?.clone()),
     put: (u: RequestInfo | URL, r: Response) => Promise.resolve(void m.set(urlOf(u), r.clone())),
     keys: () => Promise.resolve([...m.keys()].map(u => new Request(u))),
+    delete: (u: RequestInfo | URL) => Promise.resolve(m.delete(urlOf(u))),
   })
   return {
     open: (name: string) => {
@@ -48,21 +50,30 @@ const network = () => {
 
 type Listener = (e: Event) => void
 
+// The open pages, each answering the worker's question with the build it runs, and the registration's active worker.
+type Others = { readonly pages: readonly string[]; readonly active: string | null }
+const page = (build: string) => ({
+  postMessage: (_: unknown, [port]: Transferable[]) => {
+    if (port instanceof MessagePort) port.postMessage(build), port.close()
+  },
+})
+const worked = (build: string | null) => (build === null ? null : { scriptURL: `${SCOPE}${shell.script(build).slice(2)}` })
+
 // A worker of build `id` installed against a box serving `id`, and the page's way to ask it for a URL.
 // `kept` is the device's CacheStorage, which a worker installed before this one may have filled.
-const installed = async (id: string, chunks: readonly string[] = CHUNKS, kept = storage()) => {
+const installed = async (id: string, chunks: readonly string[] = CHUNKS, kept = storage(), others: Others = { pages: [], active: null }) => {
   const net = network()
   Object.defineProperty(globalThis, "caches", { value: kept, configurable: true })
   Object.defineProperty(globalThis, "fetch", { value: net.fetch, configurable: true })
   const listeners = new Map<string, Listener>()
   const scope: worker.Scope = {
     location: { href: `${SCOPE}${shell.script(id).slice(2)}` },
-    registration: { scope: SCOPE, installing: null, waiting: null },
+    registration: { scope: SCOPE, installing: null, waiting: null, active: worked(others.active) },
     skipWaiting: () => Promise.resolve(),
-    clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]) },
+    clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve(others.pages.map(page)) },
     addEventListener: (type, f) => void listeners.set(type, f),
   }
-  worker.run(scope, id, chunks)
+  worker.run(scope, id, chunks, MANIFEST)
   net.answer(path => new Response(path === shell.CURRENT ? id : `the file ${path}`))
   const waits: Promise<unknown>[] = []
   const install = Object.assign(new Event("install"), { waitUntil: (p: Promise<unknown>) => void waits.push(p) })
@@ -81,7 +92,13 @@ const installed = async (id: string, chunks: readonly string[] = CHUNKS, kept = 
     listeners.get("fetch")?.(e)
     return answered ?? net.fetch(`${SCOPE}${path}`)
   }
-  return { net, ask, behind, kept }
+  // The worker takes over: it claims the pages and sweeps.
+  const activate = (): Promise<unknown> => {
+    const sweeps: Promise<unknown>[] = []
+    listeners.get("activate")?.(Object.assign(new Event("activate"), { waitUntil: (p: Promise<unknown>) => void sweeps.push(p) }))
+    return Promise.all(sweeps)
+  }
+  return { net, ask, behind, kept, activate }
 }
 
 const started = (ask: (path: string) => Promise<Response>, own: string | null) => {
@@ -179,4 +196,25 @@ test("a newer build's worker serves a tab still on an older build that build's c
   assert.equal(r.status, 200, "the old build's kept chunk, not the box's 404")
   assert.equal(await r.text(), `the file ${shell.under("b1", c)}`)
   assert.deepEqual(now.net.asked, [], "nothing asked of the box")
+})
+
+test("the worker's sweep drops a content file its build does not name only once every open page and the active worker run its build", async () => {
+  const named = MANIFEST["typst_bg.wasm"]
+  const older = `typst_bg-${"b".repeat(64)}.wasm`
+  const cases: readonly [Others, readonly string[]][] = [
+    [{ pages: ["b2"], active: "b2" }, [named]],
+    [{ pages: [], active: null }, [named]],
+    [{ pages: ["b2", "b1"], active: "b2" }, [named, older]],
+    // A newer worker that took over while the pages answered.
+    [{ pages: ["b2"], active: "b3" }, [named, older]],
+  ]
+  for (const [others, left] of cases) {
+    const kept = storage()
+    const c = await kept.open(shell.CONTENT)
+    for (const f of [named, older]) await c.put(`${SCOPE}${shell.contentKey(f)}`, new Response(f))
+    const w = await installed("b2", CHUNKS, kept, others)
+    await w.activate()
+    const files = (await c.keys()).map(r => r.url.slice(`${SCOPE}${shell.contentKey("")}`.length))
+    assert.deepEqual(files, left, JSON.stringify(others))
+  }
 })

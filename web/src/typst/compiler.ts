@@ -57,12 +57,13 @@ export namespace compiler {
 
   // One instance per tab, so every compile shares typst's memo; a failed load is not kept, so a retry retries.
   export const load = once.of(async (): Promise<Typst> => {
-    const url = new URL("./typst_bg.wasm", import.meta.url).href
+    const file = __CONTENT__["typst_bg.wasm"]
+    const url = new URL(`./${file}`, import.meta.url).href
     const t0 = performance.now()
     // The glue and the module in one round trip; handed the response, the glue compiles it while it streams
     // (`WebAssembly.instantiateStreaming`, which needs `application/wasm`) and reads it whole only where a browser cannot.
     const [glue, response] = await Promise.all([import("./typst.js"), fetch(url)])
-    if (!response.ok) throw new Error(`typst_bg.wasm: HTTP ${response.status}`)
+    if (!response.ok) throw new Error(`${file}: HTTP ${response.status} ${response.statusText}`)
     const fetched = ms(t0)
     const t1 = performance.now()
     await glue.default({ module_or_path: response })

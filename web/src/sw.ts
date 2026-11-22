@@ -6,5 +6,5 @@ import worker from "./app/worker"
 
 if (worker.isScope(self)) {
   const me = self
-  shell.fold(shell.buildOf(me.location.href), { stamped: id => worker.run(me, id, __CHUNKS__), dev: () => undefined })
+  shell.fold(shell.buildOf(me.location.href), { stamped: id => worker.run(me, id, __CHUNKS__, __CONTENT__), dev: () => undefined })
 }

@@ -15,12 +15,16 @@ const SCOPE = "https://box.example.invalid/"
 const CHUNKS = ["toast-7QK2LS4A.js", "chunk-ZP3XUKDE.js"]
 const FILES = shell.files(CHUNKS)
 const build = (r: Rng) => r.string(SLUG, 1 + r.int(12))
+const HEX = "0123456789abcdef"
+const digest = (r: Rng) => r.string(HEX, 64)
+const contentNamed = (r: Rng) => `typst_bg-${digest(r)}.wasm`
 const path = (r: Rng) =>
   r.pick([
     () => r.pick(shell.ROOT),
     () => shell.under(build(r), r.pick(FILES)),
     () => shell.under(build(r), `${r.string(SLUG, 1 + r.int(8)).replace(/^[^a-z]/, "x")}-${r.string("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 8)}.js`),
     () => shell.under(build(r), r.pick(shell.KEPT)),
+    () => shell.under(build(r), r.pick([contentNamed(r), `typst_bg-${r.string(HEX, 63)}.wasm`, `views_bg-${digest(r)}.wasm`, `typst_bg-${digest(r).toUpperCase()}.wasm`])),
     () => r.pick(FILES),
     () => shell.CURRENT,
     () => `api/${r.string(SLUG, 1 + r.int(10))}`,
@@ -29,7 +33,7 @@ const path = (r: Rng) =>
     () => r.string(SLUG + "/.", r.int(20)),
   ])()
 
-test("law: a build's file is routed under the build its name says, its chunks with its shell, the page and its loader are the worker's own, the box's build is the worker's to answer, and nothing else is the shell's", () =>
+test("law: a build's file is routed under the build its name says, a file named by its bytes to the content cache, the page and its loader are the worker's own, the box's build is the worker's to answer, and nothing else is the shell's", () =>
   forAll(500, r => {
     const p = path(r)
     const url = `${SCOPE}${p}${r.bool() ? `?${r.string(SLUG, 4)}` : ""}`
@@ -40,14 +44,16 @@ test("law: a build's file is routed under the build its name says, its chunks wi
     const [, b = "", file = ""] = m ?? []
     assert.equal(get.type === "Root", shell.ROOT.includes(p === "" ? "index.html" : p), url)
     assert.equal(get.type === "Current", p === shell.CURRENT, url)
-    assert.equal(get.type === "Shell", m !== null && p !== shell.CURRENT && (shell.FILES.includes(file) || shell.chunk(file)), url)
-    assert.equal(get.type === "Kept", m !== null && shell.KEPT.includes(file), url)
-    if (get.type === "Shell" || get.type === "Kept") assert.deepEqual([get.build, get.file], [b, file], "the build its name says")
+    const content = /^typst_bg-[0-9a-f]{64}\.wasm$/.test(file)
+    const built = m !== null && p !== shell.CURRENT && (shell.FILES.includes(file) || shell.chunk(file) || shell.KEPT.includes(file))
+    assert.deepEqual(get.type === "Kept" ? get.kept.type : get.type, m !== null && content ? "Content" : built ? "Built" : get.type, url)
+    if (get.type === "Kept" && get.kept.type === "Built") assert.deepEqual([get.kept.build, get.kept.file], [b, file], "the build its name says")
+    if (get.type === "Kept" && get.kept.type === "Content") assert.deepEqual(get.kept.named, { file, plain: "typst_bg.wasm", digest: file.slice(9, 73) }, "the bytes its name says")
     assert.deepEqual(shell.route(url, SCOPE, "POST"), { type: "Pass" })
   }))
 
 test("any build's chunk is routed to that build's cache, whichever build's worker serves the tab", () => {
-  assert.deepEqual(shell.route(`${SCOPE}b/old/chain-ABCD2345.js`, SCOPE, "GET"), { type: "Shell", build: "old", file: "chain-ABCD2345.js" })
+  assert.deepEqual(shell.route(`${SCOPE}b/old/chain-ABCD2345.js`, SCOPE, "GET"), { type: "Kept", kept: { type: "Built", build: "old", file: "chain-ABCD2345.js" } })
   for (const f of ["chain-abcd2345.js", "chain-ABCD234.js", "chain-ABCD2345.js.map", "-ABCD2345.js", "../x-ABCD2345.js"]) assert.ok(!shell.chunk(f), f)
 })
 
@@ -84,15 +90,15 @@ test("law: a build survives the worker's script URL, and dev is never a build", 
 test("law: a build's cache goes only once no open page runs it, and never while a page has not said", () =>
   forAll(300, r => {
     const id = build(r)
-    const names = r.array(r.int(8), () => (r.bool() ? shell.cacheOf(build(r)) : r.string(SLUG, 6)))
+    const names = r.array(r.int(8), () => r.pick([() => shell.cacheOf(build(r)), () => r.string(SLUG, 6), () => shell.CONTENT, () => shell.HEARD])())
     const all = r.bool() ? [...names, shell.cacheOf(id)] : names
     const pages = r.array(r.int(4), () => (r.bool(0.15) ? null : r.bool() ? id : build(r)))
     const gone = shell.unused(all, id, pages)
     if (pages.includes(null)) return assert.deepEqual(gone, [], "a page that has not said keeps every cache")
     assert.ok(!gone.includes(shell.cacheOf(id)), "the worker's own build stays")
     for (const p of pages) if (p !== null) assert.ok(!gone.includes(shell.cacheOf(p)), "a build an open page runs stays")
-    assert.ok(gone.every(n => n.startsWith(shell.PREFIX)), "nothing that is not a shell goes")
-    assert.deepEqual(gone, all.filter(n => n.startsWith(shell.PREFIX) && n !== shell.cacheOf(id) && !pages.some(p => p !== null && n === shell.cacheOf(p))))
+    assert.ok(gone.every(n => shell.cache(n).type === "Build"), "nothing that is not a build's cache goes: the content cache and the build heard least of all")
+    assert.deepEqual(gone, all.filter(n => shell.cache(n).type === "Build" && n !== shell.cacheOf(id) && !pages.some(p => p !== null && n === shell.cacheOf(p))))
   }))
 
 test("law: a move to a new build is news once, and a device's first build is not news", () =>
@@ -119,10 +125,29 @@ test("the shell keeps every vendored font the stylesheet can ask for", () => {
   assert.deepEqual([...shell.FONTS].sort(), vendored)
 })
 
-test("the Typst module and kit are kept on first use, never precached with the shell", () => {
+test("the Typst kit is kept on first use, never precached with the shell, and the module is named by its bytes", () => {
   for (const f of shell.KEPT) assert.ok(!FILES.includes(f), f)
-  assert.ok(shell.KEPT.includes("typst_bg.wasm"))
+  for (const f of Object.keys(shell.BY_CONTENT)) assert.ok(![...FILES, ...shell.KEPT].includes(f), `${f} is no build's file`)
 })
+
+test("law: every cache name is read as the one cache it names, and a name this app never opens as foreign", () =>
+  forAll(300, r => {
+    const id = build(r)
+    assert.deepEqual(shell.cache(shell.cacheOf(id)), { type: "Build", id })
+    assert.deepEqual([shell.cache(shell.CONTENT), shell.cache(shell.HEARD)], [{ type: "Content" }, { type: "Heard" }])
+    assert.deepEqual(shell.cache(r.string(SLUG, 1 + r.int(10))), { type: "Foreign" })
+  }))
+
+test("law: the content cache loses only what the build's manifest does not name, and only once every page and worker runs the build", () =>
+  forAll(300, r => {
+    const id = build(r)
+    const manifest: shell.Manifest = { "typst_bg.wasm": contentNamed(r) }
+    const kept = r.array(r.int(5), () => (r.bool(0.3) ? manifest["typst_bg.wasm"] : contentNamed(r)))
+    const builds = r.array(r.int(4), () => (r.bool(0.15) ? null : r.bool(0.7) ? id : build(r)))
+    const gone = shell.stale(kept, manifest, id, builds)
+    if (builds.some(b => b !== id)) return assert.deepEqual(gone, [], "a page or worker of another build, or one that has not said, keeps every file")
+    assert.deepEqual(gone, kept.filter(f => f !== manifest["typst_bg.wasm"]), "every file the build does not name goes, and the one it names stays")
+  }))
 
 test("law: what the browser sends to the box without waking the worker is what the worker passes anyway", () =>
   forAll(300, r => {

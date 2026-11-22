@@ -1,5 +1,6 @@
 // A device whose key was revoked deletes what it holds: every database of this origin (the replica, the rendered
-// text, the key), the shell's caches and the browser's key-value storage, then loads afresh as a new device. A wipe is
+// text, the key), every cache of it (each build's, the content cache, the build last heard) and the browser's key-value
+// storage, then loads afresh as a new device. A wipe is
 // marked in that storage before it deletes anything. Every other tab of the device hears the mark and, by the mark as
 // it reads it then, wipes too or, the wipe already over, loads afresh, so no tab writes the revoked device's acts back;
 // a page that loads with the mark finishes the wipe, so a reload in the middle of one does not leave a new key beside

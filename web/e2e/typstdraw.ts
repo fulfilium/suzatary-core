@@ -4,6 +4,7 @@
 import { execFileSync } from "node:child_process";
 
 import type { Page } from "./cdp";
+import { TYPST_MODULE } from "./harness";
 import type { Entry } from "../src/wire/generated/wire";
 import viewstate from "../src/typst/state";
 
@@ -25,7 +26,7 @@ export const bench = `(async () => {
   window.typstbench ??= (() => { ${BENCH}; return typstbench; })();
   if (window.__glue === undefined) {
     const g = await import(new URL("./b/dev/typst.js", location.href).href);
-    await g.default({ module_or_path: new URL("./b/dev/typst_bg.wasm", location.href).href });
+    await g.default({ module_or_path: new URL("./b/dev/${TYPST_MODULE}", location.href).href });
     const c = await import(new URL("./b/dev/prodrome.js", location.href).href);
     await c.default({ module_or_path: new URL("./b/dev/prodrome_bg.wasm", location.href).href });
     const read = (f) => fetch(new URL("./b/dev/typst/" + f, location.href).href).then((r) => r.text());

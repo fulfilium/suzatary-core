@@ -3,14 +3,20 @@
 
 export namespace shell {
   export type Build = { type: "Stamped"; id: string } | { type: "Dev" }
-  // A request to the worker: the page and its loader, from its own cache; the box's build, as last heard; a file of one
-  // build, kept at install or on first use; or nothing of the shell's, the API least of all.
+  // `<name>-<SHA-256 in hex>.<ext>`: under every build's name, the same bytes for ever.
+  export type ContentNamed = { file: string; plain: ContentFile; digest: string }
+  // A file the worker keeps: one build's, in that build's cache and swept with it (`unused`), or named by its bytes, in
+  // the one content cache that no build's sweep takes (`stale`).
+  export type Kept = { type: "Built"; build: string; file: string } | { type: "Content"; named: ContentNamed }
+  // A request to the worker: the page and its loader, from its own cache; the box's build, as last heard; a file it
+  // keeps; or nothing of the shell's, the API least of all.
   export type Route =
     | { type: "Root"; file: string }
     | { type: "Current" }
-    | { type: "Shell"; build: string; file: string }
-    | { type: "Kept"; build: string; file: string }
+    | { type: "Kept"; kept: Kept }
     | { type: "Pass" }
+  // Every cache of this origin, by what it holds.
+  export type Cache = { type: "Build"; id: string } | { type: "Content" } | { type: "Heard" } | { type: "Foreign" }
   // What a page running a build says of it, by the builds this device last ran: nothing on its first, once on a new one.
   export type News = { type: "Known" } | { type: "First"; id: string } | { type: "New"; id: string }
   // The line across the top: the build this page started on, said once per device, or a served build the reader may load.
@@ -36,12 +42,43 @@ export namespace shell {
   export const fold = <R>(b: Build, on: { stamped: (id: string) => R; dev: () => R }): R =>
     b.type === "Stamped" ? on.stamped(b.id) : on.dev()
 
-  export const PREFIX = "suzatary-shell-"
+  const PREFIX = "suzatary-shell-"
   export const cacheOf = (id: string) => `${PREFIX}${id}`
-  // The caches a worker of `id` may delete, by the build each open page answered it runs (`null`: none): a build's cache
-  // stays while a page runs it, and nothing goes while a page has not answered.
+  export const CONTENT = "suzatary-content"
+  // The cache the box's build is last heard in: one name for every build, and no build's, so no sweep takes it.
+  export const HEARD = "suzatary-current"
+  export const cache = (name: string): Cache =>
+    name.startsWith(PREFIX) ? { type: "Build", id: name.slice(PREFIX.length) }
+    : name === CONTENT ? { type: "Content" }
+    : name === HEARD ? { type: "Heard" }
+    : { type: "Foreign" }
+  // The build caches a worker of `id` may delete, by the build each open page answered it runs (`null`: none): a build's
+  // cache stays while a page runs it, and nothing goes while a page has not answered.
   export const unused = (names: readonly string[], id: string, pages: readonly (string | null)[]): string[] =>
-    pages.includes(null) ? [] : names.filter(n => n.startsWith(PREFIX) && n !== cacheOf(id) && !pages.some(p => p !== null && n === cacheOf(p)))
+    pages.includes(null) ? [] : names.filter(n => {
+      const c = cache(n)
+      return c.type === "Build" && c.id !== id && !pages.includes(c.id)
+    })
+
+  // Each file a build may name by its bytes, with the one type a kept response of it may have.
+  export type ContentFile = "typst_bg.wasm"
+  export const BY_CONTENT: Readonly<Record<ContentFile, string>> = { "typst_bg.wasm": "application/wasm" }
+  // What a build names each such file (`__CONTENT__`, written by `scripts/build-web.sh`).
+  export type Manifest = Readonly<Record<ContentFile, string>>
+  const isContentFile = (f: string): f is ContentFile => Object.hasOwn(BY_CONTENT, f)
+  export const byContent = (file: string): ContentNamed | null => {
+    const m = /^([a-z][a-z0-9_]*)-([0-9a-f]{64})(\.[a-z0-9]+)$/.exec(file)
+    const [, name = "", digest = "", ext = ""] = m ?? []
+    const plain = `${name}${ext}`
+    return m !== null && isContentFile(plain) ? { file, plain, digest } : null
+  }
+  export const contentKey = (file: string): string => `c/${file}`
+  // The content cache's files a worker of `id` may delete: those its manifest does not name, once every open page and
+  // every worker installing or waiting runs `id`, since an older build's page may still ask for its own.
+  export const stale = (kept: readonly string[], manifest: Manifest, id: string, builds: readonly (string | null)[]): string[] =>
+    builds.every(b => b === id) ? kept.filter(f => !Object.values(manifest).includes(f)) : []
+  export const promised = (n: ContentNamed, digest: ArrayBuffer): boolean =>
+    [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("") === n.digest
 
   // The two small faces, kept with the shell; the two Source Serif files (250 KB of the 330) are kept as the stylesheet
   // first draws a text in them, which the browser fetches only then.
@@ -51,16 +88,13 @@ export namespace shell {
   // The Typst kit and its views: data, fetched the first time a Typst view is drawn, with the packages they import.
   export const TYPST: readonly string[] = ["kit.typ", "list.typ"]
   export const PACKAGES = "packages.json"
-  // Kept on first use rather than at install: the Typst module is 22 MB and most visits never draw a Typst view.
+  // Kept on first use rather than at install: most visits never draw a Typst view.
   export const KEPT: readonly string[] = [
     "typst.js",
-    "typst_bg.wasm",
     "typstwork.js",
     ...[...TYPST, PACKAGES].map(f => `typst/${f}`),
     ...SERIF.map(f => `fonts/${f}`),
   ]
-  // The cache the box's build is last heard in: one name for every build, and no shell's, so no sweep takes it.
-  export const HEARD = "suzatary-current"
   // The page and its loader: build-free names, each worker's own copy.
   export const ROOT: readonly string[] = ["index.html", "boot.js"]
   // The files every build has by these names; its chunks besides are named by content, handed to the worker at build.
@@ -92,7 +126,10 @@ export namespace shell {
     const m = /^b\/([^/]+)\/(.+)$/.exec(rel)
     if (m === null) return { type: "Pass" }
     const [, b = "", file = ""] = m
-    return FILES.includes(file) || chunk(file) ? { type: "Shell", build: b, file } : KEPT.includes(file) ? { type: "Kept", build: b, file } : { type: "Pass" }
+    const n = byContent(file)
+    return n !== null ? { type: "Kept", kept: { type: "Content", named: n } }
+      : FILES.includes(file) || chunk(file) || KEPT.includes(file) ? { type: "Kept", kept: { type: "Built", build: b, file } }
+      : { type: "Pass" }
   }
 
   // Sent to the box without waking the worker (Chromium's static routes): an older worker woken as it gives way to a

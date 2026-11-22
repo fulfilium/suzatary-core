@@ -19,6 +19,11 @@ tsc --noEmit -p web
 dev=false
 if [[ "${1:-}" == "--dev" ]]; then dev=true; fi
 
+# The files named by their bytes (`shell.BY_CONTENT`): `<name>-<sha256>.<ext>` is the same name in every build that
+# ships the same bytes, so a device keeps one copy across builds. Every bundle that asks for one is handed its name.
+typst_module="typst_bg-$(sha256sum "$SUZATARY_TYPST_WASM/web/typst_bg.wasm" | cut -c1-64).wasm"
+content="{\"typst_bg.wasm\":\"$typst_module\"}"
+
 echo "==> esbuild web/src/main.ts -> web/dist/app.js and its chunks (__DEV__=$dev)"
 rm -rf web/dist
 mkdir -p web/dist
@@ -35,6 +40,7 @@ esbuild app=web/src/main.ts \
   --target=es2022 \
   --sourcemap \
   --define:__DEV__="$dev" \
+  --define:__CONTENT__="$content" \
   --external:./prodrome.js \
   --external:./typst.js \
   --external:./views.js \
@@ -77,6 +83,7 @@ esbuild web/src/typst/worker.ts \
   --minify \
   --format=esm \
   --target=es2022 \
+  --define:__CONTENT__="$content" \
   --external:./typst.js \
   --outfile=web/dist/typstwork.js
 
@@ -106,6 +113,7 @@ esbuild web/src/sw.ts \
   --format=iife \
   --target=es2022 \
   --define:__CHUNKS__="$chunks" \
+  --define:__CONTENT__="$content" \
   --outfile=web/dist/sw.js
 
 echo "==> static files"
@@ -130,9 +138,10 @@ cp "$SUZATARY_VIEWS_WASM/web/views.js" "$SUZATARY_VIEWS_WASM/web/views_bg.wasm" 
 chmod u+w web/dist/views.js web/dist/views_bg.wasm
 sed 's/^/    /' "$SUZATARY_VIEWS_WASM/SIZES"
 
-echo "==> typst-wasm from $SUZATARY_TYPST_WASM"
-cp "$SUZATARY_TYPST_WASM/web/typst.js" "$SUZATARY_TYPST_WASM/web/typst_bg.wasm" web/dist/
-chmod u+w web/dist/typst.js web/dist/typst_bg.wasm
+echo "==> typst-wasm from $SUZATARY_TYPST_WASM, the module as $typst_module"
+cp "$SUZATARY_TYPST_WASM/web/typst.js" web/dist/
+cp "$SUZATARY_TYPST_WASM/web/typst_bg.wasm" "web/dist/$typst_module"
+chmod u+w web/dist/typst.js "web/dist/$typst_module"
 sed 's/^/    /' "$SUZATARY_TYPST_WASM/SIZES"
 
 # The typst kit and views are data the tab compiles, with every package on TYPST_PACKAGE_PATH,
@@ -144,9 +153,16 @@ node scripts/typst-packages.mjs > web/dist/typst/packages.json
 # `suzatary serve` never compresses on the fly; it serves these `.br` files. typst-wasm brings
 # its own. A file under 1 KiB, or one brotli does not shrink, keeps no `.br`.
 echo "==> brotli -q 11 beside every compressible file"
-cp "$SUZATARY_TYPST_WASM/web/typst_bg.wasm.br" web/dist/
-chmod u+w web/dist/typst_bg.wasm.br
-find web/dist -type f -size +1k ! -name typst_bg.wasm \
+cp "$SUZATARY_TYPST_WASM/web/typst_bg.wasm.br" "web/dist/$typst_module.br"
+chmod u+w "web/dist/$typst_module.br"
+# The box serves the .br under the name, so it must decode to the bytes the name promises: else every device is
+# answered 502 for that module.
+decoded="$(brotli -d -c "web/dist/$typst_module.br" | sha256sum | cut -c1-64)"
+if [[ "typst_bg-$decoded.wasm" != "$typst_module" ]]; then
+  echo "build-web.sh: $typst_module.br decodes to bytes of SHA-256 $decoded, not the ones its name promises" >&2
+  exit 1
+fi
+find web/dist -type f -size +1k ! -name "$typst_module" \
   \( -name '*.js' -o -name '*.map' -o -name '*.wasm' -o -name '*.css' -o -name '*.html' \
   -o -name '*.typ' -o -name '*.json' -o -name '*.svg' -o -name '*.webmanifest' \) -print0 |
   xargs -0 -P "$(nproc)" -n 1 brotli -q 11 -k -f
@@ -167,7 +183,8 @@ esac
 echo "==> every wasm module within its budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
 over=0
 for wasm in web/dist/*.wasm; do
-  name=$(basename "$wasm")
+  # A module named by its bytes is judged by its plain name.
+  name=$(basename "$wasm" | sed -E 's/-[0-9a-f]{64}\././')
   budget=$(grep -v '^#' web/wasm-budget | awk -v n="$name" -v s="$system" '$1 == n && $2 == s { print $3 }')
   size=$(stat -c %s "$wasm")
   brotli=$(stat -c %s "$wasm.br")

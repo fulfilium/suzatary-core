@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Page } from "./cdp";
-import { PHONE, WRITE_BASE, suite } from "./harness";
+import { PHONE, TYPST_MODULE, WRITE_BASE, suite } from "./harness";
 import type { Detail, Redraw } from "./typstdraw";
 import { bench, entries, fixtureState, opened, redraw, retitled, sized } from "./typstdraw";
 
@@ -43,7 +43,7 @@ app.scene("measured: bytes, first view, and the draw's first, one-row and open r
   const sizes = (file: string) =>
     `(() => { const r = performance.getEntriesByType("resource").find((e) => e.name.endsWith("/${file}")); return { decoded: r?.decodedBodySize ?? 0, encoded: r?.encodedBodySize ?? 0 }; })()`;
   const bytes = {
-    typst: await app.page.evaluate<{ decoded: number; encoded: number }>(sizes("typst_bg.wasm")),
+    typst: await app.page.evaluate<{ decoded: number; encoded: number }>(sizes(TYPST_MODULE)),
     core: await app.page.evaluate<{ decoded: number; encoded: number }>(sizes("prodrome_bg.wasm")),
     bundle: await app.page.evaluate<{ decoded: number; encoded: number }>(sizes("app.js")),
   };

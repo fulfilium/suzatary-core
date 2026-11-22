@@ -73,7 +73,7 @@ declare module "node:fs" {
    * `events/objects/` directly since the live chain's vectors stopped carrying
    * a copy of those bytes. */
   export function readdirSync(path: string): string[];
-  export function writeFileSync(path: string, data: string, encoding?: string): void;
+  export function writeFileSync(path: string, data: string | Uint8Array, encoding?: string): void;
   export function existsSync(path: string): boolean;
   export function rmSync(path: string, options?: { readonly recursive?: boolean; readonly force?: boolean }): void;
   /** An empty directory removed: the cgroup a capped browser ran in (`cdp.ts`). */
