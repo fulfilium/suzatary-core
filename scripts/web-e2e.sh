@@ -180,7 +180,8 @@ else
   shots="$(mktemp -d "${TMPDIR:-/tmp}/suzatary-e2e-shots.XXXXXX")"
   made_shots="$shots"
 fi
-servers=()
+# shellcheck source=scripts/e2e-servers.sh
+. "$root/scripts/e2e-servers.sh"
 
 # Each server runs under `setsid`, so its PID is its process group, and cleanup kills the whole
 # group (its typst subprocesses too). A SIGKILL runs no trap and orphans the servers: run this
@@ -196,7 +197,7 @@ cleanup() {
         local name pid
         name="$(basename "$pidfile" .pid)"
         pid="$(cat "$pidfile")"
-        if kill -0 "$pid" 2>/dev/null; then echo "  $name (pid $pid): running"; else echo "  $name (pid $pid): EXITED"; fi
+        if running "$pid"; then echo "  $name (pid $pid): running"; else echo "  $name (pid $pid): EXITED"; fi
         [[ -f "$work/$name.log" ]] && tail -n 15 "$work/$name.log" | sed 's/^/      /'
       done
       journalctl -k --since "-1h" 2>/dev/null | grep -iE "out of memory|killed process" | tail -n 5 | sed 's/^/  kernel: /' || true
@@ -216,16 +217,17 @@ cleanup() {
     done
     echo "==> the fixture servers' output is kept in $kept" >&2
   fi
-  for pid in "${servers[@]:-}"; do
-    [[ -n "$pid" ]] || continue
-    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  for pidfile in "$work"/*.pid; do
+    [[ -e "$pidfile" ]] || continue
+    kill -- "-$(cat "$pidfile")" 2>/dev/null || true
   done
   if [ -n "${SUZATARY_KEEP_SCRATCH:-}" ]; then echo "==> kept $work (SUZATARY_KEEP_SCRATCH)"; else rm -rf "$work"; fi
   (( status != 0 )) || [[ -z "$made_shots" ]] || rm -rf "$made_shots"
 }
 trap cleanup EXIT INT TERM
 
-# The server announces no port, so it is handed one. The check-to-bind window is a race.
+# `serve` is handed its port, the one `app_url` names (`gate::door_at`); another process can take it
+# before the bind, and `up` then hands a fresh one.
 free_port() {
   node -e '
 const net = require("net");
@@ -431,11 +433,10 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
     chain_flags+=("$1"); shift
   done
   set -- "${chain_flags[@]}"
-  local port; port="$(free_port)"
   # `--connections lapsed` writes a sign-in into the state directory: point it at the server's.
   local chain_env=(env)
   if [[ " $* " == *" --connections lapsed "* ]]; then chain_env+=("XDG_STATE_HOME=$work/$name/state"); fi
-  "${chain_env[@]}" "$fixture_bin" fixture-chain --root "$work/$name" --port "$port" --repo "$(pwd)" --tls "$tls" "$@" \
+  "${chain_env[@]}" "$fixture_bin" fixture-chain --root "$work/$name" --port 0 --repo "$(pwd)" --tls "$tls" "$@" \
     >"$work/$name.json" 2>"$work/$name.log"
   local login; login="$(node -p "require('$work/$name.json').login")"
   # Every server has its own state directory: writing into this box's would move the live epochs.
@@ -462,28 +463,35 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
     { [[ -n "${SUZATARY_PLUGINS:-}" ]] || SUZATARY_PLUGINS="$(nix_out suzatary-plugins)"; }
     serve_env+=("SUZATARY_PLUGINS=$SUZATARY_PLUGINS")
   fi
-  # The bash between `setsid` and the server logs how it ended (137 is SIGKILL, e.g. the OOM
-  # killer; 134 an abort). Cleanup kills the group, bash too, so a normal stop logs nothing.
-  # shellcheck disable=SC2016
-  setsid "${serve_env[@]}" bash -c '"$@"; echo "==> suzatary serve ended: exit $?"' serve \
-    "$fixture_bin" serve \
+  printf '%s\0' "${serve_env[@]}" "$fixture_bin" serve \
     --instance "$work/$name/instance.toml" \
     --whois-fixture "$login" \
     --model-fixture "$script" \
     --smtp-fixture "$sent" \
-    "${serve_flags[@]}" \
-    >>"$work/$name.log" 2>&1 &
-  # A subshell: `servers+=` here would be lost, so the PID goes to a file.
-  echo "$!" >"$work/$name.pid"
-  node -p "require('$work/$name.json').base"
+    "${serve_flags[@]}" >"$work/$name.argv"
+  rebind "$name"
 }
+
+# Starts `serve` NAME on a port free now, written into its instance file, and its base into
+# NAME.base.
+rebind() { # name
+  local name=$1 port url instance=(--instance "$work/$1/instance.toml")
+  port="$(free_port)"
+  url="$("$fixture_bin" "${instance[@]}" instance get web.app_url)"
+  url="${url%:*}:$port"
+  "$fixture_bin" "${instance[@]}" instance set web.serving.port "$port"
+  "$fixture_bin" "${instance[@]}" instance set web.app_url "$url"
+  echo "$url" >"$work/$name.base"
+  launch "$name"
+}
+
+base() { cat "$work/$1.base"; }
 
 # Ready means the markup is warm: the server compiles typst in the background and serves raw
 # source until then, so this waits for file-permit's `rich.body`.
-ready() { # name base
-  local name=$1 base=$2 waited=0 started=$SECONDS
-  until curl -fsS --cacert "$tls/ca.pem" "$base/api/todo/file-permit" 2>/dev/null \
-    | node -e '
+warm() { # name
+  probe "$1" "$(base "$1")/api/todo/file-permit" --cacert "$tls/ca.pem" || return
+  node -e '
 let data = "";
 process.stdin.on("data", chunk => { data += chunk; });
 process.stdin.on("end", () => {
@@ -494,22 +502,7 @@ process.stdin.on("end", () => {
     console.log("");
   }
 });
-' | grep -q warm; do
-    sleep 0.2
-    waited=$((waited + 1))
-    if (( waited > 1200 )); then
-      local pid
-      pid=$(cat "$work/$name.pid")
-      {
-        echo "web-e2e.sh: $name ($base) never served warm markup in $((SECONDS - started)) s"
-        if kill -0 "$pid" 2>/dev/null; then echo "  its server, pid $pid, is running"; else echo "  its server, pid $pid, has exited"; fi
-        echo "  the last answer to /api/todo/file-permit: $(curl -sS --cacert "$tls/ca.pem" -o /dev/null -w '%{http_code} in %{time_total} s' "$base/api/todo/file-permit" 2>&1)"
-        echo "  the last 40 lines of $name.log:"
-        tail -n 40 "$work/$name.log" | sed 's/^/    /'
-      } >&2
-      exit 1
-    fi
-  done
+' <"$work/$1.body" | grep -q warm
 }
 
 # The scene files, one at a time (Chromiums racing for one server are flaky), against `e2e_env`.
@@ -545,28 +538,22 @@ names_given=("$@")
 if [[ -n "${SUZATARY_E2E_LIVE:-}" ]]; then
   [[ -f "$SUZATARY_E2E_LIVE" ]] || { echo "web-e2e.sh: SUZATARY_E2E_LIVE names no instance file: $SUZATARY_E2E_LIVE" >&2; exit 64; }
   echo "==> a copy of the data tree of $SUZATARY_E2E_LIVE"
-  port="$(free_port)"
-  "$fixture_bin" fixture-live --from "$SUZATARY_E2E_LIVE" --root "$work/live" --port "$port" --repo "$(pwd)" \
+  "$fixture_bin" fixture-live --from "$SUZATARY_E2E_LIVE" --root "$work/live" --port 0 --repo "$(pwd)" \
     >"$work/live.json" 2>"$work/live.log"
   live_home="$work/live-home"
   mkdir -p "$live_home/.config"
   : >"$work/live-secrets.env"
-  # shellcheck disable=SC2016
-  setsid env -u SUZATARY_BOX_KEY -u SUZATARY_AGENT_KEY -u SUZATARY_DEDUP_KEY \
+  printf '%s\0' env -u SUZATARY_BOX_KEY -u SUZATARY_AGENT_KEY -u SUZATARY_DEDUP_KEY \
     "XDG_STATE_HOME=$work/live-state" "XDG_CACHE_HOME=$work/live-cache" "HOME=$live_home" \
     "XDG_CONFIG_HOME=$live_home/.config" "SECRETSPEC_PROVIDER=dotenv://$work/live-secrets.env" \
-    bash -c '"$@"; echo "==> suzatary serve ended: exit $?"' serve \
     "$fixture_bin" serve --instance "$work/live/instance.toml" --dist "$(pwd)/web/dist" \
     --whois-fixture "$(node -p "require('$work/live.json').login")" \
-    --model-fixture "$script" --smtp-fixture "$sent" \
-    >>"$work/live.log" 2>&1 &
-  echo "$!" >"$work/live.pid"
-  servers+=("$(cat "$work/live.pid")")
-  live_base="$(node -p "require('$work/live.json').base")"
-  until curl -fsS "$live_base/api/tip" >/dev/null 2>&1; do
-    kill -0 "$(cat "$work/live.pid")" 2>/dev/null || { echo "web-e2e.sh: the live copy's server ended:" >&2; tail -n 40 "$work/live.log" >&2; exit 1; }
-    sleep 0.2
-  done
+    --model-fixture "$script" --smtp-fixture "$sent" >"$work/live.argv"
+  rebind live
+  # shellcheck disable=SC2329
+  tip() { probe "$1" "$(base "$1")/api/tip"; }
+  up live tip rebind
+  live_base="$(base live)"
   echo "    live     $live_base (a viewer of the copy)"
   e2e_env=("E2E_BASE=$live_base" "E2E_BASE_PROPOSED=$live_base" "E2E_BASE_WRITE=$live_base")
   run_scenes
@@ -595,24 +582,22 @@ mkdir -p "$tls"
   cat leaf.pem ca.pem >cert.pem
 )
 spki="$(openssl x509 -in "$tls/leaf.pem" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64)"
-# Started together: each compiles the chain's markup before it listens.
-read_base="$(start read --login e2e-reader@example.invalid --settings)"
+start read --login e2e-reader@example.invalid --settings
 # Only this one has a review, so reviewed and unreviewed are two servers' states.
-proposed_base="$(start proposed --login e2e-reader@example.invalid --propose --reviewed)"
-write_base="$(start write --propose --settings)"
+start proposed --login e2e-reader@example.invalid --propose --reviewed
+start write --propose --settings
 # Its model's last call failed, so the box files the card that connects a model.
-bootstrap_base="$(start bootstrap --settings --model unanswered)"
-connect_base="$(start connect --settings --connected calendar)"
+start bootstrap --settings --model unanswered
+start connect --settings --connected calendar
 # web/e2e/links.test.ts: an unstored calendar link and a Microsoft account that cannot send yet.
-links_base="$(start links --settings --connections lapsed)"
+start links --settings --connections lapsed
 # web/e2e/google.test.ts: every request the box makes to Google reaches the fake and nothing else.
-google_port="$(free_port)"
-"$fixture_bin" fake-google --port "$google_port" >"$work/fake-google.json" 2>"$work/fake-google.log" &
-echo "$!" >"$work/fake-google.pid"
-until [[ -s "$work/fake-google.json" ]]; do sleep 0.1; done
-google_fake="$(node -p "require('$work/fake-google.json').base")"
-google_base="$(start google --settings --connected google -- --google-fixture "$google_fake")"
-epoch_base="$(start epoch)"
+printf '%s\0' "$fixture_bin" fake-google --port 0 >"$work/fake-google.argv"
+launch fake-google
+up fake-google announced
+google_fake="$(announcement fake-google)"
+start google --settings --connected google -- --google-fixture "$google_fake"
+start epoch
 # web/e2e/bigstore.test.ts: stores of the live size (each count overridable; conversations 0
 # halves them instead).
 lines_shape=(
@@ -623,11 +608,11 @@ lines_shape=(
   --topics "${SUZATARY_E2E_TOPICS:-900}"
   --todos "${SUZATARY_E2E_TODOS:-600}"
 )
-lines_base="$(start lines "${lines_shape[@]}")"
+start lines "${lines_shape[@]}"
 # web/e2e/rescrub.test.ts: lines sealed before lines recorded their rules, for `migrate-scrub`.
-rescrub_base="$(start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned)"
+start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned
 # web/e2e/wide.test.ts: 400 heads.
-wide_base="$(start wide --wide 400)"
+start wide --wide 400
 # The service worker's server: its build is read from a file per request, so a scene can deploy
 # under a running tab. Its own, or its worker would serve other files' scenes from cache.
 shell_build="$work/shell-build"
@@ -635,57 +620,24 @@ echo "e2e-1" >"$shell_build"
 # Its own copy of the bundle, so a scene can deploy a build whose files differ.
 shell_dist="$work/shell-dist"
 cp -r web/dist "$shell_dist"
-shell_base="$(start shell -- --build-fixture "$shell_build" --dist "$shell_dist")"
-# Collected in the main shell, so `cleanup` can reach them.
-servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/rescrub.pid")" "$(cat "$work/wide.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
-ready read "$read_base"
-ready proposed "$proposed_base"
-ready bootstrap "$bootstrap_base"
-ready connect "$connect_base"
-ready links "$links_base"
-ready google "$google_base"
-ready epoch "$epoch_base"
-ready lines "$lines_base"
-ready rescrub "$rescrub_base"
-ready wide "$wide_base"
-ready write "$write_base"
-ready shell "$shell_base"
-echo "    reads    $read_base (a viewer, never an actor — its chain cannot move)"
-echo "    proposed $proposed_base (the same viewer, with a card waiting)"
-echo "    writes   $write_base"
-echo "    shell    $shell_base (a writer, its build read from $shell_build)"
-
+start shell -- --build-fixture "$shell_build" --dist "$shell_dist"
+# `read` is E2E_BASE, every other E2E_BASE_<NAME> beside E2E_<NAME>_INSTANCE.
+fixtures=(read proposed bootstrap connect links google epoch lines rescrub wide write shell)
+for name in "${fixtures[@]}"; do
+  up "$name" warm rebind
+done
+echo "    reads    $(base read) (a viewer, never an actor — its chain cannot move)"
+echo "    proposed $(base proposed) (the same viewer, with a card waiting)"
+echo "    writes   $(base write)"
+echo "    shell    $(base shell) (a writer, its build read from $shell_build)"
 
 # E2E_TRIAGE_BIN lets a scene file a triage card through the agent's own verbs.
 e2e_env=(
-  "E2E_BASE=$read_base"
-  "E2E_BASE_PROPOSED=$proposed_base"
-  "E2E_BASE_WRITE=$write_base"
-  "E2E_BASE_SHELL=$shell_base"
-  "E2E_BASE_BOOTSTRAP=$bootstrap_base"
-  "E2E_BOOTSTRAP_INSTANCE=$work/bootstrap/instance.toml"
-  "E2E_BASE_CONNECT=$connect_base"
-  "E2E_CONNECT_INSTANCE=$work/connect/instance.toml"
-  "E2E_CONNECT_STORE=$work/connect/secrets-store.env"
-  "E2E_BASE_LINKS=$links_base"
-  "E2E_LINKS_INSTANCE=$work/links/instance.toml"
-  "E2E_LINKS_STORE=$work/links/secrets-store.env"
-  "E2E_BASE_GOOGLE=$google_base"
-  "E2E_GOOGLE_INSTANCE=$work/google/instance.toml"
-  "E2E_GOOGLE_STORE=$work/google/secrets-store.env"
+  "E2E_BASE=$(base read)"
   "E2E_FAKE_GOOGLE=$google_fake"
-  "E2E_BASE_EPOCH=$epoch_base"
-  "E2E_EPOCH_INSTANCE=$work/epoch/instance.toml"
-  "E2E_BASE_LINES=$lines_base"
-  "E2E_LINES_INSTANCE=$work/lines/instance.toml"
-  "E2E_BASE_RESCRUB=$rescrub_base"
-  "E2E_RESCRUB_INSTANCE=$work/rescrub/instance.toml"
-  "E2E_BASE_WIDE=$wide_base"
-  "E2E_WIDE_INSTANCE=$work/wide/instance.toml"
   "E2E_WRITE_LOG=$work/write.log"
   "E2E_SHELL_BUILD=$shell_build"
   "E2E_SHELL_DIST=$shell_dist"
-  "E2E_SHELL_INSTANCE=$work/shell/instance.toml"
   "E2E_TRIAGE_BIN=$fixture_bin"
   "E2E_TRIAGE_INSTANCE=$work/write/instance.toml"
   "E2E_WRITE_STATE=$work/write/state"
@@ -694,4 +646,8 @@ e2e_env=(
   "E2E_WRITE_MAIL=$work/write/Mail/her/cur"
   "E2E_MODEL_RELEASE=$release"
 )
+for name in "${fixtures[@]:1}"; do
+  e2e_env+=("E2E_BASE_${name^^}=$(base "$name")" "E2E_${name^^}_INSTANCE=$work/$name/instance.toml")
+done
+for name in connect links google; do e2e_env+=("E2E_${name^^}_STORE=$work/$name/secrets-store.env"); done
 run_scenes

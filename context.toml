@@ -463,7 +463,7 @@ shape = "web"
 # The modules the page and the service worker load; their exports are the web unit's interface.
 entries = ["web/src/boot.ts", "web/src/main.ts", "web/src/sw.ts", "web/src/typst/worker.ts", "web/src/prodrome/worker.ts"]
 depends = ["api", "pages", "prodrome-typst-wasm", "typst-design", "viewtree", "wasm"]
-scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh", "scripts/web-static.sh", "scripts/web-test.sh", "scripts/web-e2e.sh", "scripts/wire.sh", "scripts/gen-tokens.mjs", "scripts/typst-packages.mjs"]
+scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh", "scripts/web-static.sh", "scripts/web-test.sh", "scripts/web-e2e.sh", "scripts/e2e-servers.sh", "scripts/wire.sh", "scripts/gen-tokens.mjs", "scripts/typst-packages.mjs"]
 
 [unit.witnesses]
 "wire/generated/wire" = "api"
