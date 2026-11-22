@@ -1,4 +1,5 @@
-//! Mail-out's laws ([`suzatary_mail::mail::transport::Transport`]), read at the far end of the wire.
+//! Mail-out's laws ([`suzatary_mail::mail::transport::Transport`]), read at the far end of the
+//! wire.
 
 use std::fmt;
 
@@ -9,11 +10,9 @@ use suzatary_mail::mail::transport::{Delivered, Transport};
 /// A law of a transport, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Law {
-    /// A message sent reaches the wire once, from its sender to exactly `to + cc` (no Bcc), and
-    /// the answer names its id and those recipients.
+    /// A message reaches the wire once, from its sender to exactly `to + cc` (no Bcc).
     Delivered,
-    /// What arrives is the message as `build_mime` prints it, every line, blank ones included, up
-    /// to how its lines end.
+    /// What arrives is `build_mime`'s message line for line, whatever ends the lines.
     Intact,
 }
 
@@ -26,22 +25,17 @@ impl fmt::Display for Law {
     }
 }
 
-/// One message to send. It has no attachments: a multipart boundary is drawn at random, so only
-/// a message without one prints the same twice.
+/// One message to send, with no attachments, because a multipart boundary is random.
 #[derive(Debug, Clone)]
 pub struct Case {
-    /// The message.
     pub out: Outgoing,
-    /// Its bare `Message-Id`.
+    /// Bare, without angle brackets.
     pub message_id: String,
-    /// Its date, epoch seconds.
+    /// Epoch seconds.
     pub at: i64,
 }
 
-/// Every law over every case, on one transport whose far end `delivered` reads.
-///
-/// # Errors
-/// The first [`Broken`] law.
+/// `delivered` reads the transport's far end.
 pub fn check<T: Transport + ?Sized>(
     transport: &T,
     delivered: impl Fn() -> Vec<Delivered>,
@@ -102,8 +96,7 @@ pub fn check<T: Transport + ?Sized>(
     Ok(())
 }
 
-/// The message's lines, every one kept, empty lines included, whatever ended them: SMTP's DATA
-/// writes each line with CRLF and ends the last, so one final empty line is the wire's alone.
+/// SMTP's DATA ends every line with CRLF, so one final empty line belongs to the wire alone.
 fn lines(message: &[u8]) -> Vec<&[u8]> {
     let mut lines: Vec<&[u8]> = message
         .split(|byte| *byte == b'\n')

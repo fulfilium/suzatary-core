@@ -9,9 +9,8 @@ use suzatary_health::health::{Label, Refused};
 use suzatary_mail::mail::account::{MailAccount, Roster, Sync};
 use suzatary_services::plugin::Manifest;
 
-/// What the instance declares where a connection lives, each table parsed: the one value the
-/// connections are read from and the file's editor must agree with, so adding a connection is
-/// [`Declared::with`] here and a table written there.
+/// The parsed instance tables that connections are read from; the file's editor must agree with
+/// this value.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Declared {
     /// `[[mail.accounts]]`, a roster by construction.
@@ -25,8 +24,7 @@ pub struct Declared {
 }
 
 impl Declared {
-    /// Every connection these tables hold, by key: one per table entry a template writes, and
-    /// the data repository, which every deployment has.
+    /// Every connection these tables hold, plus the data repository, which every deployment has.
     #[must_use]
     pub fn connections(&self) -> BTreeMap<Key, Connection> {
         let made = |id: TemplateId, params: Params| Connection::new(id, params).ok();
@@ -65,7 +63,6 @@ impl Declared {
             .collect()
     }
 
-    /// The labels of every link `plugin`'s manifest declares.
     fn links(&self, plugin: &PluginName) -> Vec<Label> {
         let Some(manifest) = self.manifest(plugin) else {
             return Vec::new();
@@ -82,13 +79,12 @@ impl Declared {
             .find(|manifest| manifest.name() == plugin)
     }
 
-    /// These tables with `connection` written into them. A connection that
-    /// [moves](Connection::moves) the one under its key changes that account's sync alone, so
-    /// its folder and its mail stay where they are.
+    /// A connection that [moves](Connection::moves) the one under its key changes only that
+    /// account's sync, so its folder and its mail stay where they are.
     ///
     /// # Errors
-    /// [`Refused::Duplicate`] for a key already held, [`Refused::Unwritten`] for a template no
-    /// table holds, and the refusal the file would get for the table it would leave.
+    /// [`Refused::Duplicate`] for a key already held, and the refusal the file would get for the
+    /// table it would leave.
     pub fn with(&self, connection: &Connection) -> Result<Self, Refused> {
         let key = connection.key();
         let mut next = self.clone();
@@ -128,13 +124,8 @@ impl Declared {
         Ok(next)
     }
 
-    /// These tables without `connection`. A plugin's manifest stays when its last link goes,
-    /// since a table its template wrote cannot be told from one the person wrote alike: the
-    /// plugin is then declared with nothing to fetch.
-    ///
-    /// # Errors
-    /// [`Refused::Absent`] for a key not held, and [`Refused::Unwritten`] for a template no
-    /// table holds.
+    /// A plugin's manifest stays when its last link goes, because a template's table cannot be
+    /// told from one the person wrote.
     pub fn without(&self, connection: &Connection) -> Result<Self, Refused> {
         let key = connection.key();
         if !self.connections().contains_key(&key) {
@@ -162,10 +153,6 @@ impl Declared {
         Ok(next)
     }
 
-    /// These tables with `plugin` allowed to reach `origin`.
-    ///
-    /// # Errors
-    /// [`Refused::NoPlugin`] when no manifest is named `plugin`.
     pub fn with_origin(&self, plugin: &PluginName, origin: &Origin) -> Result<Self, Refused> {
         let held = self
             .manifest(plugin)
@@ -181,7 +168,6 @@ impl Declared {
     }
 }
 
-/// The credential a link connection names.
 fn link_name(connection: &Connection) -> Result<String, Refused> {
     connection
         .secrets()
@@ -193,7 +179,6 @@ fn link_name(connection: &Connection) -> Result<String, Refused> {
         })
 }
 
-/// Why a template with no table is neither added nor removed.
 fn unwritten(connection: &Connection, table: Table) -> Refused {
     Refused::Unwritten {
         template: connection.id().as_str(),

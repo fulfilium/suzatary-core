@@ -1,26 +1,18 @@
-//! How a person reaches the app and its tools at a terminal, which every terminal step is
-//! spelled in.
+//! How a person reaches the app and its tools at a terminal on the box.
 
-/// The way to the app's binary, its tools and its secret store, from a terminal on the box.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reach {
-    /// A user repository's script (`./suzatary`), which runs the app its lock names, a
-    /// command among the app's tools, and `secretspec` against the file the app declares its
-    /// names in.
+    /// A user repository's script (`./suzatary`), which runs the app, its tools and `secretspec`.
     Script(String),
-    /// The app's binary and its tools on `PATH`, and the file `suzatary secretspec` prints, which
-    /// declares every name the instance may set as of the moment the step runs.
+    /// The app and its tools on `PATH`, with the secretspec file `suzatary secretspec` prints.
     Installed,
-    /// The tools on `PATH` and `secretspec`'s own file: what a replica, which holds no
-    /// deployment, spells.
+    /// The tools on `PATH` and `secretspec`'s own file, for a replica that holds no deployment.
     Plain,
 }
 
-/// A reach that knows no script and no deployment.
 pub static PLAIN: Reach = Reach::Plain;
 
 impl Reach {
-    /// One of the app's verbs, with its arguments.
     #[must_use]
     pub fn app(&self, verb: &str) -> String {
         match self {
@@ -29,7 +21,6 @@ impl Reach {
         }
     }
 
-    /// A command among the app's tools.
     #[must_use]
     pub fn tool(&self, command: &str) -> String {
         match self {
@@ -38,9 +29,7 @@ impl Reach {
         }
     }
 
-    /// The secret `name`, set at `secretspec`'s prompt against the file that declares it when
-    /// the step runs, so its value is never an argument and no path is spelled that a later
-    /// connection could leave behind.
+    /// Sets the secret `name` at `secretspec`'s prompt, so its value is never an argument.
     #[must_use]
     pub fn secret(&self, name: &str) -> String {
         match self {
@@ -53,22 +42,19 @@ impl Reach {
     }
 }
 
-/// A command a person runs at a terminal: its text a template's (`&'static str`) or a
-/// connection's, filled (`String`), and spelled by a [`Reach`] only when it is shown.
+/// A command a person runs at a terminal, spelled by a [`Reach`] only when it is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Run<T> {
-    /// One of the app's tools, with its arguments.
     Tool(T),
     /// A script of the app's tools, run as one tool by `sh -c`.
     Script(T),
-    /// The secret of this name, set at the secret store's prompt.
+    /// The name of a secret, set at the secret store's prompt.
     Secret(T),
     /// A command of the person's own shell, run as written.
     Shell(T),
 }
 
 impl<T> Run<T> {
-    /// The same command, its text mapped.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Run<U> {
         match self {
             Run::Tool(text) => Run::Tool(f(text)),
@@ -78,7 +64,6 @@ impl<T> Run<T> {
         }
     }
 
-    /// Its text.
     pub const fn text(&self) -> &T {
         match self {
             Run::Tool(text) | Run::Script(text) | Run::Secret(text) | Run::Shell(text) => text,
@@ -87,7 +72,6 @@ impl<T> Run<T> {
 }
 
 impl<T: AsRef<str>> Run<T> {
-    /// What the person types, as `reach` reaches the app.
     #[must_use]
     pub fn spelled(&self, reach: &Reach) -> String {
         match self {
@@ -98,8 +82,7 @@ impl<T: AsRef<str>> Run<T> {
         }
     }
 
-    /// What a page says of it: a secret by its words and never its name, which only a terminal
-    /// is told; any other command as `reach` spells it.
+    /// What a page shows: a secret by its label, never its name, which only a terminal is told.
     #[must_use]
     pub fn shown(&self, reach: &Reach) -> String {
         match self {
@@ -112,8 +95,7 @@ impl<T: AsRef<str>> Run<T> {
     }
 }
 
-/// `text` as one POSIX shell word: as it is when every character is one no shell reads, else
-/// in single quotes, each quote within closed, escaped and opened again.
+/// `text` as one POSIX shell word: bare when no character is special, else single-quoted.
 #[must_use]
 pub fn word(text: &str) -> String {
     let plain = !text.is_empty()
@@ -131,7 +113,7 @@ pub fn word(text: &str) -> String {
 mod tests {
     use super::*;
 
-    /// A word reads back, through `sh`, as the text it quotes, whatever that holds.
+    /// A word reads back through `sh` as the text it quotes.
     #[test]
     fn a_word_is_its_text_to_a_shell() {
         for text in [

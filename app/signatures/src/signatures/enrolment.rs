@@ -7,17 +7,15 @@ use super::{KeyStanding, Keyed, Trust, Unproven};
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::{Prodrome, StoreError};
 
-/// A device asking to be trusted: whose it is and its public key, as its Inbox card holds them.
+/// A device asking to be trusted, as its Inbox card holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Spelled", into = "Spelled")]
 pub struct Enrolment {
-    /// Whom the key would speak for: the actor of the login that asked, never a request field.
+    /// The actor of the login that asked, never a request field.
     pub actor: Actor,
-    /// The device's public key.
     pub key: PublicKey,
 }
 
-/// An enrolment as text, its one serde shape.
 #[derive(Serialize, Deserialize)]
 struct Spelled {
     actor: String,
@@ -44,9 +42,7 @@ impl From<Enrolment> for Spelled {
 }
 
 impl Enrolment {
-    /// The `KeyAdded` this enrolment writes into `history`'s first prodrome: the object a
-    /// trusted device signs to vouch for it, and the box registers. `None` for a history that
-    /// holds no prodrome yet.
+    /// The `KeyAdded` for `history`'s first prodrome, which a trusted device signs to vouch.
     #[must_use]
     pub fn added(&self, history: &Dag<TodoEvent>) -> Option<Envelope<TodoEvent>> {
         history.geneses().into_iter().next().map(|genesis| {
@@ -59,19 +55,15 @@ impl Enrolment {
     }
 }
 
-/// What a trusted device says when it taps a device card: its key's signature of the
-/// registration the card asks for, as the first chain would hold it. Stored beside that
-/// registration, so who vouched is a fact anyone holding the chain can check.
+/// A trusted device's signature of the registration a device card asks for, stored beside it so
+/// anyone holding the chain can check who vouched.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Endorsement {
-    /// The tapping device's key.
     pub key: PublicKey,
-    /// Its signature of the registration's name.
     pub signature: Signature,
 }
 
 impl Endorsement {
-    /// The endorsement as the object it is: a `Signed` of `object`.
     #[must_use]
     pub fn of(&self, object: &Hash) -> Signed {
         Signed {
@@ -82,12 +74,8 @@ impl Endorsement {
     }
 }
 
-/// Does `endorsement` vouch for `enrolment` from a key `history` trusts for `tapper` under
-/// `root`, in every prodrome it holds? Answers the `Signed` to store beside the registration.
-/// A pure reading: the tap asks it of the first chain before anything is written.
-///
-/// # Errors
-/// Why not, as a post's refusal says it.
+/// The `Signed` to store if `endorsement` vouches for `enrolment` from a key trusted for `tapper`
+/// in every prodrome of `history`.
 pub(crate) fn endorses(
     history: &Dag<TodoEvent>,
     root: &PublicKey,
@@ -122,22 +110,17 @@ pub(crate) fn endorses(
     Ok(signed)
 }
 
-/// THE TAP'S DOOR TO KEYS: the keyed chains, and the root that signs what is registered there.
-/// Held by no record; only the tap route builds one.
+/// The tap's door to keys; held by no record, and only the tap route builds one.
 #[derive(Clone, Copy)]
 pub struct Enrolling<'a> {
-    /// The keyed chains, the first being the one an endorsement is read against and kept in.
+    /// The first is where an endorsement is read and kept.
     pub chains: &'a Keyed<&'a dyn Prodrome<TodoEvent>>,
-    /// The root.
     pub root: &'a Secret,
 }
 
 impl Enrolling<'_> {
-    /// Is `endorsement` a trusted device of `tapper`'s vouching for `enrolment`? Answers what
-    /// it signed.
-    ///
-    /// # Errors
-    /// The first keyed chain unreadable; inside, why not.
+    /// Whether `endorsement` is a trusted device of `tapper`'s vouching for `enrolment`, read
+    /// against the first keyed chain; answers what it signed.
     pub fn endorsed(
         &self,
         tapper: &Actor,
@@ -154,12 +137,10 @@ impl Enrolling<'_> {
         ))
     }
 
-    /// Register the enrolment's key for its actor on every keyed chain, signed by the root, and
-    /// keep the endorsement beside the first keyed chain's registration.
+    /// Registers the key on every keyed chain and keeps the endorsement on the first.
     ///
     /// # Errors
-    /// A store refusing; the chains written before it keep the key, and tapping again writes
-    /// the same objects.
+    /// A store refusing; earlier chains keep the key, and a second tap writes the same objects.
     pub fn enrol(&self, enrolment: &Enrolment, endorsed: &Signed) -> Result<(), StoreError> {
         for chain in self.chains.iter() {
             super::trust(*chain, self.root, &enrolment.actor, &enrolment.key)?;

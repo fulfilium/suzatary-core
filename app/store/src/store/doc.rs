@@ -14,7 +14,7 @@ pub trait Doc<K, T>: Gets<K, T> {
     /// [`StoreError::Unwritable`], leaving the old value.
     fn set(&self, key: &K, value: &T) -> Result<(), StoreError>;
 
-    /// Delete the value, so no later read finds it; removing what is not there succeeds.
+    /// Delete the value; removing what is not there succeeds.
     ///
     /// # Errors
     /// [`StoreError::Unwritable`] for a store that keeps what it holds, or a failed deletion.
@@ -38,6 +38,5 @@ pub trait Doc<K, T>: Gets<K, T> {
 
 /// A [`Doc`] that can say which keys hold a value.
 pub trait Lists<K, T>: Doc<K, T> {
-    /// Every key that holds a value now.
     fn held(&self) -> Result<std::collections::BTreeSet<K>, StoreError>;
 }

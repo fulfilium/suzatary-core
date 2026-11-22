@@ -8,38 +8,33 @@ use suzatary_mail::mail::account_email::AccountEmail;
 use suzatary_mail::mail::folders::Folders;
 use suzatary_services::plugin::Manifest;
 
-/// A template: its group, the table it writes, the steps a person takes and the check that
-/// proves it; every value that grants anything is here or parsed by its constructor.
+/// How one kind of connection is made; every value that grants access is here or parsed by its
+/// constructor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Template {
     pub id: TemplateId,
-    /// Where the overview draws its connections.
     pub group: Group,
-    /// What it connects, as a card names it.
     pub title: &'static str,
     pub table: Table,
-    /// The person's steps, in order.
     pub steps: &'static [StepShape],
-    /// How a connection of it proves it works.
     pub check: Check,
 }
 
 impl Template {
-    /// What a connection of it reads.
     #[must_use]
     pub const fn shape(&self) -> Shape {
         self.table.shape()
     }
 
-    /// What a conversation that connects it is titled.
+    /// The title of a conversation that connects it.
     #[must_use]
     pub fn called(&self) -> String {
         let what = self.title.split(" (").next().unwrap_or(self.title);
         format!("Connect {what}")
     }
 
-    /// The setup conversation's first line: what it connects, each step still owed, and what to
-    /// reply. A box that keeps its client is never told to make one.
+    /// The setup conversation's first line; a box that keeps its Google client is never told to
+    /// make one.
     #[must_use]
     pub fn opening(&self, client: crate::secrets::SecretState) -> String {
         let owed = self.steps.iter().filter(|step| match step {
@@ -66,34 +61,30 @@ impl Template {
     }
 }
 
-/// The table of the instance file a template writes, from a closed vocabulary.
+/// The table of the instance file a template writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Table {
-    /// None: every deployment has exactly one, its data repository.
+    /// None: every deployment has exactly one data repository.
     Always,
-    /// None: the deployment's model, which every deployment runs.
+    /// None: every deployment runs its model.
     Model,
     /// A `url` credential its label names on the fragment's plugin.
     Link(Fragment),
     /// A `[[mail.accounts]]` entry of this kind.
     Account(AccountKind),
-    /// A folder `[secretary] drive_allow` lets the Drive be read under.
+    /// A folder in `[secretary] drive_allow`.
     Folder,
-    /// A `[notify]` channel.
     Channel(Channel),
 }
 
-/// A channel that wakes the owner's phones, as `[notify] channels` names it.
+/// A channel that wakes the owner's phones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Channel {
-    /// Firebase Cloud Messaging, by a service account.
     Fcm,
-    /// ntfy, by a topic.
     Ntfy,
 }
 
 impl Channel {
-    /// Its name in `[notify] channels`.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -102,10 +93,8 @@ impl Channel {
         }
     }
 
-    /// Every channel, in the order the Settings page lists them.
     pub const ALL: [Channel; 2] = [Channel::Fcm, Channel::Ntfy];
 
-    /// The channel `[notify] channels` names `name`, or `None` for a name none is.
     #[must_use]
     pub fn parse(name: &str) -> Option<Self> {
         Self::ALL
@@ -113,7 +102,6 @@ impl Channel {
             .find(|channel| channel.as_str() == name)
     }
 
-    /// The template that connects it.
     #[must_use]
     pub const fn template(self) -> TemplateId {
         match self {
@@ -148,7 +136,6 @@ impl<'de> serde::Deserialize<'de> for Channel {
 }
 
 impl Table {
-    /// What a connection writing it reads.
     #[must_use]
     pub const fn shape(&self) -> Shape {
         match self {
@@ -163,21 +150,19 @@ impl Table {
     }
 }
 
-/// The kinds of mail account the instance holds, one per sync strategy.
+/// One kind of mail account per sync strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountKind {
-    /// Gmail, through lieer and its own sign-in.
+    /// Through lieer and its own sign-in.
     Gmail,
-    /// A Google account signed in from the box's card.
+    /// Signed in from the box's card.
     Google,
-    /// Microsoft, over IMAP and XOAUTH2.
+    /// Over IMAP and XOAUTH2.
     Microsoft,
-    /// Proton, through its Bridge.
     Proton,
 }
 
 impl AccountKind {
-    /// The kind an account's strategy is.
     #[must_use]
     pub const fn of(sync: &Sync) -> Self {
         match sync {
@@ -188,7 +173,6 @@ impl AccountKind {
         }
     }
 
-    /// The template that writes an account of this kind.
     #[must_use]
     pub const fn template(self) -> TemplateId {
         match self {
@@ -200,9 +184,6 @@ impl AccountKind {
     }
 
     /// The roster entry for `params`, with this kind's defaults.
-    ///
-    /// # Errors
-    /// Parameters of another shape.
     pub fn account(self, params: &Params) -> Result<MailAccount, Refused> {
         let (email, sync) = match (self, params) {
             (AccountKind::Gmail, Params::Address(email)) => (email, Sync::Gmail),
@@ -243,7 +224,6 @@ impl AccountKind {
         })
     }
 
-    /// The parameters an account of this kind was written from.
     #[must_use]
     pub fn params(account: &MailAccount) -> Params {
         let email = account.email.address().clone();
@@ -260,19 +240,16 @@ impl AccountKind {
 /// The manifest a calendar-like template declares for its plugin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fragment {
-    /// The plugin, and its credentials' namespace.
+    /// The plugin, which is also its credentials' namespace.
     pub plugin: &'static PluginName,
-    /// Its component, under the app's bundles.
+    /// A path under the app's bundles.
     pub component: &'static str,
-    /// Its schema, beside the component.
     pub schema: &'static str,
     /// The origins it may reach before any grant.
     pub origins: &'static [&'static str],
 }
 
 impl Fragment {
-    /// Its manifest, through the file's own door.
-    ///
     /// # Errors
     /// The refusal the file's table would get.
     pub fn manifest(&self) -> Result<Manifest, ManifestError> {
@@ -285,33 +262,22 @@ impl Fragment {
     }
 }
 
-/// One template of the catalog, by its closed name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TemplateId {
-    /// The data repository, pushed to a git remote.
     GitRemote,
-    /// A Proton Drive folder, through its command line.
     DriveCli,
-    /// A calendar, by its secret iCal link.
     Ics,
-    /// Gmail, through lieer.
     Gmail,
-    /// A Google account: its mail and calendars, by one sign-in with Google.
     Google,
-    /// Microsoft 365 or Outlook, by the device-code sign-in.
     MsImap,
-    /// Proton Mail, through its Bridge.
     Proton,
-    /// The deployment's model, signed in from a card.
     Model,
-    /// Notifications through ntfy.
     Ntfy,
-    /// Notifications through Firebase.
     Fcm,
 }
 
 impl TemplateId {
-    /// Every template, in the catalog's order.
+    /// Every template, in [`super::CATALOG`]'s order.
     pub const ALL: [TemplateId; 10] = [
         TemplateId::GitRemote,
         TemplateId::DriveCli,
@@ -325,7 +291,7 @@ impl TemplateId {
         TemplateId::Fcm,
     ];
 
-    /// Its name, as a stored act and a verb spell it.
+    /// The name a stored act spells.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -342,10 +308,6 @@ impl TemplateId {
         }
     }
 
-    /// The template its name spells.
-    ///
-    /// # Errors
-    /// [`Refused::Template`] for a name no template has.
     pub fn parse(text: &str) -> Result<Self, Refused> {
         Self::ALL
             .into_iter()
@@ -353,7 +315,6 @@ impl TemplateId {
             .ok_or_else(|| Refused::Template(text.to_owned()))
     }
 
-    /// Its data.
     #[must_use]
     pub const fn template(self) -> &'static Template {
         super::catalog::of(self)
@@ -362,7 +323,6 @@ impl TemplateId {
 
 prodrome_core::word_literal!(TemplateId: TemplateId::ALL => |id| id.as_str());
 
-/// The secret names `channel` needs: its template's steps.
 #[must_use]
 pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {
     use crate::connect::{SecretName, StepShape};
@@ -409,8 +369,7 @@ mod tests {
         );
     }
 
-    /// Each channel reads back from its name, its template writes that channel, and a name no
-    /// channel has is refused where the instance file is read, naming the channels there are.
+    /// A channel reads back from its name and its template writes it; an unknown name is refused.
     #[test]
     fn a_channel_reads_back_from_its_name_and_its_template_writes_it() {
         for channel in Channel::ALL {

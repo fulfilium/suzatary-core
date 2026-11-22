@@ -1,9 +1,7 @@
 //! A type with a finite set of values, each printed as a word: its literal and its serde form are
 //! both read from one list of its values, so the two cannot spell a value differently.
 
-/// `impl Literal`, `Serialize` and `Deserialize` for each type, printed by `$print` and read back
-/// as the value of `$all` that prints as the text: one list of words for the stored form and the
-/// wire.
+/// `impl Literal`, `Serialize` and `Deserialize` for each type, all read from `$all` and `$print`.
 #[macro_export]
 macro_rules! words {
     ($($ty:ty: $all:expr => $print:expr),+ $(,)?) => {$(

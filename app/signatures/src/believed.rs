@@ -1,5 +1,4 @@
-//! What a chain believes at an instant: the Prodrome's register projections, read once for
-//! every todo.
+//! What a chain believes at an instant: the register projections, read once for every todo.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,14 +17,12 @@ use suzatary_record::record::{Authored, Envelope, Node, TodoEvent};
 
 /// Every todo's candidates at one instant, under one policy.
 ///
-/// A register with more than one candidate is a conflict and reads as all of them: the price is
-/// the most urgent world's, and nothing here picks a winner. A reading that can show only one
-/// record takes [`Believed::record`], the candidate of the least object name.
+/// A conflict reads as all its candidates and prices as the most urgent world; a single-record
+/// reading takes [`Believed::record`], the candidate of the least object name.
 #[derive(Debug, Clone, Default)]
 pub struct Believed {
     /// Candidate outcomes of every todo not simply open, and the tendings.
     pub env: Env,
-    /// Each todo's candidate specs.
     pub specs: BTreeMap<TodoId, Vec<Term>>,
     /// Each todo's candidate records, whoever wrote them.
     pub content: BTreeMap<TodoId, Vec<Authored>>,
@@ -35,10 +32,6 @@ pub struct Believed {
 }
 
 impl Believed {
-    /// Fold `nodes` at `at` under `untrusted`, across every prodrome they hold.
-    ///
-    /// # Errors
-    /// A spec that cannot be flattened.
     pub fn of(nodes: &[Node], at: Datetime, untrusted: &Untrusted) -> Result<Believed, FplError> {
         let state = registers::fold(nodes);
         let now = fpl::instant_of(at);
@@ -67,13 +60,13 @@ impl Believed {
             .unwrap_or_else(|| Candidates::from([None]))
     }
 
-    /// Is `todo` open in every world? A conflict with an open candidate is open.
+    /// A conflict with an open candidate is open.
     #[must_use]
     pub fn is_open(&self, todo: &TodoId) -> bool {
         self.outcome(todo).contains(&None)
     }
 
-    /// The one record a single-record reading shows (see the type's note).
+    /// The candidate of the least object name.
     #[must_use]
     pub fn record(&self, todo: &TodoId) -> Option<&Authored> {
         self.content.get(todo).and_then(|records| records.first())
@@ -85,7 +78,7 @@ impl Believed {
         fold::link_specs(&self.functions, &self.known)
     }
 
-    /// `todo`'s value at `at`: `None` for `∅`, a todo with no function, or one that does not link.
+    /// `None` for `∅`, a todo with no function, or one that does not link.
     #[must_use]
     pub fn value(&self, todo: &TodoId, at: Datetime) -> Option<f64> {
         let closed = fpl::link(self.functions.get(todo)?, &self.linkable()).ok()?;
@@ -93,7 +86,7 @@ impl Believed {
     }
 }
 
-/// Every todo's candidate records at `at`, whoever wrote them: [`Believed::content`] alone.
+/// [`Believed::content`] alone.
 #[must_use]
 pub fn records(nodes: &[Node], at: Datetime) -> BTreeMap<TodoId, Vec<Authored>> {
     let now = fpl::instant_of(at);
@@ -104,8 +97,7 @@ pub fn records(nodes: &[Node], at: Datetime) -> BTreeMap<TodoId, Vec<Authored>> 
         .collect()
 }
 
-/// A history in memory, as its objects and the nodes a DAG places them as: what a preview folds
-/// before anything is written, and never flushed.
+/// A history in memory that a preview folds before anything is written; never flushed.
 #[derive(Debug, Clone, Default)]
 pub struct Preview {
     objects: Vec<(Hash, Envelope)>,
@@ -113,8 +105,6 @@ pub struct Preview {
 }
 
 impl Preview {
-    /// The history these objects make.
-    ///
     /// # Errors
     /// A cycle, which only a hash collision could make.
     pub fn of(objects: Vec<(Hash, Envelope)>) -> Result<Self, ProdromeError> {
@@ -122,28 +112,21 @@ impl Preview {
         Ok(Self { objects, nodes })
     }
 
-    /// The nodes the folds read.
     #[must_use]
     pub fn nodes(&self) -> &[Node] {
         &self.nodes
     }
 
-    /// The objects, the history's own and every one written ahead.
+    /// The history's own objects and every one written ahead.
     #[must_use]
     pub fn objects(&self) -> &[(Hash, Envelope)] {
         &self.objects
     }
 
-    /// `event` where the store's `append` would put it: nowhere when an object of the writer's
-    /// prodrome already carries it, else a `Change` over its todo's heads, the bytes a store
-    /// holding these objects would write. A history with no genesis is begun by one first, as
-    /// an empty store is.
-    ///
-    /// # Errors
-    /// The append's refusal, as the store would give it.
+    /// Writes `event` as the store's `append` would: nothing for a twin, else a `Change` over its
+    /// todo's heads, after a `Genesis` for an empty history.
     pub fn ahead(&mut self, event: TodoEvent) -> Result<(), ProdromeError> {
         let dag = Dag::from_iter(self.objects.clone());
-        // The prodrome the store's own append writes into, so a preview never picks another.
         let home = crate::chain_set::home(&dag).map_err(|several| {
             ProdromeError::Store(format!(
                 "the history holds {several} geneses: name the writer's"
@@ -172,8 +155,7 @@ impl Preview {
         Ok(())
     }
 
-    /// A list of events as a legacy chain holds them, each object on the one before: what a log
-    /// built in memory means to the folds.
+    /// Events as a legacy chain holds them, each object on the one before.
     ///
     /// # Panics
     /// Never: each object rests on the one before it, which is held.
@@ -193,8 +175,7 @@ impl Preview {
     }
 }
 
-/// The one outcome a reading that shows one takes: open while any candidate is, else the least
-/// binding.
+/// Open while any candidate is, else the least binding.
 #[must_use]
 pub fn one_outcome(candidates: &Candidates) -> Option<Outcome> {
     if candidates.contains(&None) {
@@ -204,8 +185,7 @@ pub fn one_outcome(candidates: &Candidates) -> Option<Outcome> {
     }
 }
 
-/// The candidates as the core's `Entry::state` spells them: lowercased, `open` for none, and
-/// `|` between the candidates of a conflict.
+/// As the core's `Entry::state` spells them: `open` for none, `|` between conflicting candidates.
 #[must_use]
 pub fn spelled(candidates: &Candidates) -> String {
     candidates

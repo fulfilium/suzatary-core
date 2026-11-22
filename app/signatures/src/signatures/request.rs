@@ -1,18 +1,11 @@
 use prodrome_core::event::Hash;
 use sha2::{Digest, Sha256};
 
-/// A DEVICE'S REQUEST of the box, named by its content: the method, the path and query it asked
-/// at, the instant its device stamped on it, a nonce it drew, the SHA-256 of its body and the
-/// device key asking, under a prefix of their own, so a request's name is never an object's and
-/// its signature proves nothing on a chain. The same request, copied, is the same name however
-/// often it is sent; two asks made on purpose differ by their nonces and instants.
+/// A device's request of the box, named by its content under a prefix of its own, so a request's
+/// name is never an object's.
+/// The same request copied is the same name; two asks made on purpose differ by nonce and instant.
 ///
-/// The nonce is what keeps the body out of reach: the box records every other part of the name
-/// and never the nonce, so holding a record and guessing a body (a short secret, say) does not
-/// recompute its name.
-///
-/// A device signs the name as it signs an object (the Prodrome's `Signed` over a name), and the
-/// box admits it with [`super::Trust::admits`], the check a posted object's signature passes.
+/// The box never records the nonce, so a guessed body cannot recompute the name from a record.
 ///
 /// # Panics
 /// Never: a SHA-256 in hex is a name.
@@ -50,8 +43,8 @@ pub fn is_nonce(nonce: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// How far a request's instant may be from the box's clock, either way, in seconds: a request
-/// outside it is refused, so its answer need be kept no longer than twice this.
+/// How far a request's instant may be from the box's clock, in seconds; an answer is kept twice
+/// this.
 pub const WINDOW_SECONDS: i64 = 600;
 
 /// A body's digest as a request's name takes it: lowercase hex SHA-256.

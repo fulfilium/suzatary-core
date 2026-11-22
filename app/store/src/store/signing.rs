@@ -7,30 +7,21 @@ use prodrome_core::sign::{Secret, Signed};
 
 use super::{Prodrome, Reads, StoreError, WriteLock};
 
-/// A store whose every append is SIGNED: the event's `Change`, then the key's `Signed` of it,
-/// two objects joined into the store. So a writer holding a `Signing` cannot
-/// write an unsigned object, and which key signs is the value the store was built with: the
-/// box's key for the box's stores.
-///
-/// Signing is deterministic, so a twin's signature is the object already held and an append
-/// replayed writes nothing new, signature included.
+/// A store whose every append is signed: the event's `Change`, then the key's `Signed` of it.
+/// Signing is deterministic, so a replayed append writes nothing new.
 pub struct Signing<S> {
     store: S,
     signer: Signer,
 }
 
-/// What one store's appends are signed with: a sum, because a deployment whose keys did not
-/// resolve must still READ, and its writes must say why they cannot be made rather than land
-/// unsigned.
+/// What one store's appends are signed with; a store whose key did not resolve still reads, and
+/// its writes say why they cannot be made rather than land unsigned.
 #[derive(Clone)]
 pub enum Signer {
-    /// This key unavailable (secretspec locked after a reboot, a seed that
-    /// is not the deployment's): every append refuses with this sentence and appends nothing.
+    /// The key is unavailable: every append refuses with this sentence.
     Refusing(String),
-    /// Every append signed by this key.
     Key(Arc<Secret>),
-    /// Every append unsigned, for a store that holds no signature: a public one, which never
-    /// holds a deployment's keys.
+    /// For a public store, which never holds a deployment's keys.
     Unsigned,
 }
 
@@ -45,13 +36,11 @@ impl std::fmt::Debug for Signer {
 }
 
 impl<S> Signing<S> {
-    /// `store`, every append signed as `signer` says.
     #[must_use]
     pub fn new(store: S, signer: Signer) -> Self {
         Self { store, signer }
     }
 
-    /// The store underneath.
     #[must_use]
     pub fn inner(&self) -> &S {
         &self.store
@@ -66,13 +55,9 @@ impl<S> std::fmt::Debug for Signing<S> {
     }
 }
 
-/// `signed` joined into `store`: the one way this application adds a `Signed`, so a box write and
-/// a tap's registration sign alike. A caller makes it with `Secret::sign` only over a name it has
-/// just sealed, which is a whole; over a name it holds, with `Secret::sign_whole`, since a
-/// signature of a husk's name would prove a whole the signer never hashed.
-///
-/// # Errors
-/// The store's refusal to take it, as any accept's.
+/// `signed` joined into `store`: the one way this application adds a `Signed`.
+/// Use `Secret::sign` only over a name just sealed; over a held name use `Secret::sign_whole`,
+/// since a husk's name would prove a whole the signer never hashed.
 pub fn sign<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     signed: Signed,
@@ -114,9 +99,10 @@ impl<E: Schema, S: Reads<E>> Reads<E> for Signing<S> {
 }
 
 impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
-    /// No hold of its own: a signature is an element beside its object, so two writers'
-    /// changes and signatures interleave harmlessly, and a crash between the two leaves an
-    /// unsigned object that `verify` names and the same append, replayed, signs.
+    /// No hold of its own: a signature is an element beside its object, so two writers' changes
+    /// and signatures interleave harmlessly.
+    /// A crash between the two objects leaves an unsigned object that `verify` names and a
+    /// replayed append signs.
     fn append(&self, event: E) -> Result<Hash, StoreError> {
         match &self.signer {
             Signer::Refusing(why) => Err(StoreError::not_appended("chain", why)),

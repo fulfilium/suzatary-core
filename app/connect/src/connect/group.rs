@@ -3,34 +3,25 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// What a connection is for; a connection is in exactly one, and the overview draws them in
-/// [`Group::ALL`]'s order.
+/// What a connection is for; a connection is in exactly one group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Group {
-    /// Where the data is kept: the data repository and where it is pushed.
     Storage,
-    /// The mail accounts.
     Mail,
-    /// The calendars: every credential of a plugin whose store the calendar reads.
+    /// Every credential of a plugin whose store the calendar reads.
     Calendar,
-    /// The folders of the owner's Drive the secretary may read.
     Drive,
-    /// Which model answers each job.
     Models,
-    /// The channels that wake the owner's phones.
     Notifications,
-    /// The routine a coding session fires.
     Coding,
     /// Every other plugin.
     Plugins,
-    /// The program this box runs.
     Box,
 }
 
 impl Group {
-    /// Every group, in the order the overview draws them: what the others wait on first (a model
-    /// answers everything else), then mail, the calendar and the Drive, then where the data goes.
+    /// Every group in the overview's order; models come first because the others need a model.
     pub const ALL: [Group; 9] = [
         Group::Models,
         Group::Mail,
@@ -43,7 +34,7 @@ impl Group {
         Group::Box,
     ];
 
-    /// Its name, as the wire and a connection's key print it (`calendar/WORK`).
+    /// The wire name, also the first segment of a connection's key (`calendar/WORK`).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {

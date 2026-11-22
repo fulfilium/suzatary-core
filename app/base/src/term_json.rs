@@ -1,7 +1,5 @@
-//! An FPL term as the web's JSON, read and printed through the Prodrome's term
-//! schema: lowercase kind tags, ISO instants, spans in hours. The same shape
-//! `prodrome-wasm` renders, frozen by its `conformance/term-json.json`; the
-//! wasm crate is a cdylib, so this crate reads the schema itself.
+//! An FPL term as the web's JSON: lowercase kind tags, ISO instants, spans in hours.
+//! The shape is frozen by `prodrome-wasm`'s `conformance/term-json.json`.
 
 use prodrome_core::fpl::{
     Closed, Delta, Env, Explanation, FplError, Instant, Note, Scalar, delta_from_hours, explained,
@@ -14,7 +12,6 @@ use serde_json::{Map, Value};
 /// One JSON object's fields, `null` or left out being absent.
 struct JsonSource<'a>(&'a Value);
 
-/// A term's fields, printed the wire's way.
 #[must_use]
 pub fn to_json(term: &Term) -> Value {
     let mut out = object(fields(term.out()).1);
@@ -23,9 +20,6 @@ pub fn to_json(term: &Term) -> Value {
 }
 
 /// A term back from [`to_json`]'s shape, through the core's own `mk_*`.
-///
-/// # Errors
-/// A malformed or unknown shape, as the core's [`FplError`].
 pub fn from_json(json: &Value) -> Result<Term, FplError> {
     let tag = json.get("kind").and_then(Value::as_str).unwrap_or("");
     let mut chars = tag.chars();

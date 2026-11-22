@@ -7,72 +7,54 @@ use crate::secrets::SecretState;
 use crate::settings::Help;
 use suzatary_health::health::{Instant, Reading};
 
-/// Where a line stands, ordered by how much it asks of the owner (the arms in that order), so
-/// [`Standing::join`] of a line's parts is the one that asks most; of two missing, both, and of
-/// two steps by hand, the earlier. A connection's standing is
-/// the join of its steps' ([`super::Connection::standing`]) and its check's results, never kept,
-/// so a restart, a second device and a second conversation read the same answer.
+/// Where a line stands; the arms are ordered by how much they ask of the owner, which
+/// [`Standing::join`] reads, so do not reorder them.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(rename = "LineStanding")]
 pub enum Standing {
     /// In place, with nothing to observe: the data repository, this box.
     Kept,
-    /// Its latest sync succeeded, at this instant.
     Synced {
-        /// When, ISO 8601, UTC.
+        /// ISO 8601, UTC.
         at: String,
     },
-    /// Its model's latest call answered, at this instant.
     Answered {
-        /// When, ISO 8601, UTC.
+        /// ISO 8601, UTC.
         at: String,
     },
-    /// In place, and nothing has observed it yet.
     Unobserved,
-    /// The secret store is locked, which an unlock at the box mends.
     Locked,
-    /// The secret store could not be run.
     StoreFailed,
-    /// What the box keeps of it could not be read.
     Unreadable {
-        /// Why, in words.
         words: String,
     },
-    /// Its latest observation failed.
     Failing {
-        /// It has not succeeded since this instant, ISO 8601, UTC.
+        /// ISO 8601, UTC: the instant since which it has not succeeded.
         since: String,
-        /// Its class, which names its one fix.
         class: suzatary_health::health::Failure,
-        /// What the failure said, in words.
         words: String,
-        /// When it last tried, ISO 8601, UTC.
+        /// ISO 8601, UTC.
         at: String,
     },
-    /// A step only a terminal on the box takes, which the box sees taken only once its check
-    /// first succeeds; above a failure, since a sync fails until the step is taken. Of two, the
-    /// earlier in its template's order is the one to take first.
+    /// A step only a terminal on the box takes; it ranks above a failure because a sync fails
+    /// until the step is taken.
     ByHand {
         /// Its place among its connection's steps.
         #[serde(skip)]
         #[ts(skip)]
         step: usize,
-        /// What to run, in the owner's words where it sets a secret.
         command: String,
-        /// Why, in a few words.
         why: String,
     },
     /// Secrets it reads are stored nowhere on this box, each in the owner's words.
     Missing {
-        /// What is missing, sorted.
+        /// Sorted.
         what: Vec<String>,
     },
 }
 
 impl Standing {
-    /// Whether it asks something of the owner: a line in place, or one only waiting to be
-    /// checked, asks nothing.
     #[must_use]
     pub fn asks(&self) -> bool {
         match self {
@@ -89,8 +71,8 @@ impl Standing {
         }
     }
 
-    /// The part that asks more of the owner, and two missing parts missing both: a
-    /// join-semilattice whose identity is [`Standing::Kept`].
+    /// The part that asks more of the owner; two missing parts merge and of two steps by hand the
+    /// earlier wins: a join-semilattice whose identity is [`Standing::Kept`].
     #[must_use]
     pub fn join(self, other: Self) -> Self {
         match (self, other) {
@@ -105,7 +87,6 @@ impl Standing {
         }
     }
 
-    /// The same standing, a step only a terminal takes placed `step`-th among its connection's.
     #[must_use]
     pub(crate) fn at_step(self, step: usize) -> Self {
         match self {
@@ -114,7 +95,6 @@ impl Standing {
         }
     }
 
-    /// Missing one thing, said in the owner's words.
     #[must_use]
     pub fn missing(what: impl Into<String>) -> Self {
         Self::Missing {
@@ -122,7 +102,6 @@ impl Standing {
         }
     }
 
-    /// Where a secret named `name` stands, missing in the owner's words.
     #[must_use]
     pub fn of_secret(name: &str, state: SecretState) -> Self {
         match state {
@@ -133,7 +112,6 @@ impl Standing {
         }
     }
 
-    /// What a sync's health register reads: its latest result, or nothing observed yet.
     #[must_use]
     pub fn of_health(reading: Option<Reading>) -> Self {
         match reading {
@@ -153,7 +131,7 @@ impl Standing {
         }
     }
 
-    /// What a model's calls read: as a sync's, its success an answer.
+    /// As [`Standing::of_health`], with a success read as an answer.
     #[must_use]
     pub fn of_calls(reading: Option<Reading>) -> Self {
         match Self::of_health(reading) {
@@ -163,7 +141,6 @@ impl Standing {
     }
 }
 
-/// An instant as the wire spells one.
 fn stamp(at: Instant) -> String {
     at.format("%Y-%m-%dT%H:%M:%S%.f").to_string()
 }

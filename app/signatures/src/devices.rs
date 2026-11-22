@@ -1,5 +1,4 @@
-//! The phones that asked to be woken: a log of registrations per actor, since a push token is a
-//! fact about a phone and not an act on the chain.
+//! The phones that asked to be woken: a push token is a fact about a phone, not a chain act.
 
 use std::collections::BTreeMap;
 
@@ -7,14 +6,12 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
 use suzatary_store::store::{Edit, Log, StoreError};
 
-/// One registration of a phone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
     /// `android` or `ios`.
     pub platform: String,
-    /// The push service's name for this app on this phone: state, not a secret.
+    /// The push service's name for this app on this phone: not a secret.
     pub token: String,
-    /// When it was registered.
     pub registered: Datetime,
 }
 
@@ -23,7 +20,6 @@ pub struct Device {
 pub struct Phones(pub Vec<Device>);
 
 impl Phones {
-    /// The phones a log's lines come to, read in the order they were written.
     #[must_use]
     pub fn of(lines: &[Device]) -> Self {
         let mut phones: Vec<Device> = Vec::new();
@@ -37,21 +33,18 @@ impl Phones {
     }
 }
 
-/// The longest push token this will write down.
 pub const MAX_TOKEN: usize = 4096;
 
-/// The push service a phone's token is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
-    /// Firebase, on Android.
+    /// Firebase.
     Android,
-    /// Apple's, on iOS.
     Ios,
 }
 
 impl Platform {
-    /// Its name, as a [`Device`] stores it.
+    /// As a [`Device`] stores it.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -61,11 +54,7 @@ impl Platform {
     }
 }
 
-/// Check the token `POST /api/act/device` carries and write the registration down, answering
-/// how many devices this actor now has.
-///
-/// # Errors
-/// A token that is not one line, and the store's own.
+/// `POST /api/act/device`: checks the token is one line and appends the registration.
 pub fn register_device(
     devices: &dyn Log<String, Device>,
     clock: &dyn suzatary_base::capability::Clock,
@@ -90,10 +79,6 @@ pub fn register_device(
     })
 }
 
-/// Every actor's phones, for the sender.
-///
-/// # Errors
-/// The store's own.
 pub fn everyone(devices: &dyn Log<String, Device>) -> Result<BTreeMap<String, Phones>, StoreError> {
     devices
         .keys()?
@@ -105,10 +90,7 @@ pub fn everyone(devices: &dyn Log<String, Device>) -> Result<BTreeMap<String, Ph
         .collect()
 }
 
-/// Drop a token the push service called dead, leaving the actor's other phones as they fold.
-///
-/// # Errors
-/// The store's own.
+/// Drops a token the push service called dead.
 pub fn forget(devices: &dyn Log<String, Device>, actor: &str, token: &str) -> Result<(), Refusal> {
     devices.edit(&actor.to_owned(), &mut |lines| {
         let Phones(mut phones) = Phones::of(lines);

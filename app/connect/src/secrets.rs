@@ -5,43 +5,40 @@ use crate::settings::Settable;
 use suzatary_google::google::Held;
 use suzatary_mail::mail::account::{MailAccount, Sync};
 
-/// One account's OAuth consents held by this box: for Microsoft, IMAP and SMTP are separate grants
-/// in separate slots; for a Google account, its one sign-in with Google is its reading grant.
+/// One account's OAuth consents: Microsoft's IMAP and SMTP grants sit in separate slots, so a
+/// leaked IMAP token cannot send.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MailGrants {
-    /// Whether this account holds the grant its mail is read with: the IMAP slot, or the sign-in
-    /// with Google.
+    /// The IMAP slot, or for a Google account its sign-in with Google.
     pub imap: bool,
-    /// Whether this account holds an SMTP grant.
     pub smtp: bool,
 }
 
-/// Where one mail account's credential lives, a sum over [`Sync`] so an account whose grant this
-/// box does not hold is never shown as broken.
+/// Where one mail account's credential lives, so an account whose grant this box does not hold is
+/// never shown as broken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(rename = "MailCredentialRow")]
 pub enum MailCredential {
-    /// Microsoft over IMAP and XOAUTH2, the only strategy whose grant lives in this box's store.
+    /// Microsoft over IMAP and XOAUTH2, whose grants live in this box's token store.
     Slots {
-        /// Whether this account holds an IMAP grant.
+        /// The IMAP grant.
         imap: bool,
-        /// Whether this account holds an SMTP grant, separately.
+        /// The SMTP grant, held separately.
         smtp: bool,
     },
-    /// Gmail through lieer, which owns its own credential outside this box's token store.
+    /// Gmail through lieer, which keeps its own credential outside this box's token store.
     Lieer,
-    /// A Google account whose sign-in with Google the box keeps in its secret store.
+    /// The box keeps the sign-in with Google in its secret store.
     Google {
         /// Whether the box holds it.
         granted: bool,
     },
-    /// Proton through the local Bridge, which owns its own credential the same way.
+    /// Proton through the local Bridge, which keeps its own credential.
     Bridge,
 }
 
 impl MailCredential {
-    /// Pick the arm `account.sync` names, filling [`MailCredential::Slots`] only for Microsoft.
     #[must_use]
     pub fn of(account: &MailAccount, grants: MailGrants) -> Self {
         match &account.sync {
@@ -58,69 +55,52 @@ impl MailCredential {
     }
 }
 
-/// Where a secret stands: what a lookup found, with the value dropped.
+/// Where a secret stands, with the value dropped.
 ///
-/// "The store is locked" is not "nothing is set": a page that read a locked
-/// store as unset would ask the owner to set again what is already there. Nor
-/// is a store that cannot be run locked: unlocking it fixes nothing. Ordered
-/// `Missing < Failed < Locked < Set`: false, the two unknowns with the one an
-/// unlock does not mend lower, and true, so [`SecretState::and`] is its meet.
+/// A locked store is not an unset name: reading it as unset asks the owner to set a secret again.
+/// A store that cannot be run is not locked either: unlocking it mends nothing.
+/// The order `Missing < Failed < Locked < Set` makes [`SecretState::and`] the meet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum SecretState {
-    /// Nothing holds the name.
     Missing,
-    /// The store could not be run, or answered with what is not a value.
+    /// The store could not be run, or answered with something that is not a value.
     Failed,
-    /// The store could not say, as a locked one cannot.
     Locked,
-    /// It resolves.
     Set,
 }
 
 impl SecretState {
-    /// Where several secrets stand together, "every one is set": the meet,
-    /// whose unit is [`SecretState::Set`]; one missing decides it whatever
-    /// another's store says.
+    /// "Every one is set": the meet, whose unit is [`SecretState::Set`].
     #[must_use]
     pub fn and(self, other: Self) -> Self {
         self.min(other)
     }
 
-    /// [`SecretState::and`] over `states`, `Set` for none.
     #[must_use]
     pub fn all(states: impl IntoIterator<Item = Self>) -> Self {
         states.into_iter().fold(Self::Set, Self::and)
     }
 
-    /// Whether it resolves.
     #[must_use]
     pub fn is_set(self) -> bool {
         self == Self::Set
     }
 }
 
-/// The store could not say, as a locked one cannot: an answer about the store, never about
-/// a name, and the one that costs a timeout to learn.
+/// The store is locked: an answer about the store, never about a name, and it costs a timeout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Locked;
 
 /// What the store answered for one name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Answer {
-    /// Nothing holds it.
     Missing,
-    /// The store could not be run for it, or held what is not a value.
     Failed,
-    /// It resolves.
     Set,
 }
 
 impl Answer {
-    /// A name's answer, or [`Locked`], which answers for the store and not for the name.
-    ///
-    /// # Errors
-    /// [`Locked`] for [`SecretState::Locked`].
     pub fn of(state: SecretState) -> Result<Self, Locked> {
         match state {
             SecretState::Locked => Err(Locked),
@@ -141,28 +121,24 @@ impl From<Answer> for SecretState {
     }
 }
 
-/// Where every declared name stood at one reading: each name's answer, or [`Locked`]. Read
-/// once per request, so a locked store costs one timeout however many names are declared and
-/// however often a request asks.
+/// Every declared name's answer at one reading, or [`Locked`]; read once per request, so a locked
+/// store costs one timeout.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot(Result<std::collections::BTreeMap<Settable, Answer>, Locked>);
 
 impl Snapshot {
-    /// `secrets`' reading of `names`, in as few questions as it can ask ([`Secrets::snapshot`]).
     #[must_use]
     pub fn read(secrets: &dyn Secrets, names: impl IntoIterator<Item = Settable>) -> Self {
         secrets.snapshot(&names.into_iter().collect::<Vec<_>>())
     }
 
-    /// Ask `secrets` for each of `names` once, stopping at the first answer that the store is
-    /// locked: asking the rest would only wait out the same timeout again for each. Any other
-    /// answer is the name's own, so one value that cannot be read leaves the others standing.
+    /// Asks for each name once and stops at the first locked answer, so a locked store costs one
+    /// timeout.
     #[must_use]
     pub fn each(secrets: &(impl Secrets + ?Sized), names: &[Settable]) -> Self {
         Self::stood(names, |name| secrets.secret_state(name))
     }
 
-    /// Where `stood` says each of `names` stands, asked in order until one is locked.
     fn stood(names: &[Settable], stood: impl Fn(&Settable) -> SecretState) -> Self {
         Self(
             names
@@ -172,21 +148,16 @@ impl Snapshot {
         )
     }
 
-    /// Each name's answer, or [`Locked`], as a store answered them all at once.
     #[must_use]
     pub fn of(answers: Result<std::collections::BTreeMap<Settable, Answer>, Locked>) -> Self {
         Self(answers)
     }
 
-    /// Each name's answer, or [`Locked`].
-    ///
-    /// # Errors
-    /// [`Locked`], when the store could not say.
     pub fn answers(&self) -> Result<&std::collections::BTreeMap<Settable, Answer>, Locked> {
         self.0.as_ref().map_err(|locked| *locked)
     }
 
-    /// Where `name` stood: its answer, or locked; a name the reading did not ask is missing.
+    /// A name the reading did not ask reads as missing.
     #[must_use]
     pub fn state(&self, name: &Settable) -> SecretState {
         match &self.0 {
@@ -198,29 +169,23 @@ impl Snapshot {
     }
 }
 
-/// The state of this deployment's secrets, and nothing about their content.
+/// The state of this deployment's secrets, never their values.
 pub trait Secrets: std::marker::Sync {
-    /// Where this declared name stands now.
     fn secret_state(&self, settable: &Settable) -> SecretState;
 
-    /// Where each of `names` stands at one reading. Asked of each name in turn
-    /// ([`Snapshot::each`]) unless the store can answer them all in fewer questions; either way
-    /// the reading is the same.
+    /// A store may answer in fewer questions than [`Snapshot::each`], with the same reading.
     fn snapshot(&self, names: &[Settable]) -> Snapshot {
         Snapshot::each(self, names)
     }
 
-    /// This box's own Microsoft OAuth slots for this account, read only through
-    /// [`MailCredential::of`].
+    /// This box's Microsoft OAuth slots for this account, read only through [`MailCredential::of`].
     fn mail_grants(&self, account: &MailAccount) -> MailGrants;
 
-    /// Whether `account` is signed in with Google, and the parts its grant holds: read from the
-    /// kept grant, of which only the parts cross.
+    /// Only the grant's parts cross, never the grant itself.
     fn google_grant(&self, account: &suzatary_mail::mail::address::EmailAddress) -> Held;
 }
 
-/// Each answer a secret store gave, by its question: the store as it stood when last asked.
-/// Empty until something asks; [`SecretAnswers::forget`] empties it again.
+/// Each answer a secret store gave, by its question, as it stood when last asked.
 #[derive(Debug, Clone, Default)]
 pub struct SecretAnswers {
     states: std::collections::BTreeMap<String, SecretState>,
@@ -229,19 +194,15 @@ pub struct SecretAnswers {
 }
 
 impl SecretAnswers {
-    /// Every answer dropped, so each question is asked of the store again.
     pub fn forget(&mut self) {
         *self = Self::default();
     }
 }
 
-/// `store` asked through `answers`: a question already answered there is answered from there,
-/// and any other is asked of `store` once and its answer kept. The store is asked with nothing
-/// held, so a slow question holds up no other reader.
+/// `store` cached through `answers`; the store is asked with the lock released, so a slow question
+/// blocks no other reader.
 pub struct Remembering<'a> {
-    /// The store asked.
     pub store: &'a dyn Secrets,
-    /// What it answered so far.
     pub answers: &'a std::sync::Mutex<SecretAnswers>,
 }
 
@@ -275,8 +236,7 @@ impl Secrets for Remembering<'_> {
         )
     }
 
-    /// The names not answered yet, asked of the store in one reading and kept; a locked store
-    /// is kept as locked for each name it was asked.
+    /// A locked store is kept as locked for each name it was asked.
     fn snapshot(&self, names: &[Settable]) -> Snapshot {
         let held = || {
             self.answers

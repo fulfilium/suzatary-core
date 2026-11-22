@@ -1,5 +1,4 @@
-//! Learning what a source reported into a declared store: an item the store already reads as
-//! reported is learned once, so a timer may sync as often as it likes.
+//! Learning what a source reported into a declared store, idempotently.
 
 use prodrome_core::declared::Declared;
 
@@ -8,18 +7,15 @@ use super::{Knowledge, Prodrome, StoreError};
 /// What one learning did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Learnt {
-    /// Items written: new or changed.
     pub written: usize,
     /// Items the store already read as reported.
     pub known: usize,
 }
 
-/// Write each of `items` the store does not already read as it is, under the store's hold, so
-/// two syncs at once do not both write one.
+/// Write each of `items` the store does not already read as it is, under the store's hold.
 ///
 /// # Errors
-/// The store's refusal; what was written before it stays written, and the next sync learns the
-/// rest, since learning is idempotent.
+/// The store's refusal; what was written before it stays written.
 pub fn learn(store: &dyn Prodrome<Declared>, items: Vec<Declared>) -> Result<Learnt, StoreError> {
     let _hold = store.locked()?;
     let mut known = Knowledge::of(&store.nodes()?);

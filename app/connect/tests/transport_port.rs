@@ -1,5 +1,4 @@
-//! Mail-out's conformance suite over the in-memory transport, on generated messages, and the
-//! suite catching a transport that adds a recipient.
+//! Mail-out's conformance suite over the in-memory transport, and over transports that break a law.
 
 use proptest::prelude::*;
 use suzatary_connect::conformance::transport::{Case, Law, check};
@@ -47,7 +46,6 @@ proptest! {
     }
 }
 
-/// A transport that copies someone the message does not name.
 struct Copies(Outbox);
 
 impl Transport for Copies {
@@ -82,7 +80,7 @@ fn a_transport_that_copies_someone_breaks_delivered() {
     assert_eq!(broken.law, Law::Delivered);
 }
 
-/// A wire that loses the blank lines, the one between the headers and the body among them.
+/// Loses the blank lines, including the one between the headers and the body.
 struct Squeezes(Outbox);
 
 impl Transport for Squeezes {

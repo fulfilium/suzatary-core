@@ -17,7 +17,6 @@ pub struct Set<K> {
 impl<K: Finite> Set<K> {
     const FITS: () = assert!(K::ALL.len() <= 64, "a Set holds at most 64 values");
 
-    /// The set of no value.
     #[must_use]
     pub fn empty() -> Self {
         Self::of_bits(0)
@@ -38,19 +37,16 @@ impl<K: Finite> Set<K> {
             .map_or(0, |at| 1 << at)
     }
 
-    /// The set holding `value` alone.
     #[must_use]
     pub fn one(value: K) -> Self {
         Self::of_bits(Self::bit(value))
     }
 
-    /// Whether it holds `value`.
     #[must_use]
     pub fn contains(&self, value: K) -> bool {
         self.bits & Self::bit(value) != 0
     }
 
-    /// Whether it holds none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.bits == 0
@@ -64,7 +60,6 @@ impl<K: Finite> Set<K> {
             .filter(move |value| self.contains(*value))
     }
 
-    /// The union.
     #[must_use]
     pub fn join(&self, other: &Self) -> Self {
         Self::of_bits(self.bits | other.bits)

@@ -4,20 +4,18 @@ use super::{BoxKeys, Custody};
 use prodrome_core::policy::Untrusted;
 use suzatary_store::store::Signer;
 
-/// What the box signs with, as the deployment declares and secretspec answers: resolved once
-/// per process, and never a reason not to start, since a box whose keys are locked away must
-/// still read.
+/// What the box signs with, resolved once per process; missing keys never stop the box, which
+/// must still read.
 #[derive(Debug, Clone)]
 pub enum Signers {
-    /// The keys not at hand; the sentence says which and what to run.
+    /// The sentence says which keys are missing and what to run.
     Missing(String),
     /// Both keys, checked against the root.
     Held(BoxKeys),
 }
 
 impl Signers {
-    /// The key `actor`'s writes are signed with, as [`Custody`] says, which is the key
-    /// adoption registers for it. So no event is signed by a key its actor does not own.
+    /// The key [`Custody`] gives `actor`, the one adoption registers for it.
     #[must_use]
     pub fn for_actor(&self, actor: &Actor, untrusted: &Untrusted) -> Signer {
         match self {
@@ -28,7 +26,6 @@ impl Signers {
         }
     }
 
-    /// The keys, when held.
     #[must_use]
     pub fn held(&self) -> Option<&BoxKeys> {
         match self {

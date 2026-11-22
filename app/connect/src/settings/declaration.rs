@@ -6,32 +6,26 @@ use suzatary_health::health::plugin::PluginName;
 /// One table naming a secret; a name two tables declare is declared by both.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Declaration {
-    /// The model's credential.
     Model,
-    /// A `[notify]` channel's secret.
     Channel(crate::connect::Channel),
-    /// `[coding]`'s routine fire token.
     Coding,
-    /// The data repository's push.
     DataPush,
     /// `[[secretary.repos]]`.
     Repos,
-    /// The box's one Google Cloud client.
     GoogleClient,
-    /// A Google account's grant, by the account.
+    /// By the account's address.
     GoogleGrant(String),
-    /// A `[[plugins]]` manifest's credential.
     Plugin(PluginName),
 }
 
 impl Declaration {
-    /// Whether a table declares it; no table declares the model's credential.
+    /// No table declares the model's credential.
     #[must_use]
     pub(crate) const fn by_a_table(&self) -> bool {
         !matches!(self, Self::Model)
     }
 
-    /// Whether a card of its own asks for it, since only a sign-in stores it.
+    /// Whether a card of its own asks for it, because only a sign-in stores it.
     #[must_use]
     pub const fn own_card(&self) -> bool {
         matches!(
@@ -40,13 +34,11 @@ impl Declaration {
         )
     }
 
-    /// Whether a Secret card asks for it.
     #[must_use]
     pub const fn by_a_secret_card(&self) -> bool {
         self.by_a_table() && !self.own_card()
     }
 
-    /// Whether it declares a GitHub token.
     #[must_use]
     pub const fn github(&self) -> bool {
         match self {
@@ -60,7 +52,7 @@ impl Declaration {
         }
     }
 
-    /// Whether its secret is asked for: the data push only while `pushed` needs its token.
+    /// The data push is in use only while `pushed` needs its token.
     #[must_use]
     pub fn in_use(&self, pushed: &Pushed) -> bool {
         match self {
@@ -75,7 +67,6 @@ impl Declaration {
         }
     }
 
-    /// What declares it, as a sentence names it.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {

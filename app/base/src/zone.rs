@@ -1,9 +1,7 @@
 //! The owner's zone: where a wall-clock reading (a day, an hour) is taken.
 //!
-//! An instant is a point in time, stored naive and UTC by definition; it never needs a zone. A
-//! day is the owner's, read in the named zone the instance gives (`[persona] zone`), never the
-//! machine's or a device's; it is his, so it moves when he does, and daylight saving is the
-//! zone's own rule, never a hand edit.
+//! An instant is naive and UTC and needs no zone; a day is the owner's, read in `[persona] zone`,
+//! never the machine's or a device's.
 
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeZone as _};
 use chrono_tz::Tz;
@@ -15,19 +13,13 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Zone(Tz);
 
-/// A name no zone has.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("{0:?} names no time zone (an IANA name, such as America/New_York)")]
 pub struct NoZone(pub String);
 
 impl Zone {
-    /// UTC itself.
     pub const UTC: Zone = Zone(Tz::UTC);
 
-    /// The zone `name` names.
-    ///
-    /// # Errors
-    /// [`NoZone`] for a name the zone database does not hold.
     pub fn named(name: &str) -> Result<Self, NoZone> {
         name.parse::<Tz>()
             .map(Zone)
@@ -35,8 +27,7 @@ impl Zone {
     }
 
     /// The zone a person most likely meant by `text`: the name in another case, or a city alone
-    /// (`London` → `Europe/London`, `new york` → `America/New_York`), spaces read as `_`. Only
-    /// names of a region and a city are offered, so `GB` or `Etc/GMT` never are.
+    /// (`new york` → `America/New_York`); only region/city names, never `GB` or `Etc/GMT`.
     #[must_use]
     pub fn closest(text: &str) -> Option<Self> {
         let wanted = text.trim().replace(' ', "_").to_lowercase();
@@ -59,7 +50,6 @@ impl Zone {
             .map(Zone)
     }
 
-    /// Its name, as the instance spells it.
     #[must_use]
     pub fn name(self) -> &'static str {
         self.0.name()
@@ -78,7 +68,6 @@ impl Zone {
             .local_minus_utc()
     }
 
-    /// The owner's day at `instant`.
     #[must_use]
     pub fn day(self, instant: NaiveDateTime) -> NaiveDate {
         self.wall(instant).date()
@@ -126,18 +115,15 @@ impl<'de> Deserialize<'de> for Zone {
     }
 }
 
-/// When an act is written and where the owner's days are read: what lowers a day (a deadline, a
-/// deferral, today) to an instant.
+/// When an act is written and the owner's zone: what lowers a day to an instant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Moment {
     /// The instant, UTC.
     pub at: Datetime,
-    /// The owner's zone.
     pub zone: Zone,
 }
 
 impl Moment {
-    /// The owner's day at this moment.
     #[must_use]
     pub fn today(self) -> NaiveDate {
         self.zone.day(prodrome_core::fpl::instant_of(self.at))
@@ -189,7 +175,8 @@ mod tests {
         );
         assert_eq!(new_york().east_at(at("2026-10-31 12:00")), -4);
         assert_eq!(new_york().east_at(at("2026-11-02 12:00")), -5);
-        // 00:30 EST on the 2nd is still the 1st an hour earlier in EDT terms: the day is the zone's.
+        // 00:30 EST on the 2nd is still the 1st an hour earlier in EDT terms: the day is the
+        // zone's.
         assert_eq!(new_york().day(at("2026-11-02 04:30")), sunday);
         assert_eq!(new_york().day(at("2026-11-02 05:00")), day("2026-11-02"));
     }

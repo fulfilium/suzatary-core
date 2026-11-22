@@ -1,8 +1,9 @@
 //! The registry of every store that holds a copy of a conversation's words.
 
-/// A store holding a copy of a conversation's words. For each slot it kills,
-/// `suzatary_lines::secretary::transcript::sweep` empties each [`Fate::Deleted`] holder in order; a
-/// copy it could not delete keeps the key for the next sweep.
+/// A store holding a copy of a conversation's words.
+/// The sweep (`suzatary_lines::secretary::transcript::sweep`) empties each [`Fate::Deleted`] holder
+/// in order.
+/// A copy the sweep could not delete keeps the key alive for the next sweep.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Holder {
     /// The words opened in memory.
@@ -11,7 +12,7 @@ pub enum Holder {
     Renders,
     /// The model CLI's session files, by the session ids the lines record.
     ModelSessions,
-    /// The keys that open the sealed words, destroyed last.
+    /// The keys that open the sealed words, destroyed after every copy before them.
     Keys,
     /// The keys in the vault's daily snapshots, which open the data repository's ciphertext.
     Vault,
@@ -67,8 +68,8 @@ impl Holder {
             // `scripts/vault-backup.sh` keeps seven daily snapshots.
             Holder::Vault => Fate::Remains("for up to seven days"),
             Holder::DataHistory => Fate::Remains("until that history is rewritten"),
-            // `web/src/prodrome/ownlines.ts`: kept until the box answers them; a revoked
-            // device's wipe deletes them with every database of the origin.
+            // `web/src/prodrome/ownlines.ts` keeps them until the box answers; a revoked device's
+            // wipe deletes them.
             Holder::DeviceLines => {
                 Fate::Remains("on that device until it hands them over, or its wipe")
             }
@@ -80,8 +81,7 @@ impl Holder {
 mod tests {
     use crate::secretary::erasure::Erasure;
 
-    /// Law: the erase question names every holder, and how long each copy out of the box's reach
-    /// stays.
+    /// Law: the erase question names every holder, and how long each copy out of reach stays.
     #[test]
     fn the_erase_question_names_every_holder_and_what_remains() {
         let asked = Erasure::for_good();

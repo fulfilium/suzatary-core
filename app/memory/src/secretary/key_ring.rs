@@ -1,19 +1,17 @@
-//! The keys a replica was given, as the store's pull hands them: each key's bytes in hex under
-//! its name. A tab reads its lines through one, as the box reads through its key store.
+//! The keys a replica was given, as the store's pull hands them: each key's bytes in hex under its
+//! name.
 
 use std::collections::BTreeMap;
 
 use crate::secretary::locked_text::{KEY_BYTES, KeyName, TextKey};
 use crate::secretary::words::{Gone, Words};
 
-/// Keys by name; a name given bytes that are not its key is not held. It prints as each key's
-/// bytes under its name, for a snapshot of a replica, and reads back only where every name is
-/// its bytes' own.
+/// Keys by name; a name given bytes that are not its key is not held, and the ring zeroes its bytes
+/// on drop.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "BTreeMap<KeyName, [u8; KEY_BYTES]>")]
 pub struct KeyRing(BTreeMap<KeyName, [u8; KEY_BYTES]>);
 
-/// A key whose bytes are not the key its name names.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("the bytes under {0} are not the key it names")]
 pub struct NotItsKey(KeyName);
@@ -43,7 +41,6 @@ impl Drop for KeyRing {
 }
 
 impl KeyRing {
-    /// The keys `given` names, each kept only when its bytes are the key its name names.
     #[must_use]
     pub fn of(given: &BTreeMap<KeyName, String>) -> Self {
         Self(
@@ -57,8 +54,7 @@ impl KeyRing {
         )
     }
 
-    /// The keys `given` names joined in, each kept only when its bytes are the key its name names,
-    /// and `gone` taken out; the names whose standing moved, held or not.
+    /// Joins `given` and zeroes `gone`; returns the names whose standing moved.
     pub fn change(
         &mut self,
         given: &BTreeMap<KeyName, String>,
@@ -79,7 +75,7 @@ impl KeyRing {
         moved
     }
 
-    /// These keys replaced by `ring`'s; the names held before or after and not both.
+    /// Returns the names held before or after and not both.
     pub fn replace(&mut self, mut ring: KeyRing) -> std::collections::BTreeSet<KeyName> {
         let was = KeyRing(std::mem::replace(&mut self.0, std::mem::take(&mut ring.0)));
         let came = self.0.keys().filter(|name| !was.holds(name));
@@ -87,13 +83,11 @@ impl KeyRing {
         came.chain(went).cloned().collect()
     }
 
-    /// Whether the key named `name` is held.
     #[must_use]
     pub fn holds(&self, name: &KeyName) -> bool {
         self.0.contains_key(name)
     }
 
-    /// The key named `name`, or missing.
     #[must_use]
     pub fn key(&self, name: &KeyName) -> Words<TextKey> {
         self.0
@@ -104,7 +98,6 @@ impl KeyRing {
 }
 
 impl KeyRing {
-    /// Every key, by name.
     pub fn iter(&self) -> impl Iterator<Item = (&KeyName, &[u8; KEY_BYTES])> {
         self.0.iter()
     }

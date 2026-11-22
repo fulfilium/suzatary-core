@@ -1,21 +1,17 @@
 use prodrome_core::sign::PublicKey;
 
-/// Why the history does not prove an object's actor wrote it: the box's refusal, and the
-/// reading's sentence.
+/// Why the history does not prove an object's actor wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unproven {
-    /// No signature of it at all.
     Unsigned,
     /// Signed, and no signature verifies over its name under its key.
     Forged,
     /// Signed by a key that verifies and that no registration the root signed gives its actor.
     Untrusted {
-        /// The key, as it signed.
         key: PublicKey,
     },
     /// Signed by its actor's key after, beside or unseen by that key's revocation.
     Revoked {
-        /// The key, as it signed.
         key: PublicKey,
     },
 }
@@ -43,7 +39,6 @@ impl Unproven {
     }
 }
 
-/// A key as a sentence names one: enough to tell two apart.
 pub(super) fn short(key: &PublicKey) -> String {
     key.as_str().chars().take(12).collect::<String>() + "…"
 }

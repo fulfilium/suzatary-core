@@ -1,10 +1,5 @@
-//! The tap: the one door out of a conversation and into the world, minted only from a request
-//! the door proved.
-//!
-//! A route is not generic over a capability record, so the function that sends takes a
-//! `&Tap`. Its one constructor takes a [`Trusted`], a request signed by a device key the history
-//! trusts for the gate's actor, which loopback never makes (it names no actor) and which no route
-//! holds without the door having read the trust.
+//! The tap: the one door out of a conversation into the world; the function that sends takes a
+//! `&Tap`, minted only from a [`Trusted`] request, which loopback never makes.
 
 use prodrome_core::event::Actor;
 
@@ -30,8 +25,7 @@ pub struct Tap {
 }
 
 impl Tap {
-    /// Mints one from a request the door proved, made from `seat`, checking the CSRF triple:
-    /// whom it is for is the actor the request was proven for.
+    /// Mints one for the actor the request was proven for, checking the CSRF triple.
     ///
     /// # Errors
     /// [`Refusal::forbidden`] for a request without the app's own headers.
@@ -43,13 +37,12 @@ impl Tap {
         })
     }
 
-    /// Where it was tapped.
     #[must_use]
     pub fn seat(&self) -> Seat {
         self.seat
     }
 
-    /// Who tapped it: the deployment's mapping of the peer, never a request field.
+    /// The deployment's mapping of the peer, never a request field.
     #[must_use]
     pub fn who(&self) -> &Actor {
         &self.who

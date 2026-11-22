@@ -1,7 +1,4 @@
-//! The connection algebra's laws, over generated instances and connections: a connection is read
-//! back out of the tables it writes, removing it leaves what was there, a duplicate is refused,
-//! the reading is a function of the tables as sets, every secret a step asks for is a name the
-//! deployment may set, and meeting a step never moves a standing back.
+//! The connection algebra's laws, over generated instances and connections.
 
 use prodrome_core::literal::codec::Literal as _;
 use proptest::prelude::*;
@@ -49,8 +46,7 @@ fn connection() -> impl Strategy<Value = Connection> {
     ]
 }
 
-/// A plugin the operator declared by hand, so a generated instance holds manifests no template
-/// would write: an `ics` with another component and a widened origin, and another plugin.
+/// Plugins declared by hand, so a generated instance holds manifests no template would write.
 fn by_hand() -> impl Strategy<Value = Vec<Manifest>> {
     let ics = Manifest::declare(
         "ics",
@@ -80,7 +76,7 @@ fn by_hand() -> impl Strategy<Value = Vec<Manifest>> {
     ]
 }
 
-/// An instance: tables written by hand, then by connections, refusals ignored.
+/// Tables written by hand, then by connections, with refusals ignored.
 fn declared() -> impl Strategy<Value = Declared> {
     (by_hand(), proptest::collection::vec(connection(), 0..8)).prop_map(|(plugins, connections)| {
         let start = Declared {
@@ -126,7 +122,7 @@ fn health(results: &[(u32, bool)]) -> Option<Health> {
 }
 
 proptest! {
-    /// A connection written into an instance is read back out of it, whole.
+    /// A connection written into an instance is read back out of it whole.
     #[test]
     fn a_connection_is_read_back_out_of_its_tables(declared in declared(), connection in connection()) {
         if let Ok(written) = declared.with(&connection) {
@@ -135,8 +131,8 @@ proptest! {
         }
     }
 
-    /// Removing what was added leaves the tables as they were but for a plugin's manifest the
-    /// add declared, which stays, and adding twice is refused.
+    /// Removing what was added leaves the tables as they were, except a manifest the add declared;
+    /// adding twice is refused.
     #[test]
     fn removing_what_was_added_leaves_what_was_there(declared in declared(), connection in connection()) {
         let moved = declared.connections().contains_key(&connection.key());
@@ -157,9 +153,8 @@ proptest! {
         }
     }
 
-    /// Only a template no table holds is refused on an instance without its key, and a held key
-    /// is written over only by a connection that moves it: the address's one account, its folder
-    /// kept, synced as the new template says.
+    /// Only a template no table holds is refused on a new key; a held key is written over only by
+    /// a connection that moves it, keeping the account's folder.
     #[test]
     fn a_new_connection_is_written_unless_no_table_holds_it(declared in declared(), connection in connection()) {
         let held = declared.connections().get(&connection.key()).cloned();
@@ -183,15 +178,13 @@ proptest! {
         }
     }
 
-    /// The connections are a function of the tables as sets: no order of the file's entries
-    /// moves them.
+    /// The connections are a function of the tables as sets.
     #[test]
     fn the_reading_is_a_function_of_the_tables_as_sets(declared in declared()) {
         prop_assert_eq!(declared.connections(), reversed(&declared).connections());
     }
 
-    /// Every secret a connection's steps ask for is a name its deployment declares, so its card
-    /// mints: deriving the settable names is a homomorphism over the connections.
+    /// Every secret a connection's steps ask for is a name its deployment declares.
     #[test]
     fn every_secret_a_step_asks_for_is_settable(declared in declared()) {
         let settables = Settables::derive("MODEL_TOKEN", declared.channels.iter().copied(),
@@ -217,8 +210,7 @@ proptest! {
         prop_assert_eq!(serde_json::from_str::<Connection>(&json).ok(), Some(connection));
     }
 
-    /// Meeting a step never makes a standing ask more: more secrets resolving, the sign-in held
-    /// or the check once succeeded leave it below where it was, in the join's order.
+    /// Meeting a step never makes a standing ask more, in the join's order.
     #[test]
     fn meeting_a_step_never_makes_a_standing_ask_more(
         connection in connection(),
@@ -259,8 +251,7 @@ proptest! {
     }
 }
 
-/// Every template is the catalog's under its own name, spelled once, and its help links are
-/// https, so a card never draws another scheme as a button.
+/// Every template is the catalog's under its own unique name, and its help links are https.
 #[test]
 fn the_catalog_is_one_template_per_name() {
     for (template, id) in CATALOG.iter().zip(TemplateId::ALL) {

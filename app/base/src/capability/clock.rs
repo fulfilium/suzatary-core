@@ -1,5 +1,3 @@
-//! The wall clock, as a capability rather than a call.
-
 use super::Datetime;
 
 /// The wall clock, taken as a capability so a test can fold at a fixed instant.

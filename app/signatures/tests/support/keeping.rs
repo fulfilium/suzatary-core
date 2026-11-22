@@ -7,7 +7,7 @@ use suzatary_store::store::Prodrome;
 use super::{Keeper, Keeping, Keyed};
 
 impl<'a> Keeping<Keeper<'a>> {
-    /// Each of `stores` a keyed chain, named `kept0`, `kept1`, … in order.
+    /// Named `kept0`, `kept1`, … in order.
     ///
     /// # Panics
     /// Never: each name is a slug.

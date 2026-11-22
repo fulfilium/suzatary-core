@@ -1,13 +1,8 @@
-//! The chains a deployment names, one store per concern, each with its own trust policy and
-//! roster.
+//! The chains a deployment names, each with its own trust policy and roster.
 //!
-//! The policy is per chain and the door is not: who may open the app is the deployment's
-//! (`suzatary_connect::deployment::Deployment`), while whose events bind is a store's, because one
-//! chain's untrusted agent is not the other's.
+//! Who may open the app is the deployment's choice; whose events bind is each chain's.
 //!
-//! Order is meaning here: the first chain is what the bare `/api/…` paths, the briefing, the
-//! document and every verb with no `--chain` serve, so [`Chains`] is an ordered non-empty list,
-//! not a map.
+//! The first chain is what a path or a verb with no chain serves, so [`Chains`] is ordered.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,27 +10,18 @@ use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::sign::{PublicKey, Registrar};
 
-/// A chain's name, one vocabulary for the instance file, a URL segment and a `--chain`.
-///
-/// A slug because it is a path segment: that refuses `..`, an empty segment and anything a
-/// router would have to normalise before matching.
+/// A chain's name: a slug, so a path segment refuses `..` and anything a router normalises.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 #[serde(try_from = "String", into = "String")]
 pub struct ChainName(String);
 
-/// A name that is not a slug.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a chain name is 1-32 characters of a-z, 0-9 and -, starting with a letter: {0:?}")]
 pub struct NotAName(pub String);
 
 impl ChainName {
-    /// Parse a slug.
-    ///
-    /// # Errors
-    /// When it is empty, too long, does not start with a lowercase letter, or
-    /// holds anything but lowercase letters, digits and hyphens.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAName> {
         let text = text.into();
         let ok = matches!(text.len(), 1..=32)
@@ -50,7 +36,6 @@ impl ChainName {
         }
     }
 
-    /// The name as it is spelled everywhere.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -77,23 +62,17 @@ impl std::fmt::Display for ChainName {
 }
 
 /// One chain's own rules: whose events bind, and which actors it recognises.
-///
-/// It carries no path: where a chain lives is the binary's business, so the library never
-/// holds a directory.
+/// It carries no path: where a chain lives is the binary's business.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChainPolicy {
-    /// The name, as a URL segment and a `--chain` spell it.
     pub name: ChainName,
     /// This chain's whole trust policy: actors whose events are recorded, surfaced for
     /// confirmation, and inert to the fold.
     pub untrusted: Untrusted,
     /// Every actor this chain recognises; a name on a write is tested against it.
     pub roster: BTreeSet<Actor>,
-    /// The ROOT key whose signatures make a key object count (SPEC §5): every write must be
-    /// proven by a key it registered, every device request signed by one, and every deployment
-    /// declares one.
+    /// The ROOT key whose signatures make a key object count (SPEC §5).
     pub root: PublicKey,
-    /// The name each of this deployment's actors writes under here.
     pub naming: Naming,
 }
 
@@ -114,9 +93,7 @@ pub enum Naming {
      store names only a public name ([[chains]] public_names)"
 )]
 pub struct Unnamed {
-    /// The chain.
     pub chain: String,
-    /// The actor.
     pub actor: String,
 }
 
@@ -132,9 +109,6 @@ impl ChainPolicy {
 
     /// The name `actor`'s events carry on this chain: its own on a private chain; on a public
     /// one, its own where that is already a public name (on the roster), else its public name.
-    ///
-    /// # Errors
-    /// An actor with no public name, on a public chain.
     pub fn named(&self, actor: &Actor) -> Result<Actor, Unnamed> {
         match &self.naming {
             Naming::AsActs => Ok(actor.clone()),
@@ -166,34 +140,24 @@ impl ChainPolicy {
     }
 }
 
-/// Every chain this deployment serves, in the file's order, with the first one distinguished.
-///
-/// A head and a tail, not a `Vec`, so an empty list cannot be built and [`Chains::first`]
-/// cannot fail. Names are unique by construction in [`Chains::of`], so a name picks one chain.
+/// Every chain in the file's order: a head and a tail, so the list is never empty.
+/// [`Chains::of`] makes the names unique.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chains {
     /// The first: what an unnamed chain means.
     first: ChainPolicy,
-    /// The rest, in the file's order.
     rest: Vec<ChainPolicy>,
 }
 
-/// A list of chains that is not one.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotChains {
-    /// No chains at all.
     #[error("a deployment names at least one chain")]
     Empty,
-    /// Two entries with one name.
     #[error("two chains are named {0:?}; a name is how a route and a verb pick one")]
     Twice(String),
 }
 
 impl Chains {
-    /// Build the list, refusing an empty one and a repeated name.
-    ///
-    /// # Errors
-    /// [`NotChains::Empty`] and [`NotChains::Twice`].
     pub fn of(policies: Vec<ChainPolicy>) -> Result<Self, NotChains> {
         let mut walking = policies.into_iter();
         let first = walking.next().ok_or(NotChains::Empty)?;
@@ -208,31 +172,25 @@ impl Chains {
         Ok(Self { first, rest })
     }
 
-    /// The first chain: what the bare paths, the briefing and a verb with no
-    /// `--chain` mean.
     #[must_use]
     pub fn first(&self) -> &ChainPolicy {
         &self.first
     }
 
-    /// One chain by name, or nothing.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&ChainPolicy> {
         self.iter().find(|policy| policy.name.as_str() == name)
     }
 
-    /// Every chain, in the file's order.
     pub fn iter(&self) -> impl Iterator<Item = &ChainPolicy> {
         std::iter::once(&self.first).chain(&self.rest)
     }
 
-    /// Every name, in the file's order.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
         self.iter().map(|policy| policy.name.as_str()).collect()
     }
 
-    /// How many. At least one.
     #[must_use]
     pub fn count(&self) -> usize {
         1 + self.rest.len()

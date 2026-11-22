@@ -5,36 +5,28 @@ use crate::connect::{ROUTINE_TOKEN, RoutineId};
 /// How to find one secret's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Help {
-    /// Where the value is found.
     pub text: &'static str,
     /// The issuing page, always https.
     pub link: Option<String>,
 }
 
-/// Where a secret's value is issued.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
-    /// No page is known.
     Unknown,
-    /// One fixed page.
     At(&'static str),
     /// The page of the routine `[coding]` declares.
     Routine,
 }
 
-/// A secret's words as data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Words {
     /// What the owner calls it; `{label}` is a plugin link's label.
     pub label: &'static str,
-    /// Where the value is found.
     pub text: &'static str,
-    /// Where it is issued.
     pub page: Page,
 }
 
 impl Help {
-    /// The help, or `None` for an unknown name or undeclared routine.
     #[must_use]
     pub fn of(name: &str, routine: Option<&RoutineId>) -> Option<Self> {
         let Words { text, page, .. } = Words::of(name)?;
@@ -68,7 +60,6 @@ impl Help {
 }
 
 impl Words {
-    /// The template's words for `name`, else this table's.
     fn of(name: &str) -> Option<Self> {
         crate::connect::secret_words(name).or_else(|| {
             match name {

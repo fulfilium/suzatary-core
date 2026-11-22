@@ -1,7 +1,5 @@
-//! A replica's rows in the device's form: what every store's snapshot and frames print of a row
-//! and of a move of its rows, each name as its 32 bytes rather than 64 hex characters. A store
-//! gives how one of its nodes and its keys print ([`RowForm`]'s `N` and `K`); the generation, the
-//! box's words and the frontier print the same for every store.
+//! A replica's rows and moves as the device stores them, each name as its 32 bytes rather than
+//! 64 hex characters.
 
 use std::collections::BTreeSet;
 
@@ -14,10 +12,8 @@ use crate::replica::pulling::Delta;
 use crate::replica::row::{Keys, Row};
 use crate::replica::word::Word;
 
-/// A name's 32 bytes.
 pub type Name = [u8; 32];
 
-/// A row: its nodes as `N` print, its keys as `K`.
 #[derive(Serialize, Deserialize)]
 pub struct RowForm<N, K> {
     generation: u64,
@@ -42,33 +38,25 @@ struct FrontierForm {
     digest: Name,
 }
 
-/// A move of the rows, its rows as `R` print and each key a purge let go as `G`.
 #[derive(Serialize, Deserialize)]
 pub enum DeltaForm<R, G> {
-    /// [`Delta::Piece`].
     Piece {
         /// The landings before it.
         landings: u64,
-        /// What it brought.
         row: R,
     },
-    /// [`Delta::Landed`].
     Landed {
         /// The landings, this one included.
         landings: u64,
-        /// What landed.
         row: R,
     },
-    /// [`Delta::StartedOver`].
     StartedOver {
         /// The generation started.
         generation: u64,
     },
-    /// [`Delta::Forgot`].
     Forgot(Vec<G>),
 }
 
-/// `row` as it prints, each node through `node` and its keys through `keys`.
 pub fn row_form<N: Node, K: Keys, NF, KF>(
     row: &Row<N, K>,
     node: impl Fn(&N) -> NF,
@@ -100,10 +88,6 @@ pub fn row_form<N: Node, K: Keys, NF, KF>(
     }
 }
 
-/// The row `form` prints, each node read through `node` and its keys through `keys`.
-///
-/// # Errors
-/// Why a node, the keys, a word or the frontier is not one a row holds.
 pub fn row_of<N: Node, K: Keys, NF, KF>(
     form: RowForm<NF, KF>,
     node: impl Fn(NF) -> Result<N, String>,
@@ -140,7 +124,6 @@ pub fn row_of<N: Node, K: Keys, NF, KF>(
     ))
 }
 
-/// `delta` as it prints, its rows through `row` and each key it let go through `gone`.
 pub fn delta_form<N: Node, K: Keys, R, G>(
     delta: &Delta<N, K>,
     row: impl Fn(&Row<N, K>) -> R,
@@ -162,10 +145,6 @@ pub fn delta_form<N: Node, K: Keys, R, G>(
     }
 }
 
-/// The delta `form` prints, its rows read through `row` and each key through `gone`.
-///
-/// # Errors
-/// Why a row or a key does not read.
 pub fn delta_of<N: Node, K: Keys, R, G>(
     form: DeltaForm<R, G>,
     row: impl Fn(R) -> Result<Row<N, K>, String>,
@@ -187,8 +166,8 @@ pub fn delta_of<N: Node, K: Keys, R, G>(
     })
 }
 
-/// The 32 bytes 64 hex digits spell. Every name printed here is a [`Hash`](struct@Hash) or a key's name, or
-/// was parsed as one where its node arrived, so each is 64 lowercase hex and every digit reads.
+/// The 32 bytes 64 lowercase hex digits spell; every caller passes a [`Hash`](struct@Hash) or a
+/// key's name.
 #[must_use]
 pub fn bytes(hex: &str) -> Name {
     let mut out = [0; 32];
@@ -206,18 +185,12 @@ fn nibble(digit: u8) -> u8 {
     }
 }
 
-/// The name 32 bytes spell.
-///
 /// # Errors
 /// Never for 32 bytes; kept as [`Hash::new`]'s refusal.
 pub fn hash(bytes: &Name) -> Result<Hash, String> {
     Hash::new(hex::encode(bytes)).map_err(|e| e.to_string())
 }
 
-/// The names each 32 bytes spell.
-///
-/// # Errors
-/// [`hash`]'s.
 pub fn hashes(names: &[Name]) -> Result<BTreeSet<Hash>, String> {
     names.iter().map(hash).collect()
 }

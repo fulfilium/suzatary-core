@@ -1,32 +1,27 @@
-//! How a line's slots of words are read: by name, each opened by the key its name answers, or
-//! gone as the reading says. A key store read as itself is one; an erasure's reading over it and
-//! the box's cache of opened words are others, so every reader of a line reads through one door.
+//! How a line's slots of words are read; every reader of a line reads through this one door.
 
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::words::{Gone, Words};
 
-/// The words of a slot locked under the key `name` names, `open` opening them with a key: `None`
-/// for a key that does not open them or a seal with no bytes, and words gone only for words that
-/// open and are withheld. The slot's binding (its associated data) is made inside `open`, so a
-/// reader that holds no key makes none.
+/// The words of a slot locked under the key `name` names; `open` returns `None` for a key that does
+/// not open them.
+/// The slot's associated data is made inside `open`, so a reader that holds no key makes none.
 pub trait Slots {
-    /// The slot's words, or why they are not here.
     fn words(
         &self,
         name: &KeyName,
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords>;
 
-    /// Whether the slot opens.
     fn opens(
         &self,
         name: &KeyName,
         read: &dyn Fn() -> Words<LineWords>,
         unlocks: &dyn Fn(&TextKey) -> bool,
     ) -> bool {
-        // Not missing as `read` reads the words, through the door: a reader that keeps the words
-        // it reads asks this way, so nothing it keeps went around the scrub.
+        // A reader that keeps the words asks through `read`, so nothing it keeps went around the
+        // scrub.
         let _ = (name, unlocks);
         !matches!(
             read(),
@@ -37,8 +32,7 @@ pub trait Slots {
     }
 }
 
-/// A key store read as itself: each slot opened by the key its name answers; a key that does not
-/// open its slot reads as missing.
+/// A key store read as itself: a key that does not open its slot reads as missing.
 impl<F: Fn(&KeyName) -> Words<TextKey>> Slots for F {
     fn words(
         &self,
@@ -57,8 +51,8 @@ impl<F: Fn(&KeyName) -> Words<TextKey>> Slots for F {
         _: &dyn Fn() -> Words<LineWords>,
         unlocks: &dyn Fn(&TextKey) -> bool,
     ) -> bool {
-        // A key store answers by its key alone, reading no words, so a slot under older rules is
-        // not scrubbed to answer.
+        // A key store answers by its key alone, so a slot under older rules is not scrubbed to
+        // answer.
         match self(name) {
             Words::Kept { kept } => unlocks(&kept),
             Words::Gone { gone } => !matches!(gone, Gone::Missing),

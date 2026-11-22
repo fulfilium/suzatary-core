@@ -1,13 +1,10 @@
 //! Todos, subtodos and groups as one tree of terms.
 //!
-//! A [`Classifier`] sends a todo to [`Paths`]; the paths build a [`Trie`]; the
-//! trie's catamorphism builds a term per node ([`term`]): a todo is
-//! `Ref(todo)`, a group the `Conj` of its children at p = −4. Nothing here
-//! computes a number: `crate::view::tree` links each term and asks the core.
+//! A [`Classifier`] sends a todo to [`Paths`], the paths build a [`Trie`], and [`term`] builds
+//! a term per node. Nothing here computes a number.
 //!
-//! A subtodo is a `Ref` in its parent's spec, so ancestry is derived from the
-//! specs, never stored. A key (category, urgency) classifies a subtree by its
-//! root: a subtodo sits wherever its parent does.
+//! A subtodo is a `Ref` in its parent's spec, so ancestry is derived, never stored.
+//! A key classifies a subtree by its root, so a subtodo sits wherever its parent does.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,9 +14,7 @@ use prodrome_core::term::{Term, TermF};
 
 /// An associative combine with a unit.
 pub trait Monoid {
-    /// The unit.
     fn empty() -> Self;
-    /// The combine.
     #[must_use]
     fn combine(self, other: Self) -> Self;
 }
@@ -27,14 +22,11 @@ pub trait Monoid {
 /// A rose tree: `map` is its functor, `cata` its fold.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tree<A> {
-    /// This node's value.
     pub node: A,
-    /// Its subtrees, in order.
     pub children: Vec<Tree<A>>,
 }
 
 impl<A> Tree<A> {
-    /// The functor.
     pub fn map<B, F: FnMut(A) -> B>(self, f: &mut F) -> Tree<B> {
         Tree {
             node: f(self.node),
@@ -42,14 +34,12 @@ impl<A> Tree<A> {
         }
     }
 
-    /// The catamorphism.
     pub fn cata<B, F: FnMut(A, Vec<B>) -> B>(self, alg: &mut F) -> B {
         let children = self.children.into_iter().map(|c| c.cata(alg)).collect();
         alg(self.node, children)
     }
 
-    /// Every node beside what `alg` folds its subtree to: the cata that keeps
-    /// its intermediate results.
+    /// The cata that keeps each node beside what `alg` folds its subtree to.
     pub fn scan<B, F: FnMut(&A, &[&B]) -> B>(self, alg: &mut F) -> Tree<(A, B)> {
         self.cata(&mut |node, children: Vec<Tree<(A, B)>>| {
             let below: Vec<&B> = children.iter().map(|c| &c.node.1).collect();
@@ -71,23 +61,19 @@ impl<A> Tree<A> {
     }
 }
 
-/// Where a value falls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Band {
-    /// Below 0.5, or no value at all: a reference that does not link is a
-    /// problem to fix.
+    /// Below 0.5, or a reference that does not link, which is a problem to fix.
     Problem,
     /// 0.5 to below 0.7.
     Watch,
     /// 0.7 and up.
     Fine,
-    /// No number: `∅`, the value of a todo with no function. Not a problem and
-    /// not fine, and after every priced band, as the core's list order puts it.
+    /// `∅`, a todo with no function: neither problem nor fine, and after every priced band.
     Unpriced,
 }
 
 impl Band {
-    /// The band of a worth.
     #[must_use]
     pub fn of(worth: &Result<Option<f64>, LinkError>) -> Band {
         match worth {
@@ -98,7 +84,6 @@ impl Band {
         }
     }
 
-    /// The section's name.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -110,13 +95,10 @@ impl Band {
     }
 }
 
-/// One step of a path: a group a key names, or the todo its subtodos sit
-/// under.
+/// One step of a path: a group a key names, or the todo its subtodos sit under.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Segment {
-    /// A category group.
     Category(String),
-    /// An urgency section.
     Band(Band),
     /// A todo, whose subtodos are its children.
     Todo(TodoId),
@@ -129,7 +111,6 @@ pub enum Segment {
 pub struct Path(Vec<Segment>);
 
 impl Path {
-    /// The path of one segment.
     #[must_use]
     pub fn one(segment: Segment) -> Path {
         Path(vec![segment])
@@ -164,13 +145,11 @@ impl Monoid for Path {
 pub struct Paths(BTreeSet<Path>);
 
 impl Paths {
-    /// A single path.
     #[must_use]
     pub fn one(path: Path) -> Paths {
         Paths(BTreeSet::from([path]))
     }
 
-    /// The paths.
     pub fn iter(&self) -> impl Iterator<Item = &Path> {
         self.0.iter()
     }
@@ -196,7 +175,6 @@ impl Monoid for Paths {
     }
 }
 
-/// One way to group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum By {
     /// The root's category.
@@ -208,13 +186,10 @@ pub enum By {
 }
 
 /// A classifier: the free monoid on [`By`], its unit the flat list.
-/// [`Classifier::paths`] interprets it, a homomorphism into [`Paths`] per
-/// route.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Classifier(Vec<By>);
 
 impl Classifier {
-    /// The classifier of one generator.
     #[must_use]
     pub fn by(by: By) -> Classifier {
         Classifier(vec![by])
@@ -297,10 +272,8 @@ pub struct Member {
     pub parents: BTreeSet<TodoId>,
 }
 
-/// The todos a tree places, by id.
 pub type Members = BTreeMap<TodoId, Member>;
 
-/// Each member's parents: the members whose spec holds a `Ref` to it.
 #[must_use]
 pub fn parents<'a>(
     specs: impl IntoIterator<Item = (&'a TodoId, Option<&'a Term>)>,
@@ -318,7 +291,6 @@ pub fn parents<'a>(
     out
 }
 
-/// Every todo a term references.
 #[must_use]
 pub fn refs(term: &Term) -> BTreeSet<&str> {
     let mut out = BTreeSet::new();
@@ -378,12 +350,9 @@ impl Trie {
     }
 }
 
-/// A node of the tree: the whole list, or a segment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Place {
-    /// The root.
     All,
-    /// A group or a todo.
     At(Segment),
 }
 

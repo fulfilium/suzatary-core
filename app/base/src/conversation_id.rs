@@ -12,20 +12,16 @@ pub struct ConversationId(String);
 /// Text that names no single held conversation.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unmatched {
-    /// No held id is or begins with it.
     #[error("no conversation is or begins with {0}")]
     None(String),
-    /// Several held ids begin with it.
     #[error("{count} conversations begin with {text}: type more of the id")]
     Several {
-        /// The text.
         text: String,
-        /// How many begin with it.
+        /// How many held ids begin with it.
         count: usize,
     },
 }
 
-/// A name that is not a slug.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "a conversation id is 1-64 characters of a-z, 0-9 and -, starting with a letter or digit, \
@@ -34,11 +30,6 @@ pub enum Unmatched {
 pub struct NotAnId(pub String);
 
 impl ConversationId {
-    /// Parse a slug.
-    ///
-    /// # Errors
-    /// When it is empty, too long, starts with a hyphen, or holds anything but
-    /// lowercase letters, digits and hyphens.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnId> {
         let text = text.into();
         // `new` is the page's address of a topic not yet opened (`#/secretary/new`).
@@ -58,9 +49,6 @@ impl ConversationId {
 
     /// The id among `held` that `text` names: that id itself, or the one held id `text` begins,
     /// so a person types a few of a conversation's 32 hex digits rather than all of them.
-    ///
-    /// # Errors
-    /// [`Unmatched`]: no held id is or begins with `text`, or several begin with it.
     pub fn among(text: &str, held: &[Self]) -> Result<Self, Unmatched> {
         if let Some(id) = held.iter().find(|id| id.0 == text) {
             return Ok(id.clone());
@@ -82,8 +70,7 @@ impl ConversationId {
         Self(format!("{}-{}", day.format("%Y-%m-%d"), daily.word()))
     }
 
-    /// Which daily round this is the conversation of, read back from [`ConversationId::daily`]'s
-    /// spelling; `None` for any other id.
+    /// The daily round this is the conversation of; `None` for any other id.
     #[must_use]
     pub fn daily_round(&self) -> Option<Daily> {
         let (day, word) = self.0.split_at_checked(10)?;
@@ -93,7 +80,6 @@ impl ConversationId {
             .find(|daily| word.strip_prefix('-') == Some(daily.word()))
     }
 
-    /// The name, as a path segment and a file stem spell it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -119,7 +105,6 @@ impl Daily {
         }
     }
 
-    /// What its conversation is called in a list.
     #[must_use]
     pub fn title(self) -> &'static str {
         match self {
@@ -173,7 +158,6 @@ prodrome_core::text_literal!(
 mod tests {
     use super::*;
 
-    /// A name is a path segment and a file stem.
     #[test]
     fn a_conversation_id_is_a_slug() {
         for good in ["2026-09-09-1", "brief", "a", "9", &"a".repeat(64)] {
@@ -196,8 +180,7 @@ mod tests {
         }
     }
 
-    /// An id is parsed on the way in, wherever it comes from, including a stored line somebody
-    /// could have edited.
+    /// An id is parsed whenever it is deserialised, including from an edited stored line.
     #[test]
     fn an_id_is_parsed_when_it_is_deserialised() {
         assert!(serde_json::from_str::<ConversationId>(r#""../etc""#).is_err());
@@ -209,8 +192,7 @@ mod tests {
         );
     }
 
-    /// A held id is named by itself or by a prefix only it begins with; a prefix two begin with,
-    /// or none, names nothing.
+    /// A held id is named by itself or by a prefix only it begins with.
     #[test]
     fn a_conversation_is_named_by_a_prefix_only_it_begins_with() {
         let held: Vec<ConversationId> = ["0a1b2c", "0a9f00", "default"]

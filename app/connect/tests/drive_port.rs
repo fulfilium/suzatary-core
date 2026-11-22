@@ -1,5 +1,4 @@
-//! The Drive's conformance suite over the in-memory Drive, on generated cases, and the suite
-//! catching an implementation that breaks a law.
+//! The Drive's conformance suite over the in-memory Drive, and over Drives that break a law.
 
 use proptest::prelude::*;
 use suzatary_base::drive_path::DriveFailure;
@@ -40,7 +39,6 @@ proptest! {
     }
 }
 
-/// A Drive whose second upload of a name fails: the suite names the law.
 struct RefusesSecond(Memory);
 
 impl Port for RefusesSecond {
@@ -80,7 +78,6 @@ fn a_drive_that_refuses_a_second_keep_breaks_never_replaces() {
     assert_eq!(broken.law, Law::NeverReplaces);
 }
 
-/// A Drive that hands back other bytes: the first law breaks.
 struct Forgets(Memory);
 
 impl Port for Forgets {

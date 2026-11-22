@@ -1,34 +1,21 @@
-//! The memory's history as one value: a two-phase set, the facts remembered and the facts
-//! forgotten, each by id; what stands is the first half minus the second, less every fact a
-//! consolidation replaced.
+//! The memory's history as a two-phase set: what stands is the remembered minus the forgotten, less
+//! every fact a consolidation replaced.
 //!
-//! Ordered by what it holds ([`Held`], inclusion of both halves), and a function of the object
-//! set: each fact's half is read off its register ([`crate::secretary::memory_event::LifeRegister`]), which
-//! is inflationary, so a larger history holds more and the union of two histories holds the join
-//! of what each does. Nothing here reads a fact's words; [`crate::secretary::memory::Memory`]
-//! joins them.
+//! It is a function of the object set, ordered by [`Held`]; nothing here reads a fact's words.
 //!
-//! A consolidation is a remembering whose provenance is its sources' ([`Provenance`]). Law 11
-//! (`app/stores/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
+//! Law 11 (`app/stores/tests/memory.rs`, `a_consolidation_replaces_its_sources`) has two clauses:
 //!
 //! 1. When every source stands, `live(h + C) = live(h) − from + {into}`, and the sources' words
 //!    are dead. One box refuses any other consolidation, under the memory's hold.
 //! 2. When a source rests on a forgotten fact, which only another replica's forgetting can make,
-//!    `live(h + C) = live(h)`: the consolidation reads forgotten, so its words are dead, and it
-//!    replaces nothing, so its other sources stand on as they did. A forgotten fact's words never
-//!    stand again inside another fact.
+//!    `live(h + C) = live(h)` and the consolidation's words are dead.
+//!    A forgotten fact's words never stand again inside another fact.
 //!
-//! Forgetting the consolidation itself is the owner's word on all of it: it reads forgotten and
-//! its sources stay replaced.
+//! A consolidation replaces its sources from the moment it is held, so no source stands beside it.
+//! Two rememberings of one number read as the least-named one, and the other's words are dead.
 //!
-//! A consolidation replaces its sources from the moment it is held, before every source is, so
-//! no source ever stands beside a consolidation of it; it stands itself once every source is
-//! held. Two rememberings of one number (two replicas counting alike) read as the least-named
-//! one; the other's words are named by nothing that stands, so they are dead, and its sources
-//! are replaced by nothing.
-//!
-//! Sources are numbered below their consolidation, so one pass in ascending order reads every
-//! fact's provenance, forgetting and sources once.
+//! Sources are numbered below their consolidation, so one pass in ascending order reads every fact
+//! once.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,7 +33,6 @@ use crate::secretary::salted_text::TextName;
 use crate::secretary::texts::{Liveness, Naming};
 use prodrome_core::schema::Schema;
 
-/// The memory's two-phase set.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TwoPhase {
     remembered: BTreeMap<FactId, Kept>,
@@ -56,58 +42,45 @@ pub struct TwoPhase {
     derived: Derived,
 }
 
-/// What the history says of each fact, read once from the two halves.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct Derived {
-    /// Each fact whose sources are all held, with its provenance.
+    /// Each fact whose sources are all held.
     provenance: BTreeMap<FactId, Provenance>,
-    /// Each fact that reads forgotten, with the forgotten fact it rests on (itself, or the least
-    /// source that reads forgotten).
+    /// Each fact that reads forgotten, with the forgotten fact it rests on.
     forgetting: BTreeMap<FactId, FactId>,
     /// Each consolidation's sources, at every depth.
     beneath: BTreeMap<FactId, BTreeSet<FactId>>,
-    /// Each fact a consolidation replaced, with those that did, unless the consolidation reads
-    /// forgotten through a source of its own.
+    /// Leaves out a consolidation that reads forgotten through a source of its own.
     replaced: BTreeMap<FactId, BTreeSet<FactId>>,
 }
 
-/// What a two-phase set holds, as its order sees it: the ids of each half. The records beside the
-/// ids are not ordered, so two histories that numbered one fact twice hold the same ids and still
-/// read apart.
+/// The ids of each half, as the order sees them; two histories that numbered one fact twice hold
+/// the same ids.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Held {
-    /// The facts remembered, standing or not.
+    /// Standing or not.
     pub remembered: BTreeSet<FactId>,
-    /// The facts forgotten.
     pub forgotten: BTreeSet<FactId>,
 }
 
-/// A remembering or a consolidation, as its event wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kept {
-    /// The object that wrote it.
     pub object: Hash,
     pub at: Datetime,
-    /// The name of its words in the text store.
     pub text: TextName,
-    /// About whom or what.
     pub kind: Kind,
-    /// How it was written.
     pub wrote: Wrote,
 }
 
-/// A forgetting, as its event wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gone {
     pub at: Datetime,
     pub by: Actor,
-    /// The memory's version it made.
     pub version: u64,
 }
 
 impl TwoPhase {
-    /// The history's reading: a fact is forgotten where its register reads a forgetting, and
-    /// remembered where its history holds a remembering, the least-named one should two disagree.
+    /// Two rememberings of one fact read as the least-named one.
     #[must_use]
     pub fn of(nodes: &[Node<MemoryEvent>]) -> Self {
         let folded = fold(nodes);
@@ -131,7 +104,6 @@ impl TwoPhase {
         Self::over(remembered, outranked, forgotten)
     }
 
-    /// The reading of these halves, every fact's derived once.
     fn over(
         remembered: BTreeMap<FactId, Kept>,
         mut outranked: BTreeSet<TextName>,
@@ -190,8 +162,8 @@ impl TwoPhase {
             }
         }
         for (&into, kept) in &remembered {
-            // A consolidation the owner forgot still replaced its sources; one that reads
-            // forgotten through a source replaced nothing that stands.
+            // A forgotten consolidation still replaced its sources; one forgotten through a source
+            // replaced nothing.
             if let Wrote::Merged { from, .. } = &kept.wrote
                 && derived.forgetting.get(&into).is_none_or(|on| *on == into)
             {
@@ -210,21 +182,17 @@ impl TwoPhase {
         }
     }
 
-    /// Every remembering, by fact, standing or not.
     #[must_use]
     pub fn remembered(&self) -> &BTreeMap<FactId, Kept> {
         &self.remembered
     }
 
-    /// Every forgetting, by fact.
     #[must_use]
     pub fn forgotten(&self) -> &BTreeMap<FactId, Gone> {
         &self.forgotten
     }
 
-    /// The facts that stand: remembered or consolidated, every source held, nothing it rests on
-    /// forgotten, and replaced by no consolidation, except one that reads forgotten through a
-    /// source of its own.
+    /// The facts that stand: every source held, nothing beneath forgotten, and not replaced.
     pub fn live(&self) -> impl Iterator<Item = (FactId, &Kept)> {
         self.remembered
             .iter()
@@ -236,15 +204,13 @@ impl TwoPhase {
             .map(|(&fact, kept)| (fact, kept))
     }
 
-    /// Where fact `fact` comes from: `None` for a fact not remembered, or consolidated from a fact
-    /// the history does not hold yet.
+    /// `None` also for a fact consolidated from a fact the history does not hold yet.
     #[must_use]
     pub fn provenance(&self, fact: FactId) -> Option<&Provenance> {
         self.derived.provenance.get(&fact)
     }
 
-    /// The forgetting fact `fact` reads forgotten by: its own, or for a consolidation, the
-    /// forgetting of the least source that reads forgotten.
+    /// Its own forgetting, or for a consolidation the least forgotten source's.
     #[must_use]
     pub fn forgetting(&self, fact: FactId) -> Option<&Gone> {
         self.forgotten.get(&fact).or_else(|| {
@@ -255,15 +221,14 @@ impl TwoPhase {
         })
     }
 
-    /// Every fact a consolidation replaced, with the facts that replaced it, leaving out a
-    /// consolidation that reads forgotten through a source of its own.
+    /// Leaves out a consolidation that reads forgotten through a source of its own.
     #[must_use]
     pub fn replaced(&self) -> &BTreeMap<FactId, BTreeSet<FactId>> {
         &self.derived.replaced
     }
 
-    /// Every fact whose words a forgetting of `fact` takes: the fact, every source it rests on,
-    /// and every consolidation resting on it, each with the round whose call wrote it.
+    /// Every fact whose words a forgetting of `fact` takes: its sources and every consolidation on
+    /// it.
     #[must_use]
     pub fn forgotten_with(&self, fact: FactId) -> BTreeMap<FactId, &Origin> {
         let above = self
@@ -286,9 +251,7 @@ impl TwoPhase {
             .collect()
     }
 
-    /// The texts the history names: each fact's, live while the fact stands or waits for a
-    /// source it names, and past once it is forgotten or replaced, or outranked by a less-named
-    /// remembering of its number.
+    /// A text is past once its fact is forgotten, replaced or outranked.
     #[must_use]
     pub fn naming(&self) -> Naming<crate::secretary::memory::Fact> {
         self.remembered
@@ -311,7 +274,7 @@ impl TwoPhase {
             .collect()
     }
 
-    /// The highest version any event made; 0 for an empty memory.
+    /// 0 for an empty memory.
     #[must_use]
     pub fn version(&self) -> u64 {
         let remembered = self.remembered.keys().map(|fact| fact.0);
@@ -322,7 +285,6 @@ impl TwoPhase {
         remembered.chain(forgotten).max().unwrap_or(0)
     }
 
-    /// What it holds, as its order sees it.
     #[must_use]
     pub fn held(&self) -> Held {
         Held {
@@ -331,9 +293,8 @@ impl TwoPhase {
         }
     }
 
-    /// The least set above both: each half's union, read again. Where both hold a remembering of
-    /// one fact, the least-named is kept and the other's words are outranked, as a reading of
-    /// both histories' objects together keeps them.
+    /// Where both hold a remembering of one fact, the least-named is kept, as reading both object
+    /// sets together does.
     #[must_use]
     pub fn join(self, other: Self) -> Self {
         let (mut remembered, mut outranked, mut forgotten) =
@@ -360,7 +321,7 @@ impl TwoPhase {
     }
 }
 
-/// Inclusion, half by half: a history read later holds every fact read earlier in each half.
+/// Inclusion, half by half.
 impl Order for Held {
     fn le(&self, other: &Self) -> bool {
         self.remembered.is_subset(&other.remembered) && self.forgotten.is_subset(&other.forgotten)

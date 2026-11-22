@@ -1,12 +1,7 @@
-//! A rule's version: the SHA-256 of everything that decides what the rule makes, so each value
-//! the rule makes can record the version it was made under, and a reader can find every value
-//! made under an older one.
+//! A rule's version: the SHA-256 of everything that decides what the rule makes.
 //!
-//! A rule is a type implementing [`Versioned`], which says what its parts are, for each of its
-//! cases: a rule that acts differently on two kinds of input has a version for each, so a change
-//! to one case leaves the values made under the other current. A part is best what the rule DOES
-//! on a fixed probe, which no list of names can miss; what a probe cannot reach is covered by the
-//! rule's revision, a number raised by hand when that code changes what the rule makes.
+//! Each case of a rule has its own version, so a change to one case leaves the other current.
+//! A part is best what the rule does on a fixed probe; [`Versioned::REVISION`] covers the rest.
 
 use std::marker::PhantomData;
 
@@ -30,18 +25,13 @@ pub trait Versioned: 'static {
     /// What decides how the rule acts on `case`, in a fixed order.
     fn parts(case: Self::Case) -> Vec<String>;
 
-    /// The version this build makes values of `case` under.
     fn current(case: Self::Case) -> &'static Version<Self>
     where
         Self: Sized;
 
     /// The rule's pin, which its test asserts: `Ok` when its version on `case` is `version` and
-    /// what it did on its test's fixed corpus, `behaviour`, hashes to `did`; otherwise what both
-    /// read now. When what the rule does moved and its version did not, a part the version
-    /// hashes missed the change: raise [`Versioned::REVISION`], then pin both.
-    ///
-    /// # Errors
-    /// [`Moved`] naming both readings, for a pin that no longer holds.
+    /// the hash of `behaviour` is `did`. If the behaviour moved and the version did not, raise
+    /// [`Versioned::REVISION`].
     fn pinned(
         case: Self::Case,
         behaviour: impl IntoIterator<Item = String>,
@@ -76,11 +66,8 @@ pub trait Versioned: 'static {
      not move with what it did, raise its REVISION; then pin both"
 )]
 pub struct Moved {
-    /// The rule.
     pub what: &'static str,
-    /// Its version now.
     pub version: String,
-    /// What it did on the corpus, hashed, now.
     pub did: String,
 }
 
@@ -90,20 +77,16 @@ pub struct Version<R> {
     of: PhantomData<fn() -> R>,
 }
 
-/// A name that is no SHA-256.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a version of {what} is 64 lowercase hex, got {got:?}")]
 pub struct NotAVersion {
-    /// The rule.
     pub what: &'static str,
-    /// What was read.
     pub got: String,
 }
 
 impl<R: Versioned> Version<R> {
-    /// The version of `R` on `case` as this build defines it: each of [`Versioned::parts`],
-    /// then [`Versioned::REVISION`], each ended by a NUL, which no part holds, so the parts split
-    /// one way. A rule's [`Versioned::current`] keeps this once per case.
+    /// The version of `R` on `case`: the SHA-256 of each part, then [`Versioned::REVISION`],
+    /// each ended by a NUL, which no part holds, so the parts split one way.
     #[must_use]
     pub fn of_parts(case: R::Case) -> Self {
         let mut hash = Sha256::new();
@@ -117,10 +100,6 @@ impl<R: Versioned> Version<R> {
         }
     }
 
-    /// A version read back, checked once.
-    ///
-    /// # Errors
-    /// [`NotAVersion`] for anything but 64 lowercase hex.
     pub fn new(hex: impl Into<String>) -> Result<Self, NotAVersion> {
         let hex = hex.into();
         if hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
@@ -136,7 +115,6 @@ impl<R: Versioned> Version<R> {
         }
     }
 
-    /// Whether this is the version this build makes values of `case` under.
     #[must_use]
     pub fn is_current(&self, case: R::Case) -> bool {
         self == R::current(case)
@@ -144,7 +122,6 @@ impl<R: Versioned> Version<R> {
 }
 
 impl<R: Versioned> Version<R> {
-    /// The version this build makes values of `case` under.
     #[must_use]
     pub fn current(case: R::Case) -> &'static Self {
         R::current(case)
@@ -152,7 +129,6 @@ impl<R: Versioned> Version<R> {
 }
 
 impl<R> Version<R> {
-    /// The hex.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.hex
@@ -234,7 +210,6 @@ impl<R: Versioned> Literal for Version<R> {
 
 /// Which version of `R` a stored value was made under.
 pub enum Under<R> {
-    /// The version named.
     Version(Version<R>),
     /// A version from before values of this kind recorded one.
     Unversioned,
@@ -304,13 +279,11 @@ impl<R> std::fmt::Debug for Under<R> {
 }
 
 impl<R: Versioned> Under<R> {
-    /// The version this build makes values of `case` under.
     #[must_use]
     pub fn current(case: R::Case) -> Self {
         Under::Version(R::current(case).clone())
     }
 
-    /// Whether the value was made under the version this build makes values of `case` under.
     #[must_use]
     pub fn is_current(&self, case: R::Case) -> bool {
         match self {
@@ -369,8 +342,7 @@ mod tests {
         assert!(!Under::Version(older).is_current(false));
     }
 
-    /// A pin holds while both the version and what the rule did read as pinned, and names
-    /// both readings once either moves.
+    /// A pin holds until the version or the behaviour moves, and then names both readings.
     #[test]
     fn a_pin_holds_until_the_version_or_what_it_did_moves() {
         let did = || vec!["scrubbed".to_owned()];
@@ -385,8 +357,7 @@ mod tests {
         assert!(Rule::pinned(true, did(), &version, &found.did).is_err());
     }
 
-    /// A version prints to JSON as its hex and reads back only as hex; every version orders
-    /// before the unversioned.
+    /// A version prints as its hex, reads back only as hex, and orders before the unversioned.
     #[test]
     fn a_version_round_trips_as_a_string_and_orders_before_none() {
         let current = Rule::current(false).clone();

@@ -1,8 +1,5 @@
-//! What makes this deployment the owner's, as a value: the binary parses `instance.toml` and
-//! hands a [`Deployment`] down, so no library code ever reads a configuration file.
-//!
-//! Only what is true of the box lives here (the tailnet door, the vocabulary, the URL); the
-//! trust policy and roster belong to each chain ([`suzatary_base::chains::ChainPolicy`]).
+//! The deployment as a value: the binary parses `instance.toml`, so no library code reads a
+//! configuration file.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,43 +10,36 @@ use suzatary_base::capability::Login;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::refusal::Refusal;
 
-/// This deployment, as the application reads it.
-///
 /// Ordered maps and sets throughout, so a payload that carries the roster is byte-identical
 /// between two runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Deployment {
     /// Who may open the app over the shared tailnet: Tailscale logins, not actors.
     pub viewers: BTreeSet<Login>,
-    /// Who may write, and as which actor. The value is what lands in an event's `actor`, never
-    /// a field of the request, so a page cannot claim an actor.
+    /// The value is an event's `actor`, never a request field, so a page cannot claim an actor.
     pub actors: BTreeMap<Login, Actor>,
-    /// Every chain this deployment serves, in the instance file's order; the first is what an
-    /// unnamed chain means.
+    /// In the instance file's order; the first is what an unnamed chain means.
     pub chains: Chains,
-    /// The category vocabulary, name to its stable id. A new todo's `category` must be one of these.
+    /// Name to stable id; a new todo's `category` must be one of these.
     pub categories: BTreeMap<String, u32>,
-    /// Where the app answers, as a phone reaches it. A notification's click
-    /// URL and the app's deep links are built from this.
+    /// Where a phone reaches the app; notification clicks and deep links are built from it.
     pub app_url: String,
-    /// `[coding]`, when this deployment starts coding sessions; `None` refuses a tap on one.
+    /// `None` refuses a tap that starts a coding session.
     pub coding: Option<Coding>,
-    /// `[upkeep] chain`: the one chain the box files todos about itself on, served by this
-    /// deployment; `None` files none.
+    /// `[upkeep] chain`: where the box files todos about itself; `None` files none.
     pub upkeep: Option<ChainName>,
-    /// The owner's zone, `[persona]`'s: where every day the deployment reads is read.
+    /// `[persona] zone`: every day the deployment reads is a day in this zone.
     pub zone: suzatary_base::zone::Zone,
 }
 
 impl Deployment {
-    /// Every actor a login writes as: who can mint a tap, and so whose word about standing the
-    /// digest believes.
+    /// Every actor a login writes as: who can mint a tap, so whose word the digest believes.
     #[must_use]
     pub fn writers(&self) -> BTreeSet<Actor> {
         self.actors.values().cloned().collect()
     }
 
-    /// The category vocabulary in its order, by stable id.
+    /// By stable id.
     #[must_use]
     pub fn category_order(&self) -> Vec<String> {
         suzatary_record::decoration::categories_in_order(&self.categories)
@@ -58,23 +48,19 @@ impl Deployment {
             .collect()
     }
 
-    /// The actor this peer writes as, or `None` when it may only read; there is no other way to
-    /// obtain an actor for a request.
+    /// `None` when it may only read; this is the only way to obtain an actor for a request.
     #[must_use]
     pub fn actor_of(&self, login: &Login) -> Option<&Actor> {
         self.actors.get(login)
     }
 
-    /// May this login open the app at all?
     #[must_use]
     pub fn may_view(&self, login: &Login) -> bool {
         self.viewers.contains(login)
     }
 
-    /// Every line of `[web.act_as]` that stops startup, as the sentence that says why: a login
-    /// that is no viewer, or an actor off a chain's roster or one the chain does not trust (a
-    /// person would write and tap as, say, the triage agent). On a public chain the name tested
-    /// is the actor's public name; an actor with none only reads there.
+    /// Every line of `[web.act_as]` that stops startup: a login that is no viewer, or an actor off
+    /// a chain's roster or untrusted by it; on a public chain the actor's public name is tested.
     #[must_use]
     pub fn refused_writers(&self) -> Vec<String> {
         let unseen = self
@@ -102,8 +88,7 @@ impl Deployment {
         unseen.chain(per_chain).collect()
     }
 
-    /// The chain a request or a verb named, or the first when it named none; `None` is a name
-    /// this deployment does not serve.
+    /// The first chain when none is named; `None` for a name this deployment does not serve.
     #[must_use]
     pub fn chain(&self, named: Option<&str>) -> Option<&ChainPolicy> {
         match named {
@@ -112,12 +97,8 @@ impl Deployment {
         }
     }
 
-    /// The routine "Build it" fires for a todo of `chain`: `[coding]`'s, when `chain` is the mount
-    /// whose store holds the release plan's genesis (`plan_store`), whose todos a pull request's
+    /// The routine "Build it" fires, only for a todo of `plan_store`, whose todos a pull request's
     /// `Completes:` line closes.
-    ///
-    /// # Errors
-    /// [`Refusal::conflict`] without `[coding]`, without a plan store, or for any other chain.
     pub fn builder(
         &self,
         chain: &ChainName,

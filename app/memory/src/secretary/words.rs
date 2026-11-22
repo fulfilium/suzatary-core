@@ -1,48 +1,36 @@
 //! Words a reading may no longer have: kept, or gone and why.
-//!
-//! A locked text reads as its words while its key is kept. Once the key is destroyed it reads as
-//! [`Gone::Erased`], saying who or what erased it; where the key was never here (a box restored
-//! from a vault older than the line, a tab not given it) it reads as [`Gone::Missing`]. Neither is
-//! a sentinel string: a reader that shows words matches the sum, and a reader of the shape alone
-//! never looks.
 
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::erasure::Erasure;
 
-/// Words of type `T`, or why they are not here. Kept words serialise as themselves, so a reader
-/// of the JSON a line printed before its words could go reads it the same.
+/// Words of type `T`, or why they are not here; kept words serialise as themselves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Words<T> {
     /// Here.
     Kept { kept: T },
-    /// Not here.
     Gone {
         /// Why.
         gone: Gone,
     },
 }
 
-/// Why words are not here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "why", rename_all = "lowercase")]
 pub enum Gone {
-    /// Their key was destroyed, for the reason the history records.
+    /// Their key was destroyed.
     Erased { erasure: Erasure },
     /// Their key is not here: lost in a restore, or never given to this replica.
     Missing,
-    /// They were locked under older redaction rules and no longer pass the door under the
-    /// current ones, so they are not shown; the migration reports them.
+    /// Locked under older redaction rules, they fail the current ones and are not shown.
     Withheld,
 }
 
 impl<T> Words<T> {
-    /// Kept words.
     pub fn kept(kept: T) -> Self {
         Words::Kept { kept }
     }
 
-    /// The words, when kept.
     pub fn get(&self) -> Option<&T> {
         match self {
             Words::Kept { kept } => Some(kept),
@@ -50,7 +38,6 @@ impl<T> Words<T> {
         }
     }
 
-    /// The words, owned, when kept.
     pub fn into_kept(self) -> Option<T> {
         match self {
             Words::Kept { kept } => Some(kept),
@@ -58,7 +45,6 @@ impl<T> Words<T> {
         }
     }
 
-    /// Why they are gone, when they are.
     pub fn gone(&self) -> Option<&Gone> {
         match self {
             Words::Kept { .. } => None,
@@ -66,7 +52,6 @@ impl<T> Words<T> {
         }
     }
 
-    /// The functor: `f` on kept words, a gone reason unchanged.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Words<U> {
         match self {
             Words::Kept { kept } => Words::Kept { kept: f(kept) },
@@ -74,7 +59,6 @@ impl<T> Words<T> {
         }
     }
 
-    /// The words borrowed.
     pub fn as_ref(&self) -> Words<&T> {
         match self {
             Words::Kept { kept } => Words::Kept { kept },
@@ -83,8 +67,7 @@ impl<T> Words<T> {
     }
 }
 
-/// Kept words as themselves; gone ones as the box's sentence, bracketed so it never reads as
-/// somebody's words.
+/// Gone words print as the box's sentence in brackets, so it never reads as somebody's words.
 impl<T: std::fmt::Display> std::fmt::Display for Words<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -128,8 +111,8 @@ impl<T> From<Gone> for Words<T> {
 }
 
 impl Gone {
-    /// The box's sentence for words that are not here, what a model or a page is told in their
-    /// place: composed from the reason, never stored.
+    /// The sentence a model or a page sees in the words' place, composed from the reason and never
+    /// stored.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {

@@ -5,29 +5,27 @@ use crate::settings::{Help, Words};
 use suzatary_health::health::plugin::{CredentialName, PluginName};
 use suzatary_mail::mail::address::EmailAddress;
 
-/// Which secret a step asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecretName {
-    /// One name, whatever the parameters.
     Fixed(&'static str),
     /// The link its label names on the template's plugin: `PLUGIN_<PLUGIN>_<LABEL>`.
     Link,
 }
 
-/// A step as a template declares it: data, its blanks filled by a connection's parameters.
+/// A step as a template declares it, with blanks a connection's parameters fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepShape {
-    /// A secret, with the template's words on what it is and where it is issued.
+    /// A secret, with the template's words on it.
     Secret { name: SecretName, help: Words },
     /// The account's device-code sign-in, to read its mail.
     DeviceCode,
-    /// The account's device-code consent to send mail, a grant apart from reading's.
+    /// The account's device-code consent to send mail, a grant separate from reading's.
     SendingConsent,
     /// The box's one Google Cloud client, made by the owner and pasted into its card.
     GoogleClient,
     /// The account's sign-in with Google, by an authorization code.
     AuthCode,
-    /// The model's sign-in, which the deployment runs.
+    /// The model's sign-in.
     SignIn,
     /// A command at a terminal; `{email}` and `{subdir}` stand for the account's.
     Terminal {
@@ -41,17 +39,17 @@ pub enum StepShape {
 pub enum Step {
     /// Paste a secret into a card's write-only field: the value travels only in the tap.
     Secret { name: String, help: Words },
-    /// Tap the account's sign-in, by the device-code flow, IMAP only.
+    /// IMAP only.
     DeviceCode { account: EmailAddress },
-    /// Tap the account's consent to send, by the device-code flow, SMTP only.
+    /// SMTP only.
     SendingConsent { account: EmailAddress },
-    /// Make the box's Google Cloud client and paste its downloaded file into the card's field.
+    /// Make the Google Cloud client and paste its file into the card.
     GoogleClient,
-    /// Tap the account's sign-in with Google, which reads and sends its mail.
+    /// Google's one grant reads and sends the account's mail.
     AuthCode { account: EmailAddress },
-    /// Tap the model's sign-in, which the deployment runs on the box.
+    /// The model's sign-in.
     SignIn,
-    /// Run a command at a terminal on the box, which only the person can do.
+    /// Only the person can run a command at a terminal on the box.
     Terminal { run: Run<String>, why: &'static str },
 }
 
@@ -93,9 +91,7 @@ impl StepShape {
         }
     }
 
-    /// This step for a connection of `params`, on `plugin` where the template writes a
-    /// plugin's credential; `None` where its blanks name a parameter the shape lacks, which
-    /// the catalog's law rules out for every template.
+    /// `None` where a blank names a parameter the shape lacks, which the catalog's law rules out.
     #[must_use]
     pub fn fill(&self, plugin: Option<&PluginName>, params: &Params) -> Option<Step> {
         let email = match params {
@@ -134,8 +130,7 @@ impl StepShape {
             StepShape::Terminal { run, why } => {
                 let text = run.text();
                 let names = text.contains("{email}") || text.contains("{subdir}");
-                // Each value is one shell word wherever it stands, so no address is read as
-                // more of the command than itself.
+                // Each value is one shell word, so an address cannot inject into the command.
                 let run = match email {
                     Some(email) => run.map(|text| {
                         text.replace("{email}", &super::reach::word(email.as_str()))
@@ -156,8 +151,7 @@ impl StepShape {
 }
 
 impl Step {
-    /// What the person does, as a card lists it, a terminal's command spelled as `reach` reaches
-    /// the app; a secret by its words, never its name.
+    /// What the person does, as a card lists it; a secret by its label, never its name.
     #[must_use]
     pub fn sentence(&self, reach: &Reach) -> String {
         match self {
@@ -177,7 +171,6 @@ impl Step {
         }
     }
 
-    /// Where it stands as `seen` reads it: in place once taken, else what it asks.
     #[must_use]
     pub fn standing(&self, seen: &Seen<'_>) -> Standing {
         match (self, seen.checked) {

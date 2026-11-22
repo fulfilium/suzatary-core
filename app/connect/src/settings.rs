@@ -14,7 +14,6 @@ pub use help::{Help, Page, Words};
 use suzatary_services::plugin::Manifest;
 use suzatary_services::repos::Declared;
 
-/// The name the tests' deployments store their model's credential under.
 #[cfg(any(test, feature = "nothing"))]
 pub const MODEL_TOKEN: &str = "MODEL_TOKEN";
 
@@ -26,13 +25,11 @@ pub const DATA_PUSH_TOKEN: &str = "SUZATARY_DATA_PUSH_TOKEN";
 pub struct Settables(BTreeMap<String, BTreeSet<Declaration>>);
 
 impl Settables {
-    /// One name, declared by one table.
     #[must_use]
     pub fn declared(name: &str, by: Declaration) -> Self {
         Self(BTreeMap::from([(name.to_owned(), BTreeSet::from([by]))]))
     }
 
-    /// The pointwise union.
     #[must_use]
     pub fn join(mut self, other: Self) -> Self {
         for (name, by) in other.0 {
@@ -56,8 +53,7 @@ impl Settables {
             .join(Self::google(accounts))
     }
 
-    /// The names the model, channels, `[coding]` and plugins declare; a manifest names only its
-    /// own `PLUGIN_<NAME>_` namespace.
+    /// A manifest declares names only in its own `PLUGIN_<NAME>_` namespace.
     #[must_use]
     pub fn derive(
         model: &str,
@@ -88,8 +84,7 @@ impl Settables {
             .fold(Self::default(), Self::join)
     }
 
-    /// The Google client and each account's grant, each asked for by its own card: any account
-    /// may hold a grant for its Google calendar, however its mail is read.
+    /// Any account may hold a grant for its Google calendar, however its mail is read.
     #[must_use]
     pub fn google(accounts: &[suzatary_mail::mail::account::MailAccount]) -> Self {
         let addresses: Vec<&suzatary_mail::mail::address::EmailAddress> = accounts
@@ -131,7 +126,7 @@ impl Settables {
         )
     }
 
-    /// The declarations `keep` keeps; a homomorphism of the join.
+    /// A homomorphism of the join.
     #[must_use]
     pub fn restricted(&self, keep: impl Fn(&Declaration) -> bool) -> Self {
         Self(
@@ -146,23 +141,21 @@ impl Settables {
         )
     }
 
-    /// Every declared name, sorted.
+    /// Sorted.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
         self.0.keys().map(String::as_str).collect()
     }
 
-    /// Every declared name, sorted.
+    /// Sorted.
     pub fn iter(&self) -> impl Iterator<Item = Settable> + '_ {
         self.0.keys().cloned().map(Settable)
     }
 
-    /// Every declared name with what declares it.
     pub fn declarations(&self) -> impl Iterator<Item = (Settable, &BTreeSet<Declaration>)> + '_ {
         self.0.iter().map(|(name, by)| (Settable(name.clone()), by))
     }
 
-    /// The model credential's name.
     #[must_use]
     pub fn model(&self) -> Option<Settable> {
         self.declarations()
@@ -170,13 +163,11 @@ impl Settables {
             .map(|(name, _)| name)
     }
 
-    /// The declared name with this handle.
     #[must_use]
     pub fn by_handle(&self, handle: &str) -> Option<Settable> {
         self.iter().find(|name| name.handle() == handle)
     }
 
-    /// The tables that declare `name`.
     #[must_use]
     pub fn declaration(&self, name: &Settable) -> Option<&BTreeSet<Declaration>> {
         self.0.get(name.name())
@@ -184,12 +175,11 @@ impl Settables {
 }
 
 /// A declared secret name, the only name a write route accepts; [`Settable::mint`] is its only
-/// constructor, so a tap mints a card's name against the names declared then.
+/// constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Settable(String);
 
 impl Settable {
-    /// Mint one against the declared list.
     pub fn mint(declared: &Settables, candidate: &str) -> Result<Self, SettableError> {
         if declared.0.contains_key(candidate) {
             Ok(Self(candidate.to_owned()))
@@ -198,7 +188,6 @@ impl Settable {
         }
     }
 
-    /// The name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.0
@@ -213,18 +202,14 @@ impl Settable {
     }
 }
 
-/// Why a name did not mint.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SettableError {
-    /// Not declared.
     #[error("{0:?} is not a name this deployment has declared it needs")]
     Undeclared(String),
 }
 
 /// Writes a secret; held in no capability bundle, so no verb reaches it.
 pub trait Writes {
-    /// Writes `name` to `value`.
-    ///
     /// # Errors
     /// Never carries the value.
     fn write_secret(
@@ -233,7 +218,6 @@ pub trait Writes {
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String>;
 
-    /// Deletes what is stored under `name`.
     fn clear_secret(&self, name: &Settable) -> Result<(), String>;
 }
 
@@ -245,7 +229,7 @@ pub trait Declares {
 
 /// One test call before a model's credential is kept; held in no capability record.
 pub trait Verify {
-    /// Whether `value` answers one call of the model reading `name`; `Ok` if no model reads it.
+    /// `Ok` if no model reads `name`.
     ///
     /// # Errors
     /// Never carries the value.
@@ -258,25 +242,24 @@ pub trait Verify {
 
 /// Reads a source once, when an act makes it readable; held in no capability record.
 pub trait Checks {
-    /// Read `source` once and join the result into its health.
     fn check(&self, source: &suzatary_health::health::SourceKey);
 }
 
 /// Edits the instance file; held in no capability bundle.
 pub trait Edits: Configuration {
-    /// Lets the secretary read what `rule` covers; idempotent.
+    /// Idempotent.
     fn allow_web(&self, rule: &suzatary_services::web::AllowRule) -> Result<(), EditError>;
 
-    /// Lets the secretary read files under `folder`; idempotent.
+    /// Idempotent.
     fn allow_drive(&self, folder: &suzatary_base::drive_path::DrivePath) -> Result<(), EditError>;
 
-    /// Writes `connection`'s table, keeping every other byte, so a remove undoes it.
+    /// Keeps every other byte, so a remove undoes it.
     fn add_connection(&self, connection: &connect::Connection) -> Result<(), EditError>;
 
-    /// Takes `connection`'s table out, keeping every other byte.
+    /// Keeps every other byte.
     fn remove_connection(&self, connection: &connect::Connection) -> Result<(), EditError>;
 
-    /// Lets `plugin` reach `origin`; idempotent.
+    /// Idempotent.
     fn add_origin(
         &self,
         plugin: &suzatary_health::health::plugin::PluginName,
@@ -290,16 +273,13 @@ pub trait Configuration: Send + Sync {
     fn declared(&self) -> Result<connect::Declared, EditError>;
 }
 
-/// Why an edit to the instance file did not happen.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EditError {
-    /// The file could not be read or written.
     #[error("could not edit the instance file: {0}")]
     Io(String),
-    /// The file did not parse as the document this edit expects.
     #[error("the instance file is malformed: {0}")]
     Malformed(String),
-    /// The connection algebra refused the edit, which touched nothing.
+    /// The edit touched nothing.
     #[error(transparent)]
     Connection(#[from] suzatary_health::health::Refused),
 }
@@ -324,7 +304,6 @@ mod tests {
         }
     }
 
-    /// Pinned against the widest list this module can build.
     #[test]
     fn the_five_forbidden_names_are_always_refused() {
         let declared = declared();
@@ -358,8 +337,7 @@ mod tests {
         assert!(Settable::mint(&declared, "GITHUB_PAT").is_err());
     }
 
-    /// One token per purpose: the data repository's push always, the repositories' token only
-    /// where the secretary reaches one, and neither is the other's name.
+    /// One token per purpose: the data push always, the repositories' token only when declared.
     #[test]
     fn each_github_token_is_declared_for_its_own_purpose() {
         let none = Settables::github(&suzatary_services::repos::Declared::default());
@@ -392,8 +370,7 @@ mod tests {
         assert!(Settable::mint(&without, connect::ROUTINE_TOKEN).is_err());
     }
 
-    /// A calendar's link is set by name like any other secret, and only the names its manifest
-    /// declares, in its own namespace, are added.
+    /// Only the names a manifest declares, in its own namespace, are added.
     #[test]
     fn a_plugin_s_declared_credentials_are_settable_by_name() {
         let manifest: suzatary_services::plugin::Manifest = toml::from_str(
@@ -411,7 +388,6 @@ mod tests {
         assert_eq!(declared.names().len(), 2);
     }
 
-    /// A name says what declares it, and the model's credential its model.
     #[test]
     fn a_name_says_what_declares_it() {
         let declared = Settables::derive(MODEL_TOKEN, [connect::Channel::Ntfy], None, &[]);
@@ -481,8 +457,7 @@ mod tests {
             proptest::prop_assert_eq!(a.clone().join(Settables::default()), a);
         }
 
-        /// Deriving is a homomorphism: the tables of two deployments derive the join of what
-        /// each derives.
+        /// Deriving is a homomorphism of the join.
         #[test]
         fn deriving_is_a_homomorphism(
             left in proptest::collection::vec(

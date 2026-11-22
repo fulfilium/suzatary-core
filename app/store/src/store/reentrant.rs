@@ -3,8 +3,8 @@ use std::thread::ThreadId;
 
 use super::WriteLock;
 
-/// A hold this process's threads wait on, reentrant within one thread, since a batch holds it
-/// while each write inside takes its own.
+/// An in-process hold, reentrant within one thread, since a batch holds it while each write
+/// inside takes its own.
 #[derive(Debug, Default)]
 pub struct Reentrant {
     writing: Mutex<()>,
@@ -12,7 +12,6 @@ pub struct Reentrant {
 }
 
 impl Reentrant {
-    /// Hold it until the returned guard is dropped.
     pub fn hold(&self) -> Box<dyn WriteLock + '_> {
         let me = std::thread::current().id();
         {
@@ -62,7 +61,7 @@ mod tests {
 
     use super::*;
 
-    /// Reentrant, or the first two-intent batch would deadlock.
+    /// One thread may hold it again.
     #[test]
     fn one_thread_may_hold_it_again() {
         let hold = Reentrant::default();
@@ -75,7 +74,7 @@ mod tests {
         let _after = hold.hold();
     }
 
-    /// A second thread waits, so two acts never decide from the same chain.
+    /// A second thread waits.
     #[test]
     fn a_second_thread_waits() {
         let hold = Arc::new(Reentrant::default());

@@ -1,13 +1,11 @@
 //! The secretary's memory: facts about the owner kept between conversations, one memory for all.
 //!
-//! A store of its own in two halves (`suzatary_digest::secretary::memories::Memories`): a HISTORY, a
-//! prodrome at the [`crate::secretary::memory_event::MemoryEvent`] schema saying which facts were
-//! remembered and forgotten, by id, pushed; and the TEXTS, each fact's words in a salted
-//! box-local file, which forgetting deletes. So the history stays verifiable while the words go.
+//! The history, pushed, names facts by id; each fact's words live in a salted box-local file, which
+//! forgetting deletes.
 //!
-//! A memory an email caused persists into every later session, so [`Fact::new`] is the only
-//! door and refuses a URL or a line break; it is capped at [`MAX_LIVE`] so it is read whole; and
-//! a forgotten fact never stands again. Who may write, and when, is `secretary::taint`'s.
+//! A memory an email caused persists into every later session, so [`Fact::new`] is the only door
+//! and refuses a URL or a line break.
+//! `secretary::taint` decides who may write, and when.
 
 use serde::{Deserialize, Serialize};
 
@@ -18,32 +16,27 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, shown};
 
-/// The longest fact, in characters: a sentence, never a document.
+/// The longest fact, in characters.
 pub const MAX_FACT_CHARS: usize = 280;
 
-/// How many facts may stand at once, so the secretary merges rather than grows a memory nobody
-/// reads whole.
+/// How many facts may stand at once, so a model reads the memory whole.
 pub const MAX_LIVE: usize = 200;
 
-/// One fact: one line of prose, at most [`MAX_FACT_CHARS`], holding no URL; `serde` goes through
-/// the same constructor.
+/// One line of prose, at most [`MAX_FACT_CHARS`], holding no URL; `serde` goes through the same
+/// constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Fact(String);
 
-/// Why a text is not a fact.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotAFact {
-    /// Nothing but whitespace.
     #[error("a fact says something: this one is empty")]
     Empty,
-    /// Longer than [`MAX_FACT_CHARS`].
     #[error("a fact is at most {MAX_FACT_CHARS} characters; this one is {0}")]
     TooLong(usize),
-    /// It holds a link: a link in every later session is the exfiltration half of the attack.
+    /// A link in every later session is the exfiltration half of an injection attack.
     #[error("a fact holds no URL: say what the page said instead")]
     Url,
-    /// It holds a line break or another control character.
     #[error("a fact is one line: no line break or control character")]
     LineBreak,
 }
@@ -52,10 +45,7 @@ pub enum NotAFact {
 const LINKS: [&str; 4] = ["://", "www.", "data:", "javascript:"];
 
 impl Fact {
-    /// Shape one, trimmed.
-    ///
-    /// # Errors
-    /// [`NotAFact`] naming which rule it broke.
+    /// Trims the text.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAFact> {
         let text = text.into().trim().to_owned();
         if text.is_empty() {
@@ -78,7 +68,6 @@ impl Fact {
         Ok(Self(text))
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -98,7 +87,6 @@ impl From<Fact> for String {
     }
 }
 
-/// A fact is kept in a text store as its words, read back through [`Fact::new`].
 impl crate::secretary::salted_text::Words for Fact {
     fn print(&self) -> std::borrow::Cow<'_, str> {
         self.0.as_str().into()
@@ -114,25 +102,22 @@ impl std::fmt::Display for Fact {
     }
 }
 
-/// What a fact is about, closed so a model cannot invent a fifth drawer.
+/// What a fact is about, closed so a model cannot invent a fifth kind.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ts_rs::TS,
 )]
 #[serde(rename_all = "lowercase")]
 #[ts(rename = "FactKind")]
 pub enum Kind {
-    /// About the owner: where they live, what they do.
     Owner,
-    /// About somebody else: who a sender is.
     Person,
-    /// How he likes a thing done.
+    /// How the owner likes a thing done.
     Preference,
-    /// A standing instruction he gave: "always cc Mira on tax mail".
+    /// A standing instruction from the owner.
     Standing,
 }
 
 impl Kind {
-    /// Every kind, in the order the page draws them.
     pub const ALL: [Self; 4] = [Self::Owner, Self::Person, Self::Preference, Self::Standing];
 
     /// The word a verb takes and an event stores.
@@ -146,7 +131,6 @@ impl Kind {
         }
     }
 
-    /// The kind a word names, or `None`.
     #[must_use]
     pub fn parse(word: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.as_str() == word)
@@ -186,7 +170,6 @@ pub struct FactId(
 pub struct Sources(std::collections::BTreeSet<FactId>);
 
 impl Sources {
-    /// `ids`, unless there are none.
     #[must_use]
     pub fn new(ids: std::collections::BTreeSet<FactId>) -> Option<Self> {
         (!ids.is_empty()).then_some(Self(ids))
@@ -196,7 +179,6 @@ impl Sources {
         Self::try_from(ids).map_err(ProdromeError::invalid)
     }
 
-    /// The ids, least first.
     #[must_use]
     pub fn ids(&self) -> &std::collections::BTreeSet<FactId> {
         &self.0
@@ -223,20 +205,16 @@ impl std::fmt::Display for Sources {
     }
 }
 
-/// What a fact written on the owner's tap replaces: nothing, or [`Sources`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Replaces {
-    /// A fact remembered beside the others.
     Nothing,
-    /// A fact that says what these said, in their place.
     Facts(Sources),
 }
 
 impl std::str::FromStr for FactId {
     type Err = std::num::ParseIntError;
 
-    /// A fact's number as a path or a verb names it, in decimal.
     fn from_str(said: &str) -> Result<Self, Self::Err> {
         said.parse().map(Self)
     }
@@ -248,30 +226,28 @@ impl std::fmt::Display for FactId {
     }
 }
 
-/// Who said it, read off the transcript (`secretary::taint::opener`), never a model's parameter.
+/// Who said a fact, read off the transcript (`secretary::taint::opener`), never a model's
+/// parameter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "from", rename_all = "lowercase")]
 pub enum Origin {
-    /// The owner's own words: the round's opening turn.
+    /// The round's opening turn, in the owner's own words.
     Turn {
         conversation: ConversationId,
-        /// The turn's absolute index in it.
+        /// The turn's absolute index in the conversation.
         turn: usize,
     },
     /// The owner's tap on a `Proposal::Remember`.
     Tapped {
         conversation: ConversationId,
-        /// The proposal's index in it.
         proposal: usize,
     },
 }
 
-/// `Turn(conversation, turn)`: the owner's own words, the round's opening turn.
 pub(crate) const TURN: Constructor = ("Turn", &["conversation", "turn"]);
-/// `Tapped(conversation, proposal)`: the owner's tap on a remember card.
 pub(crate) const TAPPED: Constructor = ("Tapped", &["conversation", "proposal"]);
 
-/// An origin is its arm's own constructor. By hand: its reads refuse as `Fields` does.
+/// An origin is its arm's own constructor.
 impl Literal for Origin {
     fn to_value(&self) -> Value {
         match self {
@@ -303,7 +279,6 @@ impl Literal for Origin {
 }
 
 impl Origin {
-    /// The conversation it was said in.
     #[must_use]
     pub fn conversation(&self) -> &ConversationId {
         match self {
@@ -312,24 +287,19 @@ impl Origin {
     }
 }
 
-/// A fact as remembered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Remembered {
-    /// Its number, which was the memory's version when it was written.
+    /// The memory's version when it was written.
     pub id: FactId,
     pub at: Datetime,
     pub fact: Fact,
     pub kind: Kind,
-    /// Where it comes from.
     pub said: crate::secretary::provenance::Provenance,
 }
 
-/// A fact a consolidation replaced, and the fact that replaced it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Merge {
-    /// The fact replaced.
     pub fact: FactId,
-    /// The consolidation, which was the memory's version it made.
     pub into: FactId,
 }
 
@@ -338,28 +308,24 @@ pub struct Merge {
 pub struct Forgotten {
     pub id: FactId,
     pub at: Datetime,
-    /// Who: the gate's actor, or `assistant` for the verb.
+    /// The gate's actor, or `assistant` for the verb.
     pub by: String,
-    /// The memory's version this forgetting made.
     pub version: u64,
 }
 
-/// The memory as a reader gets it: its history's standing facts with their words.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Memory {
-    /// Every standing fact, oldest first.
+    /// Oldest first.
     pub facts: Vec<Remembered>,
-    /// Every fact that reads forgotten, in the order its forgetting happened.
+    /// In the order the forgettings happened.
     pub forgotten: Vec<Forgotten>,
-    /// Every fact a consolidation replaced, by the order of the consolidation.
     pub merged: Vec<Merge>,
-    /// The highest version any event made; 0 for an empty memory.
+    /// 0 for an empty memory.
     pub version: u64,
 }
 
 impl Memory {
-    /// The memory a history reads as: a fact whose words are not found is absent, while its
-    /// number still counts in the version.
+    /// A fact whose words are not found is absent, while its number still counts in the version.
     #[must_use]
     pub fn from_history(
         history: &crate::secretary::two_phase::TwoPhase,
@@ -408,39 +374,29 @@ impl Memory {
         }
     }
 
-    /// One standing fact, by id.
     #[must_use]
     pub fn get(&self, id: FactId) -> Option<&Remembered> {
         self.facts.iter().find(|remembered| remembered.id == id)
     }
 }
 
-/// What one conversation is told of the memory next: everything, or what moved since the version
-/// it was told. A turn heading the batch, never the prompt, since a session snapshots its prompt.
+/// What one conversation is told of the memory next, as a turn heading the batch, because a session
+/// snapshots its prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
-    /// The whole memory, to a session told nothing yet.
     Whole {
-        /// Every standing fact, in the order it is told.
         facts: Vec<Remembered>,
-        /// The version this brings the conversation to.
         version: u64,
     },
-    /// What moved since the version the session was told.
     Since {
-        /// The facts remembered since, oldest first.
         added: Vec<Remembered>,
-        /// The facts it was told of and that are forgotten since.
         forgotten: Vec<FactId>,
-        /// The facts it was told of and that a consolidation replaced since.
         merged: Vec<Merge>,
-        /// The version this brings the conversation to.
         version: u64,
     },
 }
 
 impl Change {
-    /// The version this brings the conversation to.
     #[must_use]
     pub fn version(&self) -> u64 {
         match self {
@@ -448,7 +404,6 @@ impl Change {
         }
     }
 
-    /// Nothing to say.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
@@ -462,7 +417,7 @@ impl Change {
         }
     }
 
-    /// The heading's text: what a model reads, framed as background.
+    /// What a model reads, framed as background and never as instructions.
     #[must_use]
     pub fn told(&self) -> String {
         use std::fmt::Write as _;
@@ -502,7 +457,6 @@ impl Change {
     }
 }
 
-/// [`Change`] for a conversation last told `seen`.
 #[must_use]
 pub fn change(memory: &Memory, seen: Option<u64>) -> Change {
     match seen {
@@ -546,7 +500,6 @@ pub fn change(memory: &Memory, seen: Option<u64>) -> Change {
     }
 }
 
-/// The standing fact that replaced `fact`, through every consolidation; `None` when none stands.
 fn standing_for(memory: &Memory, fact: FactId) -> Option<FactId> {
     let mut pending = vec![fact];
     let mut seen = std::collections::BTreeSet::new();
@@ -569,9 +522,6 @@ fn standing_for(memory: &Memory, fact: FactId) -> Option<FactId> {
 }
 
 /// A `kind` argument, parsed, with the refusal naming the four words.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for any other word.
 pub fn kind_of(word: &str) -> Result<Kind, Refusal> {
     Kind::parse(word).ok_or_else(|| {
         Refusal::bad_request(format!(
@@ -582,14 +532,13 @@ pub fn kind_of(word: &str) -> Result<Kind, Refusal> {
     })
 }
 
-// The literal of each is its text, as an inbox act stores it.
 prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// `rename_all` spells the generated `FactKind`, so serde's words are checked against `ALL`'s.
+    /// Serde's words for a kind match `ALL`'s literals.
     #[test]
     fn a_kinds_serde_word_is_its_literals() {
         suzatary_base::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());

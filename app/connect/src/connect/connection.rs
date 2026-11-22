@@ -12,24 +12,20 @@ use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::CredentialName;
 use suzatary_mail::mail::account_email::AccountEmail;
 
-/// The model connection's key name: a deployment has one model.
 const MODEL_KEY: &str = "model";
 
-/// A template applied to parameters of the shape it reads. [`Connection::new`] is its only
-/// constructor, so its tables, steps and check are functions of the value.
+/// A template applied to parameters of its shape; [`Connection::new`] is its only constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Connection {
     template: TemplateId,
     params: Params,
 }
 
-/// A connection's identity: its group and its name there. Two connections under one key are
-/// one connection, as a mail account is one account by its address whichever strategy syncs it.
+/// A connection's identity: a mail account is one key by its address, whatever syncs it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
-    /// Its group.
     pub group: Group,
-    /// Its name in the group: an address, a label, a folder, the model, a channel.
+    /// An address, a label, a folder, the model or a channel.
     pub name: String,
 }
 
@@ -40,10 +36,6 @@ impl fmt::Display for Key {
 }
 
 impl Connection {
-    /// `template` applied to `params`.
-    ///
-    /// # Errors
-    /// [`Refused::Params`] for parameters of another shape than the template reads.
     pub fn new(template: TemplateId, params: Params) -> Result<Self, Refused> {
         let shape = template.template().shape();
         if params.shape() != shape {
@@ -55,7 +47,6 @@ impl Connection {
         Ok(Self { template, params })
     }
 
-    /// A notification channel's connection, which reads no parameter.
     #[must_use]
     pub const fn of_channel(channel: super::Channel) -> Self {
         Self {
@@ -64,10 +55,7 @@ impl Connection {
         }
     }
 
-    /// A connection from its text form: the template's name and its parameters' texts.
-    ///
-    /// # Errors
-    /// [`Refused`] naming the template or the parameter that did not parse.
+    /// A connection from the template's name and its parameters' texts.
     pub fn parse(template: &str, params: &[String]) -> Result<Self, Refused> {
         let id = TemplateId::parse(template)?;
         Self::new(
@@ -76,25 +64,21 @@ impl Connection {
         )
     }
 
-    /// Which template.
     #[must_use]
     pub const fn id(&self) -> TemplateId {
         self.template
     }
 
-    /// Its template's data.
     #[must_use]
     pub const fn template(&self) -> &'static Template {
         self.template.template()
     }
 
-    /// What was chosen.
     #[must_use]
     pub const fn params(&self) -> &Params {
         &self.params
     }
 
-    /// Its identity.
     #[must_use]
     pub fn key(&self) -> Key {
         let template = self.template();
@@ -115,9 +99,9 @@ impl Connection {
         }
     }
 
-    /// Whether writing it changes `held`, the connection under its key, rather than duplicating
-    /// it: a Gmail account read through lieer's own sign-in is signed in with Google instead,
-    /// which reads the same mail and its calendars too.
+    /// Whether writing it changes `held`, the connection under its key, instead of duplicating it:
+    /// a Gmail account read through lieer's own sign-in moves to sign-in with Google, which reads
+    /// the same mail and its calendars too.
     #[must_use]
     pub fn moves(&self, held: &Connection) -> bool {
         self.key() == held.key()
@@ -127,9 +111,7 @@ impl Connection {
             )
     }
 
-    /// The sources its health is read from: an account's mail, and a Google account's
-    /// calendars too; a link's fetches; the Drive, for a folder it may read. None for what the
-    /// box reads nothing from (the data repository, the model, a channel).
+    /// The sources its health is read from; none for what the box reads nothing from.
     #[must_use]
     pub fn sources(&self) -> Vec<SourceKey> {
         match (self.template().table, &self.params) {
@@ -146,8 +128,7 @@ impl Connection {
                 credential: CredentialName::link(fragment.plugin, label),
             }],
             (Table::Folder, _) => vec![SourceKey::Drive],
-            // A parameter of another shape than its template reads, which `Connection::new`
-            // refuses, and the tables the box reads nothing from.
+            // `Connection::new` refuses the mismatched shapes; the box reads nothing from the rest.
             (
                 Table::Link(_),
                 Params::Nothing | Params::Address(_) | Params::Microsoft { .. } | Params::Folder(_),
@@ -158,8 +139,7 @@ impl Connection {
         }
     }
 
-    /// What the owner calls it, as a sentence begins with it: the label they gave a calendar
-    /// (`your Work calendar`), an account's address, a folder's path.
+    /// What the owner calls it at the start of a sentence (`your Work calendar`).
     #[must_use]
     pub fn called(&self) -> String {
         let template = self.template();
@@ -182,8 +162,7 @@ impl Connection {
         }
     }
 
-    /// The table it writes, in words a card says: the place in the instance file, never a
-    /// secret's value, which no table holds.
+    /// The place in the instance file it writes; no table holds a secret's value.
     #[must_use]
     pub fn writes(&self) -> String {
         match (self.template().table, &self.params) {
@@ -203,7 +182,6 @@ impl Connection {
         }
     }
 
-    /// The person's steps, in the template's order, filled with its parameters.
     #[must_use]
     pub fn steps(&self) -> Vec<Step> {
         let template = self.template();
@@ -218,7 +196,6 @@ impl Connection {
             .collect()
     }
 
-    /// The names of the secrets its steps ask for.
     #[must_use]
     pub fn secrets(&self) -> Vec<String> {
         self.steps()
@@ -230,8 +207,7 @@ impl Connection {
             .collect()
     }
 
-    /// The names of everything the box keeps in the secret store for it alone: its steps'
-    /// secrets, and the grant a sign-in with Google keeps. What goes with it when it is removed.
+    /// The secret-store names that go with it when it is removed, the Google grant included.
     #[must_use]
     pub fn kept(&self) -> Vec<String> {
         self.steps()
@@ -248,8 +224,7 @@ impl Connection {
             .collect()
     }
 
-    /// Where its steps stand as `seen` reads them, joined; its check's results are the
-    /// reader's to join, since only the reader knows where they are kept.
+    /// Its steps' standing, joined; the reader joins its check's results.
     #[must_use]
     pub fn standing(&self, seen: &Seen<'_>) -> Standing {
         self.steps()
@@ -259,7 +234,6 @@ impl Connection {
             .fold(Standing::Kept, Standing::join)
     }
 
-    /// Its steps `seen` does not read as taken, in the template's order.
     #[must_use]
     pub fn unmet(&self, seen: &Seen<'_>) -> Vec<Step> {
         self.steps()
@@ -269,7 +243,6 @@ impl Connection {
     }
 }
 
-/// `Connection(template, params)`.
 pub const CONNECTION: Constructor = ("Connection", &["template", "params"]);
 
 // By hand: its reads refuse as `Fields` does.
@@ -294,7 +267,6 @@ impl Literal for Connection {
     }
 }
 
-/// The text form a page and a verb read, `{template, params}`.
 #[derive(Serialize, Deserialize)]
 struct Spelled {
     template: String,

@@ -1,6 +1,5 @@
-//! The chains read once, so every reading of one request (a page's rows, a proposal's price, the
-//! document) sees one instant of every chain and folds each once; and read again only where a
-//! chain's heads moved, so a write to one chain re-reads that chain alone.
+//! The chains read once per request, so every reading sees one instant of every chain; a chain is
+//! read again only when its heads moved.
 
 use std::sync::Arc;
 
@@ -23,8 +22,7 @@ pub struct Read(Vec<Arc<Chain>>);
 struct Chain {
     name: ChainName,
     untrusted: Untrusted,
-    /// The store's heads when it was read, which name these objects; none where they were
-    /// handed over rather than read, or the heads did not read, so nothing is kept by them.
+    /// The store's heads when it was read; `None` for objects handed over or unread heads.
     heads: Option<Vec<Hash>>,
     dag: Dag<TodoEvent>,
     nodes: Result<Vec<Node<TodoEvent>>, String>,
@@ -56,7 +54,6 @@ impl Chain {
         }
     }
 
-    /// Whether this is `policy`'s chain as its store's `heads` name it.
     fn is(&self, policy: &ChainPolicy, heads: &[Hash]) -> bool {
         self.name == policy.name
             && self.untrusted == policy.untrusted
@@ -65,7 +62,6 @@ impl Chain {
 }
 
 impl Read {
-    /// Each chain's objects as given, ordered once.
     #[must_use]
     pub fn of_objects(
         chains: impl IntoIterator<Item = (ChainName, Untrusted, Vec<(Hash, Envelope<TodoEvent>)>)>,
@@ -80,7 +76,6 @@ impl Read {
         )
     }
 
-    /// This read beside one more chain, as its objects read or why they did not.
     #[must_use]
     pub fn with(
         mut self,
@@ -93,8 +88,7 @@ impl Read {
         self
     }
 
-    /// Each store read once, under its chain's policy; a store that does not read is a chain
-    /// held as that failure, never a refusal of the others.
+    /// A store that does not read is held as that failure, never a refusal of the others.
     #[must_use]
     pub fn of_stores<'s>(
         chains: impl IntoIterator<Item = (&'s ChainPolicy, &'s dyn Prodrome<TodoEvent>)>,
@@ -102,8 +96,7 @@ impl Read {
         Read::default().moved(chains)
     }
 
-    /// These chains as the stores hold them now: a chain whose store's heads and policy are
-    /// what this read was taken at is this read's, its readings kept; every other is read again.
+    /// Keeps each chain whose heads and policy did not move, and reads every other again.
     #[must_use]
     pub fn moved<'s>(
         &self,
@@ -113,8 +106,8 @@ impl Read {
             chains
                 .into_iter()
                 .map(|(policy, store)| {
-                    // Heads first: objects written between the two are read now and kept under
-                    // the older heads, so the next ask sees the heads moved and reads again.
+                    // Heads first: a write between the two keeps under older heads, so the next
+                    // ask reads again.
                     let heads = store.tips().ok();
                     let kept = heads
                         .as_deref()
@@ -132,7 +125,6 @@ impl Read {
         )
     }
 
-    /// The set these chains make at `at`, each chain's reading there folded once.
     #[must_use]
     pub fn set(&self, at: Datetime) -> ChainSet<'_> {
         self.0
@@ -151,7 +143,7 @@ impl Read {
             })
     }
 
-    /// Whether `other` holds this read's chain `name`, the same reading, not a copy of it.
+    /// Whether `other` holds the same reading of chain `name`, not a copy.
     #[cfg(any(test, feature = "nothing"))]
     #[must_use]
     pub fn shares(&self, other: &Read, name: &ChainName) -> bool {

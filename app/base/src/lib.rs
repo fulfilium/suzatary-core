@@ -1,5 +1,4 @@
-//! The names every crate of Suzatary speaks: ids, references, chains, zones, refusals, secrets,
-//! the markup escape, and the ports for the clock, entropy, typesetting and whois.
+//! The names every Suzatary crate shares: ids, references, chains, zones, refusals and ports.
 
 #![forbid(unsafe_code)]
 

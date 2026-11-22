@@ -15,7 +15,7 @@ pub enum Law {
     RoundTrip,
     /// A kept file is listed in its folder, as a file, at its size when a size is said.
     Listed,
-    /// Keeping a name already there leaves the first bytes: a name is its content's.
+    /// Keeping a name already there leaves the first bytes.
     NeverReplaces,
     /// A folder made is listed in its parent as a folder, and lists nothing.
     Folder,
@@ -44,21 +44,17 @@ impl fmt::Display for Law {
     }
 }
 
-/// One case: a folder that does not yet exist, which the suite fills, and a file to keep there.
+/// A folder that does not yet exist, and a file to keep there.
 #[derive(Debug, Clone)]
 pub struct Case {
-    /// A fresh folder under a section, e.g. `/my-files/case-1`.
+    /// A fresh folder under a section, such as `/my-files/case-1`.
     pub folder: DrivePath,
-    /// A name, one segment.
+    /// One segment.
     pub name: String,
-    /// Its bytes.
     pub bytes: Vec<u8>,
 }
 
-/// Every law over every case, on one Drive: the Drive's own, then the fence's over it.
-///
-/// # Errors
-/// The first [`Broken`] law.
+/// The Drive's own laws, then the fence's over it.
 pub fn check<P: WritePort>(port: &P, cases: &[Case]) -> Result<(), Broken<Law>> {
     for case in cases {
         laws(port, case)?;
@@ -67,10 +63,6 @@ pub fn check<P: WritePort>(port: &P, cases: &[Case]) -> Result<(), Broken<Law>> 
     Ok(())
 }
 
-/// The Drive's own laws over one case.
-///
-/// # Errors
-/// The first [`Broken`] law.
 pub fn laws<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     let Case {
         folder,
@@ -142,10 +134,6 @@ pub fn laws<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     )
 }
 
-/// The fence's laws over one case, on `port` watched by a `Spy`.
-///
-/// # Errors
-/// The first [`Broken`] law.
 pub fn fence<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     let Case {
         folder,
@@ -199,7 +187,7 @@ pub fn fence<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
         ancestor = folder.parent();
     }
 
-    // Nothing is written behind the fence because `Fenced` is no `WritePort`: a fact of its type.
+    // `Fenced` is no `WritePort`, so nothing is written behind the fence.
     let fenced = Fenced::new(port, vec![folder.clone()]);
     let through = fenced.download(&file);
     hold(Law::Transparent, through == port.download(&file), || {
@@ -211,7 +199,7 @@ pub fn fence<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     })
 }
 
-/// A Drive, read, that counts what reaches it, so a law can say a refusal never did.
+/// A Drive that counts the calls reaching it, so a law can say a refusal never did.
 #[derive(Debug)]
 pub(crate) struct Spy<P> {
     port: P,
@@ -219,7 +207,6 @@ pub(crate) struct Spy<P> {
 }
 
 impl<P: Port> Spy<P> {
-    /// `port`, watched.
     pub fn new(port: P) -> Self {
         Self {
             port,
@@ -227,7 +214,6 @@ impl<P: Port> Spy<P> {
         }
     }
 
-    /// How many calls reached it.
     pub fn calls(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
     }

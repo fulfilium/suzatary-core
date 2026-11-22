@@ -5,7 +5,7 @@ use std::sync::{Mutex, PoisonError};
 use super::{Decide, Edit, Log, StoreError};
 use suzatary_base::refusal::Refusal;
 
-/// Logs held in memory, for tests; a refusal names what each holds and its key as `Debug`.
+/// A refusal names what each log holds and its key as `Debug`.
 #[derive(Debug)]
 pub struct InMemoryLog<K, E> {
     what: &'static str,
@@ -13,13 +13,11 @@ pub struct InMemoryLog<K, E> {
 }
 
 impl<K, E> InMemoryLog<K, E> {
-    /// No logs yet, each one a `what`.
     #[must_use]
     pub fn new(what: &'static str) -> Self {
         Self::with(what, BTreeMap::new())
     }
 
-    /// These logs, each one a `what`.
     #[must_use]
     pub fn with(what: &'static str, logs: BTreeMap<K, Vec<E>>) -> Self {
         Self {

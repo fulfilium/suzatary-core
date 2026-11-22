@@ -1,13 +1,12 @@
-//! The memory's schema: a fact remembered, naming its words by their [`TextName`]; a fact
-//! consolidated from earlier facts, naming its words and the facts it replaces; and a fact
-//! forgotten, naming only its id. Each event is about one [`FactId`].
+//! The memory's schema: each event is about one [`FactId`] and names its words only by
+//! [`TextName`].
 //!
-//! Every event writes the fact's one register, its life ([`LifeRegister`]), declared
-//! inflationary: the store refuses a
-//! `Remembered` on a fact already forgotten, so once forgotten, always forgotten. A
-//! consolidation writes only the new fact's register; that it replaces its sources is the
-//! reading's ([`crate::secretary::two_phase`]). The words are never an object: they live in the
-//! memory's text store, which forgetting and consolidating delete from.
+//! The life register is inflationary, so the store refuses a `Remembered` on a fact already
+//! forgotten.
+//! A consolidation writes only the new fact's register; [`crate::secretary::two_phase`] reads that
+//! it replaces its sources.
+//! The words are never an object: they live in the memory's text store, which forgetting deletes
+//! from.
 
 use std::collections::BTreeSet;
 
@@ -23,31 +22,22 @@ use crate::secretary::fact_life::Life;
 use crate::secretary::memory::{FactId, Kind, Origin, TAPPED, TURN};
 use crate::secretary::salted_text::TextName;
 
-/// One event about one fact: which, when, who wrote it, and what became of it.
 pub type MemoryEvent = Event<Said>;
 
-/// What an event says of its fact.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Said {
-    /// It was remembered: its words by name, about whom, and who said it.
     Remembered {
-        /// The name of its words in the text store.
         text: TextName,
-        /// About whom or what.
         kind: Kind,
-        /// Who said it.
         origin: Origin,
     },
-    /// It replaces the facts `from` with one fact of its own words: what they said together,
-    /// on their authority, so its origins are theirs.
+    /// It replaces the facts `from` with one fact of its own words, and its origins are theirs.
     Consolidated {
-        /// The facts it replaces: at least one, each numbered below it.
+        /// At least one, each numbered below it.
         from: BTreeSet<FactId>,
-        /// The name of its words in the text store.
         text: TextName,
-        /// About whom or what.
         kind: Kind,
-        /// The round the owner opened that wrote it, where its words were written.
+        /// The round the owner opened that wrote its words.
         round: Origin,
     },
     /// It was forgotten; `version` is the memory's version this made.
@@ -57,16 +47,12 @@ pub enum Said {
     },
 }
 
-/// An event that cannot be.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotAMemoryEvent {
-    /// A forgetting numbered at or below the fact it forgets, which was remembered first.
     #[error("fact {fact} cannot be forgotten at version {version}, at or below its own number")]
     Before { fact: FactId, version: u64 },
-    /// A consolidation that replaces nothing.
     #[error("fact {0} consolidates no fact")]
     FromNothing(FactId),
-    /// A consolidation naming a source numbered at or above itself, which cannot be earlier.
     #[error("fact {fact} cannot replace fact {replaced}, numbered at or above it")]
     Later {
         fact: FactId,
@@ -75,11 +61,8 @@ pub enum NotAMemoryEvent {
     },
 }
 
-/// Fact `fact` remembered by `actor`: its words by `text`, its `kind` and who said it.
-///
 /// # Errors
-/// None in practice: the schema refuses only a forgetting. The type is the schema's one door,
-/// [`Event::new`].
+/// None in practice: the schema refuses only a forgetting.
 pub fn remembered(
     fact: FactId,
     at: Datetime,
@@ -91,10 +74,6 @@ pub fn remembered(
     Event::new(fact, at, actor, Said::Remembered { text, kind, origin })
 }
 
-/// Fact `fact` forgotten by `actor`, making memory version `version`.
-///
-/// # Errors
-/// [`NotAMemoryEvent::Before`] for a version at or below the fact's own number.
 pub fn forgotten(
     fact: FactId,
     at: Datetime,
@@ -104,11 +83,6 @@ pub fn forgotten(
     Event::new(fact, at, actor, Said::Forgotten { version })
 }
 
-/// Fact `fact` written by `actor` in `round` from the facts `from`, its words by `text`.
-///
-/// # Errors
-/// [`NotAMemoryEvent::FromNothing`] for no source, and [`NotAMemoryEvent::Later`] for a source
-/// numbered at or above `fact`.
 pub fn consolidated(
     fact: FactId,
     at: Datetime,
@@ -131,23 +105,19 @@ pub fn consolidated(
     )
 }
 
-/// `Remembered(fact, at, actor, text, kind, said)`.
 const REMEMBERED: Constructor = (
     "Remembered",
     &["fact", "at", "actor", "text", "kind", "said"],
 );
-/// `Forgotten(fact, at, actor, version)`.
 const FORGOTTEN: Constructor = ("Forgotten", &["fact", "at", "actor", "version"]);
-/// `Consolidated(fact, at, actor, from, text, kind, round)`.
 const CONSOLIDATED: Constructor = (
     "Consolidated",
     &["fact", "at", "actor", "from", "text", "kind", "round"],
 );
-/// The memory's whitelist: its three events and an origin's two arms, nothing else, since no
-/// event nests a term.
+/// The memory's whitelist: its three events and an origin's two arms, because no event nests a
+/// term.
 pub type MemoryVocabulary = Constructors<Said>;
 
-// By hand: an event body of `schema::headed`, which the derive does not write.
 impl Body for Said {
     const NAME: &'static str = "Said";
     type Key = FactId;
@@ -162,8 +132,7 @@ impl Body for Said {
         std::iter::once(Only)
     }
 
-    /// A forgetting comes after its fact: its version is above the fact's own number. A
-    /// consolidation comes after every fact it replaces, so no fact rests on itself.
+    /// A forgetting and a consolidation come after the facts they name, so no fact rests on itself.
     fn admits(fact: &FactId, said: &Said) -> Result<(), NotAMemoryEvent> {
         match said {
             Said::Forgotten { version } if *version <= fact.0 => Err(NotAMemoryEvent::Before {
@@ -235,7 +204,6 @@ impl Body for Said {
     }
 }
 
-/// The register's type: a [`Life`].
 #[derive(Debug)]
 pub struct LifeRegister;
 
@@ -266,7 +234,7 @@ mod tests {
         suzatary_base::own::assert_own(&[REMEMBERED, FORGOTTEN, CONSOLIDATED, TURN, TAPPED]);
     }
 
-    /// Every count prints as itself and reads back, at the widest it holds.
+    /// Every event reads back as itself at its widest counts.
     #[test]
     fn every_event_round_trips_at_its_widest() {
         use prodrome_core::event::{canonical, parse_event};

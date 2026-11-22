@@ -1,5 +1,4 @@
-//! A store whose reads are counted, so a test can show that a path read no object without
-//! timing it.
+//! A store whose reads are counted, so a test can show that a path read no object.
 
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,8 +9,7 @@ use prodrome_core::schema::Schema;
 
 use super::{Graph, Prodrome, Reads, StoreError, WriteLock};
 
-/// `store`, counting its reads: each read of objects, prints or sizes, and each graph the store
-/// built again rather than the one it kept, which is a read of the whole store.
+/// A graph the store built again rather than the one it kept counts as a read.
 pub struct Counted<'a, E: Schema> {
     store: &'a dyn Prodrome<E>,
     reads: AtomicUsize,
@@ -19,7 +17,6 @@ pub struct Counted<'a, E: Schema> {
 }
 
 impl<'a, E: Schema> Counted<'a, E> {
-    /// `store`, no read counted yet.
     #[must_use]
     pub fn new(store: &'a dyn Prodrome<E>) -> Self {
         Self {

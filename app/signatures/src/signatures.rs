@@ -1,17 +1,10 @@
-//! Who wrote an object, read from the history: the Prodrome's signatures (SPEC §3, §5, law 42)
-//! as this deployment reads them.
+//! Who wrote an object: the Prodrome's signatures (SPEC §3, §5, law 42) as this deployment reads
+//! them.
 //!
-//! An object's actor is a field its writer chose; a `Signed` by a key registered to that actor
-//! proves it, to anyone holding the objects. Keys are history too: `KeyAdded` and `KeyRevoked`
-//! objects in each chain, counted where the deployment's ROOT signed them, so the trusted keys
-//! are a register of the store (a set that only grows, and its revocations), never a file.
-//!
-//! [`Trust`] is that reading, one fold over the object set: what is proven, which is the
-//! Prodrome's [`Proof`] exactly (a law, tested), WHY something is not ([`Unproven`]) and what a
-//! key's standing is ([`KeyStanding`]). History written before the deployment adopted
-//! signatures is not unproven but EARLIER: the root's signed `Snapshot` of each private chain, its
-//! [`epoch`], attests what the box held then, and everything beneath it reads
-//! [`Provenance::Predates`].
+//! An object's actor is proven by a `Signed` from a key registered to that actor. The trusted keys
+//! are `KeyAdded` and `KeyRevoked` objects in each chain that the deployment's root signed, never a
+//! file. [`Trust`] folds them and equals the Prodrome's [`Proof`] (a tested law). Objects beneath
+//! the root's signed `Snapshot` of a chain, its [`epoch`], read [`Provenance::Predates`].
 //!
 //! [`Proof`]: prodrome_core::sign::Proof
 

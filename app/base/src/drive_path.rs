@@ -1,9 +1,6 @@
-//! An absolute path in the owner's Drive.
-//!
 //! A path comes from a model that reads attacker-controlled mail and ends up as a Drive CLI
-//! argument, so [`DrivePath`] refuses anything the CLI could read as an option or a step outside
-//! a folder. Folders match segment by segment, so `/my-files/Docs` never allows
-//! `/my-files/Docs2`.
+//! argument, so [`DrivePath`] refuses an option or a step outside a folder.
+//! Folders match by segment, so `/my-files/Docs` never allows `/my-files/Docs2`.
 
 use std::fmt;
 
@@ -15,7 +12,6 @@ pub(crate) const MAX_PATH: usize = 1024;
 /// The longest segment accepted, in characters.
 const MAX_SEGMENT: usize = 255;
 
-/// Why a path was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "a Drive path is absolute (/my-files/…), without '.', '..', empty segments or control \
@@ -31,7 +27,6 @@ pub struct DrivePath {
 }
 
 impl DrivePath {
-    /// The top: the list of sections.
     #[must_use]
     pub fn root() -> Self {
         Self {
@@ -39,19 +34,16 @@ impl DrivePath {
         }
     }
 
-    /// Whether this is `/`.
     #[must_use]
     pub fn is_root(&self) -> bool {
         self.segments.is_empty()
     }
 
-    /// The last segment, `None` for `/`.
     #[must_use]
     pub fn name(&self) -> Option<&str> {
         self.segments.last().map(String::as_str)
     }
 
-    /// The folder this is in, `None` for `/`.
     #[must_use]
     pub fn parent(&self) -> Option<Self> {
         let (_, init) = self.segments.split_last()?;
@@ -60,12 +52,7 @@ impl DrivePath {
         })
     }
 
-    /// `name` inside this folder, when `name` is one segment this grammar
-    /// takes.
-    ///
-    /// # Errors
-    /// [`DrivePathError`] for a name holding `/`, `.`, `..` or a control
-    /// character, or one that would pass `MAX_PATH`.
+    /// `name` inside this folder, when `name` is one segment this grammar takes.
     pub fn join(&self, name: &str) -> Result<Self, DrivePathError> {
         let mut text = self.to_string();
         if !self.is_root() {
@@ -80,7 +67,6 @@ impl DrivePath {
         }
     }
 
-    /// Whether this path is `folder` or anywhere under it, its names compared without case.
     #[must_use]
     pub fn is_under_ignoring_case(&self, folder: &DrivePath) -> bool {
         self.segments.len() >= folder.segments.len()
@@ -110,8 +96,7 @@ impl std::str::FromStr for DrivePath {
         if rest.is_empty() {
             return Ok(Self::root());
         }
-        // One trailing slash is how a folder is often written; it names the
-        // same folder.
+        // One trailing slash names the same folder.
         let rest = rest.strip_suffix('/').unwrap_or(rest);
         let segments: Vec<String> = rest.split('/').map(str::to_owned).collect();
         let segment_ok = |segment: &String| {
@@ -156,7 +141,6 @@ impl fmt::Display for DrivePath {
 /// Why a read produced nothing.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DriveFailure {
-    /// No such file or folder.
     #[error("not found in Drive: {0}")]
     Missing(String),
     /// A folder where a file was wanted, or a file too large to read.
@@ -165,8 +149,7 @@ pub enum DriveFailure {
     /// The CLI could not be run, timed out, or failed, in its own words.
     #[error("Drive did not answer: {0}")]
     Unreachable(String),
-    /// The CLI answered that its session expired or was never begun: it needs its sign-in at a
-    /// terminal, in its own words.
+    /// The CLI's session expired or never began; it needs its sign-in at a terminal.
     #[error("the Drive needs its sign-in: {0}")]
     SignedOut(String),
 }

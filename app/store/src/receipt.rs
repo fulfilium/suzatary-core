@@ -1,6 +1,5 @@
-//! A keeper's refusal for good of a request a replica posted, keyed by the request's name: final,
-//! or outdated, sealed under rules the keeper no longer seals by. Generic over the store-name type,
-//! so it can move to the Prodrome. Two refusals of one are both read.
+//! A keeper's refusal for good of a request a replica posted, keyed by the request's name.
+//! Two refusals of one request are both read.
 
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -16,27 +15,22 @@ use prodrome_core::schema::headed::{Body, Constructors, Event};
 /// The request `key` refused for good.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refused<S> {
-    /// Its store.
     pub store: S,
-    /// Why it is held back.
     pub grounds: Grounds,
     /// The keeper's sentence, shown verbatim.
     pub reason: String,
 }
 
-/// Why a request is held back for good; each is a constructor of its own, since a shipped one's
-/// fields are frozen.
+/// Each grounds is a constructor of its own, since a shipped constructor's fields are frozen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Grounds {
-    /// Never taken as it is: `Refused(…)`.
+    /// `Refused(…)`.
     Final,
-    /// Sealed under rules older than the keeper's, so a newer writer seals it again:
-    /// `Outdated(…)`.
+    /// Sealed under older rules, so a newer writer seals it again: `Outdated(…)`.
     Outdated,
 }
 
 impl Grounds {
-    /// The kind a replica's writes hold it as.
     #[must_use]
     pub fn kind(self) -> crate::replica::writes::Refusal {
         match self {
@@ -49,13 +43,11 @@ impl Grounds {
 /// A refusal event: `Refused(request, at, actor, store, reason)`.
 pub type RefusalEvent<S> = Event<Refused<S>>;
 
-/// The schema's whitelist.
 pub type RefusalVocabulary<S> = Constructors<Refused<S>>;
 
 const REFUSED: Constructor = ("Refused", &["request", "at", "actor", "store", "reason"]);
 const OUTDATED: Constructor = ("Outdated", &["request", "at", "actor", "store", "reason"]);
 
-/// The keeper's refusal of `request`, posted to `store`, on `grounds`.
 #[must_use]
 pub fn refused<S>(
     request: Hash,
@@ -122,8 +114,8 @@ where
     }
 }
 
-/// Every request of `store` that `objects` refuse, two refusals of one joined in name order, on
-/// the first one's grounds.
+/// Every request of `store` that `objects` refuse; two refusals of one join in name order, on
+/// the first's grounds.
 pub fn refusals<'a, S>(
     objects: impl IntoIterator<Item = (&'a Hash, &'a Envelope<RefusalEvent<S>>)>,
     store: &S,
@@ -158,8 +150,7 @@ mod tests {
 
     use super::*;
 
-    /// Each grounds prints under its own constructor and reads back to itself, so the shipped
-    /// `Refused` keeps its fields and an `Outdated` is told from it by name alone.
+    /// Each grounds prints under its own constructor and reads back to itself.
     #[test]
     fn each_grounds_reads_back_under_its_own_constructor() {
         let request = Hash::new("a".repeat(64)).expect("a name");

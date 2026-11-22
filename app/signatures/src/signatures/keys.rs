@@ -5,17 +5,16 @@ use prodrome_core::sign::{PublicKey, Secret};
 use super::Custody;
 use suzatary_base::capability;
 
-/// The secretspec name of the box's own key, the deployment's ROOT: it signs every write the
-/// box makes and every key object, so a key counts where it signed one.
+/// The secretspec name of the box's key, the deployment's root: it signs every box write and key
+/// object.
 pub const BOX_KEY: &str = "SUZATARY_BOX_KEY";
 
 /// The secretspec name of the agent's key, registered for the agent's actor alone, so no other
-/// key of the box's proves a write as the agent; the agent's writes are Inbox cards, so it signs
-/// nothing.
+/// key of the box's proves a write as the agent.
 pub const AGENT_KEY: &str = "SUZATARY_AGENT_KEY";
 
-/// The box's two signing keys, each a seed held in secretspec by its name, checked once against
-/// the root the instance declares. Never printed: `Debug` shows the public halves.
+/// The box's two signing keys, checked against the declared root. `Debug` shows only the public
+/// halves.
 #[derive(Clone)]
 pub struct BoxKeys {
     root: Arc<Secret>,
@@ -25,10 +24,9 @@ pub struct BoxKeys {
 /// Seeds that are not this deployment's keys.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotTheKeys {
-    /// A value that is not a seed, by its name only.
+    /// Names the secret only, never its value.
     #[error("{0} is not a key's seed (64 lowercase hex)")]
     NotASeed(&'static str),
-    /// The box's key is not the root the instance declares.
     #[error("{BOX_KEY} is the key {found}, and the instance declares the root {declared}")]
     NotTheRoot {
         /// The root `[signatures]` names.
@@ -42,10 +40,6 @@ pub enum NotTheKeys {
 }
 
 impl BoxKeys {
-    /// The two keys from their seeds, the box's checked to be `root`.
-    ///
-    /// # Errors
-    /// [`NotTheKeys`].
     pub fn of(
         root: &PublicKey,
         box_seed: &capability::Secret,
@@ -70,19 +64,16 @@ impl BoxKeys {
         })
     }
 
-    /// The box's key, the root: what signs the box's writes and its key objects.
     #[must_use]
     pub fn root(&self) -> &Arc<Secret> {
         &self.root
     }
 
-    /// The agent's key, the one key registered for its actor.
     #[must_use]
     pub fn agent(&self) -> &Arc<Secret> {
         &self.agent
     }
 
-    /// The key `custody` names.
     #[must_use]
     pub fn of_custody(&self, custody: Custody) -> &Arc<Secret> {
         match custody {
@@ -92,12 +83,8 @@ impl BoxKeys {
     }
 }
 
-/// The agent's key alone, for the agent's own process: it is checked not to be the root, and
-/// the box's key is never resolved there, so nothing the agent's process holds can register a
-/// key or sign as the box.
-///
-/// # Errors
-/// [`NotTheKeys::NotASeed`] and [`NotTheKeys::Shared`].
+/// The agent's key alone: the agent's process never resolves the box's key, so nothing it holds
+/// can register a key or sign as the box.
 pub fn agent_key(root: &PublicKey, seed: &capability::Secret) -> Result<Arc<Secret>, NotTheKeys> {
     let agent = Secret::new(seed.expose()).map_err(|_| NotTheKeys::NotASeed(AGENT_KEY))?;
     if agent.public() == *root {

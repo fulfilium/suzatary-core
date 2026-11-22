@@ -4,7 +4,8 @@
 
 pub mod coding_report;
 pub mod secretary {
-    //! A line's words, the keys that seal them, the stores that hold copies, and the memory's facts.
+    //! A line's words, the keys that seal them, the stores that hold copies, and the memory's
+    //! facts.
     pub mod carried;
     pub mod erasure;
     pub mod fact_life;

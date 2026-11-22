@@ -7,7 +7,7 @@ use suzatary_store::store::{Prodrome, StoreError};
 #[path = "../../tests/support/keeping.rs"]
 mod stores;
 
-/// THE CHAINS THAT KEEP KEYS, at least one; the first keeps a trust card's endorsement.
+/// The chains that keep keys, at least one; the first keeps a trust card's endorsement.
 #[derive(Debug, Clone)]
 pub struct Keyed<T> {
     first: T,
@@ -22,7 +22,6 @@ pub enum Keeping<T> {
     Keyed(Keyed<T>),
 }
 
-/// A keyed chain as the door reads it.
 #[derive(Clone)]
 pub struct Keeper<'a> {
     pub name: ChainName,
@@ -55,8 +54,6 @@ impl<T> Keyed<T> {
         }
     }
 
-    /// # Errors
-    /// `f`'s first.
     pub fn try_map<'s, U, X>(
         &'s self,
         mut f: impl FnMut(&'s T) -> Result<U, X>,

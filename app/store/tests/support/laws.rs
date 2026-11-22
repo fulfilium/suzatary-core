@@ -1,6 +1,5 @@
-//! The laws an order and a join state, written once (the Prodrome's
-//! `docs/design-register-types.md` §7, law 2): each schema's tests call them over values its own
-//! histories reach, so a law is stated in one place and checked for every order the app defines.
+//! The laws of an order and a join (the Prodrome's `docs/design-register-types.md` §7, law 2),
+//! called by each schema's tests over values its histories reach.
 
 use std::fmt::Debug;
 
@@ -8,9 +7,6 @@ use prodrome_core::fold::Order;
 use proptest::prelude::*;
 
 /// `≤` is reflexive, antisymmetric and transitive over every triple of `values`.
-///
-/// # Errors
-/// The first law that fails, at the values it fails at.
 pub fn partial_order<V: Order + PartialEq + Debug>(values: &[V]) -> Result<(), TestCaseError> {
     for a in values {
         prop_assert!(a.le(a), "reflexive at {:?}", a);
@@ -35,12 +31,8 @@ pub fn partial_order<V: Order + PartialEq + Debug>(values: &[V]) -> Result<(), T
     Ok(())
 }
 
-/// `join` is the least upper bound of what each reading holds, over every pair and triple of
-/// `readings`: what `a ⊔ b` holds is above what each holds and below every upper bound among
-/// them, and the join is idempotent, commutative and associative in what it holds.
-///
-/// # Errors
-/// The first law that fails, at the readings it fails at.
+/// `join` is the least upper bound of what each reading holds, and is idempotent, commutative
+/// and associative, over every pair and triple of `readings`.
 pub fn join<T: Clone + Debug, V: Order + PartialEq + Debug>(
     readings: &[T],
     held: impl Fn(&T) -> V,

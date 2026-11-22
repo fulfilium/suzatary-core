@@ -1,7 +1,6 @@
 use crate::capability::{Clock, Datetime, Entropy, Manual, Manuals, Peer, Whois, WhoisError};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
-/// A test fills a record from it and swaps in the effects it is about.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Nothing;
 
@@ -12,8 +11,6 @@ impl Manuals for Nothing {
 }
 
 /// A closed world that only parses: every text typst's parser accepts compiles to an empty
-/// document. The real one is `suzatary_io::typeset`; a door's refusals of what parses and still
-/// fails to compile are tested there and in `app/cli/tests`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Parses;
 

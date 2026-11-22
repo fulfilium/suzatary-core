@@ -1,17 +1,11 @@
-//! Who a verb surface writes as.
-
 /// Who a verb surface writes as.
-///
-/// Never a parameter of a call: each surface holds a constant of this type, so "the agent
-/// cannot forge a trusted origin" is a fact about which values exist where. The owner's actor
-/// is deliberately absent, so no verb surface can make an agent's guess read as his word.
+/// Never a call parameter: each surface holds a constant, and no variant is the owner's, so an
+/// agent cannot forge a trusted origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Writer {
-    /// The unattended triage agent: untrusted, so what it writes is provisional until the
-    /// owner confirms it.
+    /// The unattended triage agent: untrusted, so its writes stay provisional until confirmed.
     Triage,
-    /// The main assistant, in a conversation somebody is reading: trusted, since the
-    /// conversation is the review.
+    /// The main assistant in a read conversation: trusted, because the conversation is the review.
     Assistant,
 }
 

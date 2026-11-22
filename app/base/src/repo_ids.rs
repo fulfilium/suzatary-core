@@ -1,23 +1,16 @@
-//! The names of a repository, a path in it and a revision.
-//!
-//! Every name comes from a model that reads attacker-controlled mail and ends up as a `git`
-//! argument, so each constructor refuses anything `git` could read as an option or as a path
-//! outside the repository.
+//! Every name comes from a model that reads attacker-controlled mail and becomes a `git`
+//! argument, so each constructor refuses an option or a path outside the repository.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Why a name was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RepoNameError {
-    /// Not `owner/name`, or a part holds a character GitHub does not allow.
     #[error("a repository is owner/name, letters, digits, '-', '_' and '.', got {0:?}")]
     Repository(String),
-    /// Absolute, empty in the middle, `..`, or too long.
     #[error("a path is relative, inside the repository and without '..', got {0:?}")]
     Path(String),
-    /// Not a full commit id.
     #[error("a commit is forty lowercase hex digits, got {0:?}")]
     Commit(String),
     /// Not a branch, tag or commit name, or one `git` could read as an expression.
@@ -29,13 +22,11 @@ pub enum RepoNameError {
     /// Empty, too large, not a unified diff, or a binary change.
     #[error("{0}")]
     Patch(String),
-    /// The declared list names repositories of more than one account.
     #[error(
         "every declared repository is in the owner's own account, but these name {}",
         .0.join(", ")
     )]
     Accounts(Vec<String>),
-    /// The declared list names one repository twice.
     #[error("{0} is declared twice")]
     Twice(String),
 }
@@ -65,7 +56,6 @@ impl RepoName {
         &self.owner
     }
 
-    /// The repository's own name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
@@ -113,7 +103,6 @@ impl fmt::Display for RepoName {
 pub struct RepoPath(String);
 
 impl RepoPath {
-    /// The path as `git` reads it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -146,7 +135,6 @@ impl From<RepoPath> for String {
     }
 }
 
-/// A full commit id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct CommitId(String);
@@ -189,7 +177,6 @@ impl From<CommitId> for String {
 pub struct Rev(String);
 
 impl Rev {
-    /// The name as `git rev-parse` reads it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

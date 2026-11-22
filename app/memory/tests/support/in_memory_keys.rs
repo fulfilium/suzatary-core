@@ -4,15 +4,13 @@ use std::sync::{Mutex, PoisonError};
 use crate::secretary::locked_text::{KEY_BYTES, KeyName, TextKey};
 use suzatary_store::store::{Doc, Gets, StoreError};
 
-/// Keys held in memory as their bytes, for tests: a key is read back as a fresh [`TextKey`], as
-/// a key file is.
+/// Keys held in memory as their bytes, read back as a fresh [`TextKey`] as a key file is.
 #[derive(Debug, Default)]
 pub struct InMemoryKeys {
     keys: Mutex<BTreeMap<KeyName, [u8; KEY_BYTES]>>,
 }
 
 impl InMemoryKeys {
-    /// Every key's name held, sorted.
     #[must_use]
     pub fn names(&self) -> Vec<KeyName> {
         self.keys

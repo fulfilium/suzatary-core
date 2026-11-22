@@ -1,13 +1,9 @@
-//! Every effect the application performs is a trait, one per file, here when it is the base's
-//! and otherwise beside its domain (as `suzatary_todo::render` or `suzatary_mail::mail::mailbox`), or a store in one of `suzatary_store::store`'s three shapes, and a
-//! role's effects are a record of them passed as a value: `suzatary_secretary::agent::Agent`,
-//! `suzatary_secretary::secretary::Secretary`, `suzatary_server::server::Server`.
-//! `suzatary-io` implements the traits, the binary assembles the records, tests fill
-//! them from fakes; a rule then is a fact about which fields a record has.
+//! Every effect is a trait, and a role's effects are a record of them, so a rule is a fact
+//! about which fields a record has.
 //!
-//! - The triage agent cannot send, notify or name a peer: `suzatary_secretary::agent::Agent` has no such field.
+//! - The triage agent cannot send, notify or name a peer: its `Agent` has no such field.
 //! - Reading mail never yields a send token: [`ImapToken`] and [`SmtpToken`] are two types.
-//! - Rendered means confirmed: `suzatary_todo::render::Render::html` takes an [`Escaped`], which only
+//! - Rendered means confirmed: `Render::html` takes an [`Escaped`], which only
 //!   [`Content::Confirmed`] yields.
 //! - Loopback never writes: an actor is a [`Login`], and only [`Whois`] mints one.
 
@@ -38,20 +34,16 @@ pub use whois::{Peer, Whois, WhoisError};
 /// The instant a [`Clock`] hands back: the Prodrome's own literal, data and never an order.
 pub type Datetime = prodrome_core::literal::Datetime;
 
-/// A Tailscale login, as the local daemon named it for a peer address.
-///
-/// Only [`Login::from_whois`] mints one, so loopback, which resolves to no peer, cannot act.
+/// A Tailscale login; only [`Login::from_whois`] mints one, so loopback cannot act.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Login(String);
 
 impl Login {
-    /// Mint a `Login` from what the whois interpreter read back, named for its one caller.
     #[must_use]
     pub fn from_whois(login: impl Into<String>) -> Self {
         Self(login.into())
     }
 
-    /// The login as text, for a roster lookup and an event's `actor` field.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -82,8 +74,8 @@ impl Secret {
     }
 }
 
-/// Read from a string, and the error says only that it was not one: a value typed
-/// as the wrong JSON type is still a secret, and a parse error must not print it.
+/// A parse error says only that the value was not a string: a mistyped value is still a
+/// secret.
 impl<'de> serde::Deserialize<'de> for Secret {
     fn deserialize<D: serde::Deserializer<'de>>(input: D) -> Result<Self, D::Error> {
         String::deserialize(input)
@@ -98,20 +90,17 @@ impl fmt::Debug for Secret {
     }
 }
 
-/// An access token that may read a mailbox over IMAP.
-///
-/// A separate type from [`SmtpToken`], so a read path that holds a token holds nothing that sends.
+/// A token that may read a mailbox over IMAP, a type apart from [`SmtpToken`] so it cannot send.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImapToken(Secret);
 
 impl ImapToken {
-    /// Mint one. Only the token store's refresh calls this.
+    /// Only the token store's refresh calls this.
     #[must_use]
     pub fn from_refresh(secret: Secret) -> Self {
         Self(secret)
     }
 
-    /// The bearer token, for the IMAP transport.
     #[must_use]
     pub fn secret(&self) -> &Secret {
         &self.0
@@ -123,13 +112,12 @@ impl ImapToken {
 pub struct SmtpToken(Secret);
 
 impl SmtpToken {
-    /// Mint one. Only the token store's refresh calls this.
+    /// Only the token store's refresh calls this.
     #[must_use]
     pub fn from_refresh(secret: Secret) -> Self {
         Self(secret)
     }
 
-    /// The bearer token, for the SMTP transport.
     #[must_use]
     pub fn secret(&self) -> &Secret {
         &self.0
@@ -137,18 +125,15 @@ impl SmtpToken {
 }
 
 /// A todo's prose, tagged by whether a trusted actor wrote it.
-///
-/// Only [`Content::Confirmed`] yields an [`Escaped`], which `suzatary_todo::render::Render::html` requires.
+/// Only [`Content::Confirmed`] yields an [`Escaped`], which `Render::html` requires.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
-    /// A trusted actor's markup. Renders.
     Confirmed(Escaped),
     /// An untrusted actor's markup: served as source, marked `(unconfirmed)`, never rendered.
     Provisional(String),
 }
 
 impl Content {
-    /// The markup a `suzatary_todo::render::Render` may take, `None` for the provisional arm.
     #[must_use]
     pub fn escaped(&self) -> Option<&Escaped> {
         match self {
@@ -157,7 +142,6 @@ impl Content {
         }
     }
 
-    /// The stored source, for either arm.
     #[must_use]
     pub fn source(&self) -> &str {
         match self {

@@ -1,11 +1,8 @@
-//! Words kept apart from the history that names them: a salt and the words, in a file of their
-//! own named by the SHA-256 of both.
+//! Words kept apart from the history that names them: a salt and the words, in a file named by the
+//! SHA-256 of both.
 //!
-//! A history names words by that [`TextName`] and never holds them, so deleting the file leaves
-//! the history verifiable and the words gone. The salt is why the name tells nothing once the
-//! file is gone: a bare digest of a sentence this short would confirm a guess at it to anyone
-//! holding the objects, and the salt is deleted with the words. Which words go is
-//! [`crate::secretary::texts`]'s.
+//! Deleting the file leaves the history verifiable and the words gone.
+//! The salt, deleted with the words, stops the name from confirming a guess at a short sentence.
 
 use sha2::{Digest, Sha256};
 use suzatary_base::capability::SALT_BYTES;
@@ -17,16 +14,11 @@ use suzatary_base::capability::SALT_BYTES;
 #[serde(try_from = "String", into = "String")]
 pub struct TextName(String);
 
-/// A name that is no SHA-256.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a text's name is 64 lowercase hex, got {0:?}")]
 pub struct NotATextName(pub String);
 
 impl TextName {
-    /// A name read back, checked once.
-    ///
-    /// # Errors
-    /// [`NotATextName`] for anything but 64 lowercase hex.
     pub fn new(name: impl Into<String>) -> Result<Self, NotATextName> {
         let name = name.into();
         if name.len() == 64 && name.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
@@ -36,7 +28,6 @@ impl TextName {
         }
     }
 
-    /// The hex.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -62,18 +53,16 @@ impl std::fmt::Display for TextName {
     }
 }
 
-/// Words a text store can keep: one print, and the door that reads it back.
+/// Words a text store can keep, under the law `read(print(w)) == Some(w)`.
 ///
-/// The law, tested per instance: `read(print(w)) == Some(w)`. A print may hold line breaks, since
-/// the salt before it is fixed-width hex and the first break ends it.
+/// A print may hold line breaks, because the salt before it is fixed-width hex and the first break
+/// ends it.
 pub trait Words: Clone + Eq {
-    /// The words as kept.
     fn print(&self) -> std::borrow::Cow<'_, str>;
-    /// The words `print` is, through the type's own door; `None` for text that is no such words.
     fn read(print: &str) -> Option<Self>;
 }
 
-/// Words and the salt they are kept with. It means the words: the salt only hides the name.
+/// Words and the salt they are kept with; the salt only hides the name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Text<T> {
     salt: [u8; SALT_BYTES],
@@ -81,13 +70,12 @@ pub struct Text<T> {
 }
 
 impl<T: Words> Text<T> {
-    /// `words`, salted with `salt`, which the interpreter draws at random.
+    /// The interpreter draws `salt` at random.
     #[must_use]
     pub fn new(words: T, salt: [u8; SALT_BYTES]) -> Self {
         Self { salt, words }
     }
 
-    /// The words.
     #[must_use]
     pub fn words(&self) -> &T {
         &self.words
@@ -99,15 +87,13 @@ impl<T: Words> Text<T> {
         format!("{}\n{}", hex::encode(self.salt), self.words.print()).into_bytes()
     }
 
-    /// The name a history gives it.
     #[must_use]
     pub fn name(&self) -> TextName {
         TextName(hex::encode(Sha256::digest(self.bytes())))
     }
 
-    /// The text a file under `name` holds, or `None` for bytes `name` does not name or that are
-    /// not the canonical print of salted words: a file swapped under the store reads as absent,
-    /// never as something else, and its words go through [`Words::read`] like every other's.
+    /// The text a file under `name` holds; a swapped or non-canonical file reads as absent, never
+    /// as something else.
     #[must_use]
     pub fn parse(name: &TextName, bytes: &[u8]) -> Option<Self> {
         let text = std::str::from_utf8(bytes).ok()?;
@@ -118,7 +104,6 @@ impl<T: Words> Text<T> {
     }
 }
 
-// The literal of each is its text, as an inbox act stores it.
 prodrome_core::text_literal!(
     TextName => |name| String::from(name.clone()),
 );
@@ -130,7 +115,6 @@ mod tests {
     use super::*;
     use crate::secretary::memory::Fact;
 
-    /// Words of any shape, line breaks included: the store is not the fact's.
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct Lines(String);
 
@@ -174,7 +158,7 @@ mod tests {
         }
     }
 
-    /// The bytes a fact was kept as before the store was generic, so the files on disk still read.
+    /// A fact's file keeps its stored format, so the files on disk still read.
     #[test]
     fn a_facts_file_is_the_bytes_it_always_was() {
         let text = Text::new(fact("Mira is the accountant"), [7; SALT_BYTES]);

@@ -9,15 +9,8 @@ use prodrome_core::store::EventStore;
 
 use super::StoreError;
 
-/// Append `event` as the Prodrome's `Change` over its entity's heads, or nothing for a twin,
-/// beginning the store's prodrome with a `Genesis` labelled `label` when it holds none. Nothing
-/// joins the heads afterwards: they are derived, and no reader needs one.
-///
-/// Another process may begin the store between the look and the `init`, which then refuses: that
-/// refusal is the store begun.
-///
-/// # Errors
-/// The core's refusal.
+/// Append `event` as a `Change` over its entity's heads, or nothing for a twin, beginning the
+/// store with a `Genesis` labelled `label` when it holds none.
 pub fn append_to<E: Schema, Pol: Policy<E>>(
     store: &EventStore<E, Pol>,
     label: &str,
@@ -27,10 +20,8 @@ pub fn append_to<E: Schema, Pol: Policy<E>>(
     store.append(event)
 }
 
-/// The store's prodrome begun with a `Genesis` labelled `label` when it holds none ([`append_to`]).
-///
-/// # Errors
-/// The core's refusal.
+/// Begin the store with a `Genesis` labelled `label` when it holds none.
+/// Another process may begin it between the look and the `init`; that refusal is the store begun.
 pub fn begun<E: Schema, Pol: Policy<E>>(
     store: &EventStore<E, Pol>,
     label: &str,
@@ -74,32 +65,20 @@ pub fn linearised<E: Schema, Pol: Policy<E>>(
 /// An exclusive hold on a store's write path for as long as the value lives.
 pub trait WriteLock {}
 
-/// Content-addressed objects of schema `E`, read: what a record that may only read holds, so
-/// no write is reachable from it.
+/// Content-addressed objects of schema `E`, read; no write is reachable from it.
 ///
 /// An interpreter may memoise, but never answer from a stale set of heads.
 pub trait Reads<E: Schema>: Sync {
     /// Every object in the linearisation's order, each beside its name.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError>;
 
-    /// The objects as one graph, which a store that memoises keeps by its heads, so a reader at
-    /// heads already read reads no object.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// The objects as one graph, which a store that memoises keeps by its heads.
     fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
         Ok(std::sync::Arc::new(super::Graph::of(self.objects()?)))
     }
 
-    /// The print of each object `names` names as the store holds it, in that order, or `None`
-    /// for one it holds no print of, read by name: whether the history holds a name is the
-    /// caller's to ask of its [`Reads::graph`].
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// The stored print of each object `names` names, in that order, or `None` for one not held.
+    /// Whether the history holds a name is the caller's to ask of [`Reads::graph`].
     fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
         let objects: std::collections::BTreeMap<Hash, Envelope<E>> =
             self.objects()?.into_iter().collect();
@@ -113,12 +92,7 @@ pub trait Reads<E: Schema>: Sync {
             .collect())
     }
 
-    /// How many bytes each object `names` names is as the store holds it, the length of its
-    /// print in [`Reads::literals`], in that order, or `None` for one this store does not
-    /// hold: what a content answer sends of it, and so what a reader sizes its asks by.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// The length in bytes of each print in [`Reads::literals`], or `None` for one not held.
     fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
         Ok(self
             .literals(names)?
@@ -127,11 +101,7 @@ pub trait Reads<E: Schema>: Sync {
             .collect())
     }
 
-    /// The objects as the register folds read them: the graph's, shared by every reader at the
-    /// same heads, never copied per call.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// The objects as the register folds read them, shared by every reader at the same heads.
     fn nodes(&self) -> Result<std::sync::Arc<[Node<E>]>, StoreError>
     where
         E: Send + Sync + 'static,
@@ -140,9 +110,6 @@ pub trait Reads<E: Schema>: Sync {
     }
 
     /// The event of every object that carries one, in the same order.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     fn events(&self) -> Result<Vec<E>, StoreError> {
         Ok(self
             .objects()?
@@ -151,18 +118,11 @@ pub trait Reads<E: Schema>: Sync {
             .collect())
     }
 
-    /// Every name the read left out: a print that is no object, or an object resting on one
-    /// (the Prodrome's `Dag::excluded`). A reading may omit them; a write that deletes or
-    /// decides on the reading may not, so it asks this first.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// Every name the read left out (the Prodrome's `Dag::excluded`).
+    /// A write that deletes or decides on the reading must ask this first.
     fn excluded(&self) -> Result<BTreeSet<Hash>, StoreError>;
 
     /// Every head, sorted; fallible because deriving them reads unverified objects.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     fn tips(&self) -> Result<Vec<Hash>, StoreError>;
 
     /// The fsck's findings, empty when healthy.
@@ -171,19 +131,15 @@ pub trait Reads<E: Schema>: Sync {
 
 /// Content-addressed objects of schema `E`, read, appended and never edited.
 pub trait Prodrome<E: Schema>: Reads<E> {
-    /// Write one event as a `Change` over its entity's heads ([`append_to`]);
-    /// [`Prodrome::locked`] serialises the decision above it.
-    ///
-    /// # Errors
-    /// [`StoreError::Unwritable`], leaving the store unchanged.
+    /// Write one event as a `Change` over its entity's heads; [`Prodrome::locked`] serialises the
+    /// decision above it.
     fn append(&self, event: E) -> Result<Hash, StoreError>;
 
-    /// [`Prodrome::append`] for each event `next` yields, which runs between the writes. `next` must
-    /// not read or write this store: a store on disk holds its lock and memory across the run, so
-    /// such a `next` would wait on itself forever.
+    /// [`Prodrome::append`] for each event `next` yields. `next` must not read or write this
+    /// store: a store on disk holds its lock across the run, so it would deadlock.
     ///
     /// # Errors
-    /// `next`'s, or [`StoreError::Unwritable`]; what was written before stays.
+    /// What was written before the error stays.
     fn append_each(
         &self,
         next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
@@ -195,17 +151,13 @@ pub trait Prodrome<E: Schema>: Reads<E> {
         Ok(names)
     }
 
-    /// The restricted join, the Prodrome's `store::accept`: take in exactly these objects, each
-    /// its name and canonical print, verified on receipt, renaming nothing; answers what was
-    /// taken, parents first. Taking twice is taking once.
+    /// The Prodrome's `store::accept`: take in exactly these canonical prints, verified, renaming
+    /// nothing.
+    /// Answers what was taken, parents first; taking twice is taking once.
     ///
     /// # Errors
     /// [`StoreError::Unwritable`], having taken nothing.
     fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError>;
 
-    /// Hold the write path until the returned guard is dropped.
-    ///
-    /// # Errors
-    /// [`StoreError::Unwritable`] when the hold cannot be taken.
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError>;
 }

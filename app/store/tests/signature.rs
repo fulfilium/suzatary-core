@@ -16,7 +16,6 @@ use prodrome_core::sign::{KeyAdded, Secret, mk_key_revoked};
 use prodrome_core::snapshot::mk_snapshot;
 use suzatary_store::replica::objects::Object;
 
-/// The least schema: a note on a key.
 #[derive(Debug, Clone, PartialEq)]
 struct Noted {
     text: String,
@@ -72,7 +71,7 @@ fn note() -> Note {
     )
 }
 
-/// One envelope of each kind, the match naming every kind so a new one fails to compile here.
+/// The match names every kind, so a new kind fails to compile here.
 fn every_kind() -> Vec<Envelope<Note>> {
     let key = Secret::new(&"07".repeat(32)).expect("a seed").public();
     let actor = Actor::new("ada").expect("an actor");

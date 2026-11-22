@@ -1,25 +1,22 @@
-//! The CSRF triple: whether code this app served made a write, and whether its page keeps a
-//! write contract the box takes.
-
 use suzatary_base::refusal::{Refusal, shown};
 
 /// The app's own header, which forces a CORS preflight this server never answers.
 pub const ACT_HEADER: &str = "x-suzatary-act";
 
-/// What a request carries that the CSRF triple reads.
+/// The headers the CSRF triple reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ActHeaders<'a> {
-    /// `X-Suzatary-Act`, absent as `None`.
+    /// `X-Suzatary-Act`.
     pub act: Option<&'a str>,
-    /// `X-Suzatary-Client`, the write contract the page's build keeps, absent as `None`.
+    /// `X-Suzatary-Client`, the write contract the page's build keeps.
     pub client: Option<&'a str>,
-    /// `Content-Type`, absent as `None`.
+    /// `Content-Type`.
     pub content_type: Option<&'a str>,
-    /// `Sec-Fetch-Site`, absent as `None`, which passes because non-browsers do not send it.
+    /// `Sec-Fetch-Site`; absent passes because non-browsers do not send it.
     pub site: Option<&'a str>,
 }
 
-/// The CSRF triple: did code this app served make this request.
+/// Whether code this app served made this request.
 pub fn check_csrf(headers: &ActHeaders<'_>) -> Result<(), Refusal> {
     if headers.act != Some("1") {
         return Err(Refusal::forbidden(format!(
@@ -50,17 +47,15 @@ pub fn check_csrf(headers: &ActHeaders<'_>) -> Result<(), Refusal> {
     }
 }
 
-/// The header a page's build names its write contract in.
 pub const CLIENT_HEADER: &str = "x-suzatary-client";
 
-/// The oldest write contract the box takes from a page; an older page is refused before it writes
-/// and reloads. Raise it in the same series as a change to what a page writes.
+/// The oldest write contract the box takes from a page. Raise it with any change to what a page
+/// writes.
 pub const CLIENT_MIN: u32 = 16;
 
-/// The contract this build's own page writes by: what a test writes as.
+/// The contract this build's own page writes by.
 pub const CLIENT: &str = "16";
 
-/// A page keeps [`CLIENT_MIN`] or later.
 fn current(client: Option<&str>) -> Result<(), Refusal> {
     match client.and_then(|said| said.trim().parse::<u32>().ok()) {
         Some(contract) if contract >= CLIENT_MIN => Ok(()),
@@ -134,7 +129,8 @@ mod tests {
             Ok(())
         );
     }
-    /// A page older than the box's minimum is told to upgrade; a client that is not a page is not asked.
+    /// A page older than the box's minimum is told to upgrade; a client that is not a page is not
+    /// asked.
     #[test]
     fn a_page_writing_by_an_older_contract_is_told_to_load_the_new_one() {
         let page = |client| ActHeaders {

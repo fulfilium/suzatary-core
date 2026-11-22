@@ -6,13 +6,10 @@ use suzatary_health::health::{Health, Instant, Outcome};
 /// Where the data repository is pushed; a failed read is `Unread`, never `Nowhere`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pushed {
-    /// To its `origin` on a host.
     To(Remote),
-    /// To its `origin` in a folder, as written.
     Folder(String),
     /// No `origin`, or no git repository.
     Nowhere,
-    /// The configuration could not be read, and why.
     Unread(String),
 }
 
@@ -42,7 +39,6 @@ impl Pushed {
         }
     }
 
-    /// Whether the push token is needed: for GitHub, or when unread.
     #[must_use]
     pub(crate) fn needs_push_token(&self) -> bool {
         match self {
@@ -63,7 +59,7 @@ impl Pushed {
     }
 }
 
-/// scp-like `host:path`: a colon before any slash.
+/// An scp-like `host:path` has a colon before any slash.
 fn scp_like(url: &str) -> bool {
     url.split_once(':')
         .is_some_and(|(host, _)| !host.is_empty() && !host.contains('/'))
@@ -74,7 +70,7 @@ fn scp_like(url: &str) -> bool {
 pub struct Remote(String);
 
 impl Remote {
-    /// The host and path a URL names, credentials, port and `.git` dropped.
+    /// The host and path a URL names, with credentials, port and `.git` dropped.
     #[must_use]
     pub fn parse(url: &str) -> Option<Self> {
         let url = url.trim();
@@ -90,13 +86,11 @@ impl Remote {
         (!host.is_empty() && !path.is_empty()).then(|| Self(format!("{host}/{path}")))
     }
 
-    /// The host and path.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// The host alone.
     #[must_use]
     pub fn host(&self) -> &str {
         self.0
@@ -108,14 +102,12 @@ impl Remote {
 /// A ref's last move, by its reflog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tip {
-    /// The commit.
     pub commit: String,
-    /// When it moved there, UTC.
+    /// UTC.
     pub at: Instant,
 }
 
 impl Tip {
-    /// The reflog's last move; `None` if no line parses.
     #[must_use]
     pub fn of_reflog(log: &str) -> Option<Self> {
         let line = log.lines().rev().find(|line| !line.trim().is_empty())?;
@@ -131,7 +123,6 @@ impl Tip {
 }
 
 /// The pushes' health: success at the upstream's last move, failure since if the head differs.
-/// `None` without an upstream.
 #[must_use]
 pub fn pushes(head: &Tip, upstream: Option<&Tip>) -> Option<Health> {
     let upstream = upstream?;

@@ -3,7 +3,6 @@
 use super::{Pairing, Pairings};
 use suzatary_store::store::StoreError;
 
-/// A pairing held in memory, for tests.
 #[derive(Debug, Default)]
 pub struct InMemoryPairings(std::sync::Mutex<Option<Pairing>>);
 

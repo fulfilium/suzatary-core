@@ -1,17 +1,17 @@
-//! Words locked under a key of their own: the history holds the ciphertext and the key's name,
-//! the key lives in a box-local store, and destroying the key erases the words while every object
-//! stays whole, immutable and verifiable.
+//! Words locked under a key of their own; destroying the box-local key erases the words while every
+//! object stays verifiable.
 //!
-//! The cipher is ChaCha20-Poly1305 (RFC 8439). Each key locks exactly one text, so the nonce is
-//! fixed at zero, and the types are what make that safe: a [`FreshKey`] is drawn from
-//! [`Entropy`], is neither `Clone` nor `Copy`, and is spent by [`Locked::lock`], which hands back
-//! the [`TextKey`] the key store keeps; a `TextKey` only opens. No key is derived, since a derived
-//! key could be derived again from its master, which is not erasure.
+//! The cipher is ChaCha20-Poly1305 (RFC 8439) with the nonce fixed at zero, which is safe only
+//! because each key locks one text.
+//! A [`FreshKey`] is neither `Clone` nor `Copy` and [`Locked::lock`] spends it; a [`TextKey`] only
+//! opens.
+//! No key is derived, because a key derived from a master could be derived again, which is not
+//! erasure.
 //!
-//! The associated data is the store's [`Shape::DOMAIN`] and the canonical print of the slot's
-//! [`Shape`], so a ciphertext moved to another slot or another store does not open. Before
-//! locking, the words are padded (ISO/IEC 7816-4: `0x80`, then zeros) to a multiple of
-//! `BUCKET` bytes, so the ciphertext tells their length only to the bucket.
+//! The associated data binds the store's [`Shape::DOMAIN`] and the slot's print, so a moved
+//! ciphertext does not open.
+//! The words are padded (ISO/IEC 7816-4) to a multiple of `BUCKET` bytes, so the ciphertext tells
+//! their length only to the bucket.
 
 use std::marker::PhantomData;
 
@@ -22,31 +22,23 @@ use sha2::{Digest, Sha256};
 use crate::secretary::salted_text::Words;
 use suzatary_base::capability::Entropy;
 
-/// How many bytes a key is.
 pub const KEY_BYTES: usize = 32;
 
-/// The padded words are a multiple of this many bytes: all a ciphertext tells of their length.
+/// The padded words are a multiple of this many bytes.
 pub(crate) const BUCKET: usize = 256;
 
-/// The SHA-256 of a key: 64 lowercase hex, the key file's name and what a locked text names.
-///
-/// A key is random, so its name confirms nothing about the words, and it needs no salt.
+/// The SHA-256 of a key in 64 lowercase hex; a key is random, so its name needs no salt.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 #[serde(try_from = "String", into = "String")]
 pub struct KeyName(String);
 
-/// A name that is no SHA-256.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a key's name is 64 lowercase hex, got {0:?}")]
 pub struct NotAKeyName(pub String);
 
 impl KeyName {
-    /// A name read back, checked once.
-    ///
-    /// # Errors
-    /// [`NotAKeyName`] for anything but 64 lowercase hex.
     pub fn new(name: impl Into<String>) -> Result<Self, NotAKeyName> {
         let name = name.into();
         if name.len() == 64 && name.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
@@ -60,7 +52,6 @@ impl KeyName {
         Self(hex::encode(Sha256::digest(key)))
     }
 
-    /// The hex.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -133,10 +124,6 @@ prodrome_core::text_literal!(
 pub struct FreshKey([u8; KEY_BYTES]);
 
 impl FreshKey {
-    /// A key nobody has: [`KEY_BYTES`] bytes of `entropy`.
-    ///
-    /// # Errors
-    /// The generator's failure, as a sentence.
     pub fn draw(entropy: &dyn Entropy) -> Result<Self, String> {
         let mut key = [0; KEY_BYTES];
         entropy.fill(&mut key)?;
@@ -172,14 +159,12 @@ impl std::fmt::Debug for FreshKey {
 pub struct TextKey([u8; KEY_BYTES]);
 
 impl TextKey {
-    /// The name a locked text gives it.
     #[must_use]
     pub fn name(&self) -> KeyName {
         KeyName::of(&self.0)
     }
 
-    /// The key whose bytes `hex` spells, as a writer posts it beside the object it opens; `None`
-    /// for anything but 64 hex digits.
+    /// The key as a writer posts it beside the object it opens.
     #[must_use]
     pub fn from_hex(hex: &str) -> Option<Self> {
         let bytes: [u8; KEY_BYTES] = hex::decode(hex).ok()?.try_into().ok()?;
@@ -192,8 +177,7 @@ impl TextKey {
         &self.0
     }
 
-    /// The key a file under `name` holds, or `None` for bytes `name` does not name: a file
-    /// swapped under the store reads as absent, never as another key.
+    /// A file swapped under the store reads as absent, never as another key.
     #[must_use]
     pub fn parse(name: &KeyName, bytes: &[u8]) -> Option<Self> {
         let key = Self(bytes.try_into().ok()?);
@@ -217,16 +201,15 @@ impl std::fmt::Debug for TextKey {
 ///
 /// The law: `print` is injective, and two stores never share a [`Shape::DOMAIN`].
 pub trait Shape {
-    /// The words a slot of this shape holds.
     type Words: Words;
     /// The store's tag, so one store's ciphertext never opens as another's.
     const DOMAIN: &'static [u8];
-    /// The slot's canonical print: equal exactly when the slots are.
+    /// Equal exactly when the slots are.
     fn print(&self) -> Vec<u8>;
 }
 
 /// Words of a slot of shape `S`, locked: the name of the one key that opens them, and the
-/// ciphertext with its tag. It means the words, while that key is kept.
+/// ciphertext with its tag.
 pub struct Locked<S> {
     key: KeyName,
     sealed: Vec<u8>,
@@ -234,8 +217,7 @@ pub struct Locked<S> {
 }
 
 impl<S: Shape> Locked<S> {
-    /// `words`, locked for the slot `shape` under `key`, which is spent here; the [`TextKey`]
-    /// that opens them is the only thing to keep.
+    /// The returned [`TextKey`] is the only thing to keep.
     ///
     /// # Panics
     /// Never for a text that fits in memory: RFC 8439 locks up to 256 GiB.
@@ -264,8 +246,7 @@ impl<S: Shape> Locked<S> {
         (locked, key)
     }
 
-    /// The words, when `key` is the one that locked them for the slot `shape`; `None` for any
-    /// other key or slot, a changed byte, or words [`Words::read`] does not read.
+    /// `None` for any other key or slot, a changed byte, or words [`Words::read`] does not read.
     #[must_use]
     pub fn open(&self, shape: &S, key: &TextKey) -> Option<S::Words> {
         if key.name() != self.key {
@@ -284,7 +265,7 @@ impl<S: Shape> Locked<S> {
         S::Words::read(std::str::from_utf8(unpad(&padded)?).ok()?)
     }
 
-    /// Locked words as a store read them back: whether they are anything is [`Locked::open`]'s.
+    /// Only [`Locked::open`] checks the bytes.
     #[must_use]
     pub fn read(key: KeyName, sealed: Vec<u8>) -> Self {
         Self {
@@ -294,13 +275,11 @@ impl<S: Shape> Locked<S> {
         }
     }
 
-    /// The name of the key that opens them.
     #[must_use]
     pub fn key(&self) -> &KeyName {
         &self.key
     }
 
-    /// The ciphertext and its tag.
     #[must_use]
     pub fn sealed(&self) -> &[u8] {
         &self.sealed
@@ -338,8 +317,8 @@ thread_local! {
     static OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many sealed texts this thread has decrypted, so a test can show what a reading opens: the
-/// core's tests, and the browser scenes, which read it from the tab's core worker.
+/// How many sealed texts this thread has decrypted; the browser scenes read it from the tab's core
+/// worker.
 #[must_use]
 pub fn opens() -> usize {
     OPENS.with(std::cell::Cell::get)
@@ -349,8 +328,8 @@ fn cipher(key: &[u8; KEY_BYTES]) -> ChaCha20Poly1305 {
     ChaCha20Poly1305::new(Key::from_slice(key))
 }
 
-/// The domain's length, the domain, the shape's print: the length makes the split unambiguous,
-/// and is eight bytes on every target, so the box and the tab bind the same bytes.
+/// The domain's length as eight big-endian bytes on every target, the domain, then the shape's
+/// print.
 fn aad<S: Shape>(shape: &S) -> Vec<u8> {
     let mut aad = (S::DOMAIN.len() as u64).to_be_bytes().to_vec();
     aad.extend_from_slice(S::DOMAIN);
@@ -385,7 +364,6 @@ mod tests {
 
     use super::*;
 
-    /// Words of any shape.
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct Plain(String);
 
@@ -398,7 +376,6 @@ mod tests {
         }
     }
 
-    /// A slot of one store: a line's number.
     #[derive(Debug, Clone, Copy)]
     struct Line(u32);
 
@@ -410,7 +387,6 @@ mod tests {
         }
     }
 
-    /// A slot of another store, printing the same bytes as a [`Line`] of the same number.
     #[derive(Debug, Clone, Copy)]
     struct Card(u32);
 
@@ -422,7 +398,6 @@ mod tests {
         }
     }
 
-    /// The same bytes every time, so a vector can be pinned.
     struct Fixed(u8);
 
     impl Entropy for Fixed {
@@ -467,8 +442,7 @@ mod tests {
             prop_assert_eq!(tampered.open(&Line(line), &opens), None);
         }
 
-        /// Two texts whose lengths fall in one bucket lock to ciphertexts of one length: the
-        /// bucket's and the tag's.
+        /// Two texts whose lengths fall in one bucket lock to ciphertexts of one length.
         #[test]
         fn a_ciphertext_tells_the_length_only_to_the_bucket(a in 0usize..1024, b in 0usize..1024) {
             let sealed = |n: usize| Locked::lock(&Line(0), &Plain("x".repeat(n)), key(1)).0.sealed().len();
@@ -497,7 +471,7 @@ mod tests {
         }
     }
 
-    /// The names a key has always had: the SHA-256 of its bytes.
+    /// A key's name is the SHA-256 of its bytes.
     #[test]
     fn a_keys_name_is_stable() {
         let (_, opens) = Locked::lock(&Line(0), &Plain(String::new()), key(7));
@@ -507,10 +481,7 @@ mod tests {
         );
     }
 
-    /// FROZEN: a fixed key, slot and words lock to these bytes, on the box and in the tab. They
-    /// were checked against a second implementation of RFC 8439 (OpenSSL's, through Python's
-    /// `cryptography`) over the same key, zero nonce, padded words and associated data, so the
-    /// construction is the standard one and not merely this crate's.
+    /// FROZEN: these bytes match a second implementation of RFC 8439 over the same inputs.
     #[test]
     fn the_locked_bytes_are_frozen() {
         let (locked, opens) =

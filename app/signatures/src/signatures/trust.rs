@@ -12,17 +12,15 @@ use super::{KeyStanding, Provenance, Unproven};
 use suzatary_base::table::Table;
 use suzatary_store::store::{Prodrome, StoreError};
 
-/// How many readings a process keeps by their heads: a few chains, each under its registrar.
+/// How many readings a process keeps by their heads.
 pub(crate) const KEPT_READINGS: usize = 8;
 
 static READINGS: LazyLock<Table<Arc<Trust>>> = LazyLock::new(|| Table::new(KEPT_READINGS));
 
-/// How many signature checks a process keeps: twenty times a chain of a few thousand objects'
-/// signatures. A history holding more is read correctly and checks again what was dropped.
+/// How many signature checks a process keeps; a larger history reads correctly and checks again.
 pub const KEPT_CHECKS: usize = 1 << 16;
 
-/// This process's table of signature checks, the Prodrome's [`Checks`]. It is no input of any
-/// reading, since it cannot change one, so no reader is handed it.
+/// This process's table of signature checks; it cannot change a reading, so no reader is handed it.
 static CHECKS: LazyLock<Checks> = LazyLock::new(|| Checks::new(KEPT_CHECKS));
 
 /// THE READING OF A HISTORY'S SIGNATURES, as a deployment reads them: what is proven, every
@@ -48,25 +46,20 @@ static CHECKS: LazyLock<Checks> = LazyLock::new(|| Checks::new(KEPT_CHECKS));
 /// whatever order the objects arrived in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trust {
-    /// The objects carrying an event that a key speaking for its actor signed, held whole.
     proven: BTreeSet<Hash>,
-    /// The same, held as husks (SPEC §3): the signature vouches for each and proves none.
+    /// Held as husks (SPEC §3): the signature vouches for each and proves none.
     vouched: BTreeSet<Hash>,
     /// Each `Snapshot` a counted key's signature covers: an epoch.
     epochs: BTreeSet<Hash>,
-    /// Beneath an epoch: written before signatures.
     predating: BTreeSet<Hash>,
-    /// Each signed object's signatures.
     signatures: BTreeMap<Hash, Vec<Signature>>,
-    /// Each key registered by a key object that counts, and whether one that counts revokes it.
+    /// Each key registered by a key object that counts.
     keys: BTreeMap<(Genesis, Actor, PublicKey), KeyStanding>,
-    /// The prodrome and actor of each object carrying an event.
     whose: BTreeMap<Hash, (Genesis, Actor)>,
     /// The prodrome of the history's least genesis.
     home: Genesis,
 }
 
-/// One `Signed` of an object: its own name, its key, and whether it verifies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Signature {
     name: Hash,
@@ -75,20 +68,15 @@ struct Signature {
 }
 
 impl Trust {
-    /// The trust `dag`'s objects give, its key objects counted as `registrar` says (the
-    /// deployment's root, or anyone's, which is how `verify` reads them), each signature checked
-    /// through this process's table of [`Checks`].
+    /// The trust `dag`'s objects give, key objects counted as `registrar` says (`verify` reads
+    /// under anyone's).
     #[must_use]
     pub fn of<E: Schema>(dag: &Dag<E>, registrar: &Registrar) -> Trust {
         Trust::through(dag, registrar, &CHECKS)
     }
 
-    /// The trust a chain's store holds now, kept by its heads: a chain that has not moved is
-    /// read once, and one that has moved is read again, checking only its new signatures. A
-    /// revocation is an object, so it moves the heads and is read at once.
-    ///
-    /// # Errors
-    /// The store unreadable.
+    /// The trust a chain's store holds now, kept by its heads; a revocation moves the heads, so
+    /// it is read at once.
     pub fn held<E: Schema>(
         store: &(impl Prodrome<E> + ?Sized),
         registrar: &Registrar,
@@ -98,8 +86,7 @@ impl Trust {
         }
         let graph = store.graph()?;
         let dag = graph.dag();
-        // Kept by the heads of what was read, never by the heads asked about first: a write
-        // between the two is in this reading, so only its own heads may name it.
+        // Keep it by the heads read, not the heads asked: a write between them is in this reading.
         let trust = Arc::new(Trust::of(dag, registrar));
         let heads: Vec<Hash> = dag.tips().into_iter().collect();
         // A finding is kept as evidence and answers nothing, so the next read reads again.
@@ -107,7 +94,6 @@ impl Trust {
         Ok(trust)
     }
 
-    /// [`Trust::of`], each signature checked through `checks`.
     #[must_use]
     pub fn through<E: Schema>(dag: &Dag<E>, registrar: &Registrar, checks: &Checks) -> Trust {
         let mut signatures: BTreeMap<Hash, Vec<Signature>> = BTreeMap::new();
@@ -127,7 +113,6 @@ impl Trust {
             Registrar::Anyone => true,
             Registrar::Roots(roots) => roots.contains(key),
         };
-        // Signed by a key `registrar` counts, with a signature that verifies.
         let attested = |name: &Hash| {
             signatures
                 .get(name)
@@ -208,7 +193,6 @@ impl Trust {
         }
     }
 
-    /// Is `object` signed by a key that speaks for its actor?
     #[must_use]
     pub fn proves(&self, object: &Hash) -> bool {
         self.proven.contains(object)
@@ -220,7 +204,6 @@ impl Trust {
         &self.home
     }
 
-    /// What the history says of `key` for `actor` in the prodrome `genesis`.
     #[must_use]
     pub fn standing(&self, genesis: &Genesis, actor: &Actor, key: &PublicKey) -> KeyStanding {
         self.keys
@@ -229,11 +212,8 @@ impl Trust {
             .unwrap_or(KeyStanding::Untrusted)
     }
 
-    /// THE ONE CHECK OF A KEY AT THE DOOR, for a posted object's signature and a device's request
-    /// alike: `signed` verifies, and the history trusts its key for `actor` in `genesis`.
-    ///
-    /// # Errors
-    /// Why not, in the words a refusal says.
+    /// The one key check at the door, for posted objects and device requests: `signed` verifies
+    /// and its key is trusted for `actor` in `genesis`.
     pub fn admits(
         &self,
         genesis: &Genesis,
@@ -254,16 +234,13 @@ impl Trust {
         }
     }
 
-    /// Every registered key, with its prodrome, actor and standing.
     pub fn keys(&self) -> impl Iterator<Item = (&Genesis, &Actor, &PublicKey, KeyStanding)> {
         self.keys
             .iter()
             .map(|((genesis, actor, key), standing)| (genesis, actor, key, *standing))
     }
 
-    /// Why `object` is not proven: `None` where it is or a signature vouches for its husk, or
-    /// where it carries no event (a signature, a key, a genesis or a snapshot asserts no actor's
-    /// fact).
+    /// Why `object` is not proven; `None` when it is proven, vouched for, or carries no event.
     #[must_use]
     pub fn why(&self, object: &Hash) -> Option<Unproven> {
         let (genesis, actor) = self.whose.get(object)?;
@@ -300,9 +277,7 @@ impl Trust {
         )
     }
 
-    /// Who wrote `object`, as the reading says it: proven by a key, vouched for as a husk by
-    /// one, written before signatures, or unproven and why. `None` for an object that carries
-    /// no event.
+    /// `None` for an object that carries no event.
     #[must_use]
     pub fn provenance(&self, object: &Hash) -> Option<Provenance> {
         let (genesis, actor) = self.whose.get(object)?;
@@ -329,8 +304,7 @@ impl Trust {
         self.why(object).map(Provenance::Unproven)
     }
 
-    /// Every write after the epoch that carries no signature at all, with its actor: what a
-    /// crash between an append and its signature leaves, or a writer that did not sign.
+    /// Every write after the epoch with no signature, as a crash between append and sign leaves.
     pub fn unsigned(&self) -> impl Iterator<Item = (&Hash, &Actor)> {
         self.whose
             .iter()
@@ -340,32 +314,25 @@ impl Trust {
             .map(|(name, (_, actor))| (name, actor))
     }
 
-    /// The EPOCHS: each `Snapshot` a key the registrar counts has signed (any key, read
-    /// structurally; a root, read as the deployment). A snapshot attests a state of its
-    /// prodrome, so the root's signature on one says "this is what the box held when it began
-    /// signing", and nothing a writer does later can move it.
+    /// Each `Snapshot` a counted key signed: what the box held when it began signing.
     #[must_use]
     pub fn epochs(&self) -> &BTreeSet<Hash> {
         &self.epochs
     }
 
-    /// Everything beneath an epoch: the history written before signatures, which an unsigned
-    /// object may belong to without being a finding. An epoch arriving moves objects into it,
-    /// and nothing moves out.
+    /// Everything beneath an epoch, where an unsigned object is no finding; nothing moves out.
     #[must_use]
     pub fn predating(&self) -> &BTreeSet<Hash> {
         &self.predating
     }
 
-    /// Is `object` beneath an epoch?
     #[must_use]
     pub fn predates(&self, object: &Hash) -> bool {
         self.predating.contains(object)
     }
 }
 
-/// The prodrome `object` is in, as the Prodrome's `Dag` places it: a signature's is what it
-/// signs', a legacy object's none.
+/// A signature's prodrome is what it signs'; a legacy object has none.
 fn prodrome<E: Schema>(dag: &Dag<E>, name: &Hash, object: &Envelope<E>) -> Genesis {
     match object {
         Envelope::Sealed { .. } | Envelope::Woven { .. } => None,
@@ -378,8 +345,7 @@ fn prodrome<E: Schema>(dag: &Dag<E>, name: &Hash, object: &Envelope<E>) -> Genes
     }
 }
 
-/// The key a reading is kept under: the trust under `registrar` of the history `heads` name,
-/// which is the whole of it, since a store holds every ancestor of its heads.
+/// The heads name the whole history, since a store holds every ancestor of its heads.
 fn reading(registrar: &Registrar, heads: &[Hash]) -> Key {
     let counted = match registrar {
         Registrar::Anyone => "anyone".to_owned(),

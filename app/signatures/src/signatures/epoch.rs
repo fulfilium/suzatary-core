@@ -5,8 +5,7 @@ use prodrome_core::sign::Registrar;
 
 use super::Trust;
 
-/// The fsck's findings in the objects of `dag` alone: [`Dag::verify`] under `policy` at that
-/// history, then [`since_epoch`]. A store on disk reports these beside what only its files show.
+/// The fsck's findings in the objects of `dag` alone: [`Dag::verify`] then [`since_epoch`].
 #[must_use]
 pub fn findings_of<E: Schema, P: Policy<E>>(dag: &Dag<E>, policy: &P) -> Vec<Finding> {
     let at = policy.at(dag);
@@ -14,8 +13,7 @@ pub fn findings_of<E: Schema, P: Policy<E>>(dag: &Dag<E>, policy: &P) -> Vec<Fin
 }
 
 /// `findings` less each `Unsigned` beneath an epoch: an object written before its actor had a key
-/// is history, not a finding. Every other finding
-/// stands, an unsigned write after the epoch included.
+/// is history, not a finding.
 #[must_use]
 pub fn since_epoch<E: Schema>(dag: &Dag<E>, findings: Vec<Finding>) -> Vec<Finding> {
     let earlier = Trust::of(dag, &Registrar::Anyone);

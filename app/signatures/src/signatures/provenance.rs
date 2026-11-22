@@ -2,30 +2,24 @@ use prodrome_core::sign::PublicKey;
 
 use super::Unproven;
 
-/// Who wrote one object, as a reader is told: what a page beside the object says, and what the
-/// box answers a refused post with.
+/// Who wrote one object, as a page or a refused post's answer tells a reader.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     /// A signature by a key registered to its actor proves it.
     Proven {
-        /// The key whose signature proves it.
         key: PublicKey,
     },
-    /// Held as its husk (SPEC §3), whose whole such a signature covers: the signature vouches
-    /// for it and proves nothing of it, since its bytes no longer hash to its name.
+    /// Held as its husk (SPEC §3): the signature vouches for it and proves nothing, since its
+    /// bytes no longer hash to its name.
     Vouched {
-        /// The key whose signature covers the whole it was.
         key: PublicKey,
     },
-    /// Unsigned and beneath an epoch: written before this deployment signed its objects, held
-    /// by the box when it began, and as valid as it ever was.
+    /// Unsigned and beneath an epoch: written before this deployment signed its objects.
     Predates,
-    /// Not proven, and not earlier than signatures.
     Unproven(Unproven),
 }
 
 impl Provenance {
-    /// The sentence a page shows.
     #[must_use]
     pub fn said(&self) -> String {
         match self {

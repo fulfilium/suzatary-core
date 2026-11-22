@@ -6,16 +6,13 @@ use super::{Reentrant, StoreError, WriteLock};
 /// What serialises a prodrome's writers above the database's own lock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hold {
-    /// This process's threads, reentrant, since a batch holds it while each write inside takes
-    /// its own.
+    /// This process's threads, reentrant.
     Reentrant,
-    /// An `flock` on this file beside the objects, opened afresh for each hold, so threads wait
-    /// on each other as processes do; never taken twice by one thread.
+    /// An `flock` on this file, opened afresh for each hold; never taken twice by one thread.
     File(&'static str),
 }
 
-/// A hold in this process that refuses a second take by the thread holding it, as the box's
-/// `flock` would hang on one, naming the store.
+/// A hold that refuses a second take by its holding thread, where the box's `flock` would hang.
 #[derive(Debug, Default)]
 pub struct Once {
     holder: Mutex<Option<ThreadId>>,
@@ -23,8 +20,6 @@ pub struct Once {
 }
 
 impl Once {
-    /// Hold it until the returned guard is dropped; another thread waits.
-    ///
     /// # Errors
     /// [`StoreError`] when this thread already holds it.
     pub fn hold(&self, store: &'static str) -> Result<Box<dyn WriteLock + '_>, StoreError> {
@@ -65,19 +60,15 @@ impl Drop for OnceHeld<'_> {
     }
 }
 
-/// A store in memory's hold, as its schema's [`Hold`] says: a file lock on the box is one a
-/// thread cannot take twice, so in memory it is a [`Once`], and a test that would hang on the box
-/// fails here.
+/// A store in memory's hold: [`Hold::File`] becomes a [`Once`], so a test that would hang on the
+/// box fails.
 #[derive(Debug)]
 pub enum InMemoryHold {
-    /// [`Hold::Reentrant`].
     Reentrant(Reentrant),
-    /// [`Hold::File`].
     Once(Once),
 }
 
 impl InMemoryHold {
-    /// The hold for `hold`.
     #[must_use]
     pub fn of(hold: Hold) -> Self {
         match hold {
@@ -86,10 +77,6 @@ impl InMemoryHold {
         }
     }
 
-    /// Hold it.
-    ///
-    /// # Errors
-    /// As [`Once::hold`].
     pub fn hold(&self, store: &'static str) -> Result<Box<dyn WriteLock + '_>, StoreError> {
         match self {
             Self::Reentrant(hold) => Ok(hold.hold()),

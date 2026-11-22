@@ -7,7 +7,6 @@ use super::{
 use crate::settings::{Page, Words};
 use suzatary_health::health::plugin::PluginName;
 
-/// The data repository, pushed to a remote.
 const GIT_REMOTE: Template = Template {
     id: TemplateId::GitRemote,
     group: Group::Storage,
@@ -23,7 +22,6 @@ const GIT_REMOTE: Template = Template {
     check: Check::Pushed,
 };
 
-/// A folder of the owner's Proton Drive the secretary may read without asking.
 const DRIVE_CLI: Template = Template {
     id: TemplateId::DriveCli,
     group: Group::Drive,
@@ -37,10 +35,8 @@ const DRIVE_CLI: Template = Template {
     check: Check::Listed,
 };
 
-/// The calendar's plugin.
 static ICS_PLUGIN: PluginName = PluginName::known("ics");
 
-/// A calendar, by the secret link its service publishes.
 const ICS: Template = Template {
     id: TemplateId::Ics,
     group: Group::Calendar,
@@ -64,7 +60,6 @@ const ICS: Template = Template {
     check: Check::Synced,
 };
 
-/// Gmail, through lieer.
 const GMAIL: Template = Template {
     id: TemplateId::Gmail,
     group: Group::Mail,
@@ -77,9 +72,7 @@ const GMAIL: Template = Template {
     check: Check::MailSynced,
 };
 
-/// A Google account, by one sign-in with Google that grants its mail and its calendars (view and
-/// edit): first the box's Google Cloud client, made once for every Google account,
-/// then the account's own consent, which Google sends back to the box.
+/// One sign-in with Google grants the account's mail and calendars (view and edit).
 const GOOGLE: Template = Template {
     id: TemplateId::Google,
     group: Group::Mail,
@@ -89,8 +82,7 @@ const GOOGLE: Template = Template {
     check: Check::MailSynced,
 };
 
-/// Microsoft 365 or Outlook, read over IMAP once the box's device-code sign-in is tapped, and
-/// sending from it once its own consent is tapped: a second grant, kept apart from reading's.
+/// Sending is a second device-code grant, kept separate from reading's.
 const MS_IMAP: Template = Template {
     id: TemplateId::MsImap,
     group: Group::Mail,
@@ -100,7 +92,6 @@ const MS_IMAP: Template = Template {
     check: Check::MailSynced,
 };
 
-/// Proton Mail, through its Bridge, whose password is set only at a terminal.
 const PROTON: Template = Template {
     id: TemplateId::Proton,
     group: Group::Mail,
@@ -124,7 +115,6 @@ const PROTON: Template = Template {
     check: Check::MailSynced,
 };
 
-/// The deployment's model, signed in from a card.
 const MODEL: Template = Template {
     id: TemplateId::Model,
     group: Group::Models,
@@ -134,7 +124,6 @@ const MODEL: Template = Template {
     check: Check::Answered,
 };
 
-/// Notifications through ntfy.
 const NTFY: Template = Template {
     id: TemplateId::Ntfy,
     group: Group::Notifications,
@@ -151,7 +140,6 @@ const NTFY: Template = Template {
     check: Check::Delivered,
 };
 
-/// Notifications through Firebase.
 const FCM: Template = Template {
     id: TemplateId::Fcm,
     group: Group::Notifications,
@@ -169,15 +157,13 @@ const FCM: Template = Template {
     check: Check::Delivered,
 };
 
-/// Every default template, in [`TemplateId::ALL`]'s order: within a group, the order Settings
-/// offers them, so a Google account comes before Gmail through lieer.
+/// Every default template, in [`TemplateId::ALL`]'s order, which Settings offers within a group.
 pub const CATALOG: [Template; 10] = [
     GIT_REMOTE, DRIVE_CLI, ICS, GOOGLE, GMAIL, MS_IMAP, PROTON, MODEL, NTFY, FCM,
 ];
 
-/// The templates a person may add, in [`Group::ALL`]'s order and the catalog's within a group:
-/// every one whose table the box writes, but a channel `held` already names, which is one per
-/// deployment.
+/// The templates a person may add: every one whose table the box writes, except a channel `held`
+/// already names.
 #[must_use]
 pub fn offered(held: &[Channel]) -> Vec<&'static Template> {
     Group::ALL
@@ -195,7 +181,6 @@ pub fn offered(held: &[Channel]) -> Vec<&'static Template> {
         .collect()
 }
 
-/// The template `id` names.
 pub(super) const fn of(id: TemplateId) -> &'static Template {
     match id {
         TemplateId::GitRemote => &GIT_REMOTE,
@@ -211,7 +196,6 @@ pub(super) const fn of(id: TemplateId) -> &'static Template {
     }
 }
 
-/// The words for the secret named `name`, from the template whose step asks for it.
 #[must_use]
 pub(crate) fn secret_words(name: &str) -> Option<Words> {
     CATALOG.iter().find_map(|template| {
@@ -241,8 +225,7 @@ pub(crate) fn secret_words(name: &str) -> Option<Words> {
     })
 }
 
-/// What the owner calls the plugin `plugin`: the calendar for the plugin the calendar template
-/// declares, and the plugin by its name otherwise.
+/// What the owner calls the plugin `plugin`, such as "the calendar".
 #[must_use]
 pub fn plugin_called(plugin: &str) -> String {
     CATALOG

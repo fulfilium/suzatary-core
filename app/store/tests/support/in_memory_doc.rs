@@ -18,7 +18,6 @@ impl<K, T> Default for InMemoryDoc<K, T> {
 }
 
 impl<K: Ord + Clone, T: Clone> InMemoryDoc<K, T> {
-    /// Every key held, sorted.
     #[must_use]
     pub fn keys(&self) -> Vec<K> {
         self.docs

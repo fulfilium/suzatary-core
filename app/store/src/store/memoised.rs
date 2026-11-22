@@ -5,14 +5,8 @@ use prodrome_core::schema::Schema;
 
 use super::{Prodrome, StoreError};
 
-/// The key a reading of `store` is kept under in a [`Cache`]: the function, named by `function`
-/// (its code and what it reads), at the argument the store's heads name. A store's objects are
-/// named by their content and its heads name every object it holds, so a reading that is a
-/// function of the objects is a function of the heads. Not for a reading that also takes the
-/// clock: the heads do not name the instant.
-///
-/// # Errors
-/// The heads unread.
+/// The key a reading of `store` is kept under: `function` at the store's heads.
+/// Not for a reading that also takes the clock: the heads do not name the instant.
 fn key<E: Schema, S: Prodrome<E> + ?Sized>(function: &[u8], store: &S) -> Result<Key, StoreError> {
     Ok(Key {
         function: name(function, []),
@@ -20,15 +14,10 @@ fn key<E: Schema, S: Prodrome<E> + ?Sized>(function: &[u8], store: &S) -> Result
     })
 }
 
-/// `read` of `store` through `cache`, the Prodrome's tabulation of a pure function
-/// (`memo f = f`): what the cache holds under the function `function` at the store's heads,
-/// or `read` of it now, then held. The heads are read first, so objects written between the two
-/// are read now and held under the older heads, and the next ask reads again. The store is read
-/// outside the hold. A key holding two values is a function that was not pure: it is read again,
-/// never answered by picking one.
-///
-/// # Errors
-/// The heads unread, or `read`'s own refusal; nothing is held from either.
+/// `read` of `store` through `cache` (`memo f = f`), keyed by `function` at the store's heads.
+/// The heads are read first, so a write in between is held under the older heads and read again.
+/// The store is read outside the hold.
+/// A key holding two values is read again, never answered by picking one.
 pub fn memoised<V, Ev, E, S, F>(
     cache: &Mutex<Cache<V, Ev>>,
     function: &[u8],
@@ -48,7 +37,6 @@ where
         return Ok(value);
     }
     let value = read(store)?;
-    // A second value under one key is the cache's finding to keep; this answer is the reading now.
     let _finding = hold().insert(key, value.clone());
     Ok(value)
 }

@@ -1,7 +1,5 @@
-//! A replica of a store whose nodes are its objects, each with its literal: the rows of its pull
-//! ([`Pulling`]) beside what this replica wrote ([`Writes`]). It names no Suzatary store. Every
-//! [`Move`] is a join, so two tabs' moves in any order hold the same replica, and an own object
-//! stays whatever the rows do.
+//! A replica of a store whose nodes are its objects: the rows of its pull beside what this
+//! replica wrote. Every [`Move`] is a join, so two tabs' moves in any order hold the same replica.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
@@ -18,7 +16,6 @@ use crate::replica::row::{Keys, Row};
 use crate::replica::writes::{Answer, Own, Role, Writes};
 use crate::snapshot::{self, NotASnapshot, Unprinted};
 
-/// One object: its name, parents, prodrome and print.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Object {
     name: Hash,
@@ -28,8 +25,7 @@ pub struct Object {
 }
 
 impl Object {
-    /// `literal`, named by its bytes and read at `schema`; a print that does not parse rests on
-    /// nothing, so the reading leaves it out (Prodrome SPEC law 44) and it never stops a pull.
+    /// A print that does not parse rests on nothing, so the reading leaves it out (SPEC law 44).
     #[must_use]
     pub fn read<E: Schema>(schema: &E::Vocabulary, literal: String) -> Self {
         let name = Hash::new(hex::encode(Sha256::digest(literal.as_bytes())))
@@ -52,15 +48,13 @@ impl Object {
         }
     }
 
-    /// The print.
     #[must_use]
     pub fn literal(&self) -> &str {
         &self.literal
     }
 
-    /// Whether this is a signature, which asserts no event. Read without a parse: a canonical
-    /// print begins with its constructor's name, and a signature that parsed rests on the one
-    /// object it signs.
+    /// Read without a parse: a canonical print begins with its constructor's name, and a parsed
+    /// signature rests on the one object it signs.
     #[must_use]
     pub fn is_signature(&self) -> bool {
         self.rests_on.len() == 1 && self.literal.starts_with("Signed(")
@@ -81,7 +75,6 @@ impl Node for Object {
     }
 }
 
-/// The keys of a store that locks no words: none.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NoKeys;
 
@@ -101,66 +94,54 @@ impl Keys for NoKeys {
     }
 }
 
-/// The rows of a store of objects.
 pub(crate) type ObjectRows = Pulling<Object, NoKeys>;
 
-/// One move of those rows.
 pub(crate) type ObjectDelta = Delta<Object, NoKeys>;
 
-/// The rows, and what this replica wrote.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Objects {
     rows: ObjectRows,
     own: Writes<Object>,
 }
 
-/// One move of the replica.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Move {
-    /// The rows moved.
     Rows(ObjectDelta),
-    /// Objects written or answered, joined in.
     Own(Vec<Own<Object>>),
 }
 
 impl Objects {
-    /// The rows.
     #[must_use]
     pub fn rows(&self) -> &ObjectRows {
         &self.rows
     }
 
-    /// The piece `said`, heard at `fetched_at`, kept beside the landed row.
     pub fn piece(&mut self, said: Said<Object>, fetched_at: u64) -> Move {
         Move::Rows(self.rows.piece(said, NoKeys, fetched_at))
     }
 
-    /// The pending pieces landed.
     pub fn land(&mut self) -> Move {
         Move::Rows(self.rows.land())
     }
 
-    /// Every row reset, in the generation after both; what this replica wrote stays.
+    /// What this replica wrote stays.
     pub fn start_over(&mut self) -> Move {
         Move::Rows(self.rows.start_over())
     }
 
-    /// `objects` written by this replica, unsent.
     pub fn write(&mut self, objects: Vec<Object>) -> Move {
         Move::Own(self.own.write(objects))
     }
 
-    /// The box's answers to what this replica wrote; any other is passed over.
+    /// An answer for an object this replica did not write is passed over.
     pub fn answered(&mut self, answers: impl IntoIterator<Item = (Hash, Answer)>) -> Move {
         Move::Own(self.own.answered(answers))
     }
 
-    /// The asks' refusals, joined in as final where they name an own object.
     pub fn refused(&mut self, refused: BTreeMap<Hash, (crate::receipt::Grounds, String)>) -> Move {
         Move::Own(self.own.refused(refused))
     }
 
-    /// `m` taken, whoever made it.
     pub fn apply(&mut self, m: &Move) {
         match m {
             Move::Rows(delta) => self.rows.apply(delta),
@@ -168,8 +149,8 @@ impl Objects {
         }
     }
 
-    /// Every object a reading reads: the landed row's and what this replica wrote, less each
-    /// object refused for good, of a prodrome the box no longer holds, or resting on either.
+    /// The landed row's objects and this replica's writes, less each refused for good, of a gone
+    /// prodrome, or resting on either.
     #[must_use]
     pub fn standing(&self) -> Vec<&Object> {
         let reading = self.rows.landed().replica().read();
@@ -179,7 +160,6 @@ impl Objects {
         reading.nodes().chain(mine).collect()
     }
 
-    /// What this replica wrote that the box has not taken and may take.
     #[must_use]
     pub fn unsent(&self) -> Vec<&Object> {
         let holding = self.rows.holding();
@@ -187,20 +167,18 @@ impl Objects {
         self.own.unsent(|name| reading.holds(name))
     }
 
-    /// What the box has not taken yet of this replica's writes, in the rule's words.
     #[must_use]
     pub fn waiting(&self) -> Vec<(&Object, String)> {
         self.own.waiting()
     }
 
-    /// What the box refused for good of this replica's writes, of which kind, with its sentence.
     #[must_use]
     pub fn refusals(&self) -> Vec<(&Object, crate::replica::writes::Refusal, String)> {
         self.own.refusals()
     }
 
-    /// The unsent changes that no signature this replica wrote covers, read at `schema`; a
-    /// signature the box refused for good covers nothing.
+    /// The unsent changes no signature of this replica covers; a signature refused for good covers
+    /// nothing.
     #[must_use]
     pub fn unsigned<E: Schema>(&self, schema: &E::Vocabulary) -> Vec<&Object> {
         let holding = self.rows.holding();
@@ -209,8 +187,7 @@ impl Objects {
             .unsigned(|name| reading.holds(name), |o| role::<E>(schema, o))
     }
 
-    /// [`Objects::unsent`] in posts that each fit `fit` by the bytes `weight` gives an object, each
-    /// change beside its signatures.
+    /// [`Objects::unsent`] in posts that each fit `fit`, each change beside its signatures.
     #[must_use]
     pub fn unsent_pieces<E: Schema>(
         &self,
@@ -229,7 +206,6 @@ impl Objects {
     }
 }
 
-/// What `o` is to a post, read at `schema`.
 fn role<E: Schema>(schema: &E::Vocabulary, o: &Object) -> Role {
     match parse_envelope::<E>(schema, &o.literal) {
         Ok(Envelope::Change(_)) => Role::Change,
@@ -238,7 +214,6 @@ fn role<E: Schema>(schema: &E::Vocabulary, o: &Object) -> Role {
     }
 }
 
-/// An object as the device keeps it.
 #[derive(Serialize, Deserialize)]
 struct ObjectForm {
     name: Name,
@@ -247,7 +222,6 @@ struct ObjectForm {
     literal: String,
 }
 
-/// A row of objects: no keys.
 type ObjectRowForm = RowForm<ObjectForm, ()>;
 
 #[derive(Serialize, Deserialize)]
@@ -256,7 +230,6 @@ struct OwnForm {
     answer: Answer,
 }
 
-/// What a snapshot of a store of objects prints.
 #[derive(Serialize, Deserialize)]
 pub struct Given {
     landed: ObjectRowForm,
@@ -304,9 +277,6 @@ impl snapshot::Held for Objects {
 }
 
 /// `m` as a frame of the log: the snapshot's form, then the move in postcard.
-///
-/// # Errors
-/// [`Unprinted`] where it refuses to print.
 pub fn frame(m: &Move) -> Result<Vec<u8>, Unprinted> {
     let form = match m {
         Move::Rows(delta) => MoveForm::Rows(form::delta_form(delta, row_form, |n| match *n {})),
@@ -316,9 +286,6 @@ pub fn frame(m: &Move) -> Result<Vec<u8>, Unprinted> {
 }
 
 /// The move `bytes` print, or none for a frame of another form.
-///
-/// # Errors
-/// [`NotASnapshot`]: a frame of this form cut short, unread, or holding what no replica holds.
 pub fn unframe(bytes: &[u8]) -> Result<Option<Move>, NotASnapshot> {
     let form: MoveForm = match snapshot::read(<Objects as snapshot::Held>::FORM, bytes) {
         Ok(form) => form,

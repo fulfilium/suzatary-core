@@ -7,10 +7,8 @@ thread_local! {
     static WROTE: RefCell<Option<Vec<Hash>>> = const { RefCell::new(None) };
 }
 
-/// `work`, run on this thread, and every chain object a store took in while it ran ([`wrote`]):
-/// what a device's request made the box write. A route performs on one thread from start to
-/// answer, so what it wrote is what this sees; work it hands to another thread (a model's later
-/// round) is that work's own.
+/// `work`, run on this thread, and every chain object a store took in while it ran ([`wrote`]).
+/// Work handed to another thread is not recorded here.
 pub fn recording<T>(work: impl FnOnce() -> T) -> (T, Vec<Hash>) {
     let outer = WROTE.with(|wrote| wrote.replace(Some(Vec::new())));
     let answer = work();
@@ -18,8 +16,7 @@ pub fn recording<T>(work: impl FnOnce() -> T) -> (T, Vec<Hash>) {
     (answer, wrote)
 }
 
-/// Told by a chain store of each object it takes in, appended or accepted, so a [`recording`]
-/// on this thread sees it; nothing happens outside one.
+/// Called by a chain store for each object it takes in; does nothing outside a [`recording`].
 pub fn wrote(name: &Hash) {
     WROTE.with(|wrote| {
         if let Some(names) = wrote.borrow_mut().as_mut() {

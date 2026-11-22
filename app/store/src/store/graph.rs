@@ -9,10 +9,7 @@ use prodrome_core::schema::Schema;
 
 use super::StoreError;
 
-/// A store's objects at one set of heads, read once and shared by every answer that reads the
-/// same heads: the DAG, the linearisation, the heads, the prodromes they are the objects of, and
-/// every reading made of them. A store keeps it beside the heads it read, and reads again when
-/// they move ([`super::Reads::graph`]).
+/// A store's objects at one set of heads, read once and shared by every answer at those heads.
 pub struct Graph<E: Schema> {
     heads: BTreeSet<Hash>,
     geneses: BTreeSet<Hash>,
@@ -23,16 +20,14 @@ pub struct Graph<E: Schema> {
 }
 
 impl<E: Schema> Graph<E> {
-    /// The graph of `objects`, given in the linearisation's order. Its heads are those of these
-    /// objects, never ones read beside them, so the graph and its heads always agree.
+    /// The graph of `objects`, given in the linearisation's order; its heads are derived from them.
     #[must_use]
     pub fn of(objects: Vec<(Hash, Envelope<E>)>) -> Self {
         let order: Vec<Hash> = objects.iter().map(|(name, _)| name.clone()).collect();
         Self::ordered(Arc::new(objects.into_iter().collect()), order)
     }
 
-    /// The graph of `dag` itself, in its linearisation's order: the database's own objects, shared
-    /// and never copied, so a store holds its objects once beside its database.
+    /// The graph of `dag` itself, shared and never copied.
     ///
     /// # Errors
     /// [`StoreError::Unreadable`] for objects that rest on one another in a cycle.
@@ -56,7 +51,6 @@ impl<E: Schema> Graph<E> {
         }
     }
 
-    /// Every head.
     #[must_use]
     pub fn heads(&self) -> &BTreeSet<Hash> {
         &self.heads
@@ -68,25 +62,21 @@ impl<E: Schema> Graph<E> {
         &self.geneses
     }
 
-    /// The objects as a DAG.
     #[must_use]
     pub fn dag(&self) -> &Dag<E> {
         &self.dag
     }
 
-    /// The name of every object.
     #[must_use]
     pub fn names(&self) -> &Arc<BTreeSet<String>> {
         &self.names
     }
 
-    /// How many objects there are.
     #[must_use]
     pub fn len(&self) -> usize {
         self.order.len()
     }
 
-    /// Whether there are none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
@@ -99,8 +89,7 @@ impl<E: Schema> Graph<E> {
             .filter_map(|name| Some((name, self.dag.get(name)?)))
     }
 
-    /// The objects as the register folds read them, in the linearisation's order: made once and
-    /// shared by every reader of this graph.
+    /// The objects as the register folds read them, made once per graph.
     ///
     /// # Errors
     /// [`StoreError::Unreadable`] for objects that rest on one another in a cycle.
@@ -121,9 +110,9 @@ impl<E: Schema> Graph<E> {
         }
     }
 
-    /// `read` of these objects under the name `reading`: made once, then kept as long as the
-    /// graph is. `read` must be a function of the objects alone; a second type under one name is
-    /// read again and replaces the first.
+    /// `read` of these objects, kept under `reading` as long as the graph lives.
+    /// `read` must be a function of the objects alone; a second type under one name replaces the
+    /// first.
     pub fn reading<V: Send + Sync + 'static>(
         &self,
         reading: &'static str,

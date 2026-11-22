@@ -1,100 +1,77 @@
 //! The made-up world every fixture and test draws from, so the code tree names no real person;
 //! every address is under a reserved domain.
-//!
-//! Prose only: pricing stays with each chain builder, because a price is relative to the
-//! builder's own clock.
+//! Prose only: each chain builder prices, because a price is relative to the builder's clock.
 
 use serde::Serialize;
 
-/// Someone a scene writes to, hears from or mentions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Person {
-    /// How prose names them.
     pub name: &'static str,
-    /// Their address, under a reserved domain.
     pub email: &'static str,
 }
 
-/// The person the deployment serves: a person with an actor name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Owner {
-    /// The actor their own writes carry: trusted, in every roster.
+    /// Trusted, in every roster.
     pub actor: &'static str,
-    /// How prose names them.
     pub name: &'static str,
     /// The one mail account a fixture deployment has.
     pub email: &'static str,
 }
 
-/// One checklist line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Sub {
-    /// The line, as typst markup.
+    /// Typst markup.
     pub text: &'static str,
-    /// Ticked.
     pub done: bool,
 }
 
-/// One todo's prose. Its price is the builder's (see the module comment).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Todo {
-    /// The id.
     pub id: &'static str,
-    /// The text its `Created` carries, often empty.
     pub created: &'static str,
-    /// The action line, as typst markup.
+    /// Typst markup.
     pub body: &'static str,
     /// The markup's one `*strong*` span, as a page shows it, or "".
     pub strong: &'static str,
-    /// The detail, as typst markup, or "".
+    /// Typst markup, or "".
     pub detail: &'static str,
-    /// The category, from the vocabulary the app orders (`CATEGORY_ORDER`).
+    /// From the vocabulary the app orders (`CATEGORY_ORDER`).
     pub category: &'static str,
-    /// Why this priority.
     pub rationale: &'static [&'static str],
-    /// The checklist.
     pub subtodos: &'static [Sub],
 }
 
-/// A message a scene's mail index holds, or a todo was triaged from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Mail {
-    /// The sender.
     pub from: Person,
-    /// The subject line.
     pub subject: &'static str,
     /// The `Message-Id`, without angle brackets.
     pub msgid: &'static str,
-    /// The body, one line.
+    /// One line.
     pub body: &'static str,
 }
 
-/// A file a message carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct CastFile {
-    /// Its filename.
     pub name: &'static str,
-    /// Its `type/subtype`.
+    /// `type/subtype`.
     pub media: &'static str,
-    /// Its bytes, which for the cast's one PDF are ASCII.
+    /// The bytes, which for the cast's one PDF are ASCII.
     pub content: &'static str,
 }
 
-/// A message with one attachment: what a proposed reply attaches.
+/// A message with one attachment, which a proposed reply attaches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Notice {
-    /// The message.
     pub mail: Mail,
-    /// What it carries.
     pub file: CastFile,
 }
 
-/// The six todos of the fixture chain, each carrying one thing a page has to
-/// get right.
+/// The six todos of the fixture chain, each carrying one thing a page has to get right.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Todos {
-    /// A Decay two days from its deadline: it prices low and sorts first.
-    /// Its body holds markup, so a page shows typst's `<strong>`.
+    /// A Decay two days from its deadline, which sorts first; its body holds markup.
     pub urgent: Todo,
     /// A Flat priced in the middle.
     pub flat: Todo,
@@ -104,15 +81,13 @@ pub struct Todos {
     pub resolved: Todo,
     /// Priced high, so "Done" removes a card from the middle of the list.
     pub high: Todo,
-    /// The triage agent's: untrusted, unconfirmed, triaged from
-    /// [`Cast::mail`]'s first message; its markup is shown as source.
+    /// The triage agent's, untrusted and unconfirmed, from [`Cast::mail`]'s first message; its
+    /// markup shows as source.
     pub agents: Todo,
 }
 
-/// The whole world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Cast {
-    /// Whom the deployment serves.
     pub owner: Owner,
     /// A law firm, the sender of the agent's todo.
     pub counsel: Person,
@@ -120,17 +95,13 @@ pub struct Cast {
     pub accountant: Person,
     /// A friend whose mail matches no todo.
     pub friend: Person,
-    /// Where the flight goes.
     pub city: &'static str,
-    /// The fixture chain.
     pub todos: Todos,
-    /// The messages the fixture's mail index holds: the first is about
-    /// [`Todos::agents`], the second matches nothing local.
+    /// The first is about [`Todos::agents`]; the second matches nothing local.
     pub mail: [Mail; 2],
     /// The todo the fixture's triage run proposes.
     pub proposed: Todo,
-    /// The e2e fixture's one open todo that nothing prices: it reads `∅` and lists after
-    /// every priced one.
+    /// The e2e fixture's one unpriced open todo: it reads `∅` and lists after every priced one.
     pub unpriced: Todo,
     /// A scanned approval notice the fixture's mail index also holds.
     pub notice: Notice,
@@ -164,7 +135,6 @@ const FRIEND: Person = Person {
     email: "diego@example.test",
 };
 
-/// The cast.
 pub const CAST: Cast = Cast {
     owner: Owner {
         actor: "ada",
@@ -299,7 +269,7 @@ pub const CAST: Cast = Cast {
 };
 
 impl Todos {
-    /// All six, in the order the chain appends them.
+    /// In the order the chain appends them.
     #[must_use]
     pub fn all(&self) -> [&Todo; 6] {
         [
@@ -313,8 +283,8 @@ impl Todos {
     }
 }
 
-/// The keys a scene's deployment signs with, as seeds in hex: made up like the rest of the cast,
-/// and never a deployment's, since anyone reading this file holds them.
+/// The keys a scene's deployment signs with, as hex seeds; never a real deployment's, because
+/// this file is public.
 pub mod keys {
     use prodrome_core::sign::{PublicKey, Secret};
 
@@ -327,8 +297,6 @@ pub mod keys {
     /// The key the mail's dedup names are made with.
     pub const DEDUP: &str = "ca5700000000000000000000000000000000000000000000000000000000d0d0";
 
-    /// The secret a seed above names.
-    ///
     /// # Panics
     /// Never for the seeds above, which are seeds.
     #[must_use]
@@ -336,7 +304,6 @@ pub mod keys {
         Secret::new(seed).expect("a cast seed is a seed")
     }
 
-    /// The scene's root, the public half of [`ROOT`].
     #[must_use]
     pub fn root() -> PublicKey {
         secret(ROOT).public()

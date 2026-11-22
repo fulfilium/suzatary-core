@@ -10,14 +10,8 @@ use prodrome_core::snapshot::mk_snapshot;
 use super::{Custody, KeyStanding, Signers, Trust};
 use suzatary_store::store::{Prodrome, Signer, StoreError, sign};
 
-/// THE ROOT'S THREE WRITES, the only key objects this application writes, each joined into
-/// `store` in every prodrome it holds and signed by `root`, so it counts.
-///
-/// `KeyAdded(genesis, actor, key)`: `key` now speaks for `actor`. Registering twice is one
-/// object, so a tap answered twice registers once.
-///
-/// # Errors
-/// The store unreadable, or refusing the objects.
+/// `KeyAdded(genesis, actor, key)` in every prodrome of `store`, signed by `root`; registering
+/// twice writes one object.
 pub fn trust<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &Secret,
@@ -41,15 +35,8 @@ pub fn trust<E: Schema>(
         .collect()
 }
 
-/// `KeyRevoked(genesis, deps, actor, key)`: `key` no longer speaks for `actor`, in each
-/// prodrome where the root's registration of it stands, and speaks for every other actor as it
-/// did. Its deps are every signature by `key` over `actor`'s writes the store holds there:
-/// what was signed before stays proven, and nothing signed after, beside or unseen by this
-/// revocation is. Where it is not trusted, nothing is written, so revoking twice is revoking
-/// once.
-///
-/// # Errors
-/// The store unreadable, or refusing the objects.
+/// `KeyRevoked(genesis, deps, actor, key)` wherever the root's registration stands; its deps are
+/// every signature by `key` over `actor`'s writes, so those stay proven.
 pub fn revoke<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &Secret,
@@ -84,11 +71,7 @@ pub fn revoke<E: Schema>(
         .collect()
 }
 
-/// Every actor the root's registrations let `key` speak for in `store`: whom a stolen device's
-/// key is revoked for.
-///
-/// # Errors
-/// The store unreadable.
+/// Every actor the root's registrations let `key` speak for in `store`.
 pub fn trusted_for<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &PublicKey,
@@ -105,11 +88,7 @@ pub fn trusted_for<E: Schema>(
         .collect())
 }
 
-/// Whether the root's history in `store` revoked `key` for `actor`: a revoked key is never
-/// registered again, so a route that would trust it refuses first.
-///
-/// # Errors
-/// The store unreadable.
+/// Whether the root revoked `key` for `actor`; a revoked key is never registered again.
 pub fn revoked_for<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &PublicKey,
@@ -127,12 +106,8 @@ pub fn revoked_for<E: Schema>(
         }))
 }
 
-/// A revocation is ALL KEYED CHAINS OR NONE: every key a keyed chain holds revoked is revoked on
-/// each other keyed chain that still trusts it, so a revoke interrupted between chains is completed
-/// by the next writer to adopt. Answers what it wrote.
-///
-/// # Errors
-/// A store unreadable, or refusing the objects.
+/// A revocation covers all keyed chains or none: this completes a revoke interrupted between
+/// chains.
 pub fn complete_revocations<E: Schema>(
     stores: &super::Keyed<&dyn Prodrome<E>>,
     root: &Secret,
@@ -162,16 +137,10 @@ pub fn complete_revocations<E: Schema>(
     Ok(written)
 }
 
-/// The EPOCH: a `Snapshot` of each prodrome's heads, signed by the root, which says "this is
-/// what the box held when it began signing". Everything beneath it reads as written before
-/// signatures (`Provenance::Predates`); nothing written after can be placed beneath it.
-///
-/// Taken ONCE per prodrome. Asked again, it is the epoch already taken, unless a write since
-/// then carries no signature: a second epoch would quietly absorb it into history, so that is
-/// refused, naming the repair.
+/// The root-signed `Snapshot` of each prodrome's heads, taken once per prodrome.
 ///
 /// # Errors
-/// `AdoptError`.
+/// An unsigned write since the epoch is refused: a second epoch would absorb it into history.
 pub fn epoch<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &Secret,
@@ -212,14 +181,12 @@ pub fn epoch<E: Schema>(
 /// What asking for a prodrome's epoch did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Epoch {
-    /// Took it now: the prodrome began signing with this ask.
     Taken(Hash),
-    /// It was taken before, and nothing since is unsigned.
+    /// Taken before, and nothing since is unsigned.
     Standing(Hash),
 }
 
 impl Epoch {
-    /// The snapshot's name.
     #[must_use]
     pub fn name(&self) -> &Hash {
         match self {
@@ -231,41 +198,31 @@ impl Epoch {
 /// Why a store did not adopt signatures.
 #[derive(Debug, thiserror::Error)]
 pub enum AdoptError {
-    /// The store would not read or take the objects.
     #[error(transparent)]
     Store(#[from] StoreError),
-    /// Writes since the epoch that no key signed.
     #[error(
         "{count} write(s) since the epoch carry no signature (the first is {first}); `suzatary \
          device sign-unsigned` signs each with the key its actor owns, and no new epoch will \
          absorb them"
     )]
     UnsignedSinceEpoch {
-        /// How many.
         count: usize,
         /// The first, by name.
         first: Hash,
     },
 }
 
-/// One write since an epoch that carries no signature: what [`sign_unsigned`] would sign, shown
-/// to the operator before it does.
+/// One write since an epoch with no signature, shown to the operator before [`sign_unsigned`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnsignedWrite {
-    /// The object.
     pub name: Hash,
-    /// Whose event it is, and so whose key would sign it.
+    /// Whose key would sign it.
     pub actor: Actor,
-    /// The instant the event claims.
     pub at: prodrome_core::literal::Datetime,
 }
 
-/// Every write since an epoch that carries no signature, in the order held: what a crash between
-/// an append and its signature leaves. Only where an epoch was taken, since before one nothing is
-/// history yet and signing would put the root's name on everything ever written.
-///
-/// # Errors
-/// The store unreadable.
+/// Every unsigned write since an epoch; before an epoch, signing would put the root's name on
+/// everything ever written.
 pub fn unsigned_writes<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &PublicKey,
@@ -291,12 +248,9 @@ pub fn unsigned_writes<E: Schema>(
         .collect())
 }
 
-/// THE REPAIR for a crash between an append and its signature: exactly `writes`, each signed by
-/// the key its actor owns. Only the box's own writers leave such a write, since the door refuses
-/// one posted unsigned; the operator sees the list ([`unsigned_writes`]) before asking for this.
-///
-/// # Errors
-/// The store refusing the signatures.
+/// Signs exactly `writes`, each by the key its actor owns: the repair for a crash between append
+/// and sign.
+/// Only the box's own writers leave an unsigned write, since the door refuses one posted unsigned.
 pub fn sign_unsigned<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     signers: &Signers,
@@ -334,8 +288,6 @@ fn signed_as_owned<E: Schema>(
         .collect()
 }
 
-/// `object` joined into `store`, then signed by `root`: two objects, the second proving the
-/// first is the root's.
 fn written<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &Secret,
@@ -352,14 +304,8 @@ fn dag_of<E: Schema>(store: &(impl Prodrome<E> + ?Sized)) -> Result<Dag<E>, Stor
     Ok(store.graph()?.dag().clone())
 }
 
-/// A chain ADOPTS signatures: each actor of its roster registered with the key its writes are
-/// signed by ([`Custody`]), then the epoch. Every write from here on is held to a key;
-/// everything before reads as written before signatures. Idempotent: adopted again, it writes
-/// nothing, or refuses as [`epoch`] does; it answers what it registered and each prodrome's
-/// epoch, taken now or before.
-///
-/// # Errors
-/// `AdoptError`.
+/// Registers each roster actor's [`Custody`] key, then takes the epoch; idempotent, refusing as
+/// [`epoch`] does.
 pub fn adopt<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     keys: &super::BoxKeys,
@@ -390,20 +336,12 @@ pub fn adopt<E: Schema>(
 /// What adopting a chain did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adoption {
-    /// Each actor registered now, with the key that signs its writes.
+    /// Each actor registered now.
     pub registered: Vec<(Actor, PublicKey)>,
-    /// Each prodrome's epoch, taken now or before.
     pub epochs: Vec<Epoch>,
 }
 
-/// THE BOX'S TWO KEYS SPEAK ONLY FOR THE ACTORS WHOSE WRITES THEY SIGN: each revoked, where the
-/// root's registration of it stands, for every actor of the roster whose [`Custody`] is the
-/// other key's. What an adoption before custody left, the box's key registered for the agent's
-/// actor; what it signed as that actor until now stays proven, nothing after. Answers each
-/// (actor, key) it revoked, and asked again, nothing.
-///
-/// # Errors
-/// The store unreadable, or refusing the objects.
+/// Revokes each box key for every roster actor whose [`Custody`] is the other key's.
 pub fn revoke_misplaced<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     keys: &super::BoxKeys,

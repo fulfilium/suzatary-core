@@ -9,13 +9,11 @@ use suzatary_mail::mail::puller::{Puller, Unpulled};
 /// A law of a puller, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Law {
-    /// After a pull, the INBOX's leaf holds every message the server's INBOX holds, byte for
-    /// byte and each once, in its `new/` or `cur/`, where the index reads it.
+    /// After a pull, the INBOX's leaf holds every server INBOX message byte for byte, once each.
     Lands,
     /// A pull that finds nothing new on the server leaves the maildir as it was.
     Once,
-    /// A server that cannot be reached fails the pull, in the class the implementation gives
-    /// that failure, which names its fix card; it never succeeds having landed nothing.
+    /// An unreachable server fails the pull in the implementation's class, never a success.
     Fails,
 }
 
@@ -29,31 +27,21 @@ impl fmt::Display for Law {
     }
 }
 
-/// An implementation for one account, with its server scripted and its maildir read back.
 pub trait Rig {
-    /// The puller under test.
     type Puller: Puller;
 
-    /// The class of the failure a pull from an unreachable server gives.
     const UNREACHABLE: Fault;
 
-    /// The puller, its server holding `messages` in its INBOX, oldest first.
+    /// `messages` oldest first.
     fn holding(&self, messages: &[Vec<u8>]) -> Self::Puller;
 
-    /// The puller, its server unreachable.
     fn unreachable(&self) -> Self::Puller;
 
-    /// Every message in the leaf the server's INBOX lands in: each file under its `new/` or
-    /// `cur/`.
+    /// Each file under the INBOX leaf's `new/` or `cur/`.
     fn landed(&self) -> Vec<Vec<u8>>;
 }
 
-/// Every law through `rig`, on one maildir: before each pull the server gains the next of
-/// `arrivals`, keeping what it held, and each pull reads from `since`, which every message is
-/// dated after.
-///
-/// # Errors
-/// The first [`Broken`] law.
+/// Before each pull the server gains the next of `arrivals`; every message is dated after `since`.
 pub fn check<R: Rig>(
     rig: &R,
     since: chrono::NaiveDate,

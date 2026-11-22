@@ -1,4 +1,4 @@
-//! Mail-in's conformance suite over the in-memory mailroom, on generated arrivals.
+//! Mail-in's conformance suite over the in-memory mailroom.
 
 use proptest::prelude::*;
 use suzatary_connect::conformance::puller::{Rig, check};

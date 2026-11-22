@@ -1,7 +1,5 @@
 //! A store in one of three shapes: [`Prodrome`] (objects, appended), [`Log`] (lines, pushed) and
-//! [`Doc`] (one value, got and set), each keyed where a store holds several; [`Reads`] and
-//! [`Gets`] are the read halves of the first and the last. `suzatary-io` interprets them over
-//! files; what a store holds means what its schema says.
+//! [`Doc`] (one value, got and set). `suzatary-io` interprets them over files.
 
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/counted.rs"]

@@ -6,19 +6,19 @@ use serde::{Deserialize, Serialize};
 use crate::secretary::holder::{Fate, Holder};
 use crate::secretary::memory::FactId;
 
-/// Why words were erased, as the history records it, so a page and a model are told which in the
-/// box's words.
+/// Why words were erased, as the history records it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Spelled", into = "Spelled")]
 pub enum Erasure {
-    /// The owner, or another actor the gate admitted, erased them on a tap.
+    /// An actor the gate admitted erased them on a tap.
     Asked { by: Actor },
     /// Forgetting a fact erased the copies its remembering wrote.
     Forgot { fact: FactId },
 }
 
 impl Erasure {
-    /// What an erasure does, as a page says it before the owner confirms: [`Holder::ALL`] read.
+    /// What an erasure does to each of [`Holder::ALL`], as a page says it before the owner
+    /// confirms.
     #[must_use]
     pub fn for_good() -> String {
         let (mut deleted, mut remains) = (Vec::new(), Vec::new());
@@ -36,7 +36,7 @@ impl Erasure {
         )
     }
 
-    /// The sentence a reader is told in the words' place.
+    /// The sentence a reader sees in the words' place.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {
@@ -51,7 +51,7 @@ impl Erasure {
     }
 }
 
-/// The serde spelling: an actor is a checked name, so it is read back through its constructor.
+/// The serde spelling, which reads an actor back through its checked constructor.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "erasure", rename_all = "lowercase")]
 enum Spelled {

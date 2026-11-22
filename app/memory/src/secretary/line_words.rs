@@ -1,11 +1,9 @@
 //! The words of one slot of a conversation line: what is locked under one key.
 //!
-//! A line holds at most a few slots (`suzatary_lines::secretary::line_shape::LineShape::slots`): a
-//! turn's words, or a model turn's text and then each call's arguments, each under a key of its
-//! own, so a forgetting can erase the one call that wrote a fact and leave the prose beside it.
-//! Every slot's words go through the redaction door ([`Scrubbed`]) before they are locked
-//! (`line_event::seal`), and the line records the rules they passed. Reading a print only parses
-//! it; the line scrubs again a slot whose rules are not the current ones as it opens.
+//! Each slot has its own key, so a forgetting can erase the one call that wrote a fact and leave
+//! the prose beside it.
+//! Every slot's words go through [`Scrubbed`] before `line_event::seal` locks them.
+//! Reading a print only parses it; the line scrubs a slot under older rules again as it opens.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -15,30 +13,22 @@ use serde::{Deserialize, Serialize};
 use crate::secretary::salted_text::Words;
 use suzatary_held::redact::Scrubbed;
 
-/// The words of one slot, by what the slot is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "slot", rename_all = "lowercase")]
 pub enum LineWords {
-    /// A person's turn: their words and each attachment's, in order.
     Person {
         text: String,
-        /// Each attachment's words.
         attachments: Vec<AttachmentWords>,
     },
     /// A model turn's prose.
     Model { text: String },
-    /// One call's arguments.
     Args {
-        /// The arguments, as the model passed them.
         args: BTreeMap<String, serde_json::Value>,
     },
     /// A verb's answer, and each file it handed over: its name and its text layer.
     Tool {
-        /// The answer, bounded.
         answer: StoredAnswer,
-        /// Each file's name, in order.
         names: Vec<String>,
-        /// Each file's text layer, in order.
         texts: Vec<String>,
     },
     /// An act's sentence.
@@ -49,7 +39,6 @@ pub enum LineWords {
     Why { why: String },
     /// Why a review could not run.
     Reason { reason: String },
-    /// A coding session's report: its file, its text and the branch's diff stat.
     Report {
         report: crate::coding_report::Report,
     },
@@ -60,20 +49,15 @@ pub enum LineWords {
     },
 }
 
-/// The most bytes of a verb's answer one line stores: 64 KiB. Ordinary answers fit whole (a
-/// mail body as most mail prints, a page of a file, a list of todos); an answer past it is a
-/// sweep that printed its whole population, which no later round reads usefully and which a
-/// phone must pull with the rest of the conversations. The model reads the whole answer in the
-/// round that asked for it; later rounds read the stored head and can call the verb again.
+/// The most bytes of a verb's answer one line stores; the model reads the whole answer only in the
+/// round that asked.
 pub const STORED_ANSWER_BYTES: usize = 64 * 1024;
 
-/// Room kept at the end of a cut answer for the sentence saying how much was left out.
+/// Bytes kept at the end of a cut answer for the sentence saying how much was left out.
 const NOTE_BYTES: usize = 128;
 
-/// A verb's answer as a line stores it: at most [`STORED_ANSWER_BYTES`] bytes. Built only from
-/// a `String`, by writer and reader alike, so no stored or opened tool answer is longer,
-/// whatever the verb returned. A longer answer keeps its head and ends in one line saying how
-/// many bytes were left out.
+/// A verb's answer as a line stores it: at most [`STORED_ANSWER_BYTES`] bytes, for writer and
+/// reader alike.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub struct StoredAnswer(String);
@@ -102,25 +86,21 @@ impl From<StoredAnswer> for String {
 }
 
 impl StoredAnswer {
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// What of an attachment is words: the file's name and, for a private file, where it is kept and
-/// its redacted text. Its id and type are the line's shape.
+/// What of an attachment is words; its id and type are the line's shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttachmentWords {
-    /// The name it was picked under; `None` for a photo, which has none.
+    /// `None` for a photo, which has no name.
     pub name: Option<String>,
-    /// Where a private file is kept, and its redacted text.
     pub private: Option<suzatary_held::vault::PrivateCopy>,
 }
 
-/// Printed as canonical JSON (struct fields in declared order, maps sorted), and read back as
-/// parsed, so `read(print(w)) == Some(w)` for every `w`.
+/// Printed as canonical JSON: struct fields in declared order, maps sorted.
 impl Words for LineWords {
     fn print(&self) -> Cow<'_, str> {
         serde_json::to_string(self)
@@ -134,8 +114,7 @@ impl Words for LineWords {
 }
 
 impl LineWords {
-    /// The slot's prose: what was said, answered or done, a name or a reason; a call's arguments
-    /// as their JSON.
+    /// The slot's prose; a call's arguments as their JSON.
     #[must_use]
     pub fn text(&self) -> std::borrow::Cow<'_, str> {
         match self {
@@ -155,7 +134,7 @@ impl LineWords {
     /// These words through the redaction door.
     ///
     /// # Errors
-    /// [`suzatary_held::redact::Unscrubbable`] for words whose scrubbed strings no longer make them.
+    /// For words whose scrubbed strings no longer make them.
     pub fn scrubbed(&self) -> Result<Self, suzatary_held::redact::Unscrubbable> {
         Scrubbed::of(self).map(Scrubbed::into_inner)
     }
@@ -167,7 +146,6 @@ pub(crate) mod tests {
 
     use super::*;
 
-    /// Any slot's words, of the shapes a line holds.
     pub(crate) fn line_words() -> impl Strategy<Value = LineWords> {
         let text = "(?s).{0,40}";
         prop_oneof![
@@ -217,7 +195,7 @@ pub(crate) mod tests {
         }
     }
 
-    /// A line stored before the bound opens bounded: the reader builds the same type.
+    /// An oversized stored answer opens bounded, because the reader builds the same type.
     #[test]
     fn an_oversized_stored_answer_opens_bounded() {
         let print = serde_json::json!({

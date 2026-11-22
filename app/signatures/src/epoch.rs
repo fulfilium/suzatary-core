@@ -1,8 +1,6 @@
-//! The box's own clock over what a store serves: a count it keeps and bumps whenever an answer
-//! does not extend the last one, so a migration, a drop and a rollback, of the stores or within
-//! them, each start a later epoch. A replica orders the box's words by it first, since a drop or a
-//! rollback is the box holding less, which no reading of a replica's objects can tell from an
-//! older word.
+//! A count per store that the box bumps whenever an answer does not extend the last, so a
+//! migration, drop or rollback starts a later epoch. A replica orders answers by it first, since
+//! its objects cannot tell a rollback from an older answer.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -11,35 +9,25 @@ use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Answered;
 use suzatary_store::store::{Doc, Gets, StoreError};
 
-/// What a store holds at one answer: the prodromes it serves, its heads, and every object it holds.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Seen {
-    /// The geneses of the prodromes the store serves.
     pub geneses: BTreeSet<String>,
-    /// Its heads.
     pub heads: BTreeSet<String>,
-    /// The name of every object it holds, shared with the store's graph so an answer builds no
-    /// set of its own.
+    /// Every object's name, shared with the store's graph so an answer builds no set of its own.
     pub held: Arc<BTreeSet<String>>,
 }
 
-/// What a store served at its last answer, and the epoch it was served in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Served {
     /// Never smaller than any epoch this box answered with before.
     pub epoch: u64,
-    /// The geneses of the prodromes the store served.
     pub geneses: BTreeSet<String>,
-    /// The heads it answered with.
     pub heads: BTreeSet<String>,
 }
 
 impl Served {
-    /// What answering `seen` reads as after `was`. An answer that extends the last (the same
-    /// prodromes, every head answered last still held) keeps its epoch; any other, a migration, a
-    /// drop or a rollback to an earlier checkpoint of the same stores, starts the next. Every bump
-    /// is `max(was + 1, floor)`, `floor` being the box's clock in seconds, so a record lost with
-    /// the state directory starts above every epoch it had answered with.
+    /// An answer that extends the last keeps its epoch; any other bumps to `max(was + 1, floor)`,
+    /// `floor` being the clock in seconds, so a lost record starts above every earlier epoch.
     #[must_use]
     pub fn after(was: Option<&Self>, seen: &Seen, floor: u64) -> Self {
         let epoch = match was {
@@ -57,16 +45,14 @@ impl Served {
     }
 }
 
-/// Each store's epoch, kept in a [`Doc`] one record per store, each read and written under that
-/// store's own lock, so two answers of one store never step from the same record to two different
-/// epochs, and a whole store read under one lock holds no other store's answer back.
+/// Each store's epoch, read and written under that store's own lock, so two answers never step one
+/// record to two epochs and one store's read holds no other store back.
 pub struct Epochs {
     doc: Box<dyn Doc<String, Served> + Send>,
     locks: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
 }
 
 impl Epochs {
-    /// Epochs kept in `doc`.
     pub fn kept(doc: impl Doc<String, Served> + Send + 'static) -> Self {
         Self {
             doc: Box::new(doc),
@@ -74,18 +60,14 @@ impl Epochs {
         }
     }
 
-    /// Epochs held in memory, for a server with no state directory of its own, as a test's is.
+    /// For a server with no state directory of its own.
     #[must_use]
     pub fn remembered() -> Self {
         Self::kept(Held::default())
     }
 
-    /// The epoch of `store` at `now` and what `read` answered beside its holdings, read under the
-    /// lock that steps the epoch, so an answer's epoch and its objects are one snapshot; the
-    /// record is kept for the next answer.
-    ///
-    /// # Errors
-    /// What `read` answers, and the record's store, unreadable or unwritable.
+    /// Runs `read` under the lock that steps the epoch, so an answer's epoch and objects are one
+    /// snapshot.
     pub fn served<T>(
         &self,
         store: &str,
@@ -104,14 +86,13 @@ impl Epochs {
         Ok((now.epoch, answer))
     }
 
-    /// The lock of `store`, made the first time it is asked for.
     fn lock_of(&self, store: &str) -> Arc<Mutex<()>> {
         let mut locks = self.locks.lock().unwrap_or_else(PoisonError::into_inner);
         Arc::clone(locks.entry(store.to_owned()).or_default())
     }
 }
 
-/// The records held in memory: the shipped build's own, since `store::InMemoryDoc` is a test's.
+/// The shipped build's in-memory records, since `store::InMemoryDoc` is test-only.
 #[derive(Default)]
 struct Held(Mutex<BTreeMap<String, Served>>);
 
@@ -139,7 +120,7 @@ impl Held {
     }
 }
 
-/// Seconds since the epoch of an instant, naive and UTC by definition; none before 1970.
+/// Unix seconds of a UTC instant; 0 before 1970.
 fn seconds(at: Datetime) -> u64 {
     chrono::NaiveDate::from_ymd_opt(at.year(), at.month(), at.day())
         .and_then(|day| day.and_hms_opt(at.hour(), at.minute(), at.second()))
@@ -221,8 +202,7 @@ mod tests {
         );
     }
 
-    /// A store's read runs under its own lock alone: another store answers while it is held,
-    /// and a second answer of the same store waits for it.
+    /// A store's read runs under its own lock alone: another store answers while it is held.
     #[test]
     fn each_store_steps_under_its_own_lock() {
         let epochs = Epochs::remembered();

@@ -1,5 +1,3 @@
-//! How text is spelled for a reader.
-
 /// A size in bytes, in words: "812 B", "48.2 KB", "3.1 MB".
 #[must_use]
 pub fn bytes(size: u64) -> String {
@@ -18,7 +16,6 @@ pub fn bytes(size: u64) -> String {
     }
 }
 
-/// `words` with its first letter in capitals, for a label that opens a line.
 #[must_use]
 pub fn capitalised(words: &str) -> String {
     let mut chars = words.chars();
@@ -61,8 +58,7 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        /// `shorten` never panics, never splits a `char` over arbitrary text, and answers at
-        /// most `chars` characters.
+        /// `shorten` never panics or splits a `char`, and answers at most `chars` characters.
         #[test]
         fn shorten_never_panics_and_never_splits_a_char(text: String, chars in 0usize..200) {
             let short = shorten(&text, chars);

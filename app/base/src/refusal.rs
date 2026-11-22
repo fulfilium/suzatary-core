@@ -1,55 +1,42 @@
-//! A request this application declines to do work for: a value every route returns, turned by
-//! the axum layer into the one body shape the frontend reads ([`crate::wire::base::ErrorPayload`]).
+//! A refusal every route returns; the axum layer turns it into [`crate::wire::base::ErrorPayload`].
 //!
-//! The sentence is the contract: the frontend shows it verbatim and tests assert on it, so a
-//! refusal names which field was wrong rather than saying something friendlier.
+//! The frontend shows the sentence verbatim and tests assert on it, so it names the wrong field.
 
 use std::fmt;
 
 use crate::wire::base::ErrorPayload;
 
-/// The HTTP status a refusal carries: a closed set rather than a `u16`, so only a status
-/// somebody decided to answer with can be answered.
+/// A closed set rather than a `u16`, so only a status somebody chose can be answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Status {
     /// The request is malformed; refused before anything touches the chain.
     BadRequest,
-    /// The gate said no: not a viewer, not an actor, or missing the CSRF triple. An unknown
-    /// caller is refused, never passed as anonymous.
+    /// The gate said no; an unknown caller is refused, never passed as anonymous.
     Forbidden,
-    /// Nothing here; distinct from an empty result, which looks identical on a page and means
-    /// the opposite.
+    /// Nothing here; a page shows an empty result the same way, and it means the opposite.
     NotFound,
     /// The right resource, the wrong method: a GET under `/api/act/`.
     MethodNotAllowed,
     /// The request contradicts the chain (an id already taken, a `base` this store never held).
     Conflict,
-    /// The request named a real resource whose own content refuses (Typst that will not
-    /// compile); unlike [`Status::BadRequest`], the fault is not the request's. Also a post to a
-    /// store a tab writes that this build reads and refuses whole: the page refuses its lines for
-    /// good on this status alone, since a box of another build answers its own 400.
+    /// A real resource whose own content refuses, such as Typst that will not compile.
+    /// The page also refuses a tab store's lines for good on this status alone, so a box of
+    /// another build answers its own 400 instead.
     UnprocessableEntity,
-    /// A body over the route's cap.
     TooLarge,
     /// Past a per-login budget (a browser's error reports, `crate::clienterror`).
     TooManyRequests,
-    /// A page whose build writes by a contract older than the box takes (`crate::signatures::CLIENT_MIN`):
-    /// nothing is performed, and the page offers the box's build, to be sent again after Reload.
+    /// The page writes by a contract older than `crate::signatures::CLIENT_MIN`; nothing is done.
+    /// The page offers the box's build and sends the act again after a reload.
     UpgradeRequired,
-    /// A post this box's build does not read (a body of another shape, a store it does not keep):
-    /// a function of which builds the box and the page run, never of the post, so the page posts
-    /// it again once they agree. The sibling of [`Status::UpgradeRequired`] for a box whose build
-    /// is not the page's.
+    /// A post this box's build does not read; the page posts it again once the builds agree.
     OtherBuild,
-    /// A request signed by a device key its history revoked: the device deletes what it holds
-    /// (the tab's `wipe`), and asks again as a new device if its person wants it back.
+    /// A request signed by a revoked device key: the device deletes what it holds.
     Wipe,
-    /// This application failed, not the caller.
     Internal,
 }
 
 impl Status {
-    /// The status as an HTTP code.
     #[must_use]
     pub fn code(self) -> u16 {
         match self {
@@ -68,7 +55,6 @@ impl Status {
     }
 }
 
-/// One refusal: a status and the server's own words for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refusal {
     status: Status,
@@ -85,74 +71,61 @@ impl Refusal {
         }
     }
 
-    /// 400 — the request is malformed.
     #[must_use]
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::new(Status::BadRequest, message)
     }
 
-    /// 403 — the gate, or the CSRF triple.
     #[must_use]
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(Status::Forbidden, message)
     }
 
-    /// 404 — nothing here.
     #[must_use]
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(Status::NotFound, message)
     }
 
-    /// 405 — the right path, the wrong method.
     #[must_use]
     pub fn method_not_allowed(message: impl Into<String>) -> Self {
         Self::new(Status::MethodNotAllowed, message)
     }
 
-    /// 409 — the request contradicts the chain.
     #[must_use]
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(Status::Conflict, message)
     }
 
-    /// 422 — the resource was found; its own content refuses. `typst`'s
-    /// message, quoted.
     #[must_use]
     pub fn unprocessable(message: impl Into<String>) -> Self {
         Self::new(Status::UnprocessableEntity, message)
     }
 
-    /// 413 — a body over the route's cap.
     #[must_use]
     pub fn too_large(message: impl Into<String>) -> Self {
         Self::new(Status::TooLarge, message)
     }
 
-    /// 429 — past a per-login budget.
     #[must_use]
     pub fn too_many(message: impl Into<String>) -> Self {
         Self::new(Status::TooManyRequests, message)
     }
 
-    /// 410 — the request was signed by a revoked device key, which deletes what it holds.
     #[must_use]
     pub fn wipe(message: impl Into<String>) -> Self {
         Self::new(Status::Wipe, message)
     }
 
-    /// 409 — this box's build does not read what was posted; the page posts it again later.
     #[must_use]
     pub fn other_build(message: impl Into<String>) -> Self {
         Self::new(Status::OtherBuild, message)
     }
 
-    /// 500 — this application failed.
     #[must_use]
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(Status::Internal, message)
     }
 
-    /// Its status.
     #[must_use]
     pub fn status(&self) -> Status {
         self.status
@@ -164,7 +137,6 @@ impl Refusal {
         &self.message
     }
 
-    /// The body every refusal answers with.
     #[must_use]
     pub fn payload(&self) -> ErrorPayload {
         ErrorPayload {
@@ -181,14 +153,11 @@ impl fmt::Display for Refusal {
 
 impl std::error::Error for Refusal {}
 
-/// What a route answers with.
 pub type Answered<T> = Result<T, Refusal>;
 
 /// A value quoted as `CPython`'s `repr` quotes a plain string: single quotes, unless the text
 /// holds one and no double quote.
-///
-/// The quotes are part of pinned refusal sentences, so `{:?}` would not do. Control characters
-/// and non-ASCII are not escaped: the values quoted have already failed a character class.
+/// The quotes are pinned in refusal sentences; control characters are not escaped.
 #[must_use]
 pub fn shown(text: &str) -> String {
     if text.contains('\'') && !text.contains('"') {

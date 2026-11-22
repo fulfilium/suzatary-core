@@ -1,24 +1,17 @@
 //! Prose into typst, as two types for its two source languages.
 //!
-//! [`Escaped`] is markup (inside `[..]`, where `#`, `[` and `]` are structure); [`Quoted`] is
-//! the inside of a `".."` string, where only `"` and `\` are. Escaping one as the other is
-//! silent damage, hence two newtypes.
+//! [`Escaped`] is markup, where `#`, `[` and `]` are structure; [`Quoted`] is a string's inside,
+//! where only `"` and `\` are. Escaping one as the other damages text silently.
 //!
-//! This is containment, not cosmetics: the triage agent's prose comes from attacker-controlled
-//! mail, and with every structural character backslashed it cannot author markup at all. That
-//! is stated as a law over arbitrary strings in the property tests below.
+//! The triage agent's prose comes from attacker-controlled mail; escaped, it cannot author markup.
 
 use std::fmt;
 
-/// The characters typst markup would otherwise read as structure.
-///
-/// `]` matters for containment (it closes a content block); the rest are escaped so prose reads
-/// as prose.
+/// The characters typst markup reads as structure; `]` closes a content block.
 pub(crate) const MARKUP_SPECIALS: &[char] =
     &['\\', '[', ']', '#', '$', '@', '*', '_', '<', '>', '`'];
 
-/// The characters a typst string would otherwise read as structure: deliberately not the
-/// markup set.
+/// The characters a typst string reads as structure: deliberately not the markup set.
 pub(crate) const STRING_SPECIALS: &[char] = &['\\', '"'];
 
 /// Typst markup that prose went through [`escape_markup`] to become: the one prose → markup
@@ -30,15 +23,14 @@ pub(crate) const STRING_SPECIALS: &[char] = &['\\', '"'];
 pub struct Escaped(String);
 
 impl Escaped {
-    /// Markup read back off the chain, already escaped when it was authored (re-escaping would
-    /// double every backslash). Never hand it raw prose or a composed string: that would put
-    /// markup back in the agent's reach.
+    /// Markup read back off the chain, already escaped when it was authored (escaping it again
+    /// would double every backslash).
+    /// Never hand it raw prose or a composed string: that puts markup back in the agent's reach.
     #[must_use]
     pub fn from_chain(markup: impl Into<String>) -> Self {
         Self(markup.into())
     }
 
-    /// The markup, for typst.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -75,8 +67,7 @@ impl fmt::Display for Quoted {
     }
 }
 
-/// Prose → typst content, with every structural character neutralised: the only way plain
-/// prose becomes [`Escaped`].
+/// Prose → typst content: the only way plain prose becomes [`Escaped`].
 #[must_use]
 pub fn escape_markup(text: &str) -> Escaped {
     Escaped(escape_with(text, MARKUP_SPECIALS))
@@ -88,14 +79,13 @@ pub fn escape_string(text: &str) -> Quoted {
     Quoted(escape_with(text, STRING_SPECIALS))
 }
 
-/// Typst content → the prose it stands for: the inverse of [`escape_markup`]. It refuses
-/// anything outside the escape's image, so `unescape_markup ∘ escape_markup = id` is total.
+/// Typst content → prose; it refuses anything outside the escape's image, so
+/// `unescape_markup ∘ escape_markup = id` is total.
 pub fn unescape_markup(markup: &Escaped) -> Result<String, EscapeError> {
     unescape_with(markup.as_str(), MARKUP_SPECIALS)
 }
 
-/// The inside of a typst string → the prose it stands for. The inverse of
-/// [`escape_string`].
+/// The inside of a typst string → the prose it stands for; the inverse of [`escape_string`].
 pub fn unescape_string(source: &Quoted) -> Result<String, EscapeError> {
     unescape_with(source.as_str(), STRING_SPECIALS)
 }
@@ -103,18 +93,16 @@ pub fn unescape_string(source: &Quoted) -> Result<String, EscapeError> {
 /// The text handed to an unescape is not in the escape's image.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum EscapeError {
-    /// A backslash with nothing after it. The escape never emits one.
     #[error("a trailing backslash at byte {at}: nothing to unescape")]
     DanglingBackslash {
-        /// Where it is.
+        /// A byte offset.
         at: usize,
     },
-    /// A structural character standing on its own: the failure that matters.
+    /// A structural character standing on its own.
     #[error("an unescaped {found:?} at byte {at}")]
     UnescapedSpecial {
-        /// The character.
         found: char,
-        /// Where it is.
+        /// A byte offset.
         at: usize,
     },
 }
@@ -148,9 +136,6 @@ fn unescape_with(source: &str, specials: &[char]) -> Result<String, EscapeError>
 
 /// No unescaped special, as a predicate over one string: every special is immediately preceded
 /// by an odd-length run of backslashes, and every other run of backslashes is even.
-///
-/// The image is full of special characters on purpose (an escape that removed them would be
-/// lossy); the law is that none of them is structure.
 #[must_use]
 pub fn no_unescaped_special(image: &str, specials: &[char]) -> bool {
     let mut backslashes = 0usize;
@@ -168,12 +153,10 @@ pub fn no_unescaped_special(image: &str, specials: &[char]) -> bool {
     backslashes.is_multiple_of(2)
 }
 
-/// Typst markup source → readable one-line plain text, for the open list and
-/// the briefing, never for rendering.
+/// Typst markup source → one line of plain text for reading, never for rendering.
 ///
-/// Not the inverse of [`escape_markup`] (that is [`unescape_markup`]): this reads markup as a
-/// person skims it. A call gives the text of its content blocks (`#link("u")[t]` → `t`) or else
-/// its string arguments. Total, so one odd body cannot break the agent's dedup list.
+/// A call gives the text of its content blocks (`#link("u")[t]` → `t`), else its strings.
+/// Total, so one odd body cannot break the agent's dedup list.
 #[must_use]
 pub fn markup_text(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
@@ -193,9 +176,7 @@ pub fn markup_text(source: &str) -> String {
 }
 
 /// The inside of a typst `".."` literal → the prose it stands for.
-///
-/// Only `\\` and `\"` are undone: those are a string's only escapes, and undoing more would
-/// invent text the document never showed.
+/// Only `\\` and `\"` are undone: undoing more would invent text the document never showed.
 #[must_use]
 pub fn string_text(source: &str) -> String {
     let chars: Vec<char> = source.chars().collect();
@@ -313,7 +294,6 @@ fn read_call(chars: &[char], mut at: usize) -> (String, usize) {
 }
 
 /// The content blocks and string literals inside an argument list, `at` being
-/// just past the `(`. Everything else in there is code, which the reader did not come for.
 fn read_args(chars: &[char], mut at: usize) -> (Vec<String>, Vec<String>, usize) {
     let mut contents = Vec::new();
     let mut strings = Vec::new();
@@ -367,8 +347,7 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    /// The set is closed: a structural character not backslashed here is one an email can use
-    /// to leave its own field.
+    /// A structural character not backslashed here is one an email can use to leave its field.
     #[test]
     fn every_markup_special_is_backslashed_and_nothing_else_is() {
         assert_eq!(
@@ -390,8 +369,7 @@ mod tests {
         );
     }
 
-    /// String source read as markup is caught by the law, not the compiler: `#` alone is not
-    /// markup.
+    /// String source read as markup is caught by the law, not the compiler.
     #[test]
     fn string_source_is_not_markup_source() {
         let quoted = escape_string("#link");
@@ -438,8 +416,7 @@ mod tests {
             prop_assert!(no_unescaped_special(escape_string(&text).as_str(), STRING_SPECIALS));
         }
 
-        /// The predicate is not vacuously true: a bare special fails it, and
-        /// so does a lone trailing backslash.
+        /// The predicate is not vacuously true: a bare special fails it.
         #[test]
         fn a_bare_special_is_caught(prefix: String, special in proptest::sample::select(MARKUP_SPECIALS)) {
             let text = format!("{}{special}", escape_markup(&prefix));

@@ -1,10 +1,6 @@
-//! What a replica wrote (`replica::writes`), over a node that is only a name and its parents.
-//!
-//! THE ROLLBACK LAW: for writes resting on rows that hold some nodes and no longer hold some
-//! prodromes, and any set F of the writes refused for good, what stands and what is unsent are what
-//! they would be had the replica never written F or anything resting on F; what stands holds no
-//! write of a prodrome gone, nor one resting on it; and the refusals name F exactly. An answer
-//! only climbs, so the moves joined in any order hold the same writes.
+//! THE ROLLBACK LAW: for any set F of the writes refused for good, what stands and what is unsent
+//! are what they would be had the replica never written F or anything resting on F; what stands
+//! holds no write of a gone prodrome, nor one resting on it; and the refusals name F exactly.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -39,13 +35,11 @@ fn name(i: usize) -> Hash {
     Hash::new(format!("{i:064x}")).expect("64 hex")
 }
 
-/// One of three prodromes, by `i`.
 fn prodrome(i: usize) -> Hash {
     Hash::new(format!("{:064x}", 0xf00 + i % 3)).expect("64 hex")
 }
 
-/// Node `i` rests on the earlier nodes `parents` picks, so the nodes are parents first; each names
-/// one of three prodromes.
+/// Node `i` rests on the earlier nodes `parents` picks, so the nodes are parents first.
 fn dag(parents: &[Vec<bool>]) -> Vec<Bare> {
     parents
         .iter()
@@ -64,7 +58,6 @@ fn dag(parents: &[Vec<bool>]) -> Vec<Bare> {
         .collect()
 }
 
-/// `refused` and every node of `own` resting on one of them.
 fn resting_on(own: &[Bare], refused: &BTreeSet<Hash>) -> BTreeSet<Hash> {
     let mut out: BTreeSet<Hash> = refused.clone();
     for n in own {
@@ -118,7 +111,6 @@ proptest! {
 
         let mut refused = Writes::default();
         refused.write(own.clone());
-        // Each refusal for good is final or outdated: both hold a write back alike.
         refused.refused(
             f.iter()
                 .enumerate()
@@ -147,9 +139,7 @@ proptest! {
             .filter(|n| !taken_back.contains(n) && !lost.contains(n))
             .collect();
         prop_assert_eq!(names(never.standing(in_rows, &gone)), standing);
-        // Every write held back is said: those refused, and each resting on one.
         prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _, _)| n)), taken_back.clone());
-        // And each holds that answer itself, so its record goes once said, as a refused one does.
         let refused_now: BTreeSet<Hash> = refused
             .iter()
             .filter(|o| matches!(&o.answer, Answer::Refused { kind: Refusal::Final | Refusal::Outdated, .. }))
@@ -158,10 +148,9 @@ proptest! {
         prop_assert_eq!(refused_now, taken_back);
     }
 
-    /// Every move is a join, so moves taken in any order and any number of times hold the same
-    /// writes; and a move already taken in is no news (`Writes::moves` is 0), which is all a tab
-    /// woken by another tab's keep reads before it hands over, so two tabs never wake each other
-    /// over one refused line for ever.
+    /// Moves taken in any order and any number of times hold the same writes, and a move taken
+    /// in already is no news (`Writes::moves` is 0), which stops two tabs waking each other for
+    /// ever over one refused line.
     #[test]
     fn law_the_moves_of_the_writes_are_joins(
         parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 10), 1..8),
@@ -176,7 +165,6 @@ proptest! {
                 moves.push(made.answered([(n.name.clone(), answer(*a))]));
             }
         }
-        // The same moves, rotated and each taken twice.
         let k = usize::try_from(order % moves.len() as u64).unwrap_or(0);
         let mut shuffled = Writes::default();
         for m in moves[k..].iter().chain(&moves[..k]).chain(&moves) {
@@ -196,9 +184,8 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
-    /// THE FIT LAW: the pieces of the unsent writes hold each of them once, in the order
-    /// [`Writes::unsent`] gives, and no piece goes over the post's count or bytes unless one write
-    /// alone does, so the box never answers a post too large for what its rule would take.
+    /// THE FIT LAW: the pieces hold each unsent write once, in order, and no piece of two or more
+    /// goes over the post's count or bytes.
     #[test]
     fn law_every_piece_fits_a_post(
         parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 12), 1..12),
@@ -224,8 +211,7 @@ proptest! {
     }
 }
 
-/// A write the box has not taken yet in its rule's words is waiting, with that sentence: posted
-/// again, never a refusal, and let go of nothing.
+/// A write answered later waits with its sentence and is posted again, never a refusal.
 #[test]
 fn a_write_answered_later_waits_and_goes_again() {
     use suzatary_store::replica::writes::Refusal;

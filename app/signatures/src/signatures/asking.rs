@@ -7,20 +7,17 @@ use super::{
 };
 use suzatary_base::refusal::Refusal;
 
-/// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it; key and signature absent where unsigned.
+/// A device's request at the door, as its headers carry it.
 #[derive(Debug, Clone, Copy)]
 pub struct Request<'a> {
-    /// Its method.
     pub method: &'a str,
-    /// Its path and query.
+    /// The path and query.
     pub target: &'a str,
-    /// Its device's instant, RFC 3339.
+    /// The device's instant, RFC 3339.
     pub at: Option<&'a str>,
-    /// Its nonce.
     pub nonce: Option<&'a str>,
     /// The body, whole.
     pub body: &'a [u8],
-    /// The device key it names.
     pub key: Option<&'a str>,
     /// The signature of its name.
     pub signature: Option<&'a str>,
@@ -48,7 +45,6 @@ pub struct Possessed(Proven);
 #[derive(Debug)]
 pub struct Trusted(Proven);
 
-/// What a proven request carries.
 #[derive(Debug, Clone)]
 pub struct Proven {
     record: Requested,
@@ -57,11 +53,7 @@ pub struct Proven {
 }
 
 impl Asking {
-    /// The request as the door reads it, written as `actor`: refused when unsigned, stamped
-    /// outside [`WINDOW_SECONDS`] of `now`, or malformed.
-    ///
-    /// # Errors
-    /// The door's refusal, in its words.
+    /// Refused when unsigned, malformed, or stamped outside [`WINDOW_SECONDS`] of `now`.
     pub fn of(
         request: &Request<'_>,
         actor: Actor,
@@ -121,9 +113,6 @@ impl Asking {
     }
 
     /// The request, its signature verifying under the key it names.
-    ///
-    /// # Errors
-    /// [`Unproven::Forged`].
     pub fn possessed(self) -> Result<Possessed, Unproven> {
         if self.signed.verifies() {
             Ok(Possessed(self.proven()))
@@ -132,11 +121,7 @@ impl Asking {
         }
     }
 
-    /// The request, its key trusted for its actor on every keyed chain under `root` and revoked
-    /// on none.
-    ///
-    /// # Errors
-    /// [`Unadmitted`].
+    /// The request, its key trusted for its actor on every keyed chain and revoked on none.
     pub fn trusted(
         self,
         chains: &Keeping<Keeper<'_>>,
@@ -151,11 +136,7 @@ impl Asking {
         Ok(Trusted(self.proven()))
     }
 
-    /// [`Unproven::Revoked`] where any keyed chain revoked the key; asked only of a verifying
-    /// signature.
-    ///
-    /// # Errors
-    /// A keyed chain that did not read.
+    /// [`Unproven::Revoked`] where any keyed chain revoked the key; `None` for a forged signature.
     pub fn revoked(
         &self,
         chains: &Keeping<Keeper<'_>>,
@@ -177,19 +158,16 @@ impl Asking {
 }
 
 impl Proven {
-    /// The record the box keeps once performed.
     #[must_use]
     pub fn record(&self) -> &Requested {
         &self.record
     }
 
-    /// The device key that signed it.
     #[must_use]
     pub fn device(&self) -> &PublicKey {
         &self.device
     }
 
-    /// The gate's actor.
     #[must_use]
     pub fn actor(&self) -> &Actor {
         &self.actor
@@ -197,7 +175,6 @@ impl Proven {
 }
 
 impl Possessed {
-    /// What it carries.
     #[must_use]
     pub fn proven(&self) -> &Proven {
         &self.0
@@ -205,7 +182,6 @@ impl Possessed {
 }
 
 impl Trusted {
-    /// What it carries.
     #[must_use]
     pub fn proven(&self) -> &Proven {
         &self.0

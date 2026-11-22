@@ -1,6 +1,4 @@
-//! An event schema's constructors are its own: none is one of the Prodrome's envelopes, which the
-//! parser looks up before a schema's, or one of its terms, which a schema that holds a price reads
-//! beside its own.
+//! A schema's constructors reuse no Prodrome envelope or term name; the parser reads those first.
 
 use prodrome_core::event::ENVELOPE_SIGNATURES;
 use prodrome_core::literal::Vocabulary as _;

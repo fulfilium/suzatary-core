@@ -5,14 +5,11 @@ use suzatary_base::repo_ids::RepoName;
 /// The secretspec name the routine's bearer token lives under; never read by this crate.
 pub const ROUTINE_TOKEN: &str = "SUZATARY_ROUTINE_TOKEN";
 
-/// `[coding]` in the instance file, parsed: which routine a tap fires and which repository its
-/// branches come back to.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Coding {
-    /// The routine created at claude.ai/code/routines.
     pub routine: RoutineId,
-    /// The repository its saved prompt names; the poll reads its branches.
+    /// The repository the routine's saved prompt names; the poll reads its branches.
     pub repo: RepoName,
 }
 
@@ -28,7 +25,6 @@ macro_rules! parsed {
         pub struct $name(String);
 
         impl $name {
-            /// The text.
             #[must_use]
             pub fn as_str(&self) -> &str {
                 &self.0
@@ -64,14 +60,12 @@ macro_rules! parsed {
     };
 }
 
-/// Not a routine id.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a routine id is letters, digits, '_' and '-', got {0:?}")]
 pub struct NotARoutine(String);
 
 parsed!(
-    /// The routine's id, as `[coding] routine` names it: it goes into the
-    /// fire URL's path, so nothing but letters, digits, `_` and `-`.
+    /// The routine's id; it goes into the fire URL's path, so it is only `[A-Za-z0-9_-]`.
     RoutineId,
     NotARoutine,
     NotARoutine,
@@ -85,8 +79,7 @@ parsed!(
 );
 
 impl RoutineId {
-    /// The routine's own page, where its API trigger's token is generated; the id is letters,
-    /// digits, `_` and `-`, so it is a path segment as it stands.
+    /// The routine's own page, where its API trigger's token is generated.
     #[must_use]
     pub fn page(&self) -> String {
         format!("https://claude.ai/code/routines/{}", self.0)

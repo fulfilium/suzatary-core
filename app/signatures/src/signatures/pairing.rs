@@ -6,26 +6,22 @@ use sha2::Sha256;
 
 use suzatary_store::store::StoreError;
 
-/// THE LETTERS OF A PAIRING CODE: RFC 8628 §6.1's base-20 set, consonants only, so a code
-/// spells no word and holds no letter a person confuses with a digit.
+/// RFC 8628 §6.1's base-20 consonants: a code spells no word and no letter looks like a digit.
 pub const ALPHABET: [u8; 20] = *b"BCDFGHJKLMNPQRSTVWXZ";
 
-/// How many letters a code has: 20^8 is about 2^34.6 codes, and with [`TRIES`] wrong tries
-/// before a code dies, one guess run succeeds about once in 5 billion.
+/// 20^8 is about 2^34.6 codes; with [`TRIES`], one guess run succeeds about once in 5 billion.
 pub(crate) const LETTERS: usize = 8;
 
 /// How long a code works after the box prints it, in minutes.
 pub const MINUTES: i64 = 10;
 
-/// How many wrong tries a code takes; the last one ends it.
+/// The last wrong try ends the code.
 pub const TRIES: u8 = 5;
 
-/// What the box tells a person to run for a new code.
 pub(crate) const RUN: &str = "`suzatary device pair`";
 
-/// A PAIRING CODE: `LETTERS` letters of [`ALPHABET`]. It has no `Display`, and its `Debug`
-/// prints no letter, so no log line or error can carry one; [`Code::shown`] is the one way out,
-/// and only the terminal that minted it calls it.
+/// A pairing code. It has no `Display` and its `Debug` prints no letter; only the minting
+/// terminal calls [`Code::shown`].
 #[derive(Clone, PartialEq, Eq)]
 pub struct Code([u8; LETTERS]);
 
@@ -44,9 +40,7 @@ impl std::fmt::Debug for Code {
 pub struct NotACode;
 
 impl Code {
-    /// The code `random` spells, letter by letter: a byte of 240 or more is skipped, so each
-    /// letter is uniform over the 20; `None` when the bytes run out first, and the caller draws
-    /// more. `random` comes from the system's generator at the box.
+    /// Skips each byte of 240 or more, so each letter is uniform; `None` when the bytes run out.
     #[must_use]
     pub fn drawn(random: &[u8]) -> Option<Code> {
         const FAIR: u8 = 240;
@@ -61,10 +55,7 @@ impl Code {
         Some(Code(code))
     }
 
-    /// The code a person typed: letters in either case, a dash or spaces anywhere.
-    ///
-    /// # Errors
-    /// `NotACode` for anything else.
+    /// Letters in either case, with a dash or spaces anywhere.
     pub fn typed(text: &str) -> Result<Code, NotACode> {
         let letters: Vec<u8> = text
             .bytes()
@@ -79,7 +70,7 @@ impl Code {
         }
     }
 
-    /// The code as the terminal prints it, in two groups of four: `BCDF-GHJK`.
+    /// `BCDF-GHJK`.
     #[must_use]
     pub fn shown(&self) -> String {
         let (first, second) = self.0.split_at(LETTERS / 2);
@@ -90,8 +81,7 @@ impl Code {
         )
     }
 
-    /// The keyed hash the box keeps in place of the code: HMAC-SHA256 under `salt` over the
-    /// actor it trusts for and the letters, so a code typed by another login does not match.
+    /// HMAC-SHA256 over the actor and the letters, so another login's code does not match.
     fn mac(&self, salt: &Salt, actor: &Actor) -> Hmac<Sha256> {
         let mut mac =
             Hmac::<Sha256>::new_from_slice(&salt.0).expect("HMAC takes a key of any length");
@@ -102,23 +92,17 @@ impl Code {
     }
 }
 
-/// The random key of one code's hash, drawn with it.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Salt(pub [u8; 32]);
 
-/// WHAT THE BOX KEEPS OF THE LAST CODE IT PRINTED: never the code, only its keyed hash, and
-/// whether it still works. One per instance, box-local, never pushed.
+/// What the box keeps of its last code: its keyed hash, never the code; box-local, never pushed.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Pairing {
-    /// A code waits to be typed.
     Waiting {
-        /// The hash's key.
         salt: Salt,
-        /// The hash of the actor and the code.
         digest: [u8; 32],
-        /// When it stops working.
         expires: DateTime<Utc>,
-        /// Wrong tries left, 1 to [`TRIES`].
+        /// 1 to [`TRIES`].
         left: u8,
     },
     /// A device's key was trusted with it.
@@ -147,37 +131,28 @@ impl std::fmt::Debug for Pairing {
     }
 }
 
-/// What a typed code comes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Presented {
-    /// The code matches, and is used now: trust the key that signed the request.
+    /// Trust the key that signed the request.
     Matched,
-    /// The code trusts nothing.
     Refused(Refused),
 }
 
-/// Why a typed code trusts nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refused {
-    /// Not the code; the try is counted.
+    /// The try is counted.
     Wrong {
-        /// Tries left.
         left: u8,
     },
-    /// Not the code, and the last try: the code is dead.
+    /// The last try was wrong.
     Died,
-    /// The box holds no code.
     NotAsked,
-    /// The code's minutes are over.
     Expired,
-    /// The code trusted a device already.
     Used,
-    /// The code died of wrong tries before.
     Spent,
 }
 
 impl Refused {
-    /// The box's refusal, in plain words.
     #[must_use]
     pub fn said(self) -> String {
         let again = format!("Run {RUN} at the box for a new one.");
@@ -206,7 +181,6 @@ impl Refused {
 }
 
 impl Pairing {
-    /// The waiting state of a code minted at `now` for `actor`.
     #[must_use]
     pub fn minted(code: &Code, salt: Salt, actor: &Actor, now: DateTime<Utc>) -> Pairing {
         let digest = code.mac(&salt, actor).finalize().into_bytes().into();
@@ -218,10 +192,9 @@ impl Pairing {
         }
     }
 
-    /// `code`, typed by a device of `actor` at `now`, against what the box holds, and what to
-    /// keep in its place, `None` to keep it as it is: a match is used at once, so a failure to
-    /// trust after it costs a new code, never a second use. The hash is compared in constant time (`Mac::verify_slice`), and
-    /// an expired, used or spent code is refused before it is compared.
+    /// The answer and what to keep (`None`: unchanged). An expired, used or spent code is refused
+    /// before the constant-time compare (`Mac::verify_slice`).
+    /// A match is used at once, so a later failure to trust costs a new code, never a second use.
     #[must_use]
     pub(crate) fn presented(
         held: Option<&Pairing>,
@@ -266,11 +239,10 @@ impl Pairing {
     }
 }
 
-/// WHERE THE BOX KEEPS ITS PAIRING: one value, replaced in one step against every other writer,
-/// so two tries at once, or a try and a new code, never interleave.
+/// Where the box keeps its pairing: one value, replaced atomically so concurrent tries never
+/// interleave.
 pub trait Pairings: Send + Sync {
-    /// Replace what is held by what `step` answers for it, `None` keeping it as it is, while no
-    /// other writer reads or writes.
+    /// Replaces what is held by `step`'s answer (`None`: unchanged) while no other writer runs.
     ///
     /// # Errors
     /// The store's own; `step` then ran on nothing, or its answer is not kept.
@@ -280,10 +252,7 @@ pub trait Pairings: Send + Sync {
     ) -> Result<(), StoreError>;
 }
 
-/// `code` typed by a device of `actor` at `now`, the try counted and a match used, in one step.
-///
-/// # Errors
-/// The store's own.
+/// Counts the try and uses a match in one step.
 pub fn present(
     held: &dyn Pairings,
     code: &Code,
@@ -299,7 +268,7 @@ pub fn present(
     Ok(presented)
 }
 
-/// A pairing as text, its one serde shape: the bytes in hex.
+/// The bytes in hex.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 enum Spelled {

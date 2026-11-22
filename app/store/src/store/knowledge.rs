@@ -8,8 +8,7 @@ use prodrome_core::policy::Everything;
 use prodrome_core::registers::{Node, fold};
 use prodrome_core::schema::Schema;
 
-/// Every entity's registers read: each register's maximal values under its declared order, as
-/// the order compares them. A function of the object set, as every reading is.
+/// Each entity's registers, as their maximal values under the declared order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Knowledge(BTreeMap<Key, BTreeMap<Slot, BTreeSet<Datum>>>);
 
@@ -21,8 +20,7 @@ fn value(event: &Declared, slot: Slot) -> Option<Datum> {
 }
 
 impl Knowledge {
-    /// The reading of `nodes`, every writer believed: a store a plugin fills has one writer and
-    /// no trust to apply.
+    /// The reading of `nodes`, every writer believed: a store a plugin fills has one writer.
     #[must_use]
     pub fn of(nodes: &[Node<Declared>]) -> Self {
         let folded = fold(nodes);
@@ -46,8 +44,8 @@ impl Knowledge {
         Self(known)
     }
 
-    /// Whether every register `event` writes already reads exactly the value it writes: learning
-    /// it would teach the store nothing. A conflict is never known, so the next write settles it.
+    /// Whether every register `event` writes already reads exactly that value.
+    /// A conflict is never known, so the next write settles it.
     #[must_use]
     pub fn knows(&self, event: &Declared) -> bool {
         let held = self.0.get(event.key());
@@ -59,8 +57,7 @@ impl Knowledge {
         })
     }
 
-    /// What a write of `event` makes the reading: it rests on every write to its entity, so each
-    /// register it writes reads its value alone.
+    /// Record a write of `event`, which rests on every write to its entity.
     pub fn settle(&mut self, event: &Declared) {
         let registers = self.0.entry(event.key().clone()).or_default();
         for slot in event.writes() {

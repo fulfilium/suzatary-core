@@ -6,12 +6,10 @@ use suzatary_base::capability::Nothing;
 
 use crate::store::{Doc, Gets, Lists, Prodrome, Reads, StoreError, WriteLock};
 
-/// A hold that holds nothing.
 struct NoLock;
 impl WriteLock for NoLock {}
 
-/// Every store, inert: it holds no object, so `verify` finds nothing, and an append is sealed and
-/// kept nowhere.
+/// An append is sealed and kept nowhere.
 impl<E: Schema> Reads<E> for Nothing {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         Ok(Vec::new())
@@ -39,7 +37,6 @@ impl<E: Schema> Prodrome<E> for Nothing {
     }
 }
 
-/// No file was uploaded or kept, no fact's words either, and none is kept here.
 impl<K, T> Gets<K, T> for Nothing {
     fn get(&self, _key: &K) -> Result<Option<T>, StoreError> {
         Ok(None)

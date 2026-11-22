@@ -1,5 +1,3 @@
-//! Compiling authored markup in the closed world: the one effect the markup door asks of.
-
 use std::fmt;
 use std::ops::Range;
 
@@ -8,8 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Compiling one text, alone, in the closed world: a standard library with no `html` module
 /// and no `plugin`, no file but the text itself, no package, no font and no clock.
 ///
-/// The world is the containment, so what a text may produce is a fact about that library,
-/// whoever wrote the text; the interpreter also bounds the compile in time.
+/// The world is the containment; the interpreter also bounds the compile in time.
 pub trait Typeset: Sync {
     /// Typst's whole HTML document for `source`, or what typst said was wrong with it.
     fn closed(&self, source: &str) -> Result<String, Rejected>;
@@ -40,12 +37,9 @@ pub fn parsed(source: &str) -> Result<(), Rejected> {
     }
 }
 
-/// One thing typst said about a source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnostic {
-    /// Its words.
     pub message: String,
-    /// What it suggests, if anything.
     #[serde(default)]
     pub hints: Vec<String>,
     /// The bytes of the source it is about, when it is about some.
@@ -54,8 +48,7 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    /// A diagnostic about nothing in particular: a compile that did not finish, a world that
-    /// could not be built.
+    /// A diagnostic about nothing in particular, such as a compile that did not finish.
     #[must_use]
     pub fn whole(message: impl Into<String>) -> Self {
         Self {
@@ -95,12 +88,10 @@ fn position(source: &str, at: usize) -> (usize, usize) {
 /// Typst refused a source: every error it gave, never empty.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rejected {
-    /// The errors, in typst's order.
     pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Rejected {
-    /// A refusal with one diagnostic about the whole text.
     #[must_use]
     pub fn whole(message: impl Into<String>) -> Self {
         Self {

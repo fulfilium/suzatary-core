@@ -1,10 +1,7 @@
-//! The memory schema's laws (`docs/design-register-types.md` §7 in the Prodrome): a fact's life
-//! is a partial order (law 2); the reading is a function of the object set, whatever order the
-//! objects arrive in (law 1); the store's real append refuses a remembering of a forgotten fact,
-//! so a forgotten id never reads again, and the reading of a union is the join of the readings
-//! (law 4); every event prints and parses back. Consolidations ride in every script, so a
-//! consolidation arriving before its sources, or beside a forgetting of one of them on another
-//! replica, reads the same whatever the order, and never stands on a forgotten fact.
+//! The memory schema's laws (`docs/design-register-types.md` §7 in the Prodrome): law 1
+//! (order-free reading),
+//! law 2 (a life is a partial order) and law 4 (the union reads the join); consolidations ride in
+//! every script.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,7 +26,6 @@ use suzatary_store::store::linearised;
 
 type Disk = EventStore<MemoryEvent, Everything>;
 
-/// A store at the memory schema, removed when dropped.
 struct Scratch(
     Disk,
     #[expect(dead_code, reason = "held for its drop, which removes the directory")]
@@ -43,7 +39,7 @@ impl Scratch {
         scratch
     }
 
-    /// A store with nothing in it, not even a genesis: a replica about to adopt one.
+    /// No genesis: a replica about to adopt one.
     fn empty() -> Self {
         let dir = suzatary_testkit::scratch("memory-schema");
         Self(Disk::new(dir.path().join("store"), Everything), dir)
@@ -107,8 +103,6 @@ fn forgotten(fact: u64, version: u64) -> MemoryEvent {
     memory_event::forgotten(FactId(fact), at(version), actor("ada"), version).expect("after it")
 }
 
-/// What the box writes: a remembering of a new fact, a forgetting of a standing one, or a
-/// consolidation of two standing ones.
 #[derive(Debug, Clone)]
 enum Step {
     Remember(u64),
@@ -128,8 +122,7 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
     )
 }
 
-/// The events `script` makes, numbered as `memory::remembering` and `memory::forgetting` number
-/// them: each one more than every id and version before it.
+/// Each event is numbered one more than every id and version before it, as the box numbers them.
 fn history(script: &[Step]) -> Vec<MemoryEvent> {
     let mut version = 0;
     let mut standing: Vec<u64> = Vec::new();
@@ -178,8 +171,7 @@ fn read(objects: Vec<(Hash, Envelope<MemoryEvent>)>) -> TwoPhase {
     TwoPhase::of(&nodes)
 }
 
-/// `objects` in an order a replica could receive them, every parent before its child, drawn
-/// from `seed`.
+/// `objects` in an order a replica could receive them, every parent before its child.
 fn arrival(
     objects: &[(Hash, Envelope<MemoryEvent>)],
     mut seed: u64,
@@ -252,10 +244,7 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
-    /// The reading is a function of the object set: every order a replica could receive the
-    /// objects in reads the same, and every prefix of that arrival holds at most the whole, a
-    /// forgotten id never standing again once its forgetting has arrived; what the prefixes of
-    /// two arrivals hold is a partial order.
+    /// Law 1: the reading is a function of the object set, and a forgotten id never stands again.
     #[test]
     fn the_reading_is_the_object_sets_whatever_order_they_arrive_in(
         script in steps(),
@@ -287,15 +276,13 @@ proptest! {
                 );
             }
         }
-        // A second arrival's prefixes, so pairs no one arrival orders are compared too.
         let second = arrival(&all, other);
         held.extend((1..=second.len()).map(|end| read(second[..end].to_vec()).held()));
         suzatary_store::laws::partial_order(&held)?;
         prop_assert!(store.0.verify().is_empty(), "{:?}", store.0.verify());
     }
 
-    /// Once forgotten, always forgotten: the store refuses any remembering of a forgotten id,
-    /// whatever words or kind it names, and writes nothing.
+    /// The store refuses any remembering of a forgotten id and writes nothing.
     #[test]
     fn the_store_refuses_to_remember_a_forgotten_fact(script in steps(), seed in any::<u64>()) {
         let events = history(&script);
@@ -308,8 +295,6 @@ proptest! {
             again = remembered(fact.0, seed.wrapping_add(1));
             prop_assert!(store.0.append(again).is_err());
         }
-        // Beside a standing remembering, another is refused, or is the very event held, which
-        // the store writes nothing for.
         for (fact, _) in reading.live() {
             let _ = store.0.append(remembered(fact.0, seed));
         }
@@ -317,15 +302,8 @@ proptest! {
         prop_assert_eq!(read(objects(&store.0)), reading);
     }
 
-    /// Two replicas share a prefix; each remembers facts the other does not see (ids the other
-    /// does not use), consolidates shared facts, and forgets one of them; adopting each other's
-    /// objects, both hold the join of what each held, and the join is the least upper bound.
-    ///
-    /// The union reads law 11's two clauses: a fact stands exactly when its sources are held,
-    /// nothing it rests on is forgotten and nothing replaced it; a consolidation that reads
-    /// forgotten through a source replaces nothing, so its other sources stand again. When both
-    /// replicas number their consolidations alike, the least-named one stands, the other's
-    /// sources are replaced by nothing, and its words are named by nothing live.
+    /// Law 4: two diverged replicas that adopt each other's objects hold the join, and the union
+    /// reads law 11's two clauses.
     #[test]
     fn the_union_reads_the_join(
         script in steps(),
@@ -353,7 +331,6 @@ proptest! {
                 next += 1;
                 store.0.append(remembered(next, *seed)).expect("climbs");
             }
-            // A consolidation of shared facts, beside the other replica's forgetting of one.
             let dropped = standing.get(drop % standing.len().max(1)).copied();
             if let (Some((a, b)), false) = (merge, standing.is_empty()) {
                 let mut from: Vec<u64> = [a, b].iter().map(|pick| standing[pick % standing.len()].0).collect();
@@ -410,7 +387,6 @@ proptest! {
             }
         }
         if same_number {
-            // Every remembering's words but the one kept per number are named, and dead.
             let kept: BTreeSet<_> = after_one.remembered().values().map(|kept| kept.text.clone()).collect();
             let named = after_one.naming();
             for (_, object) in objects(&one.0) {
@@ -427,9 +403,8 @@ proptest! {
     }
 }
 
-/// Two replicas consolidate shared facts under one new number: after the union, the least-named
-/// consolidation stands in its sources' place, the other's sources are replaced by nothing and
-/// stand, and the other's words are dead.
+/// Two consolidations numbered alike: after the union, the least-named stands and the other's words
+/// are dead.
 #[test]
 fn two_consolidations_numbered_alike_keep_the_least_named() {
     let one = written(&[remembered(1, 0), remembered(2, 2), remembered(3, 4)]);
@@ -459,7 +434,6 @@ fn two_consolidations_numbered_alike_keep_the_least_named() {
     assert!(!dead.contains(&won));
 }
 
-/// Every constructor the memory stores, with its fields in print order.
 #[test]
 fn the_stored_names_are_pinned() {
     use prodrome_core::schema::headed::Body;

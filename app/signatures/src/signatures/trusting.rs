@@ -10,10 +10,6 @@ use super::{Keeper, Keeping, Trust, Unproven, Unread};
 pub struct Trusting(Keeping<Arc<Trust>>);
 
 impl Trusting {
-    /// The trust of the keyed chains, each read under `root`.
-    ///
-    /// # Errors
-    /// The first keyed chain that did not read.
     pub fn held(chains: &Keeping<Keeper<'_>>, root: &PublicKey) -> Result<Self, Unread> {
         let roots = Registrar::Roots([root.clone()].into_iter().collect());
         Ok(Self(match chains {
@@ -27,12 +23,8 @@ impl Trusting {
         }))
     }
 
-    /// `signed` verifies, and every keyed chain trusts its key for `actor`; a revocation on any
-    /// keyed chain counts on all, and where no chain keeps keys no key is trusted.
-    ///
-    /// # Errors
-    /// [`Unproven::Revoked`] where any keyed chain revoked the key, else the first keyed chain's
-    /// refusal.
+    /// `signed` verifies and every keyed chain trusts its key for `actor`; a revocation on any
+    /// keyed chain counts on all, and with no keyed chain no key is trusted.
     pub fn admits(&self, actor: &Actor, signed: &Signed) -> Result<(), Unproven> {
         match &self.0 {
             Keeping::Keyless => Err(Unproven::Untrusted {

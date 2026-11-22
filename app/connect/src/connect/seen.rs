@@ -4,32 +4,26 @@ use crate::secrets::SecretState;
 use suzatary_health::health::Health;
 use suzatary_mail::mail::address::EmailAddress;
 
-/// The observations a connection's steps read, each a function the reader lends.
+/// The observations a connection's steps read.
 pub struct Seen<'a> {
-    /// Where the secret named so stands.
     pub secret: &'a dyn Fn(&str) -> SecretState,
     /// Whether the account holds its sign-in to read mail.
     pub signed_in: &'a dyn Fn(&EmailAddress) -> bool,
-    /// Whether the account holds its consent to send mail, a grant apart from reading's.
+    /// Whether the account holds its consent to send mail, a grant separate from reading's.
     pub may_send: &'a dyn Fn(&EmailAddress) -> bool,
-    /// Whether its check has ever succeeded.
     pub checked: Checked,
-    /// How the person reaches the app, which a terminal's step is spelled in.
     pub reach: &'a super::Reach,
 }
 
-/// Whether a connection's check has ever succeeded, which is how the box sees a step it cannot
-/// observe itself (a terminal's, the subscription's sign-in) taken.
+/// Whether a connection's check has ever succeeded; the box reads a step it cannot observe (a
+/// terminal's, the subscription's sign-in) as taken from this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Checked {
-    /// It has not, or nothing has run it.
     Never,
-    /// It has, at least once.
     Once,
 }
 
 impl Checked {
-    /// What `health` says: once its latest success exists.
     #[must_use]
     pub fn of(health: Option<&Health>) -> Self {
         match health.and_then(Health::succeeded) {

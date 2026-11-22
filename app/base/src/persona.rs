@@ -1,13 +1,8 @@
 //! The person this deployment serves, `instance.toml`'s `[persona]`.
-//!
-//! The manuals stay files, because their prose is the review surface; they carry
-//! `{{persona.*}}` placeholders that [`Persona::render`] fills in at read time, so nothing is
-//! regenerated when the instance changes. A closed, small set of placeholders, not a template
-//! language.
+//! The manuals carry `{{persona.*}}` placeholders that [`Persona::render`] fills at read time.
 
-/// Everything a manual or the weather line needs to know about the person: no path, no
-/// secret, no mail address. Who they are and where is the instance file's `[persona]`, which is
-/// pushed; what they wrote about themselves is [`Prose`], which is not.
+/// What a manual or the weather line knows of the person: no path, no secret, no mail address.
+/// The instance file that holds it is pushed, so private words live in [`Prose`].
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Persona {
@@ -15,34 +10,27 @@ pub struct Persona {
     pub name: String,
     /// The city `suzatary weather` forecasts.
     pub city: String,
-    /// The zone the person lives in, by name (`America/New_York`): what a day is to them and
-    /// the forecast city's hour. Theirs, so it changes when they move.
+    /// The person's zone by name (`America/New_York`): what a day is to them.
     pub zone: crate::zone::Zone,
-    /// Their own words, read from the box-local `persona.toml`: never a key of `[persona]`,
-    /// so the instance file a push carries cannot hold them.
+    /// Read from the box-local `persona.toml`, never `[persona]`, so a push cannot carry it.
     #[serde(skip)]
     pub prose: Prose,
 }
 
-/// The person's own prose: their email voice (which names correspondents and quotes sent
-/// mail), what news matters to them, and the anchors of their scale. Box-local, in the tier
-/// `<data>/local`, and carried by the vault, never by a push.
+/// The person's own prose, box-local in `<data>/local`: carried by the vault, never by a push.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Prose {
-    /// Topics worth surfacing in a briefing, each a whole phrase; `{{persona.news_filter}}`
-    /// joins them into one English sentence.
+    /// Topics worth surfacing in a briefing; `{{persona.news_filter}}` joins them into a sentence.
     pub news_filter: Vec<String>,
     /// This person's email voice, one rule per line; `{{persona.email_voice}}` renders bullets.
     pub email_voice: Vec<String>,
-    /// The priority scale's anchors, each `"value: meaning"`; `{{persona.anchors_table}}`
-    /// renders them as a table.
+    /// The scale's anchors, each `"value: meaning"`; `{{persona.anchors_table}}` makes a table.
     pub anchors: Vec<String>,
 }
 
 impl Default for Persona {
-    /// A name that reads as a placeholder, so an unconfigured manual looks
-    /// unconfigured rather than named after whoever wrote the fixture.
+    /// A placeholder name, so an unconfigured manual looks unconfigured.
     fn default() -> Self {
         Self {
             name: "(unconfigured persona)".to_owned(),
@@ -87,8 +75,7 @@ impl Persona {
             .join("\n")
     }
 
-    /// The anchors as a two-column Markdown table. An entry with no `:` prints whole in the left
-    /// column, so malformed configuration is visible rather than dropped.
+    /// The anchors as a Markdown table; an entry with no `:` prints whole, so it stays visible.
     fn anchors_table(&self) -> String {
         use std::fmt::Write as _;
         let mut rows = String::from("| value | means |\n|---|---|");

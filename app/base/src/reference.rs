@@ -1,12 +1,10 @@
-//! A reference: one value for "the thing I am pointing at", on a person's turn, in a
-//! proposal's sources and in the model's own prose.
+//! A reference: one value for "the thing I am pointing at", in a turn, a source or prose.
 //!
-//! The text form (`todo:life/x`) is the protocol with the model, which writes text and cannot
-//! hand back a tagged union, so it prints and parses by one pair of functions, pinned by a
-//! round-trip law. It is also the serde form, which `web/src/chat/refs.ts` parses.
+//! The text form (`todo:life/x`) is the protocol with the model, which writes text, so one
+//! pair of functions prints and parses it, pinned by a round-trip law; it is the serde form too.
+//! `web/src/chat/refs.ts` parses the same form.
 //!
-//! Every part is parsed into a type that refuses `..`, a slash and an empty segment, so a
-//! `Reference` off the wire cannot name a path and nothing downstream has to check.
+//! Every part refuses `..`, a slash and an empty segment, so a `Reference` cannot name a path.
 
 use std::fmt;
 use std::str::FromStr;
@@ -18,10 +16,8 @@ use crate::chains::ChainName;
 use crate::conversation_id::ConversationId;
 use crate::topic_target::Target;
 
-/// A string that is not a reference, and which part of it is wrong.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotAReference {
-    /// No known prefix.
     #[error(
         "a reference is todo:<chain>/<id>, todo:+<genesis>/<id>, mail:<hash>, thread:<id>, \
          briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, \
@@ -64,8 +60,6 @@ impl From<MailHash> for String {
 }
 
 impl MailHash {
-    /// # Errors
-    /// Anything that is not six to sixty-four lowercase hex characters.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAReference> {
         let text = text.into();
         let ok = matches!(text.len(), 6..=64)
@@ -93,9 +87,6 @@ impl MailHash {
 pub struct ThreadId(String);
 
 impl ThreadId {
-    /// # Errors
-    /// An empty id, one over 128 characters, or one holding anything but
-    /// letters, digits, `.`, `_` and `-`.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAReference> {
         let text = text.into();
         let ok = matches!(text.len(), 1..=128)
@@ -118,14 +109,11 @@ impl ThreadId {
     }
 }
 
-/// A triage batch's name from before the agent filed cards: the head object of its replica,
-/// eight hex at least, since a young store's short prefixes collide sooner than a corpus's.
+/// A triage batch's head object: eight hex at least, since a young store's prefixes collide.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BatchHead(String);
 
 impl BatchHead {
-    /// # Errors
-    /// Anything that is not eight to sixty-four lowercase hex characters.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAReference> {
         let text = text.into();
         let ok = matches!(text.len(), 8..=64)
@@ -151,8 +139,7 @@ impl BatchHead {
 /// The one spelling of a briefing's day, in a URL and a file name alike.
 const DAY: &str = "%Y-%m-%d";
 
-/// A todo, on the chain that holds it: an id is unique only within one store. Prints
-/// `todo:<chain>/<id>`.
+/// A todo on its chain: an id is unique only within one store.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct TodoRef {
@@ -165,7 +152,6 @@ pub struct TodoRef {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GenesisPrefix(String);
 
-/// What a [`GenesisPrefix`] names among the geneses a reader holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Found<'a> {
     One(&'a Hash),
@@ -177,8 +163,6 @@ impl GenesisPrefix {
     /// The hex a person's printer shows.
     const SHORT: usize = 12;
 
-    /// # Errors
-    /// Anything that is not eight to sixty-four lowercase hex characters.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAReference> {
         let text = text.into();
         if matches!(text.len(), 8..=64) && text.bytes().all(hex) {
@@ -222,7 +206,7 @@ impl GenesisPrefix {
     }
 }
 
-/// A todo by its prodrome's genesis, the same name in every store. Prints `todo:+<genesis>/<id>`.
+/// A todo by its prodrome's genesis, the same name in every store.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GlobalTodo {
     pub genesis: GenesisPrefix,
@@ -235,8 +219,7 @@ impl fmt::Display for GlobalTodo {
     }
 }
 
-/// One proposal in one of the secretary's conversations: the card a tap names. Prints
-/// `proposal:<conversation>/<n>`.
+/// One proposal in a secretary conversation: the card a tap names.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct ProposalRef {
@@ -257,7 +240,6 @@ impl fmt::Display for ProposalRef {
     }
 }
 
-/// A reference of another kind, read where only one kind is meant.
 fn other_kind(scheme: &'static str, read: &Reference) -> NotAReference {
     NotAReference::shape(
         scheme,
@@ -337,16 +319,13 @@ impl From<ProposalRef> for String {
     }
 }
 
-/// What a turn, a source or a sentence points at. Closed, because each arm is a destination
-/// the app has a page for.
+/// What a turn, a source or a sentence points at; each arm is a destination with a page.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Reference {
-    /// A todo, on the chain that holds it.
     Todo(TodoRef),
     Global(GlobalTodo),
     Mail {
-        /// Its canonical hash, whole or as a prefix.
         hash: MailHash,
     },
     Thread {
@@ -358,7 +337,6 @@ pub enum Reference {
     Proposal(ProposalRef),
     /// A triage run held rather than accepted or rejected.
     Batch {
-        /// The chain it is proposed against.
         chain: ChainName,
         /// The run's own head, its only name.
         head: BatchHead,
@@ -445,8 +423,7 @@ impl FromStr for Reference {
                     NotAReference::shape("briefing", format!("a day is YYYY-MM-DD, got {rest:?}"))
                 };
                 let date = chrono::NaiveDate::parse_from_str(rest, DAY).map_err(|_| wrong())?;
-                // One spelling per day: chrono also reads `2026-9-10`, which would print
-                // back differently, so the canonical print must be what was read.
+                // One spelling per day: chrono also reads `2026-9-10`, which prints back otherwise.
                 if date.format(DAY).to_string() != rest {
                     return Err(wrong());
                 }
@@ -490,7 +467,6 @@ impl FromStr for Reference {
     }
 }
 
-/// A round or a note, read by [`Target`]'s own parser.
 fn target(text: &str, scheme: &'static str) -> Result<Reference, NotAReference> {
     text.parse().map(Reference::Target).map_err(|_| {
         NotAReference::shape(
@@ -525,9 +501,8 @@ impl From<Reference> for String {
 /// Every reference named in a turn's prose, in order. A candidate [`FromStr`] refuses is
 /// dropped: erring toward "not a link" is the safe direction.
 ///
-/// A hand-written scan, mirrored by `tokenise` in `web/src/chat/refs.ts`: a candidate starts
-/// after a character that is not `[A-Za-z0-9_-]` (or at the start) and not inside an earlier
-/// candidate, and each spelling takes the longest run its shape allows.
+/// `tokenise` in `web/src/chat/refs.ts` mirrors this scan: a candidate starts at a boundary
+/// outside an earlier candidate, and each spelling takes the longest run its shape allows.
 #[must_use]
 pub fn mentions(text: &str) -> Vec<Reference> {
     let bytes = text.as_bytes();
@@ -554,7 +529,6 @@ fn word(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
 }
 
-/// How long the run of `class` at the start of `s` is, at most `most`.
 fn run(s: &[u8], class: fn(u8) -> bool, most: usize) -> usize {
     s.iter().take(most).take_while(|b| class(**b)).count()
 }
@@ -600,7 +574,6 @@ fn slashed(
     (after >= least).then_some(name + 1 + after)
 }
 
-/// The length of the candidate spelled at the start of `s`, if one is.
 fn candidate(s: &[u8]) -> Option<usize> {
     let spelled = |scheme: &str| s.strip_prefix(scheme.as_bytes());
     let with = |scheme: &str, len: Option<usize>| len.map(|l| scheme.len() + l);
@@ -671,7 +644,7 @@ mod tests {
 
     use super::*;
 
-    /// The pattern the scan replaced, with `\d` read as `[0-9]`.
+    /// A regular expression for the same spellings, with `\d` read as `[0-9]`.
     fn by_regex(text: &str) -> Vec<Reference> {
         let pattern = regex::Regex::new(concat!(
             r"(^|[^A-Za-z0-9_-])(",
@@ -787,8 +760,7 @@ mod tests {
     }
 
     proptest! {
-        /// The text form is the protocol with the model: whatever this prints reads back as
-        /// the same value.
+        /// Whatever this prints reads back as the same value.
         #[test]
         fn a_reference_reads_back_as_what_it_printed(reference in reference()) {
             let printed = reference.to_string();
@@ -805,8 +777,7 @@ mod tests {
         }
     }
 
-    /// A field that names one kind of reference reads only that kind: a todo is no proposal, a
-    /// proposal no todo, and each prints what it read.
+    /// A field that names one kind of reference reads only that kind.
     #[test]
     fn a_typed_reference_reads_only_its_own_kind() {
         let card: ProposalRef = "proposal:default/3".parse().expect("a proposal");
@@ -819,8 +790,7 @@ mod tests {
         assert!("mail:abcdef012345".parse::<TodoRef>().is_err());
     }
 
-    /// Every part is parsed, so a reference cannot carry a path, an empty segment or a name in
-    /// the wrong vocabulary.
+    /// Every part is parsed, so a reference cannot carry a path or an empty segment.
     #[test]
     fn a_string_that_is_not_a_reference_is_refused() {
         for bad in [
@@ -869,9 +839,7 @@ mod tests {
         }
     }
 
-    /// The seven spellings `SECRETARY.md` shows the model, and a triage batch's, which held
-    /// decisions on the chain still name, so the manual, the tokeniser and this grammar cannot
-    /// drift apart.
+    /// The spellings `SECRETARY.md` shows the model, so the manual and this grammar cannot drift.
     #[test]
     fn the_text_forms_are_the_ones_the_manual_names() {
         for text in [
@@ -889,8 +857,7 @@ mod tests {
         }
     }
 
-    /// A mail hash may be the six-character prefix a todo's source carries; a batch head's
-    /// floor is eight.
+    /// A mail hash may be a six-character prefix; a batch head's floor is eight.
     #[test]
     fn a_hash_has_its_floor_and_its_ceiling() {
         for (text, expected) in [
@@ -935,8 +902,7 @@ mod tests {
         );
     }
 
-    /// A prefix names the one held genesis it starts, and its failures are said: none held, or
-    /// several sharing it.
+    /// A prefix names the one held genesis it starts, or says that none or several do.
     #[test]
     fn a_genesis_prefix_names_one_held_genesis_or_says_why_not() {
         let hash = |c: &str| Hash::new(c.repeat(64)).expect("hex");

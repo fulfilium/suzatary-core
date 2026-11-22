@@ -1,6 +1,4 @@
-//! A store that can only be read: [`Only`] holds a store privately and implements its read halves,
-//! [`Reads`] and [`Gets`], and no trait that writes. A process that must never write a store opens
-//! it inside one, so no write handle to it exists anywhere in that process.
+//! A process that must never write a store opens it inside [`Only`], which has no write trait.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -10,11 +8,9 @@ use prodrome_core::schema::Schema;
 
 use super::{Gets, Graph, Reads, StoreError};
 
-/// `S`, read and never written.
 pub struct Only<S>(S);
 
 impl<S> Only<S> {
-    /// `store`, from now on only read.
     #[must_use]
     pub fn new(store: S) -> Self {
         Self(store)
@@ -61,7 +57,6 @@ impl<K, T, S: Gets<K, T>> Gets<K, T> for Only<S> {
     }
 }
 
-/// A borrowed store reads as the store, so [`Only`] can hold a borrow.
 impl<E: Schema, S: Reads<E> + ?Sized> Reads<E> for &S {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         (**self).objects()
@@ -96,7 +91,6 @@ impl<E: Schema, S: Reads<E> + ?Sized> Reads<E> for &S {
     }
 }
 
-/// A borrowed store reads as the store, so [`Only`] can hold a borrow.
 impl<K, T, S: Gets<K, T> + ?Sized> Gets<K, T> for &S {
     fn get(&self, key: &K) -> Result<Option<T>, StoreError> {
         (**self).get(key)

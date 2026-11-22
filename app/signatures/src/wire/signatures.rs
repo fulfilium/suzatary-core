@@ -15,7 +15,7 @@ pub struct DevicePayload {
     pub devices: u32,
 }
 
-/// `POST /api/act/device`, signed by the page, since the Android portal holds no key.
+/// `POST /api/act/device`; the page signs it because the Android portal holds no key.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Registering {
@@ -27,15 +27,12 @@ pub struct Registering {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum RefusalKind {
-    /// Held and named, and everything resting on it with it.
+    /// Held and named, with everything resting on it.
     Final,
-    /// Not yet: posted again, and taken once its device is trusted and it is signed.
+    /// Posted again; taken once its device is trusted and it is signed.
     Trust,
-    /// Not yet, in the rule's words: posted again, and taken once what it waits for comes (the
-    /// box's clock reaching the instant it is dated, a parent the box does not hold yet). The
-    /// person is told once, in those words.
+    /// Posted again; taken once what it waits for arrives (the box's clock, a missing parent).
     Later,
-    /// Sealed under redaction rules older than the box's: held and named like a final refusal,
-    /// never posted again, its words kept where they were typed until a reload seals them anew.
+    /// Sealed under older redaction rules: held like a final refusal until a reload seals it anew.
     Outdated,
 }
