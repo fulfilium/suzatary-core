@@ -352,7 +352,9 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **The Prodrome is a dependency, not a directory**, taken BY REVISION, the same
   sha in `app/Cargo.toml` and `flake.nix`. Its `SPEC.md` is the database's
   contract and its `conformance/` is FROZEN. The tab's wasm module is this
-  repository's own, `app/wasm` (→ `prodromedependency`).
+  repository's own, `app/wasm` (→ `prodromedependency`). A unit depends on the
+  data crate, `prodrome-data`, unless it needs the store, the evaluator or the
+  readings, which only `prodrome-core` holds.
 - The shell carries NO INTERPRETER: decisions over JSON are verbs of the binary
   (→ `nointerpreter`). **`suzatary` is NOT on PATH in `.#triage`**: scripts and
   prompts run `nix develop .#triage -c scripts/app-bin.sh <verb>`, always the

@@ -549,21 +549,21 @@ impl Held {
     }
 }
 
-pub const HELD: prodrome_core::literal::codec::Constructor = ("Held", &["kind", "hint"]);
+pub const HELD: prodrome_data::literal::codec::Constructor = ("Held", &["kind", "hint"]);
 
 // By hand: its reads refuse as `Fields` does.
-impl prodrome_core::literal::codec::Literal for Held {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        prodrome_core::literal::codec::record(
+impl prodrome_data::literal::codec::Literal for Held {
+    fn to_value(&self) -> prodrome_data::literal::Value {
+        prodrome_data::literal::codec::record(
             HELD,
             vec![self.kind.to_value(), self.hint.to_value()],
         )
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = prodrome_core::literal::codec::Fields::of(value, HELD)?;
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        let fields = prodrome_data::literal::codec::Fields::of(value, HELD)?;
         Ok(Held {
             kind: fields.get("kind")?,
             hint: fields.get("hint")?,

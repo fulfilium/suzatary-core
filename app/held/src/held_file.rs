@@ -1,8 +1,8 @@
 //! A file the box holds back (`crate::held_value`): one of the three sources a reader hands a
 //! model a withheld file from.
 
-use prodrome_core::literal::codec::Literal as _;
-use prodrome_core::literal::{Table, parse_literal, print_literal};
+use prodrome_data::literal::codec::Literal as _;
+use prodrome_data::literal::{Table, parse_literal, print_literal};
 
 use crate::attachment::AttachmentId;
 use crate::secretary::attachment_source::{AttachmentSource, FROM_DRIVE, FROM_MAIL, FROM_UPLOAD};

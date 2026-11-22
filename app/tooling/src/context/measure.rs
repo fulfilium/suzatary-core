@@ -116,9 +116,8 @@ pub fn measure(plan: &Plan, tree: &Tree) -> Report {
         .zip(&use_files)
         .map(|(unit, reading)| (unit.name.as_str(), reading.total()))
         .chain(
-            plan.externals
-                .iter()
-                .map(|external| (external.name.as_str(), external.use_)),
+            plan.externals()
+                .map(|(_, external)| (external.name.as_str(), external.use_)),
         )
         .collect();
     let manuals: Vec<(&str, &str)> = MANUALS
@@ -139,8 +138,8 @@ pub fn measure(plan: &Plan, tree: &Tree) -> Report {
                 .chain(manuals.iter().copied())
                 .collect();
             let mut develop = with_cited(&read, plan, tree);
-            for name in &unit.depends {
-                develop.add(&format!("the use of {name}"), uses[name.as_str()]);
+            for name in unit.depends.iter().flat_map(|name| plan.charged(name)) {
+                develop.add(&format!("the use of {name}"), uses[name]);
             }
             let sum = |files: &[(&str, &str)]| -> u64 {
                 files.iter().map(|(path, text)| tokens(path, text)).sum()
@@ -382,7 +381,9 @@ fn manifest_uses(unit: &Unit, plan: &Plan, tree: &Tree) -> BTreeSet<String> {
                 .get("package")
                 .and_then(toml::Value::as_str)
                 .unwrap_or(key);
-            return plan.external(package).map(|external| external.name.clone());
+            return plan
+                .external(package)
+                .map(|(_, external)| external.name.clone());
         }
         None
     };

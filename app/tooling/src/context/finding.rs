@@ -43,9 +43,10 @@ pub enum Finding {
         by: String,
         path: String,
     },
-    /// An external library's recorded revision is not the one its file pins.
+    /// A library's recorded revision is not the one its file pins.
     Unpinned {
-        external: String,
+        /// Its source.
+        library: String,
         /// The file that should hold the revision.
         file: String,
     },
@@ -92,10 +93,11 @@ impl fmt::Display for Finding {
             Self::Missing { by, path } => {
                 write!(f, "{by}: {FILE} names {path}, which is not in the tree")
             }
-            Self::Unpinned { external, file } => write!(
+            Self::Unpinned { library, file } => write!(
                 f,
-                "{external}: {file} no longer pins the revision {FILE} measured; run \
-                 `scripts/context.sh external {external} <checkout>` at the new revision"
+                "{library}: {file} no longer pins the revision {FILE} measured; write the new \
+                 one as its `rev` and run `scripts/context.sh external <name> <checkout>` there \
+                 for each of its parts"
             ),
         }
     }
@@ -144,14 +146,14 @@ pub(crate) fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding
             }),
     );
     found.extend(members(plan, tree));
-    for external in &plan.externals {
+    for library in &plan.libraries {
         if !tree
-            .get(&external.pinned_in)
-            .is_some_and(|text| text.contains(&external.rev))
+            .get(&library.pinned_in)
+            .is_some_and(|text| text.contains(&library.rev))
         {
             found.push(Finding::Unpinned {
-                external: external.name.clone(),
-                file: external.pinned_in.clone(),
+                library: library.source.clone(),
+                file: library.pinned_in.clone(),
             });
         }
     }

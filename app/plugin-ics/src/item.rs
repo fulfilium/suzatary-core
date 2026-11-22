@@ -2,7 +2,7 @@
 //! Prodrome's own printer. [`Item`] is also what the cursor keeps, as JSON private to this plugin.
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
-use prodrome_core::literal::{Datetime, ProdromeError, Value, print_literal};
+use prodrome_data::literal::{Datetime, ProdromeError, Value, print_literal};
 use serde::{Deserialize, Serialize};
 
 /// The schema every item is in, by its content name: the hash of `ics.schema`'s text.

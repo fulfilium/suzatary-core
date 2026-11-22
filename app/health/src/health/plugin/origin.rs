@@ -126,7 +126,7 @@ impl From<Origin> for String {
 }
 
 // A grant card stores the origin by its canonical print.
-prodrome_core::text_literal!(Origin => ToString::to_string);
+prodrome_data::text_literal!(Origin => ToString::to_string);
 
 impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

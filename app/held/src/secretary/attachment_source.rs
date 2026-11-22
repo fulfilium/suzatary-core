@@ -1,12 +1,12 @@
 //! Where a proposed email's attachment comes from: only the owner's own things, by a name the box
 //! resolves itself, so nothing from the web and nothing a model wrote can be attached.
 
-use prodrome_core::literal::{ProdromeError, Value as LiteralValue};
+use prodrome_data::literal::{ProdromeError, Value as LiteralValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::attachment::AttachmentId;
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::drive_path::DrivePath;
 use suzatary_base::repo_ids::{RepoName, RepoPath, Rev};
 

@@ -315,7 +315,7 @@ impl Model {
     fn reference(&self) -> String {
         suzatary_base::chains::ChainName::new(self.chain.clone())
             .ok()
-            .zip(prodrome_core::event::TodoId::new(self.id.clone()).ok())
+            .zip(prodrome_data::event::TodoId::new(self.id.clone()).ok())
             .map_or_else(
                 || format!("todo:{}/{}", self.chain, self.id),
                 |(chain, id)| TodoRef { chain, id }.to_string(),

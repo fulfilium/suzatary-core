@@ -21,13 +21,14 @@ chrono.workspace = true
 chrono-tz.workspace = true
 icalendar = { version = "0.17", default-features = false, features = ["parser"] }
 iso8601 = "0.6"
-prodrome_core.workspace = true
+prodrome_data.workspace = true
 rrule = "0.14"
 serde.workspace = true
 serde_json.workspace = true
 wit-bindgen.workspace = true
 
 [dev-dependencies]
+prodrome_core.workspace = true
 proptest.workspace = true
 # The host's own door for an item, so the tests ask the reader that stores it.
 suzatary-stores = { workspace = true, features = ["nothing"] }

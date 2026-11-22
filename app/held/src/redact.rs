@@ -354,7 +354,7 @@ impl Kind {
     }
 }
 
-prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.word());
+prodrome_data::word_literal!(Kind: Kind::ALL => |kind| kind.word());
 
 impl suzatary_base::finite::Finite for Kind {
     const ALL: &'static [Self] = &Kind::ALL;

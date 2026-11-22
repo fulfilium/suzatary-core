@@ -207,14 +207,15 @@ pub fn table(plan: &Plan, report: &Report, base: &Base) -> String {
             }
         );
     }
-    for external in &plan.externals {
+    for (library, external) in plan.externals() {
         let _ = writeln!(
             out,
-            "{:<13} {:<20} external, {} at {}",
+            "{:<13} {:<20} external, {} at {}, re-exports {:?}",
             external.name,
             cell(external.use_, None, Some(plan.budget.use_)),
-            external.source,
-            &external.rev[..8.min(external.rev.len())]
+            library.source,
+            &library.rev[..8.min(library.rev.len())],
+            external.reexports
         );
     }
     out.push_str(&footer(plan, report, base));
@@ -455,7 +456,7 @@ fn record(root: &Path, plan: &Plan, recording: Recording) -> anyhow::Result<()> 
 
 /// Measure the external library `name` from `checkout`, and write its USE.
 fn external(root: &Path, plan: &Plan, name: &str, checkout: &Path) -> anyhow::Result<()> {
-    let library = plan
+    let (library, part) = plan
         .external(name)
         .with_context(|| format!("{FILE} names no external library {name}"))?;
     let head = git(checkout, &["rev-parse", "HEAD"])?;
@@ -469,10 +470,10 @@ fn external(root: &Path, plan: &Plan, name: &str, checkout: &Path) -> anyhow::Re
     }
     let tree = Tree::checkout(checkout)?;
     let inside = |file: &str| {
-        if library.path.is_empty() {
+        if part.path.is_empty() {
             file.to_owned()
         } else {
-            format!("{}/{file}", library.path)
+            format!("{}/{file}", part.path)
         }
     };
     let ratio = &plan.tokens.ratio;
@@ -480,7 +481,7 @@ fn external(root: &Path, plan: &Plan, name: &str, checkout: &Path) -> anyhow::Re
         .get(&inside("README.md"))
         .map_or(0, |text| ratio.tokens(Kind::Markdown, text));
     let src = inside("src");
-    let interface: u64 = match library.shape {
+    let interface: u64 = match part.shape {
         ExternalShape::Crate => tree
             .under(&src)
             .filter(|(path, _)| Kind::of(path) == Kind::Rust)
@@ -495,13 +496,15 @@ fn external(root: &Path, plan: &Plan, name: &str, checkout: &Path) -> anyhow::Re
     };
     let tokens = readme + interface;
     edit_plan(root, |document| {
-        let libraries = document["external"]
+        let libraries = document["library"]
             .as_array_of_tables_mut()
-            .context("`external` is an array of tables")?;
+            .context("`library` is an array of tables")?;
         let entry = libraries
             .iter_mut()
+            .filter_map(|library| library.get_mut("external")?.as_array_of_tables_mut())
+            .flat_map(toml_edit::ArrayOfTables::iter_mut)
             .find(|entry| entry.get("name").and_then(toml_edit::Item::as_str) == Some(name))
-            .with_context(|| format!("no [[external]] named {name}"))?;
+            .with_context(|| format!("no [[library.external]] named {name}"))?;
         entry["use"] = toml_edit::value(as_toml(tokens)?);
         Ok(())
     })?;
@@ -579,7 +582,7 @@ pub(crate) fn growth(root: &Path) -> anyhow::Result<Vec<String>> {
     let base = git(root, &["merge-base", "HEAD", "origin/master"])
         .context("no merge base with origin/master to compare the growth with")?;
     let base = base.trim();
-    let was = Plan::parse(&git(root, &["show", &format!("{base}:{FILE}")])?)
+    let was = plan::ratchet(&git(root, &["show", &format!("{base}:{FILE}")])?)
         .with_context(|| format!("reading {FILE} at the merge base"))?;
     let range = format!("{base}..HEAD");
     let declared =
@@ -588,12 +591,7 @@ pub(crate) fn growth(root: &Path) -> anyhow::Result<Vec<String>> {
         .lines()
         .filter(|s| s.starts_with("Merge #"))
         .count();
-    let allowed = Allowed::of(
-        was.ratchet.reading,
-        plan.budget.allowance,
-        merges as u64,
-        &declared,
-    );
+    let allowed = Allowed::of(was.reading, plan.budget.allowance, merges as u64, &declared);
     let mut refused = finding::malformed(&declared);
     refused.extend(
         finding::reading(plan.ratchet.reading, report.reading.total(), &allowed)

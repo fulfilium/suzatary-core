@@ -1,13 +1,13 @@
 //! One file on a proposed email, as the card showed it: the tap fetches again and [`checked`]
 //! passes only the recorded digest, so what leaves is what the card showed or nothing.
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::attachment::AttachmentId;
 use crate::message_part::Attachment;
 use crate::secretary::attachment_source::AttachmentSource;
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The most one message may carry in attachments, in bytes: under the 25 MB
 /// the common transports accept once base64 has grown it by a third.
@@ -264,7 +264,7 @@ mod tests {
         use crate::secretary::attachment_source::{
             FROM_DRIVE, FROM_KEPT, FROM_MAIL, FROM_REPO, FROM_UPLOAD,
         };
-        prodrome_core::literal::codec::assert_pinned(
+        prodrome_data::literal::codec::assert_pinned(
             &[
                 ATTACHED,
                 FROM_MAIL,

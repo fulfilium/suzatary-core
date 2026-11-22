@@ -25,8 +25,8 @@ pub struct Plan {
     /// The units, in the file's order.
     #[serde(rename = "unit")]
     pub units: Vec<Unit>,
-    #[serde(rename = "external")]
-    pub externals: Vec<External>,
+    #[serde(rename = "library")]
+    pub(crate) libraries: Vec<Library>,
 }
 
 /// The budgets, in tokens.
@@ -59,6 +59,20 @@ impl Ratchet {
             .get(unit)
             .map_or(budget.use_, |recorded| recorded + budget.allowance)
     }
+}
+
+/// The ratchet of `text`, a `context.toml` whose other tables may be another version's.
+///
+/// # Errors
+/// When it does not parse, or its ratchet does not.
+pub(crate) fn ratchet(text: &str) -> anyhow::Result<Ratchet> {
+    #[derive(Deserialize)]
+    struct Ratcheted {
+        ratchet: Ratchet,
+    }
+    Ok(toml::from_str::<Ratcheted>(text)
+        .with_context(|| format!("{FILE} does not parse"))?
+        .ratchet)
 }
 
 /// How a file's characters become tokens, and the measurement the ratios came from.
@@ -141,21 +155,29 @@ pub enum Shape {
     },
 }
 
-/// A library from outside the repository, measured from its pinned source.
+/// A repository from outside this one, at one revision for every part of it used here.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct External {
-    /// Its name, as `depends` spells it: a crate's package name.
-    pub name: String,
+pub(crate) struct Library {
     pub source: String,
-    /// The revision this repository pins.
     pub rev: String,
     /// The file of this repository that holds `rev`.
     pub pinned_in: String,
+    #[serde(rename = "external")]
+    pub externals: Vec<External>,
+}
+
+/// One part of a library, measured from its pinned source.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct External {
+    /// A crate's package name.
+    pub name: String,
     /// Its directory inside its repository; empty for the root.
     pub path: String,
     pub shape: ExternalShape,
-    /// Its USE, in tokens, as last measured.
+    #[serde(default)]
+    pub reexports: BTreeSet<String>,
     #[serde(rename = "use")]
     pub use_: u64,
 }
@@ -163,7 +185,7 @@ pub struct External {
 /// What kind of library an external one is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ExternalShape {
+pub(crate) enum ExternalShape {
     /// A Rust crate.
     Crate,
     /// A Typst package: its `#let` definitions are its interface.
@@ -182,11 +204,22 @@ impl Plan {
             .units
             .iter()
             .map(|unit| &unit.name)
-            .chain(plan.externals.iter().map(|external| &external.name))
+            .chain(plan.externals().map(|(_, external)| &external.name))
         {
             if !names.insert(name.as_str()) {
                 bail!("{FILE} names {name} twice");
             }
+        }
+        if let Some((_, external)) = plan.externals().find(|(_, external)| {
+            external
+                .reexports
+                .iter()
+                .any(|name| !names.contains(name.as_str()))
+        }) {
+            bail!(
+                "{FILE}: {} re-exports what is no external library",
+                external.name
+            );
         }
         let mut files = BTreeSet::new();
         if let Some(row) = plan.in_force.iter().find(|row| !files.insert(&row.file)) {
@@ -216,9 +249,23 @@ impl Plan {
         Ok(plan)
     }
 
-    /// The external library named `name`.
+    pub(crate) fn externals(&self) -> impl Iterator<Item = (&Library, &External)> {
+        self.libraries.iter().flat_map(|library| {
+            library
+                .externals
+                .iter()
+                .map(move |external| (library, external))
+        })
+    }
+
     #[must_use]
-    pub fn external(&self, name: &str) -> Option<&External> {
-        self.externals.iter().find(|external| external.name == name)
+    pub(crate) fn external(&self, name: &str) -> Option<(&Library, &External)> {
+        self.externals().find(|(_, external)| external.name == name)
+    }
+
+    /// `name` and the parts its interface re-exports: what a dependent of `name` reads.
+    pub(crate) fn charged<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> {
+        let reexports = self.external(name).map(|(_, external)| &external.reexports);
+        std::iter::once(name).chain(reexports.into_iter().flatten().map(String::as_str))
     }
 }

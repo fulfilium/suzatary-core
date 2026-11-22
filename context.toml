@@ -260,7 +260,7 @@ scripts = []
 name = "held"
 path = "app/held"
 shape = "crate"
-depends = ["base", "prodrome-core", "store"]
+depends = ["base", "prodrome-data", "store"]
 scripts = []
 
 [[unit]]
@@ -281,7 +281,7 @@ scripts = []
 name = "health"
 path = "app/health"
 shape = "crate"
-depends = ["base", "mail", "prodrome-core", "store"]
+depends = ["base", "mail", "prodrome-data", "store"]
 scripts = []
 
 [[unit]]
@@ -421,14 +421,14 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "health", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "release", "todo", "topics", "triage", "viewtree"]
+depends = ["api", "base", "cards", "connect", "conversations", "health", "inbox", "lines", "mail", "memory", "prodrome-data", "record", "release", "todo", "topics", "triage", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]
 name = "plugin-ics"
 path = "app/plugin-ics"
 shape = "crate"
-depends = ["prodrome-core"]
+depends = ["prodrome-data"]
 scripts = ["scripts/plugin-sync.sh"]
 
 [[unit]]
@@ -478,42 +478,49 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 "app/viewtree/" = "viewtree"
 "typst-design" = "typst-design"
 
-# The libraries this repository uses from outside it, each measured from its pinned source by
-# `scripts/context.sh external <name> <checkout>`. `pinned_in` is the file that holds `rev`, so
-# moving the pin without measuring again fails the guard.
+# The libraries this repository uses from outside it, each at the one revision `pinned_in` holds,
+# so moving the pin without measuring again fails the guard. Each part is measured from its own
+# directory at that revision by `scripts/context.sh external <name> <checkout>`; a dependent of a
+# part is charged the USE of every part it `reexports` beside its own.
 
-[[external]]
-name = "prodrome-core"
+[[library]]
 source = "https://github.com/fulfilium/prodrome"
-rev = "85e50838003ce3c82c18bc05c8c73d43c47f29fc"
+rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
 pinned_in = "app/Cargo.toml"
+
+[[library.external]]
+name = "prodrome-data"
+path = "data"
+shape = "crate"
+use = 26318
+
+[[library.external]]
+name = "prodrome-core"
 path = "core"
 shape = "crate"
-use = 140200
+# Every item the data crate holds is also at its old path in the core.
+reexports = ["prodrome-data"]
+use = 88877
 
-[[external]]
+[[library.external]]
 name = "prodrome-wasm-exports"
-source = "https://github.com/fulfilium/prodrome"
-rev = "85e50838003ce3c82c18bc05c8c73d43c47f29fc"
-pinned_in = "app/Cargo.toml"
 path = "wasm/exports"
 shape = "crate"
-use = 6791
+use = 7042
 
-[[external]]
+[[library.external]]
 name = "prodrome-typst-wasm"
-source = "https://github.com/fulfilium/prodrome"
-rev = "85e50838003ce3c82c18bc05c8c73d43c47f29fc"
-pinned_in = "app/Cargo.toml"
 path = "typst-wasm"
 shape = "crate"
 use = 3954
 
-[[external]]
-name = "typst-design"
+[[library]]
 source = "https://github.com/bmabsout/typst-design"
 rev = "79d9dbafcd6457f269c3cd8b6f88c0ac27e35851"
 pinned_in = "flake.nix"
+
+[[library.external]]
+name = "typst-design"
 path = ""
 shape = "typst"
 use = 9991

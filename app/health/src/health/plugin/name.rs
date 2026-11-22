@@ -82,7 +82,7 @@ const fn shaped(bytes: &[u8]) -> bool {
 }
 
 // A grant card stores the plugin by its name.
-prodrome_core::text_literal!(PluginName => |name| name.as_str().to_owned());
+prodrome_data::text_literal!(PluginName => |name| name.as_str().to_owned());
 
 impl fmt::Display for PluginName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
