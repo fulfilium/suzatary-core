@@ -7,7 +7,6 @@ use thiserror::Error;
 #[error("typst did not render the answer: {0}")]
 pub struct AnswerError(pub String);
 
-/// Rendering a finished model turn's blocks.
 pub trait Answers: Sync {
     /// One [`Renderable`] block of an answer as typst's HTML, through the render boundary.
     ///

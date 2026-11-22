@@ -1,8 +1,6 @@
-//! The secretary's readings a page takes from its replicas of the inbox and the conversations:
-//! `suzatary_topics::secretary::readings` applied to the objects the classes hold, so a page reads
-//! what the box would answer for the same objects. A conversation's reading takes the inbox's
-//! class by reference: its objects are already in the module, and nothing crosses again. The lines
-//! are a [`Lines`], held by what changed and read by what moved.
+//! The secretary's readings a page takes from its replicas, so a page reads what the box would
+//! answer for the same objects. A conversation's reading takes the inbox's class by reference:
+//! its objects are already in the module, and nothing crosses again.
 
 use crate::topics::TopicReading;
 use std::collections::{BTreeMap, BTreeSet};
@@ -51,9 +49,9 @@ fn answered_block<'a>(
 #[wasm_bindgen]
 impl Proposals {
     /// Every proposal, oldest first, with its state and its value at `at` (ISO), each priced
-    /// through `chains` by the todo it serves: what the Inbox lists. A remember card's words are
-    /// found in the memory as its route answers it, or read as unread for `undefined`. Said
-    /// beside it: the chains it was priced without (`failed`).
+    /// through `chains` by the todo it serves. A remember card's words are found in the memory as
+    /// its route answers it, or read as unread for `undefined`. Said beside it: the chains it was
+    /// priced without (`failed`).
     pub fn inbox(
         &self,
         at: &str,
@@ -68,16 +66,13 @@ impl Proposals {
     }
 }
 
-/// The lines this replica holds, read through `HeldLines`: each print decoded once as it is
-/// held, and each reading computing only the conversations and lines that moved since the last.
-/// A slot whose key is not held reads as missing, and one an erasure names as erased. Beside the
-/// prints, the skeleton's line nodes, whose outlines the stream chooses its rounds by.
+/// The lines this replica holds, each print decoded once as it is held. A slot whose key is not
+/// held reads as missing, and one an erasure names as erased.
 #[wasm_bindgen]
 pub struct Lines(pub(crate) HeldReplica);
 
 #[wasm_bindgen]
 impl Lines {
-    /// Nothing held.
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Lines {
@@ -114,9 +109,7 @@ impl Lines {
     }
 
     /// `[{hash, parents, size, header}, …]`: every node `scope` reads, of the landed row and a
-    /// pull's pieces, whose print is not held, as it was given. `scope` is `{"type": "Whole"}`,
-    /// `{"type": "Conversations", "ids": […]}`, `{"type": "Objects", "names": […]}` or
-    /// `{"type": "Naming", "keys": […]}`.
+    /// pull's pieces, whose print is not held, as it was given.
     pub fn lacking(&self, scope: &str) -> Result<String, JsError> {
         json(&self.0.lacking(&scope_of(scope)?))
     }
@@ -143,9 +136,9 @@ impl Lines {
         Ok(self.0.outlines().frontier(&id).is_some())
     }
 
-    /// `{<name>: [<answer key>, …]}`: every key held, landed or in a pull's pieces, that is dead (the
-    /// prints name it erased, the box's rule retires it, or `told`, `[<name>, …]`, names it), with
-    /// the answer keys of the blocks its words fed: what a purge forgets, the blocks first.
+    /// `{<name>: [<answer key>, …]}`: every key held that is dead (the prints name it erased, the
+    /// box's rule retires it, or `told` names it), with the answer keys of the blocks its words
+    /// fed: what a purge forgets, the blocks first.
     pub fn owed(&mut self, told: &str) -> Result<String, JsError> {
         let told: BTreeSet<KeyName> =
             serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
@@ -179,10 +172,8 @@ impl Lines {
         json(&readings::conversations(&self.stored()?, &inbox.fold()?))
     }
 
-    /// One conversation's window, as the box's route reads it: `before`, `limit` and `about` as
-    /// its query spells them, and the memory as its route answers it, or `undefined` for a
-    /// memory not read, which reads every receipt as unread. Nothing else beyond the two stores
-    /// dresses it: blocks stay their source, and no changeset is drawn.
+    /// One conversation's window, as the box's route reads it; a memory `undefined` reads every
+    /// receipt as unread. Blocks stay their source, and no changeset is drawn.
     #[expect(
         clippy::needless_pass_by_value,
         reason = "wasm-bindgen hands an optional string over by value"
@@ -221,8 +212,8 @@ impl Lines {
             ..Dress::BARE
         };
         let mut payload = readings::conversation(&read, &inbox.fold()?, &window, &dress);
-        // Its own lines the box does not hold, each with the box's last ruling: one of a turn drawn
-        // on the line it names, one refused for good beside the transcript.
+        // Own lines the box does not hold: one of a turn drawn on the line it names, one refused
+        // for good beside the transcript.
         let drawn: BTreeSet<&str> = payload.lines.iter().map(String::as_str).collect();
         let waiting = self
             .0
@@ -264,9 +255,9 @@ impl Lines {
         )
     }
 
-    /// `[{hash, parents, size, header}, …]`: the node, as it was given, of every line whose words
-    /// the newest `pages` pages of the stream read, chosen by the skeleton's outlines alone, which a
-    /// page holds before it reads the stream.
+    /// `[{hash, parents, size, header}, …]`: the node of every line whose words the newest `pages`
+    /// pages of the stream read, chosen by the skeleton's outlines alone, which a page holds before
+    /// it reads the stream.
     pub fn chosen(
         &self,
         topics: &TopicReading,
@@ -291,10 +282,9 @@ impl Lines {
     }
 
     /// The newest `pages` pages of the rounds of every conversation carrying each topic of
-    /// `chosen` (a JSON array), oldest first, with how many the filter shows in all: chosen by
-    /// the skeleton's outlines, each drawn from the lines held that it reads. Said beside it: each
-    /// block of the rounds' answers, `{conversation, source, key}`, `key` the one the box keeps
-    /// its HTML under.
+    /// `chosen` (a JSON array), oldest first, with how many the filter shows in all. Said beside
+    /// it: each block of the rounds' answers, `{conversation, source, key}`, `key` the one the box
+    /// keeps its HTML under.
     pub fn stream(
         &mut self,
         topics: &TopicReading,
@@ -352,12 +342,11 @@ impl Lines {
         )
     }
 
-    /// Every key an erasure of its own conversation names, and every key named in `told` (JSON
-    /// `[<name>, …]`, the names the box's pull says an erasure anywhere in the store names, which
-    /// may be in a piece not yet held), each with the answer keys of the blocks its words were
-    /// rendered to where `keys` (`{<name>: <hex>}`) opens it, as JSON
-    /// `{<name>: [<answer key>, …]}`: what a replica forgets, its rendered blocks first, then the
-    /// key, as the box's sweep does.
+    /// Every key an erasure of its own conversation names, and every key named in `told` (the
+    /// names the box's pull says an erasure anywhere in the store names, which may be in a piece
+    /// not yet held), each with the answer keys of the blocks its words were rendered to where
+    /// `keys` (`{<name>: <hex>}`) opens it: what a replica forgets, its rendered blocks first,
+    /// then the key, as the box's sweep does.
     pub fn erased(&self, keys: &str, told: &str) -> Result<String, JsError> {
         let told: BTreeSet<KeyName> =
             serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
@@ -378,8 +367,7 @@ impl Lines {
     }
 
     /// `{excluded}`: what the history leaves out, `[{name, why, resting}]` in name order, as every
-    /// class's `tips` answers it: a print that does not read, and a name a held line rests on that
-    /// the skeleton does not hold either.
+    /// class's `tips` answers it.
     pub fn excluded(&self) -> Result<String, JsError> {
         let excluded: Vec<serde_json::Value> = self
             .0
@@ -398,7 +386,6 @@ impl Lines {
     }
 }
 
-/// A scope as the page spells it.
 #[derive(serde::Deserialize)]
 #[serde(tag = "type")]
 enum Spelled {
@@ -408,7 +395,6 @@ enum Spelled {
     Naming { keys: Vec<String> },
 }
 
-/// The scope `text` spells, parsed once.
 fn scope_of(text: &str) -> Result<Scope, JsError> {
     let spelled: Spelled =
         serde_json::from_str(text).map_err(|e| refused(format!("scope: {e}")))?;
@@ -446,14 +432,12 @@ impl Lines {
     }
 }
 
-/// One object as a page hands it over.
 #[derive(serde::Deserialize)]
 struct Object {
     hash: String,
     text: String,
 }
 
-/// The objects a page hands over, each beside its name.
 fn objects(text: &str) -> Result<Vec<(Hash, Vec<u8>)>, JsError> {
     let add: Vec<Object> = serde_json::from_str(text).map_err(|e| refused(format!("add: {e}")))?;
     add.into_iter()
@@ -494,14 +478,12 @@ pub fn erase_warning() -> String {
     suzatary_memory::secretary::erasure::Erasure::for_good()
 }
 
-/// The keys a pull gave, parsed once.
 fn ring(keys: &str) -> Result<KeyRing, JsError> {
     serde_json::from_str(keys)
         .map(|given| KeyRing::of(&given))
         .map_err(|e| refused(format!("keys: {e}")))
 }
 
-/// The memory as its route answers it, parsed once.
 fn memory_of(memory: Option<String>) -> Result<Option<MemoryPayload>, JsError> {
     memory
         .map(|text| serde_json::from_str(&text))

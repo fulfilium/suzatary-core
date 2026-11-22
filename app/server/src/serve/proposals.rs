@@ -19,7 +19,6 @@ use super::secretary::conversation_named;
 use super::{Chained, State};
 use prodrome_core::sign;
 
-/// Proposals of one conversation, named by their indices.
 pub(crate) struct Drawn {
     id: ConversationId,
     indices: Vec<usize>,

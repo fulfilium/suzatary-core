@@ -20,9 +20,8 @@ pub struct Route {
     /// The whole path of a box route; a chain route's path after `/api` or `/api/{chain}`.
     pub path: &'static str,
     pub scope: Scope,
-    /// Taken from the type of witness its work asks for.
+    /// Taken from the type of witness its work asks for, as `asks` is.
     pub guard: Guard,
-    /// Taken from the same witness.
     pub asks: Asks,
     handler: MethodRouter<State>,
 }
@@ -34,15 +33,13 @@ pub enum Method {
     Post,
 }
 
-/// Whose route it is, which decides where it is mounted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
     Box,
-    /// A chain's: bare under `/api` for the first chain, and under `/api/{chain}` for any.
-    ///
-    /// matchit prefers a static segment, so `instance.rs` refuses a chain named like one.
+    /// Bare under `/api` for the first chain, and under `/api/{chain}` for any; matchit prefers a
+    /// static segment, so `instance.rs` refuses a chain named like one.
     Chain,
-    /// A chain's under `/api/{chain}` only, because its bare path predates chains.
+    /// Under `/api/{chain}` only, because its bare path predates chains.
     Named,
 }
 
@@ -116,7 +113,7 @@ impl Route {
         }
     }
 
-    /// Its lines in the surface listing: `METHOD path guard asks`, one per mounted path.
+    /// `METHOD path guard asks`, one per mounted path.
     #[must_use]
     pub(crate) fn listed(&self) -> Vec<String> {
         let method = match self.method {

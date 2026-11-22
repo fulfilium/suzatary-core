@@ -19,7 +19,6 @@ use wasm_bindgen::JsError;
 use crate::line_rows::{Step, hashes, whole};
 use crate::{json, refused};
 
-/// A store of objects at the schema `E`, and its reading.
 pub struct Store<E: Schema> {
     replica: Objects,
     read: OnceCell<Result<Replica<E>, String>>,
@@ -36,7 +35,6 @@ impl<E: Schema<Vocabulary: Default>> Default for Store<E> {
     }
 }
 
-/// `moved` as a step says it.
 fn said(moved: bool) -> &'static str {
     if moved { "\"All\"" } else { "[]" }
 }
@@ -53,18 +51,15 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             .map_or_else(String::new, |d| d.as_str().to_owned())
     }
 
-    /// `[<name>, …]`: the heads of what is held, landed and not.
     pub fn heads(&self) -> Result<String, JsError> {
         let heads = self.replica.rows().holding().replica().read().heads();
         json(&heads.iter().map(Hash::as_str).collect::<Vec<_>>())
     }
 
-    /// Whether the landed row has heard the box.
     pub fn heard(&self) -> bool {
         self.replica.rows().landed().replica().spoken().is_some()
     }
 
-    /// Whether the box's `heads` name an object not held.
     pub fn behind(&self, heads: &str) -> Result<bool, JsError> {
         let heads = hashes(heads, "heads")?;
         Ok(self
@@ -96,7 +91,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         framed(&m)
     }
 
-    /// The pending pieces landed.
     pub fn land(&mut self) -> Result<Step, JsError> {
         self.step(Objects::land)
     }
@@ -151,7 +145,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         )
     }
 
-    /// The box's `ReceiptPayload` for a post.
     pub fn answered(&mut self, receipt: &str) -> Result<Step, JsError> {
         let receipt: ReceiptPayload =
             serde_json::from_str(receipt).map_err(|e| refused(format!("receipt: {e}")))?;
@@ -184,7 +177,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         )
     }
 
-    /// The device's signature `literal`, kept unsent.
     pub fn signed(&mut self, literal: &str) -> Result<Step, JsError> {
         let signature = Object::read::<E>(&E::Vocabulary::default(), literal.to_owned());
         self.step(|r| r.write(vec![signature]))
@@ -214,7 +206,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         }
     }
 
-    /// The replica whole, in the core's form.
     pub fn snapshot(&self) -> Result<Vec<u8>, JsError> {
         snapshot::snapshot(&self.replica).map_err(|e| refused(e.to_string()))
     }
@@ -240,9 +231,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     }
 
     /// The Prodrome's replica of the standing objects, made once per move.
-    ///
-    /// # Errors
-    /// Why the objects have no reading at the schema.
     pub fn reading(&self) -> Result<&Replica<E>, JsError> {
         self.read
             .get_or_init(|| self.fresh())
@@ -292,7 +280,6 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
 }
 
 impl Store<AskEvent> {
-    /// Every standing refusal, parsed.
     pub(crate) fn standing_envelopes(&self) -> Vec<(Hash, Envelope<AskEvent>)> {
         let schema = AskVocabulary::default();
         self.replica
@@ -352,12 +339,10 @@ struct Text {
     text: String,
 }
 
-/// A store's exports at one schema: the class `$name` over a [`Store`]. A macro because
-/// `#[wasm_bindgen]` exports no generic item; each method is one call of the store's. A store
-/// `unread` exports no register readings, which only a schema with a JSON view answers. Only a
-/// store the stores' table says a tab writes (`Written`) exports what the box has not taken yet:
-/// `written` names it, and the table holds either way: `waiting` asks for `Written`, and a store
-/// not named so is asserted the box's alone.
+/// A store's exports at one schema: a macro because `#[wasm_bindgen]` exports no generic item. A
+/// store `unread` exports no register readings, which only a schema with a JSON view answers.
+/// Only a store the stores' table says a tab writes (`Written`) is `written` and exports
+/// `waiting`; a store not named so is asserted the box's alone.
 macro_rules! objects_store {
     ($name:ident = $schema:ty, written) => {
         $crate::object_rows::objects_store!(@base $name = $schema);
@@ -409,7 +394,6 @@ macro_rules! objects_store {
 
         #[wasm_bindgen::prelude::wasm_bindgen]
         impl $name {
-            /// Nothing held.
             #[wasm_bindgen(constructor)]
             #[must_use]
             pub fn new() -> $name {

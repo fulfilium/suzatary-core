@@ -22,31 +22,26 @@ use super::{Chained, State};
 use suzatary_inbox::secretary::stamp;
 use suzatary_lines::wire::lines;
 
-/// `?t=` and `?limit=` of a fold.
 pub(crate) struct Folding {
     at: Datetime,
     limit: Option<usize>,
 }
 
-/// One todo, at `?t=`.
 pub(crate) struct TodoAt {
     id: String,
     at: Datetime,
 }
 
-/// `?t=` and `?by=` of the tree.
 pub(crate) struct Treeing {
     at: Datetime,
     by: wire::TreeBy,
 }
 
-/// `?since=<frontier>`: what a replica already holds.
 pub(crate) struct Since(prodrome_core::store::frontier::Since);
 
-/// `?hashes=`: the objects asked for by name.
 pub(crate) struct Wanted(query::Hashes);
 
-/// A replica's objects, each a canonical literal, refused one by one later, and the frontier it
+/// A replica's objects, each a canonical literal refused one by one later, and the frontier it
 /// held before them.
 pub(crate) struct Literals {
     pub(super) objects: Vec<String>,
@@ -86,7 +81,6 @@ impl Params for TodoAt {
     }
 }
 
-/// The todo the path names, on the chain it names.
 impl Params for TodoRef {
     fn parse(asked: &Asked, chain: &Chained) -> Result<Self, Refusal> {
         let text = asked.segment("id")?;
@@ -124,12 +118,10 @@ impl Body for Literals {
 
     type Wire = wire::PostedObjects;
 
-    /// As every body is read, but answered in the page's table (`written.failed`): a post whose
-    /// shape this build does not read is another build's (409), posted again; a body over the cap
-    /// is 413, and every other fault of the body 422, so it is refused for good and no fault of a
-    /// post holds back the posts behind it. The stores' route (`stores::take`) answers every fault
-    /// of a post so, and no 400; a chain's (`take_objects`) still answers 400 for keys posted
-    /// beside its objects, which no page of this build posts.
+    /// Answered in the page's table (`written.failed`): a shape this build does not read is
+    /// another build's (409), posted again; over the cap is 413, and every other fault 422, refused
+    /// for good so no fault of a post holds back the posts behind it; `take_objects` still answers
+    /// 400 for keys posted beside its objects, which no page of this build posts.
     async fn read(body: axum::body::Body, state: &State) -> Result<Self, Refusal> {
         use super::body::NotAnObject;
         let object = super::body::object(body, Self::CAP)
@@ -304,8 +296,7 @@ pub(crate) fn take_objects(
     Ok(Json(receipt))
 }
 
-/// `POST …/author`: the authoring, without the append; the write's decision, so the
-/// write's guard.
+/// `POST …/author`: the authoring without the append; the write's decision, so the write's guard.
 pub(crate) fn author(
     call: &Call<Actor, (), wire::Authoring>,
 ) -> Result<Json<wire::AuthoredPayload>, Refusal> {
@@ -327,10 +318,8 @@ pub(crate) fn author(
     .map(Json)
 }
 
-/// Append acts, written from `from`, to the default conversation, opening it if needed, each
-/// stamped by what `read` holds of the todo it names.
-///
-/// A failure to note is not the write's failure, so it is a log line, not the answer's.
+/// Append acts to the default conversation, each stamped by what `read` holds of the todo it
+/// names; a failure to note is not the write's failure, so it is a log line, not the answer's.
 fn noted(
     state: &State,
     read: &suzatary_signatures::chain_set::Read,

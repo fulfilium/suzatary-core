@@ -10,7 +10,6 @@ use suzatary_base::capability::Secret;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{Answered, FormPost, NeedsLogin, OauthError, Silent};
 
-/// Where the box asks Google: its consent page, its token endpoint and its Calendar API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Endpoints {
     authorize: String,
@@ -20,7 +19,6 @@ pub struct Endpoints {
 }
 
 impl Endpoints {
-    /// Google's own.
     #[must_use]
     pub fn google() -> Self {
         Self {
@@ -49,13 +47,11 @@ impl Endpoints {
         &self.token
     }
 
-    /// The Calendar API's root.
     #[must_use]
     pub fn calendar(&self) -> &str {
         &self.calendar
     }
 
-    /// The Gmail API's root.
     #[must_use]
     pub fn mail(&self) -> &str {
         &self.mail
@@ -123,11 +119,7 @@ pub enum Callback {
 }
 
 impl Callback {
-    /// The callback a query's `state`, `code` and `error` say.
-    ///
-    /// # Errors
-    /// Why the query is no callback: no state the box could have drawn, or neither a code nor
-    /// an error. Never quotes a code.
+    /// Its error never quotes a code.
     pub fn of_query(
         state: Option<&str>,
         code: Option<&str>,
@@ -156,7 +148,6 @@ impl Callback {
         }
     }
 
-    /// The state it names.
     #[must_use]
     pub fn state(&self) -> &State {
         match self {
@@ -196,7 +187,6 @@ pub fn exchange(
 pub struct RefreshToken(Secret);
 
 impl RefreshToken {
-    /// Read one, as the store gives it back.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         (!text.is_empty() && text.len() <= 2048 && text.bytes().all(|b| b.is_ascii_graphic()))
@@ -209,7 +199,6 @@ impl RefreshToken {
         self.0.expose()
     }
 
-    /// As a secret, for the store.
     #[must_use]
     pub fn secret(&self) -> &Secret {
         &self.0
@@ -226,8 +215,8 @@ pub struct Exchanged {
     pub account: EmailAddress,
 }
 
-/// Read the exchange's answer, for a consent given for `asked`: a grant holding a refresh token,
-/// naming `asked` as its verified address in its `id_token`.
+/// Read the exchange's answer: a grant holding a refresh token, naming `asked` as its verified
+/// address in its `id_token`.
 ///
 /// The `id_token` came straight from the token endpoint over TLS, so its claims are read without
 /// checking its signature (OIDC Core, section 3.1.3.7).
@@ -285,7 +274,6 @@ fn verified_email(id_token: &str) -> Option<EmailAddress> {
         .and_then(|email| EmailAddress::new(email).ok())
 }
 
-/// The request for a fresh access token from a kept grant.
 #[must_use]
 pub fn refresh(endpoints: &Endpoints, client: &Client, token: &RefreshToken) -> FormPost {
     FormPost {
@@ -315,10 +303,6 @@ pub struct AccessToken {
 const LAPSED: &str = "invalid_grant";
 
 /// Read a refresh's answer for `account`: a token, or the sign-in a lapsed grant needs.
-///
-/// # Errors
-/// A refusal no sign-in mends (an outage, a client Google no longer knows), or an answer with no
-/// access token.
 pub fn read_refresh(
     answered: &Answered,
     account: &EmailAddress,
@@ -379,14 +363,13 @@ pub struct KeptGrant {
 }
 
 impl KeptGrant {
-    /// What the store keeps.
     #[must_use]
     pub fn print(&self) -> Secret {
         let parts: Vec<&str> = self.parts.iter().map(Scope::as_str).collect();
         Secret::new(format!("{} {}", parts.join(","), self.refresh.expose()))
     }
 
-    /// What `text`, as the store gives it back, keeps; `None` for text the box did not print.
+    /// `None` for text the box did not print.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let (parts, token) = text.split_once(' ')?;
@@ -405,9 +388,7 @@ impl KeptGrant {
 /// Whether an account is signed in with Google, and the parts its grant holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Held {
-    /// No grant is kept for it.
     NotSignedIn,
-    /// A grant is kept, holding these parts.
     Signed(Scopes),
 }
 
@@ -428,7 +409,6 @@ mod tests {
     use super::*;
     use crate::google::ClientSecret;
 
-    /// A kept grant reads back as printed, and text the box did not print reads as nothing.
     #[test]
     fn a_kept_grant_reads_back_as_printed() {
         let kept = KeptGrant {
@@ -506,8 +486,6 @@ mod tests {
             .map_or("", |(_, value)| value.as_str())
     }
 
-    /// The consent carries the challenge and never the verifier, S256, the exact redirect, and
-    /// asks for a refresh token and for scopes added to what was granted.
     #[test]
     fn the_consent_asks_with_the_challenge_and_never_the_verifier() {
         let verifier = Verifier::draw(&Fixed(7)).expect("a verifier");
@@ -544,7 +522,6 @@ mod tests {
         assert!(!url.contains("GOCSPX"), "{url}");
     }
 
-    /// The exchange sends the code, the verifier and the same redirect, to the token endpoint.
     #[test]
     fn the_exchange_sends_the_verifier_and_the_same_redirect() {
         let redirect = RedirectUri::of_app("https://box.example.test").expect("a callback");
@@ -565,7 +542,6 @@ mod tests {
         assert_eq!(field(&post, "client_secret"), "GOCSPX-example");
     }
 
-    /// A callback is read once into a sum: a code, a refusal, or no callback.
     #[test]
     fn a_callback_is_a_code_a_refusal_or_nothing() {
         let state = "dBjftJeZ4CVP-mJ92K27uhbUJU1p1r_wW1gFWFOEjXk";
@@ -581,7 +557,6 @@ mod tests {
         assert!(!said.contains("secret"), "{said}");
     }
 
-    /// A grant is read into what to keep, what it holds and whose it is.
     #[test]
     fn a_grant_is_read_into_its_token_its_parts_and_its_account() {
         let read = read_exchange(
@@ -595,8 +570,7 @@ mod tests {
         assert!(!format!("{read:?}").contains("1//refresh"));
     }
 
-    /// A grant for another account, one naming no verified account and one with no refresh token
-    /// are refused; a code used twice is Google's `invalid_grant`, carried whole.
+    /// A code used twice is Google's `invalid_grant`, carried whole.
     #[test]
     fn a_grant_for_another_account_or_without_a_refresh_token_is_refused() {
         let wrong = read_exchange(&granted("eve@example.test", "openid"), &ada())
@@ -623,7 +597,6 @@ mod tests {
         );
     }
 
-    /// A revoked or expired grant needs the owner's sign-in; an outage stays an error.
     #[test]
     fn a_lapsed_grant_needs_a_sign_in_and_an_outage_does_not() {
         let lapsed = Answered {

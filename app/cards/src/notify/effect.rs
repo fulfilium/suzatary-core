@@ -6,12 +6,11 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::MailHash;
 use suzatary_inbox::secretary::inbox::ProposalId;
 
-/// What a push says happened. A closed sum whose every field is a count, a day or an id the
-/// box minted, so no stored text has a field to ride in: a relay (Google's, ntfy's) carries it
-/// in the clear, and an OS this box does not control draws it.
+/// What a push says happened; every field is a count, a day or an id the box minted, so no
+/// stored text has a field to ride in: a relay (Google's, ntfy's) carries it in the clear.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Push {
-    /// Objects of the agent's reached a chain: how many todos it wrote and how many other changes.
+    /// Objects of the agent's reached a chain.
     Agent {
         /// Todos authored or rewritten.
         authored: usize,
@@ -20,7 +19,6 @@ pub enum Push {
     },
     /// Things newly waiting for the owner.
     Waiting {
-        /// How many.
         count: NonZeroUsize,
         /// The one proposal, when exactly one waits and it is a proposal (its id is a hash).
         open: Option<ProposalId>,
@@ -34,14 +32,12 @@ pub enum Push {
     NoBrief,
     /// The secretary finished a round nobody was watching.
     Answered {
-        /// Where, by the id the box minted.
         conversation: ConversationId,
         /// Whether the round was the morning's brief.
         brief: bool,
     },
     /// Conversations the store holds do not read, newly: their reviews are left out of the rest.
     Unreadable {
-        /// How many.
         conversations: NonZeroUsize,
         /// Today's review, which names them.
         round: ConversationId,
@@ -55,7 +51,6 @@ pub enum Push {
     ReviewDown {
         /// Cards left open.
         standing: usize,
-        /// Consecutive failed passes.
         passes: NonZeroUsize,
     },
 }
@@ -64,9 +59,8 @@ pub enum Push {
 /// follows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Printed {
-    /// The notification's heading, one of this module's constants.
     pub title: &'static str,
-    /// Its line, composed from the push's numbers and day alone.
+    /// Composed from the push's numbers and day alone.
     pub body: String,
     /// Where tapping it lands, inside `app`.
     pub click: String,
@@ -75,7 +69,6 @@ pub struct Printed {
 }
 
 impl Push {
-    /// The words and link for the app at `app`.
     #[must_use]
     pub fn printed(&self, app: &str) -> Printed {
         let plural =
@@ -178,20 +171,18 @@ impl Push {
 pub struct Delivered(usize);
 
 impl Delivered {
-    /// The interpreter's report; zero is a normal answer, logged and never thrown.
+    /// Zero is a normal answer, logged and never thrown.
     #[must_use]
     pub fn to_devices(count: usize) -> Self {
         Self(count)
     }
 
-    /// How many devices it reached.
     #[must_use]
     pub fn devices(self) -> usize {
         self.0
     }
 }
 
-/// The push service refused or could not be reached.
 #[derive(Debug, thiserror::Error)]
 pub enum NotifyError {
     /// The service was unreachable or answered something unintelligible.
@@ -202,8 +193,6 @@ pub enum NotifyError {
     Refused(String),
 }
 
-/// Waking a phone.
 pub trait Notify: Sync {
-    /// Send one composed notification.
     fn push(&self, message: &Push) -> Result<Delivered, NotifyError>;
 }

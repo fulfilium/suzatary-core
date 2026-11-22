@@ -13,10 +13,6 @@ const MAX: usize = 500;
 pub struct CalendarName(String);
 
 impl CalendarName {
-    /// Parse one.
-    ///
-    /// # Errors
-    /// `NotAnOccurrence::Calendar` for anything not shaped like a plugin's credential name.
     pub fn parse(text: &str) -> Result<Self, NotAnOccurrence> {
         let shaped = text.len() <= 96
             && text
@@ -36,7 +32,6 @@ impl CalendarName {
         }
     }
 
-    /// The name.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -80,10 +75,6 @@ pub struct OccurrenceId {
 }
 
 impl OccurrenceId {
-    /// Check and build one.
-    ///
-    /// # Errors
-    /// An empty or overlong `UID`, one holding a control character, or a key of neither shape.
     pub fn new(
         calendar: CalendarName,
         uid: &str,
@@ -116,9 +107,6 @@ impl OccurrenceId {
     /// Read the one text a store keys an occurrence by: its calendar, its original start and its
     /// `UID`, each separated by a space. Neither of the first two holds one, so a `UID` that does
     /// is still read whole.
-    ///
-    /// # Errors
-    /// As [`OccurrenceId::new`], and `NotAnOccurrence::Key` for a text of fewer parts.
     pub fn parse(key: &str) -> Result<Self, NotAnOccurrence> {
         let mut parts = key.splitn(3, ' ');
         match (parts.next(), parts.next(), parts.next()) {
@@ -135,13 +123,11 @@ impl OccurrenceId {
         format!("{} {} {}", self.calendar, self.occurrence, self.uid)
     }
 
-    /// Its calendar.
     #[must_use]
     pub fn calendar(&self) -> &CalendarName {
         &self.calendar
     }
 
-    /// Its event's `UID`.
     #[must_use]
     pub fn uid(&self) -> &str {
         &self.uid

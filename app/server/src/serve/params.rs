@@ -9,8 +9,6 @@ use super::Chained;
 
 /// A route's typed parameters.
 pub(crate) trait Params: Sized + Send + 'static {
-    /// # Errors
-    /// A [`Refusal`] naming the parameter that did not parse.
     fn parse(asked: &Asked, chain: &Chained) -> Result<Self, Refusal>;
 }
 
@@ -47,7 +45,6 @@ impl Asked {
             .map(|(_, value)| value.as_str())
     }
 
-    /// # Errors
     /// [`Refusal::internal`] when the pattern has no such segment, since tables get edited.
     pub(crate) fn segment(&self, key: &str) -> Result<&str, Refusal> {
         self.segments

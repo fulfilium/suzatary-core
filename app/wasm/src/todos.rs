@@ -1,5 +1,4 @@
-//! The todo readings a page takes beside the class's generic ones: the folds, and the list as
-//! the box's route answers it, here at this application's record.
+//! The todo readings a page takes beside the class's generic ones.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,9 +26,7 @@ use crate::{Chains, Event, Todos, printed, refused};
 #[wasm_bindgen]
 impl Todos {
     /// §6.1 to §6.5 at `at` (ISO, or `null` for the latest instant the objects stamp) under
-    /// `untrusted`: the environment, the specs, each todo's function and what a
-    /// `ref` links against, the state history a past knot is priced against, and each todo's
-    /// events in causal order.
+    /// `untrusted`.
     pub fn fold(&self, at: Option<String>, untrusted: &str) -> Result<String, JsError> {
         let read = self.0.read().map_err(refused)?;
         let policy = parse_untrusted(untrusted).map_err(refused)?;
@@ -54,8 +51,6 @@ impl Todos {
                 .collect(),
         );
 
-        // Each todo's state register read at every instant a binding write is dated, where the
-        // reading changes, and every binding tending.
         let mut bindings = Map::new();
         let mut tended = BTreeMap::new();
         for (todo, stream) in state.entities() {
@@ -117,10 +112,8 @@ impl Todos {
         ]))
     }
 
-    /// The box's `GET …/fold` answered from these objects: every todo as the folds see it at
-    /// `at` under `untrusted`, priced through the set of these objects as the chain `chain` and
-    /// every other chain `others` holds, each row composed by `view::entry` as the box composes
-    /// it, its fields' keys beside no HTML.
+    /// The box's `GET …/fold` answered from these objects as the chain `chain`, priced with every
+    /// other chain `others` holds, its fields' keys beside no HTML.
     pub fn list(
         &self,
         at: Option<String>,

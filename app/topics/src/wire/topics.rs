@@ -57,7 +57,7 @@ pub struct AttachmentRow {
     pub private: String,
 }
 
-/// Tagged by speaker. `text` is the least trusted string served and is drawn as text.
+/// `text` is the least trusted string served and is drawn as text.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct TurnRow {
     /// Absolute; an `?about=` window has gaps.
@@ -98,8 +98,8 @@ pub struct BlockRow {
     pub html: Option<String>,
 }
 
-/// By hand: `Kind`'s source is one of the sources an answer's render is named by
-/// (`suzatary_todo::rendering`), so it derives no more than it must.
+/// By hand: `Kind`'s source is one of the sources an answer's render is named by, so it derives no
+/// more than it must.
 impl std::hash::Hash for BlockRow {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.source.hash(h);
@@ -185,7 +185,6 @@ pub enum FactSaid {
         on: SaidOn,
     },
     Merged {
-        /// By number.
         from: Vec<memory::FactId>,
         /// At least one.
         origins: Vec<SaidOn>,
@@ -314,10 +313,8 @@ pub struct ConversationPayload {
     pub turns: Vec<TurnRow>,
     /// The name of each row of `turns`' line, in the same order: what an erasure names.
     pub lines: Vec<String>,
-    /// Each line of this conversation this device wrote that the box does not hold, beside the
-    /// box's last ruling on it: a line of `lines` drawn on its turn, one refused for good beside
-    /// the transcript, which reads without it. A tab's own reading alone fills it, and the box's is
-    /// empty.
+    /// Each line this device wrote that the box does not hold, beside the box's last ruling on it;
+    /// a tab's own reading alone fills it, and the box's is empty.
     pub waiting: Vec<Waiting>,
     /// Every proposal whose round was kept, never windowed.
     pub proposals: Vec<ProposalRow>,
@@ -335,15 +332,13 @@ pub struct ConversationPayload {
 /// An own line the box does not hold, and the box's last ruling on it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Waiting {
-    /// The line the ruling is drawn on: the own line's name, or for an `Again`, which says no turn,
-    /// the question it asks again. An `Again` gives no words back, so a refusal for good names its
-    /// own line, which is what acting on it names.
+    /// The own line's name, or for an `Again` the question it asks again; an `Again` gives no words
+    /// back, so a refusal for good names its own line, which is what acting on it names.
     pub line: String,
     pub ruling: Ruling,
 }
 
-/// The box's last ruling on a line this device wrote and the box does not hold, as a page draws
-/// it: the line stays a fact on the device whatever the ruling, and its words are said from this.
+/// The line stays a fact on the device whatever the ruling.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Ruling {
@@ -362,8 +357,8 @@ pub enum Ruling {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Given {
-    /// A question whole, as the composer holds one: its words, the references it points at, each
-    /// file's row, and each file as the upload answered it, to seal again.
+    /// A question whole, as the composer holds one, each file as the upload answered it, to seal
+    /// again.
     Question {
         text: String,
         references: Vec<String>,
@@ -386,7 +381,6 @@ pub enum Given {
 }
 
 impl Ruling {
-    /// The wire's form of the core's ruling.
     #[must_use]
     pub fn of(ruling: suzatary_lines::secretary::held_replica::Ruling) -> Self {
         use suzatary_lines::secretary::held_replica::Ruling as Core;

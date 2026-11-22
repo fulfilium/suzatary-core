@@ -11,9 +11,7 @@ use super::{Content, NotAnOccurrence, OccurrenceId, Status, When};
 /// An occurrence a plugin reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Occurrence {
-    /// Which.
     pub id: OccurrenceId,
-    /// What it says.
     pub content: Content,
 }
 
@@ -47,9 +45,6 @@ impl Occurrence {
 
     /// Read `event` as an occurrence: its key an [`OccurrenceId`] in the namespace of the plugin
     /// that wrote it, and each register through its smart constructor.
-    ///
-    /// # Errors
-    /// The first field that does not read, or a calendar of another plugin's.
     pub fn of(event: &Declared) -> Result<Self, NotAnOccurrence> {
         let id = OccurrenceId::parse(event.key().as_ref())?;
         if !id.calendar().of_plugin(event.actor().as_str()) {
@@ -77,9 +72,6 @@ impl Occurrence {
 
     /// The event a sync by `actor` at `at` learns this occurrence by, at `schema`: what
     /// [`Occurrence::of`] reads back as this occurrence.
-    ///
-    /// # Errors
-    /// A schema whose `Learned` event is not the calendar's.
     pub fn event(
         &self,
         schema: &Declaration,

@@ -1,8 +1,7 @@
 //! The vectors the Rust writes and `web/test/vectors.test.ts` must agree with.
 //!
-//! It lives in `suzatary-server` because every capability and route it needs is this crate's or
-//! `suzatary-api`'s, so the six-todo chain is a byte-for-byte port of
-//! `app/cli/tests/common::six_todo_chain` rather than a dependency in the wrong direction.
+//! The six-todo chain is a byte-for-byte port of `app/cli/tests/common::six_todo_chain`, not a
+//! dependency in the wrong direction.
 //!
 //! A disagreement is a finding, never a file to refresh: vectors are written only under
 //! `SUZATARY_WRITE_VECTORS=1`, and otherwise recomputed and compared.
@@ -98,7 +97,6 @@ fn shift(at: Datetime, days: i64) -> Datetime {
     fpl::datetime_of(fpl::instant_of(at) + Duration::days(days)).expect("in range")
 }
 
-/// `at` shifted by whole seconds, for the scripted conversation's turns.
 fn later(at: Datetime, seconds: i64) -> Datetime {
     fpl::datetime_of(fpl::instant_of(at) + Duration::seconds(seconds)).expect("in range")
 }
@@ -107,12 +105,11 @@ fn actor(name: &str) -> Actor {
     Actor::new(name).expect("a roster name")
 }
 
-/// A path nothing is at yet, in the running test's directory.
 fn scratch(test: &str) -> PathBuf {
     suzatary_testkit::this_test().join(test)
 }
 
-/// The six-todo chain, ported from `app/cli/tests/common::six_todo_chain` with [`CAST`]'s prose.
+/// Ported from `app/cli/tests/common::six_todo_chain` with [`CAST`]'s prose.
 #[expect(
     clippy::too_many_lines,
     reason = "ported from app/cli/tests/common::six_todo_chain, which carries \
@@ -249,7 +246,6 @@ fn six_todo_chain(root: &Path) -> EventStore {
 const AGENTS_TODO_MESSAGE_HASH: &str =
     "e2e0000message0000hash0000000000000000000000000000000000000000";
 
-/// The fixture's one chain, as in `app/cli/tests/common`.
 /// The bundle's one chain, read once: the set every row and proposal is priced through.
 fn chains_of(bundle: &Bundle) -> Read {
     let policy = chain_policy();
@@ -293,10 +289,8 @@ fn deployment() -> Deployment {
 struct NoLock;
 impl WriteLock for NoLock {}
 
-/// Every capability the vectors need, over one real chain and an in-memory conversation table.
-///
-/// `Render` and `Answers` echo, so no vector needs typst, and `Model` is never called because
-/// every turn is scripted.
+/// Every capability the vectors need; `Render` and `Answers` echo, so no vector needs typst, and
+/// `Model` is never called because every turn is scripted.
 struct Bundle<H: Health = Healthy> {
     events: EventStore,
     conversations: suzatary_stores::stores::conversations::InMemory,
@@ -328,7 +322,6 @@ impl Bundle {
 }
 
 impl<H: Health> Bundle<H> {
-    /// A bundle over `events` at `at`, its inbox `inbox`.
     fn holding(
         events: EventStore,
         at: Datetime,
@@ -348,7 +341,6 @@ impl<H: Health> Bundle<H> {
         }
     }
 
-    /// The memory, whose text store keeps a remember card's words.
     fn memories(&self) -> Memories<'_> {
         Memories {
             history: &self.memory,
@@ -365,8 +357,7 @@ impl<H: Health> Bundle<H> {
         }
     }
 
-    /// File a remember card about `fact`, its words kept in the memory's text store, as the
-    /// `remember` verb does in a round that read something not the owner's own.
+    /// File a remember card about `fact`, as the `remember` verb does.
     fn card(
         &self,
         id: &ConversationId,
@@ -396,7 +387,7 @@ impl<H: Health> Bundle<H> {
         )
     }
 
-    /// File one proposal through the real `inbox::ask` and answer the line that names it.
+    /// File one proposal through the real `inbox::ask`.
     fn file(
         &self,
         id: &ConversationId,
@@ -423,8 +414,6 @@ impl<H: Health> Bundle<H> {
         }
     }
 
-    /// Seed one conversation's whole transcript at once, which `Stored::of` folds the same as
-    /// appends.
     fn seed(&self, id: &ConversationId, entries: &[ConversationEntry]) {
         transcript::start(self.conversations.conversations(), id, &entries[0]).expect("opens");
         for entry in &entries[1..] {
@@ -433,7 +422,6 @@ impl<H: Health> Bundle<H> {
     }
 }
 
-/// The server's record, with this bundle behind every effect a route reads.
 fn server_of<H: Health>(bundle: &Bundle<H>) -> Server<'_> {
     Server {
         secretary: suzatary_secretary::secretary::Secretary {
@@ -551,9 +539,6 @@ impl<H: Health> Answers for Bundle<H> {
     }
 }
 
-/// Two rounds and one proposal about [`CAST`]'s agent todo, so the vectors describe one scene.
-///
-/// The proposal follows round one's two `Said` lines, which makes it round one's own.
 /// A conversation holding every kind of line a round reads or skips: a rename, a stop, a rewind
 /// and, once `resealed` runs, a turn sealed under older rules and sealed again.
 fn every_line() -> Vec<ConversationEntry> {
@@ -610,8 +595,8 @@ fn every_line() -> Vec<ConversationEntry> {
     ]
 }
 
-/// One turn of conversation `id`, written under the rules from before lines recorded them, then
-/// every such slot sealed again as `migrate-scrub` does.
+/// One turn written under the rules from before lines recorded them, then sealed again as
+/// `migrate-scrub` does.
 fn resealed(bundle: &Bundle, id: &ConversationId) {
     use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
@@ -735,10 +720,8 @@ fn scripted_conversation(bundle: &Bundle, id: &ConversationId) -> Vec<Conversati
 
 #[derive(Serialize)]
 struct FoldAnswer {
-    /// The open todos, ascending by fulfillment with ties by id, as `web/src/todo/todos.ts`'s
-    /// `byUrgency`.
+    /// Ascending by fulfillment with ties by id, as `web/src/todo/todos.ts`'s `byUrgency`.
     open_ascending: Vec<String>,
-    /// How many open todos there are.
     count: usize,
 }
 
@@ -768,11 +751,8 @@ fn fold_answer(payload: &suzatary_api::wire::FoldPayload) -> FoldAnswer {
 
 #[derive(Serialize)]
 struct ChainAnswer {
-    /// `verify`'s verdict, empty when every object hashes to its name and every head reaches
-    /// genesis.
     verify: Vec<String>,
-    /// The linearisation's order, parents before children; not compared with `verify.ts`'s
-    /// heads-first walk, which may pick another valid order.
+    /// Not compared with `verify.ts`'s heads-first walk, which may pick another valid order.
     order: Vec<String>,
 }
 
@@ -785,10 +765,8 @@ fn chain_answer(payload: &suzatary_api::wire::ChainPayload) -> ChainAnswer {
 
 #[derive(Serialize)]
 struct ConversationAnswer {
-    /// One inclusive `[start, end]` of absolute turn indices per round, from
-    /// `about::round_spans`.
+    /// One inclusive `[start, end]` of absolute turn indices per round.
     rounds: Vec<(usize, usize)>,
-    /// Which round each proposal belongs to, in proposal order.
     proposal_rounds: Vec<usize>,
 }
 
@@ -805,8 +783,6 @@ fn conversation_answer(stored: &Stored) -> ConversationAnswer {
     }
 }
 
-/// Builds the three payloads and their answers over the six-todo chain at a fixed instant, once,
-/// and checks them against `app/api/tests/web/`.
 /// The oldest write contract the box takes, which the bundle's own contract must reach.
 #[test]
 fn the_client_vector_holds_the_box_s_minimum() {
@@ -816,8 +792,7 @@ fn the_client_vector_holds_the_box_s_minimum() {
     );
 }
 
-/// Each held kind's word, as the wire spells it, and its name, as a placeholder and a search row
-/// print it: `web/src/view/heldvalue.ts` reads placeholders and draws rows by the same names.
+/// `web/src/view/heldvalue.ts` reads placeholders and draws rows by the same names.
 #[test]
 fn the_held_kinds_vector_names_every_kind() {
     use suzatary_held::redact::Kind;
@@ -830,7 +805,6 @@ fn the_held_kinds_vector_names_every_kind() {
 
 #[test]
 fn the_vectors_match_what_the_pure_ts_modules_compute() {
-    // The cast, for the TypeScript tests' people, todos and mail.
     write_or_check(&CAST, "cast.json");
 
     let root = scratch("payloads");
@@ -874,15 +848,13 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
             .expect("the scripted conversation folds");
     write_or_check(&conversation_payload, "conversation.json");
 
-    // Folded directly, since the wire payload may one day be windowed to less than the
-    // transcript.
+    // Folded directly, since the wire payload may be windowed to less than the transcript.
     let stored = Stored::of(&conversation_id, &script).expect("the scripted transcript folds");
     write_or_check(&conversation_answer(&stored), "conversation.answer.json");
 }
 
-/// The standings vector: every standing a line can take, each failing one read from a register
-/// holding a failure of its class, as the overview reads one. A line's words in the tab are a
-/// function of its standing alone, and `web/test/overview.test.ts` reads every one of these.
+/// Each failing standing is read from a register holding a failure of its class; a line's words in
+/// the tab are a function of its standing alone.
 #[test]
 fn the_standings_vector_is_every_standing_a_line_can_take() {
     use suzatary_connect::connect::{Group, Standing};
@@ -953,7 +925,6 @@ fn the_standings_vector_is_every_standing_a_line_can_take() {
     );
 }
 
-/// The blocks vector: answers the splitter cut, each block named as the stream names it.
 #[test]
 fn the_blocks_vector_is_what_the_splitter_computes() {
     #[derive(Serialize)]
@@ -991,14 +962,13 @@ fn the_blocks_vector_is_what_the_splitter_computes() {
     write_or_check(&cuts, "blocks.json");
 }
 
-/// One proposal of [`every_stage`]'s: whether it is open, and what it waits on.
 #[derive(Serialize)]
 struct StageAnswer {
     open: bool,
 }
 
-/// A conversation with one proposal at every stage, each answered through the `inbox` code a tap
-/// runs; each is a different subject so each is its own object.
+/// One proposal at every stage, each answered through the `inbox` code a tap runs; each is a
+/// different subject so each is its own object.
 fn every_stage(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     let opened = now();
     let uncertain = Performed::Done(Done::MayHaveGone {
@@ -1082,8 +1052,7 @@ fn every_stage(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     entries
 }
 
-/// Two proposals filed in conversation `id`, the first given a check over nothing past the door
-/// that would refuse it: the unreadable one's id, then the standing one's.
+/// Two proposals, the first given a check over nothing past the door that would refuse it.
 fn with_an_unreadable_proposal(
     bundle: &Bundle<Faulty>,
     id: &ConversationId,
@@ -1132,7 +1101,6 @@ fn with_an_unreadable_proposal(
         ],
     );
 
-    // A check written over the first proposal's asking, past the door that would refuse it.
     let objects = bundle.inbox.objects().expect("reads");
     let genesis = objects
         .iter()
@@ -1165,9 +1133,8 @@ fn with_an_unreadable_proposal(
     (bad_id, good_id)
 }
 
-/// Seed `id` with three proposal lines against `bundle`'s inbox: the first filed in another
-/// replica's inbox, so this box holds its line and not its record; the second answered here (a
-/// dismissal) with its asking never taken in; the third filed here and placed.
+/// Three proposal lines: one filed in another replica's inbox, so this box holds its line and not
+/// its record; one dismissed here with its asking never taken in; one filed here and placed.
 fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
     use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
@@ -1202,7 +1169,6 @@ fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
     let ConversationEntry::Proposed { object, .. } = &unasked else {
         unreachable!("file answers a proposed line")
     };
-    // A dismissal of the second, taken in here without the asking it answers.
     let genesis = bundle
         .inbox
         .objects()
@@ -1246,10 +1212,7 @@ fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
     );
 }
 
-/// A proposal line the inbox's reading cannot place is drawn, saying why, and never skipped:
-/// its conversation renders with the line in `unplaced`, in order beside the placed one, which
-/// keeps its card; `Stored::lines` holds each with its reason; the list counts them; `verify`
-/// names each; and acting on one is refused by its reason.
+/// A proposal line the inbox's reading cannot place is drawn, saying why, and never skipped.
 #[test]
 fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
     use suzatary_conversations::secretary::store::{Line, Unheld};
@@ -1349,10 +1312,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
     );
 }
 
-/// One unreadable proposal costs only itself, on every page that reads a conversation: a
-/// conversation holding a check over nothing beside a proposal that stands renders, the
-/// unreadable card saying why and offering nothing, the other stays tappable, and a device may
-/// still ask to be trusted in the conversation that holds both.
+/// One unreadable proposal costs only itself, on every page that reads a conversation.
 #[test]
 fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable() {
     let root = scratch("unreadable");
@@ -1428,8 +1388,6 @@ fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable
     secretary_routes::ask_trust(&server, &ada, &key).expect("a device may ask");
 }
 
-/// The proposal card at every stage and whether it is open, which the page's answer controls
-/// follow.
 #[test]
 fn the_proposals_vector_is_every_stage_and_its_decision() {
     let root = scratch("stages");
@@ -1459,7 +1417,6 @@ fn the_proposals_vector_is_every_stage_and_its_decision() {
     write_or_check(&answers, "proposals.answer.json");
 }
 
-/// Every object of one store, as a replica is handed them: its name and its canonical print.
 #[derive(Serialize)]
 struct Shipped {
     hash: String,
@@ -1478,7 +1435,6 @@ fn shipped<E: suzatary_stores::stores::Store>(store: &InMemory<E>) -> Vec<Shippe
         .collect()
 }
 
-/// Every key the conversations hold, by name, as the pull spells it.
 fn keys_of(
     conversations: &suzatary_stores::stores::conversations::InMemory,
 ) -> BTreeMap<String, String> {
@@ -1497,7 +1453,6 @@ fn keys_of(
         .collect()
 }
 
-/// The owner erases `id`'s first answer, turn 1.
 fn erase_the_first_answer(bundle: &Bundle, id: &ConversationId) {
     let read = transcript::read(bundle.conversations.conversations(), id).expect("reads");
     let line = read.line_of(1).expect("the first answer");
@@ -1513,8 +1468,7 @@ fn erase_the_first_answer(bundle: &Bundle, id: &ConversationId) {
     .expect("erased");
 }
 
-/// What a replica holding `keys` forgets of the conversations: every key an erasure names, with
-/// the answer keys of the blocks its words were rendered to, by the box's own sweep's reading.
+/// What a replica holding `keys` forgets, by the box's own sweep's reading.
 fn forgotten(
     conversations: &suzatary_stores::stores::conversations::InMemory,
     keys: &BTreeMap<String, String>,
@@ -1555,7 +1509,6 @@ fn forgotten(
     dead
 }
 
-/// One window the tab asks for, as its query spells it, and the box's answer.
 #[derive(Serialize)]
 struct Asked {
     id: String,
@@ -1566,7 +1519,6 @@ struct Asked {
     answer: String,
 }
 
-/// A todo chain as a tab receives it: what prices the proposals that serve its todos.
 #[derive(Serialize)]
 struct ShippedChain {
     name: String,
@@ -1574,7 +1526,6 @@ struct ShippedChain {
     objects: Vec<Shipped>,
 }
 
-/// The bundle's chain, `life`, as the set the inbox prices through, and as a tab receives it.
 fn life(bundle: &Bundle) -> (Read, ShippedChain) {
     let policy = chain_policy();
     let set = chains_of(bundle);
@@ -1595,28 +1546,23 @@ fn life(bundle: &Bundle) -> (Read, ShippedChain) {
     (set, shipped)
 }
 
-/// One search, and the box's answer.
 #[derive(Serialize)]
 struct Searched {
     q: String,
     answer: String,
 }
 
-/// The secretary's two stores as a tab receives them, and what the box answers of them.
 #[derive(Serialize)]
 struct Replicas {
     at: String,
     chains: Vec<ShippedChain>,
     inbox: Vec<Shipped>,
     conversations: Vec<Shipped>,
-    /// The conversations' skeleton, whole, as its route answers a replica holding nothing.
     skeleton: lines::SkeletonPayload,
-    /// The key of every slot of the conversations' words, as the pull carries them.
     keys: BTreeMap<String, String>,
     /// The keys a tab held before one of the deed's turns was erased.
     stale: BTreeMap<String, String>,
-    /// What a tab holding `stale` forgets: every key an erasure names, with the answer keys of the
-    /// blocks its words were rendered to.
+    /// What a tab holding `stale` forgets.
     erased: BTreeMap<String, Vec<String>>,
     memory: wire::MemoryPayload,
     list: String,
@@ -1625,8 +1571,6 @@ struct Replicas {
     searches: Vec<Searched>,
 }
 
-/// A second conversation: a remembered fact, an answer in two blocks, a proposal answered no, and
-/// two remember cards, one standing and one whose dismissal deletes its words.
 fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     let opened = later(now(), 200);
     vec![
@@ -1694,8 +1638,7 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     ]
 }
 
-/// A digest history whose read left an object out: every sweep over it refuses. It holds no
-/// object, so `verify` has nothing to check.
+/// A digest history whose read left an object out: every sweep over it refuses.
 struct LeftOut;
 
 impl suzatary_store::store::Reads<suzatary_digest::secretary::digest_event::DigestEvent>
@@ -1751,8 +1694,7 @@ impl suzatary_store::store::Prodrome<suzatary_digest::secretary::digest_event::D
     }
 }
 
-/// A sweep after a write never fails the write: with the digest's read leaving an object out,
-/// a dismissal still stands, and its line is in the conversation for the secretary to read.
+/// A sweep after a write never fails the write.
 #[test]
 fn a_dismissal_stands_with_its_line_whatever_its_sweep() {
     let root = scratch("dismiss-left-out");
@@ -1786,7 +1728,6 @@ fn a_dismissal_stands_with_its_line_whatever_its_sweep() {
     );
 }
 
-/// The tab's replicas of the inbox and the conversations read as the box reads the same objects:
 /// `web/test/replicas.test.ts` hands these objects to the module in every order and compares its
 /// answers with these, byte for byte.
 #[test]
@@ -1894,7 +1835,6 @@ fn the_replicas_vector_is_what_the_box_answers() {
     write_or_check(&replicas, "replicas.json");
 }
 
-/// The lines' whole skeleton, as its route answers a replica holding nothing.
 fn skeleton_of(bundle: &Bundle) -> lines::SkeletonPayload {
     suzatary_api::routes::lines_skeleton(
         bundle.conversations.conversations(),
@@ -1911,8 +1851,6 @@ fn skeleton_of(bundle: &Bundle) -> lines::SkeletonPayload {
     .expect("the skeleton reads")
 }
 
-/// The memory as its route answers it, for the receipt's words, with the words its text store
-/// keeps for the remember cards as the route reads them.
 fn memory_of(bundle: &Bundle, trains: &ConversationId) -> wire::MemoryPayload {
     wire::MemoryPayload {
         facts: vec![wire::FactRow {
@@ -1936,7 +1874,6 @@ fn memory_of(bundle: &Bundle, trains: &ConversationId) -> wire::MemoryPayload {
     }
 }
 
-/// The windows a tab asks of both conversations, and the box's reading of each.
 fn windows_of(bundle: &Bundle, deed: &ConversationId, trains: &ConversationId) -> Vec<Asked> {
     let mut windows = Vec::new();
     for (id, before, limit, about) in [
@@ -1979,19 +1916,18 @@ fn windows_of(bundle: &Bundle, deed: &ConversationId, trains: &ConversationId) -
     windows
 }
 
-/// Every conversation, newest first, as the box reads its own store.
 fn listed(bundle: &Bundle) -> Vec<Stored> {
     conversations::list(bundle.conversations.conversations()).expect("the conversations read")
 }
 
-/// One sample of an answer: its JSON, and where it holds a map, whose keys are data.
+/// An answer's JSON, and where it holds a map, whose keys are data.
 #[derive(Serialize)]
 struct Sample {
     value: serde_json::Value,
     maps: Vec<Vec<serde_json::Value>>,
 }
 
-/// Every answer a route gives, by its TypeScript name, as the samples below serialise.
+/// Every answer a route gives, by its TypeScript name.
 #[derive(Default)]
 struct Samples(BTreeMap<String, Vec<Sample>>);
 
@@ -2038,9 +1974,8 @@ fn mail_row() -> suzatary_mail::mail::MailRow {
     }
 }
 
-/// `web/test/payload.test.ts`'s laws run over every answer the box gives: each type a route
-/// answers has samples here, every arm of its sums among them, and the samples say where they
-/// hold a map, so a law about fields leaves a map's keys alone.
+/// `web/test/payload.test.ts`'s laws run over every answer the box gives, every arm of its sums
+/// among them; the samples say where they hold a map, so a law about fields leaves its keys alone.
 #[test]
 #[expect(
     clippy::too_many_lines,
@@ -2121,7 +2056,6 @@ fn the_answers_vector_holds_every_answer() {
     let nothing = prodrome_core::store::frontier::Since::Nothing;
     samples
         .add([routes::objects_since(&bundle, &policy, &nothing, books, at).expect("the objects")]);
-    // The lines' pull: a conversation's objects and the key of every slot they name.
     let lines = suzatary_stores::stores::conversations::InMemory::default();
     transcript::start(
         lines.conversations(),
@@ -2142,7 +2076,6 @@ fn the_answers_vector_holds_every_answer() {
         routes::Cut::PIECE,
     )
     .expect("the lines")]);
-    // Its skeleton: the genesis, a structure, and the opening line.
     let skeleton = routes::lines_skeleton(
         lines.conversations(),
         &nothing,
@@ -2348,7 +2281,6 @@ fn the_answers_vector_holds_every_answer() {
             }],
         },
     };
-    // Every other act an object can be, so the tab decodes each.
     let others = [
         suzatary_inbox::wire::inbox::ObjectAct::Edited {
             todo: todo(false),
@@ -2391,7 +2323,6 @@ fn the_answers_vector_holds_every_answer() {
     });
     let rows: Vec<suzatary_inbox::wire::inbox::ProposedObject> =
         std::iter::once(object).chain(others).collect();
-    // A triage card's changeset, every row kind drawn, so the tab decodes each.
     samples.add([suzatary_api::wire::DrawnPayload {
         title: "Setup".to_owned(),
         proposals: vec![wire::ProposalRow {
@@ -2499,10 +2430,8 @@ fn the_answers_vector_holds_every_answer() {
     let server = server_of(&bundle);
     let conversations = [&deed, &stages]
         .map(|id| secretary_routes::newest(&server, &cards, id).expect("a conversation"));
-    // A conversation's proposals drawn in one read, as the route answers them.
     let indices: Vec<usize> = conversations[1].proposals.iter().map(|p| p.index).collect();
     samples.add([secretary_routes::drawn(&server, &cards, &stages, &indices).expect("drawn")]);
-    // A message attaching a file from every place one comes from, the repository's with its hash.
     let mut attaching = conversations[1].clone();
     let files: Vec<suzatary_inbox::wire::inbox::CardFile> = [
         suzatary_inbox::wire::inbox::FileFrom::Mail {
@@ -2854,8 +2783,7 @@ fn the_answers_vector_holds_every_answer() {
         ]);
     }
 
-    // The browser's module's own answers: the verifier's, with every arm of its walk and of
-    // what it found, and who wrote each object, with every arm of its proof.
+    // The browser's module's own answers, with every arm of its walk and of its proof.
     let verdict =
         |hash: &str, walk: suzatary_api::wire::Walk, condition: suzatary_api::wire::Condition| {
             suzatary_api::wire::ObjectVerdict {
@@ -2975,7 +2903,6 @@ fn the_answers_vector_holds_every_answer() {
     write_or_check(&samples.0, "answers.json");
 }
 
-/// A route's answer as axum's `Json` prints it.
 mod erased {
     pub trait Printed {
         fn printed(&self) -> String;
@@ -2996,9 +2923,7 @@ fn failed_chain() -> suzatary_signatures::wire::signatures::FailedChain {
     }
 }
 
-/// The slots the web vectors store, sealed under #257's own `Rules`, still read as sealed under
-/// the current rules now that `Rules` is a `rule_version::Version`: the hex a slot's associated
-/// data binds is the hex this build names.
+/// The hex a stored slot's associated data binds is the hex this build names.
 #[test]
 fn a_stored_slot_is_under_the_rules_this_build_names() {
     use suzatary_held::redact::Rules;
@@ -3065,12 +2990,10 @@ impl Device {
     }
 }
 
-/// The conversation every retirement scenario writes to.
 fn keys_conversation() -> ConversationId {
     ConversationId::new("2026-09-02-keys".to_owned()).expect("a slug")
 }
 
-/// The conversation opened and three turns, each sealed under `under`.
 fn three_turns(
     under: &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder,
 ) -> suzatary_stores::stores::conversations::InMemory {
@@ -3111,7 +3034,6 @@ fn three_turns(
     lines
 }
 
-/// The words of the conversation's line `at` erased, and swept.
 fn erase_line(lines: &suzatary_stores::stores::conversations::InMemory, at: usize) {
     let keys = transcript::read(lines.conversations(), &keys_conversation())
         .expect("reads")
@@ -3133,7 +3055,7 @@ fn erase_line(lines: &suzatary_stores::stores::conversations::InMemory, at: usiz
     transcript::sweep(lines.conversations()).expect("swept");
 }
 
-/// `migrate-scrub` run on the box: every stale slot sealed again, and swept.
+/// `migrate-scrub` run on the box, and swept.
 fn migrate(lines: &suzatary_stores::stores::conversations::InMemory) {
     let done =
         rescrub::run(lines.conversations(), later(now(), 30), rescrub::BATCH).expect("migrated");
@@ -3191,8 +3113,7 @@ fn reseal_again(lines: &suzatary_stores::stores::conversations::InMemory) {
     }
 }
 
-/// What a device does after a step of the box: pulls from where it stands, starts over, as one
-/// does when a later epoch replaces its row, and pulls from nothing, or is away and pulls nothing.
+/// What a device does after a step of the box; it starts over when a later epoch replaces its row.
 #[derive(Debug, Clone, Copy)]
 enum Then {
     Pull,
@@ -3200,13 +3121,11 @@ enum Then {
     Away,
 }
 
-/// One step of a scenario, and what the device does after it.
 type Step<'a> = (
     &'a dyn Fn(&suzatary_stores::stores::conversations::InMemory),
     Then,
 );
 
-/// A device holding nothing of the lines.
 fn fresh() -> Device {
     Device {
         since: prodrome_core::store::frontier::Since::Nothing,
@@ -3233,7 +3152,6 @@ fn restore_keys_from_before(
     }
 }
 
-/// Every key the box holds, with its bytes.
 fn held_keys(
     lines: &suzatary_stores::stores::conversations::InMemory,
 ) -> Vec<(
@@ -3279,9 +3197,8 @@ fn erase_a_reseal_s_key(lines: &suzatary_stores::stores::conversations::InMemory
 }
 
 /// A device that pulls once before `steps`, after each as it says, and once at the end, is left
-/// the box's keys by
-/// the box's own rule over the objects (`transcript::dead`), and by the core's rule over the
-/// skeleton it took (`Outlines::retired`, what a tab's core reads), given the keys it holds.
+/// the box's keys by the box's rule over the objects (`transcript::dead`) and by the core's rule
+/// over the skeleton it took (`Outlines::retired`).
 fn converged(
     name: &str,
     lines: &suzatary_stores::stores::conversations::InMemory,
@@ -3367,12 +3284,6 @@ fn converged(
     );
 }
 
-/// Every scenario the device's key hygiene must converge through: an erasure, a migration while
-/// the device was away, two migrations whose first reseals the device took in an earlier pull,
-/// two while it was away, so it never held the first reseals' keys and finds the first seals
-/// dead only through the second reseals, an erasure of a slot sealed again, the box restored
-/// with its reseals and without their keys while the device starts over, so each first seal is
-/// live again, and an erasure of a reseal's own key, which the box refuses.
 #[test]
 fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
     use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
@@ -3423,8 +3334,7 @@ fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
     );
 }
 
-/// A slot sealed again twice, before the sweep, while both reseals' keys are held: it reads from
-/// the second reseal, the newest, and the reseal it was sealed again from comes after it.
+/// The reseal a slot was sealed again from comes after its newest reseal.
 #[test]
 fn a_slot_resealed_twice_reads_its_newest_reseal() {
     use suzatary_lines::secretary::line_shape::LineShape;
@@ -3461,8 +3371,6 @@ fn a_slot_resealed_twice_reads_its_newest_reseal() {
     }
 }
 
-/// One step a generated store takes: a migration (`migrate-scrub`), every reseal sealed again
-/// from its own seal, or one line of the conversation erased.
 #[derive(Debug, Clone, Copy)]
 enum Move {
     Migrate,
@@ -3473,9 +3381,8 @@ enum Move {
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(128))]
 
-    /// Law: over generated stores with reseals of reseals and erasures, the device pulling after
-    /// each step, starting over, or away until a later pull, the core's rule over the skeleton the device took leaves it the
-    /// keys the box keeps, as the box's own rule over the objects does (`converged`).
+    /// Law: over generated stores with reseals of reseals and erasures, the core's rule over the
+    /// skeleton a device took leaves it the keys the box keeps (`converged`).
     #[test]
     fn law_the_core_s_retired_keys_are_the_box_s(
         moves in proptest::collection::vec(
@@ -3495,8 +3402,8 @@ proptest::proptest! {
         )
     ) {
         use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
-        // A migration reseals the stale slots once; a second finds none. Sealing again reads every
-        // slot's words, so it comes after a migration and before any erasure. A line is erased once.
+        // Sealing again reads every slot's words, so it comes after a migration and before any
+        // erasure.
         let mut migrated = false;
         let mut erased = std::collections::BTreeSet::<usize>::new();
         let taken: Vec<(Move, Then)> = moves

@@ -1,10 +1,9 @@
 //! Every conversation's live rounds as one stream, ordered by the instant of the turn that opened
-//! each, filtered by topics: what the secretary page draws (`docs/TOPICS-PLAN-2026-10-21.md` §0).
+//! each, filtered by topics.
 //!
-//! The rounds are chosen from the conversations' outlines and only then read: [`choose`] needs no
-//! word, and [`stream`] reads only the lines the outline names for each drawn round: its title,
-//! its turns, and the reseals and erasures of their slots. A reader holding every line and one
-//! holding only those draw the same rows, so the eager and the lazy stream are this one function.
+//! [`choose`] needs no word, and [`stream`] reads only the lines the outline names for each drawn
+//! round; a reader holding every line and one holding only those draw the same rows, so the eager
+//! and the lazy stream are this one function.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,10 +25,9 @@ use suzatary_lines::secretary::targets;
 use suzatary_lines::secretary::targets::MAX_TOPICS;
 use suzatary_memory::secretary::words::Words;
 
-/// How many rounds one page of the stream holds.
+/// How many rounds one page holds.
 pub const PAGE: usize = 30;
 
-/// One round a page draws: its conversation, that conversation's outline, and the round.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Drawn<'o> {
     pub conversation: &'o ConversationId,
@@ -46,13 +44,10 @@ impl Drawn<'_> {
     }
 }
 
-/// The rounds a page of the stream draws, oldest first, and how many rounds the filter shows in
-/// all.
+/// The rounds a page draws, oldest first, and how many the filter shows in all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Choice<'o> {
-    /// The rounds drawn.
     pub drawn: Vec<Drawn<'o>>,
-    /// How many the filter shows.
     pub total: usize,
 }
 
@@ -64,16 +59,13 @@ impl Choice<'_> {
     }
 }
 
-/// Why the stream does not read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unread {
     /// A conversation's lines are none, the first such by id, as the whole store's reading says.
     #[error(transparent)]
     Unfolded(#[from] NotAConversation),
-    /// A drawn round's line was not given.
     #[error("a round of {conversation} was chosen and its line {line} was not read")]
     Undrawn {
-        /// The round's conversation.
         conversation: ConversationId,
         line: Hash,
     },
@@ -82,9 +74,6 @@ pub enum Unread {
 /// The newest `pages` pages of the rounds of `outlines` that carry every topic of `chosen`. A
 /// round of nothing but the box's own notes ([`Voices::BoxAlone`]) is the line above a card the
 /// Inbox draws, so it is not drawn.
-///
-/// # Errors
-/// The first outline, by id, whose lines are no conversation.
 pub fn choose<'o>(
     outlines: impl IntoIterator<Item = (&'o ConversationId, &'o Outline)>,
     topics: &Reading,
@@ -122,10 +111,8 @@ pub fn choose<'o>(
     })
 }
 
-/// The newest `pages` pages of the rounds of `outlines` that carry every topic of `chosen`, oldest
-/// first, and how many rounds the filter shows in all: each drawn round from the lines `read`
-/// gives for its conversation, its opening turn and its objects, and no other line read. A round
-/// whose lines do not read as its outline names them is not drawn.
+/// The rounds [`choose`] picks, each drawn from the lines `read` gives and no other line read; a
+/// round whose lines do not read as its outline names them is not drawn.
 ///
 /// # Errors
 /// [`Unread::Unfolded`] for an outline whose lines are no conversation; [`Unread::Undrawn`] for a
@@ -183,9 +170,7 @@ pub fn every(
     }
 }
 
-/// The row of `round` from its lines opened: its title from the title line's entry and each turn
-/// from its line's, as the conversation's fold reads them; `None` where a named line says no title
-/// or no turn.
+/// The row of `round` from its lines opened; `None` where a named line says no title or no turn.
 fn opened(
     round: &Drawn<'_>,
     lines: &BTreeMap<Hash, Entry>,
@@ -208,7 +193,6 @@ fn opened(
     Some(row(&title, &round, topics, dress))
 }
 
-/// The row a stream draws for `round` of a conversation titled `title`.
 #[must_use]
 pub fn row(
     title: &Words<String>,
@@ -253,10 +237,9 @@ pub fn row(
     }
 }
 
-/// Who asked `opening`, a round's first turn in `conversation`: the one place the stream decides
-/// it. The box records the round its question opens on the line (`Stamp::Asking`). A line written
-/// before it did carries no stamp, and is read by the rule those lines were drawn by: an unstamped
-/// question in the conversation `ConversationId::daily` names is that daily round's.
+/// Who asked `opening`: the one place the stream decides it. A line without `Stamp::Asking` is read
+/// by the rule those lines were drawn by: an unstamped question in the conversation
+/// `ConversationId::daily` names is that daily round's.
 fn asked(conversation: &ConversationId, opening: &Said) -> wire::RoundAsked {
     let round = match &opening.by {
         Some(Stamp::Asking(round)) => Some(*round),

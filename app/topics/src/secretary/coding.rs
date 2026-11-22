@@ -18,14 +18,10 @@ pub struct Advanced {
     pub conversation: ConversationId,
     /// The proposal that started it.
     pub index: usize,
-    /// Where it now stands.
     pub session: Session,
 }
 
 /// Every session still waiting on a branch: fired or reported.
-///
-/// # Errors
-/// The store's own failures.
 pub fn waiting(conversations: Conversations<'_>) -> Result<Vec<Advanced>, Refusal> {
     Ok(conversations::list(conversations)?
         .into_iter()
@@ -45,9 +41,7 @@ pub fn waiting(conversations: Conversations<'_>) -> Result<Vec<Advanced>, Refusa
         .collect())
 }
 
-/// What `suzatary coding poll --explain` prints, one line each: every waiting session, every
-/// branch seen with each report it carries and the sessions that report names, then how the poll
-/// reads each waiting session against those branches.
+/// What `suzatary coding poll --explain` prints.
 #[must_use]
 pub fn explained(waiting: &[Advanced], seen: &[Seen]) -> Vec<String> {
     let mut lines = vec![format!("{} waiting session(s):", waiting.len())];
@@ -95,9 +89,6 @@ pub fn explained(waiting: &[Advanced], seen: &[Seen]) -> Vec<String> {
 }
 
 /// The tap fired a session: its first line, and the act the secretary reads.
-///
-/// # Errors
-/// The store's own failures.
 pub fn fired(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -119,9 +110,6 @@ pub fn fired(
 }
 
 /// Steps every waiting session by what `seen` shows and answers the sessions it moved.
-///
-/// # Errors
-/// The store's own failures.
 pub fn advance(
     conversations: Conversations<'_>,
     seen: &[Seen],

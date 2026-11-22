@@ -1,6 +1,6 @@
-//! The owner's request, asked again in a fresh conversation. A [`Request`] is a turn that the
-//! gate stamped as the owner's, with words and no file, so it is clean on its own. It is the only
-//! line that crosses from a conversation that read more into the fresh one.
+//! The owner's request, asked again in a fresh conversation: a turn the gate stamped as the
+//! owner's, with words and no file, is the only line that crosses from a conversation that read
+//! more into the fresh one.
 
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
@@ -58,7 +58,6 @@ impl Request {
             })
     }
 
-    /// Its index among its conversation's turns.
     #[must_use]
     pub fn turn(&self) -> usize {
         self.turn
@@ -74,7 +73,6 @@ impl Request {
         }
     }
 
-    /// The act that asks it again, filed in `conversation`.
     #[must_use]
     pub fn act(&self, conversation: &ConversationId) -> acts::Act {
         acts::Act::Afresh {
@@ -84,9 +82,8 @@ impl Request {
     }
 }
 
-/// Whether `said` is a person's words that are clean on their own: an erased turn has no words,
-/// and the taint of a person's turn is clean only under the gate's stamp of the owner, with no
-/// file.
+/// Whether `said` is a person's words clean on their own: only under the gate's stamp of the
+/// owner, with no file.
 fn own(said: &Said) -> bool {
     matches!(said.turn, Turn::Person { .. }) && taint::turn(said) == Taint::Clean
 }
@@ -129,9 +126,8 @@ mod tests {
             .expect("a conversation")
     }
 
-    /// Only a person's turn under the owner's stamp with no file is a request; an unstamped
-    /// turn, an unconfirmed pointer, an act line and the model's words never are, so nothing
-    /// that a round read can be carried as his.
+    /// Only a person's turn under the owner's stamp with no file is a request, so nothing that a
+    /// round read can be carried as his.
     #[test]
     fn only_the_owners_clean_words_are_a_request() {
         let calling = Turn::Model {

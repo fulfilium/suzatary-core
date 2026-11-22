@@ -67,7 +67,6 @@ use suzatary_topics::wire::topics as wire;
 
 /// Sending a proposed message; in no capability bundle, so no verb can send.
 pub trait Post {
-    /// Send this message as `account`, with `body` filled in and `attachments`.
     fn send(&self, draft: &Draft, body: Filled, attachments: Checked) -> Performed;
 }
 
@@ -90,13 +89,10 @@ pub trait Perform {
 pub struct Cards<'a> {
     /// The categories an act may name.
     pub deployment: &'a Deployment,
-    /// Every chain this deployment serves.
     pub chains: &'a [Bound<'a>],
-    /// The plugins the instance file declares now.
     pub plugins: Option<&'a [Manifest]>,
     /// How the person reaches the app at a terminal.
     pub reach: &'a Reach,
-    /// The names the deployment may set now.
     pub settables: &'a Settables,
 }
 
@@ -280,8 +276,7 @@ impl Draw for Drawn<'_> {
     }
 }
 
-/// A topic begun with `title` and, where given, `first` after its opening: what an afresh tap
-/// begins.
+/// A topic begun, `first` after its opening: what an afresh tap begins.
 fn begun(caps: &Server<'_>, title: &str, first: Option<&Entry>) -> Result<ConversationId, Refusal> {
     let at = caps.secretary.clock.now();
     let (id, _) = conversations::begin(
@@ -298,9 +293,6 @@ fn begun(caps: &Server<'_>, title: &str, first: Option<&Entry>) -> Result<Conver
 }
 
 /// File the box's Secret card for a new value of `handle`'s secret, unless one already asks.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a handle no secret a Secret card asks for has; the stores' own.
 pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(), Refusal> {
     let name = cards
         .settables
@@ -325,9 +317,6 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
 }
 
 /// `POST …/<id>/erase`: erase turns, or all of it, behind the same [`Tap`] as a send.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a line there is none of, and [`transcript::erase`]'s.
 pub fn erase(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -377,9 +366,6 @@ pub fn erase(
 }
 
 /// One conversation's newest window, dressed: what a write answers.
-///
-/// # Errors
-/// A name nothing is stored under, or a file this program cannot fold.
 pub fn newest(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -389,9 +375,6 @@ pub fn newest(
 }
 
 /// `GET …/<id>/drawn?indices=<n>,…`: proposals drawn against the todo chains.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a conversation or a proposal there is none of, and the stores' own.
 pub fn drawn(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -429,38 +412,27 @@ pub fn drawn(
 /// What a tap can act through.
 #[derive(Clone, Copy)]
 pub struct Effectors<'a> {
-    /// Sends a tapped email.
     pub post: &'a dyn Post,
-    /// Reads a tapped email's held values and a forward's message.
     pub reveal: &'a dyn Reveal,
-    /// Performs a tapped act (a sign-in, a web request).
     pub performer: &'a dyn Perform,
-    /// Stores a tapped secret.
     pub secrets: &'a dyn Writes,
     /// Calls a model once with a credential before it is stored.
     pub verify: &'a dyn Verify,
-    /// Syncs a plugin once its link is stored.
     pub checks: &'a dyn suzatary_connect::settings::Checks,
-    /// The sign-ins the box holds open.
     pub signing: &'a dyn Sessions,
-    /// Edits the instance file.
     pub edits: &'a dyn Edits,
-    /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn suzatary_mail::mail::cache::Forget,
     /// Registers a device's key on every keyed chain; `None` without a root key.
     pub enrolling: Option<Enrolling<'a>>,
-    /// Opens a sign-in with Google.
     pub consents: &'a dyn google_sign_in::Consents,
 }
 
 /// What a tap's body carries beside its note: nothing, or exactly one of these.
 #[derive(Debug)]
 pub enum TapAnswer {
-    /// Nothing but the tap: the card performed as it stands.
     Plain,
     /// A secret's value, or the code a sign-in's page shows.
     Value(Secret),
-    /// The card's wider yes.
     Always,
     /// The tapping device's signature of a device card's registration.
     Endorsed(Endorsement),
@@ -784,12 +756,8 @@ fn minted(settables: &Settables, name: &str) -> Result<Settable, Refusal> {
     })
 }
 
-/// `POST …/proposals/<n>/tap`: submits one proposal, at most once under the inbox's hold.
-///
-/// A failure that may have happened completes the proposal; one that did not is a note.
-///
-/// # Errors
-/// Not found, a wrong or missing answer, a secret no longer declared, a rejected rule, the stores'.
+/// `POST …/proposals/<n>/tap`: submits one proposal, at most once under the inbox's hold; a
+/// failure that may have happened completes the proposal, and one that did not is a note.
 #[allow(clippy::too_many_arguments)]
 pub fn tap(
     caps: &Server<'_>,
@@ -859,12 +827,10 @@ pub fn tap(
     })
 }
 
-/// What a tap answers.
 #[derive(Debug)]
 pub struct AfterTap {
     /// The card's conversation, as it stands after the tap.
     pub conversation: wire::ConversationPayload,
-    /// The conversation the tap opened.
     pub opened: Option<ConversationId>,
 }
 
@@ -998,9 +964,6 @@ fn calendar_event(
 }
 
 /// `POST …/proposals/<n>/tap` with `fix`: performs, as this tap, the card that fixes its lack.
-///
-/// # Errors
-/// [`Refusal::conflict`] for nothing lacked or a fix that cannot begin; the stores'.
 pub fn fix(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
@@ -1104,9 +1067,6 @@ fn retried(lacked: &inbox::Object, tap: &Tap) -> google_sign_in::Then {
 }
 
 /// After its fix's sign-in: performs `card` again when `signed` kept the grant, else says why not.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn retry(
     caps: &secretary::Secretary<'_>,
     (edits, settables, performer): (&dyn Edits, &Settables, &dyn Perform),
@@ -1241,7 +1201,6 @@ enum Link {
     Retire(Connection),
 }
 
-/// Where `value` stands as `name`'s link.
 fn linked((edits, settables): (&dyn Edits, &Settables), name: &Settable, value: &Secret) -> Link {
     let a_plugin_s = settables
         .declaration(name)
@@ -1517,9 +1476,6 @@ fn allowed(edits: &dyn Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
 pub const WAITING_DEVICES: usize = 3;
 
 /// `POST /api/act/key`: a device asks to be trusted as the gate's `actor`; files one card.
-///
-/// # Errors
-/// [`WAITING_DEVICES`] cards already waiting for other keys, and the stores' own failures.
 pub fn ask_trust(caps: &Server<'_>, actor: &Actor, key: &PublicKey) -> Answered<usize> {
     let secretary = caps.secretary;
     let stored = conversations::read_or_open_default(
@@ -1602,9 +1558,6 @@ const ALREADY_TRUSTED: &str =
     "this device's key is trusted now: it was trusted at the box or with a pairing code";
 
 /// Close, as done another way, every waiting device card whose key `history` already trusts.
-///
-/// # Errors
-/// The stores' own.
 pub fn withdraw_trusted(
     inbox: &dyn Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     history: &dyn Prodrome<suzatary_record::record::TodoEvent>,
@@ -1880,7 +1833,6 @@ fn erased(
     .into())
 }
 
-/// A topic opened for turn `turn`, read again.
 fn afresh(
     caps: &Server<'_>,
     conversation: &ConversationId,
@@ -1895,7 +1847,6 @@ fn afresh(
     Ok((opened, Done::Acted { what }.into()))
 }
 
-/// Ask the store again for every declared name.
 fn store_answers(secrets: &dyn Secrets, settables: &Settables) -> Performed {
     match suzatary_connect::secrets::Snapshot::read(secrets, settables.iter()).answers() {
         Ok(_) => Done::Acted {
@@ -2075,9 +2026,6 @@ fn apply(cards: &Cards<'_>, changeset: &Changeset) -> Performed {
 }
 
 /// `POST …/proposals/<n>/dismiss`: answers a proposal no, with a reason.
-///
-/// # Errors
-/// As [`suzatary_secretary::secretary::dismiss`].
 pub fn dismiss(
     caps: &Server<'_>,
     by: &Tap,
@@ -2097,9 +2045,6 @@ pub fn dismiss(
 }
 
 /// `POST …/proposals/<n>/acknowledge`: the owner checked a send that may have gone.
-///
-/// # Errors
-/// As [`suzatary_secretary::secretary::acknowledge`].
 pub fn acknowledge(
     caps: &Server<'_>,
     by: &Tap,
@@ -2118,9 +2063,6 @@ pub fn acknowledge(
 
 /// `POST …/todo/<id>/build`: file the card whose tap fires a coding session for `todo`, a todo of
 /// the plan store `plan_store`.
-///
-/// # Errors
-/// The builder's, the build module's and the stores'.
 pub fn build(
     caps: &Server<'_>,
     by: &Tap,
@@ -2171,9 +2113,6 @@ pub fn build(
 }
 
 /// `POST …/proposals/<n>/drop`: let a session go, with a reason.
-///
-/// # Errors
-/// As [`suzatary_topics::secretary::coding::dropped`].
 pub fn drop_session(
     caps: &Server<'_>,
     by: &Tap,
@@ -2222,9 +2161,6 @@ fn payload(
 }
 
 /// `GET /api/secretary/memory`: every standing fact and the remember cards' kept words.
-///
-/// # Errors
-/// The stores' own.
 pub fn memory(memories: Memories<'_>) -> Answered<wire::MemoryPayload> {
     Ok(wire::MemoryPayload {
         cards: card_words(memories)?,
@@ -2250,9 +2186,6 @@ fn card_words(memories: Memories<'_>) -> Result<Vec<wire::CardWords>, Refusal> {
 }
 
 /// `POST /api/secretary/memory/<id>/forget`: the fact forgotten and its words deleted.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a number no standing fact carries, and the store's own.
 pub fn forget(
     memories: Memories<'_>,
     clock: &dyn Clock,
@@ -2264,9 +2197,6 @@ pub fn forget(
 }
 
 /// `GET /api/secretary/record`: the summaries a session opening is told.
-///
-/// # Errors
-/// The stores' own.
 pub fn record(
     digests: &suzatary_digest::secretary::digests::Digests<'_>,
 ) -> Answered<RecordPayload> {
@@ -2288,9 +2218,6 @@ pub fn record(
 }
 
 /// `POST /api/secretary/record/<node>/retract`: the summary and every one above it are asked again.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a node that shows no summary, and the stores' own.
 pub fn retract(
     memories: Memories<'_>,
     clock: &dyn Clock,
@@ -2417,7 +2344,6 @@ mod tests {
         .expect("reasons")
     }
 
-    /// An empty [`Drawn`], for a test that never proposes a changeset.
     use suzatary_base::capability::Parses;
 
     fn no_chain() -> Drawn<'static> {
@@ -2438,7 +2364,6 @@ mod tests {
         }
     }
 
-    /// Every field of a proposal reaches the wire.
     #[test]
     fn a_proposal_row_carries_the_whole_message() {
         let draft = Draft {
@@ -2575,8 +2500,8 @@ mod tests {
         }
     }
 
-    /// A receipt's words are the memory's, whatever the answer quoted: an answer stored before the
-    /// verb stopped echoing its fact still names it, and a forgotten fact still draws none.
+    /// A receipt's words are the memory's, whatever the answer quoted, and a forgotten fact draws
+    /// none.
     #[test]
     fn a_receipt_is_the_shapes_fact_and_its_words_the_memorys() {
         use suzatary_conversations::secretary::outcome::Outcome;
@@ -2732,7 +2657,6 @@ mod tests {
         assert!(refused.iter().all(|block| block.html.is_none()));
     }
 
-    /// Neither a person's turn nor an act asks the renderer.
     #[test]
     fn only_a_model_turn_is_ever_rendered() {
         let person = Said {
@@ -2882,7 +2806,6 @@ mod tests {
         assert_eq!(refusal.message(), "value is required to store NTFY_TOPIC");
     }
 
-    /// A code card keeps its token under the subscription's name, minted at the tap.
     #[test]
     fn a_code_card_mints_the_subscription_s_name_at_the_tap() {
         let card = Proposal::Act(Act::SignInCode {

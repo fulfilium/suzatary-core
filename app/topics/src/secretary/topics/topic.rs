@@ -1,6 +1,5 @@
 //! A topic's name, in one spelling: one to `MAX_WORDS` words of lowercase letters and digits in
-//! any script, joined by single hyphens, at most `MAX_CHARACTERS` characters, in NFC. So
-//! `Travel`, `travel ` and `travel` cannot be three topics, and a long name cannot be one.
+//! any script, joined by single hyphens, at most `MAX_CHARACTERS` characters, in NFC.
 
 use std::collections::BTreeSet;
 
@@ -54,8 +53,7 @@ impl Topic {
     }
 
     /// Whether `other` is another topic of the same words in any order, each word read with a
-    /// plural `-s`, `-es` or `-ies` dropped: `trip-plan` and `plans-trip`, `tax` and `taxes`,
-    /// `city` and `cities` are twins.
+    /// plural `-s`, `-es` or `-ies` dropped.
     #[must_use]
     pub(crate) fn twins(&self, other: &Topic) -> bool {
         let one: Vec<&str> = self.0.split('-').collect();

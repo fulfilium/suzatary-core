@@ -73,9 +73,6 @@ pub fn file(
 }
 
 /// [`file()`], under the inbox's hold the caller has taken.
-///
-/// # Errors
-/// As [`file()`]'s.
 pub fn file_held(
     conversations: conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
@@ -147,9 +144,6 @@ pub fn file_held(
 }
 
 /// The conversation the triage agent's cards are drawn in: one, the box's own.
-///
-/// # Panics
-/// Never: `triage` is a conversation id.
 #[must_use]
 pub fn triage_conversation() -> ConversationId {
     ConversationId::new("triage").expect("triage is a slug")
@@ -163,7 +157,6 @@ pub struct TriageCards<'a> {
     inbox: &'a dyn Prodrome<InboxEvent>,
 }
 
-/// A triage card as filed: the card a tap names, and how many acts it holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carded {
     pub card: ProposalRef,
@@ -172,7 +165,6 @@ pub struct Carded {
     pub how: Carding,
 }
 
-/// How a triage write came to be on its card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Carding {
     New,
@@ -184,7 +176,6 @@ pub enum Carding {
 }
 
 impl<'a> TriageCards<'a> {
-    /// The door over the box's conversations and inbox.
     #[must_use]
     pub fn new(
         conversations: conversations::Conversations<'a>,
@@ -196,11 +187,7 @@ impl<'a> TriageCards<'a> {
         }
     }
 
-    /// File the box act `act` as the triage agent's card, at `at`; the same act asked again
-    /// answers the card already here.
-    ///
-    /// # Errors
-    /// The stores' failures.
+    /// The same act asked again answers the card already here.
     pub fn file_act(
         &self,
         at: Datetime,
@@ -235,9 +222,9 @@ impl<'a> TriageCards<'a> {
         })
     }
 
-    /// File `act` as the triage agent's, at `at`, keeping one card per todo: a write the open card
-    /// already asks for files nothing, and other acts on the same todo join it in a card that
-    /// replaces it. `check` refuses now a card the tap would refuse.
+    /// Keeping one card per todo: a write the open card already asks for files nothing, and other
+    /// acts on the same todo join it in a card that replaces it. `check` refuses now a card the tap
+    /// would refuse.
     ///
     /// # Errors
     /// [`Refusal::conflict`] for a write an answered card already asked for on the same sources,
@@ -331,9 +318,6 @@ impl<'a> TriageCards<'a> {
 
 /// `conversation`, one the box keeps for `proposer`'s cards, opened under `title` unless it is
 /// already.
-///
-/// # Errors
-/// The store's failures to append.
 pub fn opened(
     conversations: conversations::Conversations<'_>,
     conversation: &ConversationId,
@@ -422,7 +406,6 @@ fn answered_card<'f>(
         .map(|(object, _)| object)
 }
 
-/// `changeset` joined to the open card `object`, with both reasons.
 fn joined(
     object: &inbox::Object,
     standing: &Changeset,

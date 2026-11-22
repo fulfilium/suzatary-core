@@ -1,7 +1,6 @@
-//! The lines this tab writes, as the worker drives them: each sealed as the box seals it, its
-//! words through the redaction door and locked under keys drawn from bytes the worker draws
-//! (`crypto.getRandomValues`), and handed over by the engine every store a tab writes shares
-//! (`web/src/prodrome/written.ts`), each slot's key beside its line.
+//! The lines this tab writes, each sealed as the box seals it, its words through the redaction
+//! door and locked under keys drawn from bytes the worker draws (`crypto.getRandomValues`), each
+//! slot's key beside its line.
 //!
 //! Every move of the own lines answers a [`Step`] whose `delta` is the device's record of them
 //! (`[{literal, keys, answer}]`, UTF-8 JSON), which the worker keeps apart from the rows' log, in
@@ -54,7 +53,7 @@ impl Entropy for Drawn {
     }
 }
 
-/// A line a page asks the tab to seal, as the page spells it.
+/// A line a page asks the tab to seal.
 #[derive(serde::Deserialize)]
 #[serde(tag = "type", deny_unknown_fields)]
 enum Asked {
@@ -92,8 +91,7 @@ enum Asked {
     },
 }
 
-/// How a question is asked again, as the page spells it: an edit's words and new files, and the
-/// files of the question it keeps, by id.
+/// An edit's `keeps` names the files of the question it keeps, by id.
 #[derive(serde::Deserialize)]
 #[serde(tag = "type", deny_unknown_fields)]
 enum How {
@@ -101,7 +99,6 @@ enum How {
     Edit { say: Asking, keeps: Vec<String> },
 }
 
-/// A question as the page spells it.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Asking {
@@ -111,8 +108,7 @@ struct Asking {
 }
 
 impl Asking {
-    /// The question as the core seals it, from a device. A file on the box takes the person's
-    /// name for it; a private one is held as it was kept.
+    /// A file on the box takes the person's name for it; a private one is held as it was kept.
     fn question(self) -> Result<Question, JsError> {
         let Asking {
             text,
@@ -139,7 +135,7 @@ impl Asking {
     }
 }
 
-/// A title as the page spells it: blank leaves it to the title job.
+/// A blank title leaves it to the title job.
 fn titled(title: &str) -> Result<Option<Title>, JsError> {
     if title.trim().is_empty() {
         Ok(None)
@@ -158,7 +154,6 @@ struct Filed {
     name: String,
 }
 
-/// One own write as the device keeps it.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Record {
     literal: String,
@@ -166,15 +161,12 @@ struct Record {
     answer: Answer,
 }
 
-/// A line sealed: its move (as a [`Step`] reads), its name and its conversation, tagged
-/// `type: "Sealed"`. Free it once read.
+/// A line sealed, tagged `type: "Sealed"`. Free it once read.
 #[wasm_bindgen(getter_with_clone)]
 pub struct Sealed {
     /// The device's record of the own lines it joined in.
     pub delta: Vec<u8>,
-    /// What it moved.
     pub moved: String,
-    /// The line's name.
     pub name: String,
     /// Its conversation: a new one's id is its opening line's.
     pub conversation: String,
@@ -197,7 +189,6 @@ impl Sealed {
 /// Nothing sealed, for a cause a pull may cure, in that cause's sentence; tagged `type: "Unheld"`.
 #[wasm_bindgen(getter_with_clone)]
 pub struct Unheld {
-    /// The cause's sentence.
     pub why: String,
 }
 
@@ -217,16 +208,10 @@ impl Unheld {
 
 #[wasm_bindgen]
 impl Lines {
-    /// `asked` (`{type: "Rename", conversation, title}`, `{type: "Open", title}`,
-    /// `{type: "SetUp", template}`, `{type: "Say", conversation, text, references, files}`,
-    /// `{type: "Begin", title, say: {text, references, files}}`, `{type: "Stop", conversation}` or
-    /// `{type: "Again", conversation, question, how, seen}`, `how` `{type: "Regenerate"}` or
-    /// `{type: "Edit", say: {text, references, files}, keeps: [<file id>]}`) sealed by
-    /// `actor` at `at` (ISO), its keys drawn from `entropy`, bytes the worker drew: kept unsent and
-    /// read at once, a begun topic's two lines and an edit's in one move: [`Sealed`]. Where nothing
-    /// was sealed for a cause a pull may cure (no lines pulled since a reset, a conversation not
-    /// read here, or one a line of which rests on a line not read here), [`Unheld`]; any other
-    /// refusal throws.
+    /// `asked` (`lines.Sealing` in `web/src/prodrome/lines.ts`) sealed by `actor` at `at` (ISO),
+    /// its keys drawn from `entropy`, bytes the worker drew: kept unsent and read at once, a begun
+    /// topic's two lines and an edit's in one move: [`Sealed`]. Where nothing was sealed for a
+    /// cause a pull may cure, [`Unheld`]; any other refusal throws.
     pub fn seal(
         &mut self,
         asked: &str,
@@ -311,9 +296,7 @@ impl Lines {
 
     /// `{free: [<print>, …], refused: [<name>, …]}`: every own record the device may let go, and
     /// the names of those it lets go as refused, which it keeps as acted on; `told`
-    /// (`[<print>, …]`) naming the refusals the person was told of ([`HeldReplica::releasable`]).
-    ///
-    /// [`HeldReplica::releasable`]: suzatary_lines::secretary::held_replica::HeldReplica::releasable
+    /// (`[<print>, …]`) naming the refusals the person was told of.
     pub fn releasable(&self, told: &str) -> Result<String, JsError> {
         let told: std::collections::BTreeSet<String> =
             serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
@@ -324,8 +307,7 @@ impl Lines {
         }))
     }
 
-    /// The person acted on the refusals of the own lines `names` (`[<name>, …]`): what it moved,
-    /// as a [`Step`]'s `moved` reads.
+    /// The person acted on the refusals of the own lines `names` (`[<name>, …]`).
     pub fn acted(&mut self, names: &str) -> Result<String, JsError> {
         let names: Vec<String> =
             serde_json::from_str(names).map_err(|e| refused(format!("acted: {e}")))?;
@@ -336,10 +318,9 @@ impl Lines {
         said(&self.0.acted(&names))
     }
 
-    /// The device's record of own writes, `[{literal, keys, answer}]`, taken: what it kept, or
-    /// another tab's. A record that does not read is passed over and named in the answer's
-    /// `unread`: `{moved, unread, fresh}`, `fresh` how many records were new here or raised an
-    /// answer.
+    /// The device's record of own writes, `[{literal, keys, answer}]`, taken. A record that does
+    /// not read is passed over and named in the answer's `unread`: `{moved, unread, fresh}`,
+    /// `fresh` how many records were new here or raised an answer.
     pub fn take_own(&mut self, records: &str) -> Result<String, JsError> {
         let records: Vec<serde_json::Value> =
             serde_json::from_str(records).map_err(|e| refused(format!("own lines: {e}")))?;
@@ -412,14 +393,12 @@ impl Lines {
         )
     }
 
-    /// The device's `Signed` of an own line, kept unsent.
     pub fn signed(&mut self, literal: &str) -> Result<Step, JsError> {
         let own = OwnLine::read(literal.to_owned(), &BTreeMap::new()).map_err(refused)?;
         let (owned, moved) = self.0.answer_own(|w| w.write(vec![own]));
         own_step(&owned, &moved)
     }
 
-    /// The box's `ReceiptPayload` for a post of own writes.
     pub fn answered(&mut self, receipt: &str) -> Result<Step, JsError> {
         let receipt: ReceiptPayload =
             serde_json::from_str(receipt).map_err(|e| refused(format!("receipt: {e}")))?;
@@ -484,8 +463,7 @@ impl Lines {
     }
 
     /// `[{hash, reason, literal, words, at, signature}]`: every own write the box has not taken
-    /// yet, in the rule's words, with its print, the words it says and its writer's instant; a
-    /// signature tells nothing of its own, and is marked so.
+    /// yet, in the rule's words; a signature tells nothing of its own, and is marked so.
     pub fn waiting(&self) -> Result<String, JsError> {
         json(
             &self
@@ -572,7 +550,6 @@ impl Lines {
     }
 }
 
-/// One own write as a post carries it.
 fn posted(own: &OwnLine) -> serde_json::Value {
     let keys = own.keys();
     let in_order: Vec<&String> = match own {
@@ -600,7 +577,6 @@ pub(crate) const POST_FITS: suzatary_store::replica::writes::Fit =
         bytes: suzatary_api::routes::MAX_POSTED_BYTES / 2,
     };
 
-/// A move of the own writes: the device's record of what it joined in, and what it moved.
 fn own_step(owned: &[Own<OwnLine>], moved: &Moved) -> Result<Step, JsError> {
     Ok(Step::of(records(owned)?, said(moved)?))
 }
@@ -636,8 +612,8 @@ fn reading(moved: &Moved) -> serde_json::Value {
 mod tests {
     use super::*;
 
-    /// What a move moved is a JSON value inside an answer, never a JSON string of one: the tab
-    /// reads `"All"` or the ids, and a string of them failed its decoder.
+    /// What a move moved is a JSON value inside an answer, never a JSON string of one, which the
+    /// tab's decoder fails.
     #[test]
     fn a_move_reads_as_a_value() {
         let ids = std::collections::BTreeSet::from([ConversationId::new("garden").expect("an id")]);

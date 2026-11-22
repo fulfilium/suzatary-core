@@ -1,6 +1,4 @@
-//! The list's tree, grown here so the pages' module links no term and no trie: the members a
-//! page places, grouped as it asks, each node with its term (`suzatary_base::tree`), for the
-//! worker to price beside the reading it keeps.
+//! The list's tree, grown here so the pages' module links no term and no trie.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -35,7 +33,6 @@ enum Worth {
     Unlinked,
 }
 
-/// A node as the page draws it: where it stands, and its term.
 #[derive(Serialize)]
 struct Node {
     place: Spot,

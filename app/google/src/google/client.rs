@@ -18,7 +18,7 @@ const LONGEST: usize = 256;
 pub struct ClientId(String);
 
 impl ClientId {
-    /// Read one, or `None` for text Google does not issue as a client id.
+    /// `None` for text Google does not issue as a client id.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let head = text.strip_suffix(".apps.googleusercontent.com")?;
@@ -30,7 +30,6 @@ impl ClientId {
         .then(|| Self(text.to_owned()))
     }
 
-    /// As the consent and the token request send it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -42,7 +41,6 @@ impl ClientId {
 pub struct ClientSecret(Secret);
 
 impl ClientSecret {
-    /// Read one: printable, with no space, and not too long.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         (!text.is_empty() && text.len() <= LONGEST && text.bytes().all(|b| b.is_ascii_graphic()))
@@ -56,7 +54,6 @@ impl ClientSecret {
     }
 }
 
-/// The client: its id, and its secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Client {
     pub id: ClientId,
@@ -66,30 +63,24 @@ pub struct Client {
 /// Why a pasted client file was not kept. Each says what to do, and none quotes the secret.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ClientRefused {
-    /// Not the JSON Google's Download JSON gives.
     #[error(
         "that is not the file Google's Download JSON gives: paste the whole file, from its first \
          {{ to its last }}"
     )]
     NotTheFile,
-    /// A client of another type than Web application.
     #[error(
         "that client is not of the type Web application: create a new client of that type, \
          since only a web client can send you back to this box"
     )]
     NotAWebClient,
-    /// An id or secret Google would not have issued.
     #[error("the file's {0} is not one Google issues: download the file again")]
     Malformed(&'static str),
-    /// The client does not list the box's callback, so Google would refuse to send the owner
-    /// back to it.
     #[error(
         "the client does not list {wanted} as an authorized redirect URI (it lists {listed}): \
          add exactly that address under Authorized redirect URIs, save, and download the file \
          again"
     )]
     RedirectNotListed {
-        /// The box's callback.
         wanted: String,
         /// What the client lists, which is no secret.
         listed: String,
@@ -112,12 +103,9 @@ struct Web {
 }
 
 impl Client {
-    /// The client in the file Google's Download JSON gives, pasted whole into the card's field,
-    /// kept only when it is a web client listing `redirect` exactly: Google compares the
-    /// redirect byte for byte, so a client that does not list it could never finish a sign-in.
-    ///
-    /// # Errors
-    /// `ClientRefused`, in words that never quote the secret.
+    /// The client in the file Google's Download JSON gives, kept only when it is a web client
+    /// listing `redirect` exactly: Google compares the redirect byte for byte. Its refusal never
+    /// quotes the secret.
     pub fn of_download(pasted: &Secret, redirect: &RedirectUri) -> Result<Self, ClientRefused> {
         let download: Download =
             serde_json::from_str(pasted.expose().trim()).map_err(|_| ClientRefused::NotTheFile)?;
@@ -167,7 +155,6 @@ mod tests {
         Secret::new(serde_json::Value::Object(download).to_string())
     }
 
-    /// The downloaded file of a web client listing the box's callback is the client.
     #[test]
     fn a_web_client_listing_the_callback_is_kept() {
         let client = Client::of_download(
@@ -183,8 +170,6 @@ mod tests {
         assert!(!format!("{client:?}").contains("GOCSPX"));
     }
 
-    /// A redirect is compared exactly: a trailing slash, another host or none at all is refused,
-    /// and the refusal names the address to add.
     #[test]
     fn a_client_without_the_exact_callback_is_refused_by_name() {
         for uris in [

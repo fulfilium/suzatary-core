@@ -42,9 +42,8 @@ pub(crate) fn warm_now(caps: &'static Server<'static>, chain: &ChainPolicy) {
     });
 }
 
-/// Warm and never page, for a chain that is not the first one.
-///
-/// The notify call is absent rather than suppressed, so a secondary chain cannot wake the phone.
+/// Warm and never page, for a chain that is not the first one: the notify call is absent rather
+/// than suppressed, so a secondary chain cannot wake the phone.
 pub(crate) async fn warming(caps: &'static Server<'static>, chain: ChainPolicy) {
     let mut last = read("the chain's heads", heads(caps));
     loop {

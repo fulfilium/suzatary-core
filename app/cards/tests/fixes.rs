@@ -49,7 +49,6 @@ impl World {
         inbox::fold(&self.inbox).expect("reads")
     }
 
-    /// The box's one filing: what the reading owes, at `minute`.
     fn file(
         &self,
         settables: &Settables,
@@ -64,7 +63,6 @@ impl World {
         .expect("filed")
     }
 
-    /// The open cards of the box's, by the name each asks for.
     fn open(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .fold()
@@ -110,7 +108,6 @@ impl World {
     }
 }
 
-/// One step of the world around the box.
 #[derive(Debug, Clone)]
 enum Step {
     Declare(Vec<Channel>),

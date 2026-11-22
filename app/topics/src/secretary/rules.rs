@@ -9,7 +9,6 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_triage::rule::Rule;
 
-/// One of the box's own rules over a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Conversational {
     /// A conversation set up from a template is owed the box's opening note

@@ -1,7 +1,4 @@
-//! The box's half of the routes: the effects record the serving process supplies, the
-//! secretary's routes over it, the door and the portal's answer, and `serve`, the axum shell a
-//! running server is: its state, handlers and route table. The wire and the routes the tab shares
-//! are `suzatary-api`'s.
+//! The box's half of the routes; the wire and the routes the tab shares are `suzatary-api`'s.
 
 #![forbid(unsafe_code)]
 

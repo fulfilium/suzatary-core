@@ -1,6 +1,6 @@
 //! Where one topic stands on one target: the join of (presence, provenance) over the frontier
-//! writes of its names there (`docs/TOPICS-PLAN-2026-10-21.md` §3). Only the cases the secretary
-//! may change carry a token its planners take.
+//! writes of its names there. Only the cases the secretary may change carry a token its planners
+//! take.
 
 use prodrome_core::literal::Datetime;
 use prodrome_core::tags::membership;

@@ -20,8 +20,7 @@ use suzatary_record::record::{Authored, TodoEvent};
 use suzatary_signatures::believed::Believed;
 use suzatary_store::store::Prodrome;
 
-/// A chain the admission reads: its policy, which names it and says whom it does not believe,
-/// and its todos; the pair [`suzatary_signatures::chain_set::Read::of_stores`] reads.
+/// A chain the admission reads: its policy and its todos.
 pub type Chain<'a> = (&'a ChainPolicy, &'a dyn Prodrome<TodoEvent>);
 
 /// How many todos may be in progress at once.
@@ -33,10 +32,6 @@ pub static CONVERSATION: LazyLock<ConversationId> =
 
 /// The one record of `todo` a session is told: refused unless the chain holds one text for it
 /// and it is open.
-///
-/// # Errors
-/// [`Refusal::not_found`] for no text, [`Refusal::conflict`] for a register in conflict or a
-/// closed todo.
 pub fn record<'b>(believed: &'b Believed, todo: &TodoRef) -> Result<&'b Authored, Refusal> {
     let outcomes = believed.outcome(&todo.id);
     let specs = believed.specs.get(&todo.id).map_or(0, Vec::len);
@@ -64,9 +59,6 @@ pub fn record<'b>(believed: &'b Believed, todo: &TodoRef) -> Result<&'b Authored
 /// The task `todo`'s card carries: a fixed frame around the text the chain holds, as typst
 /// source, so the card shows the session everything it will be told. `attempt` makes a retry
 /// after an earlier card or session ended a request of its own.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for a text over a task's bound, or holding a control character.
 pub fn task(todo: &TodoRef, record: &Authored, attempt: usize) -> Result<Task, Refusal> {
     let detail = record.payload.detail.as_str().trim();
     Task::try_from(format!(
@@ -80,7 +72,6 @@ pub fn task(todo: &TodoRef, record: &Authored, attempt: usize) -> Result<Task, R
     .map_err(|failed| Refusal::bad_request(failed.to_string()))
 }
 
-/// Every coding-session card serving a todo, with that todo.
 fn serving(
     fold: &Fold,
 ) -> impl Iterator<Item = (&TodoRef, &suzatary_inbox::secretary::inbox::Object)> {

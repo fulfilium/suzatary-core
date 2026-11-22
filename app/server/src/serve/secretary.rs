@@ -32,7 +32,6 @@ pub(crate) struct Block {
     sha: String,
 }
 
-/// A photo or PDF, decoded.
 pub(crate) struct Upload {
     bytes: Vec<u8>,
     name: String,
@@ -201,7 +200,6 @@ pub(crate) fn retract(call: &Call<Tap, Hash, ()>) -> Result<Json<RecordPayload>,
     .map(Json)
 }
 
-/// A stored secret's handle.
 pub(crate) struct Handle(String);
 
 impl Params for Handle {

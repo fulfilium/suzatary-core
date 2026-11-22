@@ -22,7 +22,6 @@ use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_store::store::Prodrome;
 use suzatary_topics::secretary::filed::{self, Filing};
 
-/// Why a stale card is withdrawn.
 pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed for is in \
                              place, or what declared it is gone";
 
@@ -30,7 +29,6 @@ pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed
 #[derive(Debug, Clone, PartialEq)]
 pub struct Noticed {
     pub proposal: Proposal,
-    /// Why the reading owes it.
     pub why: String,
     /// When its episode began; an ended card from before is asked again.
     pub since: Option<Datetime>,
@@ -48,14 +46,11 @@ pub struct Owed {
 /// What a filing does with a waiting card the set does not hold; the join takes the larger.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 enum Stale {
-    /// Withdrawn, saying why.
     #[default]
     Withdrawn,
-    /// Left as it stands.
     Held,
 }
 
-/// What one filing did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Filed {
     /// Every owed proposal, filed now or before.
@@ -64,7 +59,6 @@ pub struct Filed {
 }
 
 impl Owed {
-    /// One proposal, owed.
     #[must_use]
     pub fn one(proposal: Proposal, why: impl Into<String>) -> Self {
         Self {
@@ -147,7 +141,6 @@ impl Owed {
             .any(|noticed| noticed.proposal.need() == proposal.need())
     }
 
-    /// Every proposal owed.
     pub fn iter(&self) -> impl Iterator<Item = &Noticed> {
         self.owed.iter()
     }
@@ -282,12 +275,9 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
     }
 }
 
-/// Each rule's input, one record.
 #[derive(Clone, Copy)]
 pub struct Seen<'a> {
-    /// Every declared secret name.
     pub settables: &'a suzatary_connect::settings::Settables,
-    /// Where each stands.
     pub secrets: &'a dyn suzatary_connect::secrets::Secrets,
     /// The model's name, as [`suzatary_conversations::secretary::model::Model::name`] spells it.
     pub model: &'a str,
@@ -303,7 +293,6 @@ pub struct Seen<'a> {
     pub heard: Option<&'a std::collections::BTreeSet<suzatary_google::calendar::CalendarName>>,
     /// Where the data repository pushes: its token is asked for only on GitHub.
     pub pushed: &'a suzatary_connect::settings::remote::Pushed,
-    /// Now, UTC.
     pub now: suzatary_health::health::Instant,
     /// The Google sign-in callback, if the app's URL has an origin Google can return to.
     pub redirect: Option<&'a suzatary_google::google::RedirectUri>,

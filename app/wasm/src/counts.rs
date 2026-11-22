@@ -1,7 +1,5 @@
 //! How much the module's costly steps have run, for the browser scenes that show what a reading
-//! costs: the redaction door (`suzatary_held::redact::scrubs`), the lines' decoding of a print
-//! (`suzatary_lines::secretary::held_lines::decodes`), the hashing of a print not admitted
-//! (`hashes`) and the opening of a sealed slot (`suzatary_memory::secretary::locked_text::opens`).
+//! costs.
 
 use suzatary_lines::secretary::held_lines;
 use wasm_bindgen::prelude::*;
@@ -11,14 +9,12 @@ fn count(n: usize) -> f64 {
     n as f64
 }
 
-/// How many values this module has scrubbed since it was loaded.
 #[wasm_bindgen]
 #[must_use]
 pub fn scrubs() -> f64 {
     count(suzatary_held::redact::scrubs())
 }
 
-/// How many prints this module's lines have decoded since it was loaded.
 #[wasm_bindgen]
 #[must_use]
 pub fn decodes() -> f64 {

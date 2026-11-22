@@ -61,9 +61,6 @@ struct Entry {
 }
 
 impl Planned {
-    /// # Errors
-    /// A round that is not a `round:`, a note that is not a `note:`, or no topic or more than
-    /// [`MAX_TOPICS`].
     pub fn new(
         round: Target,
         notes: Vec<Target>,
@@ -104,8 +101,6 @@ impl Planned {
 }
 
 impl Plan {
-    /// # Errors
-    /// The same round twice.
     pub fn new(planned: Vec<Planned>) -> Result<Self, NotAPlan> {
         let mut seen = BTreeSet::new();
         if let Some(twice) = planned.iter().find(|p| !seen.insert(&p.round)) {
@@ -142,8 +137,6 @@ impl Plan {
         text
     }
 
-    /// # Errors
-    /// Text that is not such a file, or any entry [`Planned::new`] or [`Plan::new`] refuses.
     pub fn parse(text: &str) -> Result<Self, NotAPlan> {
         let file: File =
             toml::from_str(text).map_err(|failed| NotAPlan::Toml(failed.message().to_owned()))?;
@@ -159,8 +152,8 @@ impl Plan {
     /// holding some of its planned topics gets the rest, so applying twice writes nothing.
     ///
     /// # Errors
-    /// Every target that is no longer a live round or note of `conversations`, or that has
-    /// gained a topic the plan does not give it, named; then nothing is planned.
+    /// Every target no longer a live round or note, or that has gained a topic the plan does not
+    /// give it; then nothing is planned.
     pub fn apply(
         &self,
         conversations: &[Stored],

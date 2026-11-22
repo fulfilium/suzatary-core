@@ -1,5 +1,4 @@
-//! Each membership's frontier as its presence and the actors who wrote that presence. It names no
-//! Suzatary type, so it can join `prodrome_core::tags::set`.
+//! Each membership's frontier as its presence and the actors who wrote that presence.
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -1,9 +1,7 @@
-//! The lines' rows as the tab's worker drives them: what a pull asks from, each piece the box
-//! answers, its landing, a start over and a purge, each answering the delta the worker appends to
-//! the device's log (bytes, a `Uint8Array`) and the conversations it moved; and the snapshot and
-//! log a warm load reads back. The worker keeps no state of the rows: every question is asked of
-//! the core. A husk stands for its line's print, which the worker deletes from the device in every
-//! transaction that compacts the log.
+//! The lines' rows as the tab's worker drives them, each move answering the delta the worker
+//! appends to the device's log (a `Uint8Array`) and the conversations it moved. The worker keeps
+//! no state of the rows: every question is asked of the core. A husk stands for its line's print,
+//! which the worker deletes from the device in every transaction that compacts the log.
 //!
 //! `moved` is JSON: `"All"`, or `[<conversation>, …]`.
 
@@ -34,7 +32,6 @@ pub struct Step {
 }
 
 impl Step {
-    /// The frame `delta` and what it moved, `moved`.
     pub(crate) fn of(delta: Vec<u8>, moved: String) -> Self {
         Step { delta, moved }
     }
@@ -42,14 +39,12 @@ impl Step {
 
 #[wasm_bindgen]
 impl Step {
-    /// The delta's frame, for the device's log and the other tabs.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn delta(&self) -> Vec<u8> {
         self.delta.clone()
     }
 
-    /// `"All"`, or `[<conversation>, …]`.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn moved(&self) -> String {
@@ -59,8 +54,7 @@ impl Step {
 
 #[wasm_bindgen]
 impl Lines {
-    /// The frontier a pull names as `since`: what is held, landed and not, stands at; `""` for
-    /// none.
+    /// The frontier a pull names as `since`; `""` for none.
     #[must_use]
     pub fn since(&self) -> String {
         self.0
@@ -103,9 +97,9 @@ impl Lines {
         Ok(self.0.rows().went_back(whole(epoch, "epoch")?))
     }
 
-    /// The skeleton's answer `answer` (`SkeletonPayload` JSON) kept as a piece beside the landed
-    /// row, holding the keys `keys` (`{<name>: <hex>}`; the answer's own are not read), heard at
-    /// `fetched_at` (ms since the Unix epoch): the delta's frame. It moves no reading.
+    /// The skeleton's answer (`SkeletonPayload` JSON) kept as a piece, holding the keys `keys`
+    /// (`{<name>: <hex>}`; the answer's own are not read), heard at `fetched_at` (ms since the Unix
+    /// epoch). It moves no reading.
     pub fn piece(&mut self, answer: &str, keys: &str, fetched_at: f64) -> Result<Vec<u8>, JsError> {
         let answer: SkeletonPayload =
             serde_json::from_str(answer).map_err(|e| refused(format!("answer: {e}")))?;
@@ -122,7 +116,6 @@ impl Lines {
         .map_err(|e| refused(e.to_string()))
     }
 
-    /// The pending pieces landed.
     pub fn land(&mut self) -> Result<Step, JsError> {
         step(&self.0.land())
     }
@@ -202,10 +195,9 @@ impl Lines {
     }
 
     /// The replica replaced by the snapshot `bytes` (none for the empty one) and then each frame of
-    /// `frames` taken in order, the prints held kept and each husk standing for its line: `moved`. `frames` is the log's frames one
-    /// after another, each after its length as four little-endian bytes; a frame of another form
-    /// is passed over. Refused, holding what it held, for a snapshot of another form or a frame
-    /// that does not read.
+    /// `frames` taken in order: `moved`. `frames` is the log's frames one after another, each after
+    /// its length as four little-endian bytes; a frame of another form is passed over. Refused,
+    /// holding what it held, for a snapshot of another form or a frame that does not read.
     pub fn load(&mut self, bytes: Option<Vec<u8>>, frames: &[u8]) -> Result<String, JsError> {
         let mut kept: LineReplica = match bytes {
             None => LineReplica::default(),

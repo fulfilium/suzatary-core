@@ -2,9 +2,8 @@
 //!
 //! Every Nix store file is dated 1970, so `ServeDir`'s `Last-Modified` earns years of
 //! heuristic freshness and its time-plus-size `ETag` cannot tell two builds of one
-//! length apart. So every answer says `no-cache`, the date is dropped, and the tag
-//! names the served store path (a content hash). The request's conditions are removed
-//! before `ServeDir` compares them to its 1970 labels, and compared here instead.
+//! length apart: every answer says `no-cache`, the date is dropped, the tag names the
+//! served store path, and the request's conditions are compared here, not by `ServeDir`.
 
 use std::sync::Arc;
 
@@ -24,8 +23,8 @@ pub(crate) fn tag_of(dist: &std::path::Path) -> Arc<str> {
         .map_or_else(|| "dist".into(), |name| name.to_string_lossy().into())
 }
 
-/// Revalidate a frontend file: strip the request's conditions, serve, then
-/// answer 304 when the browser already holds this exact tag.
+/// Strip the request's conditions, serve, then answer 304 when the browser already
+/// holds this exact tag.
 pub(crate) async fn revalidated(tag: Arc<str>, mut request: Request, next: Next) -> Response {
     let held = request.headers_mut().remove(header::IF_NONE_MATCH);
     request.headers_mut().remove(header::IF_MODIFIED_SINCE);

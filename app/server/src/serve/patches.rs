@@ -10,7 +10,6 @@ use super::State;
 
 const EVERY: Duration = Duration::from_hours(1);
 
-/// The sweep, forever.
 pub(crate) async fn sweeping(state: State, mirrors: Arc<Mirrors>) {
     let mut every = tokio::time::interval(EVERY);
     loop {

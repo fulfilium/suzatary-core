@@ -7,7 +7,6 @@ use suzatary_base::escape::Escaped;
 use suzatary_todo::render::{Html, Render};
 use suzatary_todo::template::Called;
 
-/// Compiles nothing and holds nothing.
 pub struct Unrendered;
 
 const NONE: &str = "the tab's fold renders nothing";

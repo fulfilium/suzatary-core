@@ -1,10 +1,8 @@
 //! A signature asserts no event, so the kept reading leaves signatures out (`read_objects`). The
 //! law that this changes nothing a reading answers, over generated topic stores, the only stores
-//! a tab signs: whatever is written, signed and refused, a reading with the signatures in it and
-//! one without leave out the same objects, read the same registers, and an append to each writes
-//! the same objects. Their `tips` and `heads` differ, since a signature rests on what it signs
-//! and nothing rests on it; no page reads those, and leaving signatures out makes them the
-//! changes, so only what is not a signature among the tips with them is a tip without them.
+//! a tab signs. Their `tips` and `heads` differ, since a signature rests on what it signs; no
+//! page reads those, so only what is not a signature among the tips with them is a tip without
+//! them.
 
 use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope};
 use prodrome_core::literal::Datetime;

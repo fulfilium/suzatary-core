@@ -39,9 +39,6 @@ pub fn owed(reading: &Transcript) -> Option<TemplateId> {
 
 /// The opening `note` of `id`'s template written at `at`, where it is still owed; whether it
 /// was.
-///
-/// # Errors
-/// The stores'.
 pub fn open(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -55,9 +52,6 @@ pub fn open(
 
 /// Every conversation owed its opening, as a restart finds them: the note a worker was to write
 /// when the box stopped.
-///
-/// # Errors
-/// The store's own.
 pub fn owing(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, StoreError> {
     Ok(transcript::each(conversations)?
         .into_iter()

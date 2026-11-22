@@ -49,7 +49,6 @@ impl Sender {
     /// The longest number accepted; Firebase's are twelve digits.
     const MOST: usize = 20;
 
-    /// The number as written.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

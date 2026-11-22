@@ -1,5 +1,4 @@
-//! §7, the evaluator a page prices and draws with: a term's value, its links, its knots, and a
-//! stored print read back as the term JSON everything here speaks.
+//! §7, the evaluator a page prices and draws with.
 
 use prodrome_core::breaks::series_knots as knots;
 use prodrome_core::fpl::{self, iso};
@@ -12,8 +11,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{printed, refused};
 
-/// What a closed term is worth at `now` under `env`; `undefined` is `∅`. A number, not a print,
-/// since this is the one answer a caller does arithmetic on.
+/// What a closed term is worth at `now` under `env`; `undefined` is `∅`, and a number, not a
+/// print, since a caller does arithmetic on it.
 #[wasm_bindgen]
 pub fn fulfillment(term: &str, now: &str, env: &str) -> Result<Option<f64>, JsError> {
     let term = parse_closed("term", term).map_err(refused)?;
@@ -22,7 +21,7 @@ pub fn fulfillment(term: &str, now: &str, env: &str) -> Result<Option<f64>, JsEr
     Ok(fpl::fulfillment(&term, now, &env))
 }
 
-/// A stored term's canonical print, read with §2's own parser and answered as the term JSON.
+/// A stored term's canonical print, read with §2's own parser.
 #[wasm_bindgen]
 pub fn term_json(literal: &str) -> Result<String, JsError> {
     let term = fpl::parse_term(literal).map_err(|e| refused(format!("term: {}", e.0)))?;
@@ -30,7 +29,7 @@ pub fn term_json(literal: &str) -> Result<String, JsError> {
 }
 
 /// Every `ref` in `term` bound to the todo it names in `specs` (`{todo: term}`), recursively;
-/// an unknown todo or a loop is the refusal, the loop named.
+/// an unknown todo or a loop is the refusal.
 #[wasm_bindgen]
 pub fn link(term: &str, specs: &str) -> Result<String, JsError> {
     let term = parse_term("term", term).map_err(refused)?;

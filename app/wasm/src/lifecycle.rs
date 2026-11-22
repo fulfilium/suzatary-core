@@ -1,6 +1,5 @@
-//! §4, so a replica can spell an act with no network: a lifecycle event through its own `mk_*`,
-//! printed. Sealing it is the class's `append`, which writes the Prodrome's `Change`; the box
-//! re-verifies everything it is given, so nothing here widens what a page may write.
+//! §4, so a replica can spell an act with no network; the box re-verifies everything it is
+//! given, so nothing here widens what a page may write.
 
 use prodrome_core::event::{
     canonical, mk_cancelled, mk_completed, mk_created, mk_reopened, mk_tended,
@@ -11,8 +10,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{Event, refused};
 
-/// One lifecycle event as its canonical print. `at` is the caller's claim and nothing clamps
-/// it: a wrong clock is `verify`'s to report, never this module's to rewrite.
+/// `at` is the caller's claim and nothing clamps it: a wrong clock is `verify`'s to report,
+/// never this module's to rewrite.
 #[wasm_bindgen]
 pub fn lifecycle(
     kind: &str,

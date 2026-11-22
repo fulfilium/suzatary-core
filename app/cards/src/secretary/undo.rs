@@ -16,7 +16,7 @@ use suzatary_inbox::secretary::responded::{Responded, Withdrawal};
 use suzatary_store::store::Prodrome;
 use suzatary_topics::secretary::filed::{self, Filing};
 
-/// How far back a brief looks for withdrawals: one day, the brief's own cadence.
+/// How far back a brief looks for withdrawals: the brief's own cadence.
 const DAY_SECONDS: i64 = 24 * 60 * 60;
 
 /// A triage card the secretary withdrew: its changes, why, and when.
@@ -38,9 +38,6 @@ fn withdrawn_by_the_secretary(object: &Object) -> Option<(&Changeset, &str, Date
 
 /// File in `conversation` a restore card per triage card the secretary withdrew in the day
 /// before `now`, once each, and say how many.
-///
-/// # Errors
-/// The stores' own, and [`filed::file`]'s.
 pub fn offer_withdrawn(
     conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,

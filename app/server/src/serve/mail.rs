@@ -13,14 +13,12 @@ use super::call::Call;
 use super::guard::Reader;
 use super::params::{Asked, Params};
 
-/// One page of a list: which account, how many, and older than when.
 pub(crate) struct Page {
     account: Option<String>,
     limit: usize,
     before: Option<Datetime>,
 }
 
-/// A notmuch query and the page of its answer.
 pub(crate) struct Search {
     q: String,
     page: Page,
@@ -28,7 +26,6 @@ pub(crate) struct Search {
 
 pub(crate) struct Message(String);
 
-/// The thread a path names, and how many of its messages.
 pub(crate) struct Thread {
     id: String,
     limit: usize,

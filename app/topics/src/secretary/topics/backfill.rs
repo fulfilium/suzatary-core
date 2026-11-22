@@ -44,7 +44,6 @@ pub struct Untopiced {
     pub words: String,
 }
 
-/// What the pass found and plans.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Backfill {
     /// Each round of an answered batch, with the topics it gets, possibly none.
@@ -55,9 +54,8 @@ pub struct Backfill {
     pub unsent: usize,
     /// Each new topic made, with how many rounds it is on.
     pub new: Vec<(Topic, usize)>,
-    /// Each new topic the model named that is on too few rounds of the answered batches, or is a
-    /// near twin of a topic in use or of a new one made before it, with how many rounds it was
-    /// given; no round gets it.
+    /// Each new topic named that is on too few rounds, or is a near twin of a topic in use or made
+    /// before it; no round gets it.
     pub dropped: Vec<(Topic, usize)>,
     /// What the model answered that was not used, in the box's words.
     pub problems: Vec<String>,
@@ -255,7 +253,6 @@ fn read(said: &str) -> Result<Answer, String> {
     serde_json::from_str(object).map_err(|failed| format!("its JSON did not read: {failed}"))
 }
 
-/// What the batches answered so far.
 #[derive(Default)]
 struct Sorting {
     /// Every new topic an answer named and gave a round.

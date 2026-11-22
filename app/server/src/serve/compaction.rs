@@ -47,8 +47,8 @@ pub struct Compactor {
 }
 
 impl Compactor {
-    /// Start the task over `caps`'s memory and clock, asking the models of `ladder` from
-    /// `workers` steps at once, all held to `budget`; it takes its first round at once.
+    /// Start the task, `workers` steps at once, all held to `budget`; it takes its first round at
+    /// once.
     #[must_use]
     pub fn spawn(
         caps: &'static Server<'static>,

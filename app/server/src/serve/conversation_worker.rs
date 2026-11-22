@@ -40,10 +40,9 @@ struct Worker {
     nudge: mpsc::Sender<()>,
 }
 
-/// One conversation's live stream: the broadcast and the partial reply a round is building.
-///
-/// The partial is never written to the file, and one mutex guards both it and every
-/// subscription so a snapshot and its broadcast position are the same instant.
+/// One conversation's live stream: the partial is never written to the file, and one mutex
+/// guards both it and every subscription so a snapshot and its broadcast position are the
+/// same instant.
 struct Stream {
     partial: Mutex<Partial>,
     frames: broadcast::Sender<wire::Frame>,
@@ -119,7 +118,7 @@ impl Stream {
         }
     }
 
-    /// The conversation's state changed; never touches the partial.
+    /// Never touches the partial.
     fn state(&self, state: ConversationState) {
         let _ = self.frames.send(wire::Frame::State { state });
     }
@@ -177,7 +176,6 @@ pub(crate) enum Ended {
 }
 
 impl Ended {
-    /// What the stop `stop` ends, as `read` reads it.
     #[must_use]
     pub(crate) fn of<E>(read: &Result<Arc<transcript::Transcript>, E>, stop: &Hash) -> Self {
         match read {
@@ -187,9 +185,8 @@ impl Ended {
     }
 }
 
-/// Every conversation currently being answered, so a `say` mid-round finds its task.
-///
-/// Held on [`State`], never a static, because a test binary runs more than one server.
+/// Every conversation currently being answered; held on [`State`], never a static, because a
+/// test binary runs more than one server.
 pub struct Workers {
     inner: Mutex<HashMap<ConversationId, Worker>>,
     /// Every conversation's [`Stream`], never removed, since a subscriber may connect
@@ -200,20 +197,17 @@ pub struct Workers {
     halts: Mutex<HashMap<ConversationId, Halt>>,
     /// Told whenever a round's halt is removed, so an erasure goes on once its round has ended.
     ended: Condvar,
-    /// The conversation's rules and every firing made, shared by every task.
+    /// Every firing made, shared by every task.
     engine: Mutex<Engine<Conversational>>,
-    /// How long an idle worker waits for a nudge; tests shorten it.
     idle: Duration,
 }
 
 impl Workers {
-    /// An empty table, waiting `IDLE` before an idle worker drops itself.
     #[must_use]
     pub fn new() -> Self {
         Self::with_idle(IDLE)
     }
 
-    /// An empty table with a chosen idle wait, for tests.
     #[must_use]
     pub fn with_idle(idle: Duration) -> Self {
         Self {
@@ -226,7 +220,6 @@ impl Workers {
         }
     }
 
-    /// This conversation's live stream, minted on first use.
     fn stream(&self, id: &ConversationId) -> Arc<Stream> {
         let mut streams = super::locks::held(&self.streams);
         Arc::clone(
@@ -236,7 +229,6 @@ impl Workers {
         )
     }
 
-    /// Subscribe to a conversation's live stream, with the frames that rebuild its partial.
     #[must_use]
     pub(crate) fn subscribe(
         &self,
@@ -251,9 +243,8 @@ impl Workers {
         self.stream(id).closed(sha)
     }
 
-    /// Tell the conversation's task its heads moved, starting one if none is running.
-    ///
-    /// Called after the write, so the nudge carries nothing: the task reads again.
+    /// Tell the conversation's task its heads moved, starting one if none is running; called
+    /// after the write, so the nudge carries nothing: the task reads again.
     pub(crate) fn nudge(&self, id: &ConversationId, state: Arc<State>) {
         let mut inner = super::locks::held(&self.inner);
         if let Some(worker) = inner.get(id) {
@@ -273,10 +264,9 @@ impl Workers {
         self.stream(id).turn();
     }
 
-    /// A tab's stop `stop` of conversation `id` was taken: the round running in it is told to stop,
-    /// as `by`, where the transcript reads it as one the stop ends ([`Workers::halt_ended`]). The
-    /// stop's line has closed that round already, so nothing waits for it; a round begun since the
-    /// take rests on the stop and runs on.
+    /// A tab's stop was taken: the round running is told to stop where the transcript reads it as
+    /// one the stop ends; the stop's line has closed that round already, so nothing waits for it,
+    /// and a round begun since the take runs on.
     pub(crate) fn stopped(state: Arc<State>, id: &ConversationId, stop: Hash, by: Actor) {
         let id = id.clone();
         tokio::task::spawn_blocking(move || {
@@ -338,13 +328,12 @@ impl Workers {
         halt
     }
 
-    /// The round ended: nothing is left to stop, and a stop waiting on it may answer.
+    /// The round ended, so a stop waiting on it may answer.
     fn unhalt(&self, id: &ConversationId) {
         super::locks::held(&self.halts).remove(id);
         self.ended.notify_all();
     }
 
-    /// Whether a task currently holds this conversation's entry; for tests only.
     #[doc(hidden)]
     #[must_use]
     pub fn is_running(&self, id: &ConversationId) -> bool {
@@ -358,8 +347,6 @@ impl Default for Workers {
     }
 }
 
-/// The loop over one conversation: perform the first rule due on its reading while one is,
-/// else wait for a nudge or the idle timeout.
 async fn run(
     id: ConversationId,
     state: Arc<State>,
@@ -436,9 +423,8 @@ async fn perform(rule: Conversational, firing: &Firing, id: &ConversationId, sta
     }
 }
 
-/// One round: the model asked and its calls run, over a session when one is held.
-///
-/// Errors are logged and end the round; only the session arm streams fragments.
+/// One round: the model asked and its calls run, over a session when one is held; only the
+/// session arm streams fragments.
 async fn round(id: &ConversationId, state: &Arc<State>) {
     let caps = state.first.caps;
     let held = Arc::clone(state);
@@ -514,7 +500,6 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
     stream.state(current_state(id, state).await);
 }
 
-/// The title job; `true` when a title landed.
 /// A set-up conversation's opening note: the template's steps the box still owes, read now.
 async fn noted(id: &ConversationId, state: &Arc<State>) -> bool {
     let caps = state.first.caps;
@@ -576,8 +561,6 @@ async fn titled(id: &ConversationId, state: &Arc<State>) -> bool {
 }
 
 /// Push once, when nobody is watching: a live subscriber means the answer is on screen.
-///
-/// `is_brief` is judged by what the round's opening turn asked, not by a flag.
 fn maybe_push(
     stream: &Stream,
     state: &Arc<State>,

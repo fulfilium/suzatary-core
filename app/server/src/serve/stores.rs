@@ -47,9 +47,6 @@ pub(crate) fn named(segment: &str) -> Result<StoreName, Refusal> {
 }
 
 /// A store's heads, sorted.
-///
-/// # Errors
-/// The store's own.
 pub(crate) fn heads(
     store: StoreName,
     caps: &Server<'_>,
@@ -75,7 +72,6 @@ enum Pulled {
     Asks,
 }
 
-/// A store pulled by its objects, and the frontier a replica of it holds.
 pub(crate) struct Since {
     store: Pulled,
     since: prodrome_core::store::frontier::Since,
@@ -148,16 +144,16 @@ impl Params for Written {
     }
 }
 
-/// What a store a tab writes takes beside its objects, read at the door. A post's own fault is
-/// answered 422, never 400: a 400 is what a box of another build answers a body it does not read,
-/// so the page holds those lines for later and refuses for good only on this build's word.
+/// A post's own fault is answered 422, never 400: a 400 is what a box of another build answers a
+/// body it does not read, so the page holds those lines for later and refuses for good only on
+/// this build's word.
 fn beside<B: Beside>(literals: &Literals) -> Result<B, Refusal> {
     B::parse(&literals.keys).map_err(Refusal::unprocessable)
 }
 
-/// `POST /api/stores/<store>/objects`: a store a tab writes, each change taken only beside a
-/// trusted signature and where the rule its row names takes it. The lines keep each slot's key a
-/// taken line came with before they take the line, and no key of a line they refuse.
+/// `POST /api/stores/<store>/objects`: each change taken only beside a trusted signature and where
+/// the rule its row names takes it; the lines keep a taken line's keys before they take the line,
+/// and no key of a line they refuse.
 pub(crate) fn take(
     call: &Call<Poster, Written, Literals>,
 ) -> Result<Json<ReceiptPayload>, Refusal> {
@@ -239,7 +235,6 @@ pub(crate) fn take(
 struct Beyond {
     root: prodrome_core::sign::PublicKey,
     uploads: Option<std::sync::Arc<super::Uploads>>,
-    /// The box's clock as the post came.
     now: prodrome_core::literal::Datetime,
 }
 
@@ -294,9 +289,8 @@ fn posted_lines(posted: &[String]) -> std::collections::BTreeSet<Hash> {
         .collect()
 }
 
-/// Each conversation a line the box took is in told to its worker, so what the line starts (a
-/// round for a question, a setup's opening note) is written; and for a stop the box took, each
-/// round the stop's line ended told to stop.
+/// Each conversation a taken line is in told to its worker, so what the line starts is written;
+/// and for a taken stop, each round the stop's line ended told to stop.
 fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
     use prodrome_core::schema::Schema as _;
     let vocabulary = line_event::LineVocabulary;
@@ -328,7 +322,6 @@ fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
     }
 }
 
-/// The frontier a replica of the lines holds.
 pub(crate) struct LinesSince(prodrome_core::store::frontier::Since);
 
 impl Params for LinesSince {
@@ -352,7 +345,6 @@ pub(crate) fn skeleton(
     .map(Json)
 }
 
-/// A store, and the objects asked of it by hash.
 pub(crate) struct Wanted {
     store: StoreName,
     hashes: query::Hashes,

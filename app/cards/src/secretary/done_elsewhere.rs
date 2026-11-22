@@ -20,11 +20,9 @@ pub enum Seen {
     Unread(String),
 }
 
-/// What one sweep did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Swept {
     pub closed: Vec<ProposalId>,
-    /// The cards not looked at, and why.
     pub unread: Vec<(ProposalId, String)>,
 }
 

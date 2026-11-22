@@ -30,7 +30,6 @@ pub struct Google<'a> {
     pub redirect: Option<&'a suzatary_google::google::RedirectUri>,
 }
 
-/// The cards the connections owe.
 #[must_use]
 pub fn owed(
     declared: &Declared,
@@ -411,7 +410,6 @@ fn connecting(connection: &suzatary_connect::connect::Connection) -> String {
     )
 }
 
-/// What a tapped card is filed into.
 pub type Filer<'a> = (
     Conversations<'a>,
     &'a dyn Prodrome<InboxEvent>,
@@ -419,9 +417,6 @@ pub type Filer<'a> = (
 );
 
 /// File the box's card asking to let `plugin` reach `origin`.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn grant(to: Filer<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), Refusal> {
     tapped(
         to,
@@ -436,9 +431,6 @@ pub fn grant(to: Filer<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), 
 }
 
 /// File the box's card asking to connect `connection`, a Google account whose calendar was pasted.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn connect(to: Filer<'_>, connection: Connection, pasted: &ProposalRef) -> Result<(), Refusal> {
     let why = connecting(&connection);
     tapped(
@@ -448,9 +440,6 @@ pub fn connect(to: Filer<'_>, connection: Connection, pasted: &ProposalRef) -> R
 }
 
 /// File the box's card asking to remove `link`, pasted for an account signed in with Google.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn retire(to: Filer<'_>, link: Connection, pasted: &ProposalRef) -> Result<(), Refusal> {
     tapped(to, retiring(link, pasted.clone()))
 }

@@ -5,9 +5,6 @@ use suzatary_todo::rendering::ANSWER;
 use wasm_bindgen::prelude::*;
 
 /// The answer template's key at `source`, as the box prints it beside the block's HTML.
-///
-/// # Errors
-/// The block does not print as JSON.
 #[wasm_bindgen]
 pub fn answer_key(source: &str) -> Result<String, JsError> {
     ANSWER

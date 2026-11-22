@@ -111,7 +111,6 @@ pub struct Settings {
     pub secrets: Arc<dyn Writes + Send + Sync>,
     pub declares: Arc<dyn Declares + Send + Sync>,
     pub edits: Arc<dyn Edits + Send + Sync>,
-    /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_mail::mail::cache::Forget + Send + Sync>,
     pub stamp: Stamp,
     pub data: Arc<std::path::PathBuf>,
@@ -164,18 +163,15 @@ pub struct Inner {
     pub uploads: Option<Arc<Uploads>>,
     /// `None` names a topic with the record's model.
     pub titler: Option<Arc<dyn model::Sessions + Send + Sync>>,
-    /// `None` while the compactor is off.
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
     pub reports: Arc<Mutex<Limiter>>,
     pub stamp: Stamp,
-    /// `None` declares no plugin.
     pub plugins: Option<Arc<Plugins>>,
     pub repos: Arc<suzatary_services::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
     pub read: Arc<Mutex<chain_set::Read>>,
-    /// Open connection cards, memoised.
     pub asking: Arc<Mutex<Cache<Vec<overview::Asking>, Lru>>>,
     pub built: Arc<Mutex<Cache<overview::Build, Lru>>>,
     /// Reached only by a tapped device card.
@@ -201,11 +197,9 @@ pub struct Inner {
     pub epochs: Arc<Epochs>,
     pub frontiers: Arc<Frontiers>,
     pub portal: Arc<Portal>,
-    /// Finds the plan store per request.
     pub projects: Projects,
 }
 
-/// A store that holds no secret.
 pub struct Unresolved;
 
 impl suzatary_io::secrets::Resolves for Unresolved {
@@ -218,7 +212,6 @@ impl suzatary_io::secrets::Resolves for Unresolved {
     }
 }
 
-/// No sign-in is held open.
 pub(crate) struct Closed;
 
 impl sign_in::Sessions for Closed {
@@ -238,7 +231,6 @@ impl sign_in::Sessions for Closed {
     }
 }
 
-/// Keeps no model credential.
 pub(crate) struct Unverified;
 
 impl Verify for Unverified {
@@ -262,7 +254,6 @@ pub struct Stamp {
     pub build: Build,
 }
 
-/// This process's build.
 #[derive(Debug, Clone)]
 pub enum Build {
     Compiled(&'static str),
@@ -303,7 +294,6 @@ impl Stamp {
     }
 }
 
-/// The plan store's chain and the plan it holds.
 #[derive(Debug, Clone)]
 pub struct Project {
     pub chain: suzatary_base::chains::ChainName,
@@ -547,9 +537,6 @@ impl State {
 
     /// The plan store's chain and plan, `None` where no mount holds a plan: the one question
     /// "Build it", `GET /api/releases` and `GET /api/about` ask.
-    ///
-    /// # Errors
-    /// A plan that does not read, or two.
     pub(crate) fn project(&self) -> Result<Option<Project>, Refusal> {
         (self.projects)().map_err(|failed| Refusal::internal(format!("{failed:#}")))
     }
@@ -780,7 +767,6 @@ impl State {
             .collect()
     }
 
-    /// Runs secretary work with the cards built.
     pub(crate) fn with_cards<T>(
         &self,
         work: impl FnOnce(&Server<'_>, &Cards<'_>) -> Result<T, Refusal>,
@@ -976,8 +962,8 @@ pub async fn started_up(first: &Chained, rest: &[Chained]) {
     started.log("serve start", starting.elapsed());
 }
 
-/// Steps and their parts, one line at `suzatary::start`: `<step>.<part> <ms>`, then the time no part
-/// took, so a line sums to its whole. It names no store's content.
+/// Steps and their parts, one line at `suzatary::start`: `<step>.<part> <ms>`, then the time no
+/// part took, so a line sums to its whole; it names no store's content.
 #[derive(Default)]
 struct Started(Vec<(&'static str, Parts, Duration)>);
 
@@ -1034,7 +1020,6 @@ pub fn bound(listening: &listening::Listening) -> anyhow::Result<std::net::TcpLi
     Ok(listener)
 }
 
-/// Serves `gated` on `listener` until the process ends.
 pub async fn serve_on(
     listening: listening::Listening,
     listener: std::net::TcpListener,
@@ -1094,8 +1079,7 @@ fn open_default(caps: &Server<'_>) {
     }
 }
 
-/// The work after the start, spawned: the first fold alone on the box's cores, then what else
-/// folds or files.
+/// The first fold runs alone on the box's cores before what else folds or files.
 pub fn after_started(state: &State, moved: Arc<tokio::sync::Notify>) {
     let (after, caps) = (state.clone(), state.first.caps);
     tokio::spawn(async move {
@@ -1131,7 +1115,6 @@ pub fn watching(
 /// Calendars busy within the quiet span.
 pub(crate) type Heard = std::collections::BTreeSet<suzatary_google::calendar::CalendarName>;
 
-/// `None`, logged, on a failed read.
 fn heard(
     calendar: &dyn suzatary_google::calendar::effect::Calendar,
     now: health::Instant,

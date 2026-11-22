@@ -2,8 +2,8 @@
 //! value, and this box's own node reads but never writes. An address is never an identity: every
 //! peer, loopback included, is whatever the tailnet's whois says it is.
 //!
-//! The layer in front of everything, the static files included, resolves the peer once and
-//! stashes it in the request's extensions, so write routes never resolve their own.
+//! The layer in front of everything, the static files included, stashes the peer in the
+//! request's extensions, so write routes never resolve their own.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -38,9 +38,7 @@ pub const PROXY_HEADERS: [&str; 5] = [
 /// A host and the port it was written with, as an `app_url` or a request's `Host` names one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Named<'a> {
-    /// The host, as written.
     pub host: &'a str,
-    /// The port, `None` where none was written.
     pub port: Option<u16>,
 }
 
@@ -55,7 +53,6 @@ pub struct Door {
 }
 
 impl Door {
-    /// The door `named` names under a scheme whose port is `scheme_port`.
     #[must_use]
     fn new(named: Named<'_>, scheme_port: u16) -> Self {
         Self {
@@ -65,7 +62,6 @@ impl Door {
         }
     }
 
-    /// The port the door answers at.
     #[must_use]
     pub fn port(&self) -> u16 {
         self.port
@@ -90,12 +86,10 @@ impl std::fmt::Display for Door {
 struct Knock<'a> {
     /// The address the socket says the request came from.
     pub peer: IpAddr,
-    /// What the request was addressed to (`Host`, or HTTP/2's `:authority`), `None` when it named
-    /// nothing readable.
+    /// `Host`, or HTTP/2's `:authority`.
     pub addressed: Option<Named<'a>>,
     /// The first of [`PROXY_HEADERS`] the request carries.
     pub forwarded: Option<&'static str>,
-    /// The key and actor the request names as the operator's, `None` where it names no actor.
     pub operator: Option<Claim<'a>>,
 }
 
@@ -106,9 +100,7 @@ pub const OPERATOR_HEADER: &str = "x-suzatary-operator";
 /// the actor it writes as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Claim<'a> {
-    /// The key the request names, as its header carries it.
     pub key: &'a str,
-    /// The actor it writes as, as its header carries it.
     pub actor: &'a str,
 }
 
@@ -188,11 +180,8 @@ pub(crate) fn actor_of(deployment: &Deployment, admitted: &Admitted) -> Result<A
 /// How long a whois answer is believed: one visit's worth of assets.
 const TTL: Duration = Duration::from_mins(1);
 
-/// What the daemon said about an address, and until when: its owner and whether it is this
-/// box's own node.
-///
-/// One per server in [`State`], never a static, so two servers in one process
-/// cannot answer each other's whois.
+/// What the daemon said about an address, and until when; one per server in [`State`], never a
+/// static, so two servers in one process cannot answer each other's whois.
 pub type Remembering = HashMap<IpAddr, (Peer, Instant)>;
 
 fn peer_of(
@@ -241,9 +230,6 @@ pub fn door(app_url: &str) -> Option<Door> {
 
 /// The door `app_url` names, refused when the gate could not read it or when it names a port
 /// other than the one bound: either would answer every request 403.
-///
-/// # Errors
-/// Either refusal, naming `app_url`.
 pub fn door_at(app_url: &str, at: SocketAddr) -> anyhow::Result<Door> {
     let door = door(app_url).with_context(|| {
         format!(
@@ -267,7 +253,6 @@ fn named(authority: &Authority) -> Named<'_> {
     }
 }
 
-/// The layer. Admit, stash, or refuse.
 pub(crate) async fn admit(
     AxumState(state): AxumState<State>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -309,7 +294,6 @@ pub(crate) async fn admit(
     }
 }
 
-/// The key and actor a request names as its operator's, where it names both.
 fn claim(headers: &axum::http::HeaderMap) -> Option<Claim<'_>> {
     let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
     Some(Claim {
@@ -320,9 +304,6 @@ fn claim(headers: &axum::http::HeaderMap) -> Option<Claim<'_>> {
 
 /// What the gate decided about this request. A request the gate never saw is refused, never
 /// read as the box: a route mounted outside the layer must fail closed.
-///
-/// # Errors
-/// [`Refusal::forbidden`] when nothing was stashed.
 pub(crate) fn who(request: &axum::http::Extensions) -> Result<Admitted, Refusal> {
     request
         .get::<Admitted>()
@@ -399,7 +380,6 @@ mod tests {
         text.parse().expect("an address")
     }
 
-    /// This deployment's own door, `https://example.test`.
     fn door() -> Door {
         Door::new(
             Named {
@@ -410,7 +390,6 @@ mod tests {
         )
     }
 
-    /// A request from `peer` addressed to the door, through no proxy.
     fn knock(peer: &str) -> Knock<'static> {
         Knock {
             peer: ip(peer),
@@ -454,8 +433,7 @@ mod tests {
         }
     }
 
-    /// This box on its own tailnet address is named its owner by whois, and reads: admitted with
-    /// no login, so it can never write.
+    /// Admitted with no login, so it can never write.
     #[test]
     fn this_box_on_its_tailnet_address_reads_and_never_writes() {
         let deployed = deployment();
@@ -501,7 +479,6 @@ mod tests {
         );
     }
 
-    /// The local shell resolves like any peer: a whois that names loopback admits it as that login.
     #[test]
     fn the_local_shell_resolves_like_any_peer() {
         // A whois that names every address, like the end-to-end fixture's.
@@ -518,7 +495,6 @@ mod tests {
         );
     }
 
-    /// A request through a proxy is refused before any lookup, whoever the socket says it is.
     #[test]
     fn a_request_through_a_proxy_is_refused_before_whois_is_asked() {
         let deployed = deployment();
@@ -579,7 +555,6 @@ mod tests {
         assert!(super::admits(&Daemon, &deployed, &door(), &nowhere).is_err());
     }
 
-    /// The actor is the mapping's value, and the local shell has none.
     #[test]
     fn only_a_named_peer_in_the_actor_mapping_may_write() {
         let deployed = deployment();
@@ -602,7 +577,6 @@ mod tests {
         );
     }
 
-    /// A request the gate stashed nothing on is refused, not admitted as the box.
     #[test]
     fn a_request_the_gate_never_saw_is_refused() {
         let empty = axum::http::Extensions::new();

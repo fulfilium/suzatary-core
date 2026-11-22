@@ -1,5 +1,4 @@
-//! A calendar card whose event has ended needs nothing more, so it closes as no longer needed,
-//! by the rule that closes a card done another way ([`done_elsewhere`]).
+//! A calendar card whose event has ended closes as no longer needed.
 
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use suzatary_base::capability::Datetime;
@@ -14,9 +13,6 @@ use suzatary_store::store::Prodrome;
 
 /// Close every waiting calendar card whose event ended by `at`; an all-day event ends when the
 /// owner's day after its last begins, in `zone`.
-///
-/// # Errors
-/// The inbox's own failures.
 pub fn sweep(inbox: &dyn Prodrome<InboxEvent>, zone: Zone, at: Datetime) -> Result<Swept, Refusal> {
     let now = prodrome_core::fpl::instant_of(at);
     done_elsewhere::sweep(inbox, at, |proposal| {

@@ -9,7 +9,6 @@ use suzatary_io::github_tokens::GithubTokens;
 
 use super::State;
 
-/// How often the expiry is read.
 const EVERY: Duration = Duration::from_hours(1);
 
 /// The rule, forever, each token's expiry read through `tokens`.

@@ -1,8 +1,6 @@
 //! The notification decision: a deterministic, total fold the watcher only interprets.
 //!
-//! A push is a [`Push`], which holds counts and ids and no text, so what a relay carries is
-//! a fact about its type. Events by this deployment's own actors are skipped, so a person's own
-//! taps never page them.
+//! Events by this deployment's own actors are skipped, so a person's own taps never page them.
 
 mod effect;
 pub use effect::{Delivered, Notify, NotifyError, Printed, Push};
@@ -17,8 +15,7 @@ use suzatary_record::record::TodoEvent;
 
 /// What to say about new chain objects, or `None` when nothing is worth a push.
 ///
-/// `own` is the set of actor names this deployment's own writers use. `now` is a parameter so
-/// that no clock is read inside.
+/// `own` is the set of actor names this deployment's own writers use.
 #[must_use]
 pub fn decide(events: &[TodoEvent], own: &BTreeSet<String>, _now: Datetime) -> Option<Push> {
     let mut authored = 0usize;
@@ -28,8 +25,7 @@ pub fn decide(events: &[TodoEvent], own: &BTreeSet<String>, _now: Datetime) -> O
             continue;
         }
         match event {
-            // A decision is something waiting for him, not the agent's work
-            // on a todo; `needs_you` says so.
+            // A decision is something waiting for him; `needs_you` says so.
             TodoEvent::Authored(record) if is_decision(record) => {}
             TodoEvent::Authored(_) => authored += 1,
             TodoEvent::Completed(_)
@@ -37,8 +33,7 @@ pub fn decide(events: &[TodoEvent], own: &BTreeSet<String>, _now: Datetime) -> O
             | TodoEvent::Reopened(_)
             | TodoEvent::Tended(_)
             | TodoEvent::SpecRevised(_) => changes += 1,
-            // A `Created` is the id being minted, which the `Authored` beside
-            // it already announces; counting both would double every new todo.
+            // The `Authored` beside a `Created` already announces it.
             TodoEvent::Created(_) => {}
         }
     }
@@ -49,7 +44,7 @@ pub fn decide(events: &[TodoEvent], own: &BTreeSet<String>, _now: Datetime) -> O
 ///
 /// A proposal counts when these inbox events ask it and a decision when these
 /// chain events create it, so an edit to one already waiting does not ring again.
-/// Only a lone proposal is linked: its id is a hash, where a decision's is a todo's name.
+/// Only a lone proposal is linked: a decision's id is a todo's name.
 #[must_use]
 pub fn needs_you(
     decisions: &[TodoEvent],
@@ -99,11 +94,9 @@ fn is_decision(record: &suzatary_record::record::Authored) -> bool {
     record.payload.is_decision()
 }
 
-/// How often the watcher looks at the tip.
 pub const POLL_SECONDS: u64 = 30;
-/// How many seconds of stillness before one push summarises what moved.
-///
-/// A burst is one notification: the agent can write a dozen objects in one pass.
+/// Stillness before one push summarises what moved: the agent can write a dozen objects in one
+/// pass.
 pub const QUIET_SECONDS: u64 = 120;
 
 #[cfg(test)]
@@ -170,15 +163,13 @@ mod tests {
         .expect("a record")
     }
 
-    /// Stored text: lowercase letters behind a prefix no printed constant, hex id or number
-    /// holds, so a hit is the text itself and never a coincidence.
+    /// A prefix no printed constant, hex id or number holds, so a hit is never a coincidence.
     fn stored() -> impl Strategy<Value = String> {
         "zq[a-z]{4,10}"
     }
 
     proptest! {
-        /// Whatever the history holds, a printed push holds none of it: every todo's id,
-        /// author and body, every proposal's reason and every answer's words stay on the box.
+        /// Whatever the history holds, a printed push holds none of it.
         #[test]
         fn no_printed_push_holds_stored_bytes(
             todos in prop::collection::vec((stored(), stored(), stored(), 0u8..4), 0..12),

@@ -57,8 +57,6 @@ fn decoded(escaped: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// An account's own calendar names its account; a shared calendar, a path that names no
-    /// calendar and another host do not.
     #[test]
     fn a_google_link_names_its_account_s_own_calendar() {
         let read = |text: &str| linked(&PluginUrl::parse(text).expect("a link"));

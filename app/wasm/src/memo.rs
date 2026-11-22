@@ -4,11 +4,8 @@
 use prodrome_core::event::Hash;
 use wasm_bindgen::prelude::*;
 
-/// `memo::name`: the node's own bytes and its children's names in order; a child that is not a name is refused.
-///
-/// # Errors
-///
-/// A child name that is not 64 lowercase hex.
+/// `memo::name` of the node's own bytes and its children's names in order; a child that is not
+/// 64 lowercase hex is refused.
 #[wasm_bindgen]
 pub fn memo_name(own: &str, children: Vec<String>) -> Result<String, JsError> {
     let children = children

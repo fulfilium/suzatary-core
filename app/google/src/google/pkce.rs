@@ -19,7 +19,6 @@ fn drawn(entropy: &dyn Entropy) -> Result<String, String> {
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
-/// Whether `text` is a value as [`drawn`] spells one.
 fn spelt(text: &str) -> bool {
     text.len() == SPELT
         && text
@@ -33,10 +32,6 @@ fn spelt(text: &str) -> bool {
 pub struct Verifier(Secret);
 
 impl Verifier {
-    /// A fresh one.
-    ///
-    /// # Errors
-    /// The generator's failure.
     pub fn draw(entropy: &dyn Entropy) -> Result<Self, String> {
         drawn(entropy).map(|text| Self(Secret::new(text)))
     }
@@ -59,8 +54,7 @@ impl Verifier {
 pub struct Challenge(String);
 
 impl Challenge {
-    /// `BASE64URL(SHA256(verifier))`, as the token endpoint checks a verifier against the
-    /// challenge it was shown (RFC 7636 §4.6).
+    /// As the token endpoint checks a verifier against its challenge (RFC 7636 §4.6).
     #[must_use]
     pub fn s256(verifier: &str) -> Self {
         Self(
@@ -69,7 +63,6 @@ impl Challenge {
         )
     }
 
-    /// As the consent's URL carries it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -83,22 +76,16 @@ impl Challenge {
 pub struct State(String);
 
 impl State {
-    /// A fresh one.
-    ///
-    /// # Errors
-    /// The generator's failure.
     pub fn draw(entropy: &dyn Entropy) -> Result<Self, String> {
         drawn(entropy).map(Self)
     }
 
-    /// One a callback names, when it is spelt as the box draws them; anything else is no state
-    /// of the box's.
+    /// One a callback names, when it is spelt as the box draws them.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         spelt(text).then(|| Self(text.to_owned()))
     }
 
-    /// As the consent's URL carries it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -137,8 +124,6 @@ mod tests {
         );
     }
 
-    /// Each draw is 256 bits, spelt in RFC 7636's alphabet at 43 characters, and two draws
-    /// differ.
     #[test]
     fn a_draw_is_43_characters_of_the_unreserved_alphabet() {
         let entropy = Counting(std::sync::atomic::AtomicU8::new(0));
@@ -155,7 +140,6 @@ mod tests {
         assert!(!format!("{verifier:?}").contains(verifier.expose()));
     }
 
-    /// A state no draw could spell is no state of the box's.
     #[test]
     fn a_state_of_another_shape_is_refused() {
         for text in [

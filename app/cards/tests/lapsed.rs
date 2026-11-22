@@ -59,8 +59,8 @@ fn withdrawn(inbox: &InMemory<InboxEvent>, id: &inbox::ProposalId) -> bool {
     )
 }
 
-/// A calendar card closes as no longer needed once its event has ended, and not before:
-/// a timed event at its end, an all-day one when the owner's day after its last begins.
+/// A timed event's card closes at its end, an all-day one's when the owner's day after its last
+/// begins, and not before.
 #[test]
 fn a_calendar_card_lapses_once_its_event_has_ended() {
     let inbox = InMemory::<InboxEvent>::default();

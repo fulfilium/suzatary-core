@@ -65,10 +65,6 @@ fn lines(problems: &[Problem]) -> String {
 
 impl Map {
     /// Refuses the whole map on any problem, and lists every problem it finds.
-    ///
-    /// # Errors
-    /// Text that is not such a TOML file, or any table naming an unknown conversation, an
-    /// invalid topic, a topic twice, or no topic or more than [`MAX_TOPICS`].
     pub fn parse(text: &str, conversations: &[Stored]) -> Result<Self, NotAMap> {
         let entries: BTreeMap<String, Entry> =
             toml::from_str(text).map_err(|failed| NotAMap::Toml(failed.message().to_owned()))?;
@@ -152,7 +148,6 @@ pub fn listing(conversations: &[Stored]) -> Vec<Listed> {
         .collect()
 }
 
-/// What the carry does to one conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Carrying {
     /// Its `rounds` rounds and `notes` notes get `topics`; `writes` is how many memberships this

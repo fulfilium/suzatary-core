@@ -69,7 +69,6 @@ pub struct OverviewLine {
 /// A stored secret a line offers to replace, by `POST /api/secretary/replace/<handle>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Replace {
-    /// What the owner calls it.
     pub label: String,
     /// How the route names it: never the secret's name.
     pub handle: String,

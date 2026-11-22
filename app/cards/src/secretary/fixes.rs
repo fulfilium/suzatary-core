@@ -28,7 +28,6 @@ pub struct Fix {
 }
 
 impl Fix {
-    /// The card's act.
     #[must_use]
     pub fn act(&self) -> Act {
         let readers = self
@@ -54,8 +53,8 @@ impl Fix {
     }
 }
 
-/// Every table-declared name that is `missing`. The model's credential is no table's; the
-/// model's own rule asks for it.
+/// Every table-declared name that is `missing`; the model's credential is no table's, its own
+/// rule asks for it.
 #[must_use]
 pub fn fixes(
     settables: &Settables,
@@ -135,7 +134,6 @@ pub fn replacing(settables: &Settables, inbox: &inbox::Fold) -> Owed {
         .fold(Owed::default(), Owed::join)
 }
 
-/// The card asking to unlock the store.
 #[must_use]
 pub fn unlock(inbox: &inbox::Fold) -> Owed {
     let after = ended(inbox, |proposal| {

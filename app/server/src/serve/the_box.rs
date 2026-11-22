@@ -149,7 +149,6 @@ pub(crate) fn device(
     devices::register_device(caps.devices, caps.secretary.clock, &call.body, &call.guard).map(Json)
 }
 
-/// A device's public key, as `POST /api/act/key` carries it.
 pub(crate) struct DeviceKey(PublicKey);
 
 impl Body for DeviceKey {
@@ -164,8 +163,8 @@ impl Body for DeviceKey {
     }
 }
 
-/// `POST /api/act/key`: a device asking to be trusted to write as the gate's actor. Files one
-/// Inbox card; trusting is the tap on it from a device already trusted.
+/// `POST /api/act/key`: files one Inbox card asking to trust a device as the gate's actor;
+/// trusting is the tap on it from a device already trusted.
 pub(crate) fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>, Refusal> {
     // The request is signed by the key it asks for, so nobody files a card for a key they do
     // not hold.
@@ -180,7 +179,6 @@ pub(crate) fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
 
-/// A pairing code, as `POST /api/act/pair` carries it.
 pub(crate) struct PairingCode(Code);
 
 impl Body for PairingCode {
@@ -195,9 +193,8 @@ impl Body for PairingCode {
     }
 }
 
-/// `POST /api/act/pair`: a device typing the code `suzatary device pair` printed at the box.
-/// The key it trusts is the one that signed this request, never a field of it, so a code
-/// trusts only the device that typed it; neither the code nor its hash is logged.
+/// `POST /api/act/pair`: the key it trusts is the one that signed this request, never a field of
+/// it, so a code trusts only the device that typed it; neither the code nor its hash is logged.
 pub(crate) fn pair(
     call: &Call<Asker, (), PairingCode>,
 ) -> Result<Json<serde_json::Value>, Refusal> {

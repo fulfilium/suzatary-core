@@ -1,12 +1,11 @@
 //! The rule over the model: when the deployment's model does not answer, the box asks for it
-//! itself. The setup agent needs a model to run, so connecting it is the one step no model
-//! guides.
+//! itself, since the setup agent needs a model to run.
 //!
-//! What it owes, and only while the model does not answer: the subscription's sign-in. A sign-in
-//! the box holds open is owed its code card whatever answers, until the session ends. Each card's
-//! words name the episode, the last instant the model answered, so a model that answers and
-//! later stops (an expired token) files the same card again, and the owner's no stands within
-//! one episode.
+//! While the model does not answer, it owes the subscription's sign-in; a sign-in the box holds
+//! open is owed its code card whatever answers, until the session ends.
+//! Each card's words name the episode, the last instant the model answered, so a model that
+//! answers and later stops files the same card again, and the owner's no stands within one
+//! episode.
 
 use crate::secretary::noticed::Owed;
 use suzatary_connect::settings::{Settable, Settables};
@@ -23,14 +22,11 @@ pub struct Answering<'a> {
     pub model: &'a str,
     /// The model's observed calls.
     pub health: &'a Healths<String>,
-    /// Every secret name declared, with what declares it.
     pub settables: &'a Settables,
-    /// Whether a declared name resolves.
     pub resolves: &'a dyn Fn(&Settable) -> bool,
 }
 
 impl Answering<'_> {
-    /// The secret the model reads.
     pub(crate) fn credential(&self) -> Option<Settable> {
         self.settables.model()
     }

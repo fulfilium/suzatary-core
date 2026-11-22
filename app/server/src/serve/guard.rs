@@ -46,9 +46,6 @@ impl Guard {
 
     /// Checks the gate's answers before the request is read. A guard whose witness asks no
     /// proof refuses the operator in its own check.
-    ///
-    /// # Errors
-    /// The refusal of whichever check failed.
     pub(crate) fn admits(
         self,
         state: &State,
@@ -94,9 +91,6 @@ pub(crate) trait Proof: Sized + Send + 'static {
 
     /// The proof from the request, held to every one of `trusting` under `root`. Run on the
     /// blocking pool: it may read a chain.
-    ///
-    /// # Errors
-    /// Why the request does not prove it.
     fn proved(
         asking: Option<Asking>,
         trusting: &Keeping<Keeper<'_>>,
@@ -157,8 +151,6 @@ pub(crate) trait Guarded: Sized + Send + 'static {
 
     type Proof: Proof;
 
-    /// # Errors
-    /// The [`Refusal`] of whichever check failed.
     fn check(
         state: &State,
         admitted: &Admitted,
@@ -260,9 +252,9 @@ impl Guarded for Reporter {
     }
 }
 
-/// A replica posting objects as its actor, a peer's mapped actor or the operator's at the box's
-/// terminal: each object's signature is held to the door one by one, by a key the chains trust
-/// for that actor, so the request needs none of its own.
+/// A replica posting objects as a peer's mapped actor or the operator's at the box's terminal:
+/// each object's signature is held to the door one by one, by a key the chains trust for that
+/// actor, so the request needs none of its own.
 pub(crate) struct Poster(pub Actor);
 
 impl Guarded for Poster {

@@ -2,11 +2,7 @@
 //! class, and what an unused one is offered, filed by the box with no model asked.
 //!
 //! A fix is a function of the connection and the instant its failure began, so the same failure
-//! asks for the same card and a failure after a success is a new card. The card is the step of
-//! [`Failure::remedy`] in the connection's template; a failing link is always owed its Secret card.
-//!
-//! What goes unused is offered for removal: a calendar link holding nothing within [`QUIET`] of
-//! today, and a mail account failing for `ABANDONED`, unless a card already mends it.
+//! asks for the same card and a failure after a success is a new card.
 
 use std::collections::BTreeSet;
 
@@ -42,20 +38,14 @@ pub(crate) fn abandoned() -> Duration {
 /// [`abandoned`], in days.
 pub(crate) const ABANDONED: i64 = 7;
 
-/// What the rule reads.
 #[derive(Clone, Copy)]
 pub struct Observed<'a> {
-    /// The tables connections are read from.
     pub declared: &'a Declared,
-    /// What the model answers, and every secret name declared.
     pub answering: &'a Answering<'a>,
-    /// Every source's results.
     pub health: &'a Healths<SourceKey>,
-    /// The calendars holding an occurrence within [`quiet`] of `now`; `None` when the
-    /// calendars could not be read, which holds every waiting card, since a calendar still
-    /// quiet cannot be told from one that is not.
+    /// The calendars holding an occurrence within [`quiet`] of `now`; `None` (unreadable) holds
+    /// every waiting card, since a calendar still quiet cannot be told from one that is not.
     pub heard: Option<&'a BTreeSet<CalendarName>>,
-    /// Now, UTC.
     pub now: Instant,
 }
 
@@ -70,9 +60,8 @@ pub struct Failing {
 }
 
 impl Failing {
-    /// The one card this failure is owed: its class's remedy as a step of its own template
-    /// (the link's secret, the account's sign-in); none for a remedy no tap gives, or one its
-    /// connection has no step for.
+    /// The one card this failure is owed: its class's remedy as a step of its own template; none
+    /// for a remedy no tap gives, or one its connection has no step for.
     #[must_use]
     pub fn fix(&self, settables: &Settables) -> Option<Owed> {
         let episode = prodrome_core::fpl::datetime_of(self.since).ok()?;
@@ -85,8 +74,7 @@ impl Failing {
                 Act::Secret {
                     name: Settable::mint(settables, &name).ok()?.name().to_owned(),
                     // The same words whatever the class, so a class moving within one
-                    // episode (an outage, then 401) asks for the one card; the class is said
-                    // in the line above it.
+                    // episode (an outage, then 401) asks for the one card.
                     why: format!(
                         "{} has failed since {since}: store it again",
                         connection.called()
@@ -97,8 +85,7 @@ impl Failing {
                 connection.steps().into_iter().find_map(|step| match step {
                     Step::DeviceCode { account } => Some(Act::Auth { account }),
                     // A revoked grant, or one a client in Testing ended after 7 days, holds no
-                    // part any more (Google forgets the whole grant), so every part is missing
-                    // and the consent asks for them all again.
+                    // part any more (Google forgets the whole grant), so the consent asks for all.
                     Step::AuthCode { account } => Some(Act::GoogleSignIn {
                         account,
                         scopes: suzatary_google::google::Scopes::all(),
@@ -124,16 +111,14 @@ impl Failing {
         )
     }
 
-    /// What failed, as the owner calls it.
     fn named(&self) -> String {
         self.connection.called()
     }
 }
 
 impl Failing {
-    /// What mends its class here: a link is always set again from its Secret card, since
-    /// setting it again is a valid move whatever its failure (a mistyped address, a rotated
-    /// link, a service gone); everything else takes its class's one remedy.
+    /// A link is always set again from its Secret card, a valid move whatever its failure;
+    /// everything else takes its class's one remedy.
     fn remedy(&self) -> Remedy {
         match self.connection.template().table {
             Table::Link(_) => Remedy::Secret,
@@ -146,7 +131,6 @@ impl Failing {
     }
 }
 
-/// `words` begun with a capital, as a sentence begins.
 fn capitalised(words: &str) -> String {
     let mut chars = words.chars();
     chars.next().map_or_else(String::new, |first| {
@@ -159,8 +143,7 @@ fn utc(at: Instant) -> String {
     format!("{} UTC", at.format("%Y-%m-%d %H:%M"))
 }
 
-/// What a class of failure said, in the box's words: the line the box says above a card it
-/// files, never the card's own identity.
+/// The line the box says above a card it files, never the card's own identity.
 fn said(class: Failure) -> String {
     match class {
         Failure::Revoked { status } => format!(
@@ -179,11 +162,10 @@ fn said(class: Failure) -> String {
     }
 }
 
-/// Every failing observation: each declared connection one of whose sources reads as failing,
-/// of the class and since the instant of that source. Of two failing sources, one whose class a
-/// tap mends is the one owed a card, so a calendar's outage never hides its account's sign-in;
-/// of two alike, the longer failing. A model that does not answer is the bootstrap's to ask for
-/// (`bootstrap::owed`).
+/// Each declared connection one of whose sources reads as failing; of two failing sources, one
+/// whose class a tap mends is the one owed a card, so a calendar's outage never hides its
+/// account's sign-in; of two alike, the longer failing. A model that does not answer is the
+/// bootstrap's to ask for (`bootstrap::owed`), so its credential is not in this rule.
 #[must_use]
 pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
     observed
@@ -205,10 +187,8 @@ pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
         .collect()
 }
 
-/// The cards the connections' health owes: one per failing connection and episode whose remedy
-/// a tap gives, and each removal an unused connection is offered. A secret or a sign-in another
-/// rule also asks for is one need, so joined after that rule's cards it is that rule's card
-/// ([`Owed::join`]).
+/// The cards the connections' health owes; a secret or a sign-in another rule also asks for is
+/// one need, so joined after that rule's cards it is that rule's card ([`Owed::join`]).
 #[must_use]
 pub fn owed(observed: &Observed<'_>) -> Owed {
     let settables = observed.answering.settables;
@@ -221,10 +201,9 @@ pub fn owed(observed: &Observed<'_>) -> Owed {
 }
 
 /// The removals an unused connection is offered: an account whose mail has failed for
-/// [`abandoned`] (a Google account's calendars failing alone leave its mail in use), and a
-/// calendar that syncs and is [`quiet`]. A failure a tap mends has its card, from this rule or
-/// another, so its connection is offered no removal, which would be the opposite act for the
-/// same state.
+/// [`abandoned`] (its calendars failing alone leave its mail in use), and a calendar that syncs
+/// and is [`quiet`]; a failure a tap mends has its card, so its connection is offered no removal,
+/// the opposite act for the same state.
 fn unused(observed: &Observed<'_>, failing: &[Failing]) -> Owed {
     let mended = |key: Key| {
         failing.iter().any(|failing| {

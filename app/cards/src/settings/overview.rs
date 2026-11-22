@@ -39,7 +39,6 @@ pub enum Need {
     SignIn,
     /// The code an open sign-in waits for.
     SignInCode,
-    /// Removing a connection.
     Removal(Key),
     /// Letting a plugin reach its link's origin.
     Grant(PluginName),
@@ -48,7 +47,6 @@ pub enum Need {
 /// One open Inbox card.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Asking {
-    /// What it asks for.
     pub need: Need,
     /// First asked, ISO 8601 UTC; the earliest per need is drawn.
     pub at: String,
@@ -152,9 +150,7 @@ pub enum Store {
     NotBegun,
     /// The calendar's schema.
     Calendar,
-    /// Another schema.
     Other,
-    /// An unreadable schema, and why.
     Unreadable(String),
 }
 
@@ -163,7 +159,6 @@ pub enum Store {
 pub struct Storage {
     /// The data repository.
     pub root: String,
-    /// Where it is pushed.
     pub pushed: Pushed,
 }
 
@@ -172,11 +167,9 @@ pub struct Storage {
 pub struct Declared<'a> {
     /// The chains and `[coding]`.
     pub deployment: &'a Deployment,
-    /// Every secret name declared now.
     pub settables: &'a Settables,
     /// `[notify].channels`.
     pub channels: &'a [connect::Channel],
-    /// Every mail account.
     pub accounts: &'a [MailAccount],
     /// Each model job, in page order.
     pub jobs: &'a [ModelJob],
@@ -184,9 +177,7 @@ pub struct Declared<'a> {
     pub plugins: &'a [Manifest],
     /// `[secretary] drive_allow`.
     pub drive: &'a [suzatary_base::drive_path::DrivePath],
-    /// Where the data is kept.
     pub storage: &'a Storage,
-    /// The program this box runs.
     pub build: &'a Build,
     /// How a command is spelled at a terminal.
     pub reach: &'a connect::Reach,
@@ -204,7 +195,6 @@ pub struct Build {
 }
 
 impl Build {
-    /// What `about` says of the build.
     #[must_use]
     pub fn of(about: &wire::AboutPayload) -> Self {
         Self {
@@ -226,21 +216,17 @@ pub struct ModelJob {
     pub label: String,
     /// What it runs.
     pub detail: String,
-    /// Whether the box records its calls.
     pub calls: Calls,
 }
 
-/// Whether a job's calls are recorded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Calls {
     /// Calls are recorded under `key`.
     Recorded {
         /// The model's name, as [`suzatary_conversations::secretary::model::Model::name`] spells it.
         key: String,
-        /// The secret the model reads.
         credential: String,
     },
-    /// No call is recorded.
     Unrecorded,
 }
 
@@ -272,7 +258,6 @@ impl Asked {
         }
     }
 
-    /// These answers with `registers`.
     #[must_use]
     pub fn observed<'a>(&'a self, registers: Registers<'a>) -> Observed<'a> {
         Observed {
@@ -286,11 +271,9 @@ impl Asked {
 /// What the stores say now; an unknown name is never stored.
 #[derive(Debug, Clone, Copy)]
 pub struct Observed<'a> {
-    /// Where each declared secret stands.
     pub secrets: &'a BTreeMap<String, SecretState>,
     /// Each Microsoft account's grants, by address.
     pub grants: &'a BTreeMap<String, MailGrants>,
-    /// What the box's registers hold.
     pub registers: Registers<'a>,
 }
 
@@ -326,14 +309,11 @@ impl Observed<'_> {
     }
 }
 
-/// The box's registers.
 #[derive(Debug, Clone, Copy)]
 pub struct Registers<'a> {
-    /// Every source's results.
     pub health: &'a Healths<SourceKey>,
     /// Each model's calls, by its name.
     pub answered: &'a Healths<String>,
-    /// Each plugin's store.
     pub plugins: &'a BTreeMap<PluginName, Store>,
     /// The data repository's pushes, if it has an upstream.
     pub pushes: Option<&'a suzatary_health::health::Health>,
@@ -533,7 +513,6 @@ impl Words {
     }
 }
 
-/// The overview of `declared` as `observed` reads it.
 #[must_use]
 pub fn overview(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
     let connections = connect::Declared {

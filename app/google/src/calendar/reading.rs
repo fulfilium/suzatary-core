@@ -10,7 +10,6 @@ use prodrome_core::registers::{Node, Stamp, fold};
 
 use super::{Content, Occurrence, OccurrenceId, When};
 
-/// Every occurrence the store holds, with its reading.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Calendar {
     /// Each occurrence's candidates, least object name first; one is a value, more a conflict.
@@ -22,16 +21,13 @@ pub struct Calendar {
 /// One day of the calendar, in a reader's clock.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Day {
-    /// The day.
     pub date: NaiveDate,
     /// What it holds: all-day occurrences first, then by start.
     pub entries: Vec<Entry>,
 }
 
-/// One occurrence on one day.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    /// Which.
     pub id: OccurrenceId,
     /// What it says: the least-named candidate when there are several.
     pub content: Content,
@@ -54,10 +50,8 @@ impl Entry {
 }
 
 impl Calendar {
-    /// The reading of `nodes`, a store at a calendar's declared schema: each occurrence's
-    /// candidates, every writer believed, since the store has one writer and no trust to apply.
-    /// A candidate is a write some register reads, and one that does not read as an occurrence
-    /// is counted, never shown.
+    /// Every writer believed, since the store has one writer and no trust to apply; a write that
+    /// does not read as an occurrence is counted, never shown.
     #[must_use]
     pub fn of(nodes: &[Node<Declared>]) -> Self {
         let mut read = Self::default();
@@ -105,13 +99,11 @@ impl Calendar {
         self.unread
     }
 
-    /// How many occurrences it holds.
     #[must_use]
     pub fn len(&self) -> usize {
         self.occurrences.len()
     }
 
-    /// Whether it holds none.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.occurrences.is_empty()

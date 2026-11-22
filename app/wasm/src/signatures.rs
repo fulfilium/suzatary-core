@@ -88,7 +88,7 @@ impl Todos {
 
     /// The class's `verify`, with each object beneath an epoch that no key proves read as
     /// history written before signatures rather than as a finding, as the box's own verify
-    /// reads it (`suzatary_signatures::signatures::since_epoch`).
+    /// reads it.
     pub fn verify_history(&self) -> Result<String, JsError> {
         // Objects with no honest reading have no epoch to read either: their findings stand.
         let history: std::collections::BTreeSet<String> = self
@@ -141,9 +141,8 @@ impl Todos {
     }
 }
 
-/// The Prodrome's `verify` answer as it prints it, read once: where the walk put each object is
-/// a flag and a depth, and what it found a flag and a list, each pair read here into the sum it
-/// means.
+/// The Prodrome's `verify` answer as it prints it: each flag-and-value pair is read here into
+/// the sum it means.
 #[derive(serde::Deserialize)]
 struct Answered {
     tips: Vec<String>,
@@ -155,7 +154,6 @@ struct Answered {
     problems: Vec<String>,
 }
 
-/// One object of [`Answered`].
 #[derive(serde::Deserialize)]
 struct Row {
     hash: String,

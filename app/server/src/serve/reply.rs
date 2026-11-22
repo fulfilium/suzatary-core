@@ -9,8 +9,6 @@ use suzatary_base::refusal::{Refusal, Status};
 
 /// What a route's work returns.
 pub(crate) trait Outcome: Send + 'static {
-    /// # Errors
-    /// The work's own [`Refusal`].
     fn outcome(self) -> Result<Response, Refusal>;
 }
 

@@ -15,10 +15,10 @@ use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::OauthError;
 
-/// How long a consent stays open from the tap that began it. The bound is on a drawn state and its
-/// verifier, held in memory and taken once by the actor who tapped: it closes a consent link left
-/// in a browser's history. It counts from the tap, the moment the card's "open until" names, so
-/// it covers a box slow to answer the tap and an owner reading Google's warning pages.
+/// How long a consent stays open from the tap that began it, the moment the card's "open until"
+/// names, so a slow answer and Google's warning pages do not cut it short; the state is held in
+/// memory and taken once by the actor who tapped, and the bound closes a consent link left in a
+/// browser's history.
 #[must_use]
 pub fn lasts() -> chrono::Duration {
     chrono::Duration::minutes(LASTS_MINUTES)
@@ -36,9 +36,7 @@ pub struct Begun {
     pub by: Actor,
     /// The verifier its challenge was made from.
     pub verifier: Verifier,
-    /// The client it was asked through.
     pub client: Client,
-    /// Where Google sends the owner back.
     pub redirect: RedirectUri,
     pub link: String,
     /// When it lapses, UTC.
@@ -89,7 +87,6 @@ pub enum Taken {
     Yours(Box<Begun>),
 }
 
-/// Every consent the box holds open, by its state.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Open(BTreeMap<State, Begun>);
 
@@ -137,7 +134,6 @@ impl Open {
 
 /// In no capability record, so only a tap begins a consent and only the callback finishes one.
 pub trait Consents: Sync {
-    /// The box's callback, if the app's URL allows one.
     fn redirect(&self) -> Option<&RedirectUri>;
 
     /// Running until it lapses, or why it could not begin.
@@ -247,9 +243,6 @@ pub fn refused(taken: &Taken, error: Option<&str>) -> Option<(ProposalId, Perfor
 }
 
 /// Ends `card` as the box and says so in its conversation, which it returns.
-///
-/// # Errors
-/// The stores' own failures.
 pub fn end(
     conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
@@ -337,8 +330,7 @@ mod tests {
         )
     }
 
-    /// A state is taken once: the first callback finds its consent, the second finds nothing,
-    /// so a replayed code is never exchanged.
+    /// A state is taken once, so a replayed code is never exchanged.
     #[test]
     fn a_state_is_taken_once() {
         let mut open = Open::default();
@@ -370,9 +362,7 @@ mod tests {
         assert_eq!(open.begun(&card(3)), None);
     }
 
-    /// A consent counts from its tap: a box that answers the tap two minutes late and an owner
-    /// who then reads Google's warning pages for twenty minutes still finish it; it lapses at its
-    /// bound, never before.
+    /// A consent counts from its tap and lapses at its bound, never before.
     #[test]
     fn a_consent_outlasts_a_slow_answer_and_a_slow_reader() {
         let tapped = at(0);

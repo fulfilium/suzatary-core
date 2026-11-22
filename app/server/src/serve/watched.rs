@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 /// The watcher's state, without effects: a poll is a function of the readings and the instant.
 ///
 /// What moved is kept apart from what was announced, so a store that grew is quiet once it stops
-/// growing. Every count is `None` until a read succeeds, and a first count announces nothing, so
-/// neither a restart nor an unreadable store announces history.
+/// growing; a first count announces nothing, so neither a restart nor an unreadable store
+/// announces history.
 #[derive(Debug)]
 pub(crate) struct Watched {
     pace: Pace,
@@ -17,12 +17,10 @@ pub(crate) struct Watched {
     motion: Motion,
 }
 
-/// What the watch knows of the inbox's length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Inbox {
     /// Never read: the first read is a count, not a movement.
     Unread,
-    /// Read at this length.
     Seen(usize),
     /// An announcement went out while it could not be read, so the first poll that reads it is
     /// a movement, once.
@@ -41,9 +39,7 @@ pub(crate) struct Pace {
 /// Whether anything has moved since the last announcement, and over which span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Motion {
-    /// Nothing has moved since the last announcement.
     Still,
-    /// Something moved first at `first` and last at `last`.
     Moving { first: Instant, last: Instant },
 }
 
@@ -170,7 +166,6 @@ mod tests {
         cap: Duration::from_secs(600),
     };
 
-    /// Polls `polls` rounds over a fixed chain and inbox; answers each non-empty announcement.
     fn run(
         watched: &mut Watched,
         start: Instant,

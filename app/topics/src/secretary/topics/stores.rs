@@ -12,8 +12,6 @@ pub struct TopicStores<'a> {
 }
 
 impl TopicStores<'_> {
-    /// # Errors
-    /// Either store unreadable.
     pub fn reading(&self) -> Result<Reading, StoreError> {
         super::reading::of(&self.memberships.nodes()?, &self.aliases.nodes()?)
             .map_err(|several| StoreError::unreadable("topics", several))

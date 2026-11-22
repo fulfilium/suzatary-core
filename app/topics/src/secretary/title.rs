@@ -17,7 +17,6 @@ use suzatary_lines::secretary::transcript;
 /// The opening words of the job's one question, which a scripted fixture keys on.
 pub const ASK: &str = "Title this conversation";
 
-/// The job's rules.
 pub(crate) const SYSTEM: &str = "You name conversations for a list. Answer with the title alone: \
                           at most six words, no quotes, no punctuation at the end, no markup.";
 
@@ -65,9 +64,6 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
 }
 
 /// Read a title off the job's answer: its first line, unquoted, cut before `JOB_MAX`.
-///
-/// # Errors
-/// [`suzatary_conversations::secretary::store::NotATitle`] when nothing is left.
 pub(crate) fn from_answer(
     say: &str,
 ) -> Result<Title, suzatary_conversations::secretary::store::NotATitle> {
@@ -123,9 +119,6 @@ pub fn run(
 }
 
 /// Rename one conversation, as the actor the gate resolved.
-///
-/// # Errors
-/// [`Refusal::bad_request`], [`Refusal::not_found`], or the store's own.
 pub fn rename(
     conversations: Conversations<'_>,
     clock: &dyn Clock,

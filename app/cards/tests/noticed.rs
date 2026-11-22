@@ -58,7 +58,6 @@ fn filing_is_idempotent_and_withdraws_what_is_no_longer_owed() {
     );
 }
 
-/// Only the box's own cards are its to withdraw.
 #[test]
 fn a_card_someone_else_asked_for_is_never_withdrawn() {
     let conversations = suzatary_stores::stores::conversations::InMemory::default();
@@ -144,7 +143,6 @@ fn signing_in() -> Proposal {
     })
 }
 
-/// The secretary's own card for `proposal`, asked at `minute`.
 fn secretarys(inbox_store: &InMemory<InboxEvent>, proposal: Proposal, minute: u32) -> ProposalId {
     let asked = inbox::Asked {
         proposer: Proposer::Secretary,
@@ -163,7 +161,6 @@ fn secretarys(inbox_store: &InMemory<InboxEvent>, proposal: Proposal, minute: u3
     inbox::ask(inbox_store, asked, &transcript::writer(), at(minute)).expect("filed")
 }
 
-/// The Setup conversation's turns, none before it is opened.
 fn said(conversations: &suzatary_stores::stores::conversations::InMemory) -> usize {
     conversations::read(
         conversations.conversations(),
@@ -222,7 +219,6 @@ fn a_card_dismissed_within_the_episode_holds_it() {
     assert_eq!(next.owed.len(), 1);
 }
 
-/// The box's open cards, as the acts they ask for.
 fn open(inbox_store: &InMemory<InboxEvent>) -> Vec<suzatary_inbox::secretary::acts::Act> {
     inbox::fold(inbox_store)
         .expect("reads")
@@ -269,9 +265,8 @@ fn noticed(
     .expect("filed")
 }
 
-/// A locked store neither asks for a key it may hold nor withdraws a card still waiting: the
-/// card stays, and the one card the box adds asks to unlock the store; once it answers, that
-/// card is withdrawn and the waiting one is as it was.
+/// A locked store neither asks for a key it may hold nor withdraws a card still waiting; once
+/// it answers, the unlock card is withdrawn and the waiting one is as it was.
 #[test]
 fn a_locked_store_holds_every_card_and_asks_once_to_be_unlocked() {
     let conversations = suzatary_stores::stores::conversations::InMemory::default();
@@ -373,8 +368,6 @@ fn a_name_the_store_failed_on_costs_only_itself() {
 
 /// A calendar whose link fails is asked for its link once, whichever rule asks: by the
 /// failing-source rule while its secret is stored, and by the secrets rule once it is lost.
-/// The secret's loss is the same need, so no notice after the first appends anything, and
-/// one card for the link stands.
 #[test]
 fn a_failing_link_whose_secret_is_lost_is_asked_for_once() {
     let work = suzatary_connect::connect::Connection::parse("ics", &["Work".to_owned()])

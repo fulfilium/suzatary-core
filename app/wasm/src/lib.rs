@@ -1,9 +1,7 @@
-//! Suzatary's browser module: the Prodrome's exports at this application's schemas, beside the
-//! evaluator and the lifecycle events a replica spells. A class per schema reads its objects
-//! once; every method parses its arguments, calls the core once and prints the answer, so the
-//! tab and the box are one reading. A refusal is the JS exception, never a panic, which would
-//! poison the module. No clock: every instant is an argument. A print that does not parse at the
-//! schema is left out with what rests on it (SPEC law 44), and `tips` says what was.
+//! Suzatary's browser module: the Prodrome's exports at this application's schemas; every method
+//! calls the core once, so the tab and the box are one reading. A refusal is the JS exception,
+//! never a panic, which would poison the module. No clock: every instant is an argument. A print
+//! that does not parse at the schema is left out with what rests on it (SPEC law 44).
 #![forbid(unsafe_code)]
 
 mod asks;
@@ -29,7 +27,6 @@ use wasm_bindgen::JsError;
 
 pub use chains::{Chains, Linker};
 
-/// The todo schema at this application's record.
 type Event = suzatary_record::record::TodoEvent;
 
 prodrome_wasm_exports::schema!(Todos = Event, priced);
@@ -44,8 +41,8 @@ fn json(value: &impl serde::Serialize) -> Result<String, JsError> {
     serde_json::to_string(value).map_err(|e| refused(format!("could not print the answer: {e}")))
 }
 
-/// A reading printed whole for a page, in UTF-8, which the page parses once
-/// (`web/src/wire/text.ts`), and beside it, as JSON, the little of it the worker reads itself.
+/// A reading printed whole in UTF-8, which the page parses once (`web/src/wire/text.ts`), and
+/// beside it, as JSON, the little of it the worker reads itself.
 #[wasm_bindgen::prelude::wasm_bindgen(getter_with_clone)]
 pub struct Read {
     pub text: Vec<u8>,

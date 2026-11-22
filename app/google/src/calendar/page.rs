@@ -2,7 +2,6 @@
 
 use suzatary_todo::reading::{CalendarDay, CalendarPage, CalendarRow};
 
-/// The calendar's page.
 #[must_use]
 pub fn calendar(days: &[super::Day]) -> CalendarPage {
     CalendarPage {
@@ -33,7 +32,6 @@ fn calendar_row(entry: &super::Entry) -> CalendarRow {
     }
 }
 
-/// The same days as plain text, for a page that has no rendering yet.
 #[must_use]
 pub fn calendar_text(days: &[super::Day]) -> String {
     days.iter()

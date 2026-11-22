@@ -12,7 +12,6 @@ pub fn at(minute: u32) -> Datetime {
     Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")
 }
 
-/// The card asking for the secret `name`.
 #[must_use]
 pub fn secret(name: &str) -> Proposal {
     Proposal::Act(Act::Secret {
@@ -21,7 +20,6 @@ pub fn secret(name: &str) -> Proposal {
     })
 }
 
-/// The cards owed for the secrets `names`.
 #[must_use]
 pub fn owed(names: &[&str]) -> Owed {
     names

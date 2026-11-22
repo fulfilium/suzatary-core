@@ -1,4 +1,4 @@
-//! Topics on the secretary's rounds and notes (`docs/TOPICS-PLAN-2026-10-21.md`).
+//! Topics on the secretary's rounds and notes.
 
 pub mod backfill;
 pub mod carry;

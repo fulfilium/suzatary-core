@@ -17,7 +17,6 @@ pub fn percent_encode(value: &str) -> String {
     out
 }
 
-/// `key=value&…`, each side [`percent_encode`]d.
 #[must_use]
 pub fn encode_form(fields: &[(&str, &str)]) -> String {
     fields

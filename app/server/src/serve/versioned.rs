@@ -11,7 +11,6 @@ use axum::response::{IntoResponse, Response};
 
 use super::State;
 
-/// The prefix of every path named by a build.
 pub(crate) const PREFIX: &str = "/b/";
 
 /// The path that names the build this box serves.
@@ -30,7 +29,6 @@ pub(crate) const ROOT: [&str; 9] = [
     "/.well-known/assetlinks.json",
 ];
 
-/// What a request's path is to the frontend.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Path {
     /// A path no build names, served as it is.
@@ -48,7 +46,6 @@ pub(crate) enum Named<'a> {
     Own(&'a str),
     /// A file of another build, or no file.
     Other,
-    /// The name of the build served.
     Current,
 }
 

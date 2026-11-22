@@ -14,17 +14,9 @@ pub(crate) trait Body: Sized + Send + 'static {
     /// other.
     type Wire: DeserializeOwned;
 
-    /// The body, out of its wire form.
-    ///
-    /// # Errors
-    /// A [`Refusal::bad_request`] naming the field that did not parse.
     fn parse(wire: Self::Wire, state: &State) -> Result<Self, Refusal>;
 
-    /// Read, cap and parse the request's body.
-    ///
-    /// # Errors
-    /// A [`Refusal::bad_request`] for a body over the cap, not JSON, not an object, not
-    /// [`Body::Wire`], or refused by [`Body::parse`].
+    /// Read, cap and parse the request's body; a [`Refusal::bad_request`] for any fault.
     fn read(
         body: axum::body::Body,
         state: &State,

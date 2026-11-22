@@ -27,15 +27,15 @@ use super::State;
 use super::guard::{Asks, Proof};
 use super::route::blocking;
 
-/// The header naming the device key that signed the request.
+/// The device key that signed the request.
 pub const KEY_HEADER: &str = "x-suzatary-key";
-/// The header carrying its signature of the request's name.
+/// The signature of the request's name.
 pub const SIGNATURE_HEADER: &str = "x-suzatary-signature";
-/// The header carrying the instant its device stamped on it, RFC 3339.
+/// The instant the device stamped on the request, RFC 3339.
 pub const AT_HEADER: &str = "x-suzatary-at";
-/// The header carrying the nonce its device drew for it, which the box never records.
+/// The nonce the device drew, which the box never records.
 pub const NONCE_HEADER: &str = "x-suzatary-nonce";
-/// The header a replayed answer carries, so a caller can tell it was answered from the record.
+/// Carried by an answer replayed from the record.
 pub(crate) const REPLAYED_HEADER: &str = "x-suzatary-replayed";
 /// The largest answer kept: an act's answer is a payload, not a document.
 const ANSWER_CAP: usize = 16 << 20;
@@ -45,10 +45,6 @@ pub(crate) type InFlight = Arc<Mutex<BTreeSet<Hash>>>;
 
 /// The body, read whole where a signature covers it, and the door's proof `P` of the request.
 /// `trusting` is the keyed chains the route can reach.
-///
-/// # Errors
-/// A body over its cap, a request dated outside the window, or one its signature does not prove,
-/// in the door's words.
 pub(crate) async fn asked<P: Proof>(
     state: &State,
     admitted: &Admitted,
@@ -96,8 +92,8 @@ pub(crate) async fn asked<P: Proof>(
 }
 
 /// A signed read whose signature proves a key revoked for the gate's actor is answered
-/// [`Refusal::wipe`], on which the tab deletes what it holds. An unsigned or unverified read is a
-/// read by the login alone, so only a device that proves it holds the revoked key is wiped.
+/// [`Refusal::wipe`], on which the tab deletes what it holds; only a device that proves it holds
+/// the revoked key is wiped.
 async fn read_by_a_kept_key(
     state: &State,
     admitted: &Admitted,
@@ -148,9 +144,6 @@ async fn read_by_a_kept_key(
 
 /// The answer already given to this request, as it was given, if the box performed it; a
 /// conflict where it was performed and its answer is no longer kept here.
-///
-/// # Errors
-/// The record store unreadable.
 pub(crate) async fn answered(
     state: &State,
     asking: &Performing,
@@ -194,10 +187,7 @@ pub(crate) struct Performing {
 }
 
 impl Performing {
-    /// Claim the request's name.
-    ///
-    /// # Errors
-    /// A conflict, when the same request is being performed now.
+    /// Claim the request's name; a conflict when the same request is being performed now.
     pub(crate) fn claim(state: &State, proven: &Proven) -> Result<Self, Refusal> {
         let record = proven.record().clone();
         let name = Hash::new(record.name.clone()).map_err(|e| Refusal::internal(e.to_string()))?;
@@ -215,9 +205,6 @@ impl Performing {
 
     /// Keep the [`Answer`] and the request's record under its name, and hand the answer on
     /// unchanged.
-    ///
-    /// # Errors
-    /// An answer too large to keep, or the record store refusing it.
     pub(crate) async fn kept(
         mut self,
         response: Response,

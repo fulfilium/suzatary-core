@@ -43,8 +43,6 @@ fn google() -> Connection {
     Connection::parse("google", &["bea@example.test".to_owned()]).expect("a Google account")
 }
 
-/// A deployment declaring the Work calendar, Ada's Microsoft account and Bea's Google
-/// account.
 struct World {
     declared: Declared,
     settables: Settables,
@@ -131,8 +129,6 @@ fn secrets_filed(fold: &Fold) -> usize {
         .count()
 }
 
-/// One result of a link: it synced, or it failed of a refusing status, of an address not
-/// reached, or of an outage.
 #[derive(Debug, Clone, Copy)]
 enum Seen {
     Synced,
@@ -152,11 +148,10 @@ fn seen() -> impl proptest::strategy::Strategy<Value = Seen> {
 }
 
 proptest::proptest! {
-    /// However often each failure is seen, whatever its class moves to between sightings
-    /// (an outage, 403, then 404), and whatever the box restarts between filings (each
-    /// reads the inbox afresh), one card is filed per episode of a failing link, an episode
-    /// being every result since one success; and the card stays as it stood (dismissed stays
-    /// dismissed, waiting stays waiting) until a success.
+    /// However often each failure is seen, whatever its class moves to between sightings,
+    /// and whatever the box restarts between filings, one card is filed per episode of a
+    /// failing link, an episode being every result since one success; and the card stays as
+    /// it stood until a success.
     #[test]
     fn one_act_per_connection_and_since(
         script in proptest::collection::vec((seen(), 1u8..4, proptest::bool::ANY), 1..20)
@@ -164,7 +159,6 @@ proptest::proptest! {
         let mut world = World::new();
         let inbox_store = InMemory::<InboxEvent>::default();
         let conversations = suzatary_stores::stores::conversations::InMemory::default();
-        // How many episodes began.
         let mut episodes = 0usize;
         let mut open_episode = false;
         let mut hour = 0;
@@ -174,7 +168,6 @@ proptest::proptest! {
             match result {
                 Seen::Synced => open_episode = false,
                 Seen::Refused(_) | Seen::Unreached | Seen::Outage => {
-                    // A failure after a success, or the first result, begins an episode.
                     if !open_episode {
                         episodes += 1;
                         open_episode = true;
@@ -189,7 +182,6 @@ proptest::proptest! {
                 object.reading.open()
                     && matches!(&object.asked.proposal, Proposal::Act(Act::Secret { .. }))
             }).count();
-            // Within an episode, its card waits until dismissed or a success.
             proptest::prop_assert!(waiting <= 1, "{} cards wait at once", waiting);
             if dismiss
                 && let Some(open) = fold.objects().find(|object| object.reading.open())
@@ -213,10 +205,9 @@ proptest::proptest! {
     }
 }
 
-/// A Google account reads two sources, its mail and its calendars. Its calendars failing
-/// alone for a week leave its mail in use, so no removal is offered; a sign-in its mail needs
-/// is owed its card whatever older outage its calendars have; and a sign-in card another
-/// rule already asks for, for one missing part, is that card.
+/// A Google account's calendars failing alone for a week leave its mail in use, so no removal
+/// is offered; a sign-in its mail needs is owed its card whatever older outage its calendars
+/// have; and a sign-in card another rule already asks for, for one missing part, is that card.
 #[test]
 fn a_google_accounts_two_sources() {
     let bea = suzatary_mail::mail::account_email::AccountEmail::new("bea@example.test")
@@ -273,8 +264,7 @@ fn a_google_accounts_two_sources() {
 
 /// The secrets rule and this one ask for a link stored nowhere once between them, however
 /// many times the box files and whatever class its failure moves to: one card waits, its
-/// words name no earlier card, and a filing over an unchanged state writes nothing. Their
-/// join filed a new card and withdrew the old on every filing before 2.1.34.
+/// words name no earlier card, and a filing over an unchanged state writes nothing.
 #[test]
 fn a_missing_link_is_asked_for_by_one_card_however_often_the_box_files() {
     let mut world = World::new();

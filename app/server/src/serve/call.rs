@@ -10,7 +10,6 @@ pub(crate) struct Call<W, P, B> {
     /// The chain the path named, or the first; a box route is handed the first.
     pub chain: Chained,
     pub admitted: Admitted,
-    /// What the route's guard minted.
     pub guard: W,
     pub params: P,
     pub body: B,

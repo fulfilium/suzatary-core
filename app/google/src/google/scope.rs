@@ -49,7 +49,6 @@ impl Scope {
         }
     }
 
-    /// What it reaches, as a card says it.
     #[must_use]
     pub const fn sentence(self) -> &'static str {
         match self {
@@ -58,7 +57,6 @@ impl Scope {
         }
     }
 
-    /// The part `text` names.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|scope| scope.as_str() == text)
@@ -70,7 +68,7 @@ impl Scope {
 pub struct Scopes(BTreeSet<Scope>);
 
 impl Scopes {
-    /// Every part: what a Google account's connection asks for.
+    /// What a Google account's connection asks for.
     #[must_use]
     pub fn all() -> Self {
         Self(Scope::ALL.into_iter().collect())
@@ -110,18 +108,15 @@ impl Scopes {
         Self::of(self.iter().filter(|part| !held.contains(*part)))
     }
 
-    /// Whether it asks for `part`.
     #[must_use]
     pub fn contains(&self, part: Scope) -> bool {
         self.0.contains(&part)
     }
 
-    /// Its parts, in order.
     pub fn iter(&self) -> impl Iterator<Item = Scope> + '_ {
         self.0.iter().copied()
     }
 
-    /// What it reaches, as a card says it.
     #[must_use]
     pub fn sentence(&self) -> String {
         let parts: Vec<&str> = self.iter().map(Scope::sentence).collect();
@@ -175,9 +170,6 @@ pub struct RedirectUri(String);
 impl RedirectUri {
     /// The callback on the origin of `app_url`, the URL the instance serves the app at: https,
     /// or plain http on a loopback host (RFC 8252 §7.3), which only a test serves.
-    ///
-    /// # Errors
-    /// Why `app_url` names no such origin.
     pub fn of_app(app_url: &str) -> Result<Self, String> {
         let (scheme, rest) = app_url
             .split_once("://")
@@ -220,7 +212,6 @@ impl RedirectUri {
         }
     }
 
-    /// As the consent's URL, the token request and the client's list spell it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -272,8 +263,6 @@ impl<'de> serde::Deserialize<'de> for RedirectUri {
 mod tests {
     use super::*;
 
-    /// The callback is the app's origin and the fixed path, whatever path the app URL names, and
-    /// only https leaves a loopback host.
     #[test]
     fn the_redirect_is_the_apps_origin_and_the_callback() {
         for (app, redirect) in [
@@ -306,7 +295,6 @@ mod tests {
         }
     }
 
-    /// A stored callback reads back only as the box spells one.
     #[test]
     fn a_stored_redirect_round_trips_and_nothing_else_reads() {
         let uri = RedirectUri::of_app("https://box.example.test").expect("a callback");
@@ -323,8 +311,6 @@ mod tests {
         }
     }
 
-    /// A part is granted only when every scope it needs is, so a person who unticks Calendar's
-    /// write on Google's page holds no calendar.
     #[test]
     fn a_part_is_granted_only_whole() {
         let all = Scopes::all().requested();

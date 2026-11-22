@@ -1,8 +1,7 @@
 //! The todo chains a tab holds, as the set every row and proposal is priced through
-//! (`suzatary_signatures::chain_set`): each chain's objects read once, its name and its policy, and the
-//! set read at the instant a reading asks for, each chain's reading there folded once until the
-//! chain is held again. A chain whose objects or policy do not read is held as that failure, so
-//! it moves nothing that does not refer into it and never refuses an act.
+//! (`suzatary_signatures::chain_set`), each chain's reading folded once until the chain is held
+//! again. A chain whose objects or policy do not read is held as that failure, so it moves
+//! nothing that does not refer into it and never refuses an act.
 
 use std::collections::BTreeMap;
 
@@ -22,7 +21,6 @@ use crate::{Event, json, printed, refused};
 /// One chain's replica and policy, or why they did not read.
 type Held = Result<(Replica<Event>, Untrusted), String>;
 
-/// Every chain the tab holds, by name, each beside its last reading.
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct Chains(Vec<(ChainName, Held, Remembered)>);
@@ -36,11 +34,9 @@ impl Chains {
         Chains::default()
     }
 
-    /// Hold the chain `name`: its objects, `[{hash, text}]`, read once, under `untrusted` (a
-    /// JSON array of actor names, as the box reports it with the objects). Objects or a policy
-    /// that do not read are held as that failure; only a name that is no chain's is refused.
-    /// Answers what was held: `{excluded}`, what the chain's reading leaves out as `tips`
-    /// answers it, or `{why}`, why the chain did not read.
+    /// Hold the chain `name`: its objects, `[{hash, text}]`, under `untrusted` (a JSON array of
+    /// actor names); only a name that is no chain's is refused. Answers `{excluded}`, what the
+    /// chain's reading leaves out as `tips` answers it, or `{why}`, why the chain did not read.
     pub fn hold(&mut self, name: &str, objects: &str, untrusted: &str) -> Result<String, JsError> {
         let name = ChainName::new(name).map_err(|e| refused(e.to_string()))?;
         // The todo schema has no husks: every print is read as a stranger's.
@@ -61,8 +57,8 @@ impl Chains {
         self.0.retain(|(held, ..)| held.as_str() != name);
     }
 
-    /// The set these chains make at `at` (ISO), read once, to link every term of one reading
-    /// in a chain whose functions are `specs` (`{todo: term}`). The caller frees it.
+    /// The set these chains make at `at` (ISO), to link every term of one reading in a chain
+    /// whose functions are `specs` (`{todo: term}`). The caller frees it.
     pub fn linker(&self, specs: &str, at: &str) -> Result<Linker, JsError> {
         let specs = parse_specs(specs).map_err(refused)?;
         let at = datetime_of(parse_instant("at", at).map_err(refused)?)
@@ -86,9 +82,9 @@ pub struct Linker {
 
 #[wasm_bindgen]
 impl Linker {
-    /// `term` with every reference bound: a bare one to the chain's functions, a qualified one to
-    /// its chain's function in the set, compiled against that chain's own environment, as the box
-    /// binds a row. A chain not held, or held as a failure, reads `∅`; a loop is the refusal.
+    /// `term` with every reference bound as the box binds a row: a bare one to the chain's
+    /// functions, a qualified one to its chain's function in the set. A chain not held, or held
+    /// as a failure, reads `∅`; a loop is the refusal.
     pub fn link(&self, term: &str) -> Result<String, JsError> {
         let term = parse_term("term", term).map_err(refused)?;
         let linked =
@@ -96,8 +92,8 @@ impl Linker {
         printed(&json::to_json(linked.term()))
     }
 
-    /// Every chain this set holds as a failure, `[{chain, why}]`: what a reference into it read
-    /// `∅` for, from the same reading as every link.
+    /// Every chain this set holds as a failure, `[{chain, why}]`, from the same reading as every
+    /// link.
     pub fn failed(&self) -> Result<String, JsError> {
         json(&self.failed)
     }

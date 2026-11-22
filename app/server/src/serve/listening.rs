@@ -37,8 +37,6 @@ impl std::fmt::Display for Plain {
 impl std::error::Error for Plain {}
 
 impl Listening {
-    /// # Errors
-    /// [`Plain`] for no pair on an address that is not loopback.
     pub fn new(at: SocketAddr, tls: Option<(PathBuf, PathBuf)>) -> Result<Self, Plain> {
         match tls {
             Some((cert, key)) => Ok(Listening::Tls { at, cert, key }),

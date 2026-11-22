@@ -1,10 +1,5 @@
-//! The topics as a page reads and writes them: the two stores' replicas, the
-//! `suzatary_topics::secretary::topics::Reading` over what they hold, and its planners, which answer
-//! events for the replicas' `append`. The box plans with the same functions, so a tab writing
-//! offline writes what the box would write holding the same objects.
-//!
-//! The replicas are the Prodrome's `schema!` exports at the two stores' schemas. A page reads
-//! the topics through [`TopicReading`].
+//! The topics as a page reads and writes them; the box plans with the same functions, so a tab
+//! writing offline writes what the box would write holding the same objects.
 
 use prodrome_core::event::{Actor, canonical};
 use prodrome_core::fpl::datetime_of;
@@ -23,13 +18,11 @@ use crate::{json, refused};
 crate::object_rows::objects_store!(Memberships = MembershipEvent, written);
 crate::object_rows::objects_store!(TopicAliases = AliasEvent, written);
 
-/// The topics both classes' objects read as, read once.
 #[wasm_bindgen]
 pub struct TopicReading(pub(crate) Reading);
 
 #[wasm_bindgen]
 impl TopicReading {
-    /// The memberships and the aliases read together.
     #[wasm_bindgen(constructor)]
     pub fn new(memberships: &Memberships, aliases: &TopicAliases) -> Result<TopicReading, JsError> {
         let memberships = memberships.0.reading()?.read().map_err(refused)?;

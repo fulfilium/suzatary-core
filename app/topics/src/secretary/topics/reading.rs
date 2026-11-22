@@ -1,6 +1,5 @@
 //! The topic stores as the Prodrome's tag sets (`prodrome_core::tags`, SPEC law 48): a
-//! [`Target`] carries [`Topic`]s. This module names the instantiation, reads the two stores with
-//! who set each topic, and reads what the secretary draws from them.
+//! [`Target`] carries [`Topic`]s.
 
 use crate::wire::topics::TopicsPayload;
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,11 +29,8 @@ impl Tagging for Topics {
 
 /// A topic put on a target or taken off it.
 pub type MembershipEvent = membership::MembershipEvent<Topics>;
-/// The membership store's schema.
 pub type MembershipVocabulary = membership::MembershipVocabulary<Topics>;
-/// A topic's alias event.
 pub type AliasEvent = alias::AliasEvent<Topics>;
-/// The alias store's schema.
 pub type AliasVocabulary = alias::AliasVocabulary<Topics>;
 /// What a topic's name stands for.
 pub(crate) type Alias = alias::Alias<Topics>;
@@ -198,9 +194,6 @@ pub struct SeveralGeneses(pub usize);
 
 /// The reading of the membership store's `memberships` and the alias store's `aliases`, each
 /// the one prodrome its store holds; a store not begun reads as empty.
-///
-/// # Errors
-/// [`SeveralGeneses`], a store holding more than one prodrome.
 pub fn of(
     memberships: &[Node<MembershipEvent>],
     aliases: &[Node<AliasEvent>],
@@ -213,7 +206,6 @@ pub fn of(
     ))
 }
 
-/// The one prodrome of `prodromes`, or `empty` where there is none.
 fn one<'a, K, E: Schema>(
     prodromes: &'a BTreeMap<K, Prodrome<E>>,
     empty: &'a Prodrome<E>,

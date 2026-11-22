@@ -48,12 +48,10 @@ pub struct Window {
     pub before: Option<usize>,
     /// Already capped.
     pub limit: usize,
-    /// The reference the rounds must touch.
     pub about: Option<Reference>,
 }
 
 impl Window {
-    /// The newest full-size window.
     #[must_use]
     pub fn newest() -> Self {
         Self {
@@ -64,20 +62,17 @@ impl Window {
     }
 }
 
-/// The default window size, in turns.
+/// In turns.
 pub const DEFAULT_TURN_WINDOW: usize = 60;
 
-/// How many hits one search answers.
 pub(crate) const SEARCH_LIMIT: usize = 50;
 
 /// What a reading takes from beyond the two stores.
 #[derive(Clone, Copy)]
 pub struct Dress<'a> {
-    /// Renders a model's blocks.
     pub answers: &'a dyn Answers,
     /// For a receipt's words; `None` reads every receipt as unread.
     pub memory: Option<&'a wire::MemoryPayload>,
-    /// Draws a changeset against its chain.
     pub draws: &'a dyn Draw,
 }
 
@@ -189,7 +184,7 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
     })
 }
 
-/// Every conversation, newest first.
+/// Newest first.
 #[must_use]
 pub fn conversations<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
@@ -723,7 +718,6 @@ fn disconnect_on_wire(connection: &Connection, sentence: String) -> ProposedAct 
     }
 }
 
-/// A remember card on the wire, with each fact a consolidation replaces.
 fn remember_on_wire(
     words: &Words,
     about: memory::Kind,

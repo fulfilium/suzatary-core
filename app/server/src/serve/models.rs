@@ -6,7 +6,6 @@ use suzatary_digest::secretary::compacting::Compacting;
 
 use suzatary_digest::secretary::reserve::Reserve;
 
-/// The models `[secretary]` names.
 #[derive(Debug, Clone)]
 pub struct Models {
     /// `[secretary] model`: the conversation, the reviews and the titles.
