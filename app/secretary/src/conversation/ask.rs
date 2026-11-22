@@ -1,5 +1,3 @@
-//! How a round asks its model.
-
 use serde_json::Value;
 use suzatary_digest::secretary::memories::Memories;
 
@@ -16,28 +14,22 @@ use suzatary_digest::secretary::told::{Asking, context_of};
 use suzatary_memory::secretary::memory;
 use suzatary_topics::secretary::topics::stores::TopicStores;
 
-/// How a round asks its model: the one difference between a model that remembers and one that
-/// does not.
+/// How a round asks its model.
 #[derive(Clone, Copy)]
 pub enum Ask<'a> {
     /// A model with no session, sent this conversation's window of live turns under what it
     /// remembers ([`suzatary_digest::secretary::told::context_of`]) each time.
     Window {
-        /// The model.
         model: &'a dyn Model,
-        /// The memory it is told.
         memories: Memories<'a>,
-        /// The topics it is told are in use.
         topics: TopicStores<'a>,
     },
     /// A session resumed with the turns it has not read, opened when there is none; an open that
     /// fails asks `fallback` once, as [`Ask::Window`] would.
     Session {
-        /// The model that holds the session.
         model: &'a dyn SessionModel,
         /// Asked when a session will not open.
         fallback: &'a dyn Model,
-        /// The memory it is told.
         memories: Memories<'a>,
         /// The topics it is told are in use when it opens.
         topics: TopicStores<'a>,
@@ -49,7 +41,6 @@ pub enum Ask<'a> {
     },
 }
 
-/// What one ask sent the model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Sent {
     /// The window under what the model remembers, to a model with no session or one opened now.
@@ -70,13 +61,11 @@ pub enum Answered {
     Stateless {
         /// What it was sent.
         sent: Conversation,
-        /// Its name.
         by: String,
     },
 }
 
 impl Answered {
-    /// What the model was sent.
     #[must_use]
     pub fn sent(self) -> Sent {
         match self {
@@ -88,21 +77,15 @@ impl Answered {
     }
 }
 
-/// What one ask sent and got back.
 pub struct Asked {
-    /// What the model answered.
     pub reply: Reply,
-    /// Who answered, and what it was sent.
     pub answered: Answered,
     /// The memory's version this ask told the model; `None` when it told none or could not read it.
     pub seen: Option<u64>,
 }
 
 impl Ask<'_> {
-    /// Ask once, over what `stored` holds and `waiting` names.
-    ///
-    /// # Errors
-    /// The model's, except a lost session, which opens a fresh one.
+    /// Ask once, over what `stored` holds and `waiting` names; a lost session opens a fresh one.
     pub fn ask(
         &self,
         id: &ConversationId,
@@ -311,7 +294,6 @@ struct Heading {
     version: Option<u64>,
 }
 
-/// Which telling an ask makes.
 #[derive(Clone, Copy)]
 enum Telling<'a> {
     /// To a model with no session, or a session opening: everything, the topics in use, and the
@@ -322,9 +304,7 @@ enum Telling<'a> {
     Resumed(Option<u64>),
 }
 
-/// What `telling` tells: the facts whole, then the record of every conversation, to a model
-/// opening; the facts added and forgotten since a resumed session was last told. A memory that
-/// will not read is said, never skipped.
+/// What `telling` tells; a memory that will not read is said, never skipped.
 fn heading(memories: Memories<'_>, telling: Telling<'_>) -> Heading {
     let memory = match memories.reads().read() {
         Ok(memory) => memory,

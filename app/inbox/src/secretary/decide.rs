@@ -1,5 +1,4 @@
-//! A recorded decision the secretary proposes and the owner's tap records: the proposal's
-//! sentence, its wire shape, and the tap's perform, each arm the shared matches delegate to.
+//! A recorded decision the secretary proposes and the owner's tap records.
 //!
 //! The tap writes as the owner (the gate's actor), so a decision the secretary drafted from a
 //! round that read mail stands only once he has read the card. A refusal at tap time (the id
@@ -14,7 +13,6 @@ use suzatary_todo::decisions::Decisions;
 use suzatary_todo::decisions::{DecisionId, Draft};
 use suzatary_todo::render::Render;
 
-/// The imperative a card and a list both print.
 #[must_use]
 pub fn sentence(draft: &Draft) -> String {
     let said = format!("record the decision {}: {}", draft.id(), draft.title());
@@ -25,7 +23,6 @@ pub fn sentence(draft: &Draft) -> String {
     format!("{said}, superseding {}", links.join(", "))
 }
 
-/// The proposal as the page draws it.
 #[must_use]
 pub fn on_wire(draft: &Draft) -> wire::ProposedAct {
     wire::ProposedAct::Decision {

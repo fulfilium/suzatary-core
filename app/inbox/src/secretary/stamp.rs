@@ -12,7 +12,6 @@ use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_signatures::chain_set::ChainSet;
 use suzatary_signatures::signatures::Seat;
 
-/// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum Stamp {
@@ -24,8 +23,8 @@ pub enum Stamp {
     /// its id, which the model is shown beside the line, may have been chosen by mail the agent
     /// read, so the line is his and is not clean.
     Unconfirmed(Speaker),
-    /// The box, asking the question of one of its own rounds. Its words may carry what it did not
-    /// compose (a sweep loads mail into its question), so it is not clean, and it is nobody's own.
+    /// The box, asking the question of one of its own rounds: its words may carry what it did not
+    /// compose, so it is not clean, and it is nobody's own.
     Asking(OwnRound),
 }
 
@@ -33,7 +32,6 @@ pub enum Stamp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Speaker {
     pub actor: String,
-    /// Where it asked from.
     pub seat: Seat,
 }
 
@@ -44,7 +42,6 @@ impl Speaker {
         Self::at(actor, Seat::Device)
     }
 
-    /// `actor`, asking from `seat`.
     #[must_use]
     pub fn at(actor: &str, seat: Seat) -> Self {
         Self {
@@ -137,7 +134,6 @@ impl Stamp {
         }
     }
 
-    /// The actor, when the gate stamped it.
     #[must_use]
     pub fn actor(&self) -> Option<&str> {
         match self {
@@ -147,11 +143,11 @@ impl Stamp {
     }
 }
 
-/// The stamp the gate's `speaker` puts on a line pointing at `references`, as `set` reads the chains
-/// when the line is written: the actor's own, unless a reference names a todo whose content is
-/// still an untrusted writer's ([`suzatary_todo::view::provisional_content`]), or one the set cannot show
-/// to be otherwise, a todo named by genesis among them, which makes it [`Stamp::Unconfirmed`]. What decides is who wrote the todo's
-/// words, its id among them; an untrusted claim about a todo he wrote leaves them his.
+/// The stamp the gate's `speaker` puts on a line pointing at `references`: the actor's own,
+/// unless a reference names a todo whose words are still an untrusted writer's, or one the set
+/// cannot show to be otherwise (a todo named by genesis), which makes it [`Stamp::Unconfirmed`].
+/// What decides is who wrote the todo's words, its id among them; an untrusted claim about a todo
+/// he wrote leaves the line his.
 #[must_use]
 pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) -> Stamp {
     let mut todos: BTreeMap<_, BTreeSet<&str>> = BTreeMap::new();
@@ -197,8 +193,8 @@ pub fn stamp(at: suzatary_base::capability::Datetime) -> String {
 mod tests {
     use super::*;
 
-    /// A stamp prints and reads back as itself, the box's own rounds' included, an actor's name
-    /// never reads as the box, and a device's stamp prints as it did before the operator's existed.
+    /// A stamp prints and reads back as itself, the box's own rounds' included, and an actor's
+    /// name never reads as the box.
     #[test]
     fn a_stamp_reads_back_as_itself() {
         for seat in [Seat::Device, Seat::Operator] {
@@ -222,8 +218,6 @@ mod tests {
         );
     }
 
-    /// A line pointing at a todo named by genesis is stamped unconfirmed: the set reads chains by
-    /// name and cannot show who wrote it, whatever store holds it.
     #[test]
     fn a_todo_named_by_genesis_is_stamped_unconfirmed() {
         let at =

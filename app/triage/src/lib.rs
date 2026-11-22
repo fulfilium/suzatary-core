@@ -1,5 +1,4 @@
-//! What the box decided about each message: the corpus, junk, older mail, watches, the triage
-//! state, and the rules the box runs over its readings.
+//! What the box decided about each message, and the rules it runs over its readings.
 
 #![forbid(unsafe_code)]
 
@@ -21,11 +20,9 @@ pub mod mail {
 }
 pub mod rule;
 pub mod wire {
-    //! The web's payloads of a mail watch.
     pub mod triage;
 }
 
-// The inert corpus, Junk folder, older mail and watch log: test support.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../tests/support/nothing.rs"]
 mod nothing;

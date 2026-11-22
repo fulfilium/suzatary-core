@@ -13,7 +13,6 @@ use suzatary_inbox::secretary::changes;
 use suzatary_inbox::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_record::todo::{Deadline, Price, TodoFields};
 
-/// The todo id for `name` expiring on `day`.
 #[must_use]
 pub fn todo(name: &Settable, day: chrono::NaiveDate) -> String {
     format!("{}{}", prefix(name), day.format("%Y%m%d"))
@@ -24,9 +23,6 @@ fn prefix(name: &Settable) -> String {
 }
 
 /// The acts that bring `nodes` up to `expiring`. `settings` is the Settings page's address.
-///
-/// # Errors
-/// The open list does not fold.
 pub fn acts(
     nodes: &[suzatary_record::record::Node],
     at: Datetime,
@@ -83,9 +79,6 @@ pub fn acts(
 
 /// Write [`acts`] to the upkeep chain as the secretary; a deployment with no `[upkeep]` writes
 /// nothing.
-///
-/// # Errors
-/// As [`acts`], [`crate::secretary::upkeep`]'s, and `gate::apply`'s refusals.
 pub fn write(
     chains: &[crate::secretary::Bound<'_>],
     deployment: &Deployment,

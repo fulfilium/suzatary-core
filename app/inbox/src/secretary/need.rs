@@ -5,7 +5,6 @@ use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use suzatary_mail::mail::address::EmailAddress;
 
-/// What a proposal asks the owner for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Need<'a> {
     /// A secret, by its name: the secrets rule and a failing link both ask for it, each in its
@@ -19,7 +18,6 @@ pub enum Need<'a> {
 }
 
 impl Proposal {
-    /// What it asks the owner for.
     #[must_use]
     pub fn need(&self) -> Need<'_> {
         match self {

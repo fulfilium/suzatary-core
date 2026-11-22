@@ -31,7 +31,6 @@ struct Answer {
     mail: Vec<suzatary_triage::mail::verbs::Summary>,
 }
 
-/// What the file side of a search answers.
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Files {

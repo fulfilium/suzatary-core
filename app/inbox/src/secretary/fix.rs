@@ -6,7 +6,6 @@ use suzatary_google::google::{Held, RedirectUri, Scope, Scopes};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::lacking::{Grant, Lacking};
 
-/// Why a lack has no card to fix it now.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unfixable {
     #[error("{0} holds that grant already: tap Try again")]
@@ -15,7 +14,6 @@ pub enum Unfixable {
     NoRedirect,
 }
 
-/// The step that gives what a card lacked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fix {
     GoogleSignIn {
@@ -29,7 +27,6 @@ pub enum Fix {
 }
 
 impl Fix {
-    /// The act of the box's card that performs it.
     #[must_use]
     pub fn act(&self) -> Act {
         match self {
@@ -48,9 +45,6 @@ impl Fix {
 }
 
 /// The step that gives what `lacking` names, asking only for the parts `held` lacks.
-///
-/// # Errors
-/// [`Unfixable`] when the step is done already or cannot begin from this box.
 pub fn of(
     lacking: &Lacking,
     held: &Held,
@@ -167,7 +161,6 @@ mod tests {
         }
     }
 
-    /// Each other lack names its own card.
     #[test]
     fn every_lack_names_the_card_that_gives_it() {
         assert_eq!(

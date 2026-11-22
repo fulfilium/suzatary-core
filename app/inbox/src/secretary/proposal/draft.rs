@@ -13,7 +13,6 @@ pub struct Draft {
     pub to: Vec<String>,
     /// The visible copies.
     pub cc: Vec<String>,
-    /// The subject.
     pub subject: String,
     /// The body, as plain text, like every outgoing message this program builds.
     pub body: String,
@@ -23,7 +22,6 @@ pub struct Draft {
     pub attachments: Vec<suzatary_held::secretary::attached::Attached>,
 }
 
-/// `Email(account, to, cc, subject, body, attachments)`.
 pub const EMAIL: prodrome_core::literal::codec::Constructor = (
     "Email",
     &["account", "to", "cc", "subject", "body", "attachments"],

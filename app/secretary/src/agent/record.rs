@@ -105,15 +105,11 @@ use suzatary_triage::mail::corpus::Corpus;
 pub struct Agent<'a> {
     /// The chain, which it reads: a [`Reads`], so no write is reachable from it.
     pub chain: &'a dyn Reads<TodoEvent>,
-    /// The triage queue and its dedup state.
     pub corpus: &'a dyn Corpus,
     /// The mail index, read-only.
     pub mail: &'a dyn Mailbox,
-    /// The repository's gates.
     pub repository: &'a dyn Repository,
-    /// The manuals it is handed.
     pub manuals: &'a dyn Manuals,
-    /// Typst, for confirmed markup.
     pub render: &'a dyn Render,
     /// The instant every write is stamped with.
     pub clock: &'a dyn Clock,

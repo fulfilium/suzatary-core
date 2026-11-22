@@ -1,8 +1,6 @@
-//! The triage agent's verbs, as one closed sum.
-//!
-//! The agent re-binds these names every run with no negotiation, so a name leaving [`TriageVerb`] is a
-//! major version and one joining it a minor; `tests/mcp-surface.json` pins [`tools`]
-//! byte for byte, and `confirm` and `send` are pinned never to appear.
+//! The triage agent's verbs, as one closed sum the agent re-binds every run with no negotiation,
+//! so a name leaving [`TriageVerb`] is a major version and one joining it a minor;
+//! `tests/mcp-surface.json` pins [`tools`] byte for byte, and `confirm` and `send` never appear.
 
 use serde_json::Value;
 
@@ -229,7 +227,6 @@ type Zoom = super::verbs::Zoom<TriageSurface>;
 verbs! {
     /// Every verb the triage agent may call, and nothing else.
     pub enum TriageVerb;
-    /// One call of a [`TriageVerb`], its arguments parsed.
     pub enum TriageCall;
     on TriageSurface;
     Sync: (),

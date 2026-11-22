@@ -10,33 +10,27 @@ use suzatary_base::capability::Datetime;
 /// How recent a sync must be to answer a request for one without starting another.
 pub const WINDOW: chrono::TimeDelta = chrono::TimeDelta::seconds(60);
 
-/// What a request for a sync now answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "sync", rename_all = "snake_case")]
 pub enum SyncNow {
     /// One finished within [`WINDOW`], so none was started; its report.
     Fresh(Report),
-    /// It was started, and this is its report.
     Ran(Report),
     /// It was started and did not report within the wait; the pass carries on without us.
     Pending {
         /// When it was asked for.
         started: String,
-        /// What to do next.
         note: &'static str,
     },
 }
 
-/// One sync's report, as much of it as the request asked about.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Report {
-    /// When it finished.
     pub at: String,
     /// The accounts asked about, each as it synced.
     pub accounts: Vec<AccountSync>,
     /// What `notmuch new` said of the whole pull.
     pub notmuch: String,
-    /// Why the sync ran without its hold, when it did.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unheld: Option<String>,
 }
@@ -73,7 +67,6 @@ pub fn fresh(last: Option<Synced>, now: Datetime) -> Option<Synced> {
     })
 }
 
-/// The pending answer for a sync asked for at `at`.
 #[must_use]
 pub fn pending(at: Datetime) -> SyncNow {
     SyncNow::Pending {

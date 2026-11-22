@@ -44,7 +44,6 @@ impl<A: JsonSchema> JsonSchema for Chained<A> {
 
 /// A verb's own arguments `A`, as a surface spells them: bare, or with the `chain` it resolves.
 pub trait Own<A> {
-    /// The verb's own arguments.
     fn own(self) -> A;
 }
 
@@ -61,9 +60,6 @@ impl<A> Own<A> for Chained<A> {
 }
 
 /// The chain a call names, whichever verb it calls; absent means the surface's first.
-///
-/// # Errors
-/// A `chain` that is not a string.
 pub(crate) fn chain_named(args: &Map<String, Value>) -> Result<Option<String>, Refusal> {
     #[derive(Deserialize, JsonSchema)]
     struct On {
@@ -78,6 +74,5 @@ pub(crate) fn chain_named(args: &Map<String, Value>) -> Result<Option<String>, R
 pub struct Request<C> {
     /// The chain named, unresolved, since only the surface knows which it serves.
     pub chain: Option<String>,
-    /// The verb and its arguments.
     pub call: C,
 }

@@ -3,10 +3,9 @@
 use serde::{Deserialize, Serialize};
 use suzatary_base::reference::Reference;
 
-/// Why a proposal was made, and what it rests on; never on a wire.
-///
-/// [`Reasons::new`] (which `serde` also goes through) refuses an empty `why` or `sources`, so a
-/// hand-edited line cannot produce a proposal with nothing behind it.
+/// Why a proposal was made and what it rests on, never on a wire: [`Reasons::new`], which `serde`
+/// also goes through, refuses an empty `why` or `sources`, so a hand-edited line cannot produce a
+/// proposal with nothing behind it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "RawReasons", into = "RawReasons")]
 pub struct Reasons {
@@ -21,13 +20,10 @@ struct RawReasons {
     sources: Vec<Reference>,
 }
 
-/// A proposal offered with nothing behind it.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NoReasons {
-    /// No sentence saying what the message is for.
     #[error("why must say, in a sentence or two, what this is for and what led to it")]
     Silent,
-    /// No references.
     #[error(
         "sources must name at least one thing this rests on — a mail message, a thread, \
          a todo, a briefing or an earlier proposal"
@@ -36,10 +32,6 @@ pub enum NoReasons {
 }
 
 impl Reasons {
-    /// Build one.
-    ///
-    /// # Errors
-    /// [`NoReasons`] for an empty `why` or an empty `sources`.
     pub fn new(why: impl Into<String>, sources: Vec<Reference>) -> Result<Self, NoReasons> {
         let why = why.into().trim().to_owned();
         if why.is_empty() {
@@ -92,7 +84,6 @@ impl From<Reasons> for RawReasons {
 mod tests {
     use super::*;
 
-    /// A proposal cannot be built without its reasons and sources.
     #[test]
     fn a_proposal_with_no_why_or_no_sources_is_not_a_proposal() {
         let source: Reference = "mail:a1b2c3d4e5f6".parse().expect("a reference");

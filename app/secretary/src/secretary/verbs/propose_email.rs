@@ -41,7 +41,6 @@ pub(super) fn address(text: &str, field: &str) -> Result<String, Refusal> {
         .map_err(|_| Refusal::bad_request(format!("{field} must be an email address")))
 }
 
-/// A comma-separated list of addresses.
 pub(super) fn addresses(list: &str, field: &str) -> Result<Vec<String>, Refusal> {
     list.split(',')
         .map(str::trim)
@@ -150,12 +149,8 @@ fn as_recorded(draft: &Draft) -> Result<(), Refusal> {
 }
 
 /// `attach`, then each held file the body names that `attach` does not list, each resolved now
-/// and recorded with its digest; absent is none.
-///
-/// # Errors
-/// An entry that names no source, a source that answers with nothing, a Drive file outside
-/// the allowed folders that this conversation never read, or a total over
-/// [`attached::MAX_TOTAL`].
+/// and recorded with its digest; absent is none. A Drive file outside the allowed folders that
+/// this conversation never read is refused, as is a total over [`attached::MAX_TOTAL`].
 fn attach_of(
     caps: &Secretary<'_>,
     (stored, read): (&Stored, &ReadHolders),
@@ -210,7 +205,6 @@ fn attach_of(
     Ok(attached)
 }
 
-/// Read one `attach` entry now and record what it holds.
 fn read_now(
     caps: &Secretary<'_>,
     (stored, read): (&Stored, &ReadHolders),

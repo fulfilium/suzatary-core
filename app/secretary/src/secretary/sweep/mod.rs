@@ -55,7 +55,6 @@ pub(crate) const SURFACE: Subset = Subset {
     },
 };
 
-/// The instruction, as a person turn like the review's.
 const ASK_HEADER: &str = "Below is every open todo with later mail that might bear on it, and \
                           that mail's own content as `show` would answer it, written out as text. \
                           For each todo: if the mail plainly says it is done or moot, call \
@@ -77,14 +76,12 @@ pub(crate) struct Bounded {
 }
 
 impl Bounded {
-    /// How many candidates are laid before the model, summed over every todo.
     #[must_use]
     pub fn candidate_count(&self) -> usize {
         self.todos.iter().map(|(_, found)| found.len()).sum()
     }
 }
 
-/// Applies [`PER_TODO`] and [`PER_ROUND`].
 fn bound(mut gathered: Vec<(OpenTodo, Vec<Candidate>)>) -> Bounded {
     let considered = gathered.len();
     for (_, candidates) in &mut gathered {
@@ -104,7 +101,6 @@ fn bound(mut gathered: Vec<(OpenTodo, Vec<Candidate>)>) -> Bounded {
     }
 }
 
-/// Clips one loaded message to [`CLIP_CHARS`] with a marker naming what was left off.
 fn clip(text: &str) -> String {
     let total = text.chars().count();
     if total <= CLIP_CHARS {
@@ -115,14 +111,11 @@ fn clip(text: &str) -> String {
     format!("{head}\n… [clipped, {more} more characters; call show for the rest]")
 }
 
-/// What one sweep did.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Swept {
-    /// The conversation as it now stands.
     pub stored: Stored,
     /// How many times the model was asked; zero when nothing open had later mail.
     pub rounds: usize,
-    /// The changesets this sweep proposed, each with its index.
     pub proposed: Vec<(usize, suzatary_conversations::secretary::store::Standing)>,
 }
 
@@ -141,8 +134,7 @@ pub fn pass(
     })
 }
 
-/// Sweeps the first chain's open list in one round; a todo with no later mail proposes nothing,
-/// and nothing runs while the model is under a limit.
+/// A todo with no later mail proposes nothing, and nothing runs while the model is under a limit.
 fn sweep(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -228,25 +220,17 @@ fn sweep(
     }))
 }
 
-/// What a sweep would lay before the model, as counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DryRun {
-    /// Each todo in the round, in order, with its candidate count.
     pub todos: Vec<(TodoId, usize)>,
-    /// How many open todos had any candidate before `PER_ROUND` applied.
     pub considered: usize,
-    /// How many todos are in the round.
     pub in_round: usize,
-    /// How many candidates the round carries in total.
     pub candidates: usize,
-    /// The length in characters of the user turn a real sweep would send, built by `user_turn`.
+    /// The length in characters of the user turn a real sweep would send.
     pub turn_chars: usize,
 }
 
 /// Gathers and bounds exactly as [`pass`] does, opening no conversation and calling no model.
-///
-/// # Errors
-/// The chain's read failures.
 pub fn dry_run(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -273,7 +257,6 @@ pub fn dry_run(
     })
 }
 
-/// Every open todo with later mail, paired with that mail and bounded.
 fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded, Refusal> {
     let now = chain.caps.clock.now();
     let nodes = chain.caps.chain.nodes()?;
@@ -454,9 +437,6 @@ fn match_word(matched: &Match) -> String {
 }
 
 /// The sweep's extra rule: every act is `complete` or `cancel`, on a todo in `swept`.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for unreadable `acts`, another act, or a todo not in `swept`.
 fn refuse_bad_act(
     swept: &std::collections::BTreeSet<String>,
     acts: Option<&Value>,
@@ -489,7 +469,6 @@ fn refuse_bad_act(
 mod tests {
     use super::*;
 
-    /// The sweep never writes or settles and proposes only changes, over every verb.
     #[test]
     fn the_sweep_allows_reads_and_propose_changes_and_nothing_else() {
         for &verb in SecretaryVerb::ALL {

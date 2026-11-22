@@ -25,11 +25,9 @@ impl Json for InboxEvent {
         }
     }
 
-    /// The content register's value is the whole `Asked` event, so its JSON is the event's
-    /// literal; the state register's is the response's
-    /// [`Phase`](crate::secretary::phase::Phase), so two responses at one phase answer one JSON
-    /// and the write's name says which response it was. An event writes one register, the one
-    /// its kind names ([`InboxEvent`]'s `writes`), so the event alone decides.
+    /// The content register's JSON is the `Asked` event's literal and the state register's is the
+    /// response's [`Phase`](crate::secretary::phase::Phase), and an event writes the one register
+    /// its kind names, so the event alone decides; the write's name says which response it was.
     fn value(&self, _: InboxRegister) -> Value {
         match &self.said {
             Said::Responded(responded) => serde_json::to_value(responded.phase())

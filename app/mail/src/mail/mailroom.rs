@@ -9,21 +9,18 @@ use super::fault::Fault;
 use super::imap::{INBOX, ImapError, Maildir, Pull, Selected, Session, SyncState, pull};
 use super::puller::{Puller, Unpulled};
 
-/// One account's server and maildir. Its pull is the core's IMAP [`pull`], so its meaning is
-/// that pull's; clones share the maildir, so a mailroom whose server changed pulls into the
-/// same files.
+/// One account's server and maildir; clones share the maildir, so a mailroom whose server
+/// changed pulls into the same files.
 #[derive(Debug, Clone, Default)]
 pub struct Mailroom {
     server: Server,
     maildir: Rc<Held>,
 }
 
-/// What the server answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Server {
     /// It holds these messages in its INBOX, oldest first.
     Holding(Vec<Vec<u8>>),
-    /// It cannot be reached.
     Unreachable,
 }
 

@@ -1,16 +1,13 @@
-//! The outgoing message, pure: values, MIME building, threading and pre-send guards.
-//!
-//! No transport lives here, and there is no Bcc, so the envelope names exactly the
-//! people the headers do.
+//! The outgoing message, pure; there is no Bcc, so the envelope names exactly the people the
+//! headers do.
 
 use mail_builder::MessageBuilder;
 use suzatary_held::message_part::Attachment;
 
 use super::address::EmailAddress;
 
-/// One message to send, plain text only. [`Outgoing::new`] is its one constructor, so every
-/// value has at least one recipient, a subject and something to say, and each address on it
-/// is an [`EmailAddress`].
+/// Plain text only; [`Outgoing::new`] is its one constructor, so every value has a recipient, a
+/// subject and something to say.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Outgoing {
     sender: EmailAddress,
@@ -23,20 +20,14 @@ pub struct Outgoing {
     references: Vec<String>,
 }
 
-/// A message as it was written, before [`Outgoing::new`] checks it.
 #[derive(Clone, PartialEq, Eq, Default)]
 pub struct Composed {
     /// An address this deployment may send as.
     pub sender: String,
-    /// The visible recipients.
     pub to: Vec<String>,
-    /// The visible copies.
     pub cc: Vec<String>,
-    /// The subject.
     pub subject: String,
-    /// The body, as text.
     pub body: String,
-    /// Files to attach.
     pub attachments: Vec<Attachment>,
     /// The bare `Message-Id` this replies to, with no angle brackets.
     pub in_reply_to: Option<String>,
@@ -130,19 +121,16 @@ impl Outgoing {
         })
     }
 
-    /// Who it is from.
     #[must_use]
     pub fn sender(&self) -> &EmailAddress {
         &self.sender
     }
 
-    /// The subject.
     #[must_use]
     pub fn subject(&self) -> &str {
         &self.subject
     }
 
-    /// The body.
     #[must_use]
     pub fn body(&self) -> &str {
         &self.body
@@ -158,7 +146,6 @@ impl Outgoing {
             .collect()
     }
 
-    /// The message as it was written, for a caller that writes it again.
     #[must_use]
     pub fn composed(&self) -> Composed {
         let texts =
@@ -176,7 +163,6 @@ impl Outgoing {
     }
 }
 
-/// Each of `written` that is an address, every one that is not pushed onto `bad`.
 fn addresses(written: &[String], bad: &mut Vec<String>) -> Vec<EmailAddress> {
     written
         .iter()
@@ -188,23 +174,18 @@ fn addresses(written: &[String], bad: &mut Vec<String>) -> Vec<EmailAddress> {
         .collect()
 }
 
-/// The refusal naming every text that is not an address.
 fn not_addresses(bad: &[String]) -> SendError {
     SendError::Refused(format!("not an address: {}", bad.join(", ")))
 }
 
-/// A message could not be built or sent.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum SendError {
-    /// A pre-send guard refused.
     #[error("{0}")]
     Refused(String),
-    /// The `From` is not the account that authenticated.
     #[error("From ({from}) is not the authenticated account ({account})")]
     WrongIdentity {
         /// What the message said.
         from: String,
-        /// Who the transport is.
         account: String,
     },
     /// The transport refused or failed at `step` before the far end held the message.
@@ -212,13 +193,11 @@ pub enum SendError {
     Transport {
         /// Where.
         step: Step,
-        /// What it said.
         why: String,
     },
     /// The message was handed over and nothing answered for it; the far end may hold it.
     #[error("the message was handed over and no answer came: {0}")]
     Unanswered(String),
-    /// The server took the message for some recipients and not others.
     #[error("some recipients refused: {0:?}")]
     RecipientsRefused(Vec<String>),
     /// The account holds no grant to send, so nothing left the box.
@@ -240,9 +219,7 @@ pub enum Step {
     Tls,
     /// AUTH, or a token exchange.
     Auth,
-    /// MAIL FROM.
     Mail,
-    /// RCPT TO.
     Rcpt,
     /// DATA, up to its go-ahead.
     Data,
@@ -265,7 +242,6 @@ impl std::fmt::Display for Step {
     }
 }
 
-/// What a failed send says about the far end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {
     /// Nothing was accepted, so sending again sends it once.
@@ -289,14 +265,11 @@ impl SendError {
     }
 }
 
-/// A message that went out.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Sent {
     /// The `Message-Id`, in angle brackets as it went on the wire.
     pub message_id: String,
-    /// Who it went to.
     pub recipients: Vec<String>,
-    /// How big it was.
     pub bytes_sent: usize,
 }
 
@@ -310,9 +283,8 @@ pub fn bare(message_id: &str) -> &str {
         .trim_end_matches('>')
 }
 
-/// The bracketed form, for a header this module writes itself.
-///
-/// Not for ids handed to the builder, which brackets them itself.
+/// The bracketed form, for a header this module writes itself, not for ids handed to the
+/// builder, which brackets them itself.
 #[must_use]
 pub fn angle(message_id: &str) -> String {
     format!("<{}>", bare(message_id))
@@ -341,9 +313,8 @@ pub(crate) fn thread_headers(out: &Outgoing) -> Vec<(String, String)> {
     ]
 }
 
-/// Render an [`Outgoing`] to MIME, with the id and `date` (epoch seconds) handed in.
-///
-/// A message with attachments carries a pseudo-random multipart boundary.
+/// `date` is epoch seconds; a message with attachments carries a pseudo-random multipart
+/// boundary.
 pub fn build_mime(out: &Outgoing, message_id: &str, date: i64) -> Result<Vec<u8>, SendError> {
     let to: Vec<&str> = out.to.iter().map(EmailAddress::as_str).collect();
     let cc: Vec<&str> = out.cc.iter().map(EmailAddress::as_str).collect();
@@ -412,7 +383,6 @@ fn whole_message(attachment: &Attachment) -> Option<mail_builder::mime::MimePart
     )
 }
 
-/// The MIME type to guess for an attachment, from a short table then a default.
 #[must_use]
 pub fn guess_mime_type(filename: &str) -> String {
     let extension = filename
@@ -502,8 +472,6 @@ mod tests {
         );
     }
 
-    // --- The constructor's guards -------------------------------------------
-
     #[test]
     fn every_guard_refuses_the_mistake_it_is_about() {
         assert_eq!(refused(composed()), None);
@@ -550,13 +518,11 @@ mod tests {
         );
     }
 
-    /// A message read back as it was written builds the same message.
     #[test]
     fn a_message_is_its_composition() {
         assert_eq!(Outgoing::new(outgoing().composed()), Ok(outgoing()));
     }
 
-    /// Only a message handed over and not answered for may have gone.
     #[test]
     fn only_an_unanswered_message_may_have_gone() {
         let steps = [
@@ -594,7 +560,6 @@ mod tests {
         }
     }
 
-    /// A reply is threaded, and `References` defaults to the parent.
     #[test]
     fn a_reply_carries_in_reply_to_and_references() {
         let reply = |references: &[&str]| {

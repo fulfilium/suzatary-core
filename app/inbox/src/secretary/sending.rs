@@ -17,7 +17,6 @@ pub enum Sending {
 }
 
 impl Sending {
-    /// What a tap on `proposal` does to mail.
     #[must_use]
     pub fn of(proposal: &Proposal) -> Self {
         match proposal {
@@ -70,9 +69,6 @@ impl Sending {
 
 /// Whether `tap` may perform `proposal`: the operator's tap performs no card that sends,
 /// because sending stays the owner's tap on his own device.
-///
-/// # Errors
-/// [`Refusal::forbidden`] for the operator's tap on a card that sends.
 pub fn performs(tap: &Tap, proposal: &Proposal) -> Result<(), Refusal> {
     match (tap.seat(), Sending::of(proposal)) {
         (Seat::Operator, Sending::Sends) => Err(Refusal::forbidden(

@@ -1,10 +1,9 @@
 //! A changeset as a person deciding about it reads it: each event its acts build, as a row with
 //! its before and after.
 //!
-//! Fields are shown as prose, not as `suzatary_todo::view::authored_diff`'s canonical prints (which are
-//! evidence against the bytes): a person accepting a sentence is shown the sentence, and a price
-//! is the fulfillment it evaluates to, at the record's own instant (the number the writer meant)
-//! under the empty environment (a proposal is not on the chain).
+//! Fields are shown as prose, not as canonical prints: a person accepting a sentence is shown the
+//! sentence, and a price is its fulfillment at the record's own instant under the empty
+//! environment, since a proposal is not on the chain.
 
 use std::collections::BTreeMap;
 
@@ -16,10 +15,8 @@ use crate::wire::inbox as wire;
 use suzatary_record::record::{Authored, Node, TodoEvent};
 use suzatary_signatures::believed::records;
 
-/// Every row of one changeset, with the "before" column advancing through it.
-///
-/// Rows are read in order, so a todo added and then edited shows the first row's after as the
-/// second row's before.
+/// Every row of one changeset, read in order, so a todo added and then edited shows the first
+/// row's after as the second row's before.
 #[must_use]
 pub fn shown(nodes: &[Node], rows: &[TodoEvent]) -> Vec<wire::ProposedObject> {
     // Folded at the latest claimed instant, not a clock, so "before" does not depend on when the
@@ -129,7 +126,6 @@ fn shown_object(
 /// `created`, `subtodos`, `notes` and `source` are left to the todo page: they are not what the
 /// todo says, or not what this surface writes.
 fn changed(before: Option<&Authored>, after: &Authored) -> Vec<wire::ProposedChange> {
-    /// A field's name and the total reader that says what it says.
     type Reader = (&'static str, fn(&Authored) -> String);
     let readers: [Reader; 6] = [
         ("body", |r| {

@@ -17,9 +17,6 @@ pub struct Reasoned {
 
 impl Reasoned {
     /// The reasons, refused when either is empty.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] for an empty `why`, no source, or a source that is no reference.
     pub fn reasons(&self) -> Result<Reasons, Refusal> {
         Reasons::new(&self.why, references(&self.sources, "sources")?)
             .map_err(|failed| Refusal::bad_request(failed.to_string()))
@@ -37,9 +34,6 @@ pub struct IfCarded {
 
 impl IfCarded {
     /// The reasons of the card `what` became.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] for a mistyped, empty or missing `why` or `sources`.
     pub fn reasons(&self, what: &str) -> Result<Reasons, Refusal> {
         let (why, sources) = (self.why.read()?, self.sources.read()?);
         Reasons::new(
@@ -66,27 +60,18 @@ pub(crate) struct FilingArgs {
 
 impl FilingArgs {
     /// The reasons, read before anything is built, so a card without them is refused first.
-    ///
-    /// # Errors
-    /// As [`Reasoned::reasons`].
     pub fn reasons(&self) -> Result<Reasons, Refusal> {
         self.reasoned.reasons()
     }
 
     /// The reasons of an act that rests on the owner's own words: `why`, and `round`, the round
     /// they asked in, as its one source, whatever `sources` names.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] for an empty `why`.
     pub fn resting_on(&self, round: Reference) -> Result<Reasons, Refusal> {
         Reasons::new(&self.reasoned.why, vec![round])
             .map_err(|failed| Refusal::bad_request(failed.to_string()))
     }
 
     /// File `proposal` in the inbox with these reasons, and answer its card's index.
-    ///
-    /// # Errors
-    /// A `serves` that is no todo reference, and whatever filing the proposal refuses.
     pub fn file(
         &self,
         call: &Call<'_>,

@@ -44,7 +44,6 @@ pub struct TodoAddArgs {
 }
 
 impl TodoAddArgs {
-    /// The act these arguments spell.
     fn act(self) -> Result<Act, Refusal> {
         let source = Sourced {
             sender: self.source_sender,

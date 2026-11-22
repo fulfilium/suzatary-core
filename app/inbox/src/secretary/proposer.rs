@@ -7,7 +7,6 @@ use suzatary_base::conversation_id::SETUP;
 use suzatary_base::reference::ProposalRef;
 use suzatary_health::health::plugin::PluginName;
 
-/// Who proposed an act the owner may tap.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Proposer {
     /// The secretary, in a round of one of its conversations: the box's own proposals are its
@@ -18,9 +17,8 @@ pub enum Proposer {
     Triage,
     /// An `actor` plugin, from what its store holds: it proposes and never performs.
     Plugin(PluginName),
-    /// The box, with no model asked: what a reading of the deployment calls for (a declared
-    /// secret that does not resolve). A function of that reading, so the same reading asks for
-    /// the same proposal, whenever it is read.
+    /// The box, with no model asked: a function of a reading of the deployment, so the same
+    /// reading asks for the same proposal, whenever it is read.
     Box,
 }
 

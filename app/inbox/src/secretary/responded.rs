@@ -1,4 +1,4 @@
-//! The responses a proposal's state register records. The constructors below are a stored format.
+//! The responses a proposal's state register records; the constructors below are a stored format.
 
 use prodrome_core::literal::{Datetime, Value};
 
@@ -37,7 +37,7 @@ impl Tried {
         }
     }
 
-    /// A flow past its code's expiry. An unparsable expiry is never past, so the box refuses
+    /// A flow past its code's expiry; an unparsable expiry is never past, so the box refuses
     /// "already running" rather than admit a claim it cannot check.
     #[must_use]
     pub fn stale(&self, now: Datetime) -> bool {
@@ -52,10 +52,8 @@ impl Tried {
     }
 }
 
-/// What performing settled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Done {
-    /// The far end took the mail.
     Sent {
         /// The envelope's addresses.
         recipients: Vec<String>,
@@ -79,7 +77,6 @@ pub enum Done {
 pub enum Withdrawal {
     /// A later card replaces it; that card's line names which (`revises`).
     Superseded,
-    /// Nothing needs it any more.
     NoLongerNeeded {
         /// In the withdrawer's words.
         why: String,
@@ -88,12 +85,9 @@ pub enum Withdrawal {
     DoneElsewhere { what: String },
 }
 
-/// What performing a proposal answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Performed {
-    /// Tried, and not settled.
     Tried(Tried),
-    /// Settled.
     Done(Done),
 }
 
@@ -124,7 +118,6 @@ impl Performed {
     }
 }
 
-/// What a check prints after an event's head.
 pub trait CheckFields {
     /// Its signature and values, in print order.
     fn body(&self) -> (Constructor, Vec<Value>);
@@ -144,7 +137,6 @@ pub(crate) const REFUSED: Constructor = ("Refused", &["attempt", "reason"]);
 pub(crate) const UNFINISHED: Constructor = ("Unfinished", &["attempt", "reason", "link"]);
 /// Stored for [`Tried::Running`].
 pub(crate) const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
-/// Stored.
 pub const SENT: Constructor = ("Sent", &["recipients", "message_id"]);
 pub(crate) const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
 pub(crate) const ACTED: Constructor = ("Acted", &["what"]);
@@ -159,27 +151,22 @@ pub(crate) const DONE_ELSEWHERE: Constructor = ("DoneElsewhere", &["what"]);
 /// One response; a check holds `C`, the send it checks once a reading finds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Responded<C = ()> {
-    /// A try that did not settle it.
     Tried {
         /// One for the first try.
         attempt: u32,
         tried: Tried,
     },
-    /// Performing settled it.
     Done(Done),
     /// The owner checked a send that may have gone.
     Checked(C),
-    /// The owner said no.
     Dismissed {
         /// His words, verbatim.
         reason: String,
     },
-    /// Taken back before anyone answered it.
     Withdrawn(Withdrawal),
 }
 
 impl Responded {
-    /// The response performing answered.
     #[must_use]
     pub fn performed(performed: Performed, attempt: u32) -> Self {
         match performed {
@@ -190,7 +177,6 @@ impl Responded {
 }
 
 impl<C> Responded<C> {
-    /// Its phase.
     #[must_use]
     pub fn phase(&self) -> Phase {
         match self {
@@ -208,7 +194,6 @@ impl<C> Responded<C> {
         }
     }
 
-    /// The grant a try lacked.
     #[must_use]
     pub fn lacking(&self) -> Option<&suzatary_mail::mail::lacking::Lacking> {
         match self {
@@ -231,7 +216,6 @@ impl<C> Responded<C> {
         }
     }
 
-    /// The link of a try that stopped partway.
     #[must_use]
     pub fn unfinished(&self) -> Option<&str> {
         match self {
@@ -325,7 +309,6 @@ impl<C: CheckFields> Responded<C> {
     }
 }
 
-/// As an event prints it after its head.
 impl<C: CheckFields> std::fmt::Display for Responded<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (signature, values) = self.body();

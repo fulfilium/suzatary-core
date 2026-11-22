@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use suzatary_memory::secretary::memory;
 use ts_rs::TS;
 
-/// A field's change in prose, for somebody deciding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ProposedChange {
     pub field: String,
@@ -199,7 +198,6 @@ pub enum ProposedAct {
         account: String,
         sentence: String,
     },
-    /// A Microsoft account's consent to send.
     #[serde(rename = "auth_send")]
     AuthSend {
         /// Verbatim.
@@ -377,7 +375,6 @@ pub enum RememberWords {
     Unread {},
 }
 
-/// A fact a consolidation card replaces, with its words while it stands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReplacedFact {
     pub id: memory::FactId,

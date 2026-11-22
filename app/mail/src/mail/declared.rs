@@ -6,15 +6,12 @@ use crate::mail::account::MsImap;
 use crate::mail::imap::{INBOX, ImapError, Pull, Pulled};
 use crate::mail::puller::Unpulled;
 
-/// The maildir leaf the sent folder lands in.
 pub(crate) const SENT_LEAF: &str = "Sent";
 
-/// One declared folder: the maildir leaf it lands in and the pull that fills it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declared {
-    /// The leaf under the account's maildir.
     pub leaf: String,
-    /// The pull, which names the server folder.
+    /// It names the server folder.
     pub pull: Pull,
 }
 
@@ -64,20 +61,16 @@ fn server_folder(leaf: &str) -> String {
     }
 }
 
-/// What one declared folder's pull came to.
 #[derive(Debug)]
 pub enum Landed {
-    /// It was pulled.
     Pulled(Pulled),
     /// The server lists no folder of its name, so nothing was asked of it.
     Unlisted,
-    /// Its pull failed.
     Failed(ImapError),
 }
 
-/// The account's line: every declared folder by its server name with what its pull came to.
-/// It is a success only when every folder was pulled; else [`Unpulled`] carries the whole line
-/// and the class of the first folder that failed.
+/// A success only when every folder was pulled; else [`Unpulled`] carries the whole line and the
+/// class of the first folder that failed.
 pub fn line(landed: &[(Declared, Landed)]) -> Result<String, Unpulled> {
     let said = landed
         .iter()

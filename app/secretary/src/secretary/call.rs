@@ -17,7 +17,6 @@ pub struct Call<'a> {
     pub settables: &'a suzatary_connect::settings::Settables,
     /// The policy of the store `caps.chain` holds.
     pub chain: &'a ChainPolicy,
-    /// Every chain, for the verbs that answer for all of them.
     pub chains: &'a [Bound<'a>],
     pub conversation: &'a ConversationId,
 }

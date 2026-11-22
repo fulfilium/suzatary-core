@@ -1,9 +1,8 @@
 //! A coding session in the cloud, started by the owner's tap: the box never runs a shell over
 //! a repository for the secretary, a routine with no route to the tailnet does.
 //!
-//! The task is data and the brief is fixed: the routine's saved prompt is the containment, so
-//! the payload is the [`Task`] text alone and the box adds nothing to it. A session's life is
-//! the closed [`Session`], stepped only by [`Session::step`].
+//! The routine's saved prompt is the containment, so the payload is the [`Task`] text alone
+//! and the box adds nothing to it.
 
 use std::fmt;
 
@@ -14,36 +13,27 @@ use suzatary_connect::parsed;
 use suzatary_memory::coding_report::{FileStat, Report};
 use suzatary_memory::secretary::words;
 
-/// The most a task may be, in bytes.
 pub(crate) const MAX_TASK_BYTES: usize = 4096;
 
 /// The prefix every branch a routine may push carries.
 pub const BRANCH_PREFIX: &str = "claude/";
 
-/// The directory a session writes its report into.
 pub const REPORTS_DIR: &str = "docs/reports";
 
-/// Why a name or a task was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CodingError {
-    /// Empty once trimmed.
     #[error("a task says what to do, in plain text; this one is empty")]
     EmptyTask,
-    /// Over `MAX_TASK_BYTES`.
     #[error("a task is at most {MAX_TASK_BYTES} bytes; this one is {0}")]
     LongTask(usize),
-    /// A control character other than a newline or a tab.
     #[error("a task is plain text: no control characters but newlines and tabs")]
     ControlInTask,
-    /// Not a session id.
     #[error(
         "a session id is cse_ or session_ then up to 256 letters, digits, '_' and '-', got {0:?}"
     )]
     Session(String),
-    /// Not a claude.ai URL.
     #[error("a session URL is https://claude.ai/…, got {0:?}")]
     Url(String),
-    /// Not a `claude/` branch.
     #[error("a session's branch is claude/…, a plain git ref, got {0:?}")]
     Branch(String),
 }
@@ -61,7 +51,6 @@ impl Task {
         &self.0
     }
 
-    /// Its first line, for a sentence.
     #[must_use]
     pub fn headline(&self) -> &str {
         self.0.lines().next().unwrap_or_default()
@@ -105,9 +94,7 @@ fn token(text: &str, max: usize) -> bool {
 /// session names itself `session_…`, both with the same body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Spelling {
-    /// `cse_`, as the fire answers.
     Cse,
-    /// `session_`, as the session writes in its report.
     Session,
 }
 
@@ -122,7 +109,6 @@ impl Spelling {
     }
 }
 
-/// Whether `c` can be part of a session id's body.
 fn id_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '_' | '-')
 }
@@ -131,8 +117,8 @@ fn id_char(c: char) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SessionKey(String);
 
-/// A session's id in either spelling. Two ids are the same session exactly when their bodies
-/// are equal; the spelling is kept only to print the id back as it came.
+/// A session's id in either spelling: two ids are the same session exactly when their bodies
+/// are equal, and the spelling is kept only to print the id back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct SessionId {
@@ -141,13 +127,11 @@ pub struct SessionId {
 }
 
 impl SessionId {
-    /// Whether `other` names the same session, in whichever spelling.
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         self.key == other.key
     }
 
-    /// The body: what both spellings share.
     #[must_use]
     pub fn body(&self) -> &str {
         &self.key.0
@@ -188,8 +172,7 @@ impl fmt::Display for SessionId {
     }
 }
 
-/// Where a session's page is. A report names its session by this page's URL, so the poll
-/// reads only ids that follow it.
+/// A report names its session by this page's URL, so the poll reads only ids that follow it.
 pub const SESSION_PAGE: &str = "https://claude.ai/code/";
 
 /// Every session `text` names by its page's URL. The id is the whole run of id characters
@@ -210,8 +193,7 @@ fn sessions_named(text: &str) -> Vec<SessionId> {
 }
 
 parsed!(
-    /// `claude_code_session_url`: an https URL on claude.ai, one token, where the session can
-    /// be watched.
+    /// `claude_code_session_url`: an https URL on claude.ai, one token.
     SessionUrl,
     CodingError,
     CodingError::Url,
@@ -239,88 +221,62 @@ parsed!(
     }
 );
 
-/// What a fire answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fired {
-    /// The session's id.
     pub id: SessionId,
-    /// Where it can be watched.
     pub url: SessionUrl,
 }
 
-/// One session's life, closed. Stored beside the proposal that started it; nothing infers it
-/// from branch names.
+/// Stored beside the proposal that started it; nothing infers a session's life from branch names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum Session {
-    /// The tap fired the routine and the session is running.
     Fired {
-        /// The session.
         id: SessionId,
-        /// Where it can be watched.
         url: SessionUrl,
-        /// When it was fired.
         at: String,
     },
-    /// A branch came back with a report naming the session.
     Reported {
-        /// The session.
         id: SessionId,
-        /// The branch it pushed.
         branch: Branch,
-        /// What it wrote there, while its words are kept.
         report: words::Words<Report>,
     },
     /// The branch is on the default branch.
     Merged {
-        /// The session.
         id: SessionId,
         /// The branch's tip, as merged.
         sha: CommitId,
     },
-    /// The owner let it go, and why.
     Dropped {
-        /// The session.
         id: SessionId,
-        /// His words, while they are kept.
         reason: words::Words<String>,
     },
 }
 
-/// What can happen to a session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
-    /// The poll found its report.
     Report {
-        /// On this branch.
         branch: Branch,
-        /// Saying this.
         report: Report,
     },
-    /// The poll found its branch merged.
     Merge {
         /// At this commit.
         sha: CommitId,
     },
-    /// The owner dropped it.
     Drop {
         /// Why.
         reason: String,
     },
 }
 
-/// A step the session's state does not admit.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a {state} session cannot be {step}")]
 pub struct NotAStep {
-    /// The state it is in.
     pub state: &'static str,
-    /// What was asked of it.
     pub step: &'static str,
 }
 
 impl Session {
-    /// The session, whatever became of it.
     #[must_use]
     pub fn id(&self) -> &SessionId {
         match self {
@@ -342,11 +298,8 @@ impl Session {
         }
     }
 
-    /// The one transition. Fired reports or drops; Reported merges or drops; Merged and
-    /// Dropped are final. The id is carried, never replaced.
-    ///
-    /// # Errors
-    /// [`NotAStep`] for any other pair.
+    /// The one transition: Fired reports or drops, Reported merges or drops, Merged and Dropped
+    /// are final, and the id is carried, never replaced.
     pub fn step(self, step: Step) -> Result<Self, NotAStep> {
         match (self, step) {
             (Self::Fired { id, .. }, Step::Report { branch, report }) => Ok(Self::Reported {
@@ -376,11 +329,8 @@ impl Session {
 /// One `claude/` branch as the poll saw it on the repository's mirror.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Seen {
-    /// The branch.
     pub branch: Branch,
-    /// Its tip.
     pub tip: CommitId,
-    /// Whether the tip is on the default branch.
     pub merged: bool,
     /// Every report the branch adds or changes under [`REPORTS_DIR`], whole.
     pub reports: Vec<ReportFile>,
@@ -397,47 +347,39 @@ pub struct ReportFile {
 }
 
 impl ReportFile {
-    /// The file at `path` saying `text`.
     #[must_use]
     pub fn read(path: RepoPath, text: String) -> Self {
         let names = sessions_named(&text);
         Self { path, text, names }
     }
 
-    /// The file.
     #[must_use]
     pub const fn path(&self) -> &RepoPath {
         &self.path
     }
 
-    /// Its text, whole.
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
     }
 
-    /// Whether the text names session `id`, in either spelling.
     #[must_use]
     pub(crate) fn speaks_for(&self, id: &SessionId) -> bool {
         self.names.iter().any(|named| named.is(id))
     }
 
-    /// Every session the text names, as it spelled each.
     #[must_use]
     pub fn names(&self) -> &[SessionId] {
         &self.names
     }
 }
 
-/// How the poll reads one session against the branches it saw: the step it takes, or why it
-/// takes none.
+/// How the poll reads one session: the step it takes, or why it takes none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reading<'a> {
     /// A fired session's report is on this branch.
     Reported {
-        /// The branch.
         found: &'a Seen,
-        /// The report naming the session.
         file: &'a ReportFile,
     },
     /// A reported session's branch is on the default branch.
@@ -509,7 +451,6 @@ pub fn read<'a>(session: &Session, seen: &'a [Seen]) -> Reading<'a> {
     }
 }
 
-/// The step the poll takes for one session, as [`read`] reads it.
 #[must_use]
 pub fn next(session: &Session, seen: &[Seen]) -> Option<Step> {
     match read(session, seen) {
@@ -574,7 +515,6 @@ mod tests {
         CommitId::try_from("a".repeat(40)).expect("a commit")
     }
 
-    /// A task is trimmed once, and parsing its text again is the same task.
     #[test]
     fn a_task_is_trimmed_and_parsing_it_again_changes_nothing() {
         let once = task("  Fix the README's typo.\n\n").expect("a task");
@@ -587,7 +527,6 @@ mod tests {
         );
     }
 
-    /// The cap is in bytes, and its edge is exact.
     #[test]
     fn a_task_is_at_most_four_kilobytes() {
         assert!(task(&"x".repeat(MAX_TASK_BYTES)).is_ok());
@@ -599,7 +538,6 @@ mod tests {
         assert!(task(&"é".repeat(MAX_TASK_BYTES / 2 + 1)).is_err());
     }
 
-    /// Plain text: newlines and tabs, no other control character, not empty.
     #[test]
     fn a_task_is_plain_text() {
         assert!(task("one\n\ttwo").is_ok());

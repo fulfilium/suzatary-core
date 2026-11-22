@@ -1,7 +1,5 @@
-//! The secretary's verbs, as one closed sum.
-//!
-//! A separate sum from `crate::agent::TriageVerb` on purpose, so widening one never widens the
-//! other; neither `send` nor `confirm` may ever appear here.
+//! The secretary's verbs, one closed sum apart from `crate::agent::TriageVerb` so widening one
+//! never widens the other; neither `send` nor `confirm` may ever appear here.
 
 use serde_json::Value;
 
@@ -30,8 +28,6 @@ use suzatary_digest::secretary::shown_record::{Everything, ShownRecord};
 use suzatary_inbox::secretary::changes::{Act, Changeset, Unapplied};
 use suzatary_inbox::secretary::proposal::Proposal;
 
-/// The secretary's verbs: each runs against a [`Call`], and answers JSON and the files it hands
-/// the model.
 pub enum SecretarySurface {}
 
 impl Surface for SecretarySurface {
@@ -257,14 +253,11 @@ impl From<SecretaryVerb> for ToolName {
 /// Some of the verbs: the ones a round's model is shown and may call, and the refusal a call of
 /// any other gets.
 pub struct Subset {
-    /// Whether a verb is in it.
     pub allows: fn(SecretaryVerb) -> bool,
-    /// The refusal of `called`, given the names the subset lists.
     pub refuses: fn(called: &str, listed: &str) -> Refusal,
 }
 
 impl Subset {
-    /// Every verb.
     pub const ALL: Self = Self {
         allows: |_| true,
         refuses: |called, listed| {
@@ -283,16 +276,12 @@ impl Subset {
             .filter(|verb| (self.allows)(*verb))
     }
 
-    /// Its verbs as the JSON a model is shown.
     #[must_use]
     pub fn tools(&self) -> Value {
         tools_of(self.verbs())
     }
 
     /// The verb `called` names, if the subset lists it.
-    ///
-    /// # Errors
-    /// [`Subset::refuses`]'s refusal for any other name.
     pub fn find(&self, called: &ToolName) -> Result<SecretaryVerb, Refusal> {
         called
             .verb()
@@ -317,7 +306,6 @@ pub fn tools() -> Value {
     Subset::ALL.tools()
 }
 
-/// The same JSON over some of the verbs, for a round scoped to fewer.
 #[must_use]
 pub(crate) fn tools_of(verbs: impl Iterator<Item = SecretaryVerb>) -> Value {
     Value::Array(verbs.map(SecretaryVerb::tool).collect())

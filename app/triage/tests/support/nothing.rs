@@ -1,4 +1,4 @@
-//! The inert corpus, Junk folder, older mail and watch log: test support, never production.
+//! The inert interpreters: test support, never production.
 
 use suzatary_base::capability::Nothing;
 use suzatary_base::refusal::Refusal;
@@ -89,7 +89,6 @@ impl crate::mail::older_mail::OlderMail for Nothing {
     }
 }
 
-/// No watch is set, and setting one is refused.
 impl suzatary_store::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> for Nothing {
     fn keys(&self) -> Result<Vec<crate::mail::watch::WatchId>, StoreError> {
         Ok(Vec::new())

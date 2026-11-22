@@ -7,10 +7,8 @@ use super::Verb;
 
 /// Declare a surface's verbs as two sums: `$Verb`, one empty variant per verb, and `$Call`, one
 /// variant per verb holding its parsed arguments.
-///
 /// Every function over a surface is a `match` the compiler checks is whole, so a verb joins the
-/// sum with its class, its schema, its parser and its body, or does not compile. `classed by`
-/// classes each verb by its own name's variant, and `of` maps back.
+/// sum with its class, its schema, its parser and its body, or does not compile.
 macro_rules! verbs {
     (
         $(#[$verb_doc:meta])* pub enum $Verb:ident;
@@ -26,7 +24,6 @@ macro_rules! verbs {
         }
 
         impl $Verb {
-            /// The verb of `class`.
             #[must_use]
             pub const fn of(class: $Class) -> Self {
                 match class {
@@ -51,7 +48,6 @@ macro_rules! verbs {
             /// Every verb, in the order the model is shown them.
             pub const ALL: &'static [Self] = &[$(Self::$Name),+];
 
-            /// The name the model calls it by.
             #[must_use]
             pub const fn name(self) -> &'static str {
                 match self {
@@ -59,7 +55,6 @@ macro_rules! verbs {
                 }
             }
 
-            /// What the model is told it does.
             #[must_use]
             pub const fn description(self) -> &'static str {
                 match self {
@@ -67,7 +62,6 @@ macro_rules! verbs {
                 }
             }
 
-            /// What the surface knows of it beyond its name.
             #[must_use]
             pub const fn class(self) -> <$Surface as $crate::verb::Surface>::Class {
                 match self {
@@ -75,7 +69,6 @@ macro_rules! verbs {
                 }
             }
 
-            /// The verb a model's string names, or `None`.
             #[must_use]
             pub fn named(name: &str) -> Option<Self> {
                 Self::ALL.iter().copied().find(|verb| verb.name() == name)
@@ -89,10 +82,6 @@ macro_rules! verbs {
                 }
             }
 
-            /// `args` read as this verb's arguments.
-            ///
-            /// # Errors
-            /// An argument that is missing or of the wrong type.
             pub fn parse(
                 self,
                 args: &serde_json::Map<String, serde_json::Value>,
@@ -103,9 +92,6 @@ macro_rules! verbs {
             }
 
             /// `args` read whole: the chain they name, then this verb's own arguments.
-            ///
-            /// # Errors
-            /// A `chain` that is not a string, or an argument that is missing or of the wrong type.
             pub fn request(
                 self,
                 args: &serde_json::Map<String, serde_json::Value>,
@@ -132,7 +118,6 @@ macro_rules! verbs {
         }
 
         impl $Call {
-            /// Which verb it calls.
             #[must_use]
             pub const fn verb(&self) -> $Verb {
                 match self {
@@ -140,10 +125,6 @@ macro_rules! verbs {
                 }
             }
 
-            /// Run it.
-            ///
-            /// # Errors
-            /// Whatever the verb refuses, or an effect's failure.
             pub fn run(
                 self,
                 on: &<$Surface as $crate::verb::Surface>::Call<'_>,
@@ -158,7 +139,6 @@ macro_rules! verbs {
 
 pub(crate) use verbs;
 
-/// `V` in the MCP `tools/list` shape.
 #[must_use]
 pub fn tool<V: Verb>() -> Value {
     json!({

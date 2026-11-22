@@ -1,7 +1,6 @@
-//! The secretary's memory as the agent's `context` carries it, within what the answer has left:
-//! the newest facts that fit, a sentence counting the rest, then the record in the owner's words
-//! alone (`shown_record::told`), as much of it as fits beside them. The answer always leaves it
-//! room for [`TOO_BIG`], so it never goes silent.
+//! The secretary's memory as the agent's `context` carries it: the newest facts that fit, then
+//! the record in the owner's words alone (`shown_record::told`); the answer always leaves it room
+//! for [`TOO_BIG`], so it never goes silent.
 
 use suzatary_base::refusal::Refusal;
 use suzatary_digest::secretary::shown_record::{OwnersRecord, told};
@@ -10,7 +9,6 @@ use suzatary_memory::secretary::memory::Memory;
 use super::reads::wire_len;
 use suzatary_lines::timings;
 
-/// What an empty memory reads as.
 const NOTHING: &str = "The secretary remembers nothing yet.";
 
 /// What a memory that does not fit at all reads as, the least room the answer leaves it.
@@ -21,8 +19,7 @@ pub(crate) const TOO_BIG: &str =
 const UNREAD: &str = "The memory could not be read.";
 
 /// `memory` and `record` as one string costing at most `room` bytes on the wire: the newest facts
-/// that fit, then the newest lines of the record's view within `room` that fit beside them. The
-/// view is built once; the searches for how many facts and lines fit only print text.
+/// that fit, then the newest lines of the record's view within `room` that fit beside them.
 pub(crate) fn remembered(
     memory: Result<&Memory, &Refusal>,
     record: Result<&OwnersRecord, &Refusal>,
@@ -67,9 +64,7 @@ pub(crate) fn remembered(
     if !fits(&told(0, 0)) {
         return TOO_BIG.to_owned();
     }
-    // The facts come first: the most of the newest that fit beside no record at all.
     let kept = largest(newest.len(), |kept| fits(&told(kept, 0)));
-    // Then the record, in what they leave.
     let view = largest(room, |view| fits(&told(kept, view)));
     let answer = told(kept, view);
     timings::counted(

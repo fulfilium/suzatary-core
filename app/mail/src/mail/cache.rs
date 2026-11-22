@@ -4,10 +4,8 @@ use crate::mail::account::MailAccount;
 use crate::mail::grants::Revoked;
 use crate::mail::removal::Removal;
 
-/// What deleting an account's kept mail came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Forgot {
-    /// No mail was kept for it.
     NotKept,
     /// Its folder was deleted, and the index forgot it.
     Deleted {
@@ -16,7 +14,6 @@ pub enum Forgot {
     },
     /// Its folder was deleted, and the index still names its messages until the next sync.
     DeletedIndexStale {
-        /// The folder.
         folder: String,
         /// Why the index was not told.
         why: String,
@@ -29,7 +26,6 @@ pub enum Forgot {
 }
 
 impl Forgot {
-    /// What a removal's outcome says of it.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {
@@ -46,15 +42,11 @@ impl Forgot {
     }
 }
 
-/// What deleting what the box kept for a removed account came to, one arm per
-/// [`Removal`].
+/// One arm per [`Removal`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Forgotten {
-    /// Its sign-in.
     SignIn(Result<Revoked, String>),
-    /// Its mail.
     Mail(Forgot),
-    /// Its sign-in and its mail.
     Both(Result<Revoked, String>, Forgot),
 }
 
@@ -72,7 +64,6 @@ impl Forgotten {
         }
     }
 
-    /// What the conversation says of it.
     #[must_use]
     pub fn sentence(&self) -> String {
         let grants = |grants: &Result<Revoked, String>| match grants {
@@ -90,7 +81,6 @@ impl Forgotten {
 /// Deletes what the box kept for one removed account, as its [`Removal`] says, under the
 /// sync's hold; held in no capability record, so only a mail account's removal reaches it.
 pub trait Forget {
-    /// Deletes `removal` of what was kept for `account`, answering what went.
     fn forget(&self, account: &MailAccount, removal: Removal) -> Forgotten;
 }
 

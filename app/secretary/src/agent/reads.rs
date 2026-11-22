@@ -1,4 +1,4 @@
-//! The verbs that only look; the ones that append are [`super::writes`].
+//! The verbs that only look.
 
 use prodrome_core::fpl;
 use prodrome_core::payload::Payload as _;
@@ -40,11 +40,11 @@ pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<V
     ))
 }
 
-/// The most `context` spends on the manual and the vocabularies, in serialized bytes. The whole
-/// answer is one budget, this and `[agent] memory_bytes`, filled in order: the manual and the
-/// vocabularies, the facts, then the record. An answer the harness will not show inline is read
-/// by nobody. With the default `memory_bytes` of 16 KiB the answer is at most 40 KiB: at most
-/// 40,960 tokens, since no token is shorter than one byte, and about 10,000 tokens of English.
+/// The most `context` spends on the manual and the vocabularies, in serialized bytes; the whole
+/// answer, this plus `[agent] memory_bytes`, is filled in order (manual, facts, record) and kept
+/// small because an answer the harness will not show inline is read by nobody. At the default
+/// `memory_bytes` of 16 KiB the answer is at most 40 KiB, so at most 40,960 tokens, since no token
+/// is shorter than one byte.
 pub const CONTEXT_CAP: usize = 24 * 1024;
 
 /// What the answer leaves unspent so `OPERATOR.md` can grow without a cut: a fifth of the cap,
@@ -54,8 +54,8 @@ pub const CONTEXT_HEADROOM: usize = CONTEXT_CAP / 5;
 /// What the category vocabulary may spend, so the manual's room is a constant.
 const CATEGORIES_BUDGET: usize = 1024;
 
-/// The bytes a value costs as the agent is sent it, pretty-printed (`commands::mcp`), measured by
-/// the encoder itself. A string costs the same printed either way; an object's layout does not.
+/// The bytes a value costs as the agent is sent it, pretty-printed (`commands::mcp`): a string
+/// costs the same printed either way; an object's layout does not.
 pub(crate) fn wire_len<T: serde::Serialize + ?Sized>(value: &T) -> usize {
     serde_json::to_string_pretty(value).map_or(usize::MAX, |wire| wire.len())
 }
@@ -113,9 +113,8 @@ pub fn manual(manuals: &dyn Manuals, deployment: &Deployment) -> Value {
     manual_within(manuals, deployment, CONTEXT_CAP)
 }
 
-/// The agent's `context`: [`manual`] within what leaves room for the memory's key, then the
-/// secretary's memory (the facts in `memory`, then the record read in `record`) in what is left
-/// of `CONTEXT_CAP + memory_bytes`.
+/// The agent's `context`: [`manual`], then the secretary's memory in what is left of
+/// `CONTEXT_CAP + memory_bytes`.
 pub fn context(
     manuals: &dyn Manuals,
     deployment: &Deployment,
@@ -123,9 +122,8 @@ pub fn context(
     record: Result<&OwnersRecord, &Refusal>,
     memory_bytes: usize,
 ) -> Value {
-    // What the `memory` key costs beside its string, which pays for its own quotes and escapes,
-    // measured on an object laid out as the answer is; the manual leaves the string room to say
-    // at least that nothing fits.
+    // What the `memory` key costs beside its string, measured as the answer is laid out; the
+    // manual leaves the string room to say at least that nothing fits.
     let key = wire_len(&json!({"a": 0, "memory": ""})) - wire_len(&json!({"a": 0})) - 2;
     let least = wire_len(super::remembered::TOO_BIG);
     let mut answer = manual_within(manuals, deployment, CONTEXT_CAP - key - least);
@@ -136,7 +134,6 @@ pub fn context(
     answer
 }
 
-/// [`manual`] within `cap` bytes.
 fn manual_within(manuals: &dyn Manuals, deployment: &Deployment, cap: usize) -> Value {
     let read = |which: Manual| {
         manuals

@@ -4,7 +4,6 @@ use crate::agent::{Call, TriageSurface, reads};
 use crate::verb::{Chained, NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// A full check of the chain.
 pub struct VerifyChain;
 
 impl Verb for VerifyChain {

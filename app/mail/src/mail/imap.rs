@@ -9,7 +9,6 @@ use std::collections::BTreeSet;
 
 use sha2::{Digest, Sha256};
 
-/// A sync could not be carried out.
 #[derive(Debug, thiserror::Error)]
 pub enum ImapError {
     /// The server refused, or the connection failed.
@@ -17,7 +16,6 @@ pub enum ImapError {
     Server {
         /// Which command — "SELECT INBOX", "UID FETCH 42".
         what: String,
-        /// What it said.
         why: String,
     },
     /// The mailbox reported no UIDVALIDITY, which every server must.
@@ -28,18 +26,14 @@ pub enum ImapError {
     Maildir {
         /// "read" or "written".
         what: &'static str,
-        /// What went wrong.
         why: String,
     },
-    /// The state file could not be read or written.
     #[error("the sync state could not be {what}: {why}")]
     State {
         /// "read" or "written".
         what: &'static str,
-        /// What went wrong.
         why: String,
     },
-    /// No usable token for this account.
     #[error("{0}")]
     Unauthorised(String),
     /// The account holds no grant, or Microsoft refused it in words only a sign-in answers.
@@ -48,7 +42,6 @@ pub enum ImapError {
 }
 
 impl ImapError {
-    /// Its class: a sign-in only a person gives, or anything else.
     #[must_use]
     pub const fn class(&self) -> crate::mail::fault::Fault {
         match self {
@@ -72,7 +65,6 @@ pub struct Selected {
 /// The server name of the inbox, which RFC 3501 makes case-insensitive.
 pub const INBOX: &str = "INBOX";
 
-/// An IMAP conversation as a capability, UID-based throughout.
 pub trait Session {
     /// `LIST "" "*"`: the name of every folder the server holds.
     fn list(&mut self) -> Result<Vec<String>, ImapError>;
@@ -91,8 +83,7 @@ pub trait Session {
     fn uid_mark_seen(&mut self, uid: u32) -> Result<(), ImapError>;
 }
 
-/// The maildir this account's folder lands in, bound to its directory when
-/// built so the core handles no path.
+/// Bound to its directory when built, so the core handles no path.
 pub trait Maildir {
     /// Write `raw` under `name`, into `new/` when unread and `cur/` otherwise;
     /// idempotent by name, never a second copy.
@@ -103,26 +94,21 @@ pub trait Maildir {
     fn file_names(&self) -> Result<Vec<String>, ImapError>;
 }
 
-/// Which UIDs this folder has fetched and which read-flags were pushed. UIDs
-/// are numbers so the persisted sets sort `9` before `10`.
+/// UIDs are numbers so the persisted sets sort `9` before `10`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SyncState {
     /// The generation the two sets below are relative to. `None` means never
     /// recorded, which [`reconcile`] adopts rather than treats as a mismatch.
     #[serde(default)]
     pub uidvalidity: Option<String>,
-    /// The UIDs already written into the maildir.
     #[serde(default)]
     pub synced: BTreeSet<u32>,
-    /// The UIDs already flagged `\Seen` on the server.
     #[serde(default)]
     pub seen_pushed: BTreeSet<u32>,
 }
 
-/// Fit a loaded state to the mailbox's current UIDVALIDITY.
-///
-/// A recorded mismatch drops both UID sets, since every stored UID may now name
-/// another message; an unrecorded generation is adopted with nothing dropped.
+/// A recorded mismatch drops both UID sets, since every stored UID may now name another
+/// message; an unrecorded generation is adopted with nothing dropped.
 #[must_use]
 pub fn reconcile(state: SyncState, current: &str) -> SyncState {
     match &state.uidvalidity {
@@ -154,7 +140,6 @@ pub fn imap_date(date: chrono::NaiveDate) -> String {
     format!("{:02}-{month}-{}", date.day(), date.year())
 }
 
-/// The first day the routine INBOX pull reaches on `today`.
 #[must_use]
 pub fn window_start(today: chrono::NaiveDate) -> chrono::NaiveDate {
     today
@@ -162,10 +147,8 @@ pub fn window_start(today: chrono::NaiveDate) -> chrono::NaiveDate {
         .unwrap_or(chrono::NaiveDate::MIN)
 }
 
-/// The file name a fetched message lands under.
-///
-/// A content digest, so a refetch rewrites the same file, carrying the UID so a
-/// locally-read file can be flagged `\Seen` upstream.
+/// A content digest, so a refetch rewrites the same file, carrying the UID so a locally-read
+/// file can be flagged `\Seen` upstream.
 #[must_use]
 pub fn maildir_name(raw: &[u8], uid: u32, unread: bool) -> String {
     let digest = hex::encode(Sha256::digest(raw));
@@ -173,10 +156,7 @@ pub fn maildir_name(raw: &[u8], uid: u32, unread: bool) -> String {
     if unread { name } else { format!("{name}:2,S") }
 }
 
-/// The server UID a file name carries, if it has one.
-///
-/// Files written by another syncer (lieer, mbsync) have none, which is not a
-/// failure.
+/// Files written by another syncer (lieer, mbsync) have none, which is not a failure.
 #[must_use]
 pub(crate) fn uid_of_maildir_name(name: &str) -> Option<u32> {
     // `.u<digits>.ms`, anywhere in the name — the flags suffix may follow it.
@@ -188,10 +168,8 @@ pub(crate) fn uid_of_maildir_name(name: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// Is this file marked read?
-///
-/// The maildir `S` flag, which notmuch (`synchronize_flags=true`) writes when a
-/// message's `unread` tag is removed.
+/// The maildir `S` flag, which notmuch (`synchronize_flags=true`) writes when a message's
+/// `unread` tag is removed.
 #[must_use]
 pub(crate) fn is_seen_name(name: &str) -> bool {
     match name.split_once(":2,") {
@@ -200,7 +178,6 @@ pub(crate) fn is_seen_name(name: &str) -> bool {
     }
 }
 
-/// The UIDs of messages read locally, out of a maildir listing.
 #[must_use]
 pub(crate) fn locally_seen_uids<S: AsRef<str>>(names: &[S]) -> BTreeSet<u32> {
     names
@@ -214,13 +191,11 @@ pub(crate) fn locally_seen_uids<S: AsRef<str>>(names: &[S]) -> BTreeSet<u32> {
 /// of its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pull {
-    /// The routine pull of a folder that is triage input: mail since `since`, seen or unseen,
-    /// landing unread, with local read-flags pushed back.
-    ///
-    /// Seen or unseen on purpose: the queue is hash-gated, so mail read on the phone before a
-    /// sync must still arrive to be triaged exactly once.
+    /// The routine pull of a triage-input folder, seen or unseen on purpose: the queue is
+    /// hash-gated, so mail read on the phone before a sync must still arrive to be triaged
+    /// exactly once.
     Window {
-        /// The server-side folder name, unquoted. The transport quotes it.
+        /// Unquoted; the transport quotes it.
         folder: String,
         /// The first day searched, on the owner's calendar.
         since: chrono::NaiveDate,
@@ -229,7 +204,7 @@ pub enum Pull {
     /// full-history pull can never mark a real mailbox all-read, landing read, since it is
     /// history.
     Backfill {
-        /// The server-side folder name, unquoted. The transport quotes it.
+        /// Unquoted; the transport quotes it.
         folder: String,
         /// Fetch at most this many, newest first, for a trial backfill.
         limit: Option<usize>,
@@ -237,7 +212,6 @@ pub enum Pull {
 }
 
 impl Pull {
-    /// The server-side folder.
     #[must_use]
     pub fn folder(&self) -> &str {
         match self {
@@ -245,7 +219,6 @@ impl Pull {
         }
     }
 
-    /// The `UID SEARCH` criteria.
     #[must_use]
     pub fn criteria(&self) -> String {
         match self {
@@ -270,7 +243,6 @@ impl Pull {
         !self.readonly()
     }
 
-    /// The cap on how many are fetched, newest first.
     #[must_use]
     pub fn limit(&self) -> Option<usize> {
         match self {
@@ -280,16 +252,12 @@ impl Pull {
     }
 }
 
-/// What one pull did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pulled {
-    /// How many messages were newly written.
     pub fetched: usize,
-    /// How many messages the search found and the fetch did not return: expunged since the
-    /// search, or held back by the server. None is recorded as fetched, so the next pull asks
-    /// again, and the count is in the sync's line, never dropped.
+    /// Found by the search and not returned by the fetch; none is recorded as fetched, so the next
+    /// pull asks again.
     pub(crate) unreturned: usize,
-    /// How many read-flags were pushed upstream.
     pub pushed: usize,
     /// The state to persist. The caller writes it; this module decides it.
     pub state: SyncState,
@@ -374,7 +342,6 @@ mod tests {
         }
     }
 
-    /// A whole IMAP server, as a value.
     struct FakeServer {
         uidvalidity: String,
         messages: BTreeMap<u32, Vec<u8>>,
@@ -434,7 +401,6 @@ mod tests {
         }
     }
 
-    /// A maildir, as a map from name to bytes.
     #[derive(Default)]
     struct FakeMaildir {
         files: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -465,8 +431,6 @@ mod tests {
         }
     }
 
-    // --- reconcile -----------------------------------------------------------
-
     fn state(validity: Option<&str>, synced: &[u32], pushed: &[u32]) -> SyncState {
         SyncState {
             uidvalidity: validity.map(str::to_owned),
@@ -475,8 +439,6 @@ mod tests {
         }
     }
 
-    /// The same generation keeps every UID, a changed one discards both sets, and an
-    /// unrecorded one is adopted without dropping anything.
     #[test]
     fn a_uid_set_survives_exactly_its_own_generation() {
         for (held, server, reconciled) in [
@@ -497,19 +459,13 @@ mod tests {
         }
     }
 
-    // --- Names ---------------------------------------------------------------
-
-    /// The name is the content, so a refetch rewrites one file.
     #[test]
     fn the_maildir_name_is_a_content_digest_and_carries_the_uid() {
         let unread = maildir_name(b"hello", 12345, true);
         assert!(unread.ends_with(".u12345.ms"), "{unread}");
         assert_eq!(unread.len(), 16 + ".u12345.ms".len());
-        // The same bytes under the same UID are the same file.
         assert_eq!(maildir_name(b"hello", 12345, true), unread);
-        // Different bytes are a different file.
         assert_ne!(maildir_name(b"hell0", 12345, true), unread);
-        // Landing already-read appends the maildir flag.
         assert_eq!(
             maildir_name(b"hello", 12345, false),
             format!("{unread}:2,S")
@@ -543,8 +499,6 @@ mod tests {
         assert!(!is_seen_name("Sabcdef.u1.ms"));
     }
 
-    // --- The pull ------------------------------------------------------------
-
     #[test]
     fn a_first_inbox_pull_fetches_everything_the_search_found() {
         let mut server = FakeServer::new("7", &[(1, "one"), (2, "two"), (3, "three")]);
@@ -560,7 +514,6 @@ mod tests {
         assert_eq!(maildir.names().len(), 3);
     }
 
-    /// A second pull over the same mailbox fetches nothing.
     #[test]
     fn a_second_pull_over_the_same_mailbox_fetches_nothing() {
         let mut server = FakeServer::new("7", &[(1, "one"), (2, "two")]);
@@ -571,7 +524,6 @@ mod tests {
         assert_eq!(again.state.synced, first.state.synced);
     }
 
-    /// A message expunged between search and fetch costs one message, not the run.
     #[test]
     fn an_expunged_message_is_skipped_and_the_rest_still_arrive() {
         let mut server = FakeServer::new("7", &[(1, "one"), (2, "two"), (3, "three")]);
@@ -604,7 +556,6 @@ mod tests {
         assert_eq!(server.stored_seen, vec![1]);
         assert_eq!(first.state.seen_pushed, [1u32].into_iter().collect());
 
-        // A second run pushes nothing.
         let again = pull(&mut server, &maildir, first.state, &inbox()).expect("a pull");
         assert_eq!(again.pushed, 0);
         assert_eq!(server.stored_seen, vec![1]);
@@ -637,7 +588,6 @@ mod tests {
         );
     }
 
-    /// A limited backfill takes the newest.
     #[test]
     fn a_limited_backfill_takes_the_newest() {
         let mut server = FakeServer::new("7", &[(1, "one"), (2, "two"), (3, "three"), (4, "four")]);
@@ -669,7 +619,6 @@ mod tests {
         assert_eq!(maildir.names().len(), 2);
     }
 
-    /// The state file round-trips.
     #[test]
     fn the_state_round_trips_through_json() {
         let held = state(Some("7"), &[3, 1, 2], &[2]);

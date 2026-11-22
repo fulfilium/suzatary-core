@@ -8,12 +8,9 @@ use prodrome_core::registers::Stamp;
 use crate::secretary::inbox_event::{InboxEvent, Said};
 use crate::secretary::phase::Phase;
 
-/// A register a write supersedes in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InboxRegister {
-    /// The proposal as asked.
     Content,
-    /// Where its machine stands.
     State,
 }
 
@@ -44,12 +41,9 @@ impl RegisterType<InboxEvent> for StateRegister {
     }
 }
 
-/// One proposal's registers.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct InboxRegisters<'a> {
-    /// What was asked.
     pub content: Frontier<'a, InboxEvent>,
-    /// What became of it.
     pub state: Climb<'a, InboxEvent>,
 }
 

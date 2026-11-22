@@ -1,14 +1,10 @@
-//! `state.json`, the sole dedup authority and the one mail state the data repository pushes:
-//! what triage decided about each message, under the name [`DedupKey::name`] gives it, so the
-//! file says how many messages were decided and how, and of no message whether this box
-//! received it. What else the box knows of a message is [`crate::mail::local_state`], which no
-//! push carries.
+//! `state.json`, the sole dedup authority and the one mail state the data repository pushes: each
+//! decision sits under the name [`DedupKey::name`] gives its message, so the file says of no
+//! message whether this box received it.
 //!
-//! The printed shape is stored data: key order (`version`, `seen`), two-space indent, sorted
-//! names, a decision's `todo_id` only on a todo, trailing newline. Key order comes from the
-//! declaration order of derived `Serialize` structs.
-//!
-//! Updates are pure: each returns a new state for the caller to write.
+//! The printed shape is stored data: key order (`version`, `seen`, the declaration order of the
+//! derived `Serialize` structs), two-space indent, sorted names, a decision's `todo_id` only on a
+//! todo, and a trailing newline.
 
 use std::collections::BTreeMap;
 
@@ -18,24 +14,20 @@ use serde::{Deserialize, Serialize};
 use suzatary_mail::mail::Disposed;
 use suzatary_mail::mail::dedup_key::{DedupKey, Keyed};
 
-/// The version this program reads and writes.
 pub(crate) const SCHEMA_VERSION: u64 = 4;
 
-/// The word a decision is stored and answered under; a closed set, so a fourth spelling is a
-/// parse failure rather than a badge nobody renders.
+/// A closed set, so a fourth spelling is a parse failure rather than a badge nobody renders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Disposition {
-    /// Actionable: a todo was authored.
     Todo,
     /// Automated, marketing or bot mail to ignore wholesale.
     Noise,
-    /// Seen, not actionable, not noise — a one-off notice.
+    /// Seen, not actionable, not noise: a one-off notice.
     Skip,
 }
 
 impl Disposition {
-    /// Its wire spelling.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -45,7 +37,6 @@ impl Disposition {
         }
     }
 
-    /// Read one, or the reason this text is not one.
     pub fn parse(text: &str) -> Result<Self, StateError> {
         match text {
             "todo" => Ok(Disposition::Todo),
@@ -62,19 +53,15 @@ impl std::fmt::Display for Disposition {
     }
 }
 
-/// The recorded decision about a message: a todo names the todo it became, and nothing else
-/// names one.
+/// A todo names the todo it became, and nothing else names one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Stored", into = "Stored")]
 pub enum Decision {
-    /// Actionable: this todo was authored for it.
     Todo {
-        /// The todo, as `todo_add` named it.
+        /// As `todo_add` named it.
         todo_id: TodoId,
     },
-    /// Automated, marketing or bot mail.
     Noise,
-    /// Seen, and neither.
     Skip,
 }
 
@@ -91,17 +78,10 @@ impl From<&Decision> for Disposed {
 }
 
 impl Decision {
-    /// Parse a decision as a verb is told it: a disposition word and, for `todo` alone, the
-    /// todo it became.
-    ///
-    /// # Errors
-    /// A word that is not a disposition, a todo with no id or an id that is not one, and an
-    /// id beside a disposition that names none.
     pub fn parse(disposition: &str, todo_id: Option<&str>) -> Result<Self, StateError> {
         Self::of(Disposition::parse(disposition)?, todo_id.map(str::to_owned))
     }
 
-    /// The decision a disposition and an optional todo make, or why they make none.
     pub fn of(disposition: Disposition, todo_id: Option<String>) -> Result<Self, StateError> {
         match (disposition, todo_id) {
             (Disposition::Todo, Some(id)) => TodoId::new(id.clone())
@@ -119,7 +99,6 @@ impl Decision {
         }
     }
 
-    /// Its word.
     #[must_use]
     pub fn disposition(&self) -> Disposition {
         match self {
@@ -129,7 +108,6 @@ impl Decision {
         }
     }
 
-    /// The todo it became, `None` for noise and skip.
     #[must_use]
     pub fn todo_id(&self) -> Option<&TodoId> {
         match self {
@@ -139,7 +117,7 @@ impl Decision {
     }
 }
 
-/// A decision as the file spells it; field order is the stored key order.
+/// Field order is the stored key order.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Stored {
@@ -164,42 +142,32 @@ impl From<Decision> for Stored {
     }
 }
 
-/// `state.json` could not be read, or a value in it is not one.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum StateError {
-    /// The file is not JSON at all, or not this shape.
     #[error("state.json is not JSON of its shape: {0}")]
     Unparseable(String),
-    /// A disposition this program does not know.
     #[error("{0:?} is not a disposition (todo, noise, skip)")]
     Disposition(String),
-    /// A `todo` decision that names no todo.
     #[error("a todo decision names the todo it became: pass todo_id")]
     NoTodo,
-    /// A todo id that is not one.
     #[error("{0:?} is not a todo id (a-z, 0-9, _ and -)")]
     TodoId(String),
-    /// A todo named beside a disposition that is not `todo`.
     #[error("a {disposition} decision names no todo, and {todo_id:?} was given")]
     NotATodo {
-        /// The disposition.
         disposition: Disposition,
-        /// The id given beside it.
         todo_id: String,
     },
-    /// Another version.
     #[error("state.json is version {0}, and this program reads version {SCHEMA_VERSION}")]
     Version(u64),
 }
 
-/// The dedup authority as it is pushed: decisions under keyed names.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TriageState {
-    /// What was decided about each message, by its keyed name.
+    /// By keyed name, never by hash.
     pub seen: BTreeMap<Keyed, Decision>,
 }
 
-/// The file's shape, in the order it is written.
+/// In the order it is written.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
@@ -208,7 +176,6 @@ struct Document {
 }
 
 impl TriageState {
-    /// Read a state file of this version.
     pub fn parse(text: &str) -> Result<Self, StateError> {
         let document: Document =
             serde_json::from_str(text).map_err(|e| StateError::Unparseable(e.to_string()))?;
@@ -220,13 +187,13 @@ impl TriageState {
         })
     }
 
-    /// What an absent file reads as: nothing triaged yet, not a failure.
+    /// What an absent file reads as, not a failure.
     #[must_use]
     pub fn empty() -> Self {
         Self::default()
     }
 
-    /// The file's exact text, trailing newline included.
+    /// Trailing newline included.
     #[must_use]
     #[expect(
         clippy::missing_panics_doc,
@@ -243,14 +210,12 @@ impl TriageState {
         text
     }
 
-    /// Record a decision about the message whose canonical hash is `hash`.
     #[must_use]
     pub fn mark(mut self, key: &DedupKey, hash: &str, decision: Decision) -> Self {
         self.seen.insert(key.name(hash), decision);
         self
     }
 
-    /// The decision recorded for the message whose canonical hash is `hash`.
     #[must_use]
     pub fn decided(&self, key: &DedupKey, hash: &str) -> Option<&Decision> {
         self.seen.get(&key.name(hash))
@@ -272,8 +237,7 @@ mod tests {
         Decision::parse("todo", Some(id)).expect("a todo decision")
     }
 
-    /// The file's text is the contract: key order, indent, sorting, omission, newline; a
-    /// todo's id is printed beside it and nowhere else.
+    /// The file's text is the contract, byte for byte.
     #[test]
     fn the_printed_document_is_its_shape_byte_for_byte() {
         let state = TriageState::empty()
@@ -312,7 +276,7 @@ mod tests {
         );
     }
 
-    /// Another version, or no version, is refused rather than read as empty.
+    /// No version is refused rather than read as empty.
     #[test]
     fn another_version_is_refused() {
         assert_eq!(
@@ -325,7 +289,6 @@ mod tests {
         ));
     }
 
-    /// The pushed form holds nothing box-local and no watermark.
     #[test]
     fn the_pushed_form_refuses_what_is_box_local_and_the_watermark() {
         let named = key().name("abc123");
@@ -358,8 +321,6 @@ mod tests {
         assert!(Disposition::parse("Skip").is_err());
     }
 
-    /// A todo names its todo, and nothing else names one, whether a verb is told it or the
-    /// file holds it.
     #[test]
     fn a_todo_names_its_todo_and_nothing_else_names_one() {
         assert_eq!(Decision::parse("todo", None), Err(StateError::NoTodo));
@@ -403,8 +364,7 @@ mod tests {
     }
 
     proptest! {
-        /// Whatever was decided about whichever messages, the pushed file holds no message's
-        /// hash, no todo note and no sender, and reads back as itself.
+        /// The pushed file holds no message's hash and no sender.
         #[test]
         fn the_pushed_form_holds_no_hash_and_round_trips(
             marks in prop::collection::vec(("[0-9a-f]{64}", a_decision()), 0..20),
@@ -423,8 +383,7 @@ mod tests {
         }
     }
 
-    /// A row with no date prints it as `""`; its disposition is a tagged value, and only a todo
-    /// decision carries a todo.
+    /// A row with no date prints it as `""`.
     #[test]
     fn a_row_prints_its_disposition_as_a_tagged_value() {
         let row = suzatary_mail::mail::MailRow {
@@ -458,7 +417,6 @@ mod tests {
         };
         let json = decided(&Decision::Noise);
         assert_eq!(json["date"], "2026-09-01T08:30:00");
-        // A page reads the row back as the box printed it, with or without a date.
         for printed in [
             serde_json::to_value(&row).expect("serialises"),
             json.clone(),

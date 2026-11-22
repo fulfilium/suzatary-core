@@ -6,7 +6,6 @@ use crate::agent::{Call, TriageSurface, answered, refused};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 
-/// The triage queue.
 pub struct New;
 
 #[derive(Deserialize, JsonSchema)]

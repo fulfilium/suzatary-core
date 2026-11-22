@@ -1,11 +1,7 @@
-//! THE AGENT'S `context` AT THE LIVE SHAPE. One call reads the facts, builds the record from every
-//! line of the conversations and the digest's history (`Recollection::record`), and fits the
-//! memory into its answer (`agent::context`), which reads the digest's view about twenty times
-//! while it searches for the largest view that fits. A view asks for every node of the tree how
-//! its summary stands, and that answer finds the node by name, so a lookup that searched the
-//! whole tree made the call cost the square of the store. Two laws bound the call's CPU time:
-//! it grows with the store and not with its square, and at the live shape an optimised build
-//! answers in under two seconds of one core.
+//! THE AGENT'S `context` AT THE LIVE SHAPE: `agent::context` reads the digest's view about twenty
+//! times, and a view finds each node by name, so a lookup that searches the whole tree costs the
+//! square of the store. Two laws bound the call's CPU time: it grows with the store and not with
+//! its square, and at the live shape an optimised build answers in under two seconds of one core.
 
 use std::time::Duration;
 
@@ -55,9 +51,8 @@ fn context(stores: &Stores) -> Duration {
         .expect("three timings")
 }
 
-/// Four times the lines cost `context` less than eight times the CPU: about four and a half
-/// times after the index, and fourteen times when each lookup searched the tree. The ratio of
-/// two CPU times holds on any machine and under any load the gate puts beside it.
+/// Four times the lines cost `context` less than eight times the CPU; a ratio of two CPU times
+/// holds on any machine and under any load the gate puts beside it.
 #[test]
 fn the_context_costs_what_the_store_holds_and_not_its_square() {
     let small = context(&store(1_000, 8));

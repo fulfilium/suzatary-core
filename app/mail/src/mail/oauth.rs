@@ -1,7 +1,5 @@
 //! Microsoft `OAuth2` as a sans-I/O state machine; `suzatary_io::oauth` is the transport.
 //!
-//! # The three rules, each a type
-//!
 //! 1. [`Minted<P>`] carries `P::Token`, so [`ImapToken`] and [`SmtpToken`] cannot be confused.
 //! 2. [`Protocol::SLOT`] keeps grants apart, so a refresh for one scope never yields the other.
 //! 3. [`device_request`] needs a [`Consent`], which nothing unattended holds or can build.
@@ -22,22 +20,17 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// Which protocol a token is for.
 pub trait Protocol: sealed::Sealed {
-    /// What a successful mint yields.
     type Token: std::fmt::Debug + Clone + PartialEq + Eq;
 
-    /// The Microsoft scope this protocol's tokens are minted under.
     const SCOPE: &'static str;
 
     /// The token store's slot for this protocol's refresh grant, one per consent.
     const SLOT: &'static str;
 
-    /// Wrap a minted secret in this protocol's token type.
     fn token(secret: Secret) -> Self::Token;
 }
 
-/// Reading a mailbox over IMAP.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Imap;
 
@@ -83,7 +76,6 @@ impl Consent {
     }
 }
 
-/// One form POST the flow needs performed, as a value rather than a call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormPost {
     pub url: String,
@@ -91,7 +83,6 @@ pub struct FormPost {
     pub form: Vec<(String, String)>,
 }
 
-/// What a transport read back: the status and the parsed JSON body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answered {
     pub status: u16,
@@ -99,7 +90,6 @@ pub struct Answered {
     pub body: serde_json::Value,
 }
 
-/// The flow refused, or the answer could not be read.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum OauthError {
     /// The endpoint answered a body that is not JSON or lacks the step's field.
@@ -116,7 +106,6 @@ pub enum OauthError {
         /// Its `error_description`, or the body when it named none.
         description: String,
     },
-    /// A device flow asked for a non-Microsoft account.
     #[error("{email} is not a Microsoft account, so it has no sign-in to run")]
     NotMicrosoft { email: String },
 }
@@ -124,14 +113,11 @@ pub enum OauthError {
 /// What a silent access answers: a token, or that a person must sign in, never a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Silent<T> {
-    /// Minted without asking anybody.
     Token(T),
-    /// Only a person can fix this.
     NeedsLogin(NeedsLogin),
 }
 
 impl<T> Silent<T> {
-    /// The token, or the needed login as an error.
     pub fn required(self) -> Result<T, NeedsLogin> {
         match self {
             Self::Token(token) => Ok(token),
@@ -143,7 +129,6 @@ impl<T> Silent<T> {
 /// Why a person has to sign in; the message names the verb to run.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NeedsLogin {
-    /// This store holds no grant for the protocol.
     #[error(
         "no {slot} authorisation for {email} — run `suzatary auth {email} --scope {slot}` at a terminal"
     )]
@@ -158,7 +143,6 @@ pub enum NeedsLogin {
         code: String,
         description: String,
     },
-    /// A Google account holds no grant, or Google refused the one it holds.
     #[error(
         "the Google sign-in for {email} is missing or has lapsed ({why}) — sign it in again from \
          its card in the Inbox; a Google client left in Testing ends each sign-in after 7 days, \
@@ -201,24 +185,19 @@ pub fn device_request<P: Protocol>(_consent: &Consent, authority: Authority) -> 
     }
 }
 
-/// The code an operator types, and what to tell them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceCode {
     /// The opaque code this machine polls with. Never printed.
     pub device_code: Secret,
-    /// The short code the operator types into the browser.
     pub user_code: String,
-    /// Where they type it.
     pub verification_uri: String,
     /// Microsoft's own sentence, printed verbatim.
     pub message: String,
     /// Seconds to wait between polls, as the endpoint asked.
     pub interval_seconds: u64,
-    /// Seconds until the code is dead.
     pub expires_in_seconds: u64,
 }
 
-/// Read step one's answer.
 pub fn read_device_code(answered: &Answered) -> Result<DeviceCode, OauthError> {
     if let Some(refused) = refusal(answered) {
         return Err(refused);
@@ -264,7 +243,6 @@ pub fn read_device_code(answered: &Answered) -> Result<DeviceCode, OauthError> {
     })
 }
 
-/// Step two: ask whether they have finished yet.
 #[must_use]
 pub fn poll_request(authority: Authority, code: &DeviceCode) -> FormPost {
     FormPost {
@@ -283,7 +261,6 @@ pub fn poll_request(authority: Authority, code: &DeviceCode) -> FormPost {
     }
 }
 
-/// What a poll answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Polled<P: Protocol> {
     /// Nobody has typed the code yet; wait this many seconds and poll again.
@@ -295,15 +272,12 @@ pub enum Polled<P: Protocol> {
 /// A grant for one protocol, whose `token` cannot become the other kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Minted<P: Protocol> {
-    /// The access token, as this protocol's type.
     pub token: P::Token,
     /// The refresh token to store, when issued; a rotated one replaces the old.
     pub refresh: Option<Secret>,
-    /// How long the access token is good for.
     pub expires_in_seconds: u64,
 }
 
-/// Read a poll's answer.
 pub fn read_poll<P: Protocol>(
     answered: &Answered,
     interval_seconds: u64,
@@ -326,7 +300,6 @@ pub fn read_poll<P: Protocol>(
     Ok(Polled::Granted(read_grant::<P>(answered)?))
 }
 
-/// Ask for a fresh access token for this protocol, from this protocol's grant.
 #[must_use]
 pub fn refresh_request<P: Protocol>(authority: Authority, refresh: &Secret) -> FormPost {
     FormPost {
@@ -433,7 +406,6 @@ mod tests {
             .map_or("", |(_, value)| value.as_str())
     }
 
-    /// The two protocols ask for different scopes on the wire.
     #[test]
     fn a_refresh_names_exactly_one_protocols_scope() {
         let refresh = Secret::new("r-1");
@@ -463,7 +435,6 @@ mod tests {
         assert_eq!(field(&imap, "client_id"), CLIENT_ID);
     }
 
-    /// One response read as each protocol yields two different token types.
     #[test]
     fn one_response_yields_one_kind_of_token_per_protocol() {
         let body = serde_json::json!({
@@ -498,7 +469,6 @@ mod tests {
         assert!(!shown.contains("hunter3"), "{shown}");
     }
 
-    /// The device request asks for the protocol's scope.
     #[test]
     fn the_device_request_asks_for_the_protocols_scope() {
         let consent = Consent::given_at_a_terminal();
@@ -535,7 +505,6 @@ mod tests {
         assert!(!format!("{code:?}").contains("dc-1"));
     }
 
-    /// A lapsed grant is a login to ask for; an outage stays an error.
     #[test]
     fn a_lapsed_grant_reads_as_needs_login_and_an_outage_does_not() {
         for code in LAPSED {

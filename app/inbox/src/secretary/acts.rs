@@ -1,8 +1,8 @@
 //! An act the box performs itself when the owner taps its proposal.
 //!
-//! `Auth` has no `scope` field on purpose: its tap mints the IMAP grant alone. Sending's consent
-//! is `AuthSend`, a card only the box files, kept in the SMTP slot apart from the IMAP one, so a
-//! leaked read token still cannot send.
+//! `Auth` has no `scope` field on purpose: its tap mints the IMAP grant alone, and sending's
+//! consent is `AuthSend`, a card only the box files, kept in the SMTP slot apart from the IMAP
+//! one, so a leaked read token still cannot send.
 
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,6 @@ use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
 
-/// One act, from a closed set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Act {
@@ -34,14 +33,11 @@ pub enum Act {
         /// The account to authorise.
         account: EmailAddress,
     },
-    /// Store a deployment-declared secret, asked for in the Inbox.
-    ///
     /// No `value` field on purpose: the value travels only in the tap's body, never stored.
     Secret {
         /// The secret's name as declared when asked; the tap mints it against the names
         /// declared then, so a card cannot outlive its declaration.
         name: String,
-        /// Why the secretary is asking.
         why: String,
     },
     /// Read the web once: a request no allow rule covers, sent only on a tap.
@@ -56,7 +52,6 @@ pub enum Act {
         repo: suzatary_base::repo_ids::RepoName,
         /// Who can read the branch once pushed, as the listing said when proposed.
         visibility: suzatary_services::repos::Visibility,
-        /// The commit the diff was written against.
         base: suzatary_base::repo_ids::CommitId,
         patch: suzatary_services::repos::Patch,
         message: String,
@@ -84,13 +79,10 @@ pub enum Act {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         since: Option<String>,
     },
-    /// The code an open sign-in waits for, typed on the page its link opens.
-    ///
     /// No `code` field on purpose: the code travels only in the tap's body, and its token only
     /// into the secret store.
     #[serde(rename = "sign_in_code")]
     SignInCode {
-        /// The sign-in's link, as the box read it off the CLI.
         url: crate::secretary::sign_in::SignInUrl,
     },
     /// Ask the secret store again, which could not answer for a declared name; the passphrase is
@@ -132,20 +124,17 @@ pub enum Act {
     },
     /// Erase these words, which may restate a forgotten fact its erasure left in other words.
     Erase {
-        /// The fact whose forgetting offers it.
         fact: memory::FactId,
         keys: std::collections::BTreeSet<locked_text::KeyName>,
     },
     /// Retract the summary `node` shows, as the memory page's Wrong does.
     Retract {
-        /// The node, by its content name.
         #[serde(with = "node_text")]
         node: prodrome_core::event::Hash,
     },
     /// Ask the owner's request again in a fresh topic, copying turn `turn` only while it is his
     /// own clean words (`suzatary_cards::secretary::afresh::Request::at_tap`).
     Afresh {
-        /// Where the request was said and the card is drawn.
         conversation: ConversationId,
         /// The request's index among that conversation's turns.
         turn: usize,
@@ -298,7 +287,6 @@ impl Act {
     }
 }
 
-/// A noise card's imperative, naming the message it was asked on by the start of its hash.
 fn silencing(sender: &str, message: &str) -> String {
     format!(
         "leave every later message from {sender} out of triage, as the triage agent asked on \
@@ -307,7 +295,6 @@ fn silencing(sender: &str, message: &str) -> String {
     )
 }
 
-/// A retraction's imperative, naming the summary by the start of its node's name.
 fn retracting(node: &prodrome_core::event::Hash) -> String {
     format!(
         "mark wrong the summary {}… on the Memory page: it is deleted, never shown to a model \
@@ -322,49 +309,27 @@ pub fn folder_of(path: &DrivePath) -> DrivePath {
     path.parent().unwrap_or_else(DrivePath::root)
 }
 
-/// `Auth(account)`.
 pub const AUTH: Constructor = ("Auth", &["account"]);
-/// `AuthSend(account)`.
 pub const AUTH_SEND: Constructor = ("AuthSend", &["account"]);
-/// `Secret(name, why)`.
 pub const SECRET: Constructor = ("Secret", &["name", "why"]);
-/// `Web(request, rule)`.
 pub const WEB: Constructor = ("Web", &["request", "rule"]);
-/// `Patch(repo, visibility, base, patch, message)`.
 pub const PATCH: Constructor = ("Patch", &["repo", "visibility", "base", "patch", "message"]);
-/// `DriveRead(path, size)`.
 pub const DRIVE_READ: Constructor = ("DriveRead", &["path", "size"]);
-/// `CodingSession(task)`.
 pub const CODING_SESSION: Constructor = ("CodingSession", &["task"]);
-/// `Device(actor, key)`.
 pub const DEVICE: Constructor = ("Device", &["actor", "key"]);
-/// `SignIn(since)`.
 pub const SIGN_IN: Constructor = ("SignIn", &["since"]);
-/// `SignInCode(url)`.
 pub const SIGN_IN_CODE: Constructor = ("SignInCode", &["url"]);
-/// `UnlockStore(after)`.
 pub const UNLOCK_STORE: Constructor = ("UnlockStore", &["after"]);
-/// `Connect(connection)`.
 pub const CONNECT: Constructor = ("Connect", &["connection"]);
-/// `Disconnect(connection)`.
 pub const DISCONNECT: Constructor = ("Disconnect", &["connection"]);
-/// `Grant(plugin, origin)`.
 pub const GRANT: Constructor = ("Grant", &["plugin", "origin"]);
-/// `Erase(fact, keys)`.
 pub const ERASE: Constructor = ("Erase", &["fact", "keys"]);
-/// `Afresh(turn)`.
 pub const AFRESH: Constructor = ("Afresh", &["conversation", "turn"]);
-/// `Retract(node)`.
 pub const RETRACT: Constructor = ("Retract", &["node"]);
-/// `Noise(sender, message)`.
 pub const NOISE: Constructor = ("Noise", &["sender", "message"]);
-/// `Restore(card)`.
 pub const RESTORE: Constructor = ("Restore", &["card"]);
-/// `GoogleClient(redirect)`.
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
-/// `GoogleSignIn(account, scopes)`.
 pub const GOOGLE_SIGN_IN: Constructor = ("GoogleSignIn", &["account", "scopes"]);
-/// `CalendarEvent(account, title, when, place)`.
 pub const CALENDAR_EVENT: Constructor = ("CalendarEvent", &["account", "title", "when", "place"]);
 
 // By hand: its reads refuse as `Fields` does.
@@ -547,7 +512,6 @@ impl Literal for Act {
     }
 }
 
-/// `Restore(card)`, read.
 fn restore(value: &Value) -> Result<Act, ProdromeError> {
     Ok(Act::Restore {
         card: Fields::of(value, RESTORE)?
@@ -557,7 +521,6 @@ fn restore(value: &Value) -> Result<Act, ProdromeError> {
     })
 }
 
-/// `Noise(sender, message)`, read.
 fn noise(value: &Value) -> Result<Act, ProdromeError> {
     let fields = Fields::of(value, NOISE)?;
     Ok(Act::Noise {
@@ -580,7 +543,6 @@ mod node_text {
     }
 }
 
-/// A Google act read back from its literal, each field through its constructor.
 fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
     Ok(match arm {
         "GoogleClient" => Act::GoogleClient {
@@ -641,7 +603,6 @@ mod tests {
         assert_ne!(Act::from_value(&auth().to_value()).as_ref(), Ok(&send));
     }
 
-    /// The sign-in's two acts print and read back as literals, the code card naming its link.
     #[test]
     fn the_sign_in_acts_round_trip_as_literals() {
         for act in [
@@ -664,9 +625,8 @@ mod tests {
         }
     }
 
-    /// An unlock card names the card it follows by its reference, printed as the text it was
-    /// stored as before it was typed, and an `after` that is no proposal's reference is refused
-    /// on reading.
+    /// An unlock card names the card it follows by its reference, and an `after` that is no
+    /// proposal's reference is refused on reading.
     #[test]
     fn an_unlock_card_names_the_card_it_follows_by_reference() {
         let act = Act::UnlockStore {
@@ -692,7 +652,6 @@ mod tests {
         assert!(Act::from_value(&a_todo).is_err(), "a todo is no card");
     }
 
-    /// A line round trips, and its tag names the act.
     /// The Google acts read back as they were stored, as literals and as JSON, and a stored
     /// event no constructor admits is refused.
     #[test]

@@ -1,8 +1,6 @@
-//! The secretary reviews the triage agent's open cards, applying `SECRETARY.md`'s rule by the
-//! model: it may withdraw a card and never performs one, which is the owner's tap alone.
-//!
-//! A hold is derived from what is still open when the round ends, and a failed review leaves
-//! every card open.
+//! The secretary reviews the triage agent's open cards: it may withdraw a card and never
+//! performs one, which is the owner's tap alone, and a failed review leaves every card open. A
+//! hold is derived from what is still open when the round ends.
 
 use super::Bound;
 use super::daily::{Run, begin, daily_round};
@@ -26,7 +24,6 @@ use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_memory::secretary::words::Words;
 
-/// What one review pass came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pass {
     /// No card stood, so no conversation was read.
@@ -35,13 +32,11 @@ pub enum Pass {
     Cards(Box<Noticed<Result<Run<Reviewed>, Refusal>>>),
 }
 
-/// A daily pass's round, after the notice of the conversations that do not read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Noticed<T> {
-    /// The push to page with when the set of conversations that do not read is new today, or
-    /// why they could not be listed.
+    /// The push to page with when today's set of unreadable conversations is new, or why they
+    /// could not be listed.
     pub unreadable: Result<Option<Push>, Refusal>,
-    /// The round.
     pub run: T,
 }
 
@@ -55,21 +50,16 @@ pub(crate) fn noticed<T>(caps: &Secretary<'_>, zone: Zone, run: impl FnOnce() ->
     }
 }
 
-/// What one review did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reviewed {
-    /// The conversation it happened in, as it now stands.
     pub stored: Stored,
-    /// How many times the model was asked.
     pub rounds: usize,
     /// The lines this review wrote, in order: withdrawn and held, with the reason.
     pub decided: Vec<Review>,
-    /// How many cards are still open when it ends.
     pub standing: usize,
 }
 
 impl Reviewed {
-    /// The lines with one decision, for a caller printing three lists.
     #[must_use]
     pub fn with(&self, outcome: Outcome) -> Vec<&Review> {
         self.decided
@@ -86,7 +76,6 @@ const ASK: &str = "Review the triage agent's open cards, below. Withdraw duplica
                    in a few sentences, what you withdrew and what you left for me and why. \
                    When in doubt, leave it.";
 
-/// A hold's reason when the model said nothing about the rest.
 const UNSPOKEN: &str = "The secretary left this standing and did not say why.";
 
 /// What a review round may call: the reads, and `triage_withdraw`. Its turn holds the cards'
@@ -104,11 +93,8 @@ pub(crate) const SURFACE: Subset = Subset {
     },
 };
 
-/// One review pass. It reads the inbox first; when no card stands, it reads no conversation and
-/// asks no model.
-///
-/// # Errors
-/// The inbox's own failure to read.
+/// One review pass; when no card stands, it reads no conversation and asks no model, and the seed
+/// (`triage_cards`' own answer as a `Turn::Tool`) spends no rounds.
 pub fn pass(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -126,8 +112,6 @@ pub fn pass(
 
 /// Review `cards` in one round, then write a `held` line for each card still open; nothing
 /// while the model is under a limit, and nothing when today's round already holds every card.
-///
-/// The seed is `triage_cards`' own answer as a `Turn::Tool`, and spends no rounds.
 fn review(
     caps: &Secretary<'_>,
     cards: &NonEmpty<(ProposalRef, Changeset)>,
@@ -239,10 +223,8 @@ fn review(
     }))
 }
 
-/// Name in today's review every conversation the store holds that does not read, once a day for
-/// each set of them: the push to page with when this pass is the first TODAY to see that set,
-/// else none. The note is kept in the day's round, so a set that stays unreadable is named and
-/// paged again each day, as a finding still standing should be.
+/// Name in today's review every conversation that does not read, paging only when this pass is
+/// the first today to see that set; a set that stays unreadable is named again each day.
 fn note_unreadable(caps: &Secretary<'_>, zone: Zone) -> Result<Option<Push>, Refusal> {
     let unreadable = every(caps.conversations)?.unreadable;
     let Some(count) = std::num::NonZeroUsize::new(unreadable.len()) else {
@@ -314,7 +296,6 @@ fn hold_the_rest(
     Ok(held.len())
 }
 
-/// The cards the round's conversation already holds, by reference.
 fn held(round: &Stored) -> std::collections::BTreeSet<String> {
     round
         .reviews
@@ -324,9 +305,7 @@ fn held(round: &Stored) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
-/// The last thing the model said, which is what a hold's reason is.
-///
-/// Read as prose, because the Inbox shows it as text.
+/// The last thing the model said, as prose, since the Inbox shows a hold's reason as text.
 fn said(stored: &Stored) -> String {
     stored
         .turns
@@ -341,10 +320,6 @@ fn said(stored: &Stored) -> String {
         .unwrap_or_else(|| UNSPOKEN.to_owned())
 }
 
-/// Every conversation: each that reads as it stands, and each that does not, named.
-///
-/// # Errors
-/// The store's own failure to list them.
 pub fn every(conversations: Conversations<'_>) -> Result<Found<Stored>, Refusal> {
     let mut found = Found {
         items: Vec::new(),
@@ -362,11 +337,7 @@ pub fn every(conversations: Conversations<'_>) -> Result<Found<Stored>, Refusal>
     Ok(found)
 }
 
-/// Every review line this box holds since a day, oldest first, from every conversation that
-/// reads, and every one that does not.
-///
-/// # Errors
-/// The store's own failure to list them.
+/// Every review line since a day, oldest first.
 pub fn reviews(
     conversations: Conversations<'_>,
     since: chrono::NaiveDate,
@@ -385,9 +356,6 @@ pub fn reviews(
 
 /// Every review that could not run since a day, oldest first, kept apart from [`reviews`] because
 /// these are not decisions.
-///
-/// # Errors
-/// As [`reviews`].
 pub fn failures(
     conversations: Conversations<'_>,
     since: chrono::NaiveDate,
@@ -415,7 +383,6 @@ pub fn failures(
 pub struct Outage {
     /// Failed passes since the last review that ran; zero when it is up.
     pub consecutive: usize,
-    /// Cards open at the latest failure.
     pub standing: usize,
 }
 
@@ -431,10 +398,7 @@ impl Outage {
     }
 }
 
-/// Today's [`Outage`], read from the conversations that read.
-///
-/// # Errors
-/// As [`reviews`]: a store that does not list says so, and is never an outage of none.
+/// Today's [`Outage`]; a store that does not list is an error, never an outage of none.
 pub fn outage(
     conversations: Conversations<'_>,
     today: chrono::NaiveDate,

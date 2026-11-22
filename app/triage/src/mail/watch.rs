@@ -1,9 +1,7 @@
-//! A watch on mail the owner expects: a sender or a subject and an expiry, set by the secretary
-//! and rung once, by a push, when a matching message has synced.
+//! A watch on mail the owner expects, rung once, by a push, when a matching message has synced.
 //!
 //! A watch's log is one [`Line::Set`], then at most one [`Line::Rang`] or [`Line::Cancelled`],
-//! then at most one [`Line::Delivered`]. An expiry writes nothing: past `until` it reads as
-//! [`Standing::Expired`].
+//! then at most one [`Line::Delivered`]; an expiry writes nothing.
 
 use prodrome_core::fpl::Instant;
 use serde::{Deserialize, Serialize};
@@ -15,25 +13,22 @@ use suzatary_base::refusal::Refusal;
 use suzatary_mail::mail::mailbox::Query;
 use suzatary_store::store::{Edit, Log};
 
-/// The longest text a watch looks for, in characters, so its query with the owner's accounts
-/// stays under the corpus's cap.
+/// In characters, so a watch's query with the owner's accounts stays under the corpus's cap.
 pub const MAX_TEXT: usize = 100;
-/// The longest a watch stands, in days.
+/// In days.
 pub const MAX_DAYS: u16 = 60;
 /// How long after a ring its push is still owed, whatever the watch's expiry.
 pub(crate) const GRACE: chrono::TimeDelta = chrono::TimeDelta::days(1);
 
-/// A watch's name: the first 16 hex digits of the hash of its [`Set`] line.
+/// The first 16 hex digits of the hash of its [`Set`] line.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WatchId(String);
 
-/// A name that is not 16 lower-case hex digits.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a watch is named by 16 lower-case hex digits")]
 pub struct NotAWatchId;
 
 impl WatchId {
-    /// The watch `text` names.
     pub fn new(text: &str) -> Result<Self, NotAWatchId> {
         (text.len() == 16 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
             .then(|| Self(text.to_owned()))
@@ -45,40 +40,34 @@ impl WatchId {
         Self(hex::encode(Sha256::digest(printed))[..16].to_owned())
     }
 
-    /// The hex digits, which are also the log's file name.
+    /// Also the log's file name.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// Which part of a message a watch looks in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Part {
     /// The sender's address or name.
     Sender,
-    /// The subject.
     Subject,
 }
 
-/// What a watch matches: words of one part of a message, as the mail index reads them.
+/// Words of one part of a message, as the mail index reads them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct On {
-    /// Where.
     pub part: Part,
-    /// What.
     pub text: Pattern,
 }
 
-/// The text a watch looks for: one line of 1 to [`MAX_TEXT`] characters with no double quote,
-/// trimmed and lower-cased.
+/// One line of 1 to [`MAX_TEXT`] characters with no double quote, trimmed and lower-cased.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Pattern(String);
 
 impl Pattern {
-    /// `text` as a pattern.
     pub fn new(text: &str) -> Result<Self, Refusal> {
         let text = text.trim();
         if text.is_empty()
@@ -92,7 +81,6 @@ impl Pattern {
         Ok(Self(text.to_lowercase()))
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -113,12 +101,11 @@ impl From<Pattern> for String {
     }
 }
 
-/// How many days a watch stands: 1 to [`MAX_DAYS`].
+/// 1 to [`MAX_DAYS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Days(u16);
 
 impl Days {
-    /// `days` as a watch's length.
     pub fn new(days: u16) -> Result<Self, Refusal> {
         (1..=MAX_DAYS)
             .contains(&days)
@@ -127,11 +114,9 @@ impl Days {
     }
 }
 
-/// A line of a watch's log.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "line", rename_all = "snake_case")]
 pub enum Line {
-    /// The watch was set.
     Set(Set),
     /// A message matched, and a push of its link is owed.
     Rang {
@@ -140,7 +125,6 @@ pub enum Line {
         /// When.
         at: Instant,
     },
-    /// The owner cancelled it.
     Cancelled {
         /// When.
         at: Instant,
@@ -152,72 +136,51 @@ pub enum Line {
     },
 }
 
-/// What a watch waits for, from when, and until when.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Set {
-    /// What it matches.
     pub on: On,
-    /// When it was set.
     pub at: Instant,
     /// When it expires.
     pub until: Instant,
 }
 
-/// A watch as its log reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Watch {
-    /// Its name.
     pub id: WatchId,
-    /// What it waits for.
     pub set: Set,
-    /// What closed it, if anything.
     pub life: Life,
 }
 
 /// What closed a watch before its expiry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Life {
-    /// Nothing.
     Open,
-    /// A message matched.
     Rang {
-        /// The message.
         message: MailHash,
-        /// When.
         at: Instant,
-        /// Whether its push reached the push service.
         push: Delivery,
     },
-    /// The owner cancelled it.
     Cancelled,
 }
 
 /// Whether a ring's push reached the push service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {
-    /// Not yet.
     Owed,
-    /// It did.
     Delivered,
 }
 
-/// A watch at an instant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Standing {
-    /// It waits.
     Watching,
     /// Its expiry passed and nothing closed it.
     Expired,
-    /// Something closed it.
     Closed,
 }
 
 impl Watch {
-    /// The watch `lines` record, `None` for a log never started.
-    ///
-    /// # Errors
-    /// An internal refusal naming the watch for a log no writer of this module writes: one that
-    /// does not begin with its `Set`, or a line after a closing it cannot follow.
+    /// `None` for a log never started, and an internal refusal for a log no writer of this module
+    /// writes: one that does not begin with its `Set`, or a line after a closing it cannot follow.
     pub fn of(id: WatchId, lines: &[Line]) -> Result<Option<Self>, Refusal> {
         let impossible = |line: &Line| {
             Refusal::internal(format!(
@@ -269,7 +232,6 @@ impl Watch {
         }))
     }
 
-    /// How it stands at `now`.
     #[must_use]
     pub fn standing(&self, now: Instant) -> Standing {
         match &self.life {
@@ -292,21 +254,14 @@ impl Watch {
         }
     }
 
-    /// The corpus query for the mail this watch waits for: the part's words, dated from the
-    /// set time on, from none of `own`, the owner's own addresses.
-    ///
-    /// # Errors
-    /// A query over the corpus's cap.
+    /// The part's words, dated from the set time on, from none of `own`, the owner's own
+    /// addresses.
     pub fn query(&self, own: &[&str]) -> Result<Query, Refusal> {
         self.set.query(own)
     }
 }
 
 impl Set {
-    /// The corpus query for the mail this watch waits for; see [`Watch::query`].
-    ///
-    /// # Errors
-    /// A query over the corpus's cap.
     pub fn query(&self, own: &[&str]) -> Result<Query, Refusal> {
         let field = match self.on.part {
             Part::Sender => "from",
@@ -331,15 +286,10 @@ impl Set {
     }
 }
 
-/// The watches' store: one log per watch.
 pub type Watches = dyn Log<WatchId, Line>;
 
-/// Set a watch on `on` for `days` from `now`; `own` is the owner's own addresses, whose mail its
-/// search leaves out.
-///
-/// # Errors
-/// A watch whose search would be over the corpus's cap, the store's own, and a conflict for
-/// the same watch set at the same instant.
+/// `own` is the owner's own addresses, whose mail its search leaves out; refused for a search over
+/// the corpus's cap, a conflict for the same watch set at the same instant, and the store's own.
 pub fn set(
     watches: &Watches,
     on: On,
@@ -362,10 +312,6 @@ pub fn set(
     })
 }
 
-/// Every watch the store holds.
-///
-/// # Errors
-/// The store's own, and a log [`Watch::of`] refuses.
 pub fn all(watches: &Watches) -> Result<Vec<Watch>, Refusal> {
     let mut all = Vec::new();
     for id in watches.keys()? {
@@ -375,7 +321,7 @@ pub fn all(watches: &Watches) -> Result<Vec<Watch>, Refusal> {
     Ok(all)
 }
 
-/// Every watch that waits at `now`, the soonest to expire first.
+/// The soonest to expire first.
 pub fn open(watches: &Watches, now: Instant) -> Result<Vec<Watch>, Refusal> {
     let mut open: Vec<Watch> = all(watches)?
         .into_iter()
@@ -385,8 +331,7 @@ pub fn open(watches: &Watches, now: Instant) -> Result<Vec<Watch>, Refusal> {
     Ok(open)
 }
 
-/// Write `line` to the watch `id` when `fits` holds of how the watch reads at `now`, and
-/// answer whether it was written.
+/// Write `line` under the log's edit only when `fits` holds of how the watch reads at `now`.
 fn close(
     watches: &Watches,
     id: &WatchId,
@@ -410,9 +355,6 @@ fn waits(watch: &Watch, now: Instant) -> bool {
     watch.standing(now) == Standing::Watching
 }
 
-/// Cancel the watch `id` at `now`.
-///
-/// # Errors
 /// Not found for a watch the store does not hold, a conflict for one that no longer waits, and
 /// the store's own.
 pub fn cancel(watches: &Watches, id: &WatchId, now: Instant) -> Result<(), Refusal> {
@@ -426,9 +368,8 @@ pub fn cancel(watches: &Watches, id: &WatchId, now: Instant) -> Result<(), Refus
     }
 }
 
-/// Ring every watch that waits at `now` and whose query `corpus` answers with a message, the
-/// newest; `own` is the owner's own addresses, whose mail never rings a watch. Answer the
-/// refusal of each watch that could not be rung, so one failing watch holds no other back.
+/// `own` is the owner's own addresses, whose mail never rings a watch; each watch that could not
+/// be rung answers its refusal, so one failing watch holds no other back.
 pub fn ring(
     watches: &Watches,
     corpus: &dyn Corpus,
@@ -459,7 +400,6 @@ pub fn ring(
         .collect())
 }
 
-/// Every push still owed at `now`: each watch's id and the message it rang for.
 pub fn owed(watches: &Watches, now: Instant) -> Result<Vec<(WatchId, MailHash)>, Refusal> {
     Ok(all(watches)?
         .iter()
@@ -471,7 +411,6 @@ pub fn owed(watches: &Watches, now: Instant) -> Result<Vec<(WatchId, MailHash)>,
         .collect())
 }
 
-/// Record that the push owed for the watch `id` reached the push service.
 pub fn delivered(watches: &Watches, id: &WatchId, now: Instant) -> Result<(), Refusal> {
     close(
         watches,
@@ -483,7 +422,6 @@ pub fn delivered(watches: &Watches, id: &WatchId, now: Instant) -> Result<(), Re
     .map(drop)
 }
 
-/// Every watch that waits at `now`, as the Mail page draws them.
 pub fn listed(
     watches: &Watches,
     now: Instant,
@@ -561,8 +499,6 @@ mod tests {
         }
     }
 
-    /// One step of an interleaving: the secretary sets a watch, the owner cancels one, a
-    /// message arrives, a sync rings and delivers, or the clock moves on.
     #[derive(Debug, Clone)]
     enum Step {
         Set(u16),
@@ -592,9 +528,8 @@ mod tests {
     }
 
     proptest! {
-        /// Whatever the order of sets, cancels, arrivals, syncs and time, each watch rings at
-        /// most once, never after its cancel and never past its expiry, and its push is
-        /// delivered at most once, only after its ring, and by any pushing sync within
+        /// Each watch rings at most once, never after its cancel and never past its expiry, and
+        /// its push is delivered at most once, only after its ring, by any pushing sync within
         /// [`GRACE`] of the ring.
         #[test]
         fn a_watch_rings_at_most_once_never_after_a_cancel_or_its_expiry(
@@ -619,7 +554,6 @@ mod tests {
                     ),
                     Step::Cancel(n) => {
                         if let Some(id) = ids.get(n) {
-                            // A watch that no longer waits refuses a cancel.
                             drop(cancel(&log, id, now));
                         }
                     }
@@ -631,7 +565,6 @@ mod tests {
                             for (id, _) in owed(&log, now).expect("reads") {
                                 delivered(&log, &id, now).expect("recorded");
                             }
-                            // Whatever the watch's expiry, a ring within the grace is delivered.
                             for id in &ids {
                                 let lines = log.lines(id).expect("a log");
                                 let rang = lines.iter().find_map(|line| match line {

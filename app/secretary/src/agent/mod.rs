@@ -1,9 +1,7 @@
 //! The triage agent's whole surface: every verb a pure function of an [`Agent`] record,
 //! which holds nothing that sends, confirms or names a peer.
-//!
-//! `verbs` holds one type per verb and `surface` sums them. `reads` holds the bodies the
-//! secretary's verbs of the same names share; a shared writing verb builds its act once and hands
-//! it to its surface's [`Holds::write`]: the triage agent files a card, and the secretary writes.
+//! A shared writing verb hands its act to [`Holds::write`]: the triage agent files a card, and
+//! the secretary writes.
 
 use suzatary_base::writer::Writer;
 mod call;
@@ -41,9 +39,6 @@ pub const WRITES_AS: Writer = Writer::Triage;
 
 /// One call as the agent sent it: read whole once, then run against the record of the chain it
 /// names, absent meaning the first.
-///
-/// # Errors
-/// An unknown verb or chain, a missing or ill-typed argument, or an effect's own failure.
 pub fn call(
     records: &BTreeMap<String, Agent<'_>>,
     cards: &suzatary_topics::secretary::filed::TriageCards<'_>,
@@ -85,12 +80,10 @@ pub fn call(
         .map(suzatary_held::held_value::withheld_value)
 }
 
-/// Any effect's failure, as the words the agent reads.
 pub(crate) fn refused<E: std::fmt::Display>(failed: &E) -> Refusal {
     Refusal::internal(failed.to_string())
 }
 
-/// A typed answer as the JSON a verb answers.
 pub(crate) fn answered<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, Refusal> {
     serde_json::to_value(value).map_err(|failed| refused(&failed))
 }

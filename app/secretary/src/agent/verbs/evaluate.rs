@@ -6,7 +6,6 @@ use crate::agent::{Call, TriageSurface, reads};
 use crate::verb::{Chained, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// A priority spec evaluated against confirmed history.
 pub struct Evaluate;
 
 #[derive(Deserialize, JsonSchema)]

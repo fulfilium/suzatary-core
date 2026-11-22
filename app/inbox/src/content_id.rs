@@ -7,7 +7,6 @@ use sha2::{Digest, Sha256};
 
 use prodrome_core::literal::codec::Literal;
 
-/// The name of a `T` by its content.
 #[derive(Debug)]
 pub struct ContentId<T> {
     hex: String,
@@ -27,7 +26,6 @@ impl<T: Literal> ContentId<T> {
 }
 
 impl<T> ContentId<T> {
-    /// The 64 hex digits.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.hex

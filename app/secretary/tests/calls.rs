@@ -1,9 +1,5 @@
-//! Every verb's answer to a call a model might send, pinned line by line.
-//!
-//! The cases are generated from each surface's tool list: a valid call, then
-//! one fault at a time (an argument missing, null, of the wrong type, out of
-//! range), so each line names the one thing wrong with its call. The effects
-//! are inert, so what is pinned is how a call is read, not what the box holds.
+//! Every verb's answer to a call a model might send, pinned line by line: a valid call, then one
+//! fault at a time; the effects are inert, so what is pinned is how a call is read.
 //! `SUZATARY_UPDATE_CALLS=1 cargo test -p suzatary-secretary --test all calls::` rewrites
 //! the snapshot; a change to it is a change the models see.
 
@@ -156,7 +152,6 @@ static KEYS: std::sync::LazyLock<suzatary_memory::secretary::locked_text::InMemo
     std::sync::LazyLock::new(Default::default);
 static ENTROPY: std::sync::LazyLock<suzatary_lines::nothing::Counting> =
     std::sync::LazyLock::new(Default::default);
-/// The watches `watch_mail` sets.
 static WATCHES: std::sync::LazyLock<
     suzatary_store::store::InMemoryLog<
         suzatary_triage::mail::watch::WatchId,
@@ -462,7 +457,6 @@ fn mistyped(schema: &Value) -> Value {
     }
 }
 
-/// Every case of one tool: its name and its arguments.
 fn cases(tool: &Value) -> Vec<(String, Map<String, Value>)> {
     let verb = tool["name"].as_str().expect("a name");
     let properties = tool["inputSchema"]["properties"]

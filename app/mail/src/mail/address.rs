@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use suzatary_base::refusal::Refusal;
 
-/// One address, shaped by its constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct EmailAddress(String);
@@ -55,7 +54,6 @@ impl EmailAddress {
         Ok(Self(trimmed.to_owned()))
     }
 
-    /// The address, as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

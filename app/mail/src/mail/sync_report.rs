@@ -6,17 +6,14 @@ use serde::{Deserialize, Serialize};
 /// expired token must not cost the other accounts their sync.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountSync {
-    /// The account's canonical address.
     pub account: crate::mail::account_email::AccountEmail,
-    /// Whether it synced, and the class of its failure where it did not.
     pub outcome: crate::outcome::Outcome<super::fault::Fault>,
     /// The last line of what it said.
     pub tail: String,
 }
 
-/// What `sync` answers. The wrapper persists it at the last-sync path, where
-/// `suzatary gate` (the triage rule, `mail::triage`) and `sync_mail` read it back, so a renamed field is renamed
-/// for both; each account's health over time is `health`'s.
+/// Persisted at the last-sync path, where `suzatary gate` and `sync_mail` read it back, so a
+/// renamed field is renamed for both.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncReport {
     /// Every account, in the roster's order.

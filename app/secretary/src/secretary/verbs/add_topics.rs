@@ -107,9 +107,7 @@ pub(super) fn revise(call: &Call<'_>, aim: Aim, revision: &Revision) -> Result<V
     Ok(answer)
 }
 
-/// The round being answered: the first turn the owner wrote of those the model is answering, else
-/// the first person's or act's turn of them, which a round the box opened (a brief, a sweep) has;
-/// or, `on` a note, the note it drafted last among them.
+/// The round being answered ([`round_answered`]), or, `on` a note, the note it drafted last.
 fn answering(stored: &Stored, on: On) -> Result<Target, Refusal> {
     match on {
         On::Round => round_answered(stored)

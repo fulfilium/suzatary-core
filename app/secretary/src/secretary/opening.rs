@@ -16,11 +16,8 @@ use suzatary_services::drive::Port as _;
 /// The file `file` names, as its source holds it now. A Drive file is read through the fence
 /// while its folder is allowed, and otherwise only when a file reader of this conversation
 /// answered it (`read`): the owner's tap on Read put it there. A private upload is read from the
-/// owner's Drive, which only a tap does.
-///
-/// # Errors
-/// The source's refusal: a missing file, a Drive file outside the allowed folders that this
-/// conversation never read, a Git LFS pointer, or the source's own failure.
+/// owner's Drive, which only a tap does. A Drive file outside the allowed folders that this
+/// conversation never read is refused, as is a Git LFS pointer.
 pub fn open(
     caps: &Secretary<'_>,
     file: &AttachmentSource,
@@ -109,7 +106,6 @@ fn upload(
     }
 }
 
-/// A file of a declared repository at the commit `at` resolves to.
 fn repository(
     caps: &Secretary<'_>,
     repo: &suzatary_base::repo_ids::RepoName,
@@ -149,7 +145,6 @@ fn repository(
 /// The held files as one conversation's tap reads them: through [`open`], and the record's PDF
 /// reader.
 pub struct Opening<'a, 'b> {
-    /// The record whose sources are read.
     pub caps: &'b Secretary<'a>,
     /// What the conversation read, which opens a Drive file outside the allowed folders.
     pub read: &'b ReadHolders,

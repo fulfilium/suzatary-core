@@ -1,15 +1,11 @@
-//! The triage trigger as a rule: mail in the queue is owed a triage pass.
-//!
-//! The queue is hash-gated by the dedup authority (`state.json`), so the pass's outcome, a
-//! disposition per message, takes each message out of the queue and discharges the rule; a pass
-//! that recorded nothing leaves the same reading, owed again by the next pass. A failed account
-//! is not the model's work: the health register shows it.
+//! The triage trigger as a rule: the queue is hash-gated by the dedup authority (`state.json`), so
+//! a disposition takes its message out of the queue and discharges the rule; a failed account is
+//! not the model's work, the health register shows it.
 
 use crate::mail::verbs::Summary;
 use crate::rule::{Named, ReadingName, Rule};
 use suzatary_mail::mail::sync_report::SyncReport;
 
-/// What triage reads: the queued messages' canonical hashes, and the last sync's report as read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Queue {
     hashes: Vec<String>,
@@ -17,7 +13,6 @@ pub struct Queue {
 }
 
 impl Queue {
-    /// The queue's rows beside the report.
     #[must_use]
     pub fn of(rows: &[Summary], report: Option<SyncReport>) -> Self {
         Self {
@@ -27,7 +22,7 @@ impl Queue {
     }
 }
 
-/// Named by its messages, and by whether the report read, which is part of what P reads.
+/// Named also by whether the report read, which is part of what P reads.
 impl Named for Queue {
     fn name(&self) -> ReadingName {
         let unread = self
@@ -51,7 +46,6 @@ impl std::fmt::Display for Queue {
     }
 }
 
-/// The one mail queue this box triages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Mailbox;
 
@@ -143,9 +137,8 @@ mod tests {
         );
     }
 
-    /// A pass fires once per queue; its dispositions empty the queue, so the next pass, a fresh
-    /// process with a fresh engine, fires nothing, while a pass that recorded nothing is owed
-    /// again.
+    /// A pass that recorded nothing is owed again by a fresh engine; one whose dispositions
+    /// emptied the queue is not.
     #[test]
     fn dispositions_discharge_the_rule() {
         let owed = Queue::of(&rows(&["a1", "b2"]), Some(report(&[true])));
@@ -157,7 +150,6 @@ mod tests {
         assert!(Engine::new(vec![Triage]).due(&Mailbox, &triaged).is_none());
     }
 
-    /// The queue's name is its set of messages, whatever order the corpus listed them in.
     #[test]
     fn the_queues_name_is_its_set_of_messages() {
         let one = Queue::of(&rows(&["a1", "b2"]), Some(report(&[true])));

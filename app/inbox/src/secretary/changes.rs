@@ -20,42 +20,34 @@ use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
 use suzatary_signatures::believed::{Believed, Preview};
 use suzatary_todo::authoring::{self, NewTodo};
 
-/// One chain act, each arm backed by an existing builder.
-///
-/// No `Undo`, since the last event may be the owner's.
+/// One chain act; no `Undo`, since the last event may be the owner's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "act", rename_all = "lowercase")]
 pub enum Act {
-    /// Author a todo that does not exist yet.
     Add {
         todo: String,
         #[serde(flatten)]
         fields: TodoFields,
-        /// The message, the day and the parent. Left out of the JSON form, which only a model
-        /// reads; the stored literal carries it.
+        /// Left out of the JSON form, which only a model reads; the stored literal carries it.
         #[serde(skip)]
         from: Provenance,
     },
-    /// Change fields on a todo that does.
     Update {
         todo: String,
-        /// What changes. Only what is named.
+        /// Only what is named changes.
         #[serde(flatten)]
         fields: TodoPatch,
     },
-    /// Close it.
     Complete {
         todo: String,
         /// What happened, in a sentence. "" for none.
         note: String,
     },
-    /// Drop it.
     Cancel {
         todo: String,
         /// Why, in a sentence. "" for none.
         note: String,
     },
-    /// Open it again.
     Reopen {
         todo: String,
         /// Why, in a sentence. "" for none.
@@ -71,7 +63,6 @@ pub enum Act {
     Reprice {
         todo: String,
         priority: Price,
-        /// Why that number now.
         rationale: String,
     },
 }
@@ -80,7 +71,6 @@ pub enum Act {
 /// is a todo created today from no message, under no parent.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Provenance {
-    /// The message it came from.
     pub source: Option<Source>,
     /// The day it is created on, at midnight; `None` is the day it is built.
     pub created: Option<Datetime>,
@@ -88,14 +78,12 @@ pub struct Provenance {
     pub parent: Option<String>,
 }
 
-/// Which act a model's record names, and on which todo.
 #[derive(Deserialize, JsonSchema)]
 struct Named {
     todo: String,
     act: String,
 }
 
-/// What an `add` reads beside its price.
 #[derive(Deserialize, JsonSchema)]
 struct Adding {
     body: String,
@@ -110,7 +98,6 @@ struct Adding {
     waiting_on: String,
 }
 
-/// What an `update` reads beside its price.
 #[derive(Deserialize, JsonSchema)]
 struct Updating {
     body: Option<String>,
@@ -122,21 +109,18 @@ struct Updating {
     clear_waiting_on: bool,
 }
 
-/// What `complete`, `cancel` and `tend` read.
 #[derive(Deserialize, JsonSchema)]
 struct Noted {
     #[serde(default)]
     note: String,
 }
 
-/// What a `reprice` reads beside its price.
 #[derive(Deserialize, JsonSchema)]
 struct Repricing {
     rationale: String,
 }
 
 impl Act {
-    /// Which todo this act is about.
     #[must_use]
     pub fn todo(&self) -> &str {
         match self {
@@ -166,9 +150,6 @@ impl Act {
 
     /// Reads one out of the JSON a model wrote: which act and on which todo, its price in any
     /// spelling, then only the fields that act takes.
-    ///
-    /// # Errors
-    /// [`Refusal::bad_request`] for an unknown act, a bad field, or two prices at once.
     pub fn of(fields: &Map<String, Value>) -> Result<Self, Refusal> {
         let Named { todo, act } = crate::verb::parse(fields)?;
         let priority = crate::verb::parse::<Priced>(fields)?.price()?;
@@ -257,11 +238,8 @@ impl Act {
         }
     }
 
-    /// The events this act is, against `nodes`: the chain plus the changeset's earlier acts. An
+    /// The events this act is against `nodes`, the chain plus the changeset's earlier acts; an
     /// add under a parent is two, the child and the parent's revision.
-    ///
-    /// # Errors
-    /// Whatever the builder refuses.
     pub fn events(
         &self,
         nodes: &[Node],
@@ -362,15 +340,11 @@ impl Act {
     }
 }
 
-/// What every act is built with: the instant and the owner's zone, who writes it, the
-/// deployment's categories, the chain's trust policy and the markup door.
 #[derive(Clone, Copy)]
 pub struct Building<'a> {
     /// The instant, and the zone a day is read in.
     pub now: Moment,
-    /// Who the events are by.
     pub by: Writer,
-    /// The categories a todo may name.
     pub categories: &'a [&'a str],
     /// The chain's untrusted actors, which a subtodo's loop check folds under.
     pub untrusted: &'a prodrome_core::policy::Untrusted,
@@ -378,7 +352,6 @@ pub struct Building<'a> {
     pub typeset: &'a dyn Typeset,
 }
 
-/// The record an edit is against, or the refusal that says there is none.
 fn existing(
     nodes: &[Node],
     at: Datetime,
@@ -404,7 +377,6 @@ fn known(nodes: &[Node], todo: &str) -> Result<(), Refusal> {
     }
 }
 
-/// A lifecycle act: the typo guard, then the constructor.
 fn lifecycle(
     nodes: &[Node],
     todo: &str,
@@ -432,7 +404,6 @@ struct RawChangeset {
     acts: Vec<Act>,
 }
 
-/// A changeset that changes nothing.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "a changeset names at least one act — add, update, complete, cancel, reopen, tend or reprice"
@@ -440,10 +411,6 @@ struct RawChangeset {
 pub struct NoActs;
 
 impl Changeset {
-    /// Build one.
-    ///
-    /// # Errors
-    /// [`NoActs`] for an empty list.
     pub fn new(chain: impl Into<String>, acts: Vec<Act>) -> Result<Self, NoActs> {
         if acts.is_empty() {
             return Err(NoActs);
@@ -460,7 +427,6 @@ impl Changeset {
         &self.chain
     }
 
-    /// The acts. Never empty.
     #[must_use]
     pub fn acts(&self) -> &[Act] {
         &self.acts
@@ -484,9 +450,6 @@ impl From<Changeset> for RawChangeset {
 }
 
 /// Every act as its events, the one build pass the diff, the proposal check and the tap share.
-///
-/// # Errors
-/// The first [`Refusal`], naming the act by position and by what it is.
 pub fn events_of(
     changeset: &Changeset,
     chain: &Preview,
@@ -508,7 +471,6 @@ pub fn events_of(
     Ok(built)
 }
 
-/// One act's refusal, with the act's own name in front of it.
 fn named(index: usize, act: &Act, failed: &Refusal) -> Refusal {
     Refusal::new(
         failed.status(),
@@ -531,12 +493,8 @@ pub enum Unapplied {
     Appending(Refusal),
 }
 
-/// Whether `changeset` would build against `chain` as it stands: every act through the builders
-/// a tap uses, each body through the markup door, nothing appended. A proposed changeset the
-/// chain would refuse is refused while it is fixable, whoever proposed it.
-///
-/// # Errors
-/// The chain's refusal of the first act it would not build, or a chain that cannot be read.
+/// Whether `changeset` would build against `chain` as it stands, nothing appended, so a
+/// changeset the chain would refuse is refused while it is fixable, whoever proposed it.
 pub fn checked(
     changeset: &Changeset,
     chain: &dyn suzatary_store::store::Reads<TodoEvent>,
@@ -564,9 +522,6 @@ pub fn shown(
 }
 
 /// The `acts` argument: an array of records, since a flat string would be a second grammar.
-///
-/// # Errors
-/// [`Refusal::bad_request`] when it is not an array of objects that are acts.
 pub fn acts_of(acts: Option<&Value>) -> Result<Vec<Act>, Refusal> {
     let name = "acts";
     let Some(Value::Array(listed)) = acts else {
@@ -594,7 +549,6 @@ pub fn acts_of(acts: Option<&Value>) -> Result<Vec<Act>, Refusal> {
         .collect()
 }
 
-/// `Changes(chain, acts)`.
 pub const CHANGES: Constructor = ("Changes", &["chain", "acts"]);
 /// `Add(todo, ...)`: a new todo's fields, its price under `priority`.
 pub const ADD: Constructor = (
@@ -610,9 +564,8 @@ pub const ADD: Constructor = (
         "waiting_on",
     ],
 );
-/// `AddFrom(todo, ..., source, created, parent)`: an add with a [`Provenance`]. A shipped kind's
-/// fields are frozen, so an add that carries one prints as a kind of its own and every `Add`
-/// already stored reads as it did.
+/// An add with a [`Provenance`]: a shipped kind's fields are frozen, so it prints as a kind of
+/// its own and every `Add` already stored reads as it did.
 pub const ADD_FROM: Constructor = (
     "AddFrom",
     &[
@@ -646,15 +599,10 @@ pub const UPDATE: Constructor = (
         "defer_to",
     ],
 );
-/// `Complete(todo, note)`.
 pub const COMPLETE: Constructor = ("Complete", &["todo", "note"]);
-/// `Cancel(todo, note)`.
 pub const CANCEL: Constructor = ("Cancel", &["todo", "note"]);
-/// `Reopen(todo, note)`.
 pub const REOPEN: Constructor = ("Reopen", &["todo", "note"]);
-/// `Tend(todo, note)`.
 pub const TEND: Constructor = ("Tend", &["todo", "note"]);
-/// `Reprice(todo, priority, rationale)`.
 pub const REPRICE: Constructor = ("Reprice", &["todo", "priority", "rationale"]);
 
 // By hand: its reads refuse as `Fields` does.
@@ -851,7 +799,6 @@ mod tests {
         assert_eq!(one.acts().len(), 1);
     }
 
-    /// Reads, stores, builds and draws a `Recur` reprice.
     #[test]
     fn a_reprice_can_make_a_chore_recur() {
         let listed = acts_of(

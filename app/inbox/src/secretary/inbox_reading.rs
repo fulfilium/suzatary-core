@@ -1,8 +1,5 @@
-//! Where one proposal's machine stands: its state register, read. Standing while nothing answered
-//! it, the one response that stands, or the responses that stand at once, a conflict nothing acts
-//! on. A check is read as the send that may have gone it checks ([`Check`]); a reading holding a
-//! check of nothing is unreadable, and says why, so the card is drawn with its reason and nothing
-//! acts on it.
+//! One proposal's state register, read: a conflict performs nothing, and a reading holding a
+//! check of nothing is unreadable, so its card is drawn with its reason and nothing acts on it.
 
 use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
@@ -13,12 +10,9 @@ use crate::secretary::responded::Responded;
 use crate::secretary::stamp::stamp;
 use suzatary_memory::secretary::memory::Fact;
 
-/// One proposal's state register, read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reading {
-    /// Nothing answered it.
     Standing,
-    /// One response stands.
     One(Answer),
     /// Responses that neither descends from.
     Conflict(Conflict),
@@ -32,9 +26,7 @@ pub enum Reading {
 pub struct Conflict {
     /// The least named, which a view that shows one record shows.
     pub first: Answer,
-    /// The next.
     pub second: Answer,
-    /// Every other, in order.
     pub rest: Vec<Answer>,
 }
 
@@ -144,19 +136,16 @@ impl std::fmt::Display for Reading {
     }
 }
 
-/// The response, then when it was recorded.
 impl std::fmt::Display for Answer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} at {}", self.response, stamp(self.at))
     }
 }
 
-/// What a remember card's words read as.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Words {
     /// They are kept: the card shows them.
     Kept(Fact),
-    /// They were deleted.
     Gone,
     /// The reading was given no memory to find them in.
     Unread,

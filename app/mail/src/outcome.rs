@@ -6,14 +6,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Outcome<C> {
-    /// It succeeded.
     Succeeded,
-    /// It failed, of this class.
     Failed(C),
 }
 
 impl<C> Outcome<C> {
-    /// The same outcome, its class read in another vocabulary.
     #[must_use]
     pub fn map<D>(self, f: impl FnOnce(C) -> D) -> Outcome<D> {
         match self {

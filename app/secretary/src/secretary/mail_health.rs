@@ -1,9 +1,6 @@
-//! The rule over the mail health register: an account failing for more than a day proposes a
-//! todo on the upkeep chain (`[upkeep]`), through the path every proposed changeset takes, and a
-//! tap performs it.
-//!
-//! The act is a function of the account and the instant it last synced, so asking again asks for
-//! the same object; a new failure after a success is a new act.
+//! An account failing for more than a day proposes a todo on the upkeep chain, which a tap
+//! performs; the act is a function of the account and the instant it last synced, so asking again
+//! asks for the same object, and a new failure after a success is a new act.
 
 use crate::secretary::{Bound, WRITES_AS};
 use suzatary_base::conversation_id::ConversationId;
@@ -75,9 +72,6 @@ const PERSISTENT: i64 = 1;
 /// Propose the todo for every account failing longer than a day at `now`, on the upkeep chain,
 /// in `conversation`; answers each proposal's index. A deployment with no `[upkeep]` proposes
 /// nothing, and neither does an account whose todo the chain already holds.
-///
-/// # Errors
-/// The register's, a chain's or the inbox's failure, and an act the chain would refuse.
 pub fn propose_persistent(
     chains: &[Bound<'_>],
     deployment: &Deployment,

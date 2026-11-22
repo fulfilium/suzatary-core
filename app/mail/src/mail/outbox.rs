@@ -5,8 +5,8 @@ use std::sync::{Mutex, PoisonError};
 use super::send::{Outgoing, SendError, Sent, angle, build_mime};
 use super::transport::{Delivered, Transport};
 
-/// A wire that keeps every message put on it, in order. Its meaning is that list: each send
-/// appends exactly one [`Delivered`].
+/// A wire that keeps every message put on it, in order: each send appends exactly one
+/// [`Delivered`].
 #[derive(Debug, Default)]
 pub struct Outbox(Mutex<Vec<Delivered>>);
 

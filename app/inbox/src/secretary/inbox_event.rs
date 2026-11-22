@@ -16,7 +16,6 @@ use crate::secretary::inbox_registers::{InboxRegister, InboxRegisters};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal as _, headed};
 
-/// One event about one proposal: who, when, and what was said of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InboxEvent {
     pub proposal: ProposalId,
@@ -26,12 +25,9 @@ pub struct InboxEvent {
     pub said: Said,
 }
 
-/// What an event says: the proposal itself, or a response to it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Said {
-    /// The proposal.
     Asked(Box<Asked>),
-    /// What became of it.
     Responded(Responded),
 }
 

@@ -4,7 +4,6 @@ use crate::agent::{Call, TriageSurface, answered, refused};
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// Sync every account and reindex.
 pub struct Sync;
 
 impl Verb for Sync {

@@ -8,22 +8,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use suzatary_base::refusal::Refusal;
 
 /// An argument parsed as `T`, or the refusal it earned, held until the verb reads it.
-///
-/// For the parts of a price and a source, which a verb reads only when the rest of the call
-/// makes them matter and whose faults it answers rather than refuses.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caught<T>(Result<T, Refusal>);
 
 impl<T> Caught<T> {
-    /// The argument, or its fault.
-    ///
-    /// # Errors
-    /// The refusal parsing it earned.
     pub fn read(&self) -> Result<&T, Refusal> {
         self.0.as_ref().map_err(Clone::clone)
     }
 
-    /// The argument made into another, its fault kept.
     #[must_use]
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Caught<U> {
         Caught(self.0.map(f))

@@ -333,7 +333,6 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
 /// One forged message in the queue, "from" the bank, written as marketing.
 struct Forged;
 
-/// The forged message's canonical hash.
 const FORGED: &str = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
 
 impl Corpus for Forged {

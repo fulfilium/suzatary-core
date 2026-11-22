@@ -16,7 +16,6 @@ use suzatary_signatures::signatures::Tap;
 use suzatary_store::store::Prodrome;
 use suzatary_triage::rule::{Named, ReadingName, Rule};
 
-/// The tap's rule at the instant of the tap.
 #[derive(Debug, Clone, Copy)]
 pub struct Tapped {
     /// When it is asked; an act's code past its expiry stands again.
@@ -70,9 +69,6 @@ impl Tapped {
     /// Fire on proposal `id`, presented with the owner's tap: under the inbox's hold the reading
     /// decides, `perform` runs only while the rule holds, and its outcome is recorded as `tap`'s
     /// before the hold is let go, so a second tap reads the first's response.
-    ///
-    /// # Errors
-    /// As [`inbox::submit`].
     pub fn fire<C: Prodrome<InboxEvent> + ?Sized>(
         &self,
         inbox: &C,

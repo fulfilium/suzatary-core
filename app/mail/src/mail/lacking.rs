@@ -6,17 +6,13 @@ use std::str::FromStr;
 
 use super::address::EmailAddress;
 
-/// What the box lacks to perform a card's effect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lacking {
     /// `account` holds no `grant`.
     Grant {
-        /// The account the effect acts as.
         account: EmailAddress,
-        /// What it may not do yet.
         grant: Grant,
     },
-    /// The box keeps no Google client.
     GoogleClient,
 }
 
@@ -32,7 +28,6 @@ pub enum Grant {
 }
 
 impl Grant {
-    /// Every grant.
     pub const ALL: [Grant; 3] = [
         Grant::GoogleCalendar,
         Grant::GoogleSend,
@@ -49,7 +44,6 @@ impl Grant {
         }
     }
 
-    /// What the grant lets the box do.
     const fn lets(self) -> &'static str {
         match self {
             Grant::GoogleCalendar => "write its calendar",
@@ -72,7 +66,6 @@ impl Grant {
 const GOOGLE_CLIENT: &str = "google-client";
 
 impl Lacking {
-    /// What the card says of the lack.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {
@@ -109,7 +102,6 @@ impl fmt::Display for Lacking {
     }
 }
 
-/// A stored lack that does not read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a lacked grant is <grant>:<account> or {GOOGLE_CLIENT}, got {0:?}")]
 pub struct NotALack(pub String);

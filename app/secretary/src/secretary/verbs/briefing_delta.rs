@@ -25,7 +25,6 @@ pub struct BriefingDeltaArgs {
 /// How far back it looks when asked for no day, so a Monday covers the weekend.
 const DEFAULT_LOOKBACK_DAYS: i64 = 7;
 
-/// Whether `event` happened on an owner's day before `since`.
 fn before(zone: suzatary_base::zone::Zone, event: &TodoEvent, since: chrono::NaiveDate) -> bool {
     zone.day(instant_of(event.at())) < since
 }

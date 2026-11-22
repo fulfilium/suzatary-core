@@ -1,5 +1,5 @@
-//! The maildir leaves an account's sync counts as triage input: at least one, each named.
-//! An account with none would read nothing, so a list that is empty is not one.
+//! The maildir leaves an account's sync counts as triage input; an account with none would
+//! read nothing, so an empty list is refused.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,6 @@ use crate::mail::account::RosterError;
 pub struct Folders(Vec<String>);
 
 impl Folders {
-    /// Check a list of folder names.
     pub fn new(folders: Vec<String>) -> Result<Self, RosterError> {
         if folders.is_empty() {
             return Err(RosterError::NoFolders);
@@ -28,7 +27,6 @@ impl Folders {
         Self(vec!["Inbox".to_owned()])
     }
 
-    /// The names, in order.
     #[must_use]
     pub fn as_slice(&self) -> &[String] {
         &self.0

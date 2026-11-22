@@ -1,5 +1,3 @@
-//! What one of the triage agent's verbs runs against.
-
 use crate::agent::Agent;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_connect::deployment::Deployment;
@@ -11,9 +9,7 @@ use suzatary_topics::secretary::filed::TriageCards;
 pub struct Call<'a> {
     /// The effects, none of which reaches outward.
     pub caps: &'a Agent<'a>,
-    /// This deployment.
     pub deployment: &'a Deployment,
-    /// The policy of the store `caps.chain` holds.
     pub chain: &'a ChainPolicy,
     /// Where its writes go: cards in the Inbox, which only the owner's tap performs.
     pub cards: &'a TriageCards<'a>,

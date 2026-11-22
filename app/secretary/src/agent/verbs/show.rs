@@ -18,22 +18,18 @@ pub struct Show<S, A>(PhantomData<(S, A)>);
 /// cannot open.
 pub(crate) const SHOW_CAP: usize = 24 * 1024;
 
-/// Which of a message's body a `show` answers.
 #[derive(Clone, Copy)]
 pub enum Part {
-    /// All of it.
     Whole,
     /// Its `n`th part of `SHOW_CAP` characters, from 1, each naming the next.
     Page(usize),
 }
 
-/// A message and the part of it.
 pub struct Shown {
     id: String,
     part: Part,
 }
 
-/// A message, paged.
 #[derive(Deserialize, JsonSchema)]
 pub struct ShowArgs {
     id: String,
@@ -49,7 +45,6 @@ impl Own<Shown> for ShowArgs {
     }
 }
 
-/// A message, whole.
 #[derive(Deserialize, JsonSchema)]
 pub struct WholeArgs {
     id: String,

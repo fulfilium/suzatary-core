@@ -1,9 +1,7 @@
 //! Searching mail older than the routine sync's window, on the mail server itself.
 //!
-//! - The query is the tool's own small language, parsed once into an [`OlderQuery`] of
-//!   [`Term`]s, and each server kind gets it in its own syntax ([`imap_criteria`],
-//!   [`gmail_q`]); no text the model wrote reaches a server except as a [`Term`] inside quotes,
-//!   and a [`Term`] holds no quote, backslash or control character.
+//! - No text the model wrote reaches a server except as a [`Term`] inside quotes, and a [`Term`]
+//!   holds no quote, backslash or control character.
 //! - The [`Range`] ends where the routine INBOX pull begins, on the same internal date, so a
 //!   message an older search pulls is one the routine sync never fetches.
 
@@ -17,23 +15,20 @@ use suzatary_mail::mail::imap::{
     ImapError, Maildir, Session, SyncState, imap_date, maildir_name, reconcile,
 };
 
-/// The most messages one search pulls per account; the rest are counted, not fetched.
+/// Per account; the rest are counted, not fetched.
 pub const MAX_MATCHES: usize = 25;
 
-/// The largest message pulled; a larger one is counted as too large and not kept.
+/// A larger message is counted as too large and not kept.
 pub const MAX_MESSAGE_BYTES: usize = 5 * 1024 * 1024;
 
-/// The longest [`Term`], in characters.
+/// In characters.
 pub(crate) const MAX_TERM_CHARS: usize = 100;
 
-/// The most [`Term`]s one query holds.
 pub(crate) const MAX_TERMS: usize = 12;
 
-/// The server folder an older search reads on an IMAP account. Sent is not searched: the
-/// routine sync already keeps the whole of it on the box.
+/// Sent is not searched: the routine sync already keeps the whole of it on the box.
 pub const IMAP_FOLDER: &str = suzatary_mail::mail::imap::INBOX;
 
-/// The maildir leaf, under an account's folder, that an older search writes into.
 #[must_use]
 pub fn leaf(folder: &str) -> String {
     format!(
@@ -42,56 +37,46 @@ pub fn leaf(folder: &str) -> String {
     )
 }
 
-/// Why a text is not a query.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum QueryError {
-    /// No from, to, subject or body word: a search for everything is not a search.
+    /// A search for everything is not a search.
     #[error("the query names nothing to look for: give from:, to:, subject: or a word of the body")]
     Empty,
-    /// A `name:` that is not one of the fields.
     #[error(
         "{0:?} is not a field; the fields are from:, to:, subject: and before:, and a word or \
          \"a quoted phrase\" alone is searched for in the body (quote one that holds a colon)"
     )]
     UnknownField(String),
-    /// A field with nothing after it.
     #[error("{0}: needs a value right after the colon")]
     Missing(&'static str),
-    /// A quote opened and never closed, or one inside a word.
     #[error("a quote must open and close a whole phrase: {0:?}")]
     Quote(String),
-    /// A term that is not one.
     #[error(transparent)]
     Term(#[from] TermError),
-    /// More terms than one search takes.
     #[error("a query holds at most {MAX_TERMS} words or phrases, got {0}")]
     TooMany(usize),
-    /// `before:` that is not a date.
     #[error("before: takes a date as YYYY-MM-DD, got {0:?}")]
     Date(String),
-    /// `before:` twice.
     #[error("before: may be given once")]
     TwoBefores,
 }
 
-/// Why a text is not a [`Term`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TermError {
-    /// Longer than `MAX_TERM_CHARS`.
     #[error("a word or phrase is at most {MAX_TERM_CHARS} characters, got {0}")]
     TooLong(usize),
-    /// A quote, a backslash or a control character, none of which a server reads as text.
+    /// None of a quote, a backslash or a control character is read by a server as text.
     #[error("a word or phrase holds no quote, backslash or control character: {0:?}")]
     Forbidden(String),
 }
 
-/// A word or phrase to look for: non-empty, at most `MAX_TERM_CHARS` characters, and free of
-/// `"`, `\` and control characters, so quoting it for any server keeps it one string.
+/// Non-empty and free of `"`, `\` and control characters, so quoting it for any server keeps it
+/// one string.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Term(String);
 
 impl Term {
-    /// A term, or why `text` is not one; `None` for text that is only whitespace.
+    /// `None` for text that is only whitespace.
     pub fn new(text: &str) -> Result<Option<Self>, TermError> {
         let text = text.trim();
         if text.is_empty() {
@@ -110,15 +95,13 @@ impl Term {
         Ok(Some(Self(text.to_owned())))
     }
 
-    /// The term as written.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
-/// What to look for in older mail: every term must match (a conjunction), and `before` narrows
-/// the date range from above.
+/// Every term must match (a conjunction), and `before` narrows the date range from above.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OlderQuery {
     from: Vec<Term>,
@@ -128,7 +111,6 @@ pub struct OlderQuery {
     before: Option<NaiveDate>,
 }
 
-/// One field of the query language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Field {
     From,
@@ -202,7 +184,6 @@ impl std::str::FromStr for OlderQuery {
     }
 }
 
-/// The field `text` opens with, if it opens with `letters:`, and what follows the colon.
 fn field_of(text: &str) -> Result<(Option<Field>, &str), QueryError> {
     let letters = text.len()
         - text
@@ -217,7 +198,6 @@ fn field_of(text: &str) -> Result<(Option<Field>, &str), QueryError> {
     }
 }
 
-/// One value: a quoted phrase, or a word up to the next whitespace.
 fn value_of(text: &str, field: Option<Field>) -> Result<(String, &str), QueryError> {
     let missing = || match field {
         Some(field) => QueryError::Missing(field.name()),
@@ -245,7 +225,6 @@ fn value_of(text: &str, field: Option<Field>) -> Result<(String, &str), QueryErr
 }
 
 impl OlderQuery {
-    /// Every term, whichever field holds it.
     fn terms(&self) -> impl Iterator<Item = &Term> {
         self.from
             .iter()
@@ -254,39 +233,33 @@ impl OlderQuery {
             .chain(&self.body)
     }
 
-    /// The upper date bound the query itself asked for, if any.
     #[must_use]
     pub fn before(&self) -> Option<NaiveDate> {
         self.before
     }
 }
 
-/// Why a date range is no range.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RangeError {
-    /// `since` is on or after where the routine sync begins.
     #[error(
         "since {since} is not older than the routine sync's window, which keeps mail from \
          {window} on; `search` reads that"
     )]
     InsideWindow {
-        /// What was asked.
         since: NaiveDate,
         /// Where the routine sync begins.
         window: NaiveDate,
     },
-    /// `before` is on or before `since`.
     #[error("before {before} is not after since {since}")]
     Backwards {
-        /// What was asked.
         since: NaiveDate,
         /// The end asked for.
         before: NaiveDate,
     },
 }
 
-/// The dates an older search covers: from `since`, up to but not including `before`, which is
-/// never later than the day the routine sync's window begins.
+/// From `since`, up to but not including `before`, which is never later than the day the routine
+/// sync's window begins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Range {
     since: NaiveDate,
@@ -294,8 +267,7 @@ pub struct Range {
 }
 
 impl Range {
-    /// From `since` up to the earlier of `asked` and `window`, where the routine sync's window
-    /// begins.
+    /// Up to the earlier of `asked` and `window`, where the routine sync's window begins.
     pub fn older(
         since: NaiveDate,
         asked: Option<NaiveDate>,
@@ -311,7 +283,6 @@ impl Range {
         Ok(Self { since, before })
     }
 
-    /// The first day searched.
     #[must_use]
     pub const fn since(self) -> NaiveDate {
         self.since
@@ -324,7 +295,6 @@ impl Range {
     }
 }
 
-/// A query this server kind cannot be asked.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Untranslatable {
     /// IMAP's quoted strings carry ASCII only, and this box sends no literals.
@@ -357,8 +327,7 @@ pub fn imap_criteria(query: &OlderQuery, range: Range) -> Result<String, Untrans
     Ok(keys.join(" "))
 }
 
-/// The query and range as the Gmail API's `q`: each term a quoted phrase under its operator, a
-/// body term a bare phrase, and the dates as `after:` and `before:`.
+/// The Gmail API's `q`: each term a quoted phrase under its operator, a body term a bare phrase.
 #[must_use]
 pub fn gmail_q(query: &OlderQuery, range: Range) -> String {
     let mut parts: Vec<String> = Vec::new();
@@ -377,18 +346,15 @@ pub fn gmail_q(query: &OlderQuery, range: Range) -> String {
     parts.join(" ")
 }
 
-/// Which of a server's matches to fetch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan<Id> {
-    /// At most `cap` of the matches the box does not hold, newest first.
+    /// Newest first.
     pub wanted: Vec<Id>,
-    /// Matches the box already holds, fetched by no one.
     pub already: usize,
     /// Matches the box does not hold that the cap left out.
     pub beyond: usize,
 }
 
-/// The newest `cap` of `newest_first` that `held` does not name, and the counts of the rest.
 #[must_use]
 pub fn plan<Id: Ord + Clone>(newest_first: &[Id], held: &BTreeSet<Id>, cap: usize) -> Plan<Id> {
     let missing: Vec<&Id> = newest_first
@@ -403,10 +369,8 @@ pub fn plan<Id: Ord + Clone>(newest_first: &[Id], held: &BTreeSet<Id>, cap: usiz
     }
 }
 
-/// How many messages a server matched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Matched {
-    /// This many, counted.
     Exactly(usize),
     /// At least this many: the server's listing was cut at a page.
     AtLeast(usize),
@@ -430,26 +394,19 @@ impl std::fmt::Display for Matched {
     }
 }
 
-/// What one pull over an IMAP folder did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pulled {
-    /// How many the server matched.
     pub matched: usize,
-    /// How many of those the box already held.
     pub already: usize,
-    /// How many were written into the leaf.
     pub landed: usize,
-    /// How many were fetched and were larger than [`MAX_MESSAGE_BYTES`].
     pub too_large: usize,
-    /// How many the cap left on the server.
     pub beyond: usize,
     /// The older leaf's state to persist.
     pub state: SyncState,
 }
 
-/// Search `folder` read-only with `criteria`, and write the newest [`MAX_MATCHES`] matches
-/// that neither `routine` (the routine pull's state for that folder) nor `state` (this leaf's
-/// own) holds into `maildir`, already read.
+/// Search `folder` read-only, and write the newest matches that neither `routine` (the routine
+/// pull's state for that folder) nor `state` (this leaf's own) holds into `maildir`, already read.
 pub fn pull<S: Session + ?Sized, M: Maildir + ?Sized>(
     session: &mut S,
     maildir: &M,
@@ -498,62 +455,48 @@ pub fn pull<S: Session + ?Sized, M: Maildir + ?Sized>(
     })
 }
 
-/// What one account's server search found.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Found {
-    /// The server folders searched.
     pub folders: Vec<String>,
-    /// How many messages matched there.
     pub matched: Matched,
     /// How many of those the box already held, which `search` finds.
     pub already_here: usize,
-    /// The messages pulled now, as the index reads them; `show` takes each `id`.
     pub pulled: Vec<Summary>,
     /// Messages pulled that the index names by no `id` this answer could ask for.
     pub unnamed: usize,
-    /// Matches larger than [`MAX_MESSAGE_BYTES`], not kept.
     pub too_large: usize,
-    /// Matches the cap of [`MAX_MATCHES`] left on the server; a narrower query reaches them.
+    /// A narrower query reaches them.
     pub beyond_cap: usize,
     /// The `search` query that reads everything older searches have pulled for this account.
     pub local: String,
 }
 
-/// Why an account was not searched on its server.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unsearched {
-    /// The account's sync kind offers this box no server search.
     #[error(
         "{0} is pulled by mbsync through the Proton Bridge, which offers this box no server \
          search; the folders mbsync syncs are on the box, and `search` reads them"
     )]
     NoServerSearch(String),
-    /// The query cannot be put to this server.
     #[error(transparent)]
     Untranslatable(#[from] Untranslatable),
-    /// The account's sign-in lapsed; only a person gives one.
+    /// Only a person gives a sign-in.
     #[error("{0}")]
     NeedsLogin(String),
-    /// The server or the box failed, in its own words.
+    /// In the failing side's own words.
     #[error("{0}")]
     Failed(String),
 }
 
-/// One account's search: what was found, or why it was not searched.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// Searched on the server.
     Searched(Found),
-    /// Not searched.
     NotSearched(Unsearched),
 }
 
-/// One account and its [`Outcome`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountOlder {
-    /// The account's address.
     pub account: String,
-    /// What its search came to.
     pub outcome: Outcome,
 }
 
@@ -585,19 +528,15 @@ impl Serialize for AccountOlder {
     }
 }
 
-/// The answer to an older search: the range, each account, and what was covered in words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Older {
-    /// Which accounts, folders and dates were searched, and what was not, in words.
+    /// What was searched, and what was not, in words.
     pub searched: String,
-    /// The dates searched.
     pub range: Range,
-    /// Each account asked.
     pub accounts: Vec<AccountOlder>,
 }
 
 impl Older {
-    /// The answer for `accounts` over `range`.
     #[must_use]
     pub fn of(range: Range, accounts: Vec<AccountOlder>) -> Self {
         Self {
@@ -608,7 +547,6 @@ impl Older {
     }
 }
 
-/// The accounts, folders and dates searched, and what was not, as sentences.
 #[must_use]
 pub fn coverage(range: Range, accounts: &[AccountOlder]) -> String {
     let mut said = vec![format!(
@@ -668,9 +606,6 @@ mod tests {
         text.parse().expect("a query")
     }
 
-    // --- the translations, as properties -----------------------------------------
-
-    /// One IMAP search key and its argument, as a server's parser reads them.
     #[derive(Debug, PartialEq, Eq)]
     enum ImapToken {
         Atom(String),
@@ -716,7 +651,6 @@ mod tests {
         Some(tokens)
     }
 
-    /// One piece of a Gmail `q`: an operator's quoted phrase, a bare phrase, or a date.
     #[derive(Debug, PartialEq, Eq)]
     enum GmailPiece {
         Phrase(String, String),
@@ -755,8 +689,7 @@ mod tests {
         Some(pieces)
     }
 
-    /// Any text the term grammar admits, the hostile kind included: operators, parentheses,
-    /// IMAP keywords and Gmail's own syntax.
+    /// The hostile kind included: operators, parentheses, IMAP keywords and Gmail's own syntax.
     fn hostile() -> impl Strategy<Value = String> {
         prop_oneof![
             "[ -~]{1,40}",
@@ -793,8 +726,7 @@ mod tests {
     }
 
     proptest! {
-        /// Whatever the terms hold, the IMAP criteria read back as the two dates and then one
-        /// key per term with that term, whole, as its quoted argument: nothing injected.
+        /// Each term reads back whole as one quoted argument: nothing injected.
         #[test]
         fn imap_criteria_carry_each_term_as_one_quoted_string(query in queries()) {
             match imap_criteria(&query, range()) {
@@ -823,8 +755,7 @@ mod tests {
             }
         }
 
-        /// Whatever the terms hold, Gmail's `q` reads back as one quoted phrase per term under
-        /// its own operator, then the two dates: nothing injected.
+        /// Each term reads back as one quoted phrase under its own operator: nothing injected.
         #[test]
         fn gmail_q_carries_each_term_as_one_quoted_phrase(query in queries()) {
             let pieces = gmail_pieces(&gmail_q(&query, range())).expect("a q of phrases and dates");
@@ -844,8 +775,7 @@ mod tests {
             prop_assert_eq!(pieces, expected);
         }
 
-        /// A parsed query's terms are the terms the text named, and no term holds what a server
-        /// could read as syntax.
+        /// No term holds what a server could read as syntax.
         #[test]
         fn a_parsed_term_never_holds_a_quote_or_a_line_end(text in "\\PC{0,60}") {
             if let Ok(query) = text.parse::<OlderQuery>() {
@@ -856,8 +786,6 @@ mod tests {
             }
         }
     }
-
-    // --- the pull, against a fake server -----------------------------------------
 
     struct Server {
         uidvalidity: String,
@@ -920,8 +848,6 @@ mod tests {
         }
     }
 
-    /// The cap: thirty matches, two already held by the routine pull, so the newest
-    /// twenty-five of the rest land read and three are counted past the cap.
     #[test]
     fn a_pull_takes_the_newest_within_the_cap_and_counts_the_rest() {
         let mut server = server(30);
@@ -948,8 +874,7 @@ mod tests {
         );
     }
 
-    /// A second search over the same range fetches nothing it already pulled, and a routine
-    /// state of another UIDVALIDITY holds nothing.
+    /// A routine state of another UIDVALIDITY holds nothing.
     #[test]
     fn a_second_pull_fetches_nothing_twice() {
         let mut first = server(3);
@@ -979,7 +904,6 @@ mod tests {
         assert_eq!((again.landed, again.already), (0, 3));
     }
 
-    /// A message over the byte cap is fetched, counted and not kept.
     #[test]
     fn a_message_over_the_byte_cap_is_not_kept() {
         let mut big = server(2);
@@ -998,9 +922,8 @@ mod tests {
         assert_eq!(leaf.0.borrow().len(), 1);
     }
 
-    /// Whatever the older search pulled, the routine INBOX pull that runs after it fetches only
-    /// within its window, so no message lands in both leaves: the routine's `SINCE` and the
-    /// older search's `BEFORE` are the same day on the same internal date.
+    /// No message lands in both leaves: the routine's `SINCE` and the older search's `BEFORE` are
+    /// the same day on the same internal date.
     #[test]
     fn the_routine_pull_and_an_older_search_never_meet() {
         let window = day("2026-10-10");
@@ -1016,8 +939,6 @@ mod tests {
             format!("SINCE {}", imap_date(window))
         );
     }
-
-    // --- the coverage words ------------------------------------------------------
 
     #[test]
     fn the_answer_names_every_account_folder_and_date() {

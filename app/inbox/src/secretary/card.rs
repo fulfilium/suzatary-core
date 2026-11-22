@@ -14,10 +14,8 @@ use suzatary_memory::secretary::memory;
 use suzatary_services::repos::Visibility;
 use suzatary_services::web::WebKind;
 
-/// The Memory page.
 pub(crate) const MEMORY_PAGE: &str = "#/secretary/memory";
 
-/// The card for a proposal.
 #[must_use]
 #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
 pub fn of(act: &ProposedAct) -> Card {
@@ -989,7 +987,6 @@ fn erase(sentence: &str) -> Card {
     }
 }
 
-/// The summary's words are on the Memory page.
 fn retract(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -1013,7 +1010,6 @@ fn retract(sentence: &str) -> Card {
     }
 }
 
-/// No second step: the tap only copies the owner's own words into a new topic.
 fn noise(sender: &str, message: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -1056,6 +1052,7 @@ fn restore(withdrawn: &str, sentence: &str) -> Card {
     }
 }
 
+/// No second step: the tap only copies the owner's own words into a new topic.
 fn afresh(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -1134,7 +1131,6 @@ mod tests {
         }
     }
 
-    /// Whether an answer's tap carries `always`.
     fn widens(answer: &CardAnswer) -> bool {
         matches!(answer.asks, Asks::Always { .. })
     }
@@ -1212,7 +1208,6 @@ mod tests {
         );
     }
 
-    /// A patch's card is the whole diff, and a public repository's says so in the question.
     #[test]
     fn a_patch_card_shows_the_diff_and_says_public_before_the_push() {
         let patch = |visibility| {
@@ -1315,7 +1310,6 @@ mod tests {
         );
     }
 
-    /// An email's files are all on its card, and its question counts them.
     #[test]
     fn an_email_card_lists_every_attachment_and_its_question_counts_them() {
         let notice = crate::wire::inbox::CardFile {

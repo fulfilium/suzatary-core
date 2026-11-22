@@ -68,9 +68,7 @@ pub struct Secretary<'a> {
     pub render: &'a dyn Render,
     /// The instant every write is stamped with.
     pub clock: &'a dyn Clock,
-    /// The model it asks.
     pub model: &'a dyn Model,
-    /// Where each exchange is written down.
     pub conversations: suzatary_lines::secretary::conversations::Conversations<'a>,
     /// Where a proposal is filed for a person to tap.
     pub inbox: &'a dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
@@ -98,14 +96,12 @@ pub struct Secretary<'a> {
     pub junk: &'a dyn Junk,
     /// The timer's own mail sync, started early; it reaches nothing the timer does not.
     pub sync: &'a dyn MailSync,
-    /// Every source's health: each mail account's syncs, each plugin's runs and links, each
-    /// Google account's calendars and the Drive's probes.
+    /// Every source's health: mail syncs, plugin runs and links, calendars and Drive probes.
     pub health: &'a dyn suzatary_health::health::Register<suzatary_health::health::SourceKey>,
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
     pub uploads: &'a dyn Gets<AttachmentId, suzatary_held::upload::Upload>,
-    /// The words of the uploads, for its search.
     pub upload_index: &'a dyn suzatary_held::upload_index::UploadIndex,
     /// The files a verb keeps for the model.
     pub kept: &'a dyn suzatary_store::store::Doc<AttachmentId, Vec<u8>>,

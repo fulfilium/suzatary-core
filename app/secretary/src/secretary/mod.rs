@@ -69,21 +69,16 @@ pub fn system_prompt(manuals: &dyn Manuals) -> String {
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
 pub const WRITES_AS: Writer = Writer::Assistant;
 
-/// How many rounds one `say` may take.
 pub const MAX_ROUNDS: usize = 8;
 
-/// What one `say` did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answered {
-    /// The conversation as it now stands.
     pub stored: Stored,
     /// How many times the model was asked; one when it answered without a verb.
     pub rounds: usize,
-    /// Whether the model answered, or the box ended the round and said why.
     pub ending: crate::conversation::round::Ending,
 }
 
-/// A question as [`converse`] takes it.
 #[derive(Debug, Clone, Copy)]
 pub struct Saying<'a> {
     pub text: &'a str,
@@ -91,12 +86,9 @@ pub struct Saying<'a> {
     pub by: Asker<'a>,
 }
 
-/// Who asks a [`Saying`].
 #[derive(Debug, Clone, Copy)]
 pub enum Asker<'a> {
-    /// A person, in their own words.
     Person(Speaker<'a>),
-    /// The box, opening one of its own rounds.
     Box(own_round::OwnRound),
 }
 
@@ -105,7 +97,6 @@ pub enum Asker<'a> {
 pub struct Speaker<'a>(&'a Actor);
 
 impl Speaker<'_> {
-    /// The fixture's scripted person.
     #[cfg(feature = "fixture")]
     #[must_use]
     pub fn scripted(actor: &Actor) -> Speaker<'_> {
@@ -113,11 +104,7 @@ impl Speaker<'_> {
     }
 }
 
-/// One exchange, appended as it happens.
-///
-/// # Errors
-/// The store's and an unreadable file's; a model that fails ends the round in
-/// [`Answered::ending`].
+/// One exchange, appended as it happens; a failing model ends the round in [`Answered::ending`].
 pub fn converse(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -161,21 +148,15 @@ pub fn converse(
     )
 }
 
-/// Who runs a conversation's rounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Holder {
-    /// The server's worker, whose task reads its conversation again after each round, so a
-    /// `Turn` frame and a push come between two: one round.
+    /// The server's worker, which reads its conversation again after each round, so a `Turn`
+    /// frame and a push come between two: one round.
     Task,
-    /// A holder with no task to read it again (`ask`, `brief`, the review): a round, then another
-    /// while one is owed.
+    /// A holder no task reads again (`ask`, `brief`, the review): rounds while one is owed.
     Alone,
 }
 
-/// Answer what waits with the model `pick` names, as `holder` runs rounds.
-///
-/// # Errors
-/// As [`converse`].
 #[expect(
     clippy::too_many_arguments,
     reason = "a round's model, its deployment and live names, its chains, its verbs, its sink and its holder"
@@ -260,7 +241,6 @@ pub(crate) fn confirming<'c>(
     }
 }
 
-/// One [`Round`] under `rules`, and the conversation as it leaves it.
 pub(crate) fn rounded(
     caps: &Secretary<'_>,
     id: &ConversationId,
@@ -282,13 +262,9 @@ pub(crate) fn rounded(
         .transpose()
 }
 
-/// A [`Round`] under `rules`, then another while one is owed, and the conversation as they leave
-/// it: its first round's ending, and every round's asks: [`Holder::Alone`]'s, and the sweep's.
-/// While a round runs, its
-/// run holds the conversation, so another holder's claim step finds nothing to do, and a
-/// question said during its last ask is joined by no one; the holder claims again after its own
-/// round, so that question is answered now and not at the next write. A stop ends the holder's
-/// rounds, since the halt it pulled stays pulled.
+/// A [`Round`] under `rules`, then another while one is owed: a round's run holds the
+/// conversation, so a question said during its last ask is joined by no one and the holder claims
+/// again; a stop ends the rounds, since its halt stays pulled.
 pub(crate) fn held(
     caps: &Secretary<'_>,
     id: &ConversationId,
@@ -325,7 +301,6 @@ pub(crate) fn held(
         .transpose()
 }
 
-/// What the last turn pointed at, loaded before the loop.
 fn load_references(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -512,27 +487,21 @@ fn load(
 /// One chain the secretary may read and write; the first is what an absent `chain` means.
 #[derive(Clone, Copy)]
 pub struct Bound<'a> {
-    /// The name a `chain` argument spells.
     pub name: &'a str,
     /// The effects over this store; all but `chain` and `proposals` are the box's.
     pub caps: Secretary<'a>,
-    /// Whose events bind here.
     pub policy: &'a ChainPolicy,
 }
 
 impl<'a> Bound<'a> {
-    /// This chain as a reading of every chain's todos takes it: its policy and its store.
     #[must_use]
     pub fn chain(&self) -> build::Chain<'a> {
         (self.policy, self.caps.chain)
     }
 }
 
-/// The chain among `chains` that the box files its own todos on: `[upkeep]`'s, or `None` when
-/// the deployment names none. Every automated filer takes its chain from here.
-///
-/// # Errors
-/// [`Refusal::internal`] when `chains` does not bind the chain `[upkeep]` names.
+/// The chain the box files its own todos on (`[upkeep]`'s, `None` when the deployment names
+/// none); every automated filer takes its chain from here.
 pub fn upkeep<'c, 'a>(
     chains: &'c [Bound<'a>],
     deployment: &Deployment,
@@ -555,10 +524,6 @@ pub(crate) fn chains_read(chains: &[Bound<'_>]) -> Read {
     Read::of_stores(chains.iter().map(Bound::chain))
 }
 
-/// Call the verb `verb` names with `args`, read whole first.
-///
-/// # Errors
-/// An unknown verb or chain, a missing or ill-typed argument, or a capability's failure.
 pub fn call(
     deployment: &Deployment,
     settables: &Settables,
@@ -571,10 +536,6 @@ pub fn call(
     run(deployment, settables, chains, id, request)
 }
 
-/// Run one call against the chain it named.
-///
-/// # Errors
-/// An unknown chain, or whatever the verb refuses.
 pub fn run(
     deployment: &Deployment,
     settables: &Settables,
@@ -627,15 +588,11 @@ pub fn bound_of<'a>(
     }
 }
 
-/// The bound chain named, or none.
 pub(crate) fn bound_named<'a>(chains: &'a [Bound<'a>], name: &str) -> Option<&'a Bound<'a>> {
     chains.iter().find(|bound| bound.name == name)
 }
 
 /// Answer a proposal no, with a reason the secretary reads next.
-///
-/// # Errors
-/// An empty reason, an index nothing proposed, one performed or running, or the stores'.
 pub fn dismiss(
     conversations: Conversations<'_>,
     memories: memories::Memories<'_>,
@@ -669,9 +626,6 @@ pub fn dismiss(
 }
 
 /// Record that the owner has checked Sent for proposal `index`; the send is never retried.
-///
-/// # Errors
-/// [`inbox::acknowledge`]'s refusals and the stores' own.
 pub fn acknowledge(
     conversations: Conversations<'_>,
     inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
@@ -744,7 +698,6 @@ mod tests {
         assert!(confirms(&[mail]));
     }
 
-    /// The actor is this module's constant, and it is the trusted one.
     #[test]
     fn the_only_actor_this_surface_can_write_as_is_the_assistant() {
         assert_eq!(WRITES_AS.actor(), "assistant");

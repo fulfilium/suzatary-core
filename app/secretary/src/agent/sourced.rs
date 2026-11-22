@@ -8,7 +8,6 @@ use suzatary_inbox::priced::day_of;
 use suzatary_inbox::verb::Caught;
 use suzatary_record::record::Source;
 
-/// The `source_*` arguments of a call.
 #[derive(Debug, Default)]
 pub(crate) struct Sourced {
     pub sender: Caught<Option<String>>,
@@ -19,9 +18,6 @@ pub(crate) struct Sourced {
 
 impl Sourced {
     /// The source, when all four are given.
-    ///
-    /// # Errors
-    /// A part of the wrong type, some but not all four given, or a date that is not a day.
     pub(crate) fn source(&self) -> Result<Option<Source>, Refusal> {
         let given = (
             self.sender.read()?,

@@ -31,15 +31,11 @@ impl Verb for TriageCards {
     }
 }
 
-/// One open triage card and its changeset.
 fn open_card(object: &Object) -> Option<&Changeset> {
     triage_card(object).filter(|_| object.reading.performs())
 }
 
 /// Every open triage card: its reference and its changeset.
-///
-/// # Errors
-/// The inbox does not read.
 pub fn standing(
     inbox: &dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,
 ) -> Result<Vec<(suzatary_base::reference::ProposalRef, Changeset)>, Refusal> {
@@ -52,9 +48,6 @@ pub fn standing(
 }
 
 /// Every open triage card, each drawn against its chain as the tap would build it.
-///
-/// # Errors
-/// The inbox or a chain that does not read.
 pub fn listed(
     chains: &[Bound<'_>],
     deployment: &suzatary_connect::deployment::Deployment,

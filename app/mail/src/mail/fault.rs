@@ -7,12 +7,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Fault {
-    /// The account's sign-in is missing or lapsed.
     NeedsLogin,
     /// A secret it reads is stored nowhere on this box.
     Unresolved,
-    /// Its server could not be reached.
     Unreachable,
-    /// Anything else.
     Unclassified,
 }

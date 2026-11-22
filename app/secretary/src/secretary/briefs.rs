@@ -21,15 +21,11 @@ pub const BRIEF: &str = "What changed since the last briefing? Call briefing_del
                      priced list, which I can already see. Then propose the two or three \
                      moves that would make the most progress, with the drafts written out.";
 
-/// One morning's brief, where it was said.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Brief {
     pub conversation: ConversationId,
-    /// The day it was asked for.
     pub date: NaiveDate,
-    /// The index of the answering turn.
     pub turn: usize,
-    /// The answer, as the secretary wrote it.
     pub text: String,
 }
 

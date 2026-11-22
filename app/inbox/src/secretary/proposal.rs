@@ -17,11 +17,8 @@ use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::memory::Replaces;
 use suzatary_memory::secretary::salted_text;
 
-/// One act the secretary wants performed and will not perform itself, whole.
-///
-/// An email is irreversible, a changeset changes the owner's commitments, and an
-/// [`Act`](crate::secretary::acts::Act) is credential-shaped; one tap answers all, because a
-/// `Tap` witnesses only that the owner asked. A sum, so each card and performer is exhaustive.
+/// One tap answers an email, a changeset and a credential-shaped
+/// [`Act`](crate::secretary::acts::Act) alike, because a `Tap` witnesses only that the owner asked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "act", rename_all = "lowercase")]
 pub enum Proposal {
@@ -30,26 +27,19 @@ pub enum Proposal {
     /// A stored message to forward, around a note: the card names the original, and the tap
     /// reads it again unmasked.
     Forward(Forward),
-    /// Chain acts to append as the trusted actor, against one chain.
-    ///
-    /// The acts are stored and the events are not, since an `Authored` built at proposal time would
-    /// undo whatever moved in between ([`crate::secretary::changes`]).
+    /// Chain acts to append as the trusted actor, against one chain; the acts are stored and the
+    /// events are not, since an `Authored` built at proposal time would undo whatever moved in
+    /// between.
     Changes(Changeset),
     /// An act for the box to perform, on the same tap.
     Act(crate::secretary::acts::Act),
-    /// A fact to remember, asked for in a round that had read something not the owner's own: a
-    /// memory written because an email said so is the attack, so his tap writes it instead. A
-    /// consolidation asked for in such a round is one too, replacing the facts it names.
-    ///
-    /// It names the fact's words and never holds them: they are kept in the memory's text store
-    /// (`suzatary_digest::secretary::memories`), so dismissing the card, or forgetting the fact it became,
-    /// deletes them while this record stays.
+    /// A fact to remember from a round that had read something not the owner's own, since a
+    /// memory written because an email said so is the attack; it names the words and never holds
+    /// them, so dismissing the card or forgetting the fact deletes them while this record stays.
     Remember {
         /// The words, by the name the memory's text store keeps them under.
         text: salted_text::TextName,
-        /// What it is about.
         kind: memory::Kind,
-        /// The standing facts it replaces.
         replaces: memory::Replaces,
     },
     /// A decision to record, whole, as the owner's own once he taps it.
@@ -58,9 +48,7 @@ pub enum Proposal {
 
 impl Proposal {
     /// Whether the box's own card for it is asked again in a new episode, so is its instant as
-    /// well as its content: an account's sign-in, asked again once the account is connected
-    /// again, a plugin's grant, asked again whenever a link is pasted from the origin, and a
-    /// secret, asked again once a value stored from its card is lost.
+    /// well as its content.
     #[must_use]
     pub(crate) fn episodic(&self) -> bool {
         matches!(
@@ -75,13 +63,10 @@ impl Proposal {
         )
     }
 
-    /// Whether asking this again later is a new request: the inbox's identity rule
-    /// ([`crate::secretary::inbox::ProposalId::of`]), for every proposer but the box
-    /// ([`crate::secretary::inbox::Asked::recurs`]).
-    ///
-    /// An effect whose repetition does harm (an email, a changeset, a fact, a push, a coding task)
-    /// is its content alone, so it is never performed twice; an act meant to recur (a sign-in, a
-    /// secret, a page or document read) is also its instant.
+    /// Whether asking this again later is a new request, for every proposer but the box
+    /// ([`crate::secretary::inbox::Asked::recurs`]): an effect whose repetition does harm is its
+    /// content alone, so it is never performed twice, and an act meant to recur is also its
+    /// instant.
     #[must_use]
     pub fn recurs(&self) -> bool {
         use crate::secretary::acts::Act;
@@ -122,8 +107,7 @@ impl Proposal {
         }
     }
 
-    /// A one-line summary for a list, never for a confirmation: the card shows every field. A
-    /// remember card's words are found by `words`, and a card whose words are gone says so.
+    /// A one-line summary for a list, never for a confirmation: the card shows every field.
     #[must_use]
     pub fn headline(
         &self,
@@ -173,14 +157,10 @@ impl Proposal {
     }
 }
 
-/// `Remember(text, kind)`.
 pub const REMEMBER: Constructor = ("Remember", &["text", "kind"]);
 /// `Consolidate(text, kind, from)`: a remember card that replaces the facts `from`.
 pub const CONSOLIDATE: Constructor = ("Consolidate", &["text", "kind", "from"]);
 
-/// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Consolidate`,
-/// `Decide`, or
-/// one of the acts the box performs.
 // By hand: most variants print as the record they hold, and one prints two constructors.
 impl prodrome_core::literal::codec::Literal for Proposal {
     fn to_value(&self) -> Value {

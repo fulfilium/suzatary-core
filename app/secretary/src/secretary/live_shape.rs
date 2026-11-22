@@ -1,7 +1,5 @@
-//! A synthetic memory of the live shape, for the tests and benches that measure reading it: lines
-//! over conversations, one in four of the owner's notes alone, and every node of the digest's
-//! tree summarised, each summary after the call that asked for it. Built in memory; a bench that
-//! measures the disk stores hands the objects over to them.
+//! A synthetic memory of the live shape, for the tests and benches that measure reading it:
+//! lines over conversations, one in four of the owner's notes alone, and the digest summarised.
 
 use std::collections::BTreeSet;
 
@@ -30,17 +28,14 @@ use suzatary_store::store::{Doc as _, InMemoryDoc, Prodrome as _};
 use suzatary_stores::stores::InMemory;
 use suzatary_stores::stores::conversations::InMemory as Lines;
 
-/// How large a memory to build.
 #[derive(Debug, Clone, Copy)]
 pub struct Shape {
     /// How many lines, shared evenly over the conversations.
     pub lines: usize,
-    /// How many conversations.
     pub conversations: usize,
     /// How many bytes each of the secretary's answers holds; every other line is one of them in
     /// three conversations of four.
     pub answer_bytes: usize,
-    /// How much of the digest's tree the compactor has summarised.
     pub summaries: Summaries,
 }
 
@@ -48,31 +43,23 @@ pub struct Shape {
 /// and finds some nodes unfit, has written so far.
 #[derive(Debug, Clone, Copy)]
 pub enum Summaries {
-    /// Every node.
     Every,
     /// The first this many nodes the compactor takes: the smallest first, level by level.
     First(usize),
 }
 
-/// The conversations, the digest and the facts, in memory.
 #[derive(Default)]
 pub struct Stores {
-    /// The conversations.
     pub lines: Lines,
     /// Whose retraction the digest believes.
     pub owners: BTreeSet<Actor>,
-    /// The digest's history.
     pub digests: InMemory<DigestEvent>,
-    /// The summaries' words.
     pub summaries: InMemoryDoc<TextName, Text<Line>>,
-    /// The facts' history.
     pub facts: InMemory<MemoryEvent>,
-    /// The facts' words.
     pub words: InMemoryDoc<TextName, Text<Fact>>,
 }
 
 impl Stores {
-    /// The digest's stores.
     #[must_use]
     pub fn digests(&self) -> Digests<'_> {
         Digests {
@@ -146,11 +133,8 @@ impl Shape {
         }
     }
 
-    /// The memory of this shape: its lines, then the digest's tree summarised as [`Shape::summaries`]
-    /// says, level by level, each summary after the call that asked for it.
-    ///
-    /// # Panics
-    /// Never for a shape of at least one conversation: every write is one the stores take.
+    /// The memory of this shape: its lines, then the digest's tree summarised as
+    /// [`Shape::summaries`] says, level by level, each summary after the call that asked for it.
     #[must_use]
     pub fn build(&self) -> Stores {
         let stores = Stores {
@@ -219,7 +203,6 @@ impl Shape {
     }
 }
 
-/// A manual of one line.
 struct Library;
 
 impl suzatary_base::capability::Manuals for Library {
@@ -230,9 +213,6 @@ impl suzatary_base::capability::Manuals for Library {
 
 /// The agent's `context` answer over `memory`, as its verb makes it, under a manual of one line
 /// and a deployment of one chain.
-///
-/// # Panics
-/// Never: the deployment's names are constants.
 #[must_use]
 pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
     use suzatary_base::chains::{ChainName, ChainPolicy, Chains};

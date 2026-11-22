@@ -1,20 +1,16 @@
-//! The monthly Junk sweep as values. Junk is never triaged, but real mail lands
-//! there, so the sweep counts headers by sender domain and lists in full only
-//! what falls outside the declared churn.
-//!
-//! [`digest`]'s laws are property tests: counts sum to the total, and no churn header is listed.
+//! The monthly Junk sweep as values: Junk is never triaged, but real mail lands there, so the
+//! sweep counts headers by sender domain and lists in full only what falls outside the churn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::NaiveDate;
 use serde::{Serialize, Serializer};
 
-/// A domain name as a sweep compares it: lower case, no trailing dot.
+/// Lower case, no trailing dot.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct Domain(String);
 
-/// Why a churn entry is not a domain.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "[mail.junk] churn: {0:?} is not a domain (letters, digits, dashes and dots, one dot at least)"
@@ -22,8 +18,7 @@ pub struct Domain(String);
 pub struct NotADomain(pub String);
 
 impl Domain {
-    /// Read a domain: two or more dot-separated labels of letters, digits and dashes,
-    /// lower-cased, with a trailing dot (the DNS root) dropped.
+    /// Two or more labels, with a trailing dot (the DNS root) dropped.
     pub fn parse(text: &str) -> Result<Self, NotADomain> {
         let lowered = text.trim().trim_end_matches('.').to_ascii_lowercase();
         let labels: Vec<&str> = lowered.split('.').collect();
@@ -37,7 +32,7 @@ impl Domain {
         }
     }
 
-    /// The domain of an address, the text after its last `@`.
+    /// The text after its last `@`.
     #[must_use]
     fn of_address(address: &str) -> Option<Self> {
         address
@@ -45,8 +40,7 @@ impl Domain {
             .and_then(|(_, domain)| Self::parse(domain).ok())
     }
 
-    /// Whether this domain is `other` or lies under it: `mail.shop.test` is
-    /// under `shop.test`, `badshop.test` is not.
+    /// `mail.shop.test` is within `shop.test`, `badshop.test` is not.
     #[must_use]
     pub fn within(&self, other: &Self) -> bool {
         self.0 == other.0
@@ -56,33 +50,28 @@ impl Domain {
                 .is_some_and(|head| head.ends_with('.'))
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// This domain, then each ancestor down to two labels: what
-    /// [`within`](Self::within) treats as "at or under", so a churn lookup over a
-    /// seed of hundreds of thousands is `O(depth · log n)`, not a scan.
+    /// Each ancestor down to two labels, so a churn lookup over a seed of hundreds of thousands
+    /// is `O(depth · log n)`, not a scan.
     fn and_ancestors(&self) -> impl Iterator<Item = Self> + '_ {
         let labels: Vec<&str> = self.0.split('.').collect();
         (0..=labels.len() - 2).map(move |start| Self(labels[start..].join(".")))
     }
 }
 
-/// Where a Junk message says it came from. Spam omits or mangles `From`, so
-/// a header with no readable address is its own bucket rather than a guess.
+/// Spam omits or mangles `From`, so a header with no readable address is its own bucket rather
+/// than a guess.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Sender {
-    /// The `From` address's domain.
     Domain(Domain),
-    /// No address a domain could be read from.
     Unaddressed,
 }
 
 impl Sender {
-    /// How the histogram prints it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
@@ -98,30 +87,23 @@ impl Serialize for Sender {
     }
 }
 
-/// Where a churn domain came from; one covered by both is labelled
-/// [`Ours`](Self::Ours), the deliberate entry.
+/// One covered by both is labelled [`Ours`](Self::Ours), the deliberate entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Origin {
-    /// From a maintained public list, normalised by [`normalize_seed_file`].
+    /// From a maintained public list.
     Seed,
     /// From this deployment's own `[mail.junk] churn`.
     Ours,
 }
 
-/// `[mail.junk] keep`: domains (and their subdomains) a digest never treats
-/// as churn, however the seed or `ours` lists them — the fix for a seed false
-/// positive.
+/// `[mail.junk] keep`: domains and their subdomains never churn, however the seed or `ours` lists
+/// them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct KeepList(BTreeSet<Domain>);
 
 impl KeepList {
-    /// Parse the instance file's list, refusing the first entry that is not a
-    /// domain.
-    ///
-    /// # Errors
-    /// [`NotADomain`].
     pub fn new<'a>(domains: impl IntoIterator<Item = &'a str>) -> Result<Self, NotADomain> {
         domains
             .into_iter()
@@ -130,12 +112,10 @@ impl KeepList {
             .map(Self)
     }
 
-    /// Every domain kept, in order.
     pub fn iter(&self) -> impl Iterator<Item = &Domain> {
         self.0.iter()
     }
 
-    /// Whether `domain` is `keep`, or lies under a `keep` entry.
     fn covers(&self, domain: &Domain) -> bool {
         domain
             .and_ancestors()
@@ -143,38 +123,29 @@ impl KeepList {
     }
 }
 
-/// Whether a digest folded a seed in, and how large. [`Seed::None`] is a real
-/// state, never an error, and a digest says which population it swept.
+/// [`Seed::None`] is a real state, never an error, and a digest says which population it swept.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Seed {
-    /// No seed file was read.
     #[default]
     None,
-    /// The seed file this deployment read, and how many domains it held.
     Loaded {
         /// How many domains the seed file held.
         domains: usize,
     },
 }
 
-/// The effective churn, `seed ∪ ours − keep`: [`Self::new`] at instance-parse
-/// time, a seed folded in fresh per digest by [`Self::with_seed`] and never held
-/// resident. Remembers each entry's origin so [`digest`] can label every row.
-///
-/// Not `Serialize`: a seed holds hundreds of thousands of domains, so an answer prints
-/// [`Self::summary`].
+/// The effective churn, `seed ∪ ours − keep`, a seed folded in fresh per digest and never held
+/// resident; not `Serialize`, since a seed holds hundreds of thousands of domains.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChurnList {
-    /// Every domain this list covers, and the more deliberate origin when
-    /// more than one source lists it.
+    /// The more deliberate origin when more than one source lists a domain.
     domains: BTreeMap<Domain, Origin>,
     keep: KeepList,
     seed: Seed,
 }
 
 impl ChurnList {
-    /// This deployment's own `[mail.junk] churn` and `keep`, with no seed.
     pub fn new<'a>(
         ours: impl IntoIterator<Item = &'a str>,
         keep: KeepList,
@@ -190,12 +161,8 @@ impl ChurnList {
         })
     }
 
-    /// Folds a seed's domains in as [`Origin::Seed`] (an `Ours` label wins) and
-    /// marks [`Seed::Loaded`].
-    ///
-    /// # Errors
-    /// [`NotADomain`] for a seed line that is not one: the seed is normalised at
-    /// build time, so this is a build defect not to paper over.
+    /// An `Ours` label wins; a seed line that is not a domain is refused, since the seed is
+    /// normalised at build time and this is a build defect not to paper over.
     pub fn with_seed<'a>(
         mut self,
         seed: impl IntoIterator<Item = &'a str>,
@@ -210,14 +177,13 @@ impl ChurnList {
         Ok(self)
     }
 
-    /// The `keep` list this was built with.
     #[must_use]
     pub fn keep(&self) -> &KeepList {
         &self.keep
     }
 
-    /// The origin of the entry that covers `sender` ([`Origin::Ours`] when both do), or `None`
-    /// when `keep` or nothing covers it; an unaddressed sender is never covered.
+    /// [`Origin::Ours`] when both cover `sender`, `None` when `keep` or nothing covers it; an
+    /// unaddressed sender is never covered.
     #[must_use]
     pub fn origin(&self, sender: &Sender) -> Option<Origin> {
         let Sender::Domain(domain) = sender else {
@@ -237,14 +203,12 @@ impl ChurnList {
         found
     }
 
-    /// Whether mail from `sender` is churn at all.
     #[must_use]
     pub fn covers(&self, sender: &Sender) -> bool {
         self.origin(sender).is_some()
     }
 
-    /// What an answer says of this list: the deployment's own entries and `keep` in full, and
-    /// the seed by its size alone.
+    /// The seed by its size alone.
     #[must_use]
     pub fn summary(&self) -> ChurnSummary {
         ChurnSummary {
@@ -259,29 +223,23 @@ impl ChurnList {
         }
     }
 
-    /// The listed domains, in order, with `keep` not subtracted (use
-    /// [`Self::covers`] for the effective set).
+    /// With `keep` not subtracted; [`Self::covers`] is the effective set.
     pub fn iter(&self) -> impl Iterator<Item = &Domain> {
         self.domains.keys()
     }
 }
 
-/// A churn list as an answer prints it: what this deployment declared, and how large a seed it
-/// folded in, never the seed's domains.
+/// Never the seed's domains.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ChurnSummary {
-    /// `[mail.junk] churn`, in order.
+    /// `[mail.junk] churn`.
     pub ours: Vec<Domain>,
-    /// `[mail.junk] keep`.
     pub keep: KeepList,
-    /// Whether a seed was folded in, and how many domains it held.
     pub seed: Seed,
 }
 
-/// Normalises one seed file into the [`Domain`]s it lists, in canonical form so
-/// the runtime never refuses one. Comments, blanks and malformed lines are
-/// dropped rather than failing the build: a public list will someday hold a bad
-/// line, and `sources.txt`'s count makes the drop visible.
+/// In canonical form so the runtime never refuses one; malformed lines are dropped rather than
+/// failing the build, and `sources.txt`'s count makes the drop visible.
 #[must_use]
 pub fn normalize_seed_file(text: &str) -> BTreeSet<Domain> {
     text.lines()
@@ -291,25 +249,22 @@ pub fn normalize_seed_file(text: &str) -> BTreeSet<Domain> {
         .collect()
 }
 
-/// A message's UID in the Junk folder: the handle `junk_show` takes back.
+/// The handle `junk_show` takes back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct Uid(pub u32);
 
-/// The most characters of a header's name, address, subject or date a digest keeps: spam
-/// writes subjects of any length.
+/// Spam writes subjects of any length.
 const HEADER_CHARS: usize = 200;
 
-/// The most headers a digest lists in full per account, newest first.
+/// Per account.
 pub(crate) const MAX_LISTED: usize = 50;
 
-/// The most sender domains a digest counts by name per account, most first.
+/// Per account.
 pub(crate) const MAX_DOMAINS: usize = 50;
 
-/// One Junk message's headers, and the handle to open it by.
-///
-/// Built by [`JunkHeader::new`], which derives [`JunkHeader::sender`] from
-/// the address, so the domain a digest counts is the address it shows.
+/// [`JunkHeader::new`] derives the sender from the address, so the domain a digest counts is the
+/// address it shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct JunkHeader {
     uid: Uid,
@@ -321,9 +276,7 @@ pub struct JunkHeader {
 }
 
 impl JunkHeader {
-    /// A header from its parts as the message printed them: the display name
-    /// and address of `From` (either may be absent), the subject and the raw
-    /// `Date`.
+    /// `name` and `address` of `From` may each be absent; `date` is raw.
     #[must_use]
     pub fn new(
         uid: Uid,
@@ -351,44 +304,35 @@ impl JunkHeader {
         }
     }
 
-    /// The handle.
     #[must_use]
     pub fn uid(&self) -> Uid {
         self.uid
     }
 
-    /// Where it came from.
     #[must_use]
     pub fn sender(&self) -> &Sender {
         &self.sender
     }
 }
 
-/// The days a sweep looks back over, ending today.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Window {
-    /// The first day read (IMAP `SINCE`, inclusive).
+    /// IMAP `SINCE`, inclusive.
     pub since: NaiveDate,
-    /// How many days.
     pub days: u32,
 }
 
-/// Why a window cannot be read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("days must be between 1 and {MAX_DAYS}, not {0}")]
 pub struct BadWindow(pub usize);
 
-/// A month, which is the sweep's own cadence.
+/// A month, the sweep's own cadence.
 pub const DEFAULT_DAYS: usize = 30;
 
-/// A year. A longer look is a backfill, not a sweep.
+/// A year: a longer look is a backfill, not a sweep.
 pub const MAX_DAYS: u32 = 366;
 
 impl Window {
-    /// The `days` ending `today`.
-    ///
-    /// # Errors
-    /// [`BadWindow`] outside `1..=MAX_DAYS`.
     pub fn ending(today: NaiveDate, days: usize) -> Result<Self, BadWindow> {
         let days = u32::try_from(days)
             .ok()
@@ -401,29 +345,21 @@ impl Window {
     }
 }
 
-/// One account's Junk, swept.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct JunkDigest {
-    /// The account.
     pub account: String,
-    /// What was read.
     pub window: Window,
-    /// How many messages the window held.
     pub total: usize,
-    /// The [`MAX_DOMAINS`] commonest sender domains, each with its count and where `churn`
-    /// covers it from (`None` when nothing does), most first (ties by name).
+    /// The commonest sender domains, most first (ties by name).
     pub(crate) by_domain: Vec<(Sender, usize, Option<Origin>)>,
     /// How many sender domains are not in `by_domain`.
     pub domains_left_out: usize,
-    /// The [`MAX_LISTED`] newest headers not from a churn domain, newest UID first.
+    /// Newest UID first.
     pub(crate) outside_churn: Vec<JunkHeader>,
     /// How many headers outside churn are not in `outside_churn`.
     pub listed_left_out: usize,
 }
 
-/// Counts every header by sender, labels each with `churn`'s [`Origin`] (or
-/// none), and keeps in full the ones outside `churn`, each list cut at its bound and
-/// counting what it left out.
 #[must_use]
 pub fn digest(
     account: &str,
@@ -464,22 +400,19 @@ pub fn digest(
     }
 }
 
-/// One mailbox as `LIST` answered it: its name, and whether the server marked
-/// it `\Junk` (RFC 6154 SPECIAL-USE).
+/// One mailbox as `LIST` answered it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listed {
-    /// The server's name for it, unquoted.
+    /// Unquoted.
     pub name: String,
-    /// Carries the `\Junk` attribute.
+    /// Carries the `\Junk` attribute (RFC 6154 SPECIAL-USE).
     pub junk: bool,
 }
 
-/// The names a Junk folder goes by where the server marks none: personal
-/// Outlook's, then Exchange's two.
+/// Where the server marks none: personal Outlook's, then Exchange's two.
 pub const JUNK_NAMES: [&str; 3] = ["Junk", "Junk Email", "Junk E-mail"];
 
-/// Which folder is Junk: the one marked `\Junk`, else the first whose name is
-/// one of [`JUNK_NAMES`] (any case), else none.
+/// The one marked `\Junk`, else the first whose name is one of [`JUNK_NAMES`] (any case).
 #[must_use]
 pub fn junk_folder(listed: &[Listed]) -> Option<&str> {
     listed
@@ -495,18 +428,14 @@ pub fn junk_folder(listed: &[Listed]) -> Option<&str> {
         .map(|folder| folder.name.as_str())
 }
 
-/// One Junk message opened: its headers and its body as text, cut at
-/// [`suzatary_mail::mail::MAX_BODY_CHARS`] and saying so.
+/// Its body cut at [`suzatary_mail::mail::MAX_BODY_CHARS`], saying so.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct JunkMessage {
-    /// The account.
     pub account: String,
-    /// Its headers.
     #[serde(flatten)]
     pub header: JunkHeader,
-    /// The body, HTML converted to text.
+    /// HTML converted to text.
     pub body: String,
-    /// Whether the body was cut.
     pub truncated: bool,
 }
 
@@ -555,8 +484,6 @@ mod tests {
         }
     }
 
-    /// A sweep of thousands of headers with no churn answers a bounded digest: the newest
-    /// [`MAX_LISTED`] headers and the [`MAX_DOMAINS`] commonest domains, counting the rest.
     #[test]
     fn a_large_sweep_is_bounded_and_counts_what_it_left_out() {
         let headers: Vec<JunkHeader> = (0..5000)
@@ -621,8 +548,7 @@ mod tests {
     }
 
     proptest! {
-        /// The counts sum to the total, and the total is every header, when no domain was left
-        /// out; the counts kept are each domain's whole count.
+        /// The counts sum to the total when no domain was left out.
         #[test]
         fn the_counts_sum_to_the_total(
             senders in prop::collection::vec(any_sender(), 0..60),
@@ -647,7 +573,6 @@ mod tests {
             }
         }
 
-        /// A churn domain is never listed, and whatever outside churn is not listed is counted.
         #[test]
         fn a_churn_domain_is_never_listed(
             senders in prop::collection::vec(any_sender(), 0..60),

@@ -67,19 +67,13 @@ pub(crate) use revise_topics::ReviseTopics;
 
 /// The verbs the triage agent holds too, over the agent's part of the secretary's record.
 pub type GitDiffSummary = verbs::GitDiffSummary<SecretarySurface>;
-/// A todo's events.
 pub type History = verbs::History<SecretarySurface, verbs::HistoryArgs>;
-/// One chain's open todos.
 pub type ListOpenTodos = verbs::ListOpenTodos<SecretarySurface>;
-/// A todo's lifecycle event, as the trusted assistant.
 pub type Record = verbs::Record<SecretarySurface>;
-/// Author a todo, as the trusted assistant.
 pub type TodoAdd = verbs::TodoAdd<SecretarySurface>;
-/// Change fields on a todo, as the trusted assistant.
 pub type TodoUpdate = verbs::TodoUpdate<SecretarySurface>;
 /// One message in full, never paged.
 pub type Show = verbs::Show<SecretarySurface, verbs::WholeArgs>;
-/// One todo as the chain holds it.
 pub type TodoShow = verbs::TodoShow<SecretarySurface>;
 /// A part of the record opened, every part read in words.
 pub type Zoom = verbs::Zoom<SecretarySurface>;
@@ -138,13 +132,9 @@ pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
     }
 }
 
-/// File `proposal` in the inbox, name it in the conversation, and supersede what it revises.
-///
-/// The object is filed before the line names it, and an unsupersedable `revises` is refused first;
-/// a coding session serving a todo is counted with each todo read open in `chains`.
-///
-/// # Errors
-/// A `revises` naming no open proposal, or a store's failure to append.
+/// File `proposal` in the inbox, name it in the conversation, and supersede what it revises; an
+/// unsupersedable `revises` is refused first, and the object is filed before the line names it.
+/// A coding session serving a todo is counted with each todo read open in `chains`.
 pub fn propose(
     caps: &Secretary<'_>,
     chains: &[super::Bound<'_>],
@@ -256,9 +246,6 @@ fn references(list: &str, field: &str) -> Result<Vec<Reference>, Refusal> {
 
 /// A fact written as a card the owner taps, in a round that has read something not his own:
 /// its words kept under the memory's hold and named by the card.
-///
-/// # Errors
-/// [`Refusal::bad_request`] for missing reasons; the stores' own.
 fn memory_card(
     caps: &crate::secretary::Secretary<'_>,
     id: &ConversationId,
@@ -282,11 +269,8 @@ fn memory_card(
 }
 
 /// The round's opening turn, for a memory write that has no card: a forgetting, which an email
-/// must not be able to make, writes only where `remember` would.
-///
-/// # Errors
-/// [`Refusal::forbidden`] for a round the box opened, or one that has read something not the
-/// owner's own words, saying `instead`, what the owner can do.
+/// must not be able to make, writes only where `remember` would: it refuses a round the box
+/// opened, or one that has read something not the owner's own words, saying `instead`.
 fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<memory::Origin, Refusal> {
     match Gate::of(
         Binding::Remembers,
@@ -301,7 +285,6 @@ fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<memory::Origin, 
     }
 }
 
-/// A read's failure, in the words the model can act on.
 pub(crate) fn refused_by(failure: &suzatary_services::repositories::RepoFailure) -> Refusal {
     use suzatary_services::repositories::RepoFailure;
     match failure {

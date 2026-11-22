@@ -15,7 +15,6 @@ impl<F> Answering<F>
 where
     F: Fn(&Conversation) -> Result<String, ModelError> + Sync,
 {
-    /// The model `name`, answering by `answer`.
     pub fn new(name: impl Into<String>, answer: F) -> Self {
         Self {
             name: name.into(),

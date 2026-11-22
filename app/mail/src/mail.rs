@@ -41,7 +41,6 @@ pub struct MailLink {
     pub label: String,
 }
 
-/// One row of the app's mail list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailRow {
     /// The canonical content hash, of which a todo's `source.hash` is a prefix.
@@ -56,23 +55,19 @@ pub struct MailRow {
     #[serde(with = "date")]
     #[ts(type = "string")]
     pub date: Option<Datetime>,
-    /// The maildir folder it lives in.
     pub container: String,
     /// The account's canonical address, "" for a maildir not of this deployment.
     pub account: String,
-    /// What triage decided about this hash.
     pub disposition: Disposed,
     /// The kinds of held value it names, which the row says and never their values.
     #[ts(as = "Vec<suzatary_held::redact::Kind>")]
     pub held: suzatary_held::held_value::Kinds,
 }
 
-/// What triage decided about a message, as a row shows it: nothing yet, or its decision, the
-/// todo only beside the one decision that names one.
+/// What triage decided about a message, as a row shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Disposed {
-    /// Triage has decided nothing about it.
     Undecided,
     /// Actionable: a todo was authored for it.
     Todo {
@@ -90,24 +85,19 @@ pub enum Disposed {
 /// One message as a page; which todos it produced is the chain's fact, joined by the route.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailMessage {
-    /// Its list row.
     pub row: MailRow,
     /// notmuch's conversation id, "" when the corpus names none.
     pub thread: String,
     /// The whitelisted headers it carries, in reading order.
     pub headers: Vec<MailHeader>,
-    /// The body as text.
     pub body: String,
-    /// Whether the body was cut at the cap.
     pub truncated: bool,
-    /// The links it holds.
     pub links: Vec<MailLink>,
 }
 
 /// The cap on a body's characters; past it the wire says `truncated`.
 pub const MAX_BODY_CHARS: usize = 200_000;
 
-/// One attachment's identity (name, MIME type, decoded size) with no content.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttachmentMeta {
     /// Its filename from the disposition or the content type, `""` when neither names one.
@@ -118,18 +108,15 @@ pub struct AttachmentMeta {
     pub size: usize,
 }
 
-/// One attachment whole: what the message calls it, its type and its decoded bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttachmentFile {
     /// Its filename, as [`AttachmentMeta::name`] lists it.
     pub name: String,
     /// `type/subtype`, lower-cased, `""` when the part carried none.
     pub mime: String,
-    /// Its decoded bytes.
     pub content: Vec<u8>,
 }
 
-/// What recording a message file for a forward found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stored {
     /// The file is larger than the cap asked for, so it was not read.
@@ -137,7 +124,6 @@ pub enum Stored {
         /// Its size in bytes.
         size: u64,
     },
-    /// The file, read once and recorded.
     Recorded(StoredMessage),
 }
 
@@ -145,11 +131,9 @@ pub enum Stored {
 /// attachments, never its words. The tap sends these bytes or nothing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct StoredMessage {
-    /// Its notmuch id.
     pub id: String,
     /// The file's size in bytes.
     pub size: u64,
-    /// The SHA-256 of the file.
     pub sha256: suzatary_held::attachment::AttachmentId,
     /// The held values in its text, in order.
     pub held: Vec<suzatary_held::held_value::Held>,
@@ -162,7 +146,6 @@ pub struct StoredMessage {
 pub struct StoredPart {
     /// Its filename, or `attachment-<n>` for the `n`th when it names none.
     pub name: String,
-    /// Its `type/subtype`.
     pub media: String,
     /// Its decoded size in bytes.
     pub size: u64,
@@ -170,10 +153,8 @@ pub struct StoredPart {
     pub sha256: suzatary_held::attachment::AttachmentId,
 }
 
-/// `StoredMessage(id, size, sha256, held, parts)`.
 pub const STORED_MESSAGE: prodrome_core::literal::codec::Constructor =
     ("StoredMessage", &["id", "size", "sha256", "held", "parts"]);
-/// `StoredPart(name, media, size, sha256)`.
 pub const STORED_PART: prodrome_core::literal::codec::Constructor =
     ("StoredPart", &["name", "media", "size", "sha256"]);
 
@@ -234,7 +215,6 @@ impl prodrome_core::literal::codec::Literal for StoredPart {
 /// The headers a message page prints, in reading order; a whitelist.
 const SHOWN_HEADERS: &[&str] = &["From", "To", "Cc", "Subject", "Date", "Reply-To"];
 
-/// The schemes a link may carry to a page.
 const LINK_SCHEMES: &[&str] = &["http://", "https://", "mailto:"];
 
 /// A source hash prefix shorter than this names todos by accident, so it is not evidence.
@@ -247,7 +227,6 @@ pub fn page(text: &str, start: usize, len: usize) -> &str {
     suzatary_base::spelling::shorten(&text[from..], len)
 }
 
-/// Only the links a page may carry.
 #[must_use]
 pub fn web_links(links: Vec<MailLink>) -> Vec<MailLink> {
     links
@@ -261,7 +240,6 @@ pub fn web_links(links: Vec<MailLink>) -> Vec<MailLink> {
         .collect()
 }
 
-/// The whitelisted headers this message actually carries, in reading order.
 #[must_use]
 pub fn headers_of(headers: &[(String, String)]) -> Vec<MailHeader> {
     SHOWN_HEADERS
@@ -346,7 +324,6 @@ mod tests {
         );
     }
 
-    /// Reading order, and nothing outside the whitelist.
     #[test]
     fn headers_come_back_whitelisted_and_in_reading_order() {
         let held = vec![
@@ -370,7 +347,6 @@ mod tests {
         );
     }
 
-    /// A prefix shorter than six names no todo.
     #[test]
     fn the_reverse_index_is_one_directional_and_has_a_floor() {
         assert!(sourced_from("abc123", "abc123def456"));
@@ -382,7 +358,6 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        /// `page` never panics, including a `start` past the end.
         #[test]
         fn page_never_panics_and_never_splits_a_char(
             text: String,
@@ -393,7 +368,6 @@ mod tests {
             prop_assert!(piece.chars().count() <= len);
         }
 
-        /// Paging in fixed steps from 0 recovers the whole text.
         #[test]
         fn paging_in_steps_reassembles_the_whole_text(text: String, step in 1usize..50) {
             let mut joined = String::new();

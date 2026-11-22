@@ -1,5 +1,5 @@
-//! The account model: which kinds of account exist and how each is scoped. The roster of
-//! addresses is the deployment's (`instance.toml`), so no address and no I/O live here.
+//! The account model; the roster of addresses is `instance.toml`'s, so no address and no I/O
+//! live here.
 
 use std::collections::BTreeSet;
 
@@ -8,10 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::mail::account_email::AccountEmail;
 use crate::mail::folders::Folders;
 
-/// The MSAL tenant a Microsoft account authenticates against.
-///
-/// A closed set because the login URL is built from it; a third spelling would
-/// be a 400 from Microsoft the hour a token expired.
+/// The MSAL tenant a Microsoft account authenticates against: a closed set because the login URL
+/// is built from it, and a third spelling would be a 400 from Microsoft the hour a token expired.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "&'static str")]
 pub enum Authority {
@@ -22,7 +20,6 @@ pub enum Authority {
 }
 
 impl Authority {
-    /// The tenant segment of the login URL.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -31,7 +28,6 @@ impl Authority {
         }
     }
 
-    /// Read one, or the reason this text is not one.
     pub fn parse(text: &str) -> Result<Self, RosterError> {
         match text {
             "organizations" => Ok(Authority::Organizations),
@@ -60,19 +56,15 @@ impl std::fmt::Display for Authority {
     }
 }
 
-/// Microsoft 365 / personal Outlook, over IMAP + XOAUTH2
-/// (`crate::mail::imap`, transported by `suzatary_io::imap`).
+/// Microsoft 365 / personal Outlook, over IMAP + XOAUTH2.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MsImap {
-    /// Which tenant to authenticate against.
     pub authority: Authority,
-    /// The leaves under the account's maildir that count as triage input, each pulled by
-    /// [`crate::mail::declared`].
+    /// Each pulled by [`crate::mail::declared`].
     pub inbox_folders: Folders,
-    /// The server-side name of the sent folder ("Sent Items" on M365, "Sent" on
-    /// personal Outlook: list the folders, do not guess), pulled whole and
-    /// read-only on every sync so "did I reply to X" has evidence.
+    /// "Sent Items" on M365, "Sent" on personal Outlook (list the folders, do not guess), pulled
+    /// whole and read-only on every sync so "did I reply to X" has evidence.
     pub sent_folder: String,
 }
 
@@ -86,49 +78,38 @@ pub struct Proton {
     /// The Bridge SMTP login: the Proton account, while mail may go out from any
     /// address it holds.
     pub smtp_user: String,
-    /// The addresses this account may send as; any other cannot be sent from.
     pub send_addresses: Vec<String>,
-    /// Which synced leaves count as triage input. Not just `Inbox`, since
-    /// Proton's rules file mail into custom folders; it must match mbsync's
+    /// Not just `Inbox`, since Proton's rules file mail into custom folders; it must match mbsync's
     /// `Patterns` (test-pinned), or a synced folder silently never reaches the queue.
     pub inbox_folders: Folders,
 }
 
-/// How an account is pulled, matched exhaustively by the syncer and the send
-/// path. Tagged on `sync`, so one strategy's fields are refused under another.
+/// Tagged on `sync`, so one strategy's fields are refused under another.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "sync", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Sync {
     /// Gmail through lieer, which maps labels to notmuch tags itself, so no
     /// `+inbox` tagging and no `inbox_folders`.
     Gmail,
-    /// A Google account signed in with Google from the box's card: its mail through lieer as
-    /// [`Sync::Gmail`]'s is, under the grant the box keeps and hands lieer before each sync, and
-    /// its calendars through Google's Calendar API (`crate::google`).
+    /// Signed in from the box's card: mail through lieer under the grant the box keeps and hands
+    /// lieer before each sync, calendars through Google's Calendar API.
     Google,
-    /// Microsoft, over IMAP + XOAUTH2.
     MsImap(MsImap),
-    /// Proton, over the Bridge.
     Proton(Proton),
 }
 
-/// One account: its canonical identity, its maildir folder, and how it syncs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailAccount {
     /// The canonical address — also the notmuch `From` and the triage key.
     pub email: AccountEmail,
-    /// The maildir folder under the mail root.
     pub subdir: String,
-    /// The strategy.
     #[serde(flatten)]
     pub sync: Sync,
 }
 
 impl MailAccount {
-    /// The notmuch fragment scoping a search to this account's maildir.
-    ///
-    /// Wider than [`MailAccount::inbox_query`]: backfilled archives are
-    /// searchable history, not triage input.
+    /// Wider than [`MailAccount::inbox_query`]: backfilled archives are searchable history, not
+    /// triage input.
     #[must_use]
     pub fn query(&self) -> String {
         format!("path:{}/**", self.subdir)
@@ -151,12 +132,9 @@ impl MailAccount {
         !matches!(self.sync, Sync::Gmail | Sync::Google)
     }
 
-    /// What the syncer may blanket-tag `+inbox`: narrower than
-    /// [`MailAccount::query`], which would put years of sent mail in the queue.
-    ///
-    /// Each leaf's path is quoted, since a server folder's name may hold a space
-    /// (`Junk Email`) and notmuch reads an unquoted space as the end of the term,
-    /// which matches nothing.
+    /// Narrower than [`MailAccount::query`], which would put years of sent mail in the queue;
+    /// each leaf's path is quoted, since notmuch reads an unquoted space (`Junk Email`) as the
+    /// end of the term, which matches nothing.
     #[must_use]
     pub fn inbox_query(&self) -> String {
         let folders = match &self.sync {
@@ -175,14 +153,12 @@ impl MailAccount {
         format!("({})", leaves.join(" or "))
     }
 
-    /// The filesystem-safe token this account's per-account state is filed
-    /// under; stored state is named by it, so it must not change.
+    /// Stored per-account state is named by it, so it must not change.
     #[must_use]
     pub fn slug(&self) -> String {
         slug_of(self.email.as_str())
     }
 
-    /// The Microsoft half of this account, or `None` when it is not one.
     #[must_use]
     pub fn microsoft(&self) -> Option<&MsImap> {
         match &self.sync {
@@ -221,26 +197,21 @@ pub fn folder_slug(folder: &str) -> String {
     out
 }
 
-/// Which transport may send as an address.
-///
-/// Resolution is Proton's `send_addresses` first, then an account's identity:
-/// a Proton identity is also a send address, and only the Bridge can send it.
+/// Which transport may send as an address; Proton's `send_addresses` resolve first, since a
+/// Proton identity is also a send address and only the Bridge can send it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Sender {
     /// Microsoft SMTP + XOAUTH2; the `From` must be the account's own address.
     Microsoft {
-        /// The authenticated account's canonical address.
         email: String,
         /// Its maildir folder, for the token store's slug.
         subdir: String,
-        /// Its tenant.
         authority: Authority,
     },
     /// The local Proton Bridge; the `From` may be any address the account holds.
     Proton {
         /// The Bridge login.
         smtp_user: String,
-        /// The `From` address.
         from: String,
     },
     /// The Gmail API, borrowing lieer's stored grant (`gmail.modify` covers
@@ -248,7 +219,6 @@ pub enum Sender {
     Gmail {
         /// The maildir folder holding lieer's credential file.
         subdir: String,
-        /// The `From` address.
         from: String,
     },
     /// The Gmail API, with an access token the box mints from the account's sign-in with
@@ -260,7 +230,6 @@ pub enum Sender {
 }
 
 impl Sender {
-    /// The address this send goes out as.
     #[must_use]
     pub fn from(&self) -> &str {
         match self {
@@ -272,7 +241,6 @@ impl Sender {
     }
 }
 
-/// A roster refused to be one.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum RosterError {
     /// Two accounts claim the same canonical address, the key triage runs on.
@@ -286,27 +254,20 @@ pub enum RosterError {
     /// corpus" is not evidence of absence.
     #[error("the Microsoft account {0:?} names no sent folder")]
     NoSentFolder(String),
-    /// A Proton account named no address it may send as.
     #[error("the Proton account {0:?} names no send addresses")]
     NoSendAddresses(String),
-    /// A tenant this program does not know.
     #[error("{0:?} is not an MSAL authority (organizations, consumers)")]
     Authority(String),
-    /// An account's address that is not one.
     #[error("{0:?} is not an email address")]
     Email(String),
-    /// An account's address with a capital in it.
     #[error("the account address {given:?} has a capital; write it as {folded:?}")]
     NotFolded {
         /// As written.
         given: String,
-        /// As it must be written.
         folded: String,
     },
-    /// An account that counts no folder as triage input.
     #[error("an account's inbox_folders names no folder")]
     NoFolders,
-    /// A blank folder name.
     #[error("an account's inbox_folders names a blank folder")]
     BlankFolder,
 }
@@ -325,9 +286,8 @@ impl std::fmt::Display for AccountName {
     }
 }
 
-/// Every account this deployment reads mail for, checked as a set (unique
-/// identities and folders, a sent folder on every Microsoft account) by [`Roster::new`]; the
-/// default roster holds no account.
+/// Checked as a set by [`Roster::new`]: unique identities and folders, a sent folder on every
+/// Microsoft account.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Vec<MailAccount>", into = "Vec<MailAccount>")]
 pub struct Roster(Vec<MailAccount>);
@@ -346,7 +306,6 @@ impl From<Roster> for Vec<MailAccount> {
 }
 
 impl Roster {
-    /// Check a list of accounts into a roster, or say why it is not one.
     pub fn new(accounts: Vec<MailAccount>) -> Result<Self, RosterError> {
         let mut emails: BTreeSet<&str> = BTreeSet::new();
         let mut subdirs: BTreeSet<&str> = BTreeSet::new();
@@ -397,10 +356,8 @@ impl Roster {
         })
     }
 
-    /// The account with this canonical address.
-    ///
-    /// A filter naming an absent account is a refusal, not an empty page: the
-    /// two look identical and mean opposite things.
+    /// A filter naming an absent account is a refusal, not an empty page: the two look identical
+    /// and mean opposite things.
     #[must_use]
     pub fn named(&self, email: &str) -> Option<&MailAccount> {
         self.0
@@ -414,7 +371,6 @@ impl Roster {
         self.microsoft_named(email).map(|(_, account)| account)
     }
 
-    /// [`Roster::microsoft`], with the name a log line gives it.
     #[must_use]
     pub fn microsoft_named(&self, email: &str) -> Option<(AccountName, &MailAccount)> {
         self.names()
@@ -562,10 +518,6 @@ mod tests {
         assert_eq!(folder_slug("---"), "");
     }
 
-    // --- Sending -------------------------------------------------------------
-
-    /// Proton first: a Proton identity is also a send address, and only the
-    /// Bridge can send it.
     #[test]
     fn the_send_identity_resolves_proton_before_an_account_match() {
         let roster = Roster::new(vec![
@@ -624,8 +576,6 @@ mod tests {
         );
     }
 
-    /// An address the roster does not hold has no send path, and the roster
-    /// names the ones that exist.
     #[test]
     fn an_unknown_address_has_no_send_path_and_the_roster_says_which_do() {
         let roster = Roster::new(vec![

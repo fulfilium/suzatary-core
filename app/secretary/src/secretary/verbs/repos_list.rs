@@ -5,7 +5,6 @@ use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// The owner's repositories.
 pub struct ReposList;
 
 impl Verb for ReposList {

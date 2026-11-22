@@ -16,7 +16,6 @@ use suzatary_memory::secretary::memory::FactId;
 /// The field of a file reading that names the file's source.
 pub const SOURCE: &str = "source";
 
-/// One verb's answer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VerbAnswer {
     /// What it said, as JSON; a string is said as itself.
@@ -51,9 +50,6 @@ impl VerbAnswer {
     /// `source`, by which a draft's held values are checked against what this conversation read.
     /// The file itself rides on the answer, kept through `keep`; a withheld file answers with its
     /// placeholder and its text.
-    ///
-    /// # Errors
-    /// [`Refusal::internal`] when the file cannot be kept.
     pub fn reading(
         mut head: Map<String, Value>,
         source: &HeldFile,

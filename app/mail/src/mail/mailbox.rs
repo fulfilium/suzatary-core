@@ -8,11 +8,9 @@ use suzatary_held::mail_error::MailError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query(String);
 
-/// The longest query the corpus will be asked.
 pub const MAX_QUERY_CHARS: usize = 500;
 
 impl Query {
-    /// A query, or the reason this text is not one.
     pub fn new(text: impl Into<String>) -> Result<Self, MailError> {
         let text = text.into();
         let trimmed = text.trim();
@@ -30,7 +28,6 @@ impl Query {
         Ok(Self(trimmed.to_owned()))
     }
 
-    /// The query as the index reads it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -38,7 +35,6 @@ impl Query {
 }
 
 /// Reading the corpus, and only reading it; sending is a separate trait nothing the agent holds.
-///
 /// Every list takes a cap and a cursor because loading a message hashes every file it matches.
 pub trait Mailbox: Sync {
     /// Every account there is; a filter naming one absent from this is a refusal, never an empty

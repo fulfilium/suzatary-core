@@ -14,7 +14,6 @@ use suzatary_conversations::secretary::store::Stored;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::secretary::upload_standing::UploadStanding;
 
-/// One file that matched, on the turn it came in on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FileHit {
     /// Its id in the upload store, which `upload_read` opens and `propose_email` attaches.
@@ -25,13 +24,10 @@ pub struct FileHit {
     pub media: String,
     /// Where it is kept in the owner's Drive, for a file he kept private.
     pub private: Option<String>,
-    /// The conversation it was sent in.
     pub conversation: ConversationId,
-    /// That conversation's heading.
     pub title: String,
     /// The index of the turn that carried it, which a conversation opens at.
     pub turn: usize,
-    /// When it was sent.
     pub at: String,
     /// What the owner said on that turn, cut to `SAID_CHARS`.
     pub said: String,
@@ -57,11 +53,7 @@ pub fn named(conversations: &[Stored]) -> BTreeSet<AttachmentId> {
 }
 
 /// Bring `index` to the uploads the stored conversations name, answering how many it holds words
-/// of: what the box runs at startup, which indexes uploads stored before the index existed, and
-/// after an erasure, so an erased upload's words leave the index at once.
-///
-/// # Errors
-/// [`suzatary_base::refusal::Refusal::internal`] when the conversations or the index cannot be read.
+/// of; run at startup and after an erasure, so an erased upload's words leave the index at once.
 pub fn reindex(
     conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
     index: &dyn suzatary_held::upload_index::UploadIndex,
@@ -160,7 +152,6 @@ fn sent(
     })
 }
 
-/// The first [`SAID_CHARS`] characters of the owner's words, on one line.
 fn cut(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     around(&chars, 0, 0, SAID_CHARS)

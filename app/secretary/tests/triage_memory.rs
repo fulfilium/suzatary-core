@@ -1,15 +1,11 @@
-//! The triage agent reads the secretary's memory and never writes it. It reads mail anyone can
-//! send, so a verb on its surface that wrote a fact or a summary would let an email reach every
-//! later session. Its surface names no verb that writes the memory, and no call it can make adds,
-//! changes or deletes an object or a word in the memory's or the digest's stores. What it does
-//! write is a card: an inbox object and lines in the `triage` conversation (its opening, and the
-//! card drawn) that carry no words from mail; no line already held moves. What it reads, through
-//! `context`, `recall` and `zoom`, is the facts and the record in the owner's words alone: their
-//! own lines and the summaries of nothing but those.
+//! The triage agent reads the secretary's memory and never writes it: it reads mail anyone can
+//! send, so a verb that wrote a fact or a summary would let an email reach every later session.
+//! What it writes is a card carrying no words from mail; what it reads, through `context`,
+//! `recall` and `zoom`, is the facts and the record in the owner's words alone.
 //!
-//! Every test here builds the agent's memory over `store::Only`, stores that implement the read
-//! traits and nothing else, so the agent's record compiling over them is the proof that its type
-//! holds no way to write the memory, the digest or the lines.
+//! Every test builds the agent's memory over `store::Only`, stores that implement the read traits
+//! and nothing else, so the agent's record compiling over them proves its type holds no way to
+//! write the memory, the digest or the lines.
 
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -48,7 +44,6 @@ use suzatary_stores::stores::InMemory;
 use suzatary_stores::stores::conversations::InMemory as Lines;
 use suzatary_topics::secretary::filed::{TriageCards, triage_conversation};
 
-/// Each salt the next number.
 #[derive(Default)]
 struct Counting(AtomicU64);
 

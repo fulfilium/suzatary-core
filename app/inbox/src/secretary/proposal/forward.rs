@@ -10,8 +10,6 @@ use suzatary_held::held_value::Original;
 use suzatary_held::message_part::Attachment;
 use suzatary_mail::mail::StoredMessage;
 
-/// A forward as proposed: the message around the original, and the original by its record.
-///
 /// The record holds none of the original's words, so a held value in it leaves the box only in
 /// the bytes the tap reads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,15 +20,12 @@ pub struct Forward {
     pub to: Vec<String>,
     /// The visible copies.
     pub cc: Vec<String>,
-    /// The forward's own subject.
     pub subject: String,
     /// The note above the original, `""` for none.
     pub note: String,
-    /// The original.
     pub message: Forwarded,
 }
 
-/// How the original travels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Style {
@@ -41,7 +36,6 @@ pub enum Style {
 }
 
 impl Style {
-    /// Every style.
     pub const ALL: [Style; 2] = [Style::Inline, Style::Attached];
 
     /// The word its stored form and the verb's argument use.
@@ -61,7 +55,6 @@ prodrome_core::word_literal!(Style: Style::ALL => |style| style.as_str());
 pub struct Forwarded {
     /// Its file, recorded when proposed.
     pub file: StoredMessage,
-    /// How it travels.
     pub style: Style,
     /// Its sender, as the model read it.
     pub from: String,
@@ -71,10 +64,8 @@ pub struct Forwarded {
     pub date: Option<String>,
 }
 
-/// What an attached forward's file is called.
 pub const EML: &str = "forwarded.eml";
 
-/// The line an inline forward's original begins with.
 pub(crate) const SEPARATOR: &str = "---------- Forwarded message ----------";
 
 /// The headers an inline forward repeats, in this order.
@@ -131,12 +122,10 @@ impl Forward {
     }
 }
 
-/// `Forward(account, to, cc, subject, note, message)`.
 pub(crate) const FORWARD: Constructor = (
     "Forward",
     &["account", "to", "cc", "subject", "note", "message"],
 );
-/// `Forwarded(file, style, from, subject, date)`.
 pub(crate) const FORWARDED: Constructor =
     ("Forwarded", &["file", "style", "from", "subject", "date"]);
 

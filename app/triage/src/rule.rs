@@ -1,17 +1,12 @@
-//! The box's work as rules: "when a reading has property P, perform E under a `Decision`, record
-//! the outcome".
+//! The box's work as rules: a [`Rule`] is a predicate P on a reading of one key, and the outcome
+//! its interpreter records moves the reading and DISCHARGES the rule (the law each rule's tests
+//! state).
 //!
-//! A [`Rule`] is only P: a predicate on a reading of one key. What a rule performs is its
-//! interpreter's, and what it records is an object of the store it writes, so the outcome moves
-//! the reading and DISCHARGES the rule (the law each rule's tests state). A firing is memoised by
-//! the content name of the reading it fired on ([`ReadingName`]), so a second notice of one
-//! reading is the first (`Memo`); the memo that survives a restart is the store itself, since a
-//! recorded outcome leaves no reading on which P holds.
+//! A firing is memoised by the reading's content name ([`ReadingName`]); the memo that survives a
+//! restart is the store itself, since a recorded outcome leaves no reading on which P holds.
 //!
-//! The box's own rules write monotone records (a transcript's lines, a title, a disposition), so
-//! they run with no coordination through an [`Engine`], which holds only rules whose witness is
-//! `()`. A rule that performs an outward act is not monotone, so its witness is the owner's `Tap`
-//! and it runs under its store's `Decision`: a rule the box fires by itself can only PROPOSE it.
+//! A rule that performs an outward act is not monotone, so its witness is the owner's `Tap` and it
+//! runs under its store's `Decision`: a rule the box fires by itself can only PROPOSE it.
 
 mod engine;
 mod firing;
@@ -25,24 +20,18 @@ pub use reading_name::{Named, ReadingName};
 
 /// P over a reading of one key: whether the box owes that reading its effect.
 pub trait Rule {
-    /// What the rule is about: a conversation, a proposal, the mail queue.
     type Key: std::fmt::Display;
-    /// What it reads of one key, named by its content.
     type Reading: Named;
     /// What must be presented before it performs: `()` for the box's own work.
     type Witness;
 
-    /// Its name in a firing and a log line.
     fn name(&self) -> &'static str;
 
-    /// P: whether this reading calls for the effect, and false once the effect's outcome is
-    /// recorded. A function of the reading and of the rule's own fields: a rule an [`Engine`]
-    /// memoises reads nothing else, so its firing is a function of the reading's name.
+    /// P, false once the effect's outcome is recorded; a rule an [`Engine`] memoises reads only
+    /// the reading and its own fields, so its firing is a function of the reading's name.
     ///
-    /// The tap's rule is the one exception, and it is outside every memo: it reads the instant
-    /// it is fired at (an act's expired code stands again), which its reading's name leaves out,
-    /// and it runs only under its store's `Decision`, never through an engine. The fence is not
-    /// this doc: it is [`Engine`]'s `Witness = ()` bound and its compile-fail doctest.
+    /// The tap's rule reads the instant it is fired at, so it runs only under its store's
+    /// `Decision`, never through an engine; the fence is [`Engine`]'s `Witness = ()` bound.
     fn holds(&self, reading: &Self::Reading) -> bool;
 }
 
@@ -91,7 +80,6 @@ mod tests {
         }
     }
 
-    /// One step: someone writes an odd object, or the engine is told the store may have moved.
     #[derive(Debug, Clone, Copy)]
     enum Step {
         Write(u32),
@@ -138,8 +126,7 @@ mod tests {
 
     proptest::proptest! {
         /// A rule fires exactly once per reading that satisfies it, however often that reading
-        /// is noticed: every firing is on a distinct reading, and every noticed reading on which
-        /// P held was fired on.
+        /// is noticed.
         #[test]
         fn a_rule_fires_exactly_once_per_reading_that_satisfies_it(script in steps()) {
             for records in [true, false] {
@@ -152,8 +139,7 @@ mod tests {
             }
         }
 
-        /// A recorded outcome discharges the rule, so a fresh engine over the store (a restart,
-        /// with an empty memo) fires nothing on what was already answered.
+        /// A recorded outcome discharges the rule, so a restart fires nothing already answered.
         #[test]
         fn a_restart_refires_nothing_whose_outcome_is_recorded(script in steps()) {
             let mut script = script;
@@ -163,7 +149,6 @@ mod tests {
             proptest::prop_assert!(restarted.due(&"store", &store).is_none());
         }
 
-        /// A reading's name is a function of the set of names: order and repeats do not move it.
         #[test]
         fn a_readings_name_is_a_function_of_the_set(
             names in proptest::collection::vec("[a-f0-9]{1,8}", 0..12),
@@ -178,8 +163,7 @@ mod tests {
         }
     }
 
-    /// Two different sets are two names, the empty set included, and the boundary between names
-    /// is part of what is hashed.
+    /// The boundary between names is part of what is hashed.
     #[test]
     fn different_sets_are_different_names() {
         let empty = ReadingName::of(Vec::<String>::new());

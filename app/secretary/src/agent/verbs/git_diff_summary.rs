@@ -6,7 +6,6 @@ use crate::agent::{Holds, refused};
 use crate::verb::{NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// What is uncommitted.
 pub struct GitDiffSummary<S>(PhantomData<S>);
 
 impl<S: Holds> Verb for GitDiffSummary<S> {

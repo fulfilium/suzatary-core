@@ -12,7 +12,6 @@ use suzatary_base::refusal::Refusal;
 /// A todo's events, oldest first, its arguments spelled `A`.
 pub struct History<S, A>(PhantomData<(S, A)>);
 
-/// The todo whose events.
 #[derive(Deserialize, JsonSchema)]
 pub struct HistoryArgs {
     todo: String,

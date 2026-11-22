@@ -9,18 +9,15 @@ use crate::secretary::changes::{Act, Provenance};
 use suzatary_record::record::SubTodo;
 use suzatary_record::todo::{Patch, TodoFields, TodoPatch};
 
-/// An act with its pricing left out.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Request<'a> {
     /// A new todo, whatever it is priced at.
     Add {
         todo: &'a str,
-        /// The action line.
         body: &'a str,
         kind: &'a str,
         category: &'a str,
         detail: &'a str,
-        /// The blocker.
         waiting_on: &'a str,
         /// The message, the day and the parent.
         from: &'a Provenance,
@@ -28,21 +25,14 @@ pub enum Request<'a> {
     /// A change to a todo: the fields it names, and whether it moves the pricing at all.
     Update {
         todo: &'a str,
-        /// A new action line.
         body: &'a Patch<String>,
-        /// A new detail.
         detail: &'a Patch<String>,
         /// A paragraph under the detail.
         detail_append: &'a Patch<String>,
-        /// A new blocker.
         waiting_on: &'a Patch<String>,
-        /// Whether the blocker is cleared.
         clear_waiting_on: bool,
-        /// A new category.
         category: &'a Patch<String>,
-        /// A new checklist.
         subtodos: &'a Patch<Vec<SubTodo>>,
-        /// A deferral.
         defer_to: &'a Patch<NaiveDate>,
         /// Whether it reprices, to whatever.
         pricing: Pricing,
@@ -56,14 +46,11 @@ pub enum Request<'a> {
 /// Whether an update names a price or a rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pricing {
-    /// It leaves both as they are.
     Kept,
-    /// It names a price, a rationale, or both.
     Moved,
 }
 
 impl Act {
-    /// The request this act makes.
     #[must_use]
     pub fn request(&self) -> Request<'_> {
         match self {

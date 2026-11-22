@@ -56,10 +56,8 @@ impl Gate {
 
 /// Applies a changeset under the write lock, building and verifying every act before any append.
 ///
-/// Not a transaction: an append that fails leaves the earlier ones, and the refusal says how many.
-///
-/// # Errors
-/// [`Unapplied::Refused`] before the first append, [`Unapplied::Appending`] after it.
+/// Not a transaction: [`Unapplied::Refused`] means nothing landed, and [`Unapplied::Appending`]
+/// leaves the earlier appends and says how many.
 pub fn apply(
     caps: &Secretary<'_>,
     policy: &ChainPolicy,

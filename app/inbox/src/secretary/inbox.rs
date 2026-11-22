@@ -41,14 +41,12 @@ pub fn value(
     )
 }
 
-/// One proposal, as the inbox stores it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Asked {
     pub proposer: Proposer,
     /// The act, whole: what the card shows is what a submit performs.
     pub proposal: Proposal,
     pub reasons: Reasons,
-    /// Where it was first asked.
     pub asked: ProposalRef,
     pub price: Price,
 }
@@ -63,13 +61,11 @@ pub enum Price {
 }
 
 impl Price {
-    /// The empty term, whose value is `∅`.
     #[must_use]
     pub fn unpriced() -> Self {
         Price::Own(mk_absent())
     }
 
-    /// The todo it serves, if it serves one.
     #[must_use]
     pub fn serves(&self) -> Option<&TodoRef> {
         match self {
@@ -115,7 +111,7 @@ impl Price {
 }
 
 impl Asked {
-    /// Whether asking it again later is a new request.
+    /// Whether asking it again later is a new request; a box's proposal recurs only when episodic.
     #[must_use]
     pub fn recurs(&self) -> bool {
         self.proposal.recurs() && (self.proposer != Proposer::Box || self.proposal.episodic())
@@ -169,7 +165,6 @@ impl Asked {
     }
 }
 
-/// The secretary's asking, after the head.
 pub const ASKED: Constructor = (
     "Asked",
     &["act", "why", "sources", "asked", "serves", "spec"],
@@ -198,7 +193,6 @@ pub(crate) const RECURRING: prodrome_core::literal::codec::Constructor =
     ("Recurring", &["at", "act"]);
 
 impl Identity {
-    /// What `asked`, asked at `at`, is.
     #[must_use]
     pub fn of(asked: &Asked, at: Datetime) -> Self {
         if asked.recurs() {
@@ -258,7 +252,6 @@ impl From<ProposalId> for String {
 }
 
 impl ProposalId {
-    /// The id `asked`, asked at `at`, is stored under.
     #[must_use]
     pub fn of(asked: &Asked, at: Datetime) -> Self {
         Self::named(&ContentId::of(&Identity::of(asked, at)))
@@ -268,12 +261,10 @@ impl ProposalId {
         Self(TodoId::new(format!("p{}", &content.as_str()[..32])).expect("hex is a todo id"))
     }
 
-    /// Parse one read back off a conversation line.
     pub fn new(text: impl Into<String>) -> Result<Self, ProdromeError> {
         TodoId::new(text).map(Self)
     }
 
-    /// Its text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -303,7 +294,6 @@ impl std::fmt::Display for ProposalId {
     }
 }
 
-/// One proposal and what became of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object {
     pub id: ProposalId,
@@ -311,7 +301,6 @@ pub struct Object {
     pub asked: Asked,
     /// Every response, each after every one it descends from.
     pub responses: Vec<Responded>,
-    /// Its state register, read.
     pub reading: Reading,
     /// Its askings' price (`Least` of each), unlinked; an error costs only this proposal.
     pub price: Result<Term, FplError>,
@@ -346,7 +335,6 @@ pub struct Check {
 }
 
 impl Check {
-    /// What the performer knew of the send it checks.
     #[must_use]
     pub fn reason(&self) -> &str {
         &self.reason
@@ -457,7 +445,6 @@ fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
 }
 
 impl Fold {
-    /// Read every proposal's registers off the store's objects.
     #[must_use]
     pub fn of(nodes: &[Node<InboxEvent>]) -> Self {
         let folded = prodrome_core::registers::fold(nodes);
@@ -495,13 +482,11 @@ impl Fold {
         Self::of(&nodes)
     }
 
-    /// One proposal.
     #[must_use]
     pub fn get(&self, id: &ProposalId) -> Option<&Object> {
         self.objects.get(id)
     }
 
-    /// Every proposal, by id.
     pub fn objects(&self) -> impl Iterator<Item = &Object> {
         self.objects.values()
     }
@@ -586,7 +571,6 @@ impl Fold {
     }
 }
 
-/// What a transition answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     /// Recorded by this call.
@@ -620,10 +604,8 @@ impl Fold {
     }
 }
 
-/// What a transition does with one proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
-    /// Record this response.
     Record(Responded),
     /// Record nothing, and answer the reading as it stands.
     Answer,
@@ -665,7 +647,6 @@ pub(crate) fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
     }
 }
 
-/// Read the inbox.
 pub fn fold<C: Prodrome<InboxEvent> + ?Sized>(caps: &C) -> Result<Fold, Refusal> {
     Ok(Fold::of(&caps.nodes()?))
 }
@@ -959,7 +940,6 @@ mod tests {
         );
     }
 
-    /// A draft with an attachment is a different act, so a different id.
     #[test]
     fn an_attachment_is_part_of_the_act() {
         let plain = asked("a");
@@ -1047,9 +1027,8 @@ mod tests {
         assert_eq!(back, event);
     }
 
-    /// A plugin's proposal is a kind of its own, `Offered`, naming the plugin in a field; the
-    /// secretary's still prints `Asked`, so no stored proposal moved. Who asked is not the act,
-    /// so the same act is the same proposal whoever asked for it.
+    /// A plugin's proposal is a kind of its own, `Offered`, naming the plugin in a field; who
+    /// asked is not the act, so the same act is the same proposal whoever asked for it.
     #[test]
     fn a_plugins_proposal_is_offered_naming_it_and_reads_back() {
         let offered = Asked {
@@ -1079,9 +1058,8 @@ mod tests {
         );
     }
 
-    /// The box's own proposal prints `Noticed` and reads back; asked of the store's unlocking, an
-    /// act that recurs when the secretary asks it and has no episodes, its name is its content
-    /// alone, so the box asking again at another instant is the same proposal.
+    /// The box's own proposal prints `Noticed` and reads back, and the box asking again at
+    /// another instant is the same proposal.
     #[test]
     fn the_boxs_proposal_is_noticed_and_named_by_its_content() {
         let act = Proposal::Act(crate::secretary::acts::Act::UnlockStore { after: None });
@@ -1165,9 +1143,8 @@ mod tests {
         assert!(checked.unasked().is_empty() && checked.get(&id).is_some());
     }
 
-    /// Each transition's step is a function of the object alone, read here off folds and never a
-    /// store: a no while nothing completed it, a check over a send that may have gone, and a
-    /// flow's end over a running one.
+    /// Each transition's step is a function of the object alone, read off folds and never a
+    /// store.
     #[test]
     fn every_step_is_a_function_of_the_object() {
         let id = ProposalId::of(&asked("a"), at(0));

@@ -22,7 +22,6 @@ pub struct ReadHolders {
 }
 
 impl ReadHolders {
-    /// The holders `stored`'s answers name.
     #[must_use]
     pub fn of(stored: &Stored) -> Self {
         let mut read = Self::default();
@@ -72,7 +71,6 @@ impl ReadHolders {
         }
     }
 
-    /// Whether a file reader answered `file` in this conversation.
     #[must_use]
     pub(crate) fn reads_file(&self, file: &HeldFile) -> bool {
         self.files.contains(file)

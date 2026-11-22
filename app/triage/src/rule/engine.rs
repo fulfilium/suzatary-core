@@ -1,5 +1,3 @@
-//! The engine: the box's own rules over one key space, each fired once per reading.
-
 use crate::rule::{Firing, Memo, Rule};
 
 /// Rules over one kind of key and reading, tried in the order declared, sharing one `Memo`.
@@ -55,7 +53,6 @@ pub struct Engine<R: Rule<Witness = ()>> {
 }
 
 impl<R: Rule<Witness = ()> + Clone> Engine<R> {
-    /// These rules, with nothing fired yet.
     #[must_use]
     pub fn new(rules: Vec<R>) -> Self {
         Self {

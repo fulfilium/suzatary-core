@@ -1,6 +1,5 @@
-//! An account's canonical address: an [`EmailAddress`] spelled in lower case, so two accounts
-//! cannot claim one mailbox by its case, and the address every per-account name is derived from
-//! has one spelling.
+//! An account's canonical address, in lower case, so two accounts cannot claim one mailbox by
+//! its case.
 
 use std::fmt;
 
@@ -9,16 +8,13 @@ use serde::{Deserialize, Serialize};
 use crate::mail::account::RosterError;
 use crate::mail::address::EmailAddress;
 
-/// An account's address, in lower case.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct AccountEmail(EmailAddress);
 
 impl AccountEmail {
-    /// Parse one.
-    ///
     /// An address with a capital is refused rather than folded: the token files and health
-    /// registers are named by the address as written, so folding it here would orphan them.
+    /// registers are named by the address as written, so folding it would orphan them.
     pub fn new(text: &str) -> Result<Self, RosterError> {
         let address = EmailAddress::new(text).map_err(|_| RosterError::Email(text.to_owned()))?;
         let folded = address.lowercased();
@@ -37,13 +33,11 @@ impl AccountEmail {
         Self(address.lowercased())
     }
 
-    /// The address, as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
 
-    /// The address.
     #[must_use]
     pub const fn address(&self) -> &EmailAddress {
         &self.0

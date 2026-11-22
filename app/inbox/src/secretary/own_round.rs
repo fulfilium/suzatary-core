@@ -3,7 +3,6 @@
 
 use suzatary_base::conversation_id::Daily;
 
-/// A round whose question the box writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OwnRound {
     /// The daily review of the triage agent's open cards.

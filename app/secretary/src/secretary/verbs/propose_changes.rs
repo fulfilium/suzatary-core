@@ -87,9 +87,6 @@ impl Verb for ProposeChanges {
 
 /// Build `changeset` against the chain as the tap will build it, appending nothing, so a card
 /// the chain would refuse is refused while it is fixable.
-///
-/// # Errors
-/// The builders' refusal of an act, and the chain's failure to read.
 pub(crate) fn check(call: &Call<'_>, changeset: &Changeset) -> Result<(), Refusal> {
     let known: Vec<&str> = call
         .deployment

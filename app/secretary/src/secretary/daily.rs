@@ -14,7 +14,6 @@ use suzatary_memory::secretary::words::Words;
 /// opened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Round {
-    /// Today's conversation of the round.
     pub id: ConversationId,
     daily: Daily,
     held: Option<Stored>,
@@ -24,17 +23,12 @@ pub struct Round {
 /// case the round wrote nothing and asked the model nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Run<T> {
-    /// It ran, to this.
     Done(T),
-    /// It did not start.
     Paused(suzatary_health::health::Limited),
 }
 
 /// Today's round of `daily`, unless the model is under a limit now: the one check every box
 /// round makes before it writes its question, so a limit fills no conversation with failures.
-///
-/// # Errors
-/// As [`daily_round`].
 pub fn begin(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Run<Round>, Refusal> {
     match caps.model.limited() {
         Some(limited) => Ok(Run::Paused(limited)),
@@ -42,10 +36,8 @@ pub fn begin(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Run<Round
     }
 }
 
-/// Today's round of `daily`, in `zone`'s day: its conversation read when it exists.
-///
-/// # Errors
-/// A conversation that exists and does not read, which is never read as one never opened.
+/// Today's round of `daily`, in `zone`'s day; a conversation that exists and does not read is an
+/// error, never one never opened.
 pub fn daily_round(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Round, Refusal> {
     let today = zone.day(prodrome_core::fpl::instant_of(caps.clock.now()));
     let id = ConversationId::daily(daily, today);
@@ -71,9 +63,6 @@ impl Round {
     }
 
     /// The conversation, opened first when it was not: what a day with work goes on in.
-    ///
-    /// # Errors
-    /// The store's own.
     pub fn open(self, caps: &Secretary<'_>) -> Result<Stored, Refusal> {
         match self.held {
             Some(stored) => Ok(stored),

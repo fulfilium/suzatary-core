@@ -71,9 +71,8 @@ impl Verb for Remember {
             .caps
             .memories
             .remember(&fact, kind, &said, call.caps.clock.now())?;
-        // The id, never the words: an answer is a conversation line that outlives a forget. The
-        // id rides on the turn's shape too, as its receipt, which reads the words from the memory
-        // by it and still reads once the answer's words are erased.
+        // The id, never the words: an answer is a conversation line that outlives a forget, and
+        // the turn's receipt reads the words from the memory by it.
         Ok(VerbAnswer {
             remembered: Some(remembered.id),
             ..VerbAnswer::from(json!({

@@ -1,10 +1,8 @@
 //! A mail query as the owner's files are matched by it: the plain words, `word*` prefixes and
 //! quoted phrases notmuch reads, case-folded and every one required, as notmuch requires them.
-//!
-//! A file has no sender, date or folder, so a query that names a notmuch field, or joins terms
-//! with an operator, is not one a file can answer, and the search says so rather than match a
-//! different question. Notmuch also stems English words (`permits` finds `permit`); a file's
-//! words are matched whole, which a `word*` prefix makes up for.
+//! A file has no sender, date or folder, so a query naming a field or an operator is refused
+//! rather than matched as another question; notmuch stems English words and a file's words match
+//! whole, which a `word*` prefix makes up for.
 
 use suzatary_conversations::secretary::search::fold;
 use suzatary_mail::mail::mailbox::Query;
@@ -20,31 +18,23 @@ struct Phrase(Vec<Word>);
 /// One word of a phrase, case-folded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Word {
-    /// Matches this word and no other.
     Whole(String),
     /// Matches every word that starts with this, as `lease*` does.
     Starting(String),
 }
 
-/// A query no file can answer.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Unanswerable {
-    /// It names a field only mail has, such as `from:` or `date:`.
     #[error("`{0}:` is a field of mail, which a file does not have")]
     Field(String),
-    /// It joins its terms with a notmuch operator.
     #[error("`{0}` is a notmuch operator; a file is matched when it holds every word")]
     Operator(String),
-    /// It holds no word, only punctuation.
     #[error("the query holds no word a file could match")]
     NoWords,
 }
 
 impl FileQuery {
     /// Read `query` as notmuch reads its free text.
-    ///
-    /// # Errors
-    /// [`Unanswerable`], naming the first term no file can match.
     pub fn of(query: &Query) -> Result<Self, Unanswerable> {
         let mut phrases = Vec::new();
         for term in terms(query.as_str()) {
@@ -79,7 +69,6 @@ impl FileQuery {
 }
 
 impl Phrase {
-    /// Whether these words open with this phrase.
     fn matches(&self, words: &[Span]) -> bool {
         words.len() >= self.0.len()
             && self.0.iter().zip(words).all(|(word, span)| match word {
@@ -89,11 +78,9 @@ impl Phrase {
     }
 }
 
-/// One term of a query as typed.
 enum Term {
     /// Inside double quotes: a phrase.
     Quoted(String),
-    /// Between spaces.
     Bare(String),
 }
 
@@ -187,7 +174,6 @@ fn spans(text: &str) -> Vec<Span> {
     spans
 }
 
-/// The case-folded words of `text`.
 fn words(text: &str) -> impl Iterator<Item = String> {
     spans(text).into_iter().map(|span| span.folded)
 }

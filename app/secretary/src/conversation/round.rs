@@ -24,15 +24,11 @@ use suzatary_lines::secretary::transcript::Retry;
 /// Who says the turn that ends an exchange the model did not finish.
 const BOX: &str = "the box";
 
-/// One exchange's state: what the last ask sent, the calls its reply made, every line the round
-/// appended, in order, and how many times it asked.
 #[derive(Debug, Default)]
 pub struct Round {
-    /// What the last ask sent the model.
     pub sent: Option<Sent>,
     /// The calls the last reply made, in the order it made them.
     pub calls: Vec<ToolCall>,
-    /// Every line this round appended.
     pub appended: Vec<Entry>,
     /// How many times the model was asked.
     pub steps: usize,
@@ -40,20 +36,16 @@ pub struct Round {
 
 /// Everything that differs between the rounds of different callers.
 pub struct Rules<'a> {
-    /// How the model is asked.
     pub ask: Ask<'a>,
-    /// The manual it works under.
     pub system: &'a str,
-    /// The verbs it is shown and may call.
     pub verbs: &'a Subset,
     /// Runs one call of a verb in `verbs`; a refusal is written down as the call's answer.
     pub run: &'a Run<'a>,
     /// How many times the model may be asked.
     pub bound: usize,
-    /// What the round streams, and the stop it obeys.
     pub sink: &'a Sink<'a>,
-    /// Runs once something waits, before the model is first asked: the secretary loads what the
-    /// question points at. A refusal ends the round like any other, with the box's words.
+    /// Runs once something waits, before the model is first asked; a refusal ends the round like
+    /// any other, with the box's words.
     pub load: &'a Load<'a>,
     /// Whether a round a lost run left may be claimed again: not while the model is failing.
     pub retry: Retry,
@@ -65,13 +57,10 @@ pub struct Rules<'a> {
 /// Runs one call of a verb the round's surface lists, read whole.
 pub type Run<'a> = dyn Fn(Request<SecretaryCall>) -> Result<VerbAnswer, Refusal> + 'a;
 
-/// What a round does before it first asks the model.
 pub type Load<'a> = dyn Fn() -> Result<(), Refusal> + 'a;
 
-/// Loads nothing, for a round whose question points at nothing.
 pub const LOAD_NOTHING: &Load<'static> = &|| Ok(());
 
-/// What a round feeds as it goes, and the stop it obeys.
 pub struct Sink<'a> {
     /// Each fragment of a resumed session's reply, verbatim, as it arrives.
     pub on_delta: &'a dyn Fn(&str),
@@ -83,7 +72,6 @@ pub struct Sink<'a> {
 }
 
 impl<'a> Sink<'a> {
-    /// Streams nothing, for a caller nobody watches.
     #[must_use]
     pub fn quiet(halt: &'a Halt) -> Self {
         fn nothing(_: &str) {}
@@ -98,11 +86,8 @@ impl<'a> Sink<'a> {
 /// The one conversation a round reads and appends to, and the clock that stamps its lines.
 #[derive(Clone, Copy)]
 pub struct Transcript<'a> {
-    /// The store.
     pub conversations: conversations::Conversations<'a>,
-    /// Stamps each line.
     pub clock: &'a dyn Clock,
-    /// The conversation.
     pub id: &'a ConversationId,
 }
 
@@ -110,9 +95,7 @@ pub struct Transcript<'a> {
 /// round's last line is the box's, written from its [`Why`] by [`Round::answer`] alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ending {
-    /// The model's last turn answered the owner in words.
     Answered,
-    /// The round stopped short of an answer, and the box said why in the conversation's last line.
     Ended {
         /// Why it stopped.
         why: Why,
@@ -123,9 +106,6 @@ impl Ending {
     /// For a job nobody reads as a conversation (a review, a sweep): `Err` when the round never
     /// had a working model or store, so the job fails as it should; a silent model, the bound
     /// and a stop are endings it records, not failures.
-    ///
-    /// # Errors
-    /// The model's failure as a refusal, or the store's own.
     pub fn ran(&self) -> Result<(), Refusal> {
         match self {
             Ending::Answered
@@ -142,14 +122,11 @@ impl Ending {
     }
 }
 
-/// Why a round stopped short of the model's answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Why {
     /// The model failed when asked. `after` is the verb whose answer it was asked about, if any.
     Model {
-        /// How it failed.
         failed: ModelError,
-        /// The verb that answered last before the ask.
         after: Option<ToolName>,
     },
     /// The model replied with no words and no call. `after` is as for [`Why::Model`].
@@ -250,23 +227,16 @@ enum Ran {
 /// A round that ran: what it appended and how it ended.
 #[derive(Debug)]
 pub struct Closed {
-    /// The round's lines and steps.
     pub round: Round,
-    /// How it ended.
     pub ending: Ending,
 }
 
 impl Round {
     /// Answer what waits in the conversation; `None` when nothing does, and no model is asked.
     ///
-    /// The round draws a run and claims what it answers under the lines' lock before it spends
-    /// anything ([`transcript::claim`]): one run answers a turn at a time, and a run lost with
-    /// its round open is retried once, then closed by the box. A round that ran ends on the
-    /// model's answer or on the box's line saying why it did not, so the conversation never ends
-    /// on a call or a verb's answer; a stop in one write.
-    ///
-    /// # Errors
-    /// The store's, when it refuses the claim or the box's closing line.
+    /// The round claims what it answers under the lines' lock before it spends anything
+    /// ([`transcript::claim`]), so one run answers a turn at a time, and a run lost with its round
+    /// open is retried once, then closed by the box; the conversation never ends on a call.
     pub fn answer(rules: &Rules<'_>, at: &Transcript<'_>) -> Result<Option<Closed>, Refusal> {
         let held = at.conversations.runs.begin()?;
         let run = &held.run;
@@ -305,8 +275,6 @@ impl Round {
         Ok(Some(Closed { round, ending }))
     }
 
-    /// Step until the model answers what the round of `run` covers without a call, or say why it
-    /// did not.
     fn run(&mut self, rules: &Rules<'_>, at: &Transcript<'_>, run: &RunId) -> Result<Ran, Why> {
         let tools = rules.verbs.tools();
         loop {
@@ -435,8 +403,7 @@ impl Round {
         )
     }
 
-    /// The lines that end the round of `run` short of an answer, while it is open. A stop is its
-    /// own line; every other ending is [`closing`]'s.
+    /// The lines that end the round of `run` short of an answer, while it is open.
     fn close(
         &mut self,
         at: &Transcript<'_>,

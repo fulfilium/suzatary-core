@@ -14,7 +14,6 @@ pub enum Wake {
     TimedOut,
 }
 
-/// What the driver does next, after one watch attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     /// Re-issue IDLE at once — the periodic renewal, with nothing to report.
@@ -25,8 +24,6 @@ pub enum Step {
     Reconnect(Duration),
 }
 
-/// Decide the next [`Step`] from one watch attempt's outcome.
-///
 /// `attempt` is the caller's reconnect counter, reset to 0 by any successful
 /// watch, so a recovered connection starts `backoff`'s schedule over.
 #[must_use]
@@ -41,15 +38,13 @@ pub fn after(outcome: Result<Wake, ()>, attempt: u32) -> (Step, u32) {
     }
 }
 
-/// How long to wait after a failure, and the next attempt's counter.
 #[must_use]
 pub fn after_failure(attempt: u32) -> (Duration, u32) {
     (backoff(attempt), attempt.saturating_add(1))
 }
 
-/// Reconnect backoff: five seconds, doubling, never past five minutes.
-///
-/// The shift is capped at 6 (already past the ceiling) so it cannot overflow.
+/// Reconnect backoff: five seconds, doubling, never past five minutes; the shift is capped at 6
+/// so it cannot overflow.
 #[must_use]
 pub(crate) fn backoff(attempt: u32) -> Duration {
     let seconds = 5u64.saturating_mul(1u64 << attempt.min(6));
@@ -65,7 +60,6 @@ pub struct Debounce {
 }
 
 impl Debounce {
-    /// A debounce that fires `window` after its first wake.
     #[must_use]
     pub fn new(window: Duration) -> Self {
         Self { window, open: None }
@@ -82,7 +76,6 @@ impl Debounce {
         }
     }
 
-    /// When the open window's deadline is, if one is open.
     #[must_use]
     pub fn deadline(&self) -> Option<Instant> {
         self.open.map(|opened| opened + self.window)
@@ -107,9 +100,6 @@ mod tests {
 
     use super::*;
 
-    // --- Debounce --------------------------------------------------------
-
-    /// Wakes inside an open window are absorbed; the deadline does not move.
     #[test]
     fn wakes_inside_an_open_window_are_absorbed_and_extend_nothing() {
         let mut debounce = Debounce::new(Duration::from_secs(30));
@@ -126,8 +116,6 @@ mod tests {
         );
     }
 
-    /// The window's end fires once: not before the deadline, once at it, then
-    /// silent.
     #[test]
     fn the_window_fires_once_at_its_end() {
         let mut debounce = Debounce::new(Duration::from_secs(30));
@@ -149,7 +137,6 @@ mod tests {
         assert_eq!(debounce.deadline(), None);
     }
 
-    /// A wake after firing opens a fresh window, on its own new deadline.
     #[test]
     fn a_wake_after_firing_opens_a_fresh_window() {
         let mut debounce = Debounce::new(Duration::from_secs(30));
@@ -161,8 +148,6 @@ mod tests {
         assert!(debounce.wake(second), "a fresh window, not absorbed");
         assert_eq!(debounce.deadline(), Some(second + Duration::from_secs(30)));
     }
-
-    // --- after: the IDLE state machine, sans I/O ----------------------------
 
     fn outcome() -> impl Strategy<Value = Result<Wake, ()>> {
         prop_oneof![

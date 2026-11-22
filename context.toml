@@ -57,7 +57,8 @@ reading = 3166903
 [ratchet.use]
 # 2026-11-21: `cli` written as `scripts/context.sh record` would write it, by hand, on the tree merged with 2.1.197 for the server's move (#583: 82,011 on that tree before it, 59,350 after), since `record` refuses while `lines` stands above its USE ratchet there, as on origin/master.
 cli = 59350
-inbox = 33529
+# 2026-11-22: `inbox` and `secretary` lowered as `scripts/context.sh record` would, by hand on this pull request's head merged with 2.1.211 (comments cut, `commentdiet`), since `record` refuses while `io` stands above its USE ratchet there, as on origin/master.
+inbox = 29095
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.
 io = 53169
 # 2026-11-19: `lines` raised by hand to the figure of #547's head (the rule's `World` and `Upload`, `Whole`, `Sealing::{Say, Stop}`, the transcript's `queued`, `state`, `turn_lines` and `Confirms`, `own_taken`; at its review the rule's clock and parents and `replies_to`; at its second the rule's view of a line and `whole`; at its third the fold's `take` and `Writes::waiting`), at its head merged with 2.1.181; accepted at the review of #547.
@@ -66,7 +67,7 @@ io = 53169
 # 2026-11-22: `lines` lowered and `conversations` and `digest` removed as `scripts/context.sh record` would, by hand on this pull request's head (comments cut, `commentdiet`), since `record` refuses while `inbox` and `io` stand above their USE ratchets there, as on origin/master.
 lines = 41150
 # 2026-11-19: the stores' table left the secretary for `suzatary-stores`, lowered by hand; still over the line, and the plan names the further cut (the triage agent).
-secretary = 33324
+secretary = 28077
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.

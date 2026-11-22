@@ -1,8 +1,7 @@
 //! The open list, swept: for each open todo, the later mail that plausibly bears on it, with why
 //! it was found typed.
-//!
-//! Searches are built from what mail carries (the source and body referents), never the todo's id,
-//! and age never gates; this module reads no clock and writes nothing.
+//! Searches use what mail carries, never the todo's id, and age never gates; this module reads
+//! no clock and writes nothing.
 
 use std::sync::LazyLock;
 
@@ -22,11 +21,9 @@ pub(crate) type MessageHash = MailHash;
 /// module never reads the chain.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenTodo {
-    /// The todo's id.
     pub id: TodoId,
-    /// The floor every candidate's message must be strictly after: the start of the day it was
-    /// created, or its latest trusted reopen when that is later, so a reopen stands until mail
-    /// newer than it arrives.
+    /// The floor every candidate's message must be strictly after: its created day's start, or its
+    /// latest trusted reopen when later, so a reopen stands until newer mail arrives.
     pub since: Datetime,
     /// The message it came from; `None` for a todo typed by hand, which then searches only its
     /// referents.
@@ -47,7 +44,6 @@ pub enum Referent {
 }
 
 impl Referent {
-    /// The text [`queries_for`] hands the corpus for this referent.
     fn query_term(&self) -> String {
         match self {
             Referent::Code(text) | Referent::Flight(text) => text.clone(),
@@ -57,39 +53,30 @@ impl Referent {
     }
 }
 
-/// Why a message was found.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Match {
     /// Found by `thread:<id>`, the conversation the todo came from.
     SameThread,
     /// Found by `from:<address>`, the same sender.
     SameSender,
-    /// Found by a referent the todo's body names.
     NamesReferent(Referent),
 }
 
 /// A later message that plausibly bears on one open todo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
-    /// The todo it might bear on.
     pub todo: TodoId,
-    /// The message it rests on.
     pub message: MessageHash,
     /// When that message arrived, always strictly after the todo's `since`.
     pub at: Datetime,
-    /// Why it was found.
     pub matched: Match,
 }
 
-/// [`candidates`] refused.
 #[derive(Debug, thiserror::Error)]
 pub enum SweepError {
-    /// The corpus itself refused a search this function built.
     #[error("searching for todo:{todo}: {source}")]
     Corpus {
-        /// Which todo the search was for.
         todo: String,
-        /// The corpus's own refusal.
         #[source]
         source: CorpusError,
     },
@@ -237,9 +224,6 @@ fn parse_shown_timestamp(text: &str) -> Option<Datetime> {
 }
 
 /// For every open todo, the later mail that plausibly bears on it; proposes and writes nothing.
-///
-/// # Errors
-/// The corpus refused a search.
 pub fn candidates(
     open: &[OpenTodo],
     corpus: &dyn Corpus,

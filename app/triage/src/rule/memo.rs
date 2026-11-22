@@ -1,13 +1,9 @@
-//! The firings a process has made: the grow-only set that makes a duplicate notice idempotent.
-
 use std::collections::BTreeSet;
 
 use crate::rule::{Firing, Named, Rule};
 
-/// Every firing made, a grow-only set; a rule is due on a reading at most once.
-///
-/// It lives in memory and is lost with the process. That is enough because the store is the
-/// memo that lasts: a rule's recorded outcome moves its reading to one where P no longer holds.
+/// Every firing made, in memory only: enough, because the store is the memo that lasts, a
+/// recorded outcome moving its reading to one where P no longer holds.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Memo(BTreeSet<Firing>);
 

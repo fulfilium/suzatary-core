@@ -7,7 +7,6 @@ use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_triage::mail::state::Decision;
 
-/// Record a decision about a message.
 pub struct Mark;
 
 #[derive(Deserialize, JsonSchema)]

@@ -1,16 +1,12 @@
-//! A reading's content name: what a rule's firing is memoised by.
-
 use sha2::{Digest, Sha256};
 
-/// The name of a reading: the hash of the set of object names it is a function of (a store's
-/// heads, a queue's message hashes), so two replicas holding the same objects name one reading,
-/// whatever order the objects arrived in.
+/// The hash of the set of object names a reading is a function of, so two replicas holding the
+/// same objects name one reading, whatever order the objects arrived in.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ReadingName(String);
 
 impl ReadingName {
-    /// The name of the set `names`: sorted, each once, each length-prefixed so no two sets share
-    /// a print.
+    /// Each name once, length-prefixed so no two sets share a print.
     #[must_use]
     pub fn of<I>(names: I) -> Self
     where
@@ -31,7 +27,6 @@ impl ReadingName {
         Self(hex::encode(hash.finalize()))
     }
 
-    /// The hex digest.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -45,8 +40,7 @@ impl std::fmt::Display for ReadingName {
     }
 }
 
-/// A reading that names itself by its content.
 pub trait Named {
-    /// Its name: a function of the objects it reads, never of when or how they were read.
+    /// A function of the objects it reads, never of when or how they were read.
     fn name(&self) -> ReadingName;
 }

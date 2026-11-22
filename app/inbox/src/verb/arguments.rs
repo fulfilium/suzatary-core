@@ -9,7 +9,6 @@ use serde_json::{Map, Value};
 
 use suzatary_base::refusal::Refusal;
 
-/// A call's arguments, as the model sent them.
 struct Arguments<'a> {
     map: &'a Map<String, Value>,
     /// The arguments the schema lets be absent.
@@ -18,9 +17,6 @@ struct Arguments<'a> {
 
 /// Read `map` as `A`. A null is absent where the schema lets the argument be absent or `A` holds
 /// it in an `Option`, and given where neither; an argument `A` does not name is ignored.
-///
-/// # Errors
-/// [`Refusal::bad_request`] naming the first argument that is missing or of the wrong type.
 pub fn parse<A: DeserializeOwned + JsonSchema>(map: &Map<String, Value>) -> Result<A, Refusal> {
     let optional = optional::<A>();
     A::deserialize(Arguments {
@@ -49,7 +45,6 @@ fn optional<A: JsonSchema>() -> BTreeSet<String> {
         .collect()
 }
 
-/// Why an argument was refused.
 #[derive(Debug)]
 struct Fault(Refusal);
 
@@ -177,7 +172,7 @@ impl<'de> de::Deserializer<'de> for Argument<'_> {
         self.deserialize_str(visitor)
     }
 
-    // Every integer argument has always been refused in these two sentences, required or not.
+    // Every integer argument is refused in these two sentences, required or not.
     fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Fault> {
         match self.value {
             Value::Number(number) => match number.as_u64() {

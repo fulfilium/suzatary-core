@@ -1,17 +1,12 @@
 //! Where a proposal's machine stands, as its state register orders it: further along is greater.
 //!
-//! Standing is the register unwritten, below every write. Each try that did not settle it is an
-//! [`Phase::Trying`] numbered by its attempt, so a retry is a step up even where the code goes
-//! from a running flow back to "not sent" and from "not sent" to a running flow again; without the
-//! number those two would sit above each other. Every try is below every settled phase, which is
-//! what retrying and then settling needs, and a send that may have gone is below its check. A
-//! withdrawal by the box or the secretary is below the owner's no, so the two closings written
-//! apart settle as his no, with his words. The settled phases are otherwise pairwise
-//! incomparable, so two devices that settled one proposal two ways read as a conflict and never as
-//! a winner.
-//!
-//! A check is above every try too, as transitivity demands, yet it stands only on the send it
-//! checks: that is its [`Phase::floor`], which the order cannot say and the append asks.
+//! Each try is a [`Phase::Trying`] numbered by its attempt, so a retry is a step up even between a
+//! running flow and "not sent"; every try is below every settled phase, and a send that may have
+//! gone is below its check. A withdrawal by the box or the secretary is below the owner's no, so
+//! the two closings written apart settle as his no, with his words. The settled phases are
+//! otherwise pairwise incomparable, so two devices that settled one proposal two ways read as a
+//! conflict and never as a winner. A check stands only on the send it checks: that is its
+//! [`Phase::floor`], which the order cannot say and the append asks.
 
 use prodrome_core::fold::{Inflationary, Order};
 use serde::Serialize;
@@ -29,17 +24,13 @@ pub enum Phase {
         /// A device-code flow was issued and runs; otherwise nothing was sent.
         running: bool,
     },
-    /// The far end took the mail.
     Sent,
-    /// The changeset's acts are on the chain.
     Applied,
-    /// The box's act ran to completion.
     Acted,
     /// It may have happened; never performed again.
     MayHaveGone,
     /// The owner checked a send that may have gone.
     Checked,
-    /// The owner said no.
     Dismissed,
     /// The box or the secretary took it back before anyone answered it: below the owner's no.
     Withdrawn,

@@ -6,7 +6,6 @@ use crate::agent::{Holds, reads};
 use crate::verb::{Chained, NoArgs, Verb};
 use suzatary_base::refusal::Refusal;
 
-/// One chain's open todos.
 pub struct ListOpenTodos<S>(PhantomData<S>);
 
 impl<S: Holds> Verb for ListOpenTodos<S> {

@@ -33,9 +33,6 @@ pub const PRICE_SPELLINGS: &str = "a price is ONE of `priority`, `deadline_end_d
 
 impl Priced {
     /// The one price the call names, if any; two are refused, since a todo holds one.
-    ///
-    /// # Errors
-    /// A part of the wrong type, a bad percentage or day, a cycle missing an end, or two prices.
     pub fn price(&self) -> Result<Option<Price>, Refusal> {
         let flat = match self.priority.read()? {
             None => None,

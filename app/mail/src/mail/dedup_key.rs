@@ -1,7 +1,6 @@
-//! The box's dedup key: what `state.json` names a message by. The content hash is a public
-//! function of a message's bytes, so a file keyed by it would tell anyone who holds a message
-//! whether this box received it; [`DedupKey::name`] is an HMAC-SHA256 of that hash under a
-//! secret only the box holds.
+//! The box's dedup key: a file keyed by the public content hash would tell anyone who holds a
+//! message whether this box received it, so [`DedupKey::name`] is an HMAC-SHA256 of that hash
+//! under a secret only the box holds.
 
 use hmac::{Hmac, Mac as _};
 use serde::{Deserialize, Serialize};
@@ -34,9 +33,6 @@ impl DedupKey {
     }
 
     /// What the pushed file names the message whose canonical hash is `hash` by.
-    ///
-    /// # Panics
-    /// Never: HMAC takes a key of any length.
     #[must_use]
     pub fn name(&self, hash: &str) -> Keyed {
         let mut mac = Hmac::<Sha256>::new_from_slice(&self.0).expect("HMAC takes any key length");
@@ -58,7 +54,6 @@ impl std::fmt::Debug for DedupKey {
 pub struct Keyed(String);
 
 impl Keyed {
-    /// Its spelling.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -115,7 +110,6 @@ mod tests {
     }
 
     proptest! {
-        /// One key names one hash one way; another key, or another hash, names it otherwise.
         #[test]
         fn names_are_a_function_of_the_key_and_the_hash(hash in "[0-9a-f]{64}", other in "[0-9a-f]{64}") {
             prop_assert_eq!(key(1).name(&hash), key(1).name(&hash));

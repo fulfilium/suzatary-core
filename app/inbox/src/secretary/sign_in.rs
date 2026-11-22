@@ -13,10 +13,7 @@ use suzatary_base::capability::Secret;
 pub struct SignInUrl(String);
 
 impl SignInUrl {
-    /// Parse one.
-    ///
-    /// # Errors
-    /// [`NotASignIn`] for another scheme, no host, userinfo, a port, or whitespace.
+    /// Refuses another scheme, no host, userinfo, a port, or whitespace.
     pub fn parse(text: &str) -> Result<Self, NotASignIn> {
         let refused = || NotASignIn(text.chars().take(80).collect());
         let rest = text.strip_prefix("https://").ok_or_else(refused)?;
@@ -32,13 +29,11 @@ impl SignInUrl {
         Ok(Self(text.to_owned()))
     }
 
-    /// The link.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// The host it names, whole.
     #[must_use]
     pub fn host(&self) -> &str {
         self.0["https://".len()..]
@@ -56,7 +51,6 @@ pub struct NotASignIn(pub String);
 /// The sign-ins the box holds open, each waiting for its code; held in no
 /// capability record, so only a tap reaches one.
 pub trait Sessions: Sync {
-    /// Every sign-in still open, by its link.
     fn open(&self) -> Vec<SignInUrl>;
 
     /// Type `code` into the sign-in at `url`, and answer the card that began it with the token

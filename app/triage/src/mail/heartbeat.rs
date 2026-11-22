@@ -1,7 +1,6 @@
-//! The automated triage wrapper's pulse: `suzatary heartbeat` writes it at the end of each pass
-//! of `scripts/hourly-triage.sh`. It answers what a silent chain cannot: when a pass last
-//! succeeded, and where the last one failed. [`alarm`] is a decision the brief appends, not an
-//! instruction to the model, which may never have run.
+//! The automated triage wrapper's pulse, written at the end of each pass of
+//! `scripts/hourly-triage.sh`; [`alarm`] is a decision the brief appends, not an instruction to
+//! the model, which may never have run.
 //!
 //! A heartbeat moves only when a pass reaches the push, so each pass also records its verdict
 //! ([`PassOutcome`], `triage-outcome`).
@@ -10,23 +9,22 @@ use std::num::NonZeroU32;
 
 use serde_json::{Value, json};
 
-/// Where a pass gave up, as the wrapper writes it in a `failed` line; closed, so an unknown word
-/// reads as [`PassOutcome::Unparseable`] rather than a silently wrong word on screen.
+/// Closed, so an unknown word in a `failed` line reads as [`PassOutcome::Unparseable`] rather than
+/// a silently wrong word on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
     /// `scripts/app-bin.sh sync`, and what must hold before it runs (free disk, the auth check).
     Sync,
-    /// The triage agent: its auth check, the fail-closed preflight that fences its
-    /// tools, and the run itself.
+    /// The triage agent: its auth check, the fail-closed preflight that fences its tools, and the
+    /// run itself.
     Triage,
-    /// `suzatary secretary review`, reviewing the cards the pass just filed.
+    /// `suzatary secretary review`.
     Review,
-    /// `suzatary secretary sweep`, the once-a-day pass over the open list.
+    /// `suzatary secretary sweep`.
     Sweep,
-    /// `safe-push.sh`'s checks of the data (the append-only walk, `suzatary verify` of every
-    /// store, the allowlist) before committing.
+    /// `safe-push.sh`'s checks of the data before committing.
     Verify,
-    /// `safe-push.sh`'s `git commit`/`git push`, past its checks of the data.
+    /// `safe-push.sh`'s `git commit`/`git push`.
     Push,
     /// Recording the pass itself, after everything it did succeeded.
     Record,
@@ -43,7 +41,6 @@ impl std::str::FromStr for Stage {
 }
 
 impl Stage {
-    /// Parse the closed word a `failed` line holds; `None` for anything else.
     fn parse(word: &str) -> Option<Self> {
         match word {
             "sync" => Some(Self::Sync),
@@ -77,37 +74,31 @@ impl std::fmt::Display for Stage {
     }
 }
 
-/// How one pass ended, as the wrapper reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pass {
-    /// Every stage did its work.
     Ok,
     /// The first stage that failed.
     Failed(Stage),
 }
 
-/// How the last pass ended, as `triage-outcome`'s one line says it: what a pass writes, and so
-/// the only thing the file is printed from.
+/// `triage-outcome`'s one line, the only thing the file is printed from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Recorded {
     /// `ok <at>`: the pass reached `safe-push.sh`'s successful end.
     Ok {
-        /// When, in [`stamp`]'s text, unparsed since nothing here needs the number.
+        /// In [`stamp`]'s text, unparsed.
         at: String,
     },
     /// `failed <at> <stage> [<n>]`: the pass gave up at `stage`, the `n`th failure running.
     Failed {
-        /// When the pass gave up, in [`stamp`]'s text.
         at: String,
-        /// Where it gave up.
         stage: Stage,
-        /// The run of consecutive failures ending with this one; a line without it is the first.
+        /// Consecutive failures ending with this one; a line without it is the first.
         count: NonZeroU32,
     },
 }
 
 impl Recorded {
-    /// The one line [`parse`](Self::parse) reads back as this outcome.
     #[must_use]
     pub fn line(&self) -> String {
         match self {
@@ -116,7 +107,7 @@ impl Recorded {
         }
     }
 
-    /// Read one line, surrounding whitespace ignored; `None` for a line of neither shape.
+    /// `None` for a line of neither shape.
     #[must_use]
     pub fn parse(line: &str) -> Option<Self> {
         let mut words = line.split_whitespace();
@@ -146,7 +137,6 @@ impl Recorded {
 /// are different facts, and neither may read as healthy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PassOutcome {
-    /// The line a pass wrote.
     Recorded(Recorded),
     /// No file, or an empty one; unlike `Ok`, it defers to the heartbeat rather than claim success.
     Absent,
@@ -155,8 +145,7 @@ pub enum PassOutcome {
 }
 
 impl PassOutcome {
-    /// The outcome once one more pass, ended as `pass` at `at`, follows this one: a failure
-    /// extends a run of failures, at whatever stage, and an ok ends it.
+    /// A failure extends a run of failures, at whatever stage, and an ok ends it.
     #[must_use]
     pub fn then(&self, pass: Pass, at: String) -> Recorded {
         match pass {
@@ -174,7 +163,7 @@ impl PassOutcome {
         }
     }
 
-    /// Read `triage-outcome`'s text, `None` when the file is absent.
+    /// `None` when the file is absent.
     #[must_use]
     pub fn parse(recorded: Option<&str>) -> Self {
         match recorded.map(str::trim) {
@@ -184,17 +173,15 @@ impl PassOutcome {
     }
 }
 
-/// The instant text both files hold: naive and UTC, as `SystemClock` reads.
+/// Naive and UTC, as `SystemClock` reads.
 const FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
 
-/// `now` as both files spell an instant, which `hours_since` reads back.
 #[must_use]
 pub fn stamp(now: chrono::NaiveDateTime) -> String {
     now.format(FORMAT).to_string()
 }
 
-/// Hours between `now` and a recorded heartbeat, or `None` when it will not parse; the gap is
-/// far inside the range where the `f64` cast rounds.
+/// `None` when it will not parse; the gap is far inside the range where the `f64` cast rounds.
 #[allow(clippy::cast_precision_loss)]
 #[must_use]
 pub(crate) fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<f64> {
@@ -202,8 +189,7 @@ pub(crate) fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<
     Some((now - at).num_minutes() as f64 / 60.0)
 }
 
-/// How long ago the wrapper last reached its push step, as the JSON a model reads: never run, an
-/// age, or unparseable. Built on `hours_since` so it and [`alarm`] never disagree on an age.
+/// Built on `hours_since` so it and [`alarm`] never disagree on an age.
 #[must_use]
 pub fn freshness(now: chrono::NaiveDateTime, recorded: Option<&str>) -> Value {
     let Some(text) = recorded else {
@@ -228,10 +214,9 @@ pub fn freshness(now: chrono::NaiveDateTime, recorded: Option<&str>) -> Value {
     })
 }
 
-/// Whether the mechanical alarm speaks: `Some(line)` to append as a `Turn::Act`, `None` to
-/// append nothing. A failed or unreadable outcome speaks however fresh the heartbeat is, since a
-/// pass dying at one stage every five minutes never writes one. `Ok` and `Absent` defer to the
-/// heartbeat, and only a fresh one is silent: missing, unparseable and stale each say so.
+/// `Some(line)` to append as a `Turn::Act`; a failed or unreadable outcome speaks however fresh
+/// the heartbeat is, since a pass dying at one stage every five minutes never writes one.
+/// `Ok` and `Absent` defer to the heartbeat, and only a fresh one is silent.
 #[must_use]
 pub fn alarm(
     now: chrono::NaiveDateTime,
@@ -306,11 +291,7 @@ mod tests {
         NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S").expect("a well-formed instant")
     }
 
-    // --- alarm: all four heartbeat arms ------------------------------------
-
-    /// Fresh is the only silent heartbeat arm, with an outcome that defers: an absent one, so a
-    /// wrapper that never writes `triage-outcome` does not page, or an ok one; and a pass exactly
-    /// at the threshold is not yet stale (`>`, not `>=`).
+    /// A pass exactly at the threshold is not yet stale (`>`, not `>=`).
     #[test]
     fn a_fresh_pass_with_an_outcome_that_defers_appends_nothing() {
         let ok = PassOutcome::Recorded(Recorded::Ok {
@@ -329,7 +310,6 @@ mod tests {
         }
     }
 
-    /// Stale says the age and the last recording.
     #[test]
     fn a_stale_pass_names_the_age() {
         let line = alarm(
@@ -343,8 +323,7 @@ mod tests {
         assert!(line.contains("2026-09-17T07:00:14"), "{line}");
     }
 
-    /// Never run speaks here, unlike `freshness`'s note: a wiped state directory or a wrong
-    /// `mail.heartbeat` path must not read as a quiet day.
+    /// A wiped state directory or a wrong `mail.heartbeat` path must not read as a quiet day.
     #[test]
     fn never_run_says_so_rather_than_staying_quiet() {
         let line = alarm(at("2026-09-20T00:00:00"), None, 1.0, &PassOutcome::Absent)
@@ -352,7 +331,6 @@ mod tests {
         assert!(line.contains("no recorded pass"), "{line}");
     }
 
-    /// Corrupt content must not read as healthy.
     #[test]
     fn unparseable_content_says_so_rather_than_reading_as_healthy() {
         let line = alarm(
@@ -366,11 +344,6 @@ mod tests {
         assert!(line.contains("not a timestamp"), "{line}");
     }
 
-    // --- PassOutcome::parse ------------------------------------------------
-
-    /// Each shape the outcome file holds reads as its outcome: nothing or a blank line is absent,
-    /// a failed line with no count is the first failure, and an unknown stage, a trailing field,
-    /// a zero count and a line starting with neither word are each unparseable.
     #[test]
     fn an_outcome_line_reads_as_its_shape() {
         let failed = |stage, count| {
@@ -419,10 +392,6 @@ mod tests {
         }
     }
 
-    // --- alarm's outcome arms ----------------------------------------------
-
-    /// Failed speaks even with a fresh heartbeat: a pass dying at the same stage every five minutes
-    /// never reaches the heartbeat write.
     #[test]
     fn failed_and_fresh_speaks_naming_the_stage() {
         let line = alarm(
@@ -440,7 +409,6 @@ mod tests {
         assert!(line.contains("FAILED"), "{line}");
     }
 
-    /// A recorded streak is named, so the owner reads "this has been failing".
     #[test]
     fn failed_with_twelve_consecutive_names_the_streak() {
         let line = alarm(
@@ -457,7 +425,6 @@ mod tests {
         assert!(line.contains("12"), "{line}");
     }
 
-    /// An unparseable outcome speaks, as an unparseable heartbeat does.
     #[test]
     fn unparseable_outcome_speaks() {
         let line = alarm(
@@ -469,8 +436,6 @@ mod tests {
         .expect("an outcome file that will not parse must not read as healthy");
         assert!(line.contains("outcome file"), "{line}");
     }
-
-    // --- the line and the fold: laws ---------------------------------------
 
     fn a_stage() -> impl Strategy<Value = Stage> {
         prop_oneof![
@@ -499,7 +464,6 @@ mod tests {
     }
 
     proptest! {
-        /// What is written reads back as itself, so the writer and the reader are one format.
         #[test]
         fn a_written_line_parses_back_as_the_outcome_it_printed(
             before in proptest::collection::vec((a_pass(), an_instant()), 0..11),
@@ -517,8 +481,6 @@ mod tests {
             );
         }
 
-        /// The fold of passes is a function of the run since the last ok: the last stage, and
-        /// how many failed since.
         #[test]
         fn the_outcome_is_the_run_of_failures_since_the_last_ok(
             start in prop_oneof![
