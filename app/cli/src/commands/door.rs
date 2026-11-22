@@ -18,7 +18,7 @@ use prodrome_core::literal::Value;
 use suzatary_base::capability::{RenderError, Typeset};
 use suzatary_base::chains::ChainName;
 use suzatary_base::chains::ChainPolicy;
-use suzatary_base::reference::{Found, GenesisPrefix, GlobalTodo, Reference, mentions};
+use suzatary_base::reference::{Found, GenesisPrefix, GlobalTodo, Reference, mentioned, mentions};
 use suzatary_held::leak::{Matcher, Opaque, Scope};
 use suzatary_plan::wait::{Audience, Kept};
 use suzatary_record::record::TodoEvent;
@@ -195,7 +195,27 @@ impl Door {
             return;
         }
         let read = self.read(events, &open);
-        match self.lists.judge(&read) {
+        // Read where any text, held or drawn, names a todo by genesis, so an event's verdict does
+        // not depend on what else rides its batch. Stores that do not read begin nothing here.
+        let names = read
+            .iter()
+            .flat_map(|reading| &reading.texts)
+            .any(|(_, text)| {
+                mentioned(text)
+                    .iter()
+                    .any(|(_, reference)| matches!(reference, Reference::Global(_)))
+            });
+        let begun: Vec<Hash> = match names.then(|| stores.get_or_init(|| self.lists.stores())) {
+            Some(Ok(stores)) => stores
+                .iter()
+                .filter_map(|(_, home, _)| match home {
+                    Home::Begun(home) => Some(home.clone()),
+                    Home::NotBegun | Home::Unread(_) => None,
+                })
+                .collect(),
+            Some(Err(_)) | None => Vec::new(),
+        };
+        match self.lists.judge(&read, &begun) {
             Ok(judged) => {
                 for (i, verdict) in open.into_iter().zip(judged) {
                     verdicts[i] = verdict;
@@ -480,7 +500,7 @@ impl Lists {
     /// Each event's verdict, refused with the site and the rule's kind, never the words; then,
     /// where nothing matched, refused for its first markup field that does not draw. `Err` says
     /// why the lists could not be read.
-    fn judge(&self, events: &[Reading]) -> Result<Vec<Result<(), Shut>>, String> {
+    fn judge(&self, events: &[Reading], begun: &[Hash]) -> Result<Vec<Result<(), Shut>>, String> {
         let words: Vec<String> = super::instance::words(&self.instance)
             .map_err(|e| format!("the deployment's own words cannot be read ({e})"))?
             .into_iter()
@@ -488,7 +508,7 @@ impl Lists {
         let matcher = Matcher::new(&self.terms()?, &words, &[], Scope::Whole);
         let mut verdicts: Vec<Result<(), Shut>> = events
             .iter()
-            .map(|reading| matched(&matcher, reading))
+            .map(|reading| matched(&matcher, reading, begun))
             .collect();
         let scanned: Vec<usize> = (0..verdicts.len())
             .filter(|&i| verdicts[i].is_ok())
@@ -596,10 +616,10 @@ pub fn published(event: &TodoEvent) -> Vec<(String, String)> {
 }
 
 /// The first text, in the reading's order, that names a term, a name or an address, or that is
-/// opaque.
-fn matched(matcher: &Matcher, reading: &Reading) -> Result<(), Shut> {
+/// opaque. The matcher reads each text [`unnamed`] by the geneses in `begun`.
+fn matched(matcher: &Matcher, reading: &Reading, begun: &[Hash]) -> Result<(), Shut> {
     for (site, text) in &reading.texts {
-        if let Some(layer) = matcher.hits(text).into_values().min() {
+        if let Some(layer) = matcher.hits(&unnamed(text, begun)).into_values().min() {
             return Err(refused(site, layer));
         }
         if let Some(opaque) = Opaque::of(text.as_bytes()) {
@@ -607,6 +627,36 @@ fn matched(matcher: &Matcher, reading: &Reading) -> Result<(), Shut> {
         }
     }
     Ok(())
+}
+
+/// `text` with the genesis of each todo it names by genesis blanked, where that genesis begins a
+/// store in `begun`: one genesis in forty begins with a run of decimal digits that reads as a
+/// telephone number. A writer of this deployment cannot choose a held genesis's characters. A
+/// followed store's publisher can, but writes nothing here and would have to know the number
+/// already, and a follow is added only in the instance file. A genesis no store begins is a
+/// writer's text, read as written, so `todo:+` and a number names nothing.
+fn unnamed(text: &str, begun: &[Hash]) -> String {
+    let mut blanked = text.to_owned();
+    for name in mentioned(text)
+        .into_iter()
+        .filter_map(|(at, reference)| match reference {
+            Reference::Global(global) if !matches!(global.genesis.among(begun), Found::Unheld) => {
+                let from = at.start + "todo:+".len();
+                Some(from..from + global.genesis.as_str().len())
+            }
+            Reference::Global(_)
+            | Reference::Todo(_)
+            | Reference::Mail { .. }
+            | Reference::Thread { .. }
+            | Reference::Briefing { .. }
+            | Reference::Proposal(_)
+            | Reference::Batch { .. }
+            | Reference::Target(_) => None,
+        })
+    {
+        blanked.replace_range(name.clone(), &" ".repeat(name.len()));
+    }
+    blanked
 }
 
 /// Every string `value` holds, decoded, beside its field's path: a printed object escapes a line
@@ -646,4 +696,81 @@ fn unjudged(why: &str) -> Shut {
     Shut::Unjudged(format!(
         "door 1 reads every write to a public store, and {why}, so it takes none"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// The sentence of the least layer a matcher with no lists finds in `text`.
+    fn phoned(text: &str) -> Option<String> {
+        let matcher = Matcher::new(&[], &[], &[], Scope::Whole);
+        matcher
+            .hits(text)
+            .into_values()
+            .min()
+            .map(|layer| layer.to_string())
+    }
+
+    /// A genesis that begins with `digits` decimal digits, the rest of it lowercase hex.
+    fn genesis() -> impl Strategy<Value = Hash> {
+        (8usize..=64)
+            .prop_flat_map(|digits| ("[0-9]{64}", "[0-9a-f]{64}", Just(digits)))
+            .prop_map(|(decimal, hex, digits)| {
+                Hash::new(format!("{}{}", &decimal[..digits], &hex[digits..])).expect("hex")
+            })
+    }
+
+    /// The seed case that failed `a_public_store_refuses_a_chain_name_and_says_the_genesis_form`:
+    /// a genesis that begins with nine decimal digits reads as a telephone number until the door
+    /// knows it begins a store of the deployment.
+    #[test]
+    fn a_genesis_of_nine_digits_is_a_name() {
+        let home = Hash::new(format!("123456789{}", "a".repeat(55))).expect("hex");
+        let wait = format!("todo:+{}/zzfirst", home.as_str());
+        assert_eq!(phoned(&wait).as_deref(), Some("names a telephone number"));
+        assert_eq!(phoned(&unnamed(&wait, &[home])), None);
+    }
+
+    /// Only the held genesis is blanked: a number beside the name, a number written as its id
+    /// and a writer's digits after a held prefix are read as written. A run of digits as the id,
+    /// with no plus before it, is no telephone number, as it was before.
+    #[test]
+    fn what_stands_beside_a_held_genesis_is_read_as_written() {
+        let home = Hash::new(format!("123456789{}", "a".repeat(55))).expect("hex");
+        let held = format!("todo:+{}/", &home.as_str()[..12]);
+        let number = concat!("+961 ", "3 123 456");
+        for (text, said) in [
+            (format!("Call {number} {held}x"), true),
+            (format!("{held}x then {number}"), true),
+            (format!("{held}call-{}", concat!("415-867", "-5309")), true),
+            (format!("todo:+{}0/x", &home.as_str()[..9]), true),
+            (format!("{held}{}", concat!("961312", "3456")), false),
+        ] {
+            assert_eq!(
+                phoned(&unnamed(&text, std::slice::from_ref(&home))).as_deref(),
+                said.then_some("names a telephone number"),
+                "{text}"
+            );
+        }
+    }
+
+    proptest! {
+        /// THE LAW OF A NAME BY GENESIS: a wait by a genesis a store of the deployment begins,
+        /// whole or by any prefix of eight or more, is no telephone number however many decimal
+        /// digits it begins with; by a genesis no store begins, the matcher reads the text as
+        /// written, so the phone layer judges it as it always did.
+        #[test]
+        fn a_held_genesis_is_a_name_at_every_prefix(home in genesis(), other in genesis()) {
+            prop_assume!(home.as_str()[..8] != other.as_str()[..8]);
+            for len in 8..=64 {
+                let prefix = GenesisPrefix::new(&home.as_str()[..len]).expect("a prefix");
+                prop_assert_eq!(prefix.among([&home]), Found::One(&home));
+                let wait = format!("todo:+{}/zzfirst", prefix.as_str());
+                prop_assert_eq!(phoned(&unnamed(&wait, std::slice::from_ref(&home))), None);
+                prop_assert_eq!(unnamed(&wait, std::slice::from_ref(&other)), wait);
+            }
+        }
+    }
 }

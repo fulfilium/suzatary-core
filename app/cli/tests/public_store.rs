@@ -751,6 +751,111 @@ fn a_public_store_refuses_a_chain_name_and_says_the_genesis_form() {
     }
 }
 
+/// A short international number is refused with the phone layer's sentence in a free-text wait, in
+/// a body, and written as a name by a genesis no store of this deployment begins.
+#[test]
+fn a_public_store_refuses_a_number_in_a_wait_a_body_and_an_unheld_name() {
+    let (root, instance) = a_box("door-phone", true);
+    let first = add(&instance, "zzfirst", "Water the garden", "A plain reason");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let before = held(&root);
+    for wrote in [
+        waiting(&instance, "zzprose", concat!("Call +961 ", "3 123 456")),
+        waiting(&instance, "zzdressed", concat!("todo:+961312", "3456/x")),
+        add(
+            &instance,
+            "zzbody",
+            concat!("Call +961 ", "3 123 456"),
+            "A plain reason",
+        ),
+    ] {
+        let said = String::from_utf8_lossy(&wrote.stderr);
+        assert!(!wrote.status.success(), "a number was published");
+        assert!(said.contains("names a telephone number"), "{said}");
+    }
+    assert_eq!(held(&root), before, "the store moved");
+}
+
+/// A name by the genesis of a store the deployment holds is taken however many decimal digits
+/// that genesis begins with, written in a wait or drawn by a body whose source names nothing;
+/// the same texts are refused while the deployment does not hold that store.
+#[test]
+fn a_public_store_takes_a_name_by_a_held_genesis_that_begins_with_digits() {
+    let (root, instance) = a_box("door-digits", true);
+    let first = add(&instance, "zzfirst", "Water the garden", "A plain reason");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    // A store laid so its genesis begins with twelve decimal digits, the first not 0 or 1.
+    let (genesis, hash) = (0u64..1 << 20)
+        .map(|n| {
+            let genesis: Envelope<suzatary_record::record::TodoEvent> = Envelope::Genesis(
+                prodrome_core::genesis::mk_genesis(
+                    suzatary_record::record::GENESIS,
+                    &format!("{n:032x}"),
+                )
+                .expect("a genesis"),
+            );
+            let hash = seal_hash(&genesis).as_str().to_owned();
+            (genesis, hash)
+        })
+        .find(|(_, hash)| {
+            hash.as_bytes()[..12].iter().all(u8::is_ascii_digit) && hash.as_bytes()[0] >= b'2'
+        })
+        .expect("a genesis of digits");
+    let wait = format!("todo:+{}/sharedtask", &hash[..12]);
+    let drawn = format!("#(\"todo:+\" + \"{}\" + \"/sharedtask\")", &hash[..12]);
+    let write = |id: &str, in_wait: bool| {
+        if in_wait {
+            waiting(&instance, id, &wait)
+        } else {
+            add(&instance, id, &drawn, "A plain reason")
+        }
+    };
+    let before = held(&root);
+    for (id, in_wait) in [("zzwait", true), ("zzdrawn", false)] {
+        let refused = write(id, in_wait);
+        let said = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            !refused.status.success(),
+            "{id}: taken from an unheld store"
+        );
+        assert!(said.contains("names a telephone number"), "{id}: {said}");
+    }
+    assert_eq!(held(&root), before, "the store moved");
+    let shared = root.join("events-shared");
+    std::fs::create_dir_all(shared.join("objects")).expect("the store");
+    std::fs::write(shared.join("charter.toml"), "public = true\n").expect("a charter");
+    std::fs::write(
+        shared.join("objects").join(format!("{hash}.py")),
+        canonical_envelope(&genesis),
+    )
+    .expect("its genesis");
+    let text = std::fs::read_to_string(&instance).expect("the instance");
+    std::fs::write(
+        &instance,
+        format!(
+            "{text}\n[[chains]]\nname = \"shared\"\nevents = \"events-shared\"\n\
+             untrusted = []\nactors = [\"ada\"]\nowner = \"ada\"\n"
+        ),
+    )
+    .expect("the instance");
+    for (id, in_wait) in [("zzwait", true), ("zzdrawn", false)] {
+        let taken = write(id, in_wait);
+        assert!(
+            taken.status.success(),
+            "{id}: {}",
+            String::from_utf8_lossy(&taken.stderr)
+        );
+    }
+}
+
 /// Where a chain of the deployment does not read, door 1 cannot tell whether a todo a write names
 /// is one of it, so it takes no write that names a todo, a rightful name by genesis included,
 /// and says which chain did not read; a write that names no todo is still taken.

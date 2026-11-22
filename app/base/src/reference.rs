@@ -505,6 +505,15 @@ impl From<Reference> for String {
 /// outside an earlier candidate, and each spelling takes the longest run its shape allows.
 #[must_use]
 pub fn mentions(text: &str) -> Vec<Reference> {
+    mentioned(text)
+        .into_iter()
+        .map(|(_, reference)| reference)
+        .collect()
+}
+
+/// [`mentions`], each beside the bytes of `text` it was read from.
+#[must_use]
+pub fn mentioned(text: &str) -> Vec<(std::ops::Range<usize>, Reference)> {
     let bytes = text.as_bytes();
     let mut found = Vec::new();
     let mut at = 0;
@@ -514,7 +523,7 @@ pub fn mentions(text: &str) -> Vec<Reference> {
             Some(len) => {
                 // A candidate is ASCII, so its ends are on character boundaries.
                 if let Ok(reference) = text[at..at + len].parse::<Reference>() {
-                    found.push(reference);
+                    found.push((at..at + len, reference));
                 }
                 // The next candidate needs a boundary this one did not take.
                 at += len + 1;
