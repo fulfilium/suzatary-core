@@ -553,12 +553,12 @@ impl Verb<'_> {
     }
 }
 
-/// What a refusal's stderr said, as a log may quote it. The value a `set` wrote, its trimmed
-/// whole and each of its lines are first replaced wherever they occur by a stand-in of their
-/// length; then a reduction that never looks at the value again makes everything but the line and
-/// character counts, the name asked for, the words of [`WORDS`] and the errno after `os error`
-/// `…`, so a stderr that does not contain the value reads the same whatever the value. A value or line of one or two characters
-/// is put out of every word that contains it, and the counts can tell an echoed value's length.
+/// What a refusal's stderr said, as a log may quote it. Each character of the stderr in an
+/// occurrence of the value a `set` wrote is first replaced ([`covered`]); then a reduction that
+/// never looks at the value again makes everything but the line and character counts, the name
+/// asked for, the words of [`WORDS`] and the errno after `os error` `…`, so a stderr that does not
+/// contain the value reads the same whatever the value. A short value is put out of every word
+/// that contains it, and the counts can tell an echoed value's length.
 /// For `get`, `check` and `delete` no value is known, so a store that echoed another secret would
 /// show it only if that secret were itself a word of the list. Its one constructor is that
 /// reduction, so no log site of the shipped build can quote the stderr itself.
@@ -583,19 +583,10 @@ const WORDS: &str = "\
 
 impl Said {
     fn of(stderr: &str, name: &str, verb: Verb<'_>) -> Self {
-        let mut said = stderr.to_owned();
-        if let Verb::Set(value) = verb {
-            let value = value.expose();
-            let mut whole: Vec<&str> = [value, value.trim()]
-                .into_iter()
-                .chain(value.lines().map(str::trim))
-                .filter(|whole| !whole.is_empty())
-                .collect();
-            whole.sort_by_key(|whole| std::cmp::Reverse(whole.len()));
-            for whole in whole {
-                said = said.replace(whole, &"x".repeat(whole.chars().count()));
-            }
-        }
+        let said = match verb {
+            Verb::Set(value) => covered(stderr, value.expose()),
+            Verb::Get | Verb::Check | Verb::Delete => stderr.to_owned(),
+        };
         let lines: Vec<String> = said
             .lines()
             .filter(|line| !line.trim().is_empty())
@@ -630,6 +621,34 @@ impl Said {
             words: lines.join(" | "),
         }
     }
+}
+
+/// `stderr` with each character that lies in any occurrence of `value`, of `value` trimmed or of a
+/// trimmed line of it, overlapping occurrences included, replaced by `x`. Every occurrence is
+/// found in `stderr` itself, never in a text already replaced, where a stand-in beside the
+/// store's own words could spell the value again (a value that holds `x`).
+fn covered(stderr: &str, value: &str) -> String {
+    let forms: Vec<&str> = [value, value.trim()]
+        .into_iter()
+        .chain(value.lines().map(str::trim))
+        .filter(|form| !form.is_empty())
+        .collect();
+    let mut ends = vec![0; stderr.len()];
+    for (at, _) in stderr.char_indices() {
+        for form in &forms {
+            if stderr[at..].starts_with(form) {
+                ends[at] = ends[at].max(at + form.len());
+            }
+        }
+    }
+    let mut reach = 0;
+    stderr
+        .char_indices()
+        .map(|(at, c)| {
+            reach = reach.max(ends[at]);
+            if at < reach { 'x' } else { c }
+        })
+        .collect()
 }
 
 impl std::fmt::Display for Said {
@@ -1196,31 +1215,67 @@ mod tests {
         }
     }
 
-    /// A value with separators, newlines and letters beyond ASCII.
     const VALUES: &str = "[a-zA-Z0-9 _:/.=+'\"\\-\néß中🔑]{1,40}";
 
+    /// [`VALUES`], and as often one with white space at an end, or one of the stand-in's
+    /// character and white space alone: where a scrubber leaks if it ever does.
+    fn values() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::strategy::Strategy as _;
+        proptest::prop_oneof![
+            2 => VALUES,
+            2 => ("[ \n]{0,3}", VALUES, "[ \n]{0,3}").prop_map(|(a, b, c)| format!("{a}{b}{c}")),
+            1 => "[x \n]{1,8}",
+        ]
+    }
+
+    fn words() -> impl proptest::strategy::Strategy<Value = Vec<&'static str>> {
+        proptest::collection::vec(
+            proptest::sample::select(WORDS.split_whitespace().collect::<Vec<_>>()),
+            0..12,
+        )
+    }
+
+    fn forms(value: &str) -> impl Iterator<Item = &str> {
+        [value, value.trim()]
+            .into_iter()
+            .chain(value.lines().map(str::trim))
+            .filter(|form| !form.is_empty())
+    }
+
+    /// A stderr echoing `what` twice, and where each echo lies.
+    fn echoed(words: &[&str], at: usize, what: &str) -> (String, [std::ops::Range<usize>; 2]) {
+        let (before, after) = words.split_at(at.min(words.len()));
+        let before: String = before.iter().flat_map(|word| [*word, " "]).collect();
+        let after: String = after.iter().flat_map(|word| [" ", *word]).collect();
+        let line = format!("{before}{what}{after}\nError: {NOBODY} (os error 16) '");
+        let echoes = [
+            before.len()..before.len() + what.len(),
+            line.len()..line.len() + what.len(),
+        ];
+        (format!("{line}{what}'"), echoes)
+    }
+
     proptest::proptest! {
-        /// Law (a refusal's log line rests on it), its first half: a stderr that repeats the value
-        /// written reads as one that holds a stand-in of its length there instead; and the name
-        /// and every listed word around it are kept.
+        /// Law (a refusal's log line rests on it), its first half: a stderr that holds the value
+        /// written only where it echoed it reads as the stderr with a stand-in of its length
+        /// there instead, read with no value known; and every listed word around it is kept.
         #[test]
         fn a_refusal_s_evidence_reads_an_echoed_value_as_its_stand_in(
-            value in VALUES,
-            words in proptest::collection::vec(proptest::sample::select(WORDS.split_whitespace().collect::<Vec<_>>()), 0..12),
+            value in values(),
+            words in words(),
             at in 0usize..12,
         ) {
-            let said = |what: &str| {
-                let mut said: Vec<&str> = words.clone();
-                said.insert(at.min(said.len()), what);
-                format!("{}\nError: {NOBODY} (os error 16) '{what}'", said.join(" "))
-            };
-            let template = said("");
-            let whole = [value.as_str(), value.trim()].into_iter().chain(value.lines().map(str::trim));
-            proptest::prop_assume!(whole.filter(|w| !w.is_empty()).all(|w| !template.contains(w)));
-            let secret = Secret::new(value.clone());
-            let evidence = |stderr: &str| Said::of(stderr, NOBODY, Verb::Set(&secret));
-            let shown = evidence(&said(&value));
-            proptest::prop_assert_eq!(&shown, &evidence(&said(&"x".repeat(value.chars().count()))));
+            let (stderr, echoes) = echoed(&words, at, &value);
+            let elsewhere = forms(&value).any(|form| {
+                stderr.char_indices().any(|(start, _)| {
+                    stderr[start..].starts_with(form)
+                        && !echoes.iter().any(|echo| echo.start <= start && start + form.len() <= echo.end)
+                })
+            });
+            proptest::prop_assume!(!elsewhere);
+            let (stand_in, _) = echoed(&words, at, &"x".repeat(value.chars().count()));
+            let shown = Said::of(&stderr, NOBODY, Verb::Set(&Secret::new(value.clone())));
+            proptest::prop_assert_eq!(&shown, &Said::of(&stand_in, NOBODY, Verb::Get));
             for word in &words {
                 proptest::prop_assert!(shown.to_string().contains(word), "{word}: {shown}");
             }
@@ -1230,17 +1285,56 @@ mod tests {
         /// substring reads the same whatever the value written.
         #[test]
         fn a_refusal_s_evidence_of_a_stderr_without_the_value_is_the_same_for_every_value(
-            one in VALUES,
-            other in VALUES,
-            words in proptest::collection::vec(proptest::sample::select(WORDS.split_whitespace().collect::<Vec<_>>()), 0..12),
+            one in values(),
+            other in values(),
+            words in words(),
         ) {
             let stderr = format!("{}\nError: {NOBODY} (os error 16)", words.join(" "));
-            let absent = |value: &str| {
-                [value, value.trim()].into_iter().chain(value.lines().map(str::trim)).filter(|w| !w.is_empty()).all(|w| !stderr.contains(w))
-            };
+            let absent = |value: &str| forms(value).all(|form| !stderr.contains(form));
             proptest::prop_assume!(absent(&one) && absent(&other));
             let evidence = |value: &str| Said::of(&stderr, NOBODY, Verb::Set(&Secret::new(value)));
             proptest::prop_assert_eq!(evidence(&one), evidence(&other));
+        }
+
+        /// For any value and a stderr that echoes it whole, trimmed or a line of it, no word the
+        /// evidence shows holds a run of two or more of the value's non-white characters that the
+        /// stderr without the echo does not hold.
+        #[test]
+        fn no_run_of_an_echoed_value_reaches_a_shown_word(
+            value in values(),
+            words in words(),
+            at in 0usize..12,
+            form in proptest::arbitrary::any::<proptest::sample::Index>(),
+        ) {
+            let forms: Vec<&str> = forms(&value).collect();
+            let (stderr, _) = echoed(&words, at, form.get(&forms));
+            let (without, _) = echoed(&words, at, "");
+            let shown = Said::of(&stderr, NOBODY, Verb::Set(&Secret::new(value.clone())));
+            let chars: Vec<char> = value.chars().collect();
+            for piece in chars.split(|c| c.is_whitespace()) {
+                for start in 0..piece.len() {
+                    for end in start + 2..=piece.len() {
+                        let run: String = piece[start..end].iter().collect();
+                        let reached = shown.words.split_whitespace().any(|word| word.contains(&run));
+                        proptest::prop_assert!(!reached || without.contains(&run), "{run}: {shown}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// The shrunk cases: the gate's, and a trimmed line matching across its whole's stand-in.
+    #[test]
+    fn a_value_with_white_space_at_its_end_reads_as_its_stand_in() {
+        for (value, words, at, shown) in [
+            ("x ", &["a", "a"][..], 0, "… a a"),
+            ("\nx x", &["index"][..], 1, "index …"),
+        ] {
+            let (stderr, _) = echoed(words, at, value);
+            assert_eq!(
+                Said::of(&stderr, NOBODY, Verb::Set(&Secret::new(value))).words,
+                format!("{shown} | Error {NOBODY} os error 16 …")
+            );
         }
     }
 
