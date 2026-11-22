@@ -389,6 +389,14 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   pushing in a dev checkout deploys nothing. Never hand-roll the deploy's wait
   for a `suzatary-roots` run's `Result=success` (→
   `deploy`).
+- **A store is read by the mark of its last hold**, so everything that writes
+  one moves together. The deploy pauses the timers and the mail watcher while
+  the units move, and ends non-zero naming any that did not start again. A live
+  store is written only by a binary at the deployed pin of the store library.
+  After a pull, merge or restore of the data tree, run
+  `scripts/app-bin.sh --deployed prodrome record` with the deployment's
+  instance, and `verify` names a store left behind; a write by a binary of
+  another pin is cured only by a restart of the server (→ `storemarks`).
 - **Two roots dirs**: the units link into `~/.local/state/suzatary/roots`
   (`SUZATARY_ROOTS`); `app-bin.sh`, `web-dist.sh` and `root-serving.sh` without
   it link into `…/roots-dev`, so a dev build cannot repoint what the units run.
