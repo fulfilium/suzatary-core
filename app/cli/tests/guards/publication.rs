@@ -315,16 +315,43 @@ fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
     );
 }
 
-/// Two stub caches (`file://` directories of narinfos) and a stub `nix path-info --size` over a
-/// table of sizes, for `scripts/cache-unserved.sh`.
+/// Two stub caches behind a stub `curl` that answers a narinfo's status as the caches do, 200
+/// when held and 404 when not, or fails a set number of times first; a stub `sleep` that logs its
+/// pause and returns; and a stub `nix path-info --size` over a table of sizes. Every question is
+/// logged in `asked` as `<cache> <hash>`, every pause in `slept`. The stub `curl` fails every
+/// question asked without the script's timeouts.
 struct StubCaches {
     scratch: Scratch,
 }
 
+const CURL: &str = r#"#!/bin/sh
+for timeout in "--connect-timeout 5" "--max-time 10"; do
+  case " $* " in
+    *" $timeout "*) ;;
+    *) echo "curl without $timeout: $*" >&2 && exit 2 ;;
+  esac
+done
+for url; do :; done
+host="${url#http://}" file="${url##*/}"
+cache="${host%%.test/*}" hash="${file%.narinfo}"
+echo "$cache $hash" >>"$STUB/asked"
+if [ -f "$STUB/$cache/$hash.fail" ]; then
+  read -r left how <"$STUB/$cache/$hash.fail"
+  if [ "$left" -gt 0 ]; then
+    echo "$((left - 1)) $how" >"$STUB/$cache/$hash.fail"
+    case "$how" in
+      timeout) printf 000 && exit 28 ;;
+      *) printf %s "$how" && exit 0 ;;
+    esac
+  fi
+fi
+if [ -f "$STUB/$cache/$hash.narinfo" ]; then printf 200; else printf 404; fi
+"#;
+
 impl StubCaches {
     fn new(sizes: &[(&str, u64)]) -> Self {
         let scratch = Scratch::new("cache-unserved");
-        for dir in ["upstream", "cache", "bin"] {
+        for dir in ["upstream", "cache", "tmp"] {
             std::fs::create_dir_all(scratch.join(dir)).expect("a directory");
         }
         std::fs::write(
@@ -332,33 +359,80 @@ impl StubCaches {
             lines(sizes.iter().map(|(p, n)| format!("{p} {n}"))),
         )
         .expect("sizes");
-        let nix = scratch.join("bin/nix");
-        std::fs::write(
-            &nix,
+        let bin = scratch.join("bin");
+        let _ = suzatary_testkit::fake_program(
+            &bin,
+            "nix",
             "#!/bin/sh\n[ \"$1 $2\" = \"path-info --size\" ] || exit 64\nshift 2\n\
-             for p; do grep -F \"$p \" \"$SIZES\" || exit 1; done\n",
-        )
-        .expect("the stub nix");
-        std::fs::set_permissions(&nix, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
+             for p; do grep -F \"$p \" \"$STUB/sizes\" || exit 1; done\n",
+        );
+        let _ = suzatary_testkit::fake_program(&bin, "curl", CURL);
+        let _ = suzatary_testkit::fake_program(
+            &bin,
+            "sleep",
+            "#!/bin/sh\necho \"$1\" >>\"$STUB/slept\"\n",
+        );
         StubCaches { scratch }
+    }
+
+    fn file(&self, cache: &str, path: &str, ending: &str) -> std::path::PathBuf {
+        let hash = &path["/nix/store/".len()..][..32];
+        self.scratch.join(format!("{cache}/{hash}.{ending}"))
     }
 
     /// `cache` (`upstream` or `cache`) answers the narinfo of `path` from now on.
     fn serve(&self, cache: &str, path: &str) {
-        let hash = &path["/nix/store/".len()..][..32];
-        std::fs::write(self.scratch.join(format!("{cache}/{hash}.narinfo")), "")
-            .expect("a narinfo");
+        std::fs::write(self.file(cache, path, "narinfo"), "").expect("a narinfo");
     }
 
-    /// The script's exit code, what it printed, and the unserved list it wrote.
+    /// `cache`'s next `times` answers about `path` are `how`: `timeout`, curl's exit 28, or a
+    /// status.
+    fn fail(&self, cache: &str, path: &str, times: u32, how: &str) {
+        std::fs::write(self.file(cache, path, "fail"), format!("{times} {how}\n"))
+            .expect("a failure");
+    }
+
+    /// Every child's `ask` answers about `path` by running `body` instead, through `BASH_ENV`,
+    /// which `bash -c` reads after it imports the script's exported `ask`.
+    fn replace_ask(&self, path: &str, body: &str) {
+        std::fs::write(
+            self.scratch.join("ask.sh"),
+            format!(
+                "if declare -f ask >/dev/null; then\n  eval \"real_$(declare -f ask)\"\n  \
+                 ask() {{ if [ \"$2\" = {path} ]; then {body}; else real_ask \"$@\"; fi; }}\nfi\n"
+            ),
+        )
+        .expect("the replaced ask");
+    }
+
+    /// The file `name` the run `out` wrote.
+    fn wrote(&self, out: &str, name: &str) -> String {
+        std::fs::read_to_string(self.scratch.join(out).join(name)).expect("the run wrote it")
+    }
+
+    /// How many times `cache` was asked about `path`.
+    fn asked(&self, cache: &str, path: &str) -> usize {
+        let line = format!("{cache} {}", &path["/nix/store/".len()..][..32]);
+        std::fs::read_to_string(self.scratch.join("asked"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| *l == line)
+            .count()
+    }
+
+    /// The pauses slept, in order.
+    fn slept(&self) -> String {
+        std::fs::read_to_string(self.scratch.join("slept")).unwrap_or_default()
+    }
+
+    /// The script's exit code, what it printed, and the unserved list it wrote, if it wrote one.
     fn run(
         &self,
         mode: &str,
         paths: &[&str],
         out: &str,
         limit: &str,
-    ) -> (Option<i32>, String, String) {
+    ) -> (Option<i32>, String, Option<String>) {
         let input = self.scratch.join(format!("{out}.in"));
         std::fs::write(&input, lines(paths.iter())).expect("the list");
         let path = format!(
@@ -366,22 +440,26 @@ impl StubCaches {
             self.scratch.join("bin").display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let url = |cache: &str| format!("file://{}", self.scratch.join(cache).display());
-        let done = Command::new(repo().join("scripts/cache-unserved.sh"))
+        let mut command = Command::new(repo().join("scripts/cache-unserved.sh"));
+        let ask = self.scratch.join("ask.sh");
+        if ask.exists() {
+            command.env("BASH_ENV", ask);
+        }
+        let done = command
             .args([
                 mode,
                 &input.to_string_lossy(),
                 &self.scratch.join(out).to_string_lossy(),
             ])
             .env("PATH", path)
-            .env("SIZES", self.scratch.join("sizes"))
-            .env("UPSTREAM", url("upstream"))
-            .env("CACHE", url("cache"))
+            .env("STUB", self.scratch.join(""))
+            .env("TMPDIR", self.scratch.join("tmp"))
+            .env("UPSTREAM", "http://upstream.test")
+            .env("CACHE", "http://cache.test")
             .env("LIMIT", limit)
             .output()
             .expect("cache-unserved.sh runs");
-        let unserved = std::fs::read_to_string(self.scratch.join(out).join("unserved.txt"))
-            .unwrap_or_default();
+        let unserved = std::fs::read_to_string(self.scratch.join(out).join("unserved.txt")).ok();
         (
             done.status.code(),
             String::from_utf8_lossy(&done.stdout).into_owned(),
@@ -431,7 +509,11 @@ fn cache_unserved_skips_what_another_run_pushed_and_refuses_the_rest() {
 
     let (code, said, listed) = caches.run("closure", &[up, mine, a, b, c], "build", gigabyte);
     assert_eq!(code, Some(0), "{said}");
-    assert_eq!(listed, lines([a, b, c].iter()), "what neither cache serves");
+    assert_eq!(
+        listed,
+        Some(lines([a, b, c].iter())),
+        "what neither cache serves"
+    );
     assert!(said.contains("the push adds 3 paths"), "{said}");
 
     // The other run pushes the shared path between this run's two measures.
@@ -440,7 +522,7 @@ fn cache_unserved_skips_what_another_run_pushed_and_refuses_the_rest() {
     assert_eq!(code, Some(0), "{said}");
     assert_eq!(
         pushed,
-        lines([a, c].iter()),
+        Some(lines([a, c].iter())),
         "the list less what was pushed since"
     );
     assert!(
@@ -475,6 +557,147 @@ fn cache_unserved_skips_what_another_run_pushed_and_refuses_the_rest() {
         let (code, said, _) = caches.run(mode, &paths, name, limit);
         assert_eq!(code, Some(1), "{name}: {said}");
         assert!(said.contains(why), "{name}: {said}");
+    }
+}
+
+/// A store path whose hash is `n` in 32 digits.
+fn numbered(n: usize, name: &str) -> String {
+    format!("/nix/store/{n:032}-{name}")
+}
+
+/// The publication run of 2026-11-21: among hundreds of questions, one about a path upstream
+/// serves failed once. The failed question is asked again, its "yes" makes the path served, and
+/// the list names only what both caches said they do not hold.
+#[test]
+fn cache_unserved_asks_again_when_one_question_among_hundreds_fails() {
+    let paths: Vec<String> = (0..400).map(|n| numbered(n, "dependency")).collect();
+    let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+    let (new, built) = (paths[123], &paths[390..]);
+    let caches = StubCaches::new(&built.iter().map(|p| (*p, 1_000_000)).collect::<Vec<_>>());
+    for path in &paths[..390] {
+        caches.serve("upstream", path);
+    }
+    caches.fail("upstream", new, 1, "timeout");
+
+    let (code, said, listed) = caches.run("closure", &paths, "build", "1000000000");
+    assert_eq!(code, Some(0), "{said}");
+    assert_eq!(listed, Some(lines(built.iter())), "{said}");
+    let mut both: Vec<String> = [caches.wrote("build", "served.txt"), lines(built.iter())]
+        .concat()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    both.sort();
+    assert_eq!(both, paths, "served and unserved partition the input");
+    assert_eq!(caches.asked("upstream", new), 2, "asked again once");
+    assert_eq!(caches.asked("cache", new), 0, "upstream's yes is enough");
+    assert_eq!(caches.slept(), "1\n");
+}
+
+/// A question that fails is asked again, five tries in all with pauses of 1, 2, 4 and 8
+/// seconds, whether it failed with a curl error or a status other than 200 and 404; an answer
+/// on any try is the path's answer.
+#[test]
+fn cache_unserved_asks_a_failed_question_again_with_growing_pauses() {
+    let (late_yes, late_no) = (numbered(1, "late-yes"), numbered(2, "late-no"));
+    let (late_yes, late_no) = (late_yes.as_str(), late_no.as_str());
+    let caches = StubCaches::new(&[(late_no, 1_000_000)]);
+    caches.serve("upstream", late_yes);
+    caches.fail("upstream", late_yes, 4, "503");
+    caches.fail("cache", late_no, 2, "timeout");
+
+    let (code, said, listed) = caches.run("closure", &[late_yes, late_no], "build", "1000000000");
+    assert_eq!(code, Some(0), "{said}");
+    assert_eq!(listed, Some(lines([late_no].iter())), "{said}");
+    assert_eq!(caches.asked("upstream", late_yes), 5);
+    assert_eq!(caches.asked("cache", late_no), 3);
+    assert_eq!(caches.slept(), "1\n2\n4\n8\n1\n2\n");
+}
+
+/// A path a cache gives no answer about in five tries fails the measure, in either job, naming
+/// the cache, the count and the path with its last failure, and writes no list. Upstream's
+/// failure stops the run before the project's cache is asked.
+#[test]
+fn cache_unserved_fails_by_name_when_a_cache_cannot_be_asked() {
+    let (fine, mute) = (numbered(1, "fine"), numbered(2, "mute"));
+    let (fine, mute) = (fine.as_str(), mute.as_str());
+    for (mode, cache, how, why) in [
+        (
+            "closure",
+            "upstream",
+            "503",
+            "the upstream cache could not be asked about 1 paths",
+        ),
+        (
+            "list",
+            "upstream",
+            "timeout",
+            "the upstream cache could not be asked about 1 paths",
+        ),
+        (
+            "closure",
+            "cache",
+            "403",
+            "the project's cache could not be asked about 1 paths",
+        ),
+        (
+            "list",
+            "cache",
+            "timeout",
+            "the project's cache could not be asked about 1 paths",
+        ),
+    ] {
+        let caches = StubCaches::new(&[(fine, 1_000_000), (mute, 1_000_000)]);
+        caches.fail(cache, mute, 5, how);
+        let (code, said, listed) = caches.run(mode, &[fine, mute], "out", "1000000000");
+        let case = format!("{mode} {cache} {how}: {said}");
+        assert_eq!(code, Some(1), "{case}");
+        assert!(said.contains(why), "{case}");
+        let last = if how == "timeout" {
+            "curl-exit-28"
+        } else {
+            how
+        };
+        assert!(said.contains(&format!("{mute} ({last})")), "{case}");
+        assert_eq!(listed, None, "{case}");
+        assert_eq!(caches.asked(cache, mute), 5, "{case}");
+        if cache == "upstream" {
+            assert_eq!(caches.asked("cache", fine), 0, "{case}");
+        }
+    }
+}
+
+/// The measure reads its children's answers whole: an answer that is none of the three, a line
+/// that holds more than one answer, a path with no answer, or a child that fails stops the run,
+/// naming the fault, and writes no list.
+#[test]
+fn cache_unserved_refuses_answers_it_cannot_read() {
+    let (fine, odd) = (numbered(1, "fine"), numbered(2, "odd"));
+    let (fine, odd) = (fine.as_str(), odd.as_str());
+    for (name, body, why) in [
+        (
+            "a fourth answer",
+            "echo \"maybe $2\"",
+            format!("is none of held <path>, absent <path> and unknown <path> <last>: maybe {odd}"),
+        ),
+        (
+            "two answers on a line",
+            "echo \"held $2 absent $2\"",
+            "is none of held".to_owned(),
+        ),
+        ("no answer", ":", format!("asked, with no answer: {odd}")),
+        (
+            "a child that fails",
+            "exit 3",
+            "did not run to its answer (xargs exit 123".to_owned(),
+        ),
+    ] {
+        let caches = StubCaches::new(&[(fine, 1_000_000), (odd, 1_000_000)]);
+        caches.replace_ask(odd, body);
+        let (code, said, listed) = caches.run("closure", &[fine, odd], "out", "1000000000");
+        assert_eq!(code, Some(1), "{name}: {said}");
+        assert!(said.contains(&why), "{name}: {said}");
+        assert_eq!(listed, None, "{name}");
     }
 }
 
