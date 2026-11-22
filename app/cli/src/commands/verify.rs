@@ -1,7 +1,5 @@
-//! `suzatary verify`: the stores' fsck.
-//!
-//! One line per problem and a non-zero exit when there is one: `scripts/safe-push.sh` aborts on
-//! it before committing, since a bad object in a Merkle log must not reach the remote.
+//! `suzatary verify`: the stores' fsck, non-zero on a problem, on which `scripts/safe-push.sh`
+//! aborts before committing, since a bad object in a Merkle log must not reach the remote.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -21,7 +19,6 @@ use suzatary_lines::first_read;
 use suzatary_lines::secretary::prune;
 use suzatary_store::store::{Prodrome, Reads as _};
 
-/// What `suzatary verify` checks.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// Check instead each line this directory holds, `<name>.py` as the last commit held it,
@@ -33,8 +30,6 @@ pub struct Args {
     store: StoreAt,
 }
 
-/// Fsck the todo store `--store` names, or every store the data push stages, or check the lines
-/// husked since the last commit.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     args.store.or_instance(
         path,
@@ -143,7 +138,6 @@ fn reported(
     bail!("{total} problem(s) across the stores checked")
 }
 
-/// `verify --husked <was>`.
 fn husked(instance: &Instance, was: &Path) -> anyhow::Result<()> {
     let stores = instance.conversation_stores();
     let objects = stores.lines.inner().root().join("objects");

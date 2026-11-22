@@ -26,7 +26,6 @@ use suzatary_conversations::nonempty;
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_digest::secretary::reserve::Reserve;
 
-/// The whole file. A key the binary does not read refuses the file.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct File {
@@ -89,10 +88,6 @@ fn here() -> PathBuf {
 }
 
 impl File {
-    /// The file at `path`, each value parsed to its type.
-    ///
-    /// # Errors
-    /// The file unreadable, or not an instance file.
     pub(crate) fn read(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("reading the instance file {}", path.display()))?;
@@ -100,19 +95,12 @@ impl File {
             .with_context(|| format!("parsing the instance file {}", path.display()))
     }
 
-    /// Serialise, with a fixed header ahead of the tables.
-    ///
-    /// # Errors
-    /// The value will not serialise.
     pub(crate) fn to_toml_string(&self, header: &str) -> anyhow::Result<String> {
         let body = toml::to_string_pretty(self).context("serialising the instance file")?;
         Ok(format!("{}\n{body}", header.trim_end()))
     }
 
     /// Write it to `path`, refusing to clobber an existing file unless `force`.
-    ///
-    /// # Errors
-    /// `path` exists and `force` is false, or the write fails.
     pub(crate) fn write(&self, path: &Path, header: &str, force: bool) -> anyhow::Result<()> {
         if !force && path.exists() {
             bail!(
@@ -165,7 +153,6 @@ pub(crate) struct Web {
     pub(crate) serving: Serving,
 }
 
-/// Where this deployment serves from and what it serves.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Serving {
     pub host: String,
@@ -188,7 +175,6 @@ impl Serving {
     }
 }
 
-/// `[mail]`: where the mail and its bookkeeping live, and whose it is.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mail {
     pub root: PathBuf,
@@ -261,7 +247,7 @@ pub struct Secretary {
     pub digests: PathBuf,
     /// The two topic stores, box-local, vaulted and never pushed.
     pub topics: Topics,
-    /// The model for the conversation, reviews and titles, pinned so it cannot drift.
+    /// The model for the conversation, reviews and titles.
     pub model: ModelName,
     /// Whether the compactor runs; the five keys after it are read only when it does.
     pub compact: bool,
@@ -323,7 +309,6 @@ impl Default for Secretary {
 }
 
 impl Secretary {
-    /// The compactor as these keys set it: off, or its models within a budget.
     #[must_use]
     pub fn compacting(&self) -> Compacting {
         if !self.compact {
@@ -399,7 +384,6 @@ impl Secretary {
         self.conversations.join("files")
     }
 
-    /// The secretary's directory with `suffix` on its name, beside it.
     fn beside(&self, suffix: &str) -> PathBuf {
         let mut name = self
             .conversations

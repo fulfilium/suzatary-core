@@ -97,7 +97,6 @@ fn printed_under(instance_file: &Path, env: &[(&str, &str)]) -> String {
     stdout[begin..end].to_owned()
 }
 
-/// This test again in a child with exactly `env`.
 fn child(instance_file: &Path, env: &[(&str, &str)]) -> std::process::Output {
     // The test's name inside its binary: this module's path below the crate root, then the
     // function, so the child finds it whether this file is a crate or a module of one.

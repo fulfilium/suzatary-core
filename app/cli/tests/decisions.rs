@@ -1,7 +1,5 @@
-//! `suzatary decision` against a scratch store: a decision recorded, superseded, withdrawn,
-//! found by a word of its body and viewed, and each refusal a writer meets (markup the door
-//! refuses, a link that would close a cycle, a restatement of a withdrawn decision), with the
-//! store reading the same afterwards.
+//! `suzatary decision` against a scratch store: each verb and each refusal a writer meets, with
+//! the store reading the same afterwards.
 
 use std::path::Path;
 use std::process::Output;

@@ -13,8 +13,7 @@ use suzatary_io::typeset::closed::CPU_SECONDS;
 /// Plenty for one text; typst reserves stacks and arenas well under this.
 const ADDRESS_SPACE: u64 = 2 << 30;
 
-/// # Errors
-/// Stdin could not be read or stdout written; a refused text is an answer, not an error.
+/// A refused text is an answer, not an error.
 pub fn run() -> anyhow::Result<()> {
     // The soft limit sends SIGXCPU, whose default action ends the child. The hard limit, a
     // second later, sends SIGKILL, for a child that inherited SIGXCPU ignored across `exec`.

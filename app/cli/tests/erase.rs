@@ -28,7 +28,6 @@ fn one_round(tag: &str, words: &str) -> (Arc<Fakes>, String, String) {
     (fakes, base, id)
 }
 
-/// Whether any file under `root` holds `words`.
 fn held(root: &std::path::Path, words: &str) -> bool {
     std::fs::read_dir(root).expect("a directory").any(|entry| {
         let path = entry.expect("an entry").path();

@@ -1,8 +1,5 @@
 //! The secretary's rounds, pinned: for a scripted model, the lines each way of answering appends
 //! and what the model is shown and sent, byte for byte against `tests/pins/`.
-//!
-//! The sweep's and the review's rounds are pinned beside their own fixtures, in `sweep.rs` and
-//! `review.rs`.
 
 use crate::common;
 use suzatary_conversations::secretary::store::ConversationState;
@@ -40,7 +37,7 @@ fn opened(caps: &Fakes) {
     .expect("the conversation opens");
 }
 
-/// A person's turn answered by the model with no session: `converse`, as the brief runs.
+/// `converse` with no session, as the brief runs.
 fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
     let policy = common::chain();
     let deployment = deployment();
@@ -83,7 +80,6 @@ fn a_round_without_a_session() {
     common::pinned("window", &common::scene(&caps, &id()));
 }
 
-/// A model that never stops calling runs out at the bound, and says so.
 #[test]
 fn a_round_that_runs_out() {
     let calling = r#"{"say": "", "calls": [{"verb": "weather", "args": {}}]}"#;
@@ -93,7 +89,6 @@ fn a_round_that_runs_out() {
     common::pinned("bound", &common::scene(&caps, &id()));
 }
 
-/// A model that fails ends the exchange in the transcript, with the box's words.
 #[test]
 fn a_round_whose_model_fails() {
     let caps = Fakes::new("rounds-failed").model(FakeModel::saying([]));
@@ -185,7 +180,6 @@ fn round_of(
     )
 }
 
-/// [`round_of`] under a halt and a load of the caller's.
 fn round_under(
     caps: &Fakes,
     bound: usize,
@@ -388,7 +382,6 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
     assert_eq!(gained, turns);
 }
 
-/// Law: a verb's refusal is an answer the model reads, not an error that ends the round.
 #[test]
 fn a_refusal_is_an_answer_not_an_error() {
     let caps = Fakes::new("round-law-refusal").model(FakeModel::saying([
@@ -418,7 +411,6 @@ fn a_refusal_is_an_answer_not_an_error() {
     );
 }
 
-/// The conversation's last live turn.
 fn last_turn(caps: &Fakes) -> Turn {
     conversations::read(caps.conversations.conversations(), &id())
         .expect("reads")
@@ -447,7 +439,6 @@ fn ended_with(caps: &Fakes, why: &Why, words: &str) {
 
 const WEATHER: &str = r#"{"say": "Looking.", "calls": [{"verb": "weather", "args": {}}]}"#;
 
-/// A model that failed some other way quotes the backend, escaped so its words are not markup.
 #[test]
 fn a_round_whose_model_failed_quotes_the_backend_escaped() {
     let failed = ModelError::Failed("the API answered 500: *overloaded*".to_owned());
@@ -468,7 +459,6 @@ fn a_round_whose_model_failed_quotes_the_backend_escaped() {
     assert!(text.contains(r"\*overloaded\*"), "{text}");
 }
 
-/// What the question points at would not load: the round ends before any model is asked.
 #[test]
 fn a_round_whose_load_is_refused_says_so_and_asks_no_model() {
     let caps = Fakes::new("round-end-load").model(FakeModel::saying([]));
@@ -494,8 +484,7 @@ fn a_round_whose_load_is_refused_says_so_and_asks_no_model() {
     assert!(matches!(last_turn(&caps), Turn::Model { calls, .. } if calls.is_empty()));
 }
 
-/// A pulled halt ends the round on a stop line naming who pulled it, not on the model's turn, and
-/// a halt pulled before the model is asked asks it nothing.
+/// The stop line names who pulled it, and a halt pulled before the model is asked asks it nothing.
 #[test]
 fn a_stopped_round_ends_on_the_stop() {
     let caps = Fakes::new("round-end-stopped").model(FakeModel::saying([WEATHER]));
@@ -558,9 +547,8 @@ fn step() -> impl proptest::strategy::Strategy<Value = Step> {
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(48))]
 
-    /// Law: whatever the model does, a round that ran ends on the model's answer in words, or on
-    /// the box's turn saying why, or on a stop; never on a call or a verb's answer, and the
-    /// ending says which.
+    /// Law: a round ends on a stop, or else never on a call or a verb's answer, and the ending says
+    /// which.
     #[test]
     fn every_round_ends_on_an_answer_or_the_boxs_words(
         script in proptest::collection::vec(step(), 0..6),
@@ -639,8 +627,7 @@ impl suzatary_conversations::secretary::model::Model for Interrupted<'_> {
     }
 }
 
-/// Regression: a question said while the model writes its final answer was settled unseen, since
-/// the answer rests on it. It is owed after that answer, and the next round sends it.
+/// The answer rests on the question without having seen it, so the next round sends it.
 #[test]
 fn a_question_said_during_the_last_answer_is_still_owed() {
     let caps = Fakes::new("round-swallowed").model(FakeModel::saying([
@@ -792,7 +779,6 @@ fn round_over(
     }))
 }
 
-/// The runs of every claim in the conversation, in order.
 fn claimed_by(caps: &Fakes) -> Vec<String> {
     transcript::lines(caps.conversations.conversations(), &id())
         .expect("reads")
@@ -806,7 +792,6 @@ fn claimed_by(caps: &Fakes) -> Vec<String> {
         .collect()
 }
 
-/// A round whose task ends with no close is retried once by a new run, which answers.
 #[test]
 fn a_lost_round_is_retried_once_by_a_new_run() {
     let caps = Fakes::new("round-lost-once").model(FakeModel::saying([r#"{"say": "Friday."}"#]));
@@ -945,9 +930,7 @@ fn a_question_said_during_a_round_joins_it_at_its_next_ask() {
     );
 }
 
-/// Regression: an old question left unanswered beside a fresh one is sent with it, since the bound
-/// decides whether a round starts and never what a started round covers; no box line about time
-/// follows the answer.
+/// The bound decides whether a round starts and never what a started round covers.
 #[test]
 fn an_old_question_beside_a_fresh_one_is_sent_with_it() {
     let caps =
@@ -997,10 +980,8 @@ fn an_old_question_beside_a_fresh_one_is_sent_with_it() {
     );
 }
 
-/// Two holders: while one holder's round writes its last answer, a question lands, and the other
-/// holder's claim step finds the round's run alive and appends nothing. The first holder claims
-/// again after its own round, so the question is answered before it returns, not at the next
-/// write.
+/// The other holder finds the round's run alive and appends nothing, so the first claims again
+/// after its own round, before it returns.
 #[test]
 fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder() {
     let caps = Fakes::new("round-two-holders").model(FakeModel::saying([

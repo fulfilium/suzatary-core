@@ -1,7 +1,6 @@
-//! The leak guard, `scripts/public-tree.sh --check`, and the public scan over another
-//! repository's range, `scripts/public-scan.sh`: run as the real scripts over throwaway trees and
-//! throwaway deployments, never the real ones. The lists live only in the private data repository
-//! and are never copied here, so a failure prints each hit's file and line and nothing else.
+//! The leak guard and the public scan, run over throwaway trees and deployments, never the real
+//! ones: the lists live only in the private data repository, so a failure prints each hit's file
+//! and line and nothing else.
 
 use super::{Scratch, binary, repo, stderr};
 use std::path::{Path, PathBuf};
@@ -22,8 +21,7 @@ fn a_checkout(guard: &str) -> bool {
     checkout
 }
 
-/// `public-tree.sh` with `args`, reading the deployment at `instance` (the script's own
-/// default, `<repo>/instance.toml`, when `None`).
+/// An `instance` of `None` leaves the script its own default, `<repo>/instance.toml`.
 fn public_tree(args: &[&Path], instance: Option<&Path>) -> Output {
     let mut command = Command::new(public_tree_script());
     command.args(args).env("SUZATARY_BIN", binary::path());
@@ -35,8 +33,7 @@ fn public_tree(args: &[&Path], instance: Option<&Path>) -> Output {
     command.output().expect("public-tree.sh runs")
 }
 
-/// No tracked file of this repository, its private history included, holds a term from the
-/// data repository's lists; the script skips with one line where there is no instance.
+/// No tracked file, the private history included, holds a term from the data repository's lists.
 #[test]
 fn personal_terms_no_tracked_file_names_a_person() {
     let out = public_tree(&[Path::new("--check"), Path::new("--terms"), &repo()], None);
@@ -50,7 +47,7 @@ fn personal_terms_no_tracked_file_names_a_person() {
 
 /// The tree a public repository would start from holds nothing of this deployment: no address
 /// outside the reserved domains, no tailnet name, no home path, none of this box's names and
-/// no term of the data repository's lists, which skip with a line where there is no instance.
+/// no term of the data repository's lists.
 #[test]
 fn public_tree_holds_nothing_of_this_deployment() {
     if !a_checkout("public_tree_holds_nothing_of_this_deployment") {
@@ -69,8 +66,8 @@ fn public_tree_holds_nothing_of_this_deployment() {
     );
 }
 
-/// The public tree hosts itself: a commit of its own output, run through its own copy of the
-/// script, writes that output again, byte for byte.
+/// A commit of the public tree's output, run through its own copy of the script, writes that
+/// output again, byte for byte.
 #[test]
 fn public_tree_is_a_fixpoint_of_itself() {
     if !a_checkout("public_tree_is_a_fixpoint_of_itself") {
@@ -114,12 +111,10 @@ fn public_tree_is_a_fixpoint_of_itself() {
     );
 }
 
-/// The deployment's own words, the one function `public-tree.sh` and door 1 read (`suzatary
-/// instance words`), over instance files that vary each of its inputs, are the words stated here:
-/// the box's name in `FETCHER` with its spaces dropped, the labels of `web.app_url`'s host but
-/// the generic ones and those of a scheme not in lower case, and the user of each home path, all
-/// lowercased, and nothing outside `[a-z0-9_-]`. The scratch directory's own home user, where the
-/// temporary directory lies under a home, is a word of every case.
+/// The deployment's words (`suzatary instance words`, the one function `public-tree.sh` and door
+/// 1 read) are the box's name in `FETCHER` without spaces, the labels of `web.app_url`'s host but
+/// the generic ones and those of a scheme not in lower case, each home path's user and the
+/// scratch's home user if any, all lowercased, and nothing outside `[a-z0-9_-]`.
 #[test]
 fn the_deployments_words_are_the_words_stated() {
     let (home, users, tailnet) = (
@@ -190,7 +185,6 @@ fn the_deployments_words_are_the_words_stated() {
     }
 }
 
-/// The matcher itself, over a throwaway tree and a throwaway deployment, never the real ones.
 /// Every leak is spelled in pieces, so the tree this guard reads does not hold them.
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -380,10 +374,9 @@ fn public_tree_guard_finds_each_leak_and_never_prints_it() {
     assert!(stderr(&bare).contains("skipped"), "a skip says so");
 }
 
-/// The rules a reader's eye would catch and the old matcher did not, over a throwaway tree and a
-/// throwaway deployment, each leak spelled in pieces: a tailnet node's address; a telephone
-/// number; a term with an accent; a binary file the tree's manifest does not list with its
-/// digest. The cast's tailnet block and a fictional number are not leaks.
+/// A tailnet node's address, a telephone number, an accented term and a binary file the manifest
+/// does not list with its digest are each a leak, and the cast's tailnet block and a fictional
+/// number are not.
 #[test]
 fn public_tree_guard_finds_what_a_reader_would() {
     let scratch = Scratch::new("public-tree-reader");
@@ -396,11 +389,9 @@ fn public_tree_guard_finds_what_a_reader_would() {
     std::fs::write(data.join("local/context-terms.txt"), "zzcontext\n").expect("context");
     let lines = [
         "nothing here".to_owned(),
-        // A tailnet node and a telephone; the cast's block and a fictional number are not.
         concat!("host = \"100.", "101.102.103\"").to_owned(),
         concat!("call +961 ", "3 123 456").to_owned(),
         "host = \"100.64.0.9\", or (555) 555-0100".to_owned(),
-        // A term with an accent the list does not write.
         "a note about zzpérson".to_owned(),
     ];
     std::fs::write(tree.join("leaks.txt"), lines.join("\n") + "\n").expect("leaks");
@@ -438,9 +429,8 @@ fn public_tree_guard_finds_what_a_reader_would() {
     );
 }
 
-/// A matcher that fails is a check that did not run, never a clean tree: an older binary
-/// without the verb, or one that fails part way (here on the files, after the paths), exits 2
-/// and prints no verdict, whatever the tree holds.
+/// A matcher that fails, without the verb or part way, is a check that did not run, never a clean
+/// tree: exit 2 and no verdict, whatever the tree holds.
 #[test]
 fn public_tree_guard_is_not_clean_when_its_matcher_fails() {
     let scratch = Scratch::new("public-tree-matcher-fails");
@@ -509,8 +499,7 @@ fn public_tree_guard_refuses_a_path_holding_a_newline() {
     );
 }
 
-/// The public scan reads every file a range adds, a name git would quote included: `zoë.md`
-/// holding a term is a hit, never a file skipped.
+/// A file whose name git would quote is read, never skipped.
 #[test]
 fn public_scan_reads_a_file_whose_name_git_would_quote() {
     let scratch = Scratch::new("public-scan-quoted");
@@ -617,11 +606,9 @@ fn public_tree_guard_finds_each_dangling_link() {
     assert!(lists.status.success(), "--lists reads no link");
 }
 
-/// The public tree is a function of a commit's tree: of a throwaway repository holding the
-/// script, the tree of the commit named is written whatever later commits and the working tree
-/// hold, its changelog `unreleased` where the changelog dates no release, never dated by the
-/// clock or the commit; and `--strict`, the check a publication passes, fails where a rule would
-/// skip.
+/// The tree of the commit named is written whatever later commits and the working tree hold, an
+/// undated changelog `unreleased` and never dated by the clock, and `--strict`, the check a
+/// publication passes, fails where a rule would skip.
 #[test]
 fn public_tree_is_a_function_of_its_commit() {
     let scratch = Scratch::new("public-tree-of");
@@ -738,7 +725,7 @@ fn noise(seed: u32, n: usize) -> String {
         .collect()
 }
 
-/// A throwaway deployment's instance file, its lists holding one term each.
+/// Its lists hold one term each.
 fn throwaway_deployment(scratch: &Scratch) -> PathBuf {
     let data = scratch.join("data");
     std::fs::create_dir_all(data.join("local")).expect("the box-local tier");
@@ -748,10 +735,9 @@ fn throwaway_deployment(scratch: &Scratch) -> PathBuf {
     data.join("instance.toml")
 }
 
-/// The secret scanner is gitleaks with its maintained rules: a GitHub token, an AWS key pair, a
-/// PEM private key and a token wrapped in base64 are each a hit at their line, printed by file
-/// and line alone. A finding the tree's `.gitleaksignore` names by its fingerprint passes, at
-/// that path and no other, once the manifest admits the file's bytes too.
+/// A GitHub token, an AWS key pair, a PEM key and a base64-wrapped token are each a hit printed by
+/// file and line alone, and a `.gitleaksignore` fingerprint passes one only at that path, once the
+/// manifest admits the file's bytes too.
 #[test]
 fn public_tree_guard_finds_secrets_with_gitleaks() {
     use base64::Engine as _;
@@ -822,9 +808,8 @@ fn public_tree_guard_finds_secrets_with_gitleaks() {
     assert!(!printed.contains(&token[4..]), "the guard printed a token");
 }
 
-/// No path hides a secret from the scanner: gitleaks's own default allowlist passes over a
-/// picture's text, lock files, `node_modules/`, a PDF's and a `.bin`'s text and any path naming
-/// its config, so the guard hands it every file under a neutral name. A token in each is a hit.
+/// gitleaks's default allowlist passes over pictures, lock files, `node_modules/`, PDFs, `.bin`s
+/// and any path naming its config, so the guard hands it every file under a neutral name.
 #[test]
 fn public_tree_guard_finds_a_secret_whatever_its_path() {
     let scratch = Scratch::new("public-tree-gitleaks-paths");
@@ -879,8 +864,8 @@ fn public_tree_guard_refuses_an_untrimmed_admission() {
     assert!(out.stdout.is_empty(), "no verdict is printed");
 }
 
-/// A go.sum line is allowed only in its own shape: a module, a version of digits and words, an
-/// `h1:` checksum. A key standing where the version stands is a secret like any other.
+/// A go.sum line passes only as a module, a version of digits and words and an `h1:` checksum, so
+/// a key where the version stands is a secret like any other.
 #[test]
 fn public_tree_guard_takes_a_go_sum_line_only_in_its_shape() {
     use base64::Engine as _;
@@ -906,9 +891,8 @@ fn public_tree_guard_takes_a_go_sum_line_only_in_its_shape() {
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "go.sum:2");
 }
 
-/// A sealed slot passes both checks in its exact shape: the matcher reads its box as
-/// ciphertext, and the scanner reads the line with the slot a placeholder. A key on the same
-/// line as a slot, or on another, is still found, and so is a slot of a near-miss shape.
+/// A sealed slot passes both checks only in its exact shape: a key beside it or elsewhere, and a
+/// slot of a near-miss shape, are still found.
 #[test]
 fn public_tree_guard_reads_a_sealed_slot_as_ciphertext() {
     use base64::Engine as _;
@@ -1004,10 +988,8 @@ fn public_tree_guard_is_not_clean_when_gitleaks_fails() {
     assert!(out.stdout.is_empty(), "no verdict is printed");
 }
 
-/// Opaque content is admitted, not decoded: a file the matcher cannot read as words (a binary,
-/// a run of base64) is a hit until the manifest lists its path with the digest of its bytes,
-/// at that path alone; a listed file whose bytes changed is a hit again; what an admitted file
-/// holds encoded is not read, and its plain lines still are.
+/// An opaque file is a hit until the manifest lists its path with its bytes' digest, at that path
+/// alone, and a changed one is a hit again; its encoded content is not read, its plain lines are.
 #[test]
 fn public_tree_guard_admits_opaque_files_by_digest() {
     use base64::Engine as _;
@@ -1156,9 +1138,8 @@ fn public_scan_shares_the_guard_and_admits_at_a_terminal() {
     );
 }
 
-/// A push publishes every commit of a range, so the scan reads each one: a term one commit adds
-/// and the next removes is a hit, though the tip holds none; and a commit's own file is never
-/// overwritten by the scan's copy of its message.
+/// A push publishes every commit, so a term one commit adds and the next removes is a hit, and a
+/// commit's own file is never overwritten by the scan's copy of its message.
 #[test]
 fn public_scan_reads_every_commit_of_the_range() {
     let scratch = Scratch::new("public-scan-every-commit");
@@ -1209,10 +1190,9 @@ fn public_scan_reads_every_commit_of_the_range() {
     );
 }
 
-/// A push publishes each commit's author and committer beside its message, so the scan reads
-/// both names and both addresses as git stores them: a term in any of them is a hit at its line
-/// of the commit's `identity` (1 the author, 2 the committer), even where the repository's
-/// `.mailmap`, published before the range, would show a clean name in its place.
+/// A push publishes each commit's author and committer, so a term in either name or address as git
+/// stores it is a hit at its line of `identity` (1 the author, 2 the committer), even where a
+/// `.mailmap` would show a clean name.
 #[test]
 fn public_scan_reads_each_commit_s_author_and_committer() {
     let scratch = Scratch::new("public-scan-identity");
@@ -1479,14 +1459,8 @@ fn public_tree_guard_incremental_and_full_checks_agree() {
     );
 }
 
-/// Door 2 over a public store's repository: `prodrome draw`'s pictures pass the scan of a commit
-/// exactly when drawing the store at that commit gives their bytes, wherever and however often the
-/// store is drawn. One byte changed in a picture is refused, and so is a picture drawn before an
-/// object its commit adds; each refusal names the file and no word. A commit with an object door 1
-/// would refuse is refused as before, and so is one whose body draws a listed word. The redraw
-/// reads the commit alone: a link is a hit by its path, and the commit's own `.gitattributes`
-/// change nothing it reads. A body the closed world refuses or stops is drawn as text, and its
-/// object is a hit by its path.
+/// `prodrome draw`'s pictures pass the scan of a commit exactly when drawing the store at that
+/// commit gives their bytes, and each refusal names the file and no word.
 #[test]
 #[allow(clippy::too_many_lines)]
 fn door_2_admits_a_picture_by_drawing_the_store_again() {
@@ -1744,9 +1718,8 @@ fn door_2_admits_a_picture_by_drawing_the_store_again() {
     );
     git(&["reset", "-q", "--hard", "fresh"]);
 
-    // A body the closed world refuses (it reaches for `plugin`) and one it stops (a loop past its
-    // child's CPU cap) are each drawn as text, and the store still draws; door 2 refuses both
-    // objects by their paths, as door 1 would. One that breaks a page draws, and is taken.
+    // A body the closed world refuses (`plugin`) or stops (a loop past its child's CPU cap) is
+    // drawn as text and refused by its path, as door 1 would; one that breaks a page is taken.
     add("aplugin", "Load #plugin(bytes(()))", 4);
     add("aloop", "Count #for i in range(1000000000) {}", 4);
     add("apage", "Before #pagebreak() after", 4);

@@ -1,7 +1,6 @@
-//! A store this deployment follows: a copy of a store another repository keeps, read under its
-//! own policy and never written here. It is no [`super::ChainDir`], so adoption, the writers,
-//! the release plan and the public push, which all walk [`super::ChainDirs`], cannot reach it;
-//! and its one handle is a [`Reading`], which has no append.
+//! A store this deployment follows, read under its own policy and never written here: it is no
+//! [`super::ChainDir`], so nothing that walks [`super::ChainDirs`] (adoption, the writers, the
+//! release plan, the public push) reaches it, and its one handle is a [`Reading`], with no append.
 
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
@@ -126,7 +125,6 @@ impl From<Within> for PathBuf {
     }
 }
 
-/// A store this deployment reads and never writes.
 #[derive(Debug, Clone)]
 pub struct Followed {
     /// The name the one list and `--chain` spell, unique beside every chain's.
@@ -141,9 +139,8 @@ pub struct Followed {
     clone: PathBuf,
 }
 
-/// What the copy holds, as a reading reports it: its tree as the last fetch that moved or
-/// confirmed it left it, and a refused fetch since. Anything the upstream gained since the
-/// confirmed fetch is missing from every reading.
+/// What the copy holds as of the last fetch that moved or confirmed it, and a refused fetch
+/// since; anything the upstream gained since the confirmed fetch is missing from every reading.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Copied {
     pub tree: Tree,
@@ -227,12 +224,9 @@ impl Followed {
             .collect()
     }
 
-    /// The copy as it stands, under its own policy, with no way to append.
-    ///
-    /// # Errors
-    /// A store whose directory, or any directory on its way down from the copy, or whose
-    /// `objects`, is not a real directory, or an entry of `objects` that is not a regular file:
-    /// a link would read another place of this machine as the followed store.
+    /// The copy as it stands, under its own policy, with no way to append; a store directory, a
+    /// directory on its way down or `objects` that is not a real directory, or an entry of
+    /// `objects` that is not a regular file, is refused: a link would read another place as it.
     pub fn reading(&self) -> Result<Reading, String> {
         let store = self.clone.join(&self.within.0);
         let mut walked = self.clone.clone();
@@ -310,14 +304,10 @@ impl Followed {
         Copied { tree, since }
     }
 
-    /// Bring the copy to the upstream branch's head, fast-forward only, and record the outcome at
-    /// `now`: a store only gains objects, so an upstream that rewrote its history is refused, the
-    /// copy stays as it was, and the reading says the refusal. A fetch that fails after it began
-    /// to change the copy's tree leaves the copy unconfirmed, read as no store until a fetch
-    /// confirms it again; the next fetch puts the tree back first.
-    ///
-    /// # Errors
-    /// Git's refusal, with its words, or a record that could not be written.
+    /// Bring the copy to the upstream head, fast-forward only, recording the outcome at `now`: a
+    /// store only gains objects, so a rewritten history is refused and the copy stays, and a fetch
+    /// that fails after it began to change the tree leaves the copy unconfirmed, read as no store
+    /// until a fetch confirms it again, and the next fetch puts the tree back first.
     pub fn fetch(&self, now: Datetime) -> anyhow::Result<()> {
         let at = prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(now));
         let _held = suzatary_io::durable::hold(&self.record("lock"))?;
@@ -376,7 +366,6 @@ impl Followed {
     }
 }
 
-/// `path` removed, or already absent.
 fn gone(path: &Path) -> anyhow::Result<()> {
     match std::fs::remove_file(path) {
         Err(absent) if absent.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -384,12 +373,11 @@ fn gone(path: &Path) -> anyhow::Result<()> {
     }
 }
 
-/// Git in `dir` for a store another repository keeps. It reads none of the user's or the
-/// system's git configuration, so no filter driver, credential helper or setting of theirs
-/// applies; ssh still reads the user's own keys and known hosts, and a store followed over
-/// https is a public one, which needs no credential. No hook runs, a link checks out as a plain
-/// file, every object received is checked, only the https, ssh and file transports are
-/// allowed, nothing prompts, and a call that hangs is killed.
+/// Git in `dir` for a store another repository keeps, reading none of the user's or system's
+/// git configuration (ssh still reads the user's keys and known hosts; a followed https store
+/// is public): no hook runs, a link checks out as a plain file, every object received is
+/// checked, only the https, ssh and file transports are allowed, nothing prompts, and a call
+/// that hangs is killed.
 fn git(dir: &Path) -> Cmd {
     Cmd::new("git")
         .args([

@@ -5,9 +5,7 @@ use clap::Parser;
 use suzatary_cli::commands::{doctor, init};
 use suzatary_cli::instance::Instance;
 
-/// A thin wrapper so a test can build [`init::Args`] the way `main.rs`
-/// does — through `clap`'s own parser — without `Args`'s fields needing to be
-/// `pub` for an external test crate to reach them.
+/// Builds [`init::Args`] through `clap`'s own parser, so `Args`'s fields need not be `pub`.
 #[derive(Debug, Parser)]
 struct Wrapper {
     #[command(flatten)]
@@ -26,7 +24,6 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// The repository this test file lives in.
 fn repo() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -35,8 +32,7 @@ fn repo() -> std::path::PathBuf {
         .to_path_buf()
 }
 
-/// Every answer `instance.sample.toml` was generated from: a placeholder deployment with no
-/// real address in it, `--repo "."` so the committed file reads exactly as `init` wrote it.
+/// The answers `instance.sample.toml` was generated from, with no real address in them.
 fn sample_args() -> init::Args {
     parse(&[
         "--name",
@@ -58,9 +54,8 @@ fn sample_args() -> init::Args {
     ])
 }
 
-/// `instance.sample.toml` is `suzatary init`'s own output, byte for byte, so it cannot drift
-/// from what the verb writes; the fresh `init` runs over a temp directory so its chain
-/// directories stay out of the repository.
+/// `instance.sample.toml` is `suzatary init`'s own output, byte for byte; the fresh `init` runs
+/// over a temp directory so its chain directories stay out of the repository.
 #[test]
 fn the_committed_sample_equals_a_fresh_init() {
     let dir = temp_dir("sample");
@@ -83,7 +78,6 @@ fn the_committed_sample_equals_a_fresh_init() {
     );
 }
 
-/// A fresh `init`, then `doctor`, over a deployment nothing has hand-edited.
 #[test]
 fn doctor_over_a_fresh_init_passes_its_startup_checks() {
     let dir = temp_dir("doctor");
@@ -112,12 +106,10 @@ fn doctor_over_a_fresh_init_passes_its_startup_checks() {
     })
     .expect("a fresh init");
 
-    // The startup check `suzatary serve` refuses to start without: no dead writer, no
-    // unrostered actor, no reserved or repeated chain name, a roster with no duplicate address.
+    // The startup check `suzatary serve` refuses to start without.
     let read = Instance::read(&instance_path, &env_beside(&instance_path));
     assert!(read.is_ok(), "{:?}", read.err());
 
-    // And `doctor` over it, the operator-facing half of the same claim.
     doctor::run(&instance_path, &doctor::Args::default()).expect("doctor never fails outright");
 }
 
@@ -177,9 +169,7 @@ fn the_binary_takes_its_code_root_from_the_unit_over_the_instance() {
     );
 }
 
-/// A fresh init with a separate `--data` puts the chain directories there and nothing under
-/// the code root: a chain's directory is data, resolved on `DataRoot`. The roots must differ,
-/// or a writer that stayed on `CodeRoot` would pass.
+/// The roots must differ, or a writer that stayed on `CodeRoot` would pass.
 #[test]
 fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none() {
     let code_dir = temp_dir("data-root-code");
@@ -222,7 +212,6 @@ fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none()
         );
     }
 
-    // And nothing leaked into the code root.
     for name in ["events", "events-suzatary"] {
         assert!(
             !code_dir.join(name).exists(),
@@ -242,10 +231,8 @@ fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
     .expect("the cast's keys")
 }
 
-/// A deployment's first run as its units run it (`scripts/deployed-shape.sh`): a cleared
-/// environment whose PATH holds no `secretspec`. The keys are minted through the secret store,
-/// so that run cannot mint them, and says which and why; handed the seeds in its environment,
-/// as a store that already holds them answers first, it begins the deployment under their root.
+/// On the units' cleared PATH (`scripts/deployed-shape.sh`), with no `secretspec`, a run cannot
+/// mint the keys and says which and why, and seeds in its environment answer first.
 #[test]
 fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store() {
     let dir = temp_dir("units-path");
@@ -309,8 +296,8 @@ fn init_on_the_units_path_takes_its_keys_from_the_environment_or_names_the_store
         "{}",
         String::from_utf8_lossy(&seeded.stderr)
     );
-    // Its steps set a secret against the file `suzatary secretspec` names when the step runs,
-    // which is under the state directory, never the code root, which a deployment cannot write.
+    // The secretspec file is under the state directory, never the code root, which a deployment
+    // cannot write.
     let steps = String::from_utf8_lossy(&seeded.stdout);
     assert!(
         steps.contains("secretspec set CLAUDE_CODE_OAUTH_TOKEN --file \"$(suzatary secretspec)\""),
@@ -354,7 +341,6 @@ fn env_beside(path: &std::path::Path) -> suzatary_cli::paths::Env {
     suzatary_cli::paths::Env::under(path.with_file_name("home"), path.with_file_name("run"))
 }
 
-/// Every file under `root` and its bytes.
 fn tree(root: &std::path::Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
     let mut files = std::collections::BTreeMap::new();
     let mut walking = vec![root.to_path_buf()];
@@ -372,9 +358,7 @@ fn tree(root: &std::path::Path) -> std::collections::BTreeMap<std::path::PathBuf
     files
 }
 
-/// LAW: resolving the box's keys only reads. A verb that asks for them (`doctor`) leaves the
-/// instance's directory byte for byte as it was; adopting is `device init`'s act (and the
-/// server's), and it is the one that writes.
+/// LAW: resolving the box's keys only reads; adopting is `device init`'s and the server's act.
 #[test]
 fn the_signers_leave_the_instance_directory_byte_identical() {
     let dir = temp_dir("signers-read");
@@ -426,8 +410,8 @@ fn the_signers_leave_the_instance_directory_byte_identical() {
     assert_eq!(tree(&dir), adopted);
 }
 
-/// LAW: `suzatary notify` pushes through the server's one channel list, so a deployment whose
-/// `[notify]` names none pushes nothing from either, and says so rather than resolving a secret.
+/// LAW: with no `[notify]` channel, `suzatary notify` pushes nothing and says so rather than
+/// resolving a secret.
 #[test]
 fn notify_reads_the_channel_list_the_server_reads() {
     let dir = temp_dir("notify-channels");

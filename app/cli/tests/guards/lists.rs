@@ -58,7 +58,6 @@ fn admitted((kind, path): &(Kind, String)) -> String {
     }
 }
 
-/// The one assignment of `key` in `script`.
 fn assigned(script: &str, key: &str) -> String {
     let all = assignments(script, key);
     assert_eq!(all.len(), 1, "{key} is assigned once: {all:?}");

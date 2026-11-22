@@ -1,8 +1,6 @@
-//! A connection's tables written into the instance file's text, and taken out again.
-//!
-//! Each edit asks the [`Declared`] algebra for the tables it must leave, writes them with
-//! `toml_edit` so every other byte stays, and reads the result back: a text that does not read
-//! as the algebra said is refused, never written.
+//! Each edit writes the tables the [`Declared`] algebra asks for with `toml_edit`, so every other
+//! byte stays, and reads the result back: a text that does not read as the algebra said is
+//! refused, never written.
 
 use std::path::Path;
 
@@ -11,10 +9,6 @@ use suzatary_connect::settings::EditError;
 use suzatary_health::health::plugin::{Origin, PluginName};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, TableLike, Value};
 
-/// `text` with `connection`'s table added.
-///
-/// # Errors
-/// The algebra's refusal, or a file that is not the document this edit expects.
 pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<String, EditError> {
     let before = declared(path, text)?;
     let expected = before.with(connection)?;
@@ -77,9 +71,6 @@ pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<St
 }
 
 /// `text` without `connection`'s table; a plugin's manifest stays, as the algebra keeps it.
-///
-/// # Errors
-/// The algebra's refusal, or a file that is not the document this edit expects.
 pub(crate) fn remove(
     path: &Path,
     text: &str,
@@ -123,9 +114,6 @@ pub(crate) fn remove(
 }
 
 /// `text` with `plugin` allowed to reach `origin`; the same text when it already may.
-///
-/// # Errors
-/// The algebra's refusal, or a file that is not the document this edit expects.
 pub(crate) fn add_origin(
     path: &Path,
     text: &str,
@@ -153,9 +141,6 @@ pub(crate) fn add_origin(
 }
 
 /// The tables connections are read from, by [`super::Instance::declared`] over `text`.
-///
-/// # Errors
-/// A text that does not read as an instance.
 pub(crate) fn declared(path: &Path, text: &str) -> Result<Declared, EditError> {
     let file: super::File =
         toml::from_str(text).map_err(|failed| EditError::Malformed(failed.to_string()))?;

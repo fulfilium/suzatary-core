@@ -1,6 +1,5 @@
-//! A coding session's report stays on its branch. The poll reads it there (`Mirrors::seen` diffs
-//! the branch against the default branch) and keeps its text in the session's state, so the
-//! reviewer deletes it in a commit on the branch before the train lands the branch.
+//! A coding session's report stays on its branch, where the poll reads it (`Mirrors::seen` diffs
+//! the branch against the default branch), so the reviewer deletes it before the train lands it.
 
 use std::process::Command;
 

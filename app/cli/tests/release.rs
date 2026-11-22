@@ -45,7 +45,6 @@ fn authored(id: &str, body: &str, spec: prodrome_core::term::Term) -> TodoEvent 
     .expect("a record")
 }
 
-/// The roadmap store's directory under `root`.
 fn roadmap(root: &Path) -> String {
     root.join("roadmap").to_string_lossy().into_owned()
 }
@@ -189,7 +188,6 @@ fn a_checkout(root: &Path) -> PathBuf {
         "# Changelog\n\n## [Unreleased]\n\n## [1.3.0] - 2026-09-01\n\n### Added\n- the first\n",
     )
     .expect("a changelog");
-    // Two changes' entries, each its own file.
     std::fs::create_dir_all(tree.join("changelog.d")).expect("the fragments");
     std::fs::write(tree.join("changelog.d/b-fix.md"), "### Fixed\n- a fix\n").expect("a fragment");
     std::fs::write(
@@ -447,7 +445,7 @@ fn a_cut_from_the_tag_folds_an_untagged_version() {
 }
 
 /// A release completed by hand since the cut is the next train's: the chain reads above the
-/// cut, and the check passes. A tree that claims more than the chain holds is refused.
+/// cut and the check passes, while a tree that claims more than the chain holds is refused.
 #[test]
 fn a_check_wants_the_chain_at_least_at_the_cut() {
     let root = common::scratch("release-at-least");
@@ -603,9 +601,8 @@ fn known_tells_an_unknown_todo_from_a_failure() {
     assert_eq!(broken.status.code(), Some(1));
 }
 
-/// `release complete` writes each todo done where it is found, the roadmap's there with the
-/// release alone as its note and a private one on the upkeep chain with the pull request's, skips one already done, and writes nothing the second
-/// time; a todo found nowhere writes nothing at all.
+/// `release complete` writes each todo done once where it is found, the roadmap's with the
+/// release alone as its note and the upkeep chain's with the pull request's.
 #[test]
 fn complete_writes_where_each_todo_is_found_once() {
     let root = common::scratch("release-complete");
@@ -704,8 +701,7 @@ fn version_installed(name: &str, release: Option<&str>) -> String {
 }
 
 /// A release is data installed beside the binary, not compiled into it: one binary, copied into
-/// two packages with two release files, prints each package's release, and with none prints
-/// `dev`. `GET /api/about` asks the same reader (`stamp::release`).
+/// two packages with two release files, prints each package's release, and with none `dev`.
 #[test]
 fn the_release_is_read_from_the_file_beside_the_binary() {
     assert_eq!(
@@ -727,8 +723,8 @@ fn the_release_is_read_from_the_file_beside_the_binary() {
     );
 }
 
-/// `release fragments` reads `changelog.d/` as a cut does, with no instance or chain: what the
-/// merge gate's `changelog` step asks. A fragment the cut refuses, it refuses, naming the file.
+/// `release fragments`, the merge gate's `changelog` step, reads `changelog.d/` as a cut does,
+/// with no instance or chain, and refuses what the cut refuses, naming the file.
 #[test]
 fn fragments_are_read_as_a_cut_reads_them() {
     let root = common::scratch("release-fragments");

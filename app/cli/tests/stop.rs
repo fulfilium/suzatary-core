@@ -30,8 +30,6 @@ fn refused_stop(base: &str, id: &str) -> String {
     common::refused_line(base, &stop)
 }
 
-/// Nothing running is nothing to stop: the lines refuse the stop, and no halt is left standing
-/// to stop the next question instead.
 #[test]
 fn a_stop_with_no_round_running_is_refused_and_stops_nothing_later() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -73,9 +71,8 @@ fn shape(payload: &serde_json::Value) -> Vec<(String, String, bool)> {
         .collect()
 }
 
-/// A stop mid-round ends it: the answer never lands, the act names who stopped it and closes the
-/// question by itself, with no empty answer after it. Once the box holds the stop, no reading
-/// shows the stopped question queued or working.
+/// The answer never lands, the act closes the question with no empty answer after it, and no
+/// reading after the stop shows the question queued or working.
 #[test]
 fn a_stop_mid_round_ends_it_in_the_act() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -94,8 +91,7 @@ fn a_stop_mid_round_ends_it_in_the_act() {
     let _ = common::say(&base, &id, "read every thread");
     gate.wait_until_entered();
 
-    // Held in the model: the round has claimed the question and written nothing more, so the
-    // question is the round's and no longer queued.
+    // Held in the model: the round has claimed the question, so it is no longer queued.
     let held = common::reading(&base, &id, &[]);
     assert_eq!(held["state"], "thinking", "{held}");
     assert_eq!(
@@ -124,9 +120,8 @@ fn a_stop_mid_round_ends_it_in_the_act() {
     );
 }
 
-/// A question the page shows as queued, which no round has taken yet, is stopped by the act
-/// alone: the stop answers with the question closed, no model is asked for it, and the next
-/// question is answered as usual, so nothing of the stop is left over.
+/// A queued question is stopped by the act alone: no model is asked for it, and the next question
+/// is answered as usual.
 #[test]
 fn a_stop_before_any_round_takes_the_question_closes_it() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());

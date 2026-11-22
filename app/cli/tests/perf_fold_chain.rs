@@ -29,7 +29,6 @@ use suzatary_secretary::secretary::Secretary;
 use suzatary_server::server::Server;
 use suzatary_store::store::Reads as _;
 
-/// The repository root.
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -66,8 +65,6 @@ fn timed<T>(f: impl Fn() -> T) -> (T, f64) {
     (out, start.elapsed().as_secs_f64() * 1000.0)
 }
 
-/// `n` timed runs of `f`, keeping the last value and every reading.
-///
 /// The minimum is reported beside the mean because scheduler noise only adds time.
 fn repeated<T>(n: usize, f: impl Fn() -> T) -> (T, Vec<f64>) {
     let mut times = Vec::with_capacity(n);
@@ -98,7 +95,6 @@ fn gzip(bytes: &[u8], level: u32) -> Vec<u8> {
     encoder.finish().expect("finishes")
 }
 
-/// `part` of `whole`, as a percentage.
 #[allow(
     clippy::cast_precision_loss,
     reason = "bodies here are under 1 MB; a f64 mantissa holds that exactly"

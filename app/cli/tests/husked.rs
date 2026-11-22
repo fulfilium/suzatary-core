@@ -71,9 +71,8 @@ fn readings(conversations: Conversations<'_>) -> [(&'static str, String); 3] {
     suzatary_api::routes::lines_readings(conversations, at(50)).expect("reads")
 }
 
-/// Three conversations of six lines, the last with three lines past the content answer's bound,
-/// and the first two's answers erased and their keys destroyed: answers the lines' names that no
-/// key opens.
+/// Three conversations of six lines, the last with three past the content answer's bound and the
+/// first two's keys destroyed: answers the lines' names that no key opens.
 fn written(root: &Path) -> BTreeSet<Hash> {
     let held = stores_at(root);
     let conversations = held.conversations();
@@ -134,8 +133,8 @@ fn file(root: &Path, name: &Hash) -> Vec<u8> {
 }
 
 /// THE PRUNE LAW: a store pruned in any number of steps (a stop between two writes is a prune
-/// of fewer names) reads as it did, and so do the same files opened afresh, as a clone of them
-/// reads; each husk holds no sealed word; verify finds nothing; and a second prune writes nothing.
+/// of fewer names) reads as it did, opened afresh too, each husk holds no sealed word, and verify
+/// finds nothing.
 #[test]
 fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
     let dir = suzatary_testkit::scratch("husked");
@@ -252,10 +251,9 @@ fn counted(
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
 
-    /// THE HUSKED CHAIN LAW: a store whose slots are sealed again 1 to 5 times, each seal from the
-    /// one before, then swept and pruned so every seal of a chain but the last is a husk, reads
-    /// as it did whole: the same readings and the same opened words. Reading it prints a binding
-    /// for exactly the slots that open, one each, and for no husked seal.
+    /// THE HUSKED CHAIN LAW: a store whose slots are sealed again 1 to 5 times, then pruned so
+    /// every seal of a chain but the last is a husk, reads as it did whole and prints a binding
+    /// for exactly the slots that open, one each.
     #[test]
     fn a_husked_reseal_chain_reads_as_it_did_and_binds_only_what_opens(
         chains in proptest::collection::vec((0usize..3, 1usize..=5), 1..8),
@@ -264,8 +262,7 @@ proptest! {
     }
 }
 
-/// The husked chain law's case that first failed on the train's runners: two chains in one
-/// conversation, the first four seals deep.
+/// The husked chain law over two chains in one conversation, the first four seals deep.
 #[test]
 fn a_second_chain_after_a_deep_one_in_the_same_conversation() {
     husked_chains(&[(0, 1), (2, 4), (2, 4), (1, 2), (2, 5)]).expect("the law holds");
@@ -394,9 +391,8 @@ fn chains_written(
     (readings(conversations), counted(conversations, &whole).0)
 }
 
-/// A pruned store takes back no whole it let go: offered every object of a device that still
-/// holds the dead lines whole, and a line that device wrote over them, it takes the new line
-/// alone and keeps each husk. It still writes over its husks.
+/// Offered a device's whole dead lines and a line written over them, a pruned store takes the new
+/// line alone, keeps each husk, and still writes over them.
 #[test]
 fn a_pruned_store_takes_back_no_dropped_whole() {
     let dir = suzatary_testkit::scratch("husked");

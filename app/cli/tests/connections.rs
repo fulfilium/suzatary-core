@@ -1,7 +1,4 @@
-//! A connection's cards over a real server and a scratch instance file: Connect writes its
-//! table and the box files its step, a link served from an origin its plugin may not reach is
-//! stored nowhere and asked for as a Grant, and Disconnect takes out what Connect wrote, a
-//! plugin's manifest aside.
+//! A connection's cards over a real server and a scratch instance file.
 
 use crate::common;
 
@@ -73,7 +70,6 @@ fn serving(tag: &str, act: Act) -> Box {
     serving_with(tag, act, |server, _| server)
 }
 
-/// [`serving`], its server built further by `with` first.
 fn serving_with(
     tag: &str,
     act: Act,
@@ -82,8 +78,6 @@ fn serving_with(
     serving_answering(tag, Some(act), None, with)
 }
 
-/// [`serving_with`], the secretary answering as `model` scripts it; `act`, when given, filed as
-/// the secretary's card.
 fn serving_answering(
     tag: &str,
     act: Option<Act>,
@@ -195,7 +189,6 @@ fn file(served: &Box) -> String {
     std::fs::read_to_string(&served.path).expect("the file")
 }
 
-/// The conversation the setup agent's cards are drawn in, here.
 const CONNECT: &str = "connect";
 
 /// `act` filed as the secretary's in the `connect` conversation, as the setup agent files it.
@@ -203,11 +196,8 @@ fn asked(fakes: &Fakes, act: Act) {
     common::asked(fakes, CONNECT, act);
 }
 
-/// Connect writes the calendar's table, and the box asks for its link at once; a link from an
-/// origin the plugin may not reach is stored nowhere, its card says only the origin, and the box
-/// asks for a grant; once allowed, the same link is stored; Disconnect takes the link out and
-/// clears it, the plugin, granted an origin its template does not name, stays, and connecting
-/// again asks for the link anew.
+/// A link from an origin the plugin may not reach is stored nowhere and its card says only the
+/// origin, and Disconnect leaves the plugin, granted an origin its template does not name.
 #[test]
 fn a_calendar_is_connected_granted_and_removed_by_its_cards() {
     let served = serving(
@@ -298,9 +288,8 @@ fn a_calendar_is_connected_granted_and_removed_by_its_cards() {
     assert_eq!(again["state"], "standing", "{asked}");
 }
 
-/// Over a store that refuses, as `secretspec` does, a name its file does not declare: Connect
-/// declares the calendar's link before the box files its card, so the card's tap stores it,
-/// and Disconnect clears the link while it is still declared and only then drops the name.
+/// Over a store that refuses, as `secretspec` does, an undeclared name, the link is declared
+/// before its card is filed and cleared while still declared, and only then is the name dropped.
 #[test]
 fn a_calendar_s_link_is_declared_before_its_card_and_cleared_before_it_is_dropped() {
     let store = Arc::new(DeclaredStore::new());
@@ -359,9 +348,8 @@ fn a_calendar_s_link_is_declared_before_its_card_and_cleared_before_it_is_droppe
     assert!(!store.declares("PLUGIN_ICS_WORK"), "dropped once cleared");
 }
 
-/// Storing a link syncs its plugin at the tap, once, so the link is checked then and not at the
-/// next timer; a link that was refused, here for its origin, stored nothing and syncs nothing,
-/// and the same link once its origin is allowed is stored and synced.
+/// Storing a link syncs its plugin once at the tap, not at the next timer, and a refused link
+/// syncs nothing.
 #[test]
 fn a_stored_link_is_checked_at_its_tap() {
     let checks = Arc::new(common::CheckRecorder::default());
@@ -396,9 +384,7 @@ fn a_stored_link_is_checked_at_its_tap() {
     assert_eq!(checks.checked(), ["ics"], "synced once, at the tap");
 }
 
-/// A calendar added to the instance file by hand is seen with no restart: the server reads the
-/// moved file again, the settings page draws its line and the box asks for its link; reading
-/// the same file again files nothing more.
+/// Reading the same unmoved file again files nothing more.
 #[test]
 fn a_calendar_added_by_hand_is_seen_without_a_restart() {
     let served = serving_with(
@@ -458,8 +444,7 @@ fn asked_of(served: &Box, act: Act) {
     asked(&served.fakes, act);
 }
 
-/// The secretary proposes against the names the instance declares now: a calendar's link is
-/// refused before its Connect is tapped and proposed once it is, with no restart between.
+/// The secretary proposes against the names the instance declares now, with no restart.
 #[test]
 fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
     let propose = r#"{"say": "I will ask for the link.",
@@ -508,10 +493,8 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
     );
 }
 
-/// A connect the owner asks for in their own words is filed on the first try, its source the
-/// round they asked in, which the model does not name; and so is a second in the same
-/// conversation, after the first card and after a refused proposal, since neither answer reads
-/// anything from outside the round.
+/// Its source is the round asked in, which the model does not name, and a second in the same
+/// conversation is filed too, since neither answer reads anything from outside the round.
 #[test]
 fn a_connect_in_the_owners_words_is_filed_on_the_first_try() {
     let connect = |label: &str| {
@@ -557,8 +540,7 @@ fn a_connect_in_the_owners_words_is_filed_on_the_first_try() {
     );
 }
 
-/// A second add is a failed card that wrote nothing, and a connection added and removed leaves
-/// the file byte for byte but for the calendar's plugin, which stays, declared with no link.
+/// A connection added and removed leaves the file byte for byte but for the calendar's plugin.
 #[test]
 fn connecting_twice_writes_once_and_removing_takes_out_what_it_wrote() {
     let served = serving(
@@ -594,8 +576,7 @@ fn connecting_twice_writes_once_and_removing_takes_out_what_it_wrote() {
     assert!(!left.contains("credentials"), "{left}");
 }
 
-/// A mail account's removal offers its wider yes, deleting its cached mail too; a calendar's
-/// removal has none, and a tap claiming one is refused before anything runs.
+/// A calendar's removal has no wider yes, and a tap claiming one is refused before anything runs.
 #[test]
 fn only_a_mail_account_s_removal_may_delete_its_mail() {
     let account = Connection::parse("lieer", &["ada@example.test".to_owned()]).expect("an account");
@@ -638,8 +619,7 @@ fn only_a_mail_account_s_removal_may_delete_its_mail() {
     assert_eq!(status, 400);
 }
 
-/// A tap carries at most one answer beside its note: a body naming two is refused where it is
-/// read, and the card stands, so tapping it again with one answer performs it.
+/// A tap carries at most one answer beside its note.
 #[test]
 fn a_tap_naming_two_answers_is_refused_and_the_card_stands() {
     let account = Connection::parse("lieer", &["ada@example.test".to_owned()]).expect("an account");
@@ -673,8 +653,7 @@ fn a_tap_naming_two_answers_is_refused_and_the_card_stands() {
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
 }
 
-/// A grant the owner dismissed is asked for anew when a link from its origin is pasted again:
-/// each paste is the owner asking, so the box's card has an episode, never a final no.
+/// Each paste is the owner asking, so the box's card has an episode, never a final no.
 #[test]
 fn a_dismissed_grant_is_asked_again_when_the_link_is_pasted_again() {
     let served = serving(
@@ -706,8 +685,7 @@ fn a_dismissed_grant_is_asked_again_when_the_link_is_pasted_again() {
     assert_eq!(again["state"], "standing", "{after}");
 }
 
-/// The box's sign-in card the owner dismissed stays dismissed while the account stays, and an
-/// account removed and connected again is a new episode, whose sign-in is asked for anew.
+/// A dismissed sign-in card stays dismissed while the account stays; a reconnect is a new episode.
 #[test]
 fn an_account_connected_again_is_asked_for_its_sign_in_again() {
     let account = || {
@@ -758,8 +736,8 @@ fn an_account_connected_again_is_asked_for_its_sign_in_again() {
     assert_eq!(proposals[1]["state"], "standing", "{asked}");
 }
 
-/// A link in the clear is refused before any grant is asked for, since the plugin's fetch never
-/// sends a secret link over plain http, so allowing its origin would allow nothing.
+/// The plugin's fetch never sends a secret link over plain http, so allowing its origin would
+/// allow nothing.
 #[test]
 fn a_link_in_the_clear_is_refused_before_any_grant() {
     let served = serving(
@@ -787,11 +765,8 @@ fn a_link_in_the_clear_is_refused_before_any_grant() {
     assert!(served.secrets.calls().is_empty(), "nothing was stored");
 }
 
-/// A link to a Google calendar is stored nowhere, since the box reads a Google account's
-/// calendars through its sign-in with Google: a calendar that is no account's own asks for
-/// nothing more, and an account's own calendar asks for that account's connection, never for a
-/// grant of Google's origin, for the deployment's account, which lieer reads, too; that
-/// connection's tap leaves the instance file as it was.
+/// A Google calendar's link is stored nowhere, since the box reads it through the account's
+/// sign-in with Google, and never asks for a grant of Google's origin.
 #[test]
 fn a_google_calendar_s_link_asks_for_its_google_account() {
     let served = serving(
@@ -848,9 +823,7 @@ fn a_google_calendar_s_link_asks_for_its_google_account() {
     assert_eq!(file(&served), before, "the instance file is as it was");
 }
 
-/// A calendar's card says what its plugin may reach as the instance declares it now: the
-/// template's origins for a first calendar, as a replica reads it, and the box draws the
-/// declared plugin's once there is one.
+/// The template's origins for a first calendar, and the declared plugin's once there is one.
 #[test]
 fn a_connect_card_names_the_origins_its_plugin_may_reach_now() {
     let served = serving(
@@ -886,8 +859,7 @@ fn a_connect_card_names_the_origins_its_plugin_may_reach_now() {
     );
 }
 
-/// Removing a Microsoft account deletes the sign-ins it held, reading and sending, which its
-/// card lists under what it forgets, whatever the card's wider yes.
+/// Removing the account deletes both its sign-ins, reading and sending, whatever the card's yes.
 #[test]
 fn removing_a_microsoft_account_forgets_its_sign_in() {
     let account = || {
@@ -932,8 +904,7 @@ fn removing_a_microsoft_account_forgets_its_sign_in() {
     assert!(other.exists(), "another account's are not");
 }
 
-/// A calendar's link tapped while the instance file does not read is refused, never stored
-/// unchecked: whether it may be fetched is the file's to say.
+/// A link is never stored unchecked: whether it may be fetched is the file's to say.
 #[test]
 fn a_link_is_refused_while_the_instance_file_does_not_read() {
     let served = serving(
@@ -994,10 +965,8 @@ fn push_token_card(served: &Box) -> Option<serde_json::Value> {
         .cloned()
 }
 
-/// A tap that moves the instance file derives the settable names again with the same function
-/// the server started with, so the data repository's push token, which no table of a
-/// connection declares, stays settable, and its card stays owed while the repository pushes to
-/// GitHub.
+/// A tap that moves the instance file derives the settable names with the function the server
+/// started with, so the push token, which no connection declares, stays settable.
 #[test]
 fn a_connect_tap_leaves_the_push_token_settable_and_owed() {
     let served = serving_pushing("pushtoken", Some("https://github.com/ada/data.git"));
@@ -1007,8 +976,7 @@ fn a_connect_tap_leaves_the_push_token_settable_and_owed() {
     assert_eq!(owed["state"], "standing", "{owed}");
 }
 
-/// A data repository that pushes nowhere, or to a host that is not GitHub, is asked for no
-/// GitHub push token: the token is for a push that does not happen.
+/// A repository pushing nowhere or not to GitHub is asked for no push token, as no push happens.
 #[test]
 fn a_repository_pushing_nowhere_is_asked_for_no_push_token() {
     for (tag, origin) in [
@@ -1022,10 +990,8 @@ fn a_repository_pushing_nowhere_is_asked_for_no_push_token() {
     }
 }
 
-/// A Microsoft account connected stands at its sign-in, so the box files the sign-in's card,
-/// the one the secretary's `propose_act` files, and the same tap begins its device flow against
-/// the instance file as it reads now, though the server started before the account was there;
-/// the card itself shows the link and the code while the flow waits.
+/// The tap begins its device flow against the instance file as it reads now, though the server
+/// started before the account was there.
 #[test]
 fn a_new_microsoft_account_is_asked_for_its_sign_in() {
     let account = Connection::parse(
@@ -1110,8 +1076,7 @@ fn notifications(base: &str) -> Vec<serde_json::Value> {
         .unwrap_or_default()
 }
 
-/// A channel connected by its card is a Notifications line at once: the overview reads the
-/// channels under the lock the tap swaps, not as the server started.
+/// The overview reads the channels under the lock the tap swaps, not as the server started.
 #[test]
 fn a_connected_channel_is_on_the_overview_with_no_restart() {
     let ntfy = Connection::parse("ntfy", &[]).expect("a channel");
@@ -1129,7 +1094,6 @@ fn a_connected_channel_is_on_the_overview_with_no_restart() {
     assert!(names_ntfy(&lines), "{lines:?}");
 }
 
-/// A topic opened for `served`, its id.
 fn topic(served: &Box) -> String {
     common::opened(&served.base, "Setup")
 }
@@ -1156,11 +1120,8 @@ fn proposing(payload: &serde_json::Value) -> serde_json::Value {
         .unwrap_or_else(|| panic!("the verb's turn: {payload}"))
 }
 
-/// Asked in a round of the owner's own words, the secretary files a Connect card from the
-/// catalog's calendar template; nothing is written until the owner taps it, the tap writes the
-/// calendar's table, and the box then asks for its link on its own card. Asked again for the
-/// same calendar in a new topic, the secretary's card is refused, since the file already holds
-/// it.
+/// Nothing is written until the owner taps, and the same calendar asked again is refused, since
+/// the file already holds it.
 #[test]
 fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     let served = serving_answering(
@@ -1217,9 +1178,7 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     );
 }
 
-/// An account, a calendar or a folder is the owner's to name: after a round read mail, a
-/// Connect card is refused, says why in words that assume nobody's pronouns, and nothing is
-/// filed or written.
+/// An account, a calendar or a folder is the owner's to name, so mail cannot name one.
 #[test]
 fn a_round_that_read_mail_proposes_no_connect_card() {
     let served = serving_answering(

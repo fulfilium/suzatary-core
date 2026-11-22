@@ -183,7 +183,6 @@ fn the_golden_list_is_sorted_and_every_write_is_guarded() {
     }
 }
 
-/// Every listed route answers its method, and its guard is the one listed.
 #[test]
 fn every_listed_route_answers_behind_its_guard() {
     let servers = servers();

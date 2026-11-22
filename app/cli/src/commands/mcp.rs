@@ -164,8 +164,6 @@ impl Interpreters {
     }
 }
 
-/// `suzatary mcp`: serve the agent's tools over stdio until the client goes.
-///
 /// Logs go to stderr only: one stray line on stdout desynchronises the client.
 /// `RUST_LOG=warn,suzatary::timings=info` adds the memory-reading timings.
 pub fn run(path: &std::path::Path) -> anyhow::Result<()> {

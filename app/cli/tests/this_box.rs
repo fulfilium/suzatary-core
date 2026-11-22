@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use suzatary_cli::instance::Instance;
 
-/// Where this box's instance file is.
 pub(crate) fn path() -> PathBuf {
     std::env::var(suzatary_cli::instance::ENV)
         .ok()
@@ -16,9 +15,8 @@ pub(crate) fn path() -> PathBuf {
         )
 }
 
-/// The deployment, or `None` only where no instance file exists, the one skip a live check
-/// takes. A file that does not read, or an environment `Instance::open` refuses, fails the run:
-/// a live check that cannot read the box has not passed.
+/// The deployment, or `None` only where no instance file exists: a file that does not open
+/// fails the run, because a live check that cannot read the box has not passed.
 pub(crate) fn instance() -> Option<Instance> {
     let path = path();
     path.exists().then(|| {

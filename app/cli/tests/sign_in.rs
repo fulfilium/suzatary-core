@@ -1,8 +1,6 @@
-//! Connecting a model with the subscription, through the real tap route: with no model
-//! answering, the box files the Connect card (and, beside it, the API key's); its tap runs a fake `claude setup-token` in a
-//! pseudo-terminal, whose link becomes the code card's button; the code card's tap types the code
-//! in and keeps the token the CLI printed as the subscription's, after its test call. No answer
-//! carries the code or the token. Never a real login.
+//! Connecting a model with the subscription through the real tap route, over a fake `claude
+//! setup-token` in a pseudo-terminal: no answer carries the code or the token, and never a real
+//! login.
 
 use crate::common;
 
@@ -14,8 +12,7 @@ const CODE: &str = "fake-code#fake-state";
 const TOKEN: &str = "sk-ant-oat01-FAKEtoken_for-the-route-test";
 const URL: &str = "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=s1";
 
-/// A `claude` that draws the link `setup-token` draws and prints a token for one code, as the
-/// io crate's spike's fake does.
+/// A `claude` that draws the link `setup-token` draws and prints a token for one code.
 fn fake_claude(tag: &str) -> String {
     let dir = common::scratch(&format!("claude-{tag}"));
     std::fs::create_dir_all(&dir).expect("a directory");
@@ -41,7 +38,6 @@ fn unanswered(tag: &str, secrets: &Arc<SecretRecorder>, verify: VerifyRecorder) 
     unanswered_over(tag, secrets, verify).0.base
 }
 
-/// The same server, and the fakes whose stores it writes.
 fn unanswered_over(
     tag: &str,
     secrets: &Arc<SecretRecorder>,
@@ -77,7 +73,6 @@ fn unanswered_over(
 /// card the box files while no model answers.
 const CODE_CARD: usize = 1;
 
-/// Tap the box's card `index` in its `setup` conversation, with `body`.
 fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value {
     let setup = suzatary_base::conversation_id::SETUP.as_str();
     let mut tapped = common::act(
@@ -90,8 +85,8 @@ fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value 
     body
 }
 
-/// The whole sign-in, and then the code and the token are in no answer, no store the box keeps
-/// and no request record it pushes.
+/// The code and the token are in no answer, no store the box keeps and no request record it
+/// pushes.
 #[test]
 fn with_no_model_answering_the_sign_in_keeps_the_subscription_token() {
     let secrets = Arc::new(SecretRecorder::new());
@@ -174,8 +169,7 @@ fn a_token_whose_test_call_fails_is_not_kept() {
     assert!(!raw.contains(TOKEN));
 }
 
-/// Four filings at once file each card once: one Connect card and one line asking for it,
-/// however the filings interleave.
+/// One Connect card and one line asking for it, however four filings interleave.
 #[test]
 fn filings_at_once_file_each_card_once() {
     let secrets = Arc::new(SecretRecorder::new());

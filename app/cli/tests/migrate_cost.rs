@@ -1,15 +1,8 @@
 //! What `suzatary secretary migrate-scrub --apply` costs, counted.
 //!
-//! The measurement, ignored: a generated store of [`SLOTS`] slots sealed before the lines recorded
-//! their rules (`fixture-chain --lines --sealed unversioned`), migrated once. It prints the slots
-//! sealed again per second, the keys' syncs (written through `suzatary_io::durable`; the lines'
-//! are the library's store's, which this counts nothing of), the scrubs and the decryptions per
-//! stale slot, and
-//! how long the lines' lock was held, which a second thread measures by trying the lock file
-//! every millisecond. The counts are read from counters, never from the clock.
-//!
-//! The laws beside it are the migration's crash order, drawn at every step of a batch, its counts
-//! (one scrub per stale slot), and what a sweep keeps and empties around a file that does not read.
+//! The ignored measurement migrates [`SLOTS`] stale slots once and prints reseals per second, the
+//! keys' syncs (through `suzatary_io::durable`; the lines' are not counted), scrubs and decryptions
+//! per stale slot, and the lines' lock time, tried every millisecond, from counters, never a clock.
 //!
 //! `cargo test --release -p suzatary --features fixture --test all migrate_cost -- --ignored
 //! --nocapture`
@@ -29,7 +22,6 @@ use suzatary_store::store::{Doc, Gets, Graph, Prodrome, Reads, StoreError, Write
 
 use crate::secretary_cli;
 
-/// The stale slots the measurement migrates.
 const SLOTS: usize = 10_000;
 
 #[derive(Debug, clap::Parser)]
@@ -335,13 +327,9 @@ fn stops() -> Vec<(usize, Stop)> {
     stops
 }
 
-/// The crash order, drawn at every step of every batch, for runs of one batch and of several: "a
-/// line is never durable before its key". A run stopped after any number of a batch's keys reached
-/// the disk, or after its keys and any number of its lines, keeps every old key and leaves every
-/// slot reading the same words; one stopped part-way through its sweep reads the same too. The
-/// next run removes what a stopped batch staged and never placed, and reaches the store an
-/// unstopped run reaches: no slot stale, every replaced seal's key and the erased slot's
-/// destroyed, and a run after it does nothing.
+/// The crash order, "a line is never durable before its key": a run stopped at any step of a batch
+/// or its sweep keeps every old key and reads the same words, and the next run reaches the store
+/// an unstopped run reaches.
 #[test]
 fn migrate_scrub_stopped_at_any_step_of_a_batch_and_run_again_reads_the_same() {
     use suzatary_lines::secretary::rescrub::{self, Census};
@@ -425,10 +413,8 @@ fn migrate_scrub_stopped_at_any_step_of_a_batch_and_run_again_reads_the_same() {
     }
 }
 
-/// A crash inside a hold may keep a reseal and lose the line it rests on: the reseal waits
-/// outside the history under a key nothing reads. The next run seals its slot again and its
-/// sweep destroys the waiting reseal's key, so once the slot is erased, no key on disk opens any
-/// file on disk of that slot.
+/// A crash inside a hold may keep a reseal and lose the line it rests on, so the next run's sweep
+/// destroys the waiting reseal's key and, once the slot is erased, no key on disk opens its files.
 #[test]
 fn migrate_scrub_destroys_the_key_of_a_reseal_kept_without_its_parent() {
     use suzatary_lines::secretary::line_shape::LineShape;
@@ -553,9 +539,8 @@ fn migrate_scrub_scrubs_each_stale_slot_once() {
     }
 }
 
-/// A run reads the store twice: it opens the stale slots under no lock, then reads again under
-/// the lock, and trusts that reading. A slot erased between the two is erased, never sealed
-/// again, though its words were opened; the census it answers counts it erased.
+/// A run opens the stale slots under no lock, then reads again under the lock and trusts that
+/// reading, so a slot erased between the two stays erased, never sealed again, and counts erased.
 #[test]
 fn migrate_scrub_trusts_the_reading_under_the_lock() {
     use suzatary_lines::secretary::rescrub;
@@ -604,11 +589,9 @@ fn migrate_scrub_trusts_the_reading_under_the_lock() {
     assert_eq!((done.resealed, done.destroyed), (0, 0));
 }
 
-/// Whatever file of a resealed store stops reading for a while, garbled or gone, before its old
-/// keys were swept or after, and whatever sweeps, erasures and migrations run meanwhile, every
+/// Whatever file of a resealed store stops reading for a while and whatever runs meanwhile, every
 /// slot not erased opens again once the file is back: a sweep destroys a key only where what it
-/// opens is held elsewhere or erased. A line beneath the reseals that does not read leaves them
-/// waiting outside the history, and a reseal whose key is its slot's only key keeps it.
+/// opens is held elsewhere or erased.
 #[test]
 fn migrate_scrub_keeps_every_slot_through_a_file_that_does_not_read() {
     use suzatary_lines::secretary::{rescrub, transcript};
@@ -714,11 +697,8 @@ impl suzatary_todo::render_cache::RenderCache for Recording<'_> {
     }
 }
 
-/// An erasure of a slot whose reseal waits outside the history, a line between the slot's own
-/// line and its reseal gone for a while, after a completed migration: the erasure is written, and its
-/// sweep destroys the reseal's key and the slot's own, and forgets every block rendered from the
-/// reseal's words, as it does for any erased slot; once the line reads again, no key on disk
-/// opens a seal of that slot.
+/// Erasing a slot whose reseal waits outside the history destroys the reseal's key and the slot's
+/// and forgets every block rendered from the reseal's words, so no key on disk opens a seal of it.
 #[test]
 fn migrate_scrub_erasing_a_slot_whose_reseal_waits_empties_every_holder() {
     use suzatary_lines::secretary::line_shape::LineShape;

@@ -14,7 +14,6 @@ use suzatary_connect::cast::CAST;
 
 use super::init;
 
-/// The world a guide is compiled in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum World {
     /// The app's own: typst's library without `html`, `plugin`, files or packages.
@@ -23,7 +22,6 @@ pub enum World {
     Pdf,
 }
 
-/// What `suzatary-dev guide` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// The guide's directory, holding `guide.typ`.
@@ -64,9 +62,6 @@ const PDF: &str = r#"#import "@local/typst-design:0.1.0": working-document
 const CLOSED: &str = "#let shot(file, caption) = block(link(file, emph(caption)))\n";
 
 /// The guide in `world`: its preamble, the demo, then the text.
-///
-/// # Errors
-/// The demo's flags no longer make an onboarding.
 pub fn source(world: World, guide: &str) -> anyhow::Result<String> {
     let onboarding = init::answered(DEMO)?;
     let command = format!("$ {SCRIPT} init {}", flags());
@@ -117,9 +112,6 @@ fn flags() -> String {
 }
 
 /// The guide as HTML, compiled in the closed world and past the tripwire.
-///
-/// # Errors
-/// The text does not compile there, or the tripwire refuses what it made.
 pub fn html(guide: &str) -> anyhow::Result<String> {
     let html = suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(&source(
         World::Closed,
@@ -132,10 +124,6 @@ pub fn html(guide: &str) -> anyhow::Result<String> {
     Ok(html)
 }
 
-/// `suzatary-dev guide`: write `guide.html` and the PDF's source beside each other.
-///
-/// # Errors
-/// The text is unreadable, does not compile, or an output cannot be written.
 pub fn run(args: &Args) -> anyhow::Result<()> {
     let text = read(&args.from.join("guide.typ"))?;
     std::fs::create_dir_all(&args.out)

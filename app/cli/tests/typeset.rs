@@ -34,8 +34,6 @@ fn the_child_answers_as_the_compile_does_in_process() {
     }
 }
 
-/// A text that would compile for hours is refused by the child's CPU limit, long before the
-/// wall-clock backstop.
 #[test]
 fn a_text_that_runs_forever_is_refused_by_its_cpu_limit() {
     let started = Instant::now();
@@ -94,8 +92,7 @@ fn a_short_text_compiles_while_the_box_is_busy() {
     drop(load);
 }
 
-/// A start that waits longer than the old five-second wall-clock limit, as a child of a box
-/// building a deploy can, uses no CPU and is not counted against the text.
+/// A box building a deploy can start a child slowly, and that wait uses no CPU.
 #[test]
 fn a_slow_start_is_not_counted_against_the_text() {
     let dir = suzatary_testkit::scratch("typeset");
@@ -113,7 +110,6 @@ fn a_slow_start_is_not_counted_against_the_text() {
     );
 }
 
-/// A child that waits without using CPU is stopped at the backstop and named as such.
 #[test]
 fn a_child_that_never_answers_is_stopped_at_the_backstop() {
     let dir = suzatary_testkit::scratch("typeset");
@@ -129,14 +125,13 @@ fn a_child_that_never_answers_is_stopped_at_the_backstop() {
     assert!(started.elapsed() < Duration::from_secs(10));
 }
 
-/// A text that allocates without end is stopped at the child's address-space cap, which the child
-/// sets on itself before it reads the text: refused by the cap, not by the CPU limit.
+/// The child sets its address-space cap on itself before it reads the text.
 #[test]
 fn unbounded_memory_is_stopped_at_its_cap() {
     let started = Instant::now();
     let refused = closed()
-        // One request for three gigabytes, so the cap is reached at once and not after seconds of
-        // filling a range, which a busy box could spend past the CPU limit first.
+        // One request for three gigabytes reaches the cap at once, before a busy box spends the
+        // CPU limit filling a range.
         .closed("#(\"x\" * 3000000000).len()")
         .expect_err("two gigabytes is not enough for three");
     assert!(!refused.diagnostics.is_empty());

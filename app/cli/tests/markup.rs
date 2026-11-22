@@ -25,8 +25,7 @@ fn rich(base: &str, todo: &str) -> serde_json::Value {
     common::body_json(&mut response)["entry"]["authored"]["rich"].clone()
 }
 
-/// The four rich fields are always there, null before anything compiles; each present field's key is named
-/// beside them whether it compiled or not.
+/// Each present field's key is named whether it compiled or not.
 #[test]
 fn the_four_keys_are_always_there_and_null_before_anything_compiles() {
     let base = base();
@@ -41,7 +40,7 @@ fn the_four_keys_are_always_there_and_null_before_anything_compiles() {
     assert!(keys["body"].is_string(), "a present body is keyed");
 }
 
-/// The source is kept beside the rendering, so `rich` never replaces `body`.
+/// `rich` never replaces `body`.
 #[test]
 fn the_source_is_kept_beside_the_rendering() {
     let base = base();
@@ -53,7 +52,6 @@ fn the_source_is_kept_beside_the_rendering() {
     );
 }
 
-/// A warmed trusted todo comes back rendered from the fragment it carries.
 #[test]
 fn a_warmed_trusted_todo_comes_back_rendered() {
     let fakes = Fakes::new("markup-warm");
@@ -71,8 +69,7 @@ fn a_warmed_trusted_todo_comes_back_rendered() {
     assert_eq!(body["body"], "<p>File the *permit* renewal</p>");
 }
 
-/// An untrusted todo is served as source even when compiled, until confirming re-appends it as
-/// `ada`.
+/// Served as source even when compiled, until confirming re-appends it as `ada`.
 #[test]
 fn an_untrusted_todo_is_source_until_it_is_confirmed() {
     let ada = common::login("ada@example.com");
@@ -88,7 +85,6 @@ fn an_untrusted_todo_is_source_until_it_is_confirmed() {
 
     assert!(rich(&base, "email-harrow")["body"].is_null());
 
-    // The box authors the re-append and the replica seals and hands it over.
     confirm(&base, &caps, "email-harrow");
 
     assert_eq!(
@@ -131,8 +127,7 @@ fn confirm(base: &str, caps: &Fakes, todo: &str) {
     );
 }
 
-/// A todo a replica just sealed comes back rendered, because `POST /api/objects` compiles what it
-/// adopted before answering.
+/// `POST /api/objects` compiles what it adopted before answering.
 #[test]
 fn a_todo_added_now_comes_back_rendered() {
     let ada = common::login("ada@example.com");

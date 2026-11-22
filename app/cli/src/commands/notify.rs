@@ -1,6 +1,5 @@
-//! `suzatary notify`: push one of the core's [`Push`]es to the phone.
-//!
-//! The verb takes a notice and the day or conversation it names, never a title or a message.
+//! `suzatary notify`: push one of the core's [`Push`]es to the phone, from a notice and the day
+//! or conversation it names, never a title or a message.
 
 use std::path::Path;
 
@@ -17,13 +16,11 @@ use suzatary_store::store::Log;
 
 use crate::instance::Instance;
 
-/// What `suzatary notify` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// Print what would be sent and send nothing.
     #[arg(long, global = true)]
     dry_run: bool,
-    /// Which notice.
     #[command(subcommand)]
     notice: Notice,
 }
@@ -47,10 +44,6 @@ pub enum Notice {
 }
 
 impl Notice {
-    /// The push this notice is.
-    ///
-    /// # Errors
-    /// A conversation id that is not one.
     pub fn push(&self) -> anyhow::Result<Push> {
         Ok(match self {
             Notice::Briefing { day } => Push::Brief { day: *day },
@@ -63,7 +56,6 @@ impl Notice {
     }
 }
 
-/// `suzatary notify`: compose the push and send it, or print it and send nothing.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
     let push = args.notice.push()?;
@@ -86,10 +78,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 }
 
 /// Push `push` through the deployment's channels; returns how many devices it reached.
-///
-/// # Errors
-/// No channel named, the device store unreadable, the secret store not answering, every channel
-/// refusing, or nothing delivered.
 pub fn deliver(instance: &Instance, push: &Push) -> anyhow::Result<usize> {
     let Some(channels) = &instance.notify else {
         bail!(
@@ -120,8 +108,7 @@ pub fn deliver(instance: &Instance, push: &Push) -> anyhow::Result<usize> {
 }
 
 /// The push effect over `channels`: none named is [`Configured::Absent`], asking no secret
-/// store; a store that does not answer yet is asked again at each push. Generic over
-/// [`Resolves`] so a test can prove nothing is resolved otherwise.
+/// store; a store that does not answer yet is asked again at each push.
 pub(crate) fn push<D: Log<String, Device> + Clone>(
     channels: Option<&NonEmpty<Channel>>,
     secrets: impl Resolves + Send + Sync + 'static,
@@ -188,7 +175,6 @@ mod tests {
         }
     }
 
-    /// No channel resolves nothing and pushes to nobody.
     #[test]
     fn no_channel_resolves_nothing_and_is_absent() {
         let result = push(None, PanicsIfAsked, "test", "https://app", NoDevices);

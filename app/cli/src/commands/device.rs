@@ -21,14 +21,12 @@ use suzatary_signatures::signatures;
 use suzatary_signatures::signatures::MINUTES;
 use suzatary_store::store::Reads as _;
 
-/// Which act.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     #[command(subcommand)]
     action: Action,
 }
 
-/// The acts.
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// Mint the box's and the agent's keys and the mail's dedup key into secretspec (keeping
@@ -76,10 +74,6 @@ pub enum Action {
     List,
 }
 
-/// `suzatary device <act>`.
-///
-/// # Errors
-/// A key or actor that is not one, a deployment with no keys, or a store failing.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     match &args.action {
@@ -201,7 +195,6 @@ fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The box's keys, or why this box cannot sign.
 fn held_keys(instance: &Instance) -> anyhow::Result<BoxKeys> {
     match instance.signers() {
         signatures::Signers::Held(keys) => Ok(keys),
@@ -246,7 +239,6 @@ fn keyed(instance: &Instance) -> anyhow::Result<Keyed<&ChainDir>> {
     }
 }
 
-/// The keys, the key named and the actor it is for, each checked.
 fn asked(
     instance: &Instance,
     key: &str,
@@ -277,9 +269,6 @@ fn on_every_roster(instance: &Instance, actor: Option<&str>) -> anyhow::Result<A
 /// The box's keys and the mail's dedup key, each seed kept where the store holds one and minted
 /// only where it says it holds none: a store that could not answer may hold the box's key, and
 /// minting over it would orphan every signature it made.
-///
-/// # Errors
-/// The store not answering or refusing a seed, or a seed that is not one.
 pub(crate) fn kept_or_minted(
     get: impl Fn(&str) -> anyhow::Result<Option<capability::Secret>>,
     set: impl Fn(&str, &capability::Secret) -> anyhow::Result<()>,
@@ -303,10 +292,6 @@ pub(crate) fn kept_or_minted(
     Ok(BoxKeys::of(&root, &boxed, &agent)?)
 }
 
-/// The box's keys through secretspec, kept or minted.
-///
-/// # Errors
-/// As [`kept_or_minted`].
 pub(crate) fn kept_or_minted_in(
     secrets: &suzatary_io::secrets::Secretspec,
 ) -> anyhow::Result<BoxKeys> {
@@ -317,7 +302,6 @@ pub(crate) fn kept_or_minted_in(
     )
 }
 
-/// Keep or mint each seed, check it against the declared root, and adopt now.
 fn init(instance: &Instance) -> anyhow::Result<()> {
     let keys = kept_or_minted_in(&instance.secrets())?;
     let root = keys.root().public();

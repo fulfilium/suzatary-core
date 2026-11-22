@@ -1,7 +1,5 @@
-//! `suzatary decision` — record, revise, withdraw, list and view the recorded decisions.
-//!
-//! A decision's body is Typst markup through the one door; its title, rationale and reason are
-//! plain text. `--store` names a store read with no instance file (e.g. `memory/`).
+//! `suzatary decision`: a body is Typst markup through the one door; title, rationale and reason
+//! are plain text.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -17,17 +15,14 @@ use suzatary_todo::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 
 use super::store_at::StoreAt;
 
-/// Which `decision` act, and its own arguments.
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Which act.
     #[command(subcommand)]
     action: Action,
     #[command(flatten)]
     store: StoreAt,
 }
 
-/// EVERY `decision` act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// Record a new decision.
@@ -93,10 +88,6 @@ pub struct Stated {
     at: Option<Datetime>,
 }
 
-/// Run one act.
-///
-/// # Errors
-/// The instance file, the store, or the act's refusal.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let root = args.store.or_instance(
         path,

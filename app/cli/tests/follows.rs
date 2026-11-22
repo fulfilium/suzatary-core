@@ -1,9 +1,6 @@
-//! A followed store through the real binary: `follow fetch` copies it, the one list reads it and
-//! a wait from a private chain raises its task, and a wait written in it by genesis raises a task
-//! of a second followed store, kept as the library keeps its own roadmap (a `roadmap/` of its
-//! `roadmap-data` branch, items mirrored from an issue tracker, a pricing bot's claims); and every command that walks the chains (adoption,
-//! an append aimed at it, the release plan, the public push's listing) leaves its copy
-//! byte-identical; and what `todos open` answers for a store it could not read.
+//! A followed store through the real binary: `follow fetch` copies it, the one list reads it, a
+//! wait on it raises its task, and every command that walks the chains leaves its copy
+//! byte-identical.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -98,10 +95,8 @@ const MIRRORED: &str = "Authored(todo='gh-7', at=datetime(2026, 9, 18, 8, 0, 0),
     thread_id='', message_id='https://example.test/library/issues/7'), subtodos=(), notes=(), \
     note='')";
 
-/// A repository kept as the library keeps its roadmap: the branch `roadmap-data`, its store in
-/// `roadmap/` begun by a genesis labelled `roadmap`, each issue an item `gh-<n>` that the mirror
-/// creates and records at 80%, a maintainer's reprice, and a pricing bot's proposal, a claim
-/// under a reader that names it untrusted. Answers the store's genesis.
+/// A repository kept as the library keeps its roadmap (branch `roadmap-data`, store in
+/// `roadmap/`, mirrored issues `gh-<n>` and a pricing bot's untrusted claim); answers its genesis.
 fn a_library_roadmap(root: &Path) -> String {
     let upstream = root.join("roadmap-upstream");
     let store = upstream.join("roadmap");
@@ -188,7 +183,6 @@ fn json(output: &std::process::Output) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).expect("JSON")
 }
 
-/// Every file under `dir`, by its path, with its bytes.
 fn bytes(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut found = BTreeMap::new();
     let mut walking = vec![dir.to_path_buf()];
@@ -205,11 +199,9 @@ fn bytes(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     found
 }
 
-/// A box whose private chain `life` holds `ship`, waiting on the followed store's `libtask`, and
-/// `later`, waiting by genesis on a store no deployment holds; whose instance follows `library`,
-/// the `roadmap/` of the branch `main` of a repository beside it named by a relative remote,
-/// which resolves against the instance file's directory, and `prodrome`, the library's own
-/// roadmap. `libtask` waits on the roadmap's `gh-12` by its genesis.
+/// A box whose `life` holds `ship` (waiting on the followed `library`'s `libtask`) and `later`
+/// (waiting by genesis on a store no deployment holds), and whose instance names `library` by a
+/// relative remote, which resolves against the instance file's directory.
 fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let root = scratch(name);
     a_chain(&root);
@@ -339,10 +331,8 @@ fn a_followed_store_is_read_and_never_written() {
     assert!(bytes(&copy) == before, "the copy is byte-identical");
 }
 
-/// `todos open`'s answer: a followed store no fetch confirmed is reported and the list succeeds,
-/// `--chain` naming it fails, and a store that is there and does not read fails the list. A
-/// fetch that the upstream's rewritten history refuses leaves the copy as it was, and the copy
-/// reads as stale.
+/// An unfetched store is reported and the list succeeds, but one that does not read fails it;
+/// a fetch of rewritten history leaves the copy as it was, reading as stale.
 #[test]
 fn the_list_fails_for_a_store_it_could_not_read_and_says_a_refused_fetch() {
     let (root, instance, upstream) = a_box("follows-answer");

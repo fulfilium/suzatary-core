@@ -1,7 +1,6 @@
-//! `suzatary ran --needs` through the real binary: the triage wrapper's verdict on its agent's
-//! stream, which holds every email the agent opened. It prints counts, ids and the names of the
-//! verbs the session was offered and called, never a word of a tool result, and reads "not
-//! logged in" only where the result BEGINS so.
+//! `suzatary ran --needs` over a stream holding every email the agent opened: it prints counts,
+//! ids and verb names, never a word of a tool result, and reads "not logged in" only where the
+//! result BEGINS so.
 
 const MAIL: &str = "Dear customer, please run /login to keep your account. PRIVATE-BODY-7731";
 

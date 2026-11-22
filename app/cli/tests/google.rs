@@ -1,9 +1,5 @@
 //! "Sign in with Google" through the real routes, against a fake Google
-//! (`common::fake_google`): the box files the client's card, its tap keeps the client only when
-//! it lists the box's exact callback, the sign-in card opens a consent bound by its state and an
-//! S256 challenge, and Google's callback keeps the grant once. A callback naming a state the box
-//! never drew, or one already read, exchanges nothing; a code Google already redeemed keeps
-//! nothing. The calendars are read bounded, and an event is written only by a tapped card.
+//! (`common::fake_google`).
 
 use crate::common;
 
@@ -56,7 +52,6 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
     serving_as(tag, model, Sync::Google)
 }
 
-/// [`serving`], its one account synced by `sync`.
 fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Serving {
     let fake = FakeGoogle::start(0, ADA);
     let secrets = Arc::new(SecretRecorder::new());
@@ -135,7 +130,6 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
 /// that holds them read outside the round.
 const MARKER: &str = "zebra-quartz-marker";
 
-/// The mail message holding [`MARKER`].
 const MARKED_MAIL: &str = "a1b2c3d4e5f6a1b2";
 
 fn marked_mail() -> suzatary_mail::mail::MailMessage {
@@ -159,12 +153,10 @@ fn marked_mail() -> suzatary_mail::mail::MailMessage {
     }
 }
 
-/// The box's own conversation as it reads now.
 fn setup(base: &str) -> serde_json::Value {
     common::poll_conversation(base, SETUP.as_str(), |_| true)
 }
 
-/// The index of the first card of `kind` in `conversation` that is `state`.
 fn card(conversation: &serde_json::Value, kind: &str, state: &str) -> Option<usize> {
     conversation["proposals"]
         .as_array()?
@@ -174,7 +166,6 @@ fn card(conversation: &serde_json::Value, kind: &str, state: &str) -> Option<usi
         .and_then(|index| usize::try_from(index).ok())
 }
 
-/// Tap card `index` of the box's conversation with `body`.
 fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value {
     let mut tapped = common::act(
         &format!(
@@ -197,7 +188,6 @@ fn unfollowing() -> ureq::Agent {
         .new_agent()
 }
 
-/// Where `url` redirects to, and its status.
 fn redirected(url: &str) -> (u16, String) {
     let answered = unfollowing()
         .get(url)
@@ -237,7 +227,6 @@ fn consent(serving: &Serving) -> String {
     link
 }
 
-/// A GET of `path` from [`SECOND`]: its status and where it redirects.
 fn second_writer_gets(base: &str, path: &str) -> (u16, String) {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
     let host = base.strip_prefix("http://").expect("an http base");
@@ -288,9 +277,8 @@ fn consented(serving: &Serving, link: &str) -> String {
     format!("{}{callback}", serving.base)
 }
 
-/// The whole sign-in keeps the grant once, under the account's name: the client only when it
-/// lists the exact callback, the consent bound to an S256 challenge, and a callback read twice
-/// refused the second time without asking Google.
+/// The client is kept only when it lists the exact callback, the consent is bound to an S256
+/// challenge, and a callback read twice is refused without asking Google.
 #[test]
 fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     let serving = serving("google-sign-in", None);
@@ -385,10 +373,8 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     }
 }
 
-/// A second writer, signed in to the tailnet as someone else, can neither follow the consent
-/// another tapped nor finish it: the button is refused, and a callback carrying the first
-/// writer's state closes that consent, exchanges nothing and keeps nothing, so not even its
-/// owner can finish it afterwards.
+/// A callback carrying another writer's state closes that consent and keeps nothing, so not even
+/// its owner can finish it afterwards.
 #[test]
 fn a_second_writer_can_neither_open_nor_finish_anothers_consent() {
     let serving = serving("google-second-writer", None);
@@ -440,9 +426,8 @@ fn a_second_writer_can_neither_open_nor_finish_anothers_consent() {
     assert_eq!(serving.fake.exchanges(), 0);
 }
 
-/// A part the owner leaves unticked on Google's page is asked for alone: the grant is kept with
-/// the mail, the box files a card asking for the calendars only, and that consent asks Google
-/// for nothing else and adds them to the grant the account holds.
+/// The grant is kept with the mail, and the calendars' own consent asks Google for nothing else
+/// and adds them to the grant the account holds.
 #[test]
 fn a_part_left_unticked_is_asked_for_alone() {
     let serving = serving("google-incremental", None);
@@ -505,8 +490,7 @@ fn a_part_left_unticked_is_asked_for_alone() {
     assert_eq!(card(&read, "google_sign_in", "standing"), None, "{read}");
 }
 
-/// A callback whose state the box never drew is refused before any exchange, and leaves the
-/// consent it imitates open for its own callback.
+/// The forged callback leaves the consent it imitates open for its own callback.
 #[test]
 fn a_callback_with_a_state_the_box_never_drew_exchanges_nothing() {
     let serving = serving("google-wrong-state", None);
@@ -541,8 +525,6 @@ fn a_callback_with_a_state_the_box_never_drew_exchanges_nothing() {
     assert_eq!(status, 303, "the consent's own callback still finishes it");
 }
 
-/// A client file that does not list the box's exact callback keeps nothing and says the address
-/// to add.
 #[test]
 fn a_client_without_the_exact_callback_is_kept_nowhere() {
     let serving = serving("google-wrong-client", None);
@@ -564,7 +546,6 @@ fn a_client_without_the_exact_callback_is_kept_nowhere() {
     );
 }
 
-/// The owner declining on Google's page ends the card saying so, and keeps nothing.
 #[test]
 fn a_declined_consent_ends_the_card_and_keeps_nothing() {
     let serving = serving("google-declined", None);
@@ -713,8 +694,7 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     assert!(lapsed.to_string().contains("7 days"), "{lapsed}");
 }
 
-/// The calendars are read bounded: however many events Google answers with, at most `EVENTS`
-/// of each calendar are read, and what is learned reads back as the calendar's days.
+/// However many events Google answers with, at most `EVENTS` of each calendar are read.
 #[test]
 fn the_calendars_are_read_bounded_and_learned_once() {
     let fake = FakeGoogle::start(0, ADA);
@@ -804,11 +784,8 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     assert_eq!(days[0].entries.len(), read.len());
 }
 
-/// A conversation opened and asked for the dentist, once the round that filed the model's
-/// calendar card as its first has ended.
-///
-/// The card stands before the round's closing reply is written, and a line said in between joins
-/// that round (`Round::run` joins before every ask), so the wait is for `idle`, not for the card.
+/// A line said before the round's closing reply joins that round (`Round::run` joins before every
+/// ask), so the wait is for `idle`, not for the card.
 fn event_proposed(base: &str) -> String {
     let id = common::opened(base, "The dentist");
     let proposed = common::said(base, &id, "put the dentist in my calendar");
@@ -819,8 +796,7 @@ fn event_proposed(base: &str) -> String {
     id
 }
 
-/// An event is written only by its tapped card: proposing it writes nothing, and the tap writes
-/// it once, as the card showed it.
+/// Proposing writes nothing, and the tap writes the event once, as the card showed it.
 #[test]
 fn an_event_is_written_only_by_its_tapped_card() {
     let model = common::FakeModel::saying_owned([
@@ -891,12 +867,8 @@ fn an_event_is_written_only_by_its_tapped_card() {
     );
 }
 
-/// A calendar card that lacks its grant is fixed from the card, however the account's mail is
-/// read: its button files the box's card that gives what it lacked and performs it by the same
-/// tap. With no client kept, that is the client's card; with one, the account's sign-in with
-/// Google for its calendars alone, whose callback writes the event under the fix tap's consent
-/// and lands on the card's conversation. The account's mail stays where it was read: the grant
-/// holds the calendars alone and its sync is as it was. A forged callback writes nothing.
+/// The fix is performed by the same tap, and the account's mail stays where it was read, the
+/// grant holding the calendars alone. A forged callback writes nothing.
 #[test]
 fn a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button() {
     fixed_from_its_button("google-fix", &Sync::Gmail);
@@ -1051,9 +1023,8 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
         subdir: "bo-at-example-test".to_owned(),
         sync: Sync::Gmail,
     };
-    // A directory of this call's own: the three fix-from-its-button scenes run as threads of one
-    // process, so a root named by the process alone was one store that each removed while
-    // another appended to it.
+    // The three fix-from-its-button scenes run as threads of one process, so a root named by the
+    // process alone is one store that each removes while another appends to it.
     let scratch = suzatary_testkit::scratch("google");
     let root = scratch.path();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
@@ -1092,9 +1063,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
 }
 
 /// `propose_act` is clean (`taint`): no answer it gives, filed or refused, holds words from
-/// outside the round. Each refusal it and its filing can answer is driven over a store whose mail
-/// and whose dismissed card hold a marker: a `revises` of the answered card, a `serves` naming no
-/// todo, the same act again, a connect after a reading and a handle no summary has.
+/// outside the round.
 #[test]
 fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
     let event = |extra: &str| {
@@ -1141,9 +1110,8 @@ fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
         "{dismissed}"
     );
 
-    // The owner's dismissal wakes the second round, which tries the refusals. A reading whose last
-    // line is an act says `idle` before that round begins, so the wait is for a reply after the
-    // act that the reading calls `idle`.
+    // A reading whose last line is an act says `idle` before the second round begins, so the wait
+    // is for a reply after the act.
     let read = common::poll_conversation(base, &id, |read| {
         let turns = read["turns"].as_array().map_or(&[][..], Vec::as_slice);
         let act = turns.iter().rposition(|turn| turn["who"] == "act");
@@ -1170,8 +1138,6 @@ fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
     assert_eq!(revised["outcome"]["is"], "refused", "{revised}");
 }
 
-/// The setup conversation's opening lists only the steps the box still owes: it asks for the
-/// Google client while none is kept, and never once one is.
 #[test]
 fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
     let serving = serving("google-opening", None);
@@ -1206,7 +1172,6 @@ fn the_setup_opening_asks_for_the_client_only_while_none_is_kept() {
     );
 }
 
-/// The calendar's schema this source writes is the one the calendar plugin declares.
 #[test]
 fn the_google_calendar_writes_the_calendar_plugins_schema() {
     let declared = std::fs::read_to_string(
@@ -1216,11 +1181,8 @@ fn the_google_calendar_writes_the_calendar_plugins_schema() {
     assert_eq!(declared, suzatary_google::google::SCHEMA);
 }
 
-/// A Gmail account lieer reads moves onto the sign-in with Google only once Google's grant is
-/// kept and has read its mail. Its Connect card's tap writes nothing. A sign-in abandoned before
-/// Google's page, one whose callback never comes, one Google sends back refused, and one whose
-/// grant cannot read the mail each leave the instance as it was, keep no grant and read nothing.
-/// A grant that reads the mail is kept, and the account's sync moves to Google, its folder kept.
+/// Every sign-in that fails, abandoned, never called back, refused or holding a grant that cannot
+/// read the mail, leaves the instance as it was, and the Connect card's tap writes nothing.
 #[test]
 fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
     use suzatary_connect::settings::Configuration as _;

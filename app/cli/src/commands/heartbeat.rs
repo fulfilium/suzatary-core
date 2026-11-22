@@ -10,7 +10,6 @@ use suzatary_triage::mail::heartbeat::{Pass, Stage};
 
 use crate::instance::Instance;
 
-/// What `suzatary heartbeat` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// How the pass ended.
@@ -18,7 +17,6 @@ pub struct Args {
     ended: Ended,
 }
 
-/// How a pass ended.
 #[derive(Debug, Subcommand)]
 enum Ended {
     /// Every stage did its work: the heartbeat moves.
@@ -30,10 +28,6 @@ enum Ended {
     },
 }
 
-/// `suzatary heartbeat ok | failed <stage>`: record the pass and print the outcome's line.
-///
-/// # Errors
-/// The instance, or a file that cannot be read or written.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let pass = match args.ended {

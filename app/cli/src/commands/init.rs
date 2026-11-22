@@ -1,8 +1,5 @@
-//! `suzatary init`: ask who the deployment serves, write `instance.toml`, begin the chains, and
-//! print what only the person can do next.
-//!
-//! The answers are one [`Onboarding`]: flags first, a missing one asked for at a terminal and
-//! refused by name off one. No secret is ever an argument; the steps say where each is typed.
+//! `suzatary init`: write `instance.toml`, begin the chains, and print what only the person
+//! can do next; no secret is ever an argument, and the steps say where each is typed.
 
 mod onboarding;
 pub mod options;
@@ -23,7 +20,6 @@ pub use onboarding::{
 };
 use suzatary_connect::connect::Reach;
 
-/// What `suzatary init` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// Your name, as the secretary addresses you (`[persona].name`).
@@ -73,9 +69,6 @@ pub struct Args {
 
 /// `suzatary init`: keep or mint the box's keys in the secret store, write `instance.toml`
 /// declaring their root, begin the chains, and say what is left.
-///
-/// # Errors
-/// As [`run_keyed`].
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     // Read before anything is minted or written, so an environment no box path fits refuses
     // with nothing done.
@@ -89,10 +82,6 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
 
 /// [`run`] in `env`, the box's keys taken from `keys` over the secret store the code root
 /// declares.
-///
-/// # Errors
-/// An existing file without `--force`, an answer refused, the keys not kept or minted, or the
-/// file not written or not reading back.
 pub fn run_keyed(
     path: &Path,
     args: Args,
@@ -135,9 +124,6 @@ pub fn run_keyed(
 
 /// `onboarding`'s instance file written under `root`, its chains and topic stores begun, and read
 /// back.
-///
-/// # Errors
-/// The file not written, a chain or a topic store not begun, or the file not reading back.
 fn written(
     path: &Path,
     onboarding: &Onboarding,
@@ -163,9 +149,6 @@ fn written(
 
 /// The onboarding these flags give off a terminal: how a deployment shown in the guide was
 /// begun.
-///
-/// # Errors
-/// A flag clap refuses, or an answer [`Onboarding::new`] does.
 pub fn answered<'a>(flags: impl IntoIterator<Item = &'a str>) -> anyhow::Result<Onboarding> {
     let Flags { args } = Flags::try_parse_from(std::iter::once("init").chain(flags))?;
     gather(args, false)
@@ -407,9 +390,6 @@ fn begin_chains(data: &Path) -> anyhow::Result<()> {
 
 /// The todo store at `events` begun with its `Genesis`. A store found begun (`--force`, or a
 /// clone) stays the store it is.
-///
-/// # Errors
-/// The store unreadable, or its `Genesis` not written.
 pub(crate) fn begin_chain(events: &Path) -> anyhow::Result<()> {
     super::chain_at(events.to_owned(), prodrome_core::policy::Untrusted::none())
         .begin()

@@ -1,6 +1,6 @@
-//! `suzatary call`: any route of the server's table, asked of the running server by the operator.
-//! The request meets the same gate, guards, door and handler as a device's, signed with the root
-//! key, so every act is recorded as the operator's.
+//! `suzatary call`: any route of the server's table, asked of the running server through the
+//! same gate, guards, door and handler as a device's, signed with the root key so every act is
+//! recorded as the operator's.
 
 use std::ops::ControlFlow;
 use std::path::Path;
@@ -22,14 +22,12 @@ use suzatary_lines::secretary::held_replica;
 use suzatary_server::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
 use suzatary_server::serve::{route, table};
 
-/// Which request.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     #[command(subcommand)]
     asked: Asked,
 }
 
-/// The requests.
 #[derive(Debug, Subcommand)]
 pub enum Asked {
     /// Read a route, its path and query filled in: `suzatary call get /api/waiting`.
@@ -50,9 +48,6 @@ pub enum Asked {
 }
 
 /// `suzatary call <request>`: the answer's body on stdout.
-///
-/// # Errors
-/// The instance file's, the keys', the connection's, and a route's refusal.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let operator = || Operator::of(&Instance::open(path)?);
     let answer = match &args.asked {
@@ -100,7 +95,6 @@ const PATIENCE: Duration = Duration::from_mins(2);
 const ANSWER_CAP: u64 = 64 << 20;
 
 impl Operator {
-    /// The operator of the app at `base`, signing with `key` and writing as `actor`.
     #[must_use]
     pub fn new(base: &str, key: Arc<Secret>, actor: Actor) -> Self {
         Self {
@@ -121,9 +115,6 @@ impl Operator {
 
     /// This box's operator: the instance's `app_url`, the root key from secretspec, and the
     /// first chain's owner.
-    ///
-    /// # Errors
-    /// The keys not at hand.
     pub fn of(instance: &Instance) -> anyhow::Result<Self> {
         let keys = match instance.signers() {
             Signers::Held(keys) => keys,
@@ -143,9 +134,6 @@ impl Operator {
     }
 
     /// The operator's clock as it dates a line: the instant its requests are stamped with.
-    ///
-    /// # Errors
-    /// A clock that reads no year the lines can hold.
     pub fn now(&self) -> anyhow::Result<prodrome_core::literal::Datetime> {
         prodrome_core::fpl::datetime_of((self.wall)().naive_utc())
             .map_err(|failed| anyhow::anyhow!("the operator's clock: {failed}"))
@@ -158,10 +146,6 @@ impl Operator {
 
     /// `method` at `target`, the path and query of a route in the table, with `body`: the
     /// answer where it is 2xx, and the name the box keeps the request's record under.
-    ///
-    /// # Errors
-    /// A target no route answers, the connection's failure, or the route's refusal, with its
-    /// status and words.
     pub fn request(
         &self,
         method: route::Method,
@@ -194,9 +178,6 @@ impl Operator {
     }
 
     /// Each line of a stream route's answer, handed to `each` until `each` breaks.
-    ///
-    /// # Errors
-    /// A target no route answers, the connection's failure, or a status that is not 2xx.
     pub fn stream(
         &self,
         target: &str,
@@ -221,17 +202,8 @@ impl Operator {
         Ok(())
     }
 
-    /// The lines as a tab holds those of conversation `id`: the skeleton pulled piece by piece,
-    /// each asked from the frontier the last one named, and the content of that conversation's
-    /// nodes asked by hash, each literal held and each husk taken in its place.
-    ///
-    /// # Errors
-    /// A route's refusal, or an answer that does not read.
     /// `own`, a line the operator sealed, handed to the lines beside its signature by the root
     /// key and its slots' keys, once the box took the line.
-    ///
-    /// # Errors
-    /// A refusal of the request, or of the line, in the box's words.
     pub fn hand_over(
         &self,
         own: &suzatary_lines::secretary::own_line::OwnLine,
@@ -336,7 +308,6 @@ pub struct Signed {
 }
 
 impl Signed {
-    /// `method` at `target` with `body`, stamped `at` with `nonce`, signed by `key`.
     #[must_use]
     pub fn of(
         method: &str,

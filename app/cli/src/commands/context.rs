@@ -1,6 +1,5 @@
 //! `suzatary context calibrate`: the context budget's token ratios counted with Claude's
-//! tokenizer, which needs the app's model port. The budget itself is the train's tool's
-//! (`suzatary_tooling::context`, `scripts/context.sh`).
+//! tokenizer; the budget itself is `suzatary_tooling::context`'s (`scripts/context.sh`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -13,7 +12,6 @@ use suzatary_tooling::context::tokens::{Kind, Ratios};
 use suzatary_tooling::context::tree::Tree;
 use suzatary_tooling::context::{as_toml, edit_plan, kind_key, read_plan};
 
-/// What `suzatary context` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// The repository's root.
@@ -34,10 +32,6 @@ enum Act {
     },
 }
 
-/// Calibrate the ratios.
-///
-/// # Errors
-/// When the plan or the tree cannot be read, or the model cannot count.
 pub fn run(args: &Args) -> anyhow::Result<()> {
     let Act::Calibrate { model } = &args.act;
     let root = &args.repo.canonicalize()?;

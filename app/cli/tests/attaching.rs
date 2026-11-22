@@ -395,9 +395,8 @@ fn a_private_file_is_attached_unread_and_fetched_by_the_tap() {
 }
 
 /// A file read into the conversation attaches from the copy kept then, and only a file this
-/// conversation holds: the owner's Allow once (here, a verb's read of a mail attachment, which
-/// keeps its copy the same way) is what lets it go on an email, and the send tap sends exactly
-/// those bytes.
+/// conversation holds: the owner's Allow once is what lets it go on an email, and the send tap
+/// sends exactly those bytes.
 #[test]
 fn a_file_read_here_attaches_from_its_kept_copy_and_nothing_else_does() {
     let id = suzatary_held::attachment::AttachmentId::of(NOTICE);

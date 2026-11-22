@@ -1,7 +1,5 @@
-//! The write surface is exactly the named POSTs, and only `POST /api/objects` reaches the chain.
-//!
-//! Checked as this box's own node, which reads and never writes, since these are claims about the
-//! router, not identity.
+//! The write surface is exactly the named POSTs and only `POST /api/objects` reaches the chain,
+//! checked as this box's own node since these are claims about the router, not identity.
 
 use crate::common;
 
@@ -78,9 +76,8 @@ fn every_write_route_refuses_a_bare_post_from_loopback() {
     }
 }
 
-/// The router's whole mutating surface, enumerated so a new write is added on purpose.
-///
-/// A POST to a read route is 405, which tells "no handler" from "a handler refused".
+/// The router's whole mutating surface, enumerated so a new write is added on purpose; a POST
+/// to a read route is 405, which tells "no handler" from "a handler refused".
 #[test]
 fn nothing_but_the_named_writes_answers_a_post() {
     let base = base();
@@ -152,9 +149,8 @@ fn every_secretary_write_refuses_a_bare_post_from_loopback() {
     }
 }
 
-/// The SMTP transport is named only by `commands::mail`, whose `deliver` every send uses.
-///
-/// It is a text grep, so `tests/` is skipped and prose elsewhere must not spell the call.
+/// The SMTP transport is named only by `commands::mail`, by a text grep, so prose elsewhere
+/// must not spell the call.
 #[test]
 fn the_smtp_transport_has_exactly_one_calling_site() {
     let app = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -216,9 +212,7 @@ fn it_sends_no_cors_or_cookie_headers() {
     assert!(response.headers().get("set-cookie").is_none());
 }
 
-/// Every answer carries the page policy, and every API answer says `no-store`, so a phone's HTTP
-/// cache keeps no mail and no todo; the shell (here, the page that says it is not built) keeps
-/// its own caching.
+/// Every API answer says `no-store`, so a phone's HTTP cache keeps no mail and no todo.
 #[test]
 fn every_answer_carries_the_policy_and_no_api_answer_is_stored() {
     let base = base();
@@ -408,9 +402,8 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
     );
 }
 
-/// A `Tap` is minted in one production place, the route guard, and only from the door's
-/// `Trusted` proof (its one constructor takes it): a route cannot hold one without a device
-/// signature the history trusts.
+/// A `Tap` is minted only by the route guard from the door's `Trusted` proof, so a route cannot
+/// hold one without a device signature the history trusts.
 #[test]
 fn the_tap_is_minted_only_by_the_guard_from_a_proof() {
     let constructor = ["Tap::", "of("].concat();
@@ -421,11 +414,9 @@ fn the_tap_is_minted_only_by_the_guard_from_a_proof() {
     );
 }
 
-/// What edits the instance file's connections, and what deletes an account's mail or its
-/// sign-ins, is called from the tap's route, the server's wrappers and the fixture alone, so no
-/// verb, read or other route reaches any of them. The one other caller of an edit is the Google
-/// callback, which finishes a tapped sign-in: it is admitted only by the state drawn for that
-/// tap, for the actor who tapped, and it moves a lieer account only once the grant read its mail.
+/// No verb, read or other route reaches a connection edit or a mail delete; the one other edit
+/// caller, the Google callback, is admitted only by the state drawn for the tap and its actor,
+/// and moves a lieer account only once the grant read its mail.
 #[test]
 fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     let app = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -622,11 +613,10 @@ fn stored_markup_is_minted_only_where_it_is_read() {
     );
 }
 
-/// The closed world is the Prodrome's restricted project, and this application builds no typst
-/// world or library of its own: a second world would be a second containment to keep in step
-/// with the tab's. The Prodrome's unrestricted project is built in the same one file, for a
-/// template whose library is `Library::Open`, and only the templates name that library: the
-/// pages', and the picture of a public store, which compiles in `tokens.typ` with the binary.
+/// This application builds no typst world or library of its own, since a second world would be
+/// a second containment to keep in step with the tab's; `Library::Open`, the Prodrome's
+/// unrestricted project, is built in the same file, and only the templates (the pages', a public
+/// store's picture) name it.
 #[test]
 fn the_closed_world_is_the_one_world_and_library_built_here() {
     for needle in [

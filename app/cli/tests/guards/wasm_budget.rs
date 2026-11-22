@@ -1,7 +1,6 @@
-//! The shipped wasm modules' budget (`web/wasm-budget`), in bytes after wasm-opt: its own form.
-//! `scripts/build-web.sh` refuses a module over its line; whether a line rose past what the
-//! commits since the merge base declare is the train's tool's (`scripts/context.sh growth`), the
-//! gate's history half, since the answer reads the commits and not the tree.
+//! The shipped wasm modules' budget (`web/wasm-budget`, bytes after wasm-opt), its form only:
+//! `scripts/build-web.sh` refuses a module over its line, and `scripts/context.sh growth` judges a
+//! line's rise, since that reads the commits and not the tree.
 
 use std::collections::BTreeMap;
 
@@ -15,8 +14,8 @@ const STEP: u64 = 10_000;
 /// The systems the gate and the box build for, each of which needs a line for every module.
 const SYSTEMS: [&str; 2] = ["x86_64-linux", "aarch64-linux"];
 
-/// Each line by its module and system: `<module>.wasm <system> <bytes>`. A line that is not that
-/// fails here, so the script's lookup never reads a malformed one.
+/// Each line, `<module>.wasm <system> <bytes>`, by module and system; any other fails here, so the
+/// script's lookup never reads a malformed one.
 fn lines(text: &str) -> BTreeMap<(String, String), u64> {
     text.lines()
         .map(str::trim)

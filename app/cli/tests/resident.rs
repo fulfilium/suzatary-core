@@ -1,15 +1,8 @@
-//! THE SERVER'S RESIDENT MEMORY DOES NOT GROW WITH THE ROUNDS IT ANSWERS (servememory,
-//! 2026-11-02): the real `suzatary-dev serve` over a `fixture-chain` store of the live shape's
-//! kind, driven by rounds of the page's request mix (a warm load's reads, a cold pull of the
-//! lines, the inbox and the topics, a window of the lines' literals, a said line), with the
-//! allocator as `scripts/serve-web.sh` runs it. After `ROUNDS` more rounds the process's resident
-//! set has grown by no more than `SLACK_MB`, and its high-water mark stays under `BOUND_MB`.
-//! It is the whole server's bound; `the_store_keeps_only_its_newest_version` (`io/src/objects.rs`)
-//! is the store's law beneath it.
-//!
-//! The shape is the e2e lines server's, a tenth of it, so the law runs in the suite; the live
-//! shape is `SUZATARY_RESIDENT_LINES=14400 SUZATARY_RESIDENT_CONVERSATIONS=100` (each count
-//! below has its variable), which a release build measured at 0.86 to 0.92 GB over 24 rounds.
+//! The server's resident memory does not grow with the rounds of the page's request mix it
+//! answers, with the allocator as `scripts/serve-web.sh` runs it: after `ROUNDS` more rounds the
+//! resident set has grown by no more than `SLACK_MB`, and its high-water mark stays under
+//! `BOUND_MB`, at a tenth of the e2e lines server's shape (each count has its
+//! `SUZATARY_RESIDENT_*` variable).
 
 use crate::common;
 
@@ -22,8 +15,8 @@ const ROUNDS: usize = 4;
 /// How much the second reading may exceed the first: what one round's answer and an allocator's
 /// page reuse can leave, never a store's size.
 const SLACK_MB: u64 = 64;
-/// The most the process may ever hold at the default shape, in a debug build: it measured 167 MB.
-/// A larger shape names its own, `SUZATARY_RESIDENT_BOUND_MB`.
+/// The most the process may hold at the default shape in a debug build; a larger shape names its
+/// own, `SUZATARY_RESIDENT_BOUND_MB`.
 const BOUND_MB: usize = 384;
 
 /// A count from the environment, or its default.
@@ -42,8 +35,7 @@ fn status_mb(pid: u32, field: &str) -> u64 {
         .expect("the field is there")
 }
 
-/// The fixture's chain and stores at the test's shape, then its server, answering once its log
-/// says it listens.
+/// The fixture's chain and stores at the test's shape, then its server.
 fn served(root: &Path) -> (Serving, String) {
     let port = crate::ports::outside_ephemeral();
     std::fs::create_dir_all(root.join("state")).expect("a directory");

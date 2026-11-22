@@ -108,8 +108,7 @@ fn a_folder_is_listed_with_no_tap() {
     drive.only_reads_ran();
 }
 
-/// The owner's private folder is never listed, even with every folder allowed: the fence refuses
-/// before the Drive is asked.
+/// Even with every folder allowed, the fence refuses the private folder before the Drive is asked.
 #[test]
 fn the_private_folder_is_never_listed() {
     let drive = FakeDrive::new("drive-private");
@@ -399,8 +398,7 @@ fn tapped(tag: &str, tap: &serde_json::Value) -> Tapped {
     }
 }
 
-/// The tap reads it: the text lands in the conversation as a `drive_read`
-/// answer, redacted, and the proposal reads acted.
+/// The text lands redacted as a `drive_read` answer, and the proposal reads acted.
 #[cfg(feature = "fixture")]
 #[test]
 fn a_tapped_document_request_puts_the_masked_text_in_the_conversation() {

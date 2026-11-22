@@ -206,8 +206,7 @@ fn a_round_that_read_mail_proposes_no_session() {
     );
 }
 
-/// The tap fires the routine with the stored task and nothing else, and the
-/// session it answers is the proposal's, as `fired`.
+/// The session the fire answers is the proposal's, as `fired`.
 #[test]
 fn a_tapped_session_fires_the_routine_with_the_task_alone() {
     let (routine, served) = fake_routine();
@@ -257,9 +256,8 @@ fn a_tapped_session_fires_the_routine_with_the_task_alone() {
     );
 }
 
-/// The operator at the box's terminal asks for the session and taps its card: the tap fires
-/// the routine through the route a device's tap takes, and the box records it under the root
-/// key, which no device holds.
+/// The terminal's tap fires the routine through a device's route, and the box records it under
+/// the root key, which no device holds.
 #[test]
 fn an_operators_tap_starts_a_session() {
     use suzatary_cli::commands::{ask, tap};
@@ -475,11 +473,8 @@ fn a_poll_that_fails_leaves_the_server_answering() {
     );
 }
 
-/// The live case of 2026-11-01: a session fired in a new, untitled conversation with a `cse_`
-/// id, and among many `claude/` branches (some merged, some reporting other sessions, one with
-/// no report) the one whose only change is a report naming the `session_` URL, on a base the
-/// default branch has since moved past. The explanation says which branch reports it, and the
-/// poll moves it.
+/// A `cse_` session of an untitled conversation is reported by the one `claude/` branch whose
+/// only change is a report naming its `session_` URL, on a base the default branch moved past.
 #[test]
 fn a_new_conversations_session_is_reported_by_one_branch_among_many() {
     let (routine, served) = fake_routine();
@@ -650,11 +645,8 @@ fn task_of(chain: &str, todo: &suzatary_connect::cast::Todo, attempt: usize) -> 
     )
 }
 
-/// "Build it" files today's session card serving the todo, its task the todo's whole text; the
-/// tap sends that task and nothing else, and leaves the other build card standing. A todo is in
-/// progress while its card is open or its session runs, so a second build of it and a third
-/// todo are refused, naming what is in progress, until a card is dismissed; a dropped session's
-/// todo is built again as a new card, its next attempt.
+/// A todo is in progress while its card is open or its session runs, so a second build of it
+/// and a third todo are refused until a card is dismissed; a dropped session's todo builds again.
 #[test]
 fn a_todo_is_built_from_its_card_at_most_two_at_once() {
     let (routine, served) = fake_routine();
@@ -773,10 +765,8 @@ fn a_todo_of_another_chain_is_not_built() {
     assert_eq!(fold.objects().count(), 0, "nothing was filed");
 }
 
-/// A round that read mail is refused a session, and the box files one card that asks the
-/// owner's request again. Its tap opens a conversation whose first line is the owner's request,
-/// byte for byte, under the same stamp and clean; no other line of the old conversation is in
-/// it. The secretary there proposes the session, and its tap fires the routine.
+/// The box's card opens a conversation whose first line is the owner's request, byte for byte
+/// under the same stamp, and no other line of the old one.
 #[test]
 fn a_refused_session_starts_again_in_a_fresh_conversation() {
     use suzatary_cli::commands::{ask, tap};

@@ -1,6 +1,6 @@
-//! `suzatary tap proposal:<conversation>/<n>`: the operator's tap on a card, through the route a
-//! device's tap takes. The box refuses the operator's tap on every card that sends mail
-//! (`suzatary_inbox::secretary::sending`), because sending stays the owner's tap.
+//! `suzatary tap`: the operator's tap on a card, through the route a device's tap takes, refused
+//! on every card that sends mail (`suzatary_inbox::secretary::sending`), because sending stays
+//! the owner's tap.
 
 use std::path::Path;
 
@@ -12,7 +12,6 @@ use super::call::Operator;
 use crate::instance::Instance;
 use suzatary_server::serve::route::Method;
 
-/// Which card, and what the tap brings.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// The card, in its reference form: `proposal:<conversation>/<n>`.
@@ -28,10 +27,6 @@ pub struct Args {
     value_from_stdin: bool,
 }
 
-/// `suzatary tap <card>`: the conversation as the box answers after the tap, on stdout.
-///
-/// # Errors
-/// The instance file's, the keys', stdin's, and the route's refusal.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let answer = match (args.always, args.value_from_stdin) {
         (true, _) => TapAnswer::Always,
@@ -52,7 +47,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A tap the box performed.
 #[derive(Debug)]
 pub struct Tapped {
     /// The name the box keeps the tap's record under, which names the root key.
@@ -61,10 +55,7 @@ pub struct Tapped {
     pub conversation: serde_json::Value,
 }
 
-/// Tap `card` as `operator`, bringing `answer`.
-///
-/// # Errors
-/// The route's refusal, a card that sends mail among them.
+/// The route refuses a card that sends mail.
 pub fn tap(
     operator: &Operator,
     card: &ProposalRef,

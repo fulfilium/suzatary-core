@@ -90,9 +90,8 @@ fn handed(model: &FakeModel) -> Vec<suzatary_held::enclosed::Enclosed> {
         .collect()
 }
 
-/// Listing names every attachment and reads none; naming one hands the model the file itself:
-/// the PDF reaches it as a document, kept in the box's file store, with its text layer beside
-/// it for a model that cannot read one.
+/// Naming one hands the model the file itself: the PDF as a document, with its text layer
+/// beside it for a model that cannot read one.
 #[test]
 fn attachments_lists_then_reads_a_named_one() {
     let mailbox = holding("offer-msg")
@@ -188,8 +187,7 @@ fn attachments_lists_then_reads_a_named_one() {
     );
 }
 
-/// An image reaches the model as an image; anything else that is not text is
-/// refused by name, never opened.
+/// Anything that is neither text nor an image is refused by name, never opened.
 #[test]
 fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_type() {
     let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 16];
@@ -258,9 +256,8 @@ fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_t
     assert!(docx.contains("nothing a model reads"), "{docx}");
 }
 
-/// An SSN in an attachment arrives `[redacted]`: a PDF whose text layer names one is not
-/// handed over at all, and its text passes through the same `redact` a Drive document does
-/// before the model or the transcript sees it.
+/// A PDF whose text layer names an SSN is not handed over, and its text passes through the
+/// same `redact` a Drive document does before the model or the transcript sees it.
 #[test]
 fn an_ssn_in_an_attachment_arrives_as_placeholders_naming_the_file() {
     let mailbox = holding("w2-msg")

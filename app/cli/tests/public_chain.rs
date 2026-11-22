@@ -1,9 +1,6 @@
-//! A DEPLOYMENT THAT MOUNTS A PUBLIC CHAIN TAPS (`publicchaindoor`), a security boundary, over the
-//! real binary: the e2e fixture's box, whose chains are `life` and `suzatary`, private, and
-//! `roadmap`, public. A key is asked of the private chains alone, so a trusted device's tap is
-//! performed, an untrusted key is refused and a revoked one wiped; `device init`, `trust`,
-//! `revoke` and `list` succeed; the server starts with no adoption warning; and no step writes a
-//! byte to the public store.
+//! A DEPLOYMENT THAT MOUNTS A PUBLIC CHAIN TAPS (`publicchaindoor`), a security boundary: on the
+//! e2e fixture's box, where `roadmap` alone is public, a key is asked of the private chains alone
+//! and no step writes a byte to the public store.
 
 use crate::common;
 
@@ -20,7 +17,6 @@ fn seed(byte: char) -> Secret {
     Secret::new(&byte.to_string().repeat(64)).expect("a seed")
 }
 
-/// Every file of the public store, by path, with its bytes.
 fn public_store(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(dir: &Path, into: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).expect("the store reads") {
@@ -124,7 +120,6 @@ fn a_box_that_mounts_a_public_chain_performs_a_trusted_tap() {
     let serving = Serving::start(&root, &root.join("box/instance.toml"));
     let base = format!("http://127.0.0.1:{port}");
 
-    // A new device asks for its card, and the trusted phone's tap trusts it.
     let (status, asked) = act(
         &base,
         "/api/act/key",
@@ -160,7 +155,6 @@ fn a_box_that_mounts_a_public_chain_performs_a_trusted_tap() {
     assert_eq!(listed(&root, &new), keyed("trusted"));
     untouched("the trust card's tap");
 
-    // A key no private chain trusts is refused in the standing words.
     let dismiss = "/api/secretary/conversations/nothing/proposals/0/dismiss";
     let reason = serde_json::json!({ "reason": "not now" });
     let (status, refused) = act(&base, dismiss, &reason, &stranger);
@@ -168,7 +162,6 @@ fn a_box_that_mounts_a_public_chain_performs_a_trusted_tap() {
     let why = refused["error"].as_str().unwrap_or_default();
     assert!(why.contains("which is not trusted"), "{why}");
 
-    // A revoked key is refused and told to wipe.
     device(&root, &["revoke", phone.public().as_str()]);
     untouched("device revoke");
     assert_eq!(listed(&root, &phone), keyed("revoked"));

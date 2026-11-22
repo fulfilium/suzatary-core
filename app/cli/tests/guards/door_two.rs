@@ -1,8 +1,6 @@
-//! Door 2 runs from the hourly pass: `scripts/safe-push.sh` pushes each public store's clone through
-//! `scripts/roadmap-push.sh`, which runs `scripts/public-scan.sh`, which runs
-//! `scripts/public-tree.sh`. Every program those three call must be on the unit's path, and the
-//! unit's path is `nix/services.nix`'s `runtimeDeps`, which holds `doorTwo`; the module check
-//! (`nix/module-check.nix`) holds `doorTwo` to the triage unit's evaluated path.
+//! Every program door 2's scripts call from the hourly pass (`scripts/safe-push.sh`) must be on
+//! the unit's path, `nix/services.nix`'s `doorTwo`, which `nix/module-check.nix` holds to the
+//! triage unit's evaluated path.
 
 use std::collections::BTreeSet;
 

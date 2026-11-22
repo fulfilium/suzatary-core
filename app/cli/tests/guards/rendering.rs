@@ -6,14 +6,12 @@ use super::repo;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// A source `rendering.rs` hashes, and its digest.
 #[derive(serde::Deserialize)]
 struct Hashed {
     file: String,
     sha256: String,
 }
 
-/// `guards/rendering.toml`'s sources.
 fn pinned() -> Vec<Hashed> {
     #[derive(serde::Deserialize)]
     struct File {
@@ -26,8 +24,7 @@ fn pinned() -> Vec<Hashed> {
         .sources
 }
 
-/// Every source `rendering.rs` hashes into a kept render's name is pinned by its digest, so a
-/// change to one is seen where it is reviewed: it renames every kept render.
+/// A change to a hashed source renames every kept render, so the pin shows it where it is reviewed.
 #[test]
 fn the_sources_a_render_is_named_by_are_pinned() {
     let src = repo().join("app/todo/src");

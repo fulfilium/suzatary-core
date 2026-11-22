@@ -10,7 +10,6 @@ use prodrome_core::literal::Datetime;
 use suzatary_record::record::{EventStore, mk_authored};
 use suzatary_store::store::Reads as _;
 
-/// A scratch root of its own.
 pub(crate) fn scratch(name: &str) -> PathBuf {
     let root = crate::common::scratch(name);
     std::fs::create_dir_all(&root).expect("a scratch root");

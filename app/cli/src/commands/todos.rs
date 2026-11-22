@@ -1,7 +1,6 @@
 //! `suzatary todos open`: the one list of every store the deployment reads, which the briefing
-//! and the agent's dedup read. `--chain` restricts it to one store's rows.
-//!
-//! An unconfirmed triage-authored todo is marked where it stands, never moved or sunk.
+//! and the agent's dedup read; an unconfirmed triage-authored todo is marked where it stands,
+//! never moved or sunk.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -21,10 +20,8 @@ use super::at::At;
 use super::store_at::StoreAt;
 use crate::instance::{Charted, Copied, Instance, Since, Tree};
 
-/// Which reading of the todo list.
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Which reading.
     #[command(subcommand)]
     action: Action,
     /// Only this store's rows; absent is every store, chains and followed stores alike.
@@ -46,7 +43,6 @@ pub enum Action {
     },
 }
 
-/// Every store the list reads, and how.
 struct Listing {
     read: Read,
     stores: Vec<(ChainName, Kept)>,
@@ -69,11 +65,8 @@ enum Packages {
     Unchecked { why: String },
 }
 
-/// `suzatary todos <reading>`.
-///
-/// A store that is declared and absent (a followed store no fetch has confirmed) is reported and
-/// the list succeeds. A store that is there and does not read fails the command, after the rows
-/// that did read are printed. With `--chain`, the named store not read fails it, absent or not.
+/// A declared store that is absent is reported and the list succeeds; one that is there and does
+/// not read, or the `--chain` store not read, fails the command after the rows that did read.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let read = args.store.or_instance(
         path,
@@ -143,8 +136,7 @@ fn of_instance(instance: &Instance) -> Listing {
 }
 
 /// The units of `code`'s `context.toml` for the mount that holds the release plan, or why the
-/// packages go unchecked. A plan or a `context.toml` that does not read leaves the packages
-/// unchecked and fails no reading.
+/// packages go unchecked, which fails no reading.
 fn packages(mounts: &crate::instance::Mounts, code: Option<&Path>) -> Packages {
     let unchecked = |why: String| Packages::Unchecked { why };
     match mounts.project() {
@@ -161,7 +153,6 @@ fn packages(mounts: &crate::instance::Mounts, code: Option<&Path>) -> Packages {
     }
 }
 
-/// `suzatary todos open`: the one list, ascending in reading (low is urgent).
 fn open_todos(read: &Listing, only: Option<&str>, at: Datetime, json: bool) -> anyhow::Result<()> {
     let set = read.read.set(at);
     let stores: Vec<Store<'_>> = read

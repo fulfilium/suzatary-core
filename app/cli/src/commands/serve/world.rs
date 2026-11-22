@@ -24,7 +24,6 @@ pub struct World {
 }
 
 impl World {
-    /// Choose an interpreter for every effect, out of what the instance file says.
     #[must_use]
     pub fn assemble(instance: &Instance, signers: Signers, peers: Peers, brain: Brain) -> Self {
         let devices = Devices::open(instance.paths.devices.clone());
@@ -54,15 +53,11 @@ impl World {
 
     /// Every store a tab writes begun (the topic stores and the lines), so a tab's first write
     /// has a prodrome to rest on: a tab may not begin one.
-    ///
-    /// # Errors
-    /// A store unreadable or not begun.
     pub fn begin_written(&self) -> Result<(), suzatary_store::store::StoreError> {
         self.opened.topics.begin()?;
         self.opened.remembering.conversations.lines.begin()
     }
 
-    /// The stores a tapped act and the coding poll write through: this world's own handles.
     #[must_use]
     pub fn acting_stores(&'static self) -> crate::commands::secretary::ActingStores {
         crate::commands::secretary::ActingStores {
@@ -71,7 +66,6 @@ impl World {
         }
     }
 
-    /// The server's record over one chain's stores.
     #[must_use]
     pub fn server<'a>(&'a self, stores: &'a Stores) -> Server<'a> {
         Server {

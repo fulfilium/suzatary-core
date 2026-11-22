@@ -1,7 +1,6 @@
-//! Every test file runs. Each crate's integration tests are one binary, `tests/all.rs`, with
-//! each file a module of it and test discovery off, so a file that `all.rs` does not declare,
-//! and that is not a target of its own in the crate's manifest, would compile into nothing and
-//! pass by saying nothing. This walks every crate of the workspace and names such a file.
+//! Every test file runs: each crate's integration tests are one binary, `tests/all.rs`, with
+//! test discovery off, so a file that `all.rs` does not declare, and that is not a target of its
+//! own in the crate's manifest, would compile into nothing and pass by saying nothing.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -27,7 +26,6 @@ fn files(dir: &Path) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
-/// The files `all.rs` declares as modules, by their `#[path = "…"]`.
 fn declared(all: &str) -> BTreeSet<String> {
     all.lines()
         .filter_map(|line| line.trim().strip_prefix("#[path = \""))

@@ -18,8 +18,7 @@ pub struct StoreAt {
 }
 
 impl StoreAt {
-    /// `by_path` of the named directory, else `mounted` of the instance file at `path`, which is
-    /// opened only then.
+    /// `by_path` of the named directory, else `mounted` of the instance file, opened only then.
     pub(crate) fn or_instance<T>(
         &self,
         path: &Path,

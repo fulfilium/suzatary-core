@@ -24,7 +24,6 @@ fn deployment() -> suzatary_connect::deployment::Deployment {
     )
 }
 
-/// Open the conversation with one person turn already on it.
 fn opened_with_a_person_turn(caps: &Fakes) {
     conversations::start(
         caps.conversations.conversations(),
@@ -198,9 +197,8 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
     );
 }
 
-/// A session told the record before the owner retracted a summary is opened afresh rather than
-/// resumed: the record it holds may carry the summary he said is wrong, which no model is shown
-/// again.
+/// A session told the record before the owner retracted a summary is opened afresh, since its
+/// record may carry the summary he said is wrong, which no model is shown again.
 #[test]
 fn a_retraction_reopens_a_stored_session() {
     let mut caps =
@@ -285,7 +283,6 @@ fn a_retraction_reopens_a_stored_session() {
     );
 }
 
-/// A lost resume is followed by exactly one `open` over the whole transcript, whose reply answers.
 #[test]
 fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
     let caps = Fakes::new("session-lost")
@@ -699,7 +696,6 @@ fn a_stopped_round_ends_in_the_act_and_the_next_opens_cold() {
     );
 }
 
-/// A round with nothing waiting asks no model after an answer, a failure or a stop.
 #[test]
 fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
     let counsel = suzatary_connect::cast::CAST.counsel.name;
@@ -789,7 +785,6 @@ fn nothing_waiting_asks_no_model_after_an_answer_a_failure_or_a_stop() {
     );
 }
 
-/// The stateless arm asks no model when nothing is waiting either.
 #[test]
 fn nothing_waiting_asks_a_stateless_model_nothing() {
     let caps =
@@ -859,9 +854,8 @@ impl suzatary_conversations::secretary::model::Model for Named {
     }
 }
 
-/// A round reads the order only when something waits, and each round's pick is its own: a
-/// round with nothing to answer picks nothing, and the next round answers by the order as it
-/// stands then, named by the model that answered.
+/// Each round's pick is its own: the next round answers by the order as it stands then, named
+/// by the model that answered.
 #[test]
 fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
     let caps = Fakes::new("pick-per-round").model(FakeModel::saying(["{\"say\": \"hi\"}"]));

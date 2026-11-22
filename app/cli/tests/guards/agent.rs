@@ -1,12 +1,5 @@
 //! `AGENT.md`, the guide a coding agent follows to set up a deployment: its options are
 //! `suzatary init --options` to the byte, and everything it tells the agent to run exists.
-//!
-//! - Every invocation of the app names a verb of the deployed argument tree at every level,
-//!   with flags that verb takes and a `--help` that answers, or a verb the template's script
-//!   answers itself: `secret` with a name `secretspec.toml` declares, `tool` with one of the
-//!   tools the script names, `which` and `shell` with nothing.
-//! - Every unit `systemctl` or `journalctl` is pointed at is one the NixOS module declares,
-//!   every flag given to a script is one its text spells, and every repository path is here.
 
 use super::repo;
 
@@ -36,13 +29,9 @@ fn app() -> clap::Command {
 
 /// What the template's `suzatary` script answers without the app, read from the script.
 struct Script {
-    /// Its own verbs, its `case` arms.
     verbs: Vec<String>,
-    /// The tools its header says `tool` reaches, by command name, and the shell they run in.
     tools: Vec<String>,
-    /// The names `secretspec.toml` declares, which `secret` sets.
     secrets: Vec<String>,
-    /// The plugin credentials the guide's own `[[plugins]]` tables declare.
     plugins: Vec<String>,
 }
 
@@ -158,7 +147,6 @@ fn commands(text: &str) -> Vec<String> {
     out
 }
 
-/// Each simple command in `text`, as words.
 fn simple(text: &str) -> impl Iterator<Item = Vec<&str>> {
     text.split(['&', '|', ';', ')', '"'])
         .map(|segment| segment.split_whitespace().collect())
@@ -218,7 +206,6 @@ fn refused(app: &clap::Command, words: &[String]) -> Option<String> {
     (!answered).then(|| format!("`{} --help` does not answer", path.join(" ")))
 }
 
-/// Whether `command` takes `--flag`, its own or a global one.
 fn takes(command: &clap::Command, flag: &str) -> bool {
     flag == "help"
         || flag == "instance"
@@ -227,7 +214,6 @@ fn takes(command: &clap::Command, flag: &str) -> bool {
             .any(|arg| arg.get_long() == Some(flag))
 }
 
-/// Whether `command` takes `-short`, its own or help's.
 fn takes_short(command: &clap::Command, short: char) -> bool {
     short == 'h'
         || command
@@ -235,7 +221,6 @@ fn takes_short(command: &clap::Command, short: char) -> bool {
             .any(|arg| arg.get_short() == Some(short))
 }
 
-/// The user units, system services and timers the NixOS module declares, by unit name.
 fn declared_units() -> Vec<String> {
     let module = read("nix/nixos-module.nix");
     let mut out = Vec::new();
@@ -274,8 +259,6 @@ fn the_guides_options_are_inits_own() {
     );
 }
 
-/// What the guide says leaves the box is what the code sends: the section is
-/// `suzatary doctor --outbound`'s output, byte for byte.
 #[test]
 fn the_guides_outbound_section_is_the_codes() {
     use suzatary_cli::commands::outbound;

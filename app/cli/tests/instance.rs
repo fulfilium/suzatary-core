@@ -260,10 +260,8 @@ fn printed(instance: &Instance) -> String {
     out
 }
 
-/// Every startup refusal: a name, and the edit to the live-shaped file that
-/// provokes it, `from` replaced by `to` (an empty `from` is the whole file).
-/// The few edits the parse lets through are here too, so a change to what it
-/// lets through shows.
+/// Every startup refusal, and the few edits the parse lets through: a name, and the edit to
+/// the live-shaped file, `from` replaced by `to` (an empty `from` is the whole file).
 const REFUSALS: &[(&str, &str, &str)] = &[
     ("not toml", "", "repo = "),
     ("no repo", "repo = \"/srv/code\"\n", ""),
@@ -489,7 +487,6 @@ const REFUSALS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// The live-shaped file with one edit.
 fn edited(from: &str, to: &str) -> String {
     if from.is_empty() {
         return to.to_owned();

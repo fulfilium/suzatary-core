@@ -64,7 +64,6 @@ use suzatary_memory::secretary::salted_text;
 use suzatary_services::web;
 use suzatary_topics::secretary::topics::backfill;
 
-/// What sends a tapped proposal.
 pub enum Postman {
     Real(Arc<Instance>),
     /// Records to a file; behind a feature so the deployed build lacks it.
@@ -88,7 +87,6 @@ impl Post for Postman {
 pub enum Acting {
     /// This build performs no act; a tap records why.
     NotYet,
-    /// The real performers.
     Real {
         /// Read at the tap, so an account added since startup signs in.
         roster: Arc<dyn Edits + Send + Sync>,
@@ -125,7 +123,6 @@ pub enum Acting {
 /// The conversations store, `'static` because a flow's own thread writes its end.
 pub type ActingConversations = &'static ConversationStores;
 
-/// The inbox an act ends in.
 pub type ActingInbox = &'static dyn Prodrome<inbox_event::InboxEvent>;
 
 /// The server's own store handles, so the process holds one copy of each.
@@ -149,7 +146,6 @@ pub fn fixture_mirrors(instance: &Instance) -> Arc<Mirrors> {
     ))
 }
 
-/// Resolves no secret.
 #[cfg(feature = "fixture")]
 struct NoToken;
 
@@ -509,7 +505,6 @@ impl suzatary_server::secretary::routes::Perform for Acting {
     }
 }
 
-/// Begin a tapped device flow.
 #[expect(
     clippy::too_many_arguments,
     reason = "one value per thing the flow needs, none of them optional"
@@ -1338,18 +1333,14 @@ enum TopicsAction {
     },
 }
 
-/// What `topics carry` does.
 #[derive(Debug, Clone)]
 pub enum CarryRun {
-    /// List every conversation.
     List,
     /// Print what the map would give; write nothing.
     Show(std::path::PathBuf),
-    /// Write what the map gives.
     Write(std::path::PathBuf),
 }
 
-/// What `topics backfill` does.
 #[derive(Debug, Clone)]
 enum BackfillRun {
     Plan(Option<std::path::PathBuf>),
@@ -1364,7 +1355,6 @@ use suzatary_services::web::WebAnswer;
 /// Hours before a stale triage heartbeat alarms: twelve missed five-minute timers.
 const STALE_HOURS: f64 = 1.0;
 
-/// `suzatary secretary`.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.command {
         Command::Owed { compare: _, store } => {
@@ -1377,9 +1367,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 
 /// `suzatary secretary owed --compare --store <lines>`: the lines at `store`, read and never
 /// written, compared at `now` ([`suzatary_lines::secretary::compare`]).
-///
-/// # Errors
-/// No store at `store`, or one that does not read.
 pub fn owed_compare(
     store: &Path,
     now: capability::Datetime,
@@ -1441,7 +1428,6 @@ pub fn owed_compare(
     Ok(())
 }
 
-/// `suzatary secretary`'s verbs over the instance's stores.
 fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
     match action {
         Action::Ask { conversation, text } => {
@@ -1531,7 +1517,6 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
     }
 }
 
-/// `suzatary secretary digest census`.
 pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     let remembering = crate::wiring::Remembering::reader(instance);
     let digest = remembering.memories().digests.reads().read()?;
@@ -1795,8 +1780,8 @@ fn husk_dead(
 }
 
 /// `readings`: `name=<sha-256>` for each reading, on one line, the lines' readings
-/// ([`suzatary_api::routes::lines_readings`]) beside the digest's census and the waiting count.
-/// Read at one fixed instant, so it is a function of the stores alone.
+/// ([`suzatary_api::routes::lines_readings`]) beside the digest's census and the waiting count,
+/// read at one fixed instant so it is a function of the stores alone.
 pub fn readings(instance: &Instance, out: &mut impl std::io::Write) -> anyhow::Result<()> {
     use sha2::Digest as _;
     let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());

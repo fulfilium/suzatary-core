@@ -1,7 +1,6 @@
-//! `suzatary leaks`: the leak guard's matcher (`suzatary_held::leak`) over files, or over the
-//! paths on stdin, printing each hit as `file:line` on stdout and its layer on stderr, and
-//! nothing of what it matched; `suzatary leaks scan-copy` writes the copy the secret scanner
-//! reads. `scripts/public-tree.sh --check` walks the tree and calls both.
+//! `suzatary leaks`: the leak guard's matcher (`suzatary_held::leak`) over files or stdin's
+//! paths, printing each hit as `file:line` on stdout and its layer on stderr, and nothing it
+//! matched.
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -31,7 +30,6 @@ pub enum AdmitBy {
     Never,
 }
 
-/// What `suzatary leaks` was told: a scan by the matcher, or the scanner's copy.
 #[derive(Debug, clap::Args)]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct Args {
@@ -41,7 +39,6 @@ pub struct Args {
     scan: Option<Scan>,
 }
 
-/// The copy the secret scanner reads, rather than a scan.
 #[derive(Debug, clap::Subcommand)]
 enum Copy {
     /// Write the copy the secret scanner reads: stdin is NUL-separated paths, each written to
@@ -54,7 +51,6 @@ enum Copy {
     },
 }
 
-/// What the matcher reads, and against what.
 #[derive(Debug, clap::Args)]
 struct Scan {
     /// The data repository's terms, one per line.
@@ -92,10 +88,6 @@ struct Scan {
     files: Vec<PathBuf>,
 }
 
-/// Print every hit, or write the scanner's copy.
-///
-/// # Errors
-/// A list, the manifest or a file unreadable, the manifest malformed, or no mode given.
 pub fn run(args: &Args) -> anyhow::Result<()> {
     match (&args.copy, &args.scan) {
         (Some(Copy::ScanCopy { dir }), _) => scan_copy(dir),
@@ -104,10 +96,6 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
     }
 }
 
-/// Print every hit the matcher finds.
-///
-/// # Errors
-/// A list, the manifest or a file unreadable, or the manifest malformed.
 fn matched(args: &Scan) -> anyhow::Result<()> {
     let read = |path: &Path| {
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))
@@ -199,9 +187,6 @@ fn matched(args: &Scan) -> anyhow::Result<()> {
 
 /// Write the copy the secret scanner reads into `dir`, one numbered file per path on stdin, and
 /// print the index.
-///
-/// # Errors
-/// A path that is not UTF-8, or a file unreadable or unwritable.
 fn scan_copy(dir: &Path) -> anyhow::Result<()> {
     let mut paths = Vec::new();
     std::io::stdin().read_to_end(&mut paths)?;

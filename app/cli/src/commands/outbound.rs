@@ -17,7 +17,6 @@ pub const BEGIN: &str =
 /// The line after it.
 pub const END: &str = "<!-- end of outbound -->";
 
-/// One place something is sent.
 struct Destination {
     to: String,
     receives: String,

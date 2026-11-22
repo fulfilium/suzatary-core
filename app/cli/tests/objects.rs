@@ -1,6 +1,4 @@
 //! The phone as a replica: `POST /api/objects` driven as a phone drives it, over a real server.
-//!
-//! `v4` is the writer `ada@example.com` and `v6` a viewer; unresolved peers are `gate.rs`'s.
 
 use crate::common;
 
@@ -47,12 +45,10 @@ fn at(minute: u32) -> prodrome_core::literal::Datetime {
     prodrome_core::literal::Datetime::new(2026, 9, 2, 11, minute, 0, 0).expect("a real instant")
 }
 
-/// What a phone does: seal an event onto a head it holds.
 fn sealed(prev: Option<&Hash>, event: suzatary_record::record::TodoEvent) -> Envelope {
     mk_sealed(prev.cloned(), event)
 }
 
-/// The phone's signature of `object`, which it posts beside it.
 fn signature(object: &Envelope) -> Envelope {
     Envelope::Signed(common::phone().sign(&seal_hash(object)))
 }
@@ -66,7 +62,6 @@ fn landed(objects: &[&Envelope]) -> serde_json::Value {
         .collect()
 }
 
-/// Hand objects over the way the app does: each signed by the phone that sealed it.
 fn post(base: &str, objects: &[&Envelope]) -> ureq::http::Response<ureq::Body> {
     let literals: Vec<String> = objects
         .iter()
@@ -78,9 +73,6 @@ fn post(base: &str, objects: &[&Envelope]) -> ureq::http::Response<ureq::Body> {
     )
 }
 
-// --- The gate ----------------------------------------------------------------
-
-/// A POST from loopback is refused.
 #[test]
 fn a_post_from_loopback_is_refused() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -108,7 +100,6 @@ fn a_post_from_loopback_is_refused() {
     assert_eq!(events(&caps).len(), before);
 }
 
-/// A viewer who is not an actor may read the objects and not post any.
 #[test]
 fn a_viewer_who_is_not_an_actor_may_read_but_not_post() {
     let whois = common::FakeWhois::new()
@@ -139,7 +130,6 @@ fn a_viewer_who_is_not_an_actor_may_read_but_not_post() {
     );
 }
 
-/// The CSRF triple guards the sync route.
 #[test]
 fn the_csrf_triple_guards_the_sync_route() {
     let (base, caps) = writer("sync-csrf");
@@ -149,7 +139,6 @@ fn the_csrf_triple_guards_the_sync_route() {
     );
     let body = serde_json::json!({ "objects": [canonical_envelope(&object)] });
 
-    // No app header.
     let mut no_header = common::agent()
         .post(format!("{base}/api/objects"))
         .send_json(body.clone())
@@ -180,7 +169,7 @@ fn the_csrf_triple_guards_the_sync_route() {
         );
     }
 
-    // A page from before the box's write contract: told to load the new one, before anything is
+    // A page from before the box's write contract is told to load the new one, before anything is
     // written.
     let mut stale = common::agent()
         .post(format!("{base}/api/objects"))
@@ -196,7 +185,6 @@ fn the_csrf_triple_guards_the_sync_route() {
             .contains("was not sent")
     );
 
-    // Not JSON.
     let form = common::agent()
         .post(format!("{base}/api/objects"))
         .header("x-suzatary-act", "1")
@@ -205,8 +193,6 @@ fn the_csrf_triple_guards_the_sync_route() {
         .expect("the request completes");
     assert_eq!(common::status(&form), 403);
 }
-
-// --- What the box takes ------------------------------------------------------
 
 /// A sealed act from a phone lands on the chain, and the answer names it.
 #[test]
@@ -247,8 +233,8 @@ fn a_sealed_act_from_a_phone_lands_on_the_chain() {
     assert_eq!(row["state"], "completed");
 }
 
-/// What a tab does since it writes changes: hold the box's objects in the Prodrome's replica,
-/// append there, and post the one object that answers.
+/// A tab holds the box's objects in the Prodrome's replica, appends there, and posts the one
+/// object that answers.
 #[test]
 fn a_change_a_phone_appended_lands_through_adoption() {
     use prodrome_core::store::{MemoryStore, Replica as _};
@@ -345,7 +331,6 @@ fn bytes_that_are_not_an_object_are_refused_by_name() {
     assert_eq!(events(&caps).len(), before);
 }
 
-/// An event naming an actor other than the poster's mapping is refused.
 #[test]
 fn an_object_naming_another_actor_is_refused() {
     let (base, caps) = writer("sync-foreign-actor");
@@ -395,7 +380,6 @@ fn an_object_resting_on_nothing_the_box_holds_is_refused() {
     assert_eq!(caps.chain.verify(), Vec::<String>::new());
 }
 
-/// Objects posted in any order are placed by parent.
 #[test]
 fn a_post_in_reverse_order_still_lands_parents_first() {
     let (base, caps) = writer("sync-order");
@@ -422,8 +406,7 @@ fn a_post_in_reverse_order_still_lands_parents_first() {
     assert_eq!(caps.chain.verify(), Vec::<String>::new());
 }
 
-/// Two diverged replicas leave the box both heads: nothing joins them, and the fold reads both
-/// branches' facts.
+/// Nothing joins the two heads, and the fold reads both branches' facts.
 #[test]
 fn divergence_leaves_both_heads_and_the_box_writes_nothing() {
     let (base, caps) = writer("sync-merge");
@@ -483,8 +466,6 @@ fn the_phones_at_is_stored_as_the_phone_claimed_it() {
         "the claimed instant is stored as written"
     );
 }
-
-// --- The read side ------------------------------------------------------------
 
 /// `since` names the frontier an answer named; one the box does not hold is answered as a replica
 /// holding nothing, and says so; a post naming its frontier is answered with one its next pull
@@ -605,8 +586,6 @@ fn me_names_the_actor_or_says_this_login_cannot_seal() {
     assert_eq!(viewer["login"], "guest@example.com");
     assert!(viewer["actor"].is_null(), "a viewer may not seal: {viewer}");
 }
-
-// --- The authoring a replica cannot do for itself -----------------------------
 
 /// `POST /api/author` appends nothing and answers the event's canonical print.
 #[test]

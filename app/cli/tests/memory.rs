@@ -123,9 +123,8 @@ fn his_clean_round_remembers_at_once() {
     );
 }
 
-/// Every file under `root` whose bytes hold `words`, relative to `root`. The server runs
-/// beside the walk and may delete a file it listed (a sweep, a cache), and a file that is
-/// gone holds nothing: only `NotFound` reads as absent.
+/// Every file under `root` whose bytes hold `words`; the server may delete a listed file beside
+/// the walk, so only `NotFound` reads as absent.
 fn holding(root: &std::path::Path, words: &str) -> Vec<String> {
     use suzatary_io::present::Present as _;
     fn walk(dir: &std::path::Path, root: &std::path::Path, words: &[u8], out: &mut Vec<String>) {
@@ -183,9 +182,8 @@ fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
     );
 }
 
-/// What a forgetting leaves: no file's bytes and no line, read with every key the box holds,
-/// hold the words. The model's `remember` call reads as erased, its shape whole, and the turns
-/// around it are offered on a card of the box's.
+/// What a forgetting leaves: no file or line holds the words, and the model's `remember` call
+/// reads as erased, its shape whole.
 fn erased_by_forgetting(fakes: &Fakes, id: &str, words: &str) {
     erased_call(fakes, id, words, "remember");
 }
@@ -228,9 +226,8 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     );
 }
 
-/// After a remember and a forget, no file's bytes hold the words: not the memory's texts, which
-/// the forgetting deleted, and not the conversation's lines, whose words are locked, nor read
-/// with every key the box keeps: the call that wrote them is erased with the forgetting.
+/// After a remember and a forget, no file's bytes hold the words, nor the lines read with every
+/// key the box keeps.
 #[test]
 fn a_forgotten_facts_words_are_left_nowhere() {
     let words = "The car is on level four of the Elm garage";
@@ -305,11 +302,8 @@ fn a_forgotten_facts_words_are_left_nowhere() {
     );
 }
 
-/// Two facts remembered in two conversations and consolidated in a third: the memory lists the
-/// new fact merged from both, on both rounds' word; each source's receipt names the fact that
-/// replaced it, and no file but the calls that wrote them holds the sources' words. Forgetting
-/// the consolidation then erases all three calls, in their three conversations, and leaves the
-/// words nowhere.
+/// Two facts consolidated in a third conversation merge on both rounds' word, and forgetting the
+/// consolidation erases all three calls and leaves the words nowhere.
 #[test]
 fn forgetting_a_consolidation_leaves_its_sources_words_nowhere() {
     let (one, two, both) = (
@@ -506,10 +500,8 @@ fn a_round_the_box_opened_remembers_nothing() {
     );
 }
 
-/// A tainted round's card, and what is left of its words once it is answered: dismissed, or
-/// tapped and its fact forgotten, the inbox names them and the memory's text store has deleted
-/// them, so no file holds them, the one copy left is the model's own call, locked, and the card
-/// draws as gone.
+/// A tainted round's card, dismissed or tapped and forgotten, leaves its words only in the
+/// model's own locked call, and draws as gone.
 #[test]
 fn a_cards_words_are_left_only_in_the_models_call_once_dismissed_or_forgotten() {
     let words = "Mira keeps the books for the Elm garage";

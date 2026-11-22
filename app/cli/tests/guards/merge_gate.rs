@@ -1,9 +1,6 @@
-//! The merge gate's two halves (`scripts/merge-gate.sh`): every test that reads the owner's
-//! data tree is in the live half, so the tree half, which runs where the data never is (GitHub's
-//! runners) or with it hidden, leaves nothing unread that only the live half would read.
-//! And its kept passes: a step whose inputs did not move is not run again, so each step's
-//! declared reads must cover what it reads, and the gate run with a stub in every step's place
-//! runs exactly the steps whose inputs moved.
+//! The merge gate's halves and kept passes (`scripts/merge-gate.sh`): every test that reads the
+//! owner's data tree is in the live half, since the tree half runs where the data never is, and
+//! each step's declared reads cover what it reads, since a step whose inputs did not move is kept.
 
 use super::gate_list::{Step, heavies, heavy_order, steps, togethers};
 use super::scratch::on_path;
@@ -12,10 +9,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// A test source finds the owner's data tree through the instance file's variable, the one
-/// helper over it (`tests/this_box.rs`), or the web tests' live-chain variables that
-/// `scripts/web-test.sh` sets from it. A file with no test of its own is a helper, read where
-/// its callers are.
+/// A test source finds the owner's data tree through the instance file's variable, `this_box` or
+/// the web tests' live-chain variables; a file with no test of its own is a helper, read where its
+/// callers are.
 fn reads_the_data_tree(source: &str) -> bool {
     (source.contains("#[test]") || source.contains("test("))
         && (source.contains("instance::ENV")
@@ -51,10 +47,9 @@ fn all_modules() -> Vec<(String, String)> {
         .collect()
 }
 
-/// Every step is in one of three halves and says what it reads beside the tree, and its half
-/// follows from that: the tree half reads no store and no commit but in `changelog`, unkept; the live
-/// half reads no commit, and the history half reads the commits alone, by the train's tool, which
-/// compiles nothing, so its red is about the commits' messages and never the tree's.
+/// Every step's half follows from what it reads beside the tree: the tree half no store and no
+/// commit but in an unkept `changelog`, the live half no commit, and the history half the commits
+/// alone, by a tool that compiles nothing, so its red is never the tree's.
 #[test]
 fn merge_gate_every_step_is_in_one_half_and_says_what_it_reads_beside_the_tree() {
     let steps = steps();
@@ -228,8 +223,6 @@ fn merge_gate_live_modules_are_modules_of_all() {
     }
 }
 
-/// The triage push runs in the live half over the instance's data repository, and only ever
-/// dry, so the gate sees what the box's next push would stage and commits nothing there.
 #[test]
 fn merge_gate_live_half_checks_the_public_tree_whole() {
     let step = steps()
@@ -244,7 +237,7 @@ fn merge_gate_live_half_checks_the_public_tree_whole() {
     );
 }
 
-/// The live half runs the triage push dry, once.
+/// Only ever dry, so the gate sees what the box's next push would stage and commits nothing there.
 #[test]
 fn merge_gate_live_half_runs_the_push_dry() {
     let step = steps()
@@ -265,9 +258,7 @@ fn merge_gate_live_half_runs_the_push_dry() {
 }
 
 /// The live half reads the owner's data tree, which no name of the tree covers, so none of its
-/// steps is kept but the live pins and modules, which are kept by the code that reads the data
-/// (`merge_gate_live_reads_cover_what_the_live_tests_compile`), and the web's live run, kept by
-/// the web's reads as the tree half's web steps are; and every step's reads is one of the forms.
+/// steps is kept but the live pins and modules and the web's live run, kept by the code they read.
 #[test]
 fn merge_gate_keeps_no_live_step() {
     for step in steps() {
@@ -321,10 +312,9 @@ fn code(source: &str) -> String {
         .join("\n")
 }
 
-/// The sources that name a skipped path only as a path of a scratch repository, of a checkout
-/// handed over at run time, of a branch read through git, of a literal under test or of a
-/// document a printed line points a person to, never to read this repository's own: each one
-/// read by a person, so a new source naming one fails until it is read too.
+/// The sources that name a skipped path only as data (a scratch repository, a branch, a literal
+/// under test, a document a person is pointed to), each read by a person, so a new one fails until
+/// it is read too.
 const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/src/commands/doctor.rs", "docs"),
     ("app/cli/tests/support/fixture.rs", "docs"),
@@ -437,11 +427,8 @@ fn declares(member: &str, path: &str) -> bool {
 }
 
 /// A cargo step that declares it never reads a path is kept across changes to it, so no Rust
-/// source it builds or runs may name that path, and none may climb to it from a crate; a path
-/// only a declaring unit reads may be named by the sources of a member whose unit declares it.
-/// The `script-guards` step builds its own crate alone, so its skips hold that crate's sources;
-/// the other steps' skips hold every other source but the CLI's guards', which the `guards` step
-/// reads with the whole tree.
+/// source it builds may name or climb to that path unless its member's unit declares it; the
+/// CLI's guards are exempt, since the `guards` step reads the whole tree.
 #[test]
 fn merge_gate_no_rust_source_names_a_path_its_cargo_steps_skip() {
     let skips = |steps: &[Step]| -> BTreeSet<String> {
@@ -523,9 +510,7 @@ pub(super) const MADE_AND_READ: &[(&str, &str)] = &[
 ];
 
 /// A step that reads another's output runs after it in its lane, or in the `quiet` lane, which
-/// runs after every other, since lanes run side by side: e2e serves the bundle build-web makes,
-/// the web steps read what web-inputs prepares, and the plugin tests load the
-/// components fence-plugin resolves.
+/// runs after every other, since lanes run side by side.
 #[test]
 fn merge_gate_a_step_follows_what_it_reads_in_its_lane() {
     let steps = steps();
@@ -546,11 +531,8 @@ fn merge_gate_a_step_follows_what_it_reads_in_its_lane() {
     }
 }
 
-/// The workspace's Cargo builds and the Nix builds of the app and the browser module are heavy:
-/// on the box two of them side by side ran it out of memory (train 90). Every name `heavy`
-/// declares is a step, and the heavy steps of a lane are named in the lane's own order, since
-/// each waits for the one named before it: a lane whose later step came first would wait on
-/// itself.
+/// The Cargo and Nix builds are heavy, since two side by side ran the box out of memory, and a
+/// lane names its heavy steps in its own order, since each waits for the one named before it.
 #[test]
 fn merge_gate_declares_the_builds_heavy() {
     let all = steps();
@@ -584,8 +566,7 @@ fn merge_gate_declares_the_builds_heavy() {
 }
 
 /// A step that reads what another writes outside the tree is kept or run with it, so it never
-/// reads what a kept writer left from another tree: e2e serves the bundle build-web writes to
-/// web/dist, and web-test and build-web read the web/src/wire/generated web-inputs writes.
+/// reads what a kept writer left from another tree.
 #[test]
 fn merge_gate_keeps_a_writer_and_its_readers_together() {
     let groups = togethers();
@@ -603,10 +584,8 @@ fn merge_gate_keeps_a_writer_and_its_readers_together() {
     }
 }
 
-/// A kept scene reads nothing, so a scene is kept across a change that build-web runs for only
-/// when its key holds every input of the bundle build-web writes: no path an e2e unit skips is
-/// one the bundle is built from, but the inputs a scene reads once it fetched them
-/// (`merge_gate_a_scene_is_kept_by_what_it_fetched`).
+/// A kept scene reads nothing, so no path an e2e unit skips is one the bundle build-web writes is
+/// built from.
 #[test]
 fn merge_gate_a_scene_reads_every_input_of_the_bundle() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -651,11 +630,8 @@ fn prodrome_pins(text: &str) -> BTreeSet<String> {
         .collect()
 }
 
-/// The tree half's web steps read the Prodrome twice: its crates through cargo (the wasm, the
-/// wire and the vectors' parser, at `app/Cargo.lock`'s revision) and its conformance files
-/// through the flake input (`suzatary-vector-json` reads `${prodrome}/conformance`, and the
-/// tab's Typst is that input's build). One revision, pinned in all four files, so a vector is
-/// always read by the parser of the commit that wrote it.
+/// The web steps read the Prodrome through cargo and through the flake input, so one revision is
+/// pinned in all four files and a vector is always read by the parser of the commit that wrote it.
 #[test]
 fn merge_gate_reads_one_prodrome_through_cargo_and_the_flake() {
     let read = |path: &str| {
@@ -676,13 +652,9 @@ fn merge_gate_reads_one_prodrome_through_cargo_and_the_flake() {
     }
 }
 
-/// The deploy's build is made once, by the gate: the live half builds HEAD's public tree on the
-/// box with the list `scripts/deploy.sh` builds (`scripts/app-builds.sh`), from the store path a
-/// published commit is fetched to, so the deploy of a landed commit finds every output built.
-/// The dry push runs the binary that build made, the program the deploy runs: this gate's, handed
-/// on in its lane's shell, never a link another checkout's gate moves, and none at all after a
-/// failed build. The leak check reads that build's tree with the deployed app, so no tree
-/// weakens the matcher that reads it.
+/// The live half builds HEAD's public tree as the deploy does, and the dry push and the leak check
+/// run that build's binary, never a link another checkout's gate moves nor any after a failed
+/// build, so no tree weakens the matcher that reads it.
 #[test]
 fn merge_gate_live_half_builds_what_the_deploy_builds() {
     let step = steps()
@@ -744,11 +716,8 @@ fn merge_gate_live_half_builds_what_the_deploy_builds() {
     );
 }
 
-/// The gate roots the environment it runs in before it builds anything: `nix develop` roots
-/// nothing, and the daemon's collection, short of disk, took gitleaks from under the guards
-/// mid-gate. So the rooting comes before the disk is checked, the gate collects nothing itself,
-/// and what it roots holds every store path on the running shell's PATH in its closure, which is
-/// what a collection keeps.
+/// The gate roots its shell's PATH closure before it checks the disk or builds, and collects
+/// nothing itself, since `nix develop` roots nothing and a collection can take a tool mid-gate.
 #[test]
 fn merge_gate_roots_the_shell_it_runs_in_before_it_collects() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -817,11 +786,9 @@ fn crate_reads() -> Vec<String> {
         .collect()
 }
 
-/// Every path the gate's read lists name is in the tree: a step's pass is keyed by the paths it
-/// reads, so a listed path that holds nothing keys it by nothing, and the step is kept stale once
-/// something lands there. The lists are each step's reads, `crate_reads` and the scenes' base
-/// (`unit_base[files:web/e2e]`, which `--list` does not print). The private history may be
-/// absent: a public tree leaves it out, and `docs/reports` is empty between sessions.
+/// Every path the gate's read lists name is in the tree, since a listed path that holds nothing
+/// keys a step by nothing and keeps it stale once something lands there; the private history may
+/// be absent.
 #[test]
 fn merge_gate_every_path_a_read_list_names_is_in_the_tree() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -940,10 +907,8 @@ fn folded(path: &Path) -> Option<String> {
 }
 
 /// A member's tests are kept across a change to a path its unit skips, so every path its sources
-/// reach by a relative literal is one the unit reads: an `include_*!` against the file's own
-/// directory, and any other literal holding `../` against the member's directory, as
-/// `CARGO_MANIFEST_DIR` and a test's working directory are. The guards' sources are the guards
-/// step's, which reads the whole tree.
+/// reach by a relative literal (`include_*!` from the file's directory, any other `../` from the
+/// member's, as `CARGO_MANIFEST_DIR` is) is one the unit reads.
 #[test]
 fn merge_gate_member_sources_reach_only_what_their_units_read() {
     if !on_path("node") {
@@ -1012,10 +977,7 @@ fn merge_gate_member_sources_reach_only_what_their_units_read() {
 }
 
 /// The live pins and modules are kept by `live_reads`, so it holds everything they compile and
-/// read of the tree: the workspace's manifests and lock, the directory of every member the CLI
-/// depends on (the store, its readers, the wire and the migrations among them), the CLI's
-/// sources, the test files and the modules they include, and every file the members' sources
-/// include at compile time.
+/// read of the tree.
 #[test]
 #[allow(clippy::too_many_lines)]
 fn merge_gate_live_reads_cover_what_the_live_tests_compile() {
@@ -1149,9 +1111,8 @@ fn merge_gate_live_reads_cover_what_the_live_tests_compile() {
     }
 }
 
-/// The web steps and the public tree's builds read no path they skip: the sources of the flake
-/// builds they take (the browser module, the wire, the vectors, the bundle; the binary, the
-/// plugins) hold no file under a path the steps declare they never read.
+/// The sources of the flake builds the web steps and the public tree take hold no file under a
+/// path the steps declare they never read.
 #[test]
 fn merge_gate_web_and_public_builds_read_no_skipped_path() {
     if !on_path("nix") || std::env::var_os("IN_NIX_SHELL").is_none() {
@@ -1249,11 +1210,7 @@ fn a_library_test(rel: &str) -> bool {
 }
 
 /// The browser module, the wire and the vectors are built from the core's library alone, so a
-/// change to the CLI, the server's crates or a test file builds none of them again: their
-/// sources hold, beside the workspace's manifests, the library of each crate the core is cut into
-/// ([`LIBRARY_CRATES`]), the core's examples and release plan, the browser module's crate, the
-/// calendar's schema, and of those crates' tests only the supports their libraries include, each
-/// of which they hold.
+/// change to the CLI, the server's crates or a test file builds none of them again.
 #[test]
 fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
     if !on_path("nix") || std::env::var_os("IN_NIX_SHELL").is_none() {
@@ -1352,10 +1309,8 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
     }
 }
 
-/// No output holds the dependency builds the browser module and the core's builds start from,
-/// so web-inputs roots each one the store holds (`nix_held`), on the box as on a runner: a
-/// collection that took one cost a gate the wasm32 dependencies again. One the store does not
-/// hold (the modules were fetched) is not built only to be rooted.
+/// No output holds the dependency builds the browser module and the core start from, so
+/// web-inputs roots each one the store holds, or a collection costs a gate the wasm32 builds again.
 #[test]
 fn merge_gate_roots_the_web_inputs_dependency_builds() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -1513,10 +1468,8 @@ fn merge_gate_every_crate_unit_reads_every_manifest() {
     }
 }
 
-/// A release commit changes `app/release.toml` and `CHANGELOG.md` and removes `changelog.d/` alone,
-/// so it reruns only what reads them: the steps that read every file, and the one crate unit that declares the release
-/// file (`suzatary`, whose guards hold the changelog's tests); no unit reads the changelog, and
-/// the web's units skip both by their base.
+/// A release commit changes `app/release.toml` and `CHANGELOG.md` and removes `changelog.d/`, so
+/// it reruns only the steps that read every file and the one crate unit that declares the release.
 #[test]
 fn merge_gate_a_release_reruns_only_what_reads_it() {
     let release = [
@@ -1764,7 +1717,6 @@ fn the_changelog_step_reads_every_fragment_as_the_cut_does() {
     );
 }
 
-/// A release commit at the tip of a train writes `CHANGELOG.md`, and the step passes it.
 #[test]
 fn the_changelog_step_passes_a_release_commit() {
     let repo = ChangelogRepo::new("gate-changelog-release");
@@ -1780,7 +1732,6 @@ fn the_changelog_step_passes_a_release_commit() {
     assert!(repo.step());
 }
 
-/// Any commit but a release that writes `CHANGELOG.md` fails the step.
 #[test]
 fn the_changelog_step_refuses_a_non_release_edit_of_the_changelog() {
     let repo = ChangelogRepo::new("gate-changelog-edit");
@@ -1822,10 +1773,9 @@ fn the_changelog_step_on_master_reads_the_train_since_the_last_release() {
     assert!(!repo.step(), "only a release writes CHANGELOG.md on master");
 }
 
-/// Every script the gate, the train or a workflow runs by its path is executable in the index: a
-/// checkout takes its mode from there, and a script that lost it fails every step that runs it,
-/// on a runner, long after the commit. A script sourced (`.`, `source`) or handed to an
-/// interpreter (`bash`, `sh`, `node`) needs no mode.
+/// Every script run by its path is executable in the index, since a checkout takes its mode from
+/// there and one that lost it fails on a runner long after the commit; one sourced or handed to an
+/// interpreter needs no mode.
 #[test]
 fn merge_gate_every_script_run_by_path_is_executable() {
     let modes = Command::new("git")
@@ -1896,7 +1846,6 @@ const PRIVATE_HISTORY: &[(&str, &str)] = &[
     ("app/cli/tests", "live.rs"),
 ];
 
-/// A private path, whole.
 fn private_path((dir, name): (&str, &str)) -> String {
     if dir.is_empty() {
         name.to_owned()
@@ -1965,12 +1914,9 @@ fn reads_beyond_the_public_tree(body: &str) -> bool {
     deployment || private || git || walk || shell
 }
 
-/// The live half runs on the box exactly the guards whose verdict the public tree cannot give:
-/// those that read this deployment, the private history or this checkout's own history and
-/// directories, directly or through a helper of their file or of their target's guards.rs, in the
-/// CLI's guards or the script guards. GitHub's guards lanes run every guard over the public tree,
-/// so every other guard's verdict is already the tree's. `app/cli/tests/guards/on-the-box.txt` is
-/// the list, and the reading here is its definition.
+/// The live half runs on the box exactly the guards whose verdict the public tree cannot give,
+/// those reading this deployment, the private history or this checkout, directly or through a
+/// helper, and `app/cli/tests/guards/on-the-box.txt` is the list this reading defines.
 #[test]
 fn merge_gate_live_guards_are_the_guards_that_read_beyond_the_public_tree() {
     if let Ok(attributes) = std::fs::read_to_string(repo().join(".gitattributes")) {

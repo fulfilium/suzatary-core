@@ -1,6 +1,5 @@
-//! The guide (`docs/guide/guide.typ`) in both its worlds: the app's closed world makes its HTML
-//! and the tripwire passes it, and typst makes its PDF from the same text with every picture it
-//! names, which are the end-to-end suite's own (`docs/images`).
+//! The guide in both its worlds: the closed world's HTML passes the tripwire, and typst makes its
+//! PDF with every picture it names, the end-to-end suite's own (`docs/images`).
 
 use super::{Scratch, repo};
 use std::process::Command;

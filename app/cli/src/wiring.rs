@@ -1,5 +1,4 @@
-//! The box's interpreters, opened once from the instance: what every record borrows. Each
-//! effect's interpreter is built in one place.
+//! The box's interpreters, opened once from the instance; each effect's is built here alone.
 
 use crate::instance::InstanceEdits;
 use crate::mail_cache::MailCache;
@@ -199,7 +198,6 @@ impl Grounds {
         }
     }
 
-    /// The agent's record over `chain`, reading `memory`.
     #[must_use]
     pub fn agent<'a>(
         &'a self,
@@ -279,8 +277,8 @@ impl Remembering {
 }
 
 /// The secretary's memory as the triage agent's process opens it: memory and digest inside
-/// [`Only`], so no write handle exists in the process. The conversations and the inbox stay
-/// writable, since the agent's cards are filed there.
+/// [`Only`], so no write handle exists in the process, while the conversations and the inbox
+/// stay writable for the agent's cards.
 pub struct Recalling {
     pub(crate) conversations: ConversationStores,
     memory: Only<Objects<MemoryEvent>>,
@@ -456,7 +454,6 @@ impl Opened {
     }
 }
 
-/// One chain's stores and the policy they are read under, together.
 pub struct Stores {
     pub policy: ChainPolicy,
     /// Every append the box makes is signed.

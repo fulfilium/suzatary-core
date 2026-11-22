@@ -1,8 +1,6 @@
-//! `suzatary plugin sync`: run each plugin `[[plugins]]` declares and learn what it reports into
-//! the cache tier; every Google account's calendars and the Drive's probe ride the same timer.
-//!
-//! Learning is idempotent, so a timer may sync as often as it likes. The cursor is saved after
-//! the learning, so a run cut short is run again.
+//! `suzatary plugin sync`: run each declared plugin and learn what it reports into the cache
+//! tier; learning is idempotent, and the cursor is saved after the learning, so a run cut short
+//! is run again.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -30,7 +28,6 @@ use suzatary_services::plugin::Plugins;
 /// timer roots `.#suzatary-plugins` and passes it here.
 pub const COMPONENTS: &str = "SUZATARY_PLUGINS";
 
-/// `suzatary plugin …`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
     #[command(subcommand)]
@@ -44,7 +41,6 @@ enum Command {
     Sync(SyncArgs),
 }
 
-/// `suzatary plugin sync`.
 #[derive(Debug, ClapArgs)]
 pub struct SyncArgs {
     /// The plugins to sync, by name; every plugin `[[plugins]]` declares when none is named.
@@ -55,11 +51,7 @@ pub struct SyncArgs {
     components: Option<PathBuf>,
 }
 
-/// Run it.
-///
-/// # Errors
-/// An unreadable instance, a plugin not declared, or any plugin's run that did not end with
-/// what it learned stored; every plugin named still runs.
+/// Every plugin named runs even when another's run fails.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     match &args.command {
         Command::Sync(args) => sync_all(path, args),
@@ -154,7 +146,6 @@ pub fn effects(instance: &Instance) -> Effects {
     }
 }
 
-/// What one plugin's sync came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     pub line: String,
@@ -163,9 +154,8 @@ pub struct Report {
     pub learnt: Option<Learnt>,
 }
 
-/// Sync one plugin and join what came of it into `health`.
-///
-/// Never an error: whatever went wrong is the report's line and the plugin's health.
+/// Sync one plugin into `health`; never an error, since whatever went wrong is the report's
+/// line and the plugin's health.
 #[must_use]
 pub fn sync(
     host: &Host,

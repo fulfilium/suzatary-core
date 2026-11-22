@@ -22,11 +22,8 @@ pub struct Project {
     pub plan: Plan,
 }
 
-/// The plan beside `store`, or `None` where it has no `releases.toml`.
-///
-/// # Errors
-/// The file unreadable, not a plan, or naming a genesis `store` does not hold: a plan copied
-/// beside another store is not that store's.
+/// The plan beside `store`, or `None` where it has none; a plan naming a genesis `store` does
+/// not hold is refused, since a plan copied beside another store is not that store's.
 pub fn beside(store: &Path) -> anyhow::Result<Option<Plan>> {
     let path = store.join(PLAN);
     let text = match std::fs::read_to_string(&path) {
@@ -49,10 +46,7 @@ pub fn beside(store: &Path) -> anyhow::Result<Option<Plan>> {
 }
 
 impl Mounts {
-    /// The plan store, `None` where no mount holds a plan.
-    ///
-    /// # Errors
-    /// A plan that does not read, or two mounts holding one.
+    /// The plan store, `None` where no mount holds a plan; two mounts holding one is refused.
     pub fn project(&self) -> anyhow::Result<Option<Project>> {
         let mut found: Option<Project> = None;
         for (chain, store) in &self.0 {

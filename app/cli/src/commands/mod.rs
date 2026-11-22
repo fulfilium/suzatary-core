@@ -10,7 +10,7 @@ pub mod device;
 pub mod doctor;
 pub mod door;
 pub mod follow;
-// The browser suite's fixtures: test support, compiled only under the `fixture` feature.
+// The browser suite's fixtures, test support.
 #[cfg(feature = "fixture")]
 #[path = "../../tests/support/fixture.rs"]
 pub mod fixture;
@@ -51,7 +51,6 @@ use suzatary_record::record::EventStore;
 
 use crate::instance::{ChainDir, Instance};
 
-/// The store of one chain opened by the box, with that same chain's trust policy.
 pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_record::record::TodoEvent> {
     opened(chain, door::Opened::ByTheBox)
 }
@@ -77,7 +76,6 @@ pub(crate) fn opened(
     }
 }
 
-/// The todo store at `events`, not believing `untrusted`.
 pub(crate) fn chain_at(
     events: std::path::PathBuf,
     untrusted: prodrome_core::policy::Untrusted,
@@ -102,9 +100,8 @@ pub fn chains_read(instance: &Instance) -> suzatary_signatures::chain_set::Read 
     }))
 }
 
-/// [`chains_read`] with every store the instance follows beside the chains, each copy read
-/// whole: the one list's reading, and the reading of a followed store's todo. A copy no fetch
-/// has confirmed is not held, so the set answers it as absent.
+/// [`chains_read`] with every followed store beside the chains; a copy no fetch has confirmed is
+/// not held, so the set answers it as absent.
 #[must_use]
 pub fn plan_read(instance: &Instance) -> suzatary_signatures::chain_set::Read {
     use suzatary_store::store::Reads as _;
@@ -125,9 +122,7 @@ pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io::reading::Reading {
     suzatary_io::reading::chain(chain.events.clone(), chain.policy.untrusted.clone())
 }
 
-/// Run one of the repository's operator scripts, and exit with its status.
-///
-/// `vault` is human-only and on no agent trait.
+/// Run one of the repository's operator scripts; `vault` is human-only and on no agent trait.
 pub fn script(instance: &Instance, name: &str) -> anyhow::Result<()> {
     let path = instance.code().join("scripts").join(name);
     // The operator's whole environment, on purpose: the script reads what the shell set up

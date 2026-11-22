@@ -1,9 +1,5 @@
-//! The tree half on GitHub's runners (`scripts/train.sh gate --remote github`): the steps the box
-//! runs (`BOX_BEFORE` and `BOX_AFTER` in `app/tooling/src/gating.rs`) and the jobs of `.github/workflows/gate.yml` hold every
-//! step of `scripts/merge-gate.sh`'s tree half between them; the workflow runs on a push to a gate
-//! branch alone, with a read-only token, no secret and every action pinned, and restores the store
-//! `.github/workflows/gate-store.yml` saves on master and saves nothing; and `scripts/e2e-part.sh`
-//! deals the browser suite's files to parts that hold each once.
+//! The tree half on GitHub's runners (`scripts/train.sh gate --remote github`): the box's runs
+//! (`app/tooling/src/gating.rs`) and `.github/workflows/gate.yml`'s jobs hold every tree step.
 
 use super::gate_list::steps;
 use super::merge_gate::MADE_AND_READ;
@@ -24,7 +20,7 @@ fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-/// gate.yml's jobs, by lane: each one's steps and its e2e part.
+/// By lane: each one's steps and its e2e part.
 fn jobs() -> BTreeMap<String, (Vec<String>, String)> {
     read(".github/workflows/gate.yml")
         .lines()
@@ -42,8 +38,7 @@ fn jobs() -> BTreeMap<String, (Vec<String>, String)> {
         .collect()
 }
 
-/// The steps the train runs on the box, each list one run of the gate: `BOX_BEFORE`, before the
-/// push, and `BOX_AFTER`, after it.
+/// `BOX_BEFORE`, before the push, and `BOX_AFTER`, after it.
 fn box_runs() -> Vec<(&'static str, Vec<String>)> {
     train_lists(&["BOX_BEFORE", "BOX_AFTER"])
 }
@@ -68,9 +63,8 @@ fn train_lists(names: &[&'static str]) -> Vec<(&'static str, Vec<String>)> {
         .collect()
 }
 
-/// Every step of the tree half runs on the box or in a job, never both; each job and each of the
-/// box's runs hold what each step they run reads from another; and a step runs in more than one job only as what
-/// a job's own reader reads, or as the e2e parts, each a part of its scenes.
+/// Each step runs on the box or in a job, never both, beside what it reads from another; a step in
+/// more than one job is a job's own reader's read or an e2e part.
 #[test]
 fn gate_yml_and_the_box_run_every_tree_step() {
     let tree: BTreeSet<String> = steps()
@@ -132,10 +126,8 @@ fn gate_yml_and_the_box_run_every_tree_step() {
     }
 }
 
-/// With the tree half on GitHub's runners, the box runs the live half in two runs, `LIVE_EARLY`
-/// while the publication run builds and `LIVE_AFTER` beside the runners: together every live step,
-/// each once. The one name beyond `--list` they may hold is `live`, the live pins' step, which a
-/// public tree (no pins) does not declare.
+/// `LIVE_EARLY` and `LIVE_AFTER` may hold `live` beyond `--list`, since a public tree (no pins)
+/// does not declare it.
 #[test]
 fn train_runs_every_live_step_once_in_two_runs() {
     let live: BTreeSet<String> = steps()
@@ -170,8 +162,7 @@ fn gate_yml_runs_a_nightly_branch_full() {
     assert!(read("app/tooling/src/verbs.rs").contains("\"gate/nightly-\""));
 }
 
-/// The e2e jobs are the timed scenes' part and the parts 1/n to n/n of one n, each once, and only
-/// they run e2e.
+/// The timed scenes' part and the parts 1/n to n/n of one n, and only they run e2e.
 #[test]
 fn gate_yml_e2e_jobs_are_every_part_once() {
     let jobs = jobs();
@@ -200,7 +191,6 @@ fn gate_yml_e2e_jobs_are_every_part_once() {
     );
 }
 
-/// A workflow's lines that are not comments.
 fn code(rel: &str) -> String {
     read(rel)
         .lines()
@@ -209,7 +199,7 @@ fn code(rel: &str) -> String {
         .join("\n")
 }
 
-/// The trigger block: the lines under `on:`, trimmed.
+/// The lines under `on:`, trimmed.
 fn trigger(body: &str) -> Vec<&str> {
     body.lines()
         .skip_while(|line| *line != "on:")
@@ -245,10 +235,8 @@ fn values<'a>(body: &'a str, key: &str) -> BTreeSet<&'a str> {
         .collect()
 }
 
-/// The workflow runs on a push to `gate/**` and on nothing else (no pull request event, from a
-/// fork or not), its token reads only, its checkout keeps no credential, every action is pinned
-/// by its commit, and it names no secret: it reads the Cachix as a substituter, pushes to no
-/// binary cache, and restores the Actions cache without saving to it.
+/// No pull request event, a read-only token, a checkout with no credential, every action pinned
+/// by commit, no binary cache pushed and the Actions cache restored, never saved.
 #[test]
 fn gate_yml_runs_on_a_gate_branch_alone_holding_no_secret() {
     let body = code(".github/workflows/gate.yml");
@@ -282,10 +270,8 @@ fn gate_yml_runs_on_a_gate_branch_alone_holding_no_secret() {
     );
 }
 
-/// gate-store.yml runs on a push to master in the public repository alone, names no secret, is
-/// the one workflow whose token may write (the Actions cache, for its purge), saves under the key
-/// gate.yml restores, collects the store to its roots before saving, purges every older entry of
-/// it, and fails when its entry is over half of the repository's 10 GB.
+/// In the public repository alone, with no secret, the one token that may write (for the purge),
+/// the key gate.yml restores, and a failure over half of the repository's 10 GB cache.
 #[test]
 fn gate_store_yml_saves_the_one_store_on_master() {
     let store = code(".github/workflows/gate-store.yml");
@@ -359,10 +345,8 @@ fn gate_store_yml_saves_the_one_store_on_master() {
     assert!(store.contains("if ((bytes > LIMIT)); then"));
 }
 
-/// gate-passes.yml runs on master when a Gate run ends, in the public repository alone, names no
-/// secret, saves the passes under a key with the prefix gate.yml restores, at the path it restores
-/// them to, and purges its own older entries alone. Each gate job uploads what its gate kept,
-/// whatever its verdict, and moves the restored passes out of its tree before the gate reads it.
+/// In the public repository alone, with no secret; each gate job moves the restored passes out of
+/// its tree before the gate reads it.
 #[test]
 fn gate_passes_yml_hands_each_gate_the_passes_of_the_last() {
     let passes = code(".github/workflows/gate-passes.yml");
@@ -441,9 +425,8 @@ fn conjuncts(body: &str, job: &str) -> Option<BTreeSet<String>> {
         .collect()
 }
 
-/// The passes gate-passes.yml saves are the word of a gate job, so it acts only after a Gate run a
-/// push to a `gate/` branch of this same repository started: a `workflow_run` job holds the
-/// repository's token whatever started the run it follows, a fork's or a pull request's too.
+/// A `workflow_run` job holds the repository's token whatever started the run it follows, a
+/// fork's or a pull request's too.
 #[test]
 fn gate_passes_yml_takes_passes_from_this_repositorys_gate_pushes_alone() {
     let passes = code(".github/workflows/gate-passes.yml");
@@ -474,10 +457,8 @@ fn gate_passes_yml_takes_passes_from_this_repositorys_gate_pushes_alone() {
     );
 }
 
-/// The cargo lanes restore the dependency build gate-store.yml saves on master, one action keeping
-/// both (`for: gate`, so one key and one list of paths); the build runs before the save, and the
-/// action drops the workspace's own units before it saves, so an entry holds only what cargo
-/// identifies by what it was built from.
+/// One action keeps both (one key, one list of paths) and drops the workspace's own units before
+/// it saves, so an entry holds only what cargo identifies by what it was built from.
 #[test]
 fn gate_yml_restores_the_dependency_build_gate_store_saves() {
     let store = code(".github/workflows/gate-store.yml");
@@ -502,9 +483,7 @@ fn gate_yml_restores_the_dependency_build_gate_store_saves() {
     );
 }
 
-/// actionlint passes the workflows the gate and the caches rest on, and the Pages workflow
-/// `prodrome init --public` writes: their syntax, their expressions, their runner labels and the
-/// shell of each step.
+/// Including the Pages workflow `prodrome init --public` writes.
 #[test]
 fn gate_workflows_pass_actionlint() {
     let out = Command::new("actionlint")
@@ -526,9 +505,8 @@ fn gate_workflows_pass_actionlint() {
     );
 }
 
-/// `scripts/e2e-part.sh <k>/<n>`: the n parts and `timed` hold every file once, the same files on
-/// every run, `timed` those that read the page's clock and each part some file while there are
-/// files enough, and a part that is no part is refused.
+/// `scripts/e2e-part.sh <k>/<n>`: the same files on every run, `timed` those that read the page's
+/// clock, and a part that is no part refused.
 #[test]
 fn e2e_parts_hold_every_file_once() {
     let scratch = Scratch::new("e2e-part");
@@ -582,9 +560,8 @@ fn e2e_parts_hold_every_file_once() {
     }
 }
 
-/// The live half's web step substitutes what it reads from the Cachix, which holds only what
-/// publication.yml builds from the gate commit: so it builds every web output the step reads and
-/// the fixture binary, and pushes their closures with the deploy's.
+/// The live web step substitutes from the Cachix, which holds only what publication.yml builds
+/// from the gate commit.
 #[test]
 fn publication_builds_what_the_live_web_step_reads() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -621,10 +598,8 @@ fn publication_builds_what_the_live_web_step_reads() {
     );
 }
 
-/// `scripts/core-settings.sh` turns on the workflows of its `core_workflows` in core and turns
-/// every other one off, so that list is exactly the workflows that run there: those whose every
-/// job skips in a private repository, and gate.yml's kind, which only a push to a `gate/**` branch
-/// starts (the train pushes those to core alone).
+/// Those whose every job skips in a private repository, and gate.yml's kind, which only a push to
+/// a `gate/**` branch starts (the train pushes those to core alone).
 #[test]
 fn core_settings_turns_on_exactly_the_workflows_that_run_in_core() {
     let settings = read("scripts/core-settings.sh");

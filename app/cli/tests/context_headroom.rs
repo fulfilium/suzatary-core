@@ -1,11 +1,6 @@
 //! The agent's first answer leaves a fifth of its manual's cap free, so `OPERATOR.md` can grow
-//! without a silent cut, and the whole answer, the secretary's memory included, stays within one
-//! budget however full the memory is: 200 facts of the most characters a fact may hold and a
-//! record longer than the budget. Weighed with this box's persona, categories and
-//! `[agent] memory_bytes` where there is an instance file, and otherwise with a stand-in of the
-//! same shape; skipped where the checkout's manual is not present (a build sandbox is handed
-//! `app/` alone). Beside it, a `zoom` into the same record shows no line longer than a line may
-//! be shown, however long the line was said.
+//! without a silent cut, weighed with this box's instance file where there is one and skipped
+//! where the checkout's manual is not present (a build sandbox is handed `app/` alone).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -38,7 +33,6 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The scale's seven anchors and a dozen categories, about what a deployment declares.
 fn stand_in() -> (Persona, Deployment) {
     let persona = Persona {
         name: "Ada".to_owned(),
@@ -90,8 +84,7 @@ fn at(minute: u32) -> Datetime {
     Datetime::new(2026, 10, 24, 9 + minute / 60, minute % 60, 0, 0).expect("an instant")
 }
 
-/// The most facts the memory keeps, each of the most characters a fact holds, every one of
-/// them a quote or a two-byte letter, so escaping costs what it can.
+/// Every fact is quotes and two-byte letters, so escaping costs what it can.
 fn full_memory() -> Memory {
     let words: String = "\"é".repeat(MAX_FACT_CHARS / 2);
     Memory {
@@ -113,11 +106,9 @@ fn full_memory() -> Memory {
     }
 }
 
-/// How many lines [`full_record`] holds.
 const RECORD_LINES: u32 = 600;
 
-/// A record of the owner's turns longer than any budget here, its last turn alone 25 times
-/// longer than a line may be shown.
+/// A record longer than any budget here.
 fn full_record(lines: &Lines) -> Reading {
     let id = ConversationId::new("long").expect("a slug");
     for minute in 0..RECORD_LINES {
@@ -155,8 +146,6 @@ fn full_record(lines: &Lines) -> Reading {
     .expect("the record reads")
 }
 
-/// `zoom` opens any part of the record, the longest line included, with no line of its answer
-/// longer than [`LINE_BYTES`] and its cut note.
 #[test]
 fn a_zoom_answers_no_line_longer_than_a_line_may_be() {
     let lines = Lines::default();

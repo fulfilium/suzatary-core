@@ -1,10 +1,6 @@
-//! `suzatary plugin sync` over a loopback feed: the reference calendar component, the host, the
-//! store and the sources' health, everything but the transport and the secret store the box's
-//! own.
-//!
-//! Run by name with `SUZATARY_PLUGINS` naming `nix build .#suzatary-plugins`'s output, as
-//! `scripts/merge-gate.sh` does; the production transport refuses loopback by design, so the
-//! test lends the verb's body a transport that reaches the server it starts, by struct update.
+//! `suzatary plugin sync` over a loopback feed, run with `SUZATARY_PLUGINS` naming `nix build
+//! .#suzatary-plugins`'s output; the production transport refuses loopback, so the test lends the
+//! verb a transport that reaches the server it starts.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
@@ -234,8 +230,8 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         restarted.line
     );
 
-    // A cursor that is there and cannot be read fails the run, and its health says so, rather
-    // than reading as none and reporting the whole window again.
+    // A cursor that is there and cannot be read fails the run rather than reading as none and
+    // reporting the whole window again.
     let cursor = plugins.cache.join("plugins/ics/cursor");
     std::fs::remove_file(&cursor).expect("removed");
     std::fs::create_dir(&cursor).expect("a directory where the cursor belongs");

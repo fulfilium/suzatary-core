@@ -1,7 +1,5 @@
-//! The mail verbs, each calling one operation and printing its result as JSON.
-//!
-//! `send` alone bypasses the corpus operator, which holds no send path, so sending stays
-//! human-only on both sides of the seam; `--dry-run` prints exactly what would go on the wire.
+//! The mail verbs; `send` alone bypasses the corpus operator, which holds no send path, so
+//! sending stays human-only on both sides of the seam.
 
 use crate::wiring::Ground;
 use std::io::IsTerminal as _;
@@ -36,13 +34,11 @@ use suzatary_triage::mail::state::Decision;
 
 use crate::instance::Instance;
 
-/// Print a value as indented JSON, the shape the agent reads.
 fn emit<T: serde::Serialize>(value: &T) -> anyhow::Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
 }
 
-/// The grants this deployment holds.
 #[must_use]
 pub fn tokens(instance: &Instance) -> TokenStore {
     TokenStore::new(&instance.paths.oauth)
@@ -59,19 +55,16 @@ pub fn ledger(instance: &Instance) -> Ledger {
     )
 }
 
-/// The corpus, read-only.
 #[must_use]
 pub fn notmuch(instance: &Instance) -> Notmuch {
     Ground::of(instance).notmuch(instance.code())
 }
 
-/// The pull.
 #[must_use]
 pub fn syncer(instance: &Instance) -> Syncer {
     Ground::of(instance).syncer()
 }
 
-/// The grants a sign-in with Google keeps, against Google's own endpoints.
 #[must_use]
 pub fn google_grants(instance: &Instance) -> Grants {
     Grants::new(
@@ -80,15 +73,15 @@ pub fn google_grants(instance: &Instance) -> Grants {
     )
 }
 
-/// The mechanical operations bound to this deployment, shared with `suzatary mcp` so the
-/// agent and the operator run against one corpus, dedup authority and syncer.
+/// The mechanical operations, shared with `suzatary mcp` so the agent and the operator run against
+/// one corpus, dedup authority and syncer.
 #[must_use]
 pub fn operator(instance: &Instance) -> Operator {
     Ground::of(instance).operator(instance.code(), instance.persona.zone)
 }
 
-/// `suzatary sync`: pull every account, reindex, re-tag (which rings each matched watch), then
-/// push each ring not yet delivered. The report goes to `Paths::last_sync` and stdout.
+/// `suzatary sync`: pull, reindex, re-tag (ringing each matched watch), then push each ring
+/// owed; the report goes to `Paths::last_sync` and stdout.
 pub fn sync(path: &Path) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let synced = operator(&instance).sync();
@@ -123,7 +116,6 @@ fn deliver_rings(instance: &Instance) {
     }
 }
 
-/// What `suzatary new` was told.
 #[derive(Debug, clap::Args)]
 pub struct NewArgs {
     /// At most this many, newest first.
@@ -131,16 +123,12 @@ pub struct NewArgs {
     limit: Option<usize>,
 }
 
-/// `suzatary new`: the triage queue.
 pub fn queue(path: &Path, args: &NewArgs) -> anyhow::Result<()> {
     emit(&operator(&Instance::open(path)?).queue(args.limit)?)
 }
 
-/// `suzatary gate`: fire the triage rule on the queue, printing what it read and the firing,
-/// and exit 3 when it does not fire.
-///
-/// A queue the corpus cannot answer is an error, which fails the pass loudly
-/// rather than reading as an empty inbox.
+/// `suzatary gate`: exits 3 when the rule does not fire; a queue the corpus cannot answer is
+/// an error, so it fails the pass loudly rather than reading as an empty inbox.
 pub fn gate(path: &Path) -> anyhow::Result<()> {
     use suzatary_triage::mail::triage::{Mailbox, Queue, Triage};
     let instance = Instance::open(path)?;
@@ -164,7 +152,6 @@ pub fn gate(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// What `suzatary search` was told.
 #[derive(Debug, clap::Args)]
 pub struct SearchArgs {
     /// The query, in notmuch's own language.
@@ -174,32 +161,26 @@ pub struct SearchArgs {
     limit: Option<usize>,
 }
 
-/// `suzatary search`: any notmuch query, newest first.
 pub fn search(path: &Path, args: &SearchArgs) -> anyhow::Result<()> {
     let query = Query::new(&args.query)?;
     emit(&operator(&Instance::open(path)?).search(&query, args.limit)?)
 }
 
-/// What `suzatary show` was told.
 #[derive(Debug, clap::Args)]
 pub struct ShowArgs {
     /// The locator or the hash.
     id: String,
 }
 
-/// `suzatary show`: one message by notmuch id or canonical hash.
 pub fn show(path: &Path, args: &ShowArgs) -> anyhow::Result<()> {
     emit(&operator(&Instance::open(path)?).show(&args.id)?)
 }
 
-/// `suzatary locate-mail`: record where every message the index holds lives, by canonical
-/// hash, and print how many there are.
 pub fn locate_mail(path: &Path) -> anyhow::Result<()> {
     let located = notmuch(&Instance::open(path)?).locate_all()?;
     emit(&serde_json::json!({ "located": located }))
 }
 
-/// What `suzatary mark` was told.
 #[derive(Debug, clap::Args)]
 pub struct MarkArgs {
     /// The canonical hash from the `new`/`search` row.
@@ -219,7 +200,6 @@ pub struct MarkArgs {
     native_id: Option<String>,
 }
 
-/// `suzatary mark`: record a decision about a canonical message.
 pub fn mark(path: &Path, args: &MarkArgs) -> anyhow::Result<()> {
     let decision = Decision::parse(&args.disposition, args.todo_id.as_deref())?;
     emit(&operator(&Instance::open(path)?).mark(
@@ -240,7 +220,6 @@ pub enum NoiseAction {
     },
 }
 
-/// Which act on the wholesale-ignore list.
 #[derive(Debug, clap::Args)]
 pub struct NoiseArgs {
     /// Which act.
@@ -248,7 +227,6 @@ pub struct NoiseArgs {
     action: NoiseAction,
 }
 
-/// `suzatary noise add`: a sender to ignore wholesale.
 pub fn noise(path: &Path, args: &NoiseArgs) -> anyhow::Result<()> {
     let NoiseAction::Add { sender } = &args.action;
     emit(&silence(&ledger(&Instance::open(path)?), sender)?)
@@ -268,7 +246,6 @@ pub(crate) fn silence(ledger: &Ledger, sender: &str) -> anyhow::Result<NoiseAdde
     })
 }
 
-/// What `suzatary backfill` was told.
 #[derive(Debug, clap::Args)]
 pub struct BackfillArgs {
     /// A Microsoft account in the roster.
@@ -285,7 +262,6 @@ pub struct BackfillArgs {
     limit: Option<usize>,
 }
 
-/// `suzatary backfill`: a read-only pull of a whole server folder.
 pub fn backfill(path: &Path, args: &BackfillArgs) -> anyhow::Result<()> {
     emit(&operator(&Instance::open(path)?).backfill(
         &args.account,
@@ -295,7 +271,6 @@ pub fn backfill(path: &Path, args: &BackfillArgs) -> anyhow::Result<()> {
     )?)
 }
 
-/// What `suzatary auth` was told; with no address it runs the box's own setup.
 #[derive(Debug, clap::Args)]
 pub struct AuthArgs {
     /// A Microsoft account in the roster.
@@ -306,7 +281,6 @@ pub struct AuthArgs {
     scope: String,
 }
 
-/// `suzatary auth [ADDRESS]`: an account's grant, or the box's own setup script.
 pub fn auth(path: &Path, args: &AuthArgs) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     match &args.email {
@@ -378,7 +352,6 @@ pub fn grants(
         .collect()
 }
 
-/// What `suzatary send` was told — read it back with `--dry-run` before any of it goes on a wire.
 #[derive(Debug, clap::Args)]
 pub struct SendArgs {
     /// The address to send as.
@@ -429,9 +402,6 @@ fn attachment(path: &Path) -> anyhow::Result<Attachment> {
 
 /// One message onto its account's transport, reached only by the human's `send` and the
 /// owner's tap, and deliberately in no effect record so no verb can send.
-///
-/// # Errors
-/// The transport's own refusal, whole.
 pub fn deliver(
     instance: &Instance,
     sender: &Sender,
@@ -502,13 +472,11 @@ pub fn deliver(
     }
 }
 
-/// The `Message-Id` this box mints, for a caller outside this module.
 #[must_use]
 pub fn mint_message_id(from: &str) -> String {
     message_id(from)
 }
 
-/// `suzatary send`: the human's send verb.
 pub fn send(path: &Path, args: &SendArgs) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
     let sender = instance
@@ -611,7 +579,6 @@ const RENEW_AFTER: Duration = Duration::from_mins(29);
 /// one trigger.
 const DEBOUNCE_WINDOW: Duration = Duration::from_secs(30);
 
-/// `suzatary mail <verb>`: the long-running mail verbs.
 #[derive(Debug, clap::Args)]
 pub struct MailArgs {
     /// Which long-running verb.
@@ -619,7 +586,6 @@ pub struct MailArgs {
     action: MailAction,
 }
 
-/// A long-running mail verb.
 #[derive(Debug, Subcommand)]
 pub enum MailAction {
     /// Watch every IMAP account's inbox and trigger the triage pipeline on
@@ -627,7 +593,6 @@ pub enum MailAction {
     Idle,
 }
 
-/// `suzatary mail <verb>`.
 pub fn mail_command(path: &Path, args: &MailArgs) -> anyhow::Result<()> {
     match args.action {
         MailAction::Idle => idle_run(&Instance::open(path)?),
@@ -652,8 +617,8 @@ fn log(scope: &str, message: &str) {
     eprintln!("mail idle: {scope}: {message}");
 }
 
-/// `suzatary mail idle`: one read-only IMAP session per Microsoft account, and their debounce.
-/// The first thread to end ends the process, and systemd restarts the whole watch.
+/// `suzatary mail idle`: one read-only IMAP session per Microsoft account; the first thread to
+/// end ends the process, and systemd restarts the whole watch.
 fn idle_run(instance: &Instance) -> anyhow::Result<()> {
     let roster = &instance.mail.accounts;
     let accounts: Vec<(AccountName, MailAccount)> = roster
@@ -726,9 +691,8 @@ fn first_to_end(jobs: Vec<(String, Job)>) -> Option<String> {
     ends.recv().ok()
 }
 
-/// One account's connection, held open and reconnected forever; every transition is
-/// decided by the core's tested `idle::after`, never here. Its lines name it by `name`, never by
-/// its address.
+/// One account's connection, reconnected forever; every transition is the core's tested
+/// `idle::after`'s, never decided here, and its lines name it by `name`, never by its address.
 fn account_loop(
     name: AccountName,
     account: &MailAccount,

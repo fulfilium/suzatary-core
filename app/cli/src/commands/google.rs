@@ -1,6 +1,6 @@
 //! Each Google account's calendars, and each lieer account's that holds a calendar grant, read
-//! through Google's Calendar API into the calendar's cache tier: what `suzatary plugin sync` runs beside the plugins, on the same timer. Each
-//! account's result joins the sources' health under its calendars' key.
+//! through Google's Calendar API into the calendar's cache tier, by `suzatary plugin sync` beside
+//! the plugins.
 
 use suzatary_base::capability::Clock as _;
 use suzatary_health::health::Failure;
@@ -33,9 +33,8 @@ pub fn sync_calendars(
     (lines, stored)
 }
 
-/// Read into `store_of` the calendars of each of `accounts` the box reads them for
-/// (`google::reads_calendars`): a line and a health each, and whether every one was stored. A
-/// lieer account is read through its calendar grant alone, and its mail stays lieer's.
+/// A line and a health for each account the box reads calendars for (`google::reads_calendars`),
+/// and whether every one was stored; a lieer account is read through its calendar grant alone.
 pub fn read_calendars(
     accounts: &[suzatary_mail::mail::account::MailAccount],
     grants: &suzatary_io::google::Grants,

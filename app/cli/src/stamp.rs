@@ -33,7 +33,6 @@ pub enum Package {
 }
 
 impl Package {
-    /// The package of the executable at `exe`.
     #[must_use]
     pub fn of(exe: &Path) -> Package {
         exe.parent()
@@ -43,9 +42,6 @@ impl Package {
     }
 
     /// The Typst package path a drawing reads: the package's own, else `TYPST_PACKAGE_PATH`.
-    ///
-    /// # Errors
-    /// A cargo build run where `TYPST_PACKAGE_PATH` is unset.
     pub fn typst_packages(&self) -> anyhow::Result<PathBuf> {
         match self {
             Package::Installed(out) => Ok(out.join(TYPST_PACKAGES)),
@@ -60,7 +56,6 @@ impl Package {
         }
     }
 
-    /// The running executable's package, looked up once.
     #[must_use]
     pub fn running() -> &'static Package {
         static PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new();
@@ -69,23 +64,18 @@ impl Package {
     }
 }
 
-/// The release a binary runs as.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Release {
     /// No release file beside the executable: a cargo build, or a binary copied out alone.
     Dev,
-    /// The release the file beside the executable holds.
     Released(Released),
 }
 
-/// Why the release beside an executable could not be read.
 #[derive(Debug)]
 pub enum Unread {
     /// The running executable's own path.
     Exe(std::io::Error),
-    /// The release file is there and could not be read.
     File(PathBuf, std::io::Error),
-    /// The release file does not hold a release.
     Released(ReleasedError),
 }
 
@@ -103,9 +93,6 @@ impl std::error::Error for Unread {}
 
 impl Release {
     /// The release installed beside the executable at `exe` ([`BESIDE`]).
-    ///
-    /// # Errors
-    /// A release file that cannot be read or does not hold a release.
     pub fn beside(exe: &Path) -> Result<Release, Unread> {
         let Package::Installed(out) = Package::of(exe) else {
             return Ok(Release::Dev);
@@ -122,9 +109,6 @@ impl Release {
 }
 
 /// The release this binary runs as, read once from beside the running executable.
-///
-/// # Errors
-/// The executable's path or its release file could not be read, or the file holds no release.
 pub fn release() -> Result<&'static Release, &'static Unread> {
     static RELEASE: std::sync::OnceLock<Result<Release, Unread>> = std::sync::OnceLock::new();
     RELEASE

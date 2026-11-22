@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use anyhow::Context as _;
 use suzatary_io::model::summary::{Outcome, summary_of};
 
-/// What `suzatary ran` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// The run's output, as `claude -p --output-format json` or `stream-json --verbose`
@@ -36,9 +35,6 @@ enum Failed {
 }
 
 /// Print the run's summary line; a file that holds no result object says only how long it is.
-///
-/// # Errors
-/// The file unreadable, or the instance at `path` when the run's limit is recorded.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let text = std::fs::read_to_string(&args.output)
         .with_context(|| format!("reading {}", args.output.display()))?;

@@ -8,9 +8,6 @@ use crate::instance::Instance;
 
 /// Write and print the file declaring every secret name this instance may set, beside the code
 /// root's own: what `secretspec set <NAME> --file` takes.
-///
-/// # Errors
-/// The instance's, or the file not written.
 pub fn run(path: &Path) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let declared = instance

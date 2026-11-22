@@ -1,5 +1,3 @@
-//! The box-local tier.
-
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -60,9 +58,6 @@ impl Local {
     }
 
     /// The prose, or the default when the file is absent.
-    ///
-    /// # Errors
-    /// A file that is there and does not read as prose.
     pub fn prose(&self) -> anyhow::Result<suzatary_base::persona::Prose> {
         let path = self.persona();
         let reading = || format!("reading {}", path.display());

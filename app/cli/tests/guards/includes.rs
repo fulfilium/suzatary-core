@@ -1,7 +1,5 @@
-//! The files a crate's sources include at compile time (`include_str!`, `include_bytes!` and
-//! `include!` of a literal), and the flake's builds of tests holding each of them. Cargo in a
-//! checkout reads the whole tree and a build in Nix reads only its fileset, so an include from
-//! outside the fileset compiles everywhere but in Nix.
+//! Compile-time includes and the flake's test builds holding them: a build in Nix reads only its
+//! fileset, so an include from outside the fileset compiles everywhere but in Nix.
 
 use super::scratch::on_path;
 use super::{Scratch, repo};
@@ -11,7 +9,6 @@ use std::process::Command;
 
 /// One `include_str!`, `include_bytes!` or `include!` of a string literal.
 pub(super) struct Include {
-    /// The source file that holds it.
     pub(super) from: PathBuf,
     /// The literal, a path from the directory of `from`.
     pub(super) literal: String,
@@ -27,8 +24,7 @@ impl Include {
     }
 }
 
-/// Every include of a literal in the `.rs` files under `dir`, outside any `target` or
-/// `node_modules`. An include whose argument is not a literal (`concat!`, `env!`) is not read.
+/// Every include of a literal under `dir`; one of a non-literal (`concat!`, `env!`) is not read.
 pub(super) fn includes(dir: &Path) -> Vec<Include> {
     let mut found = Vec::new();
     walk(dir, &mut found);
@@ -104,12 +100,9 @@ fn lexical(path: &Path) -> PathBuf {
     out
 }
 
-/// The sources of the flake's builds that compile tests, each with the outputs built from it:
-/// every check (the suites, and clippy over `--all-targets`) and every package that runs cargo's
-/// tests, in its check phase or in its build phase as the wire's does, whose source Nix copies
-/// from the tree. Nix copies each fileset into the store as it evaluates, so this is the tree
-/// each build sees, not a reading of `flake.nix`'s text. A dependency build's source is crane's
-/// dummy of its crates, a derivation of a source above, holding no include.
+/// The store copies of the sources of the flake's builds that compile tests, each with its
+/// outputs: the tree each build sees, not a reading of `flake.nix`'s text (a dependency build's
+/// crane dummy holds no include).
 fn test_sources() -> BTreeMap<PathBuf, Vec<String>> {
     let system = format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
     let selects = [
@@ -148,9 +141,6 @@ fn test_sources() -> BTreeMap<PathBuf, Vec<String>> {
     sources
 }
 
-/// Every build of tests holds what its sources include: the core's unit tests, which the wire's
-/// build runs over `coreSrc`, and the workspace's suites over `appSrc` compile in Nix from the
-/// files their filesets name, so a file a test includes from outside them fails there alone.
 #[test]
 fn every_build_of_tests_holds_what_its_sources_include() {
     if !on_path("nix") || std::env::var_os("IN_NIX_SHELL").is_none() {
@@ -181,8 +171,6 @@ fn every_build_of_tests_holds_what_its_sources_include() {
     );
 }
 
-/// The guard names the including file and the path it names outside the source, and passes an
-/// include the source holds.
 #[test]
 fn an_include_outside_the_source_is_named() {
     let source = Scratch::new("includes-unheld");

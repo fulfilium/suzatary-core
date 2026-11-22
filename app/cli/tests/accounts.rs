@@ -3,12 +3,11 @@
 //!
 //! `mbsync`'s `Patterns` decides what lands on disk and `inbox_folders` what gets tagged
 //! `+inbox`; a folder on one list and not the other is synced but silently invisible to
-//! triage. Properties of the account model itself are `Roster::new`'s, pinned in the core.
+//! triage.
 
 use suzatary_mail::mail::account::Sync;
 
-/// The deployment's own file parses, and its roster passes `Roster::new`'s checks, so it holds
-/// no duplicate address or maildir folder.
+/// The roster passes `Roster::new`'s checks: no duplicate address or maildir folder.
 #[test]
 fn the_instance_file_reads_and_its_roster_is_one() {
     let Some(instance) = crate::this_box::instance() else {
@@ -26,8 +25,8 @@ fn the_instance_file_reads_and_its_roster_is_one() {
     }
 }
 
-/// The `Patterns` line and `inbox_folders` stay in step. mbsync spells the inbox `INBOX` and
-/// the maildir leaf is `Inbox`; every other folder maps verbatim.
+/// mbsync spells the inbox `INBOX` and the maildir leaf is `Inbox`; every other folder maps
+/// verbatim.
 #[test]
 fn every_proton_inbox_folder_is_actually_synced() {
     let Some(instance) = crate::this_box::instance() else {
@@ -112,8 +111,8 @@ fn the_proton_channel_is_the_group_covering_a_pull_only_sent() {
     }
 }
 
-/// Every maildir subdirectory is somebody's, and the mail root is absolute: provenance is
-/// derived from where a message lives, so a relative root would depend on the sync's cwd.
+/// Provenance is derived from where a message lives, so a relative mail root would depend on
+/// the sync's cwd.
 #[test]
 fn the_mail_root_is_absolute_and_the_state_file_is_in_the_data_tree() {
     let Some(instance) = crate::this_box::instance() else {

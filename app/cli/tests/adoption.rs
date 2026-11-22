@@ -199,9 +199,8 @@ fn trusting_everyone(instance: &Path) -> &Path {
     instance
 }
 
-/// A box adopted before custody, as it was on 2026-10-07: the box's key registered for every
-/// actor of the roster and the epoch taken. `device init` repairs it, saying each act, and run
-/// again does nothing.
+/// A box adopted before custody, its key registered for every actor of the roster and the epoch
+/// taken: `device init` repairs it, saying each act, and run again does nothing.
 #[test]
 fn device_init_repairs_a_box_adopted_before_custody() {
     let root = scratch("adopt-repair-custody");

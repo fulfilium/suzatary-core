@@ -1,8 +1,5 @@
-//! `suzatary mcp` driven as the agent drives it, a real process over stdio, with the write checked
-//! on disk.
-//!
-//! It runs against a temp chain and a temp instance file, and calls no verb that reaches mail or
-//! shells out.
+//! `suzatary mcp` driven as the agent drives it, a real process over stdio against a temp chain
+//! and instance file, calling no verb that reaches mail or shells out.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -14,7 +11,6 @@ use prodrome_core::literal::Datetime;
 use suzatary_conversations::secretary::store;
 use suzatary_record::record::{EventStore, mk_authored};
 
-/// A scratch root of its own.
 fn scratch(name: &str) -> PathBuf {
     let root = crate::common::scratch(name);
     std::fs::create_dir_all(&root).expect("a scratch root");
@@ -127,7 +123,6 @@ sync = "gmail"
     path
 }
 
-/// The server, and the two pipes it speaks over.
 struct Session {
     child: Child,
     stdin: ChildStdin,
@@ -209,7 +204,6 @@ impl Session {
         }
     }
 
-    /// The handshake, and the server's own claim about itself.
     fn hello(&mut self) -> serde_json::Value {
         let hello = self.ask(
             "initialize",
@@ -259,7 +253,6 @@ impl Drop for Session {
     }
 }
 
-/// Every object a store directory holds, by name.
 fn names(dir: &Path) -> std::collections::BTreeSet<String> {
     std::fs::read_dir(dir.join("objects"))
         .map(|entries| {
@@ -278,10 +271,9 @@ fn reasoned(mut fields: serde_json::Value) -> serde_json::Value {
     fields
 }
 
-/// THE TRUST BOUNDARY, OVER A REAL PROCESS: initialize, read the chain, write on both chains,
-/// then read the disk. Every write is a card in the instance's own Inbox, asked by the triage
-/// agent; no chain and no replica gains an object, and markup outside the closed world is
-/// refused before anything is filed.
+/// Every write is a card in the instance's own Inbox, asked by the triage agent: no chain and no
+/// replica gains an object, and markup outside the closed world is refused before anything is
+/// filed.
 #[test]
 fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
     let root = scratch("session");
@@ -375,7 +367,6 @@ fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
     );
 }
 
-/// The names a served process actually lists match the versioned surface.
 #[test]
 fn the_wire_lists_the_verb_table_and_nothing_it_may_never_hold() {
     let root = scratch("surface");
@@ -422,10 +413,8 @@ fn the_wire_lists_the_verb_table_and_nothing_it_may_never_hold() {
     drop(session);
 }
 
-/// THE GATE FOR ADOPTION: a deployment shaped as the instance sample writes it (no actor
-/// untrusted) adopts signatures, the agent's own process files its card, and the box's `verify`
-/// passes. Adoption once registered the box's key for triage here, so every pass after it was
-/// refused.
+/// A deployment shaped as the instance sample writes it (no actor untrusted) adopts signatures
+/// without registering the box's key for triage, which would refuse every agent pass after it.
 #[test]
 fn after_adoption_the_agents_card_is_filed_and_verifies() {
     const OWN: &str = "9999999999999999999999999999999999999999999999999999999999999999";
@@ -472,7 +461,6 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     ran(&["verify"]);
 }
 
-/// Every file under `root`, by its path, with its bytes.
 fn files(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
     let mut held = std::collections::BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
@@ -489,10 +477,8 @@ fn files(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
     held
 }
 
-/// The agent's reads of the memory write nothing anywhere under the data root: every file is there
-/// with the same bytes after `context`, `recall` and `zoom` have each read the owner's line as
-/// before them. And its server never
-/// opens the secretary's answers' cache, which sweeps a block like this one when it opens.
+/// The agent's reads of the memory change no file under the data root, and its server never opens
+/// the secretary's answers' cache, which sweeps a block like this one when it opens.
 #[test]
 fn the_agents_reads_of_the_memory_write_no_file() {
     let root = scratch("reads");

@@ -133,7 +133,6 @@ fn a_note_on_update_lands_on_the_event_and_wakes_the_secretary() {
     assert_eq!(last["text"], "Understood, I'll leave it as is otherwise.");
 }
 
-/// An update with no note leaves `note` empty and the conversation untouched.
 #[test]
 fn an_update_with_no_note_appends_nothing_to_the_conversation() {
     let (base, _fakes) = writing("acts-update-blank", Vec::new());
@@ -146,7 +145,6 @@ fn an_update_with_no_note_appends_nothing_to_the_conversation() {
     none_opened(&base, "no note, so nothing opened the default conversation");
 }
 
-/// A sealed `Completed` with a note is heard when the box adopts it.
 #[test]
 fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
     let (base, fakes) = writing(
@@ -192,7 +190,6 @@ fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
     assert_eq!(last["text"], "Noted — good to know it moved.");
 }
 
-/// A sealed `Completed` with no note appends nothing.
 #[test]
 fn a_sealed_completed_event_with_no_note_appends_nothing() {
     let (base, fakes) = writing("acts-sealed-blank", Vec::new());
@@ -284,11 +281,9 @@ fn remember_after_a_note_on(
     )
 }
 
-/// A todo the agent wrote and nobody confirmed has an id mail may have chosen, which the model is
-/// shown beside the owner's note: the box stamps the note's line unconfirmed where it writes it,
-/// so the line is tainted and `remember` stores a card. The same note on a todo the owner wrote
-/// is stamped his and its line is clean; that round is a card too, but only because the box loads
-/// the todo it points at through `todo_show`, a read like any other.
+/// A todo the agent wrote and nobody confirmed has an id mail may have chosen, so the box stamps
+/// the owner's note on it unconfirmed and `remember` stores a card. The same note on the owner's
+/// todo is clean; that round is a card only because the box reads the todo through `todo_show`.
 #[test]
 fn a_note_on_an_unconfirmed_agent_todo_makes_remember_a_card() {
     use suzatary_conversations::secretary::taint::Taint;

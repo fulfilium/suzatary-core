@@ -1,6 +1,5 @@
-//! The conversation worker over a real server, `v4` committed to `ada@example.com` (see
-//! `common`'s header on peer identities). Two scenes hold `common::Gate` across the model call,
-//! since a fast fake could finish a round before the second `say` arrives.
+//! The conversation worker over a real server; two scenes hold `common::Gate` across the model
+//! call, since a fast fake could finish a round first.
 
 use crate::common;
 
@@ -22,7 +21,6 @@ fn writer(tag: &str, model: FakeModel) -> (String, Arc<suzatary_server::serve::W
     (base, workers)
 }
 
-/// Like [`writer`], with a chosen idle wait rather than the real thirty seconds.
 fn writer_idle(
     tag: &str,
     model: FakeModel,
@@ -46,8 +44,7 @@ fn say(base: &str, id: &str, text: &str) {
     let _ = common::say(base, id, text);
 }
 
-/// Whether the tab's reading of conversation `id` shows the person turn `text` as queued: owed a
-/// round that no round covers yet.
+/// Whether the person turn `text` is owed a round that no round covers yet.
 fn queued(base: &str, id: &str, text: &str) -> bool {
     common::reading(base, id, &[])["turns"]
         .as_array()
@@ -56,9 +53,7 @@ fn queued(base: &str, id: &str, text: &str) -> bool {
         .any(|turn| turn["who"] == "person" && turn["text"] == text && turn["queued"] == true)
 }
 
-/// A `say` while the model writes its answer to the first is not settled by that answer, which
-/// the model wrote without it: the next exchange answers it.
-///
+/// The answer the model wrote without the `say` does not settle it.
 /// `wait_until_entered` blocks until the fake has registered the call, since a taken line says
 /// nothing about whether the worker had reached the model yet.
 #[test]
@@ -108,8 +103,7 @@ fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     assert_eq!(turns[3]["who"], "model");
     assert_eq!(turns[3]["text"], "got the second");
 
-    // And `queue::delta` is empty: the last turn is a finished model turn, which is what the
-    // worker's idle check reads.
+    // The worker's idle check reads a finished model turn as the last.
     let id = suzatary_base::conversation_id::ConversationId::new(id).expect("a slug");
     assert!(
         workers.is_running(&id),
@@ -117,8 +111,7 @@ fn a_say_during_an_answer_is_answered_by_the_next_exchange() {
     );
 }
 
-/// With the gate held so no round can complete, `MAX_PENDING` turns are taken and the next is
-/// refused by the lines' rule with the exact sentence, before it is appended.
+/// With no round able to complete, a say past `MAX_PENDING` is refused in the lines' exact words.
 #[test]
 fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     let gate = Gate::new();
@@ -159,11 +152,10 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     );
 }
 
-/// The worker exits when idle: once a round finishes with nothing queued, the table holds no
-/// entry for the conversation after the idle timeout, so no task leaks per conversation.
+/// Once a round ends with nothing queued, the idle worker leaves the table, so no task leaks.
 #[test]
 fn an_idle_worker_drops_out_of_the_table() {
-    // A short idle, not the real 30 s: this pins the mechanism, not the production constant.
+    // Pins the mechanism, not the production constant of 30 s.
     let idle = std::time::Duration::from_millis(300);
     let (base, workers) = writer_idle(
         "worker-idle",
@@ -187,9 +179,8 @@ fn an_idle_worker_drops_out_of_the_table() {
     assert!(gone, "the worker never dropped itself out of the table");
 }
 
-/// A rule whose outcome is recorded is never fired again by a restarted box: the memo that
-/// lasts is the transcript. A second server over the same stores, told the conversation moved,
-/// asks nothing, and answers only what is said after.
+/// The memo that lasts is the transcript: a second server over the same stores answers only what
+/// is said after.
 #[test]
 fn a_restarted_box_refires_nothing_already_answered() {
     let asks = |model: &FakeModel| model.asked().len() + model.resumed_with().len();
@@ -231,9 +222,8 @@ fn a_restarted_box_refires_nothing_already_answered() {
     assert_eq!(turns.last().expect("a turn")["text"], "the new one");
 }
 
-/// A round whose task ends with no close (here, a panic in the model's call) leaves its claim
-/// open; its run is gone once the task is, so the conversation's task claims it again with a new
-/// run at its next reading, and that round answers.
+/// A panic in the model's call leaves the claim open, and its run is gone with the task, so the
+/// conversation's task claims it again with a new run.
 #[test]
 fn a_round_that_ends_with_no_close_is_retried_by_its_conversation() {
     let (base, _workers) = writer(
@@ -249,9 +239,7 @@ fn a_round_that_ends_with_no_close_is_retried_by_its_conversation() {
 }
 
 /// A holder outside the server (a brief, a sweep) that dies with its round open leaves that round
-/// to the next write of its conversation. A tab's question is such a write: the lines' acceptance
-/// of it wakes the conversation's task, which retries the lost round with a new run and then
-/// answers the question, with no other write.
+/// to the next write of its conversation, which retries it before answering.
 #[test]
 fn a_tab_s_question_after_a_holder_died_is_answered_without_another_write() {
     use suzatary_lines::secretary::transcript;
@@ -331,9 +319,8 @@ fn a_tab_s_question_after_a_holder_died_is_answered_without_another_write() {
     );
 }
 
-/// The person's view when the box was down at Send: a question sealed then and handed over once
-/// the box is up is answered while it is within the bound, and closed by the box, its model never
-/// asked, once it is past it; each is drawn once, as its one turn.
+/// A question sealed while the box was down; past the bound its model is never asked, and each is
+/// drawn once, as its one turn.
 #[test]
 fn a_question_handed_over_late_is_answered_within_the_bound_and_closed_past_it() {
     use suzatary_conversations::secretary::model::Turn;

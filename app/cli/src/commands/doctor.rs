@@ -24,7 +24,6 @@ pub struct Args {
     outbound: bool,
 }
 
-/// One capability of the application, and whether this binary has an interpreter for it.
 struct Capability {
     name: &'static str,
     stage: &'static str,
@@ -74,7 +73,6 @@ const CAPABILITIES: &[Capability] = &[
     },
 ];
 
-/// The version, the clock, and which capability has an interpreter.
 fn capabilities() {
     let clock = SystemClock;
     println!(
@@ -127,7 +125,6 @@ fn notmuch_config_line(config: Option<&Path>) -> String {
     )
 }
 
-/// What this binary reads the deployment to be.
 #[allow(clippy::too_many_lines)]
 fn deployment(path: &Path) {
     match instance::Instance::open(path) {
@@ -263,8 +260,6 @@ fn said(state: SecretState) -> &'static str {
     }
 }
 
-/// The Claude models `[secretary]` names, the compactor's reserve, and whether the token the
-/// `claude` CLI reads resolves.
 fn print_models(read: &instance::Instance) {
     println!("\nmodels");
     println!(
@@ -296,7 +291,6 @@ fn print_models(read: &instance::Instance) {
     }
 }
 
-/// `suzatary doctor`: the program, then the deployment.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     if args.outbound {
         print!("{}", super::outbound::markdown());
@@ -319,7 +313,6 @@ fn door_line(read: &crate::instance::Instance) -> String {
     )
 }
 
-/// Which port `serve` binds, as `doctor` can know it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Binds {
     /// Run by the unit: the port it was handed.

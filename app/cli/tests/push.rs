@@ -12,8 +12,6 @@ fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-/// Like `tests/stream.rs::writer`, and also hands back the [`Fakes`], a second handle on the
-/// same `Arc`, to read what [`common::FakeNotify`] recorded.
 fn writer(
     tag: &str,
     model: FakeModel,
@@ -34,9 +32,7 @@ fn say(base: &str, id: &str, text: &str) {
     let _ = common::say(base, id, text);
 }
 
-/// Poll for the push, not just for idle: the worker writes the final turn and only then pushes,
-/// so `idle` says nothing about the push having been sent. Bounded, so a round that never
-/// pushes fails rather than hangs.
+/// Poll for the push, not just for idle: the worker writes the final turn and only then pushes.
 fn pushed(fakes: &Fakes) -> Vec<suzatary_cards::notify::Push> {
     for _ in 0..400 {
         let pushed = fakes.notify.pushed();
@@ -48,8 +44,7 @@ fn pushed(fakes: &Fakes) -> Vec<suzatary_cards::notify::Push> {
     Vec::new()
 }
 
-/// A round that answers, with no subscriber, pushes exactly once: the conversation's
-/// [`suzatary_cards::notify::Push::Answered`], none of the answer's words.
+/// The one push names the conversation and carries none of the answer's words.
 #[test]
 fn no_subscriber_earns_one_push_naming_the_conversation() {
     let (base, fakes, _workers) = writer(
@@ -81,8 +76,6 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     );
 }
 
-/// The same round, with a subscriber connected throughout, pushes nothing:
-/// the answer is already landing on the page a subscriber is reading.
 #[test]
 fn a_connected_subscriber_gets_no_push_at_all() {
     let (base, fakes, _workers) = writer(
@@ -91,13 +84,12 @@ fn a_connected_subscriber_gets_no_push_at_all() {
     );
     let id = open(&base);
 
-    // Subscribe synchronously before the round runs: a blocking `.call()` returns only once the
-    // subscription exists.
+    // A blocking `.call()` returns only once the subscription exists.
     let response = common::agent()
         .get(format!("{base}/api/secretary/conversations/{id}/stream"))
         .call()
         .expect("the stream connects");
-    // Held for the whole scene: dropping `response` would close the subscription.
+    // Dropping `response` would close the subscription.
     let _held = response;
 
     say(&base, &id, "What changed?");

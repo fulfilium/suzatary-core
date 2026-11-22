@@ -145,10 +145,9 @@ fn a_tapped_patch_opens_a_pull_request_and_nothing_before() {
     );
 }
 
-/// The attack: a mail the secretary reads asks it to publish the owner's words in a public
-/// repository, buried in a patch too long to read on a phone. After that read, a public patch and
-/// its message carry at most `MAX_SHOWN_BYTES` together: the long one is refused before a card,
-/// and a short one is filed with its whole diff on the card.
+/// The attack: a mail asks the secretary to publish the owner's words buried in a patch too long
+/// to read on a phone, so after a mail read a public patch and its message carry at most
+/// `MAX_SHOWN_BYTES` together, a longer one refused before a card.
 #[test]
 fn after_a_mail_read_a_public_patch_is_only_what_its_card_shows_whole() {
     let root = common::scratch("repos-tainted");
@@ -193,8 +192,6 @@ fn after_a_mail_read_a_public_patch_is_only_what_its_card_shows_whole() {
     assert!(body.contains("+Principal investigator") && !body.contains("notes.txt"));
 }
 
-/// A patch that does not apply to its base is refused before anything is
-/// stored, so no card ever shows one.
 #[test]
 fn a_patch_that_does_not_apply_is_never_stored() {
     let root = common::scratch("repos-stale");

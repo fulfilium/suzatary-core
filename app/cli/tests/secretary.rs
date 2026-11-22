@@ -289,7 +289,6 @@ fn secret_model() -> FakeModel {
     ])
 }
 
-/// A tap with a value stores it under the name, and the conversation never carries the bytes.
 #[test]
 fn a_tap_with_a_value_stores_it_and_never_echoes_it() {
     let whois = common::FakeWhois::new()
@@ -336,7 +335,6 @@ fn a_tap_with_a_value_stores_it_and_never_echoes_it() {
     );
 }
 
-/// A secret tap with no value is refused and the store is never asked.
 #[test]
 fn a_tap_with_no_value_is_refused_and_the_store_is_never_asked() {
     let whois = common::FakeWhois::new()
@@ -370,7 +368,6 @@ fn a_tap_with_no_value_is_refused_and_the_store_is_never_asked() {
     assert!(recorder.calls().is_empty());
 }
 
-/// A value on an `auth` act is refused before the performer runs.
 #[test]
 fn a_value_on_an_auth_act_is_refused_and_the_performer_never_runs() {
     let whois = common::FakeWhois::new()
@@ -414,7 +411,6 @@ fn a_value_on_an_auth_act_is_refused_and_the_performer_never_runs() {
     );
 }
 
-/// An undeclared secret name is refused at propose time, and nothing is stored.
 #[test]
 fn an_undeclared_secret_name_is_refused_and_nothing_is_stored() {
     let whois = common::FakeWhois::new()
@@ -464,7 +460,6 @@ fn an_undeclared_secret_name_is_refused_and_nothing_is_stored() {
     assert!(recorder.calls().is_empty());
 }
 
-/// The standing proposal row's JSON has no `value` field.
 #[test]
 fn the_standing_proposal_row_carries_no_value_field() {
     let whois = common::FakeWhois::new()
@@ -598,7 +593,6 @@ fn a_tap_performs_the_stored_message() {
     assert_eq!(common::status(&nowhere), 404);
 }
 
-/// A tap with no note appends no turn and asks the model nothing.
 #[test]
 fn a_tap_with_no_note_asks_the_model_nothing() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -654,7 +648,6 @@ fn a_tap_with_no_note_asks_the_model_nothing() {
     assert_eq!(turns[before + 1]["text"], "Understood, Mira it is.");
 }
 
-/// A tap with a note appends a `Turn::Act` naming the proposal and wakes the secretary.
 #[test]
 fn a_tap_with_a_note_appends_an_act_turn_and_wakes_the_secretary() {
     let (base, recorder) = writing("secretary-tap-note");
@@ -832,7 +825,6 @@ fn a_changeset_with_one_bad_act_stores_and_appends_nothing() {
     );
 }
 
-/// A viewer reads the conversations and can neither tap nor dismiss.
 #[test]
 fn a_viewer_may_read_the_conversations_and_tap_nothing() {
     let whois = common::FakeWhois::new()
@@ -1265,7 +1257,6 @@ fn last_act(turns: &[serde_json::Value]) -> &str {
         .expect("a final act turn with text")
 }
 
-/// An unknown account is refused before the transport is asked.
 #[test]
 fn a_real_act_for_an_account_not_on_the_roster_fails_and_asks_the_transport_nothing() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -1568,7 +1559,6 @@ fn a_send_that_sent_nothing_is_tried_again() {
     assert_eq!(recorder.sent().len(), 1, "a sent message is sent once");
 }
 
-/// A send that may have gone waits on the owner's acknowledgement and never sends again.
 #[test]
 fn a_send_that_may_have_gone_waits_until_acknowledged_and_never_sends_again() {
     let (base, recorder) = failing(
@@ -1646,7 +1636,6 @@ fn a_standing_proposal_is_not_acknowledged() {
     );
 }
 
-/// The same email proposed in two conversations is one inbox object and sends once.
 #[test]
 fn the_same_email_proposed_twice_is_one_object_and_sends_once() {
     let proposing = r#"{"say": "Here is the reply.",
@@ -1692,7 +1681,6 @@ fn the_same_email_proposed_twice_is_one_object_and_sends_once() {
     assert_eq!(recorder.sent().len(), 1, "sent once");
 }
 
-/// A send that sent nothing may be dismissed.
 #[test]
 fn a_send_that_sent_nothing_may_be_dismissed() {
     let (base, _) = failing(
@@ -2011,8 +1999,6 @@ fn a_file_sent_in_a_chat_is_found_by_search_and_a_held_one_only_once_released() 
     );
 }
 
-/// Erasing the turn that sent a file takes its words out of the index at once, and a search
-/// finds it no more.
 #[test]
 fn erasing_the_turn_that_sent_a_file_takes_it_out_of_the_index() {
     let model = FakeModel::saying([
@@ -2132,8 +2118,6 @@ fn a_search_answer_is_stored_within_the_cap_and_keeps_its_files() {
     );
 }
 
-/// `upload_read` hands a file found by `search` to the model as itself, and refuses a file no
-/// turn sent.
 #[test]
 fn upload_read_opens_a_file_a_turn_sent_and_no_other() {
     let lease_pdf = common::pdf_saying("Lease for unit 4");

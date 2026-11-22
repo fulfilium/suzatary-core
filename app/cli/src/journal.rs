@@ -5,9 +5,6 @@ use std::os::unix::net::UnixDatagram;
 const SOCKET: &str = "/run/systemd/journal/socket";
 
 /// Say an entry of `fields` (name, value) to the journal.
-///
-/// # Errors
-/// The socket's: no journal listening, or a datagram refused.
 pub(crate) fn say(fields: &[(&str, &str)]) -> std::io::Result<()> {
     UnixDatagram::unbound()?
         .send_to(&entry(fields), SOCKET)

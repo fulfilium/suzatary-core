@@ -1,7 +1,5 @@
 //! `/api/mail/*` over a faked `Mailbox` (notmuch is not in CI): everything above that door is
-//! real, including the reverse index joining a message to the todo it produced. Read as this
-//! box throughout; who may read mail is `gate.rs`'s. The query string that reaches notmuch is the
-//! interpreter's, tested in `suzatary_io::mailbox`, not here.
+//! real, read as this box throughout.
 
 use crate::common;
 
@@ -56,7 +54,6 @@ fn start_with(mailbox: common::FakeMailbox) -> String {
     )
 }
 
-/// The limit is capped, not obeyed.
 #[test]
 fn the_limit_is_capped_not_obeyed() {
     let base = start_with(common::FakeMailbox::new());
@@ -82,7 +79,6 @@ fn a_search_with_no_query_is_400() {
     );
 }
 
-/// The todos a message produced come back with it, over the six-todo chain's `email-harrow`.
 #[test]
 fn the_todos_a_message_produced_come_back_with_it() {
     let hash = common::AGENTS_TODO_MESSAGE_HASH;
@@ -100,9 +96,8 @@ fn the_todos_a_message_produced_come_back_with_it() {
     assert_eq!(todos, vec!["email-harrow"]);
 }
 
-/// EVERY READING TOLERATES A DANGLING MAIL REFERENCE: with the message gone (its account removed
-/// with its mail), the message reads as no longer stored with what the todo citing it recorded,
-/// its conversation reads the same words, and the todo itself still reads whole.
+/// With the message gone (its account removed with its mail), the message and its thread read as
+/// no longer stored and the todo citing it still reads whole.
 #[test]
 fn every_reading_tolerates_a_message_no_longer_stored() {
     let hash = common::AGENTS_TODO_MESSAGE_HASH;
@@ -132,8 +127,6 @@ fn every_reading_tolerates_a_message_no_longer_stored() {
     assert_eq!(common::status(&todo), 200, "the todo citing it still reads");
 }
 
-/// An id that would be notmuch syntax is refused before the corpus: the fake
-/// mailbox is never asked.
 #[test]
 fn an_id_that_would_be_notmuch_syntax_is_refused_before_the_corpus() {
     let mailbox = common::FakeMailbox::new();
@@ -155,7 +148,6 @@ fn an_id_that_would_be_notmuch_syntax_is_refused_before_the_corpus() {
     assert_eq!(caps.mailbox.asked_messages(), Vec::<String>::new());
 }
 
-/// Every mail route is a read: none of them appears among the writing routes.
 #[test]
 fn every_mail_route_is_a_read() {
     let base = start_with(common::FakeMailbox::new());
@@ -174,8 +166,6 @@ fn every_mail_route_is_a_read() {
     }
 }
 
-/// A tiny, dependency-free percent-encoder for the handful of characters the
-/// notmuch-syntax test needs to get through the URL unmangled.
 fn urlencoding_lite(text: &str) -> String {
     text.chars()
         .map(|c| match c {

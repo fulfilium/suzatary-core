@@ -86,8 +86,8 @@ fn a_replica_pulls_what_it_lacks_by_frontier() {
     }
 }
 
-/// A page from before the lines asks for the store they replaced, and is told to load the new
-/// version rather than answered that nothing is there.
+/// A page from before the lines is told to load the new version rather than answered that
+/// nothing is there.
 #[test]
 fn a_page_asking_for_the_retired_store_is_told_to_reload() {
     let base = writing("stores-retired");
@@ -205,7 +205,6 @@ fn literals(base: &str, store: &str) -> std::collections::BTreeMap<String, Strin
         .collect()
 }
 
-/// The lines' whole skeleton, in one piece.
 fn skeleton(base: &str) -> serde_json::Value {
     let mut asked = common::get(&format!("{base}/api/stores/lines/skeleton"));
     assert_eq!(common::status(&asked), 200);
@@ -435,11 +434,8 @@ fn a_chain_s_objects_are_asked_for_by_hash() {
     }
 }
 
-/// The lines' skeleton, and each node's content asked for by hash: each a literal that hashes to
-/// its name, sized as the skeleton says, until an erasure; then each line no key the skeleton
-/// sends opens a word of comes as its husk, sized as the skeleton says, and its words never
-/// leave the box. A replica holding the heads lacks nothing, and is sent no node, no key and not
-/// the heads it holds.
+/// Each node hashes to its name and is sized as the skeleton says, and after an erasure a line no
+/// sent key opens comes as its husk, its words never leaving the box.
 #[test]
 fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     let base = writing("stores-skeleton");
@@ -596,11 +592,8 @@ fn recorded(base: &str) -> Vec<String> {
         .collect()
 }
 
-/// A tab posts a topic it wrote offline, signed by its device, and the box takes it with its
-/// signature as the actor its peer maps to; a re-post takes nothing. A change naming another
-/// actor is refused by name, a signed change resting on what the box does not hold waits and is
-/// recorded nowhere, and one resting on a change refused for good is refused for good and
-/// recorded once in the asks, which every device pulls, however often it is posted.
+/// A change resting on what the box does not hold waits recorded nowhere, and one resting on a
+/// change refused for good is refused for good and recorded once in the asks, however often posted.
 #[test]
 fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     let base = writing("stores-topic");
@@ -672,10 +665,8 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     );
 }
 
-/// Nobody but a trusted device of a peer `web.act_as` maps writes a topic: a change signed by a
-/// key no chain trusts, or by no key, is refused until trusted and recorded nowhere, a viewer who
-/// acts as nobody is refused at the door, and the store holds only its genesis after each. The
-/// box alone writes the inbox, the lines and the asks.
+/// An untrusted or unsigned change is refused and recorded nowhere, and the box alone writes the
+/// inbox, the lines and the asks.
 #[test]
 fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
     let base = writing("stores-topic-refused");
@@ -743,10 +734,8 @@ impl suzatary_base::capability::Entropy for Counting {
     }
 }
 
-/// A tab opens a conversation by posting its sealed opening with each slot's key beside it: the
-/// box takes the line and keeps its key, which the lines' pull then hands every device. A line it
-/// refuses in the same post leaves its key nowhere, and a key posted to a store that takes none
-/// refuses the post.
+/// The box keeps an opening line's key for the lines' pull to hand every device, and a key posted
+/// to a store that takes none refuses the post.
 #[test]
 fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
     use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
@@ -849,9 +838,7 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
     );
 }
 
-/// Keys travel beside the lines they open and nothing else: a post whose `keys` names its
-/// signature object, not a line, is refused whole (422, the post's own fault), and no key of it is
-/// kept.
+/// Keys travel beside the lines they open and nothing else, and no key of a refused post is kept.
 #[test]
 fn a_key_beside_anything_but_a_posted_line_is_refused() {
     let base = writing("stores-keys-beside");
@@ -883,9 +870,8 @@ fn a_key_beside_anything_but_a_posted_line_is_refused() {
     assert_eq!(status, 422, "{said}");
 }
 
-/// A post this box's build does not read is another build's, never the post's fault: a body of
-/// another shape, and a store the box does not keep, are each answered 409 naming another build,
-/// which the page posts again; a post the box reads and refuses whole stays a 400.
+/// A post this build does not read is another build's (409, which the page posts again), never the
+/// post's fault, and one it reads and refuses whole stays a 400.
 #[test]
 fn a_post_of_another_build_names_the_build() {
     let base = writing("stores-another-build");
@@ -910,10 +896,8 @@ fn a_post_of_another_build_names_the_build() {
     assert!(said.to_string().contains("another build"), "{said}");
 }
 
-/// No fault of a post to a store a tab writes is answered with a status the page's table
-/// (`written.failed`) reads as for later: a body over the cap is 413 and every other fault of the
-/// post 422, so the page refuses that piece for good and posts the ones behind it. A 400 would
-/// be read as another build's, and the piece posted again for ever.
+/// The page's table (`written.failed`) refuses a 413 or 422 piece for good, while a 400 would be
+/// read as another build's and the piece posted again for ever.
 #[test]
 fn every_fault_of_a_post_is_413_or_422() {
     let base = writing("stores-faults");

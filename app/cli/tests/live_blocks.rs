@@ -1,8 +1,6 @@
-//! Every record on the deployment's chains renders as a verified block, because a write to a todo
-//! answers with its block (`todos::render_current`) and a changeset is gated on it: a live record
-//! outside the block grammar would refuse every later write to that todo. The core's proptest pins
-//! the law on generated rows; this asks it of the prose that exists. It skips with its reason
-//! printed where this checkout has no chain.
+//! Every record on the deployment's chains renders as a verified block, because a write is gated
+//! on its block (`todos::render_current`) and a live record outside the block grammar would
+//! refuse every later write to that todo; it skips with its reason where there is no chain.
 
 use suzatary_base::capability::Clock;
 use suzatary_io::clock::SystemClock;

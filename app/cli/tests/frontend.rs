@@ -19,12 +19,8 @@ fn with_dist(dist: &std::path::Path) -> String {
     .base
 }
 
-/// A built dist is served, and nothing outside it is: a `../` traversal never yields the
-/// escaped file's content.
-///
-/// The answer is `index.html`, not a 404: navigation lives in the URL fragment, so every
-/// unmatched path, a refused traversal included, falls back to the index. The claim is
-/// containment, not a status code.
+/// A `../` traversal never yields the escaped file's content; the answer is `index.html`, not
+/// a 404, because navigation lives in the URL fragment and every unmatched path falls back to it.
 #[test]
 fn a_built_dist_is_served_and_nothing_outside_it_is() {
     let root = common::scratch("frontend-dist");
@@ -52,8 +48,8 @@ fn a_built_dist_is_served_and_nothing_outside_it_is() {
     }
 }
 
-/// The site vouches for the Android app: `.well-known/assetlinks.json` carries the package
-/// name, the sha256 cert fingerprint, and the `delegate_permission` relation.
+/// `.well-known/assetlinks.json` carries the package name, the sha256 cert fingerprint, and the
+/// `delegate_permission` relation.
 #[test]
 fn the_site_vouches_for_the_android_app() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -105,9 +101,8 @@ fn the_site_vouches_for_the_android_app() {
     );
 }
 
-/// The frontend is revalidated on every load, by content: a store path's files all date from
-/// 1970, so the answer is `no-cache`, no date and a tag for a 304, and a 1970
-/// `If-Modified-Since` is never answered "not modified".
+/// A store path's files all date from 1970, so the answer is `no-cache`, no date and a tag for
+/// a 304, and a 1970 `If-Modified-Since` is never answered "not modified".
 #[test]
 fn the_frontend_is_revalidated_by_content() {
     let root = common::scratch("frontend-fresh");
@@ -149,9 +144,9 @@ fn the_frontend_is_revalidated_by_content() {
     );
 }
 
-/// A file with a `.br` beside it is served as that file to a request that accepts brotli, with
-/// the file's own type, `Content-Encoding: br` and `Vary: Accept-Encoding`, and as itself to one
-/// that does not; no frontend file is compressed per request, gzip accepted or not.
+/// The `.br` is served with the file's own type, `Content-Encoding: br` and
+/// `Vary: Accept-Encoding` to a request that accepts brotli, and the file itself to one that
+/// does not.
 #[test]
 fn a_precompressed_file_is_served_as_its_br_and_nothing_is_compressed_per_request() {
     let root = common::scratch("frontend-br");

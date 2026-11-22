@@ -16,8 +16,7 @@ use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::transcript;
 use suzatary_store::store::Reads as _;
 
-/// A thin wrapper so a test can build [`init::Args`] through `clap`'s own
-/// parser, exactly `tests/init.rs`'s own `Wrapper`/`parse`.
+/// Builds [`init::Args`] through `clap`'s own parser, as `tests/init.rs` does.
 #[derive(Debug, Parser)]
 struct Wrapper {
     #[command(flatten)]
@@ -66,9 +65,7 @@ pub(crate) fn fresh_instance(name: &str) -> Instance {
     Instance::read(&instance_path, &env_beside(&instance_path)).expect("it reads back")
 }
 
-/// A round of the scripted model over the served app, writing into
-/// `instance`'s own stores: one proposed email, in a conversation this
-/// answers the id of.
+/// A round of the scripted model over the served app proposing one email in `instance`'s stores.
 fn proposed(instance: &Instance) -> ConversationId {
     let first = instance.chains.first();
     let chain = suzatary_io::objects::Objects::chain(suzatary_record::record::EventStore::new(
@@ -102,9 +99,7 @@ fn proposed(instance: &Instance) -> ConversationId {
     ConversationId::new(id).expect("the id the box minted")
 }
 
-/// The CLI's own `dismiss` answers the proposal in the Inbox, as the route
-/// does: a `Cancelled` with the owner's reason, and one act turn; a second
-/// dismissal answers the same and writes nothing.
+/// A `Cancelled` with the owner's reason and one act turn; a second dismissal writes nothing.
 #[test]
 fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     let instance = fresh_instance("dismiss");
@@ -154,7 +149,6 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     );
 }
 
-/// `suzatary verify`, as the binary prints it.
 fn verify(instance: &Instance) -> std::process::Output {
     crate::binary::keyed()
         .args([
@@ -166,9 +160,8 @@ fn verify(instance: &Instance) -> std::process::Output {
         .expect("the binary runs")
 }
 
-/// `suzatary verify` walks every store: one OK line per chain, per proposals
-/// replica, and for every other prodrome but the cache tier's, and a damaged
-/// conversation object is a finding and a failure, never silence.
+/// Every prodrome but the cache tier's, and a damaged conversation object is a failure, never
+/// silence.
 #[test]
 fn verify_walks_every_store() {
     let instance = fresh_instance("verify");
@@ -238,8 +231,6 @@ fn verify_walks_every_store() {
     );
 }
 
-/// A proposal line whose inbox record this box does not hold is named everywhere it is read:
-/// `secretary show` prints it in its place with why, and `verify` reports it and fails.
 #[test]
 fn show_and_verify_name_a_proposal_line_the_inbox_does_not_hold() {
     let instance = fresh_instance("unplaced");
@@ -279,9 +270,8 @@ fn show_and_verify_name_a_proposal_line_the_inbox_does_not_hold() {
     );
 }
 
-/// Every directory the data push may stage is a store `suzatary verify` reads: the push rests
-/// on `verify` alone, so a store it stages and nothing checks is one a damaged object could
-/// reach the remote through. The directories are read from `safe-push.sh`'s own `ADD_PATHS`.
+/// The push rests on `verify` alone, so a store it stages and nothing checks is one a damaged
+/// object could reach the remote through.
 #[test]
 fn every_directory_the_push_stages_is_a_store_verify_reads() {
     let instance = fresh_instance("verify-staged");
@@ -399,8 +389,7 @@ fn drafted() -> [suzatary_conversations::secretary::model::Turn; 3] {
     ]
 }
 
-/// Four conversations on a fresh instance: a topic with a note, a topic, a daily sweep and the
-/// default.
+/// A topic with a note, a topic, a daily sweep and the default.
 fn carried(name: &str) -> Instance {
     use suzatary_conversations::secretary::store::Kind;
     let instance = fresh_instance(name);
@@ -444,14 +433,12 @@ fn carried(name: &str) -> Instance {
     instance
 }
 
-/// A carry map written under the test's scratch directory.
 fn carry_map(name: &str, text: &str) -> std::path::PathBuf {
     let path = temp_dir(name).join("map.toml");
     std::fs::write(&path, text).expect("the map is written");
     path
 }
 
-/// The carry's count and its lines, sorted.
 fn carrying(
     instance: &Instance,
     run: &suzatary_cli::commands::secretary::CarryRun,
@@ -467,7 +454,6 @@ fn carrying(
     Ok((count, lines))
 }
 
-/// How many objects the membership store holds.
 fn held(instance: &Instance) -> usize {
     instance
         .secretary
@@ -479,8 +465,7 @@ fn held(instance: &Instance) -> usize {
         .len()
 }
 
-/// The listing names each conversation with its date, rounds and title, and a map with any
-/// problem is refused whole, listing every problem, and writes nothing.
+/// A map with any problem is refused whole, listing every problem, and writes nothing.
 #[test]
 fn the_carry_lists_the_conversations_and_refuses_a_wrong_map_whole() {
     use suzatary_cli::commands::secretary::CarryRun;
@@ -522,9 +507,7 @@ fn the_carry_lists_the_conversations_and_refuses_a_wrong_map_whole() {
     assert_eq!(held(&instance), begun, "a refused map writes nothing");
 }
 
-/// A dry run with a map says what each conversation gets and writes nothing. The run gives each
-/// named conversation's rounds and note its topics and the others none, and a second run writes
-/// nothing.
+/// A dry run and a second run write nothing.
 #[test]
 fn the_carry_gives_the_conversations_a_map_names_their_topics_once() {
     use suzatary_base::topic_target::Target;
@@ -612,8 +595,7 @@ fn searched(answer: &str) -> [suzatary_conversations::secretary::model::Turn; 2]
     ]
 }
 
-/// The backfill's dry run, its plan written to `file`, each batch answered by `answer` and every
-/// text the model was sent kept in `sent`: its count and its lines, in the order it says them.
+/// The backfill's dry run, every text the model was sent kept in `sent`.
 fn planning(
     instance: &Instance,
     file: &std::path::Path,
@@ -644,8 +626,7 @@ fn lines_of(said: Vec<u8>) -> Vec<String> {
         .collect()
 }
 
-/// One conversation of seven rounds, the first with the topic `garden` on it, one reading mail
-/// and one drafting a note.
+/// Seven rounds, the first with the topic `garden`, one reading mail and one drafting a note.
 fn backfilled(name: &str) -> Instance {
     use suzatary_base::topic_target::Target;
     use suzatary_conversations::secretary::store::Kind;
@@ -732,9 +713,8 @@ fn a_batch_the_model_does_not_answer_is_left_out_of_the_plan() {
     );
 }
 
-/// The backfill sends the model the owner's words alone and plans only for rounds no topic is
-/// on, a new topic only when it is on three rounds; applying writes exactly the plan, twice
-/// writes nothing, and a plan whose rounds gained other topics is refused whole.
+/// The model is sent the owner's words alone, and a plan whose rounds gained other topics is
+/// refused whole.
 #[test]
 fn the_backfill_applies_the_plan_it_showed_once() {
     use suzatary_base::topic_target::Target;
@@ -837,8 +817,6 @@ fn the_backfill_applies_the_plan_it_showed_once() {
     assert_eq!(held(), stale, "a refused plan writes nothing");
 }
 
-/// `suzatary secretary digest census` counts the digest's nodes from the instance's own stores
-/// and prints no word of a line or a summary.
 #[test]
 fn the_digest_census_prints_counts_and_no_word() {
     use suzatary_conversations::secretary::store::Kind;
@@ -904,7 +882,6 @@ pub(crate) fn read_lines(
         .clone()
 }
 
-/// Every object of the lines, by name and print.
 fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)> {
     use suzatary_store::store::Reads as _;
     instance
@@ -917,7 +894,6 @@ fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)
         .collect()
 }
 
-/// `suzatary secretary migrate-scrub`, its count of keys and what it said.
 pub(crate) fn migrated(
     instance: &Instance,
     apply: bool,
@@ -1009,7 +985,6 @@ pub(crate) fn written_before_the_rules(instance: &Instance) -> ConversationId {
     id
 }
 
-/// The names of the keys the box keeps.
 pub(crate) fn kept_keys(instance: &Instance) -> std::collections::BTreeSet<String> {
     std::fs::read_dir(instance.secretary.line_keys())
         .expect("the keys")
@@ -1157,8 +1132,7 @@ fn migrate_scrub_stopped_and_run_again_reads_the_same() {
     assert_eq!(read_lines(&instance, &id), before);
 }
 
-/// A slot whose key is lost opens under no seal: the dry run names it, a run seals the others
-/// again and leaves it, and it reads as missing before and after.
+/// A slot whose key is lost opens under no seal, and reads as missing before and after.
 #[test]
 fn migrate_scrub_names_a_slot_whose_key_is_lost_and_seals_the_rest() {
     let instance = fresh_instance("migrate-scrub-lost");
@@ -1189,9 +1163,8 @@ fn migrate_scrub_names_a_slot_whose_key_is_lost_and_seals_the_rest() {
     assert_eq!(done.expect("a run").resealed, 2, "{said}");
 }
 
-/// A store restored with its reseal lines and without their keys (the lines pushed, the vault
-/// older than the run) keeps every old key: a reseal that does not open here supersedes nothing,
-/// so every slot reads the same, and the next run seals each slot again and then destroys.
+/// The lines pushed, the vault older than the run: a reseal that does not open here supersedes
+/// nothing, so the next run seals each slot again before it destroys.
 #[test]
 fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
     let instance = fresh_instance("migrate-scrub-restored");
@@ -1225,10 +1198,8 @@ fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
     assert_eq!((done.resealed, done.destroyed), (0, 0));
 }
 
-/// `secretary owed --compare` over a lines directory with no instance and no key: it prints each
-/// conversation's owed turns by the reading before the claim and by the claim's, the turns a start
-/// before the claim sent beside those the first start claims, and that the turns keep their order,
-/// then the counts and both differences; and it leaves every file of the store as it was.
+/// Over a lines directory with no instance and no key, by the reading before the claim and by the
+/// claim's.
 #[test]
 fn owed_compare_reads_a_copy_and_changes_nothing() {
     use suzatary_conversations::secretary::model::Turn;

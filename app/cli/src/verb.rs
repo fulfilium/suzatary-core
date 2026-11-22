@@ -105,8 +105,6 @@ pub enum Verb {
 }
 
 impl Verb {
-    /// # Errors
-    /// The verb's own.
     pub fn run(self, path: &Path) -> anyhow::Result<()> {
         match self {
             Verb::Doctor(args) => doctor::run(path, &args),
@@ -154,9 +152,8 @@ impl Verb {
     }
 }
 
-/// A command logs only when asked: with `RUST_LOG` set, a subscriber with that filter, to stderr
-/// and plain (stdout is a command's answer, and the MCP server's protocol). `serve` and `mcp`
-/// install their own defaults otherwise, and take this one, with the same filter, when it is set.
+/// With `RUST_LOG` set, a subscriber with that filter, to stderr and plain since stdout is a
+/// command's answer and the MCP server's protocol; `serve` and `mcp` install their own otherwise.
 pub fn logs_when_asked() {
     if std::env::var_os("RUST_LOG").is_some() {
         let _ = tracing_subscriber::fmt()
@@ -167,9 +164,8 @@ pub fn logs_when_asked() {
     }
 }
 
-/// Under a unit (`JOURNAL_STREAM` set), this process's first read is one journal entry: the verb,
-/// what was read and its milliseconds. Natively, since a pass captures a verb's stderr. A process
-/// a person runs says nothing: the journal records its command line, which can hold words.
+/// Under a unit (`JOURNAL_STREAM` set), the first read is one journal entry, said natively since a
+/// pass captures stderr; a process a person runs says nothing, as its command line can hold words.
 pub fn tell_the_journal(matches: &clap::ArgMatches) {
     if std::env::var_os("JOURNAL_STREAM").is_none() {
         return;

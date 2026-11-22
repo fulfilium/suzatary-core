@@ -25,7 +25,6 @@ pub struct Onboarding {
     person: Person,
     /// The actor their own writes carry; never an agent's.
     owner: Actor,
-    /// Where the app answers, and who may come in.
     door: Door,
     /// The todos' categories, most important first. Never empty, no name twice.
     categories: Vec<String>,
@@ -49,11 +48,7 @@ pub struct Door {
 pub struct BoxName(String);
 
 impl BoxName {
-    /// The name, or why this text is not one.
-    ///
-    /// # Errors
-    /// Not two or more labels of `a-z`, `0-9` and inner `-`; the one final dot the daemon
-    /// prints a name with is dropped.
+    /// Two or more labels of `a-z`, `0-9` and inner `-`; the daemon's one final dot is dropped.
     pub fn parse(text: &str) -> anyhow::Result<Self> {
         let text = text.strip_suffix('.').unwrap_or(text);
         let label = |part: &str| {
@@ -82,10 +77,6 @@ impl BoxName {
 }
 
 impl Door {
-    /// The door, or why it opens for nobody.
-    ///
-    /// # Errors
-    /// No login.
     pub fn new(name: BoxName, logins: BTreeSet<Login>) -> anyhow::Result<Self> {
         if logins.is_empty() {
             bail!("at least one Tailscale login opens the app and writes as you");
@@ -110,7 +101,6 @@ pub struct Person {
     pub zone: suzatary_base::zone::Zone,
 }
 
-/// A first account: an address and who serves it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FirstAccount {
     pub provider: Provider,
@@ -137,7 +127,6 @@ pub struct Step {
     pub why: &'static str,
 }
 
-/// The header every written instance file carries.
 pub(crate) const HEADER: &str = "\
 # WHAT MAKES THIS DEPLOYMENT YOURS, written by `suzatary init` (docs/guide/).
 #
@@ -165,15 +154,11 @@ const UPKEEP: &str = "suzatary";
 pub const CATEGORIES: [&str; 5] = ["work", "study", "project", "home", "other"];
 
 /// Where `suzatary serve` run by hand binds: loopback, where tailscaled names no one, so the gate
-/// admits nothing there. The module's unit serves the box's tailnet address, on the door's URL.
+/// admits nothing there.
 const HOST: &str = "127.0.0.1";
 const PORT: u16 = 8787;
 
 impl Onboarding {
-    /// The value, or what is wrong with the answers.
-    ///
-    /// # Errors
-    /// No name, an owner spelled as an agent, no category or one named twice.
     pub fn new(
         person: Person,
         owner: Actor,
@@ -215,9 +200,6 @@ impl Onboarding {
     }
 
     /// The instance file this onboarding means.
-    ///
-    /// # Errors
-    /// An address the roster refuses.
     pub(crate) fn file(&self, root: &prodrome_core::sign::PublicKey) -> anyhow::Result<File> {
         let roster: Vec<Actor> = std::iter::once(self.owner.clone())
             .chain(agents())
@@ -299,9 +281,6 @@ impl Onboarding {
     }
 
     /// The file as `init` writes it under `root`, header and all.
-    ///
-    /// # Errors
-    /// An address the roster refuses, as for the file it prints.
     pub fn printed(&self, root: &prodrome_core::sign::PublicKey) -> anyhow::Result<String> {
         self.file(root)?.to_toml_string(HEADER)
     }
@@ -322,9 +301,6 @@ impl Onboarding {
 }
 
 /// The name to address the person by, trimmed, or why not.
-///
-/// # Errors
-/// A blank name.
 pub fn named(text: &str) -> anyhow::Result<&str> {
     let name = text.trim();
     if name.is_empty() {
@@ -334,9 +310,6 @@ pub fn named(text: &str) -> anyhow::Result<&str> {
 }
 
 /// The owner's actor spelled `text`, or why not.
-///
-/// # Errors
-/// Not an actor, or an agent's.
 pub fn owner(text: &str) -> anyhow::Result<Actor> {
     let owner =
         Actor::new(text).map_err(|failed| anyhow::anyhow!("{text:?} is not an actor: {failed}"))?;
@@ -364,24 +337,17 @@ fn agents() -> impl Iterator<Item = Actor> {
 impl FirstAccount {
     /// The roster entry: the mail template of its provider applied to its address, so `init`
     /// writes the account a Connect card would.
-    ///
-    /// # Errors
-    /// An address that is not one.
     pub fn account(&self) -> Result<MailAccount, Refused> {
         let (kind, params) = self.applied()?;
         kind.account(&params)
     }
 
     /// The connection a Connect card would make of it.
-    ///
-    /// # Errors
-    /// An address that is not one.
     pub fn connection(&self) -> Result<Connection, Refused> {
         let (kind, params) = self.applied()?;
         Connection::new(kind.template(), params)
     }
 
-    /// Its provider's mail template, and the parameters its address gives it.
     fn applied(&self) -> Result<(AccountKind, Params), Refused> {
         let email = EmailAddress::new(&self.email).map_err(|refused| Refused::Param {
             param: "email",

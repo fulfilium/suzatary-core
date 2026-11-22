@@ -1,8 +1,6 @@
-//! The one way a test runs the binary. A run starts from a clean environment: nothing of the
-//! process that runs the suite reaches it but the tools it finds, so a suite run by a unit on the
-//! box (`SUZATARY_REPO`, `SUZATARY_INSTANCE`, `SUZATARY_ROOTS`, the XDG directories) or by the
-//! owner (a secret store found through `HOME`) never reads that deployment. A test sets what its
-//! run reads; `binary_spawns_only_here` in `suites.rs` fails on a spawn anywhere else.
+//! The one way a test runs the binary, from a clean environment, so a suite run by a unit or the
+//! owner (`SUZATARY_INSTANCE`, the XDG directories, `HOME`) never reads that deployment;
+//! `binary_spawns_only_here` in `suites.rs` fails on a spawn anywhere else.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -10,8 +8,7 @@ use std::process::Command;
 /// What a run keeps of this process's environment: where its tools are, and where scratch goes.
 const KEPT: [&str; 2] = ["PATH", "TMPDIR"];
 
-/// `suzatary`, its environment the [`KEPT`] variables and a `HOME` and a runtime directory of
-/// the running test's own that start empty, as a login session or a unit has both.
+/// `suzatary` with the [`KEPT`] variables and an empty `HOME` and runtime directory of its own.
 pub(crate) fn suzatary() -> Command {
     run(std::path::Path::new(path()))
 }
@@ -59,9 +56,8 @@ pub(crate) fn keyed() -> Command {
     command
 }
 
-/// The binary's path, for a script a guard runs that calls only a verb reading no deployment
-/// (`public-tree.sh`'s matcher, `suzatary leaks`, over the lists it is handed): the script sets
-/// that run's environment, as a deploy's does.
+/// The binary's path, for a guard's script that calls only verbs reading no deployment and sets
+/// their environment itself.
 pub(crate) fn path() -> &'static str {
     env!("CARGO_BIN_EXE_suzatary")
 }
@@ -100,8 +96,7 @@ pub(crate) fn keyed_fixture(root: &std::path::Path) -> Command {
     command
 }
 
-/// `suzatary-dev serve` over a fixture instance, ended when the test is. Every line it logs is
-/// kept for [`Serving::log`].
+/// `suzatary-dev serve` over a fixture instance, ended when the test is.
 #[cfg(feature = "fixture")]
 pub(crate) struct Serving {
     child: std::process::Child,

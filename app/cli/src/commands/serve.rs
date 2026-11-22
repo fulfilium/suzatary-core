@@ -35,7 +35,6 @@ use suzatary_server::serve::{
 };
 use world::World;
 
-/// What `suzatary serve` was told.
 pub struct Serving {
     pub listening: listening::Listening,
     /// `app_url`'s host at the `listening` port.

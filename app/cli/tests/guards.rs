@@ -2,14 +2,8 @@
 //! backstop (`scripts/edit-guard.sh`), the commit-message hook and its replay, the trusted
 //! push path (`scripts/safe-push.sh`) and the scripts and units around them.
 //!
-//! - The guards run as the real script, with real hook JSON on stdin, asserting on the exit
-//!   code (0 allow, 2 block) and stderr: a reimplementation would share the script's bugs.
-//! - The commit hook runs under real `git commit` in a throwaway repository, since the
-//!   property is what git accepts under the hook.
-//! - Scripts that drive a push, systemd or a build are pinned statically from their source,
-//!   and a pattern is checked with `grep -E`, the tool the script itself uses.
-//!
-//! Every scratch directory is unique per test and removed when its `Scratch` guard drops.
+//! The guards run as the real script on real hook JSON, since a reimplementation would share the
+//! script's bugs, and scripts that drive a push, systemd or a build are pinned from their source.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -68,8 +62,6 @@ mod triage_auth;
 #[path = "guards/wasm_budget.rs"]
 mod wasm_budget;
 
-/// Run `script` as a subprocess, feeding it `stdin` and returning its whole
-/// output.
 fn run(script: &Path, stdin: &str) -> Output {
     let mut child = Command::new(script)
         .stdin(Stdio::piped())
@@ -99,16 +91,11 @@ fn stderr(output: &Output) -> String {
 const ALLOW: i32 = 0;
 const BLOCK: i32 = 2;
 
-// ============================================================================
-// scripts/edit-guard.sh
-// ============================================================================
-
 fn edit_guard() -> PathBuf {
     repo().join("scripts").join("edit-guard.sh")
 }
 
-/// Feed the hook a `PreToolUse` Edit payload and return its exit code. `None`
-/// omits `file_path` entirely, the unparseable case.
+/// `None` omits `file_path` entirely, the unparseable case.
 fn run_edit_guard(file_path: Option<&str>) -> i32 {
     let tool_input = match file_path {
         Some(fp) => serde_json::json!({ "file_path": fp }),
@@ -141,10 +128,6 @@ fn edit_guard_denies_every_path() {
     assert_eq!(run_edit_guard(Some("daily/2026-09-01.typ")), BLOCK);
     assert_eq!(run_edit_guard(None), BLOCK);
 }
-
-// ============================================================================
-// scripts/tool-guard.sh
-// ============================================================================
 
 fn tool_guard() -> PathBuf {
     repo().join("scripts").join("tool-guard.sh")
@@ -227,9 +210,8 @@ fn tool_guard_shell_read_and_write_and_network_tools_are_denied() {
     }
 }
 
-/// `ToolSearch` is allowed: the verbs are deferred tools whose schemas load through it, so
-/// denying it blinds the agent. It grants nothing, since every call after a lookup comes back
-/// through this hook.
+/// `ToolSearch` is allowed, since the verbs' schemas load through it, and grants nothing, since
+/// every call after a lookup comes back through this hook.
 #[test]
 fn tool_guard_toolsearch_is_allowed_because_the_verbs_arrive_through_it() {
     let payload = call(
@@ -239,8 +221,8 @@ fn tool_guard_toolsearch_is_allowed_because_the_verbs_arrive_through_it() {
     assert_eq!(code(&run_tool_guard(&payload)), ALLOW);
 }
 
-/// `mcp__suzatary_evil__x` shares a prefix with the namespace up to the final
-/// underscore. Matching must be on the full `mcp__suzatary__`.
+/// `mcp__suzatary_evil__x` shares a prefix up to the final underscore, so matching must be on
+/// the full `mcp__suzatary__`.
 #[test]
 fn tool_guard_a_near_miss_prefix_is_denied() {
     for name in [
@@ -261,10 +243,8 @@ fn tool_guard_unparseable_input_is_denied() {
     }
 }
 
-/// `tool_input` carries the body of an attacker's email. If a payload embeds
-/// its own `"tool_name"`, the guard must not be steerable by it. The safe
-/// direction is fail-closed: a forgery may turn an allow into a deny, never
-/// the reverse.
+/// A `"tool_name"` embedded in `tool_input`, an attacker's email, must not steer the guard: a
+/// forgery may turn an allow into a deny, never the reverse.
 #[test]
 fn tool_guard_a_forged_tool_name_cannot_turn_a_deny_into_an_allow() {
     let forged = call(
@@ -277,8 +257,6 @@ fn tool_guard_a_forged_tool_name_cannot_turn_a_deny_into_an_allow() {
     assert_eq!(code(&run_tool_guard(&forged)), BLOCK);
 }
 
-/// The mirror of the test above, and the reason it is not symmetric.
-///
 /// A legitimate verb whose payload contains the text `"tool_name": "Bash"` (an email quoting
 /// this hook) is still allowed: on the wire it is JSON-escaped and can never be read as a key,
 /// and refusing it would let anyone who mentions the guard stop the agent reading their mail.
@@ -291,10 +269,8 @@ fn tool_guard_quoting_the_guard_in_an_email_body_cannot_disable_triage() {
     assert_eq!(code(&run_tool_guard(&smuggled)), ALLOW);
 }
 
-// ----------------------------------------------------------------------------
-// Wiring: the hook only contains anything if it is registered and the invocation loads the
-// file that registers it.
-// ----------------------------------------------------------------------------
+// The hook only contains anything if it is registered and the invocation loads the file that
+// registers it.
 
 fn triage_settings() -> serde_json::Value {
     let path = repo().join(".claude").join("triage-settings.json");
@@ -467,10 +443,9 @@ fn wiring_the_triage_script_journals_a_summary_and_keeps_its_files_private() {
     }
 }
 
-/// A model job keeps no transcript it will not resume (the triage pass writes none), and no
-/// job's settings prune transcripts: every job but the compactor runs under the box user's
-/// `~/.claude`, where `cleanupPeriodDays` is global and would delete the owner's own sessions,
-/// the main assistant's history among them. No file this repository ships sets it.
+/// A model job keeps no transcript it will not resume, and no file this repository ships sets
+/// `cleanupPeriodDays`: under the box user's `~/.claude` it is global and would delete the
+/// owner's own sessions.
 #[test]
 fn wiring_model_jobs_keep_no_transcript_and_prune_none_of_the_owners() {
     let src = std::fs::read_to_string(repo().join("scripts").join("hourly-triage.sh"))
@@ -565,11 +540,9 @@ fn wiring_the_triage_script_reviews_the_batch_before_it_pushes() {
     );
 }
 
-/// A quiet pass commits what the server wrote since the last one, through the same trusted
-/// push as a busy pass and with no model on its path: the quiet branch calls `push_pass`
-/// before it records the pass and its `exit 0`, runs neither `claude` nor a secretary verb,
-/// and says in its message that the commit is the server's; `push_pass` is the one place the
-/// wrapper runs `safe-push.sh`, so both paths share one allowlist and one verification.
+/// A quiet pass commits what the server wrote through `push_pass` before it records the pass,
+/// with no model on its path, and `push_pass` is the one place the wrapper runs `safe-push.sh`,
+/// so both paths share one allowlist and one verification.
 #[test]
 fn wiring_the_quiet_pass_commits_the_servers_writes_without_a_model() {
     let src = std::fs::read_to_string(repo().join("scripts").join("hourly-triage.sh"))
@@ -628,10 +601,8 @@ fn wiring_the_quiet_pass_commits_the_servers_writes_without_a_model() {
     );
 }
 
-/// The sweep runs once a day, after the review, and a failed one is recorded, not swallowed:
-/// the wrapper calls `secretary sweep` exactly once, after `secretary review` (so it proposes
-/// against a settled open list), gated on the sweep-stamp file, and writes the stamp only when
-/// the sweep succeeded, so a failed sweep runs again next pass instead of losing the day.
+/// The sweep runs after `secretary review`, so it proposes against a settled open list, and
+/// writes its stamp only when it succeeded, so a failed sweep runs again next pass.
 #[test]
 fn wiring_the_triage_script_sweeps_once_a_day_after_the_review() {
     let src = std::fs::read_to_string(repo().join("scripts").join("hourly-triage.sh"))
@@ -686,10 +657,8 @@ fn wiring_the_triage_script_sweeps_once_a_day_after_the_review() {
     );
 }
 
-/// The wrapper never spells the heartbeat or its outcome: it records each pass through
-/// `suzatary heartbeat`, which writes where the instance's `mail.heartbeat` names and the brief
-/// reads (pinned through the binary in `tests/heartbeat.rs`). The instance's path is refused in
-/// `/tmp`, which is cleared on reboot and would read as an outage.
+/// The wrapper records each pass through `suzatary heartbeat` and never spells its path, which
+/// is refused in `/tmp`, since that is cleared on reboot and would read as an outage.
 #[test]
 fn wiring_the_heartbeat_has_one_writer_that_reads_the_instance() {
     let script = std::fs::read_to_string(repo().join("scripts").join("hourly-triage.sh"))
@@ -724,7 +693,7 @@ fn wiring_the_heartbeat_has_one_writer_that_reads_the_instance() {
 
 /// A pass is recorded ok only when it did not fail, in exactly two places: before a quiet
 /// inbox's `exit 0`, so an idle week is not an outage, and after the deferred failures' `exit
-/// 1`. `set -e` kills the script on any earlier failure.
+/// 1`, since `set -e` kills the script on any earlier failure.
 #[test]
 fn wiring_the_heartbeat_is_written_only_on_a_clean_pass() {
     let src = commands(
@@ -841,9 +810,8 @@ fn wiring_allow_list_is_only_the_suzatary_namespace() {
     );
 }
 
-/// No settings file denies `ToolSearch`, the agent's only route to its verbs, a quiet outage.
-/// Every file matters: `--settings` merges with the project settings and deny beats allow at
-/// every scope.
+/// No settings file denies `ToolSearch`, the agent's only route to its verbs: `--settings`
+/// merges with the project settings and deny beats allow at every scope.
 #[test]
 fn wiring_no_settings_file_denies_toolsearch() {
     let dir = repo().join(".claude");
@@ -929,16 +897,10 @@ fn wiring_the_dangerous_execution_tools_are_still_denied() {
     }
 }
 
-// ============================================================================
-// scripts/hooks/commit-msg
-// ============================================================================
-
 fn commit_msg_hook() -> PathBuf {
     repo().join("scripts").join("hooks").join("commit-msg")
 }
 
-/// Run `git` in `cwd` with a fixed identity, optionally feeding `stdin` (for
-/// `commit -F -`).
 fn git(cwd: &Path, args: &[&str], stdin: Option<&str>) -> Output {
     let mut cmd = Command::new("git");
     cmd.args(args)
@@ -1132,9 +1094,7 @@ fn commit_msg_comment_lines_are_ignored() {
     assert!(r.status.success(), "{}", stderr(&r));
 }
 
-// ----------------------------------------------------------------------------
-// Wiring: per clone, with `git config core.hooksPath scripts/hooks`; CI has no such config.
-// ----------------------------------------------------------------------------
+// The hook is wired per clone, with `git config core.hooksPath scripts/hooks`; CI has none.
 
 /// This clone runs the hook, checked read-only and only on the deployed checkout; a scratch
 /// clone or a CI runner has its own `core.hooksPath`, or none, and skips.
@@ -1181,18 +1141,15 @@ fn commit_msg_hook_is_executable() {
     }
 }
 
-// ----------------------------------------------------------------------------
 // `scripts/check-commits.sh` replays the hook over existing commits, so the
 // claim holds for history and not only for commits made through the hook.
-// ----------------------------------------------------------------------------
 
 fn check_commits_script() -> PathBuf {
     repo().join("scripts").join("check-commits.sh")
 }
 
-/// A throwaway repository seeded with `a.py` and `b.py`, unwired to any
-/// hook — `check-commits.sh` replays `commit-msg` itself via
-/// `COMMIT_MSG_COMMIT`, so nothing needs `core.hooksPath` here.
+/// A throwaway repository seeded with `a.py` and `b.py` and wired to no hook, since
+/// `check-commits.sh` replays `commit-msg` itself via `COMMIT_MSG_COMMIT`.
 fn range_replay_repo(name: &str) -> Scratch {
     let root = Scratch::new(name);
     let init = git(&root, &["init", "-q", "-b", "main"], None);
@@ -1286,10 +1243,6 @@ fn check_commits_honest_commits_pass_the_range() {
     );
 }
 
-// ============================================================================
-// scripts/safe-push.sh, pinned statically from its own source.
-// ============================================================================
-
 fn safe_push_script() -> String {
     let path = repo().join("scripts").join("safe-push.sh");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
@@ -1351,7 +1304,7 @@ fn matches_allowed_pattern(pattern: &str, probe: &str) -> bool {
 /// object holds a person's or a model's words, each with the law test that says so), `BY_DESIGN`
 /// (words the owner means to keep in history: the chains, his decisions, his notes, the
 /// deployment) or `PENDING` (words still pushed in the clear, owed the same locking by decision
-/// `wordsowed`). A store admitted and in no table, or in a table and not admitted, fails; and no
+/// `wordsowed`); a store admitted and in no table, or in a table and not admitted, fails, and no
 /// store of keys or texts, which hold the words themselves, is ever admitted.
 #[test]
 fn every_store_safe_push_admits_is_classified() {
@@ -1439,8 +1392,7 @@ fn the_template_ignores_every_store_of_words_or_keys() {
     }
 }
 
-/// The containment that survives the abort's removal. `git add -A --
-/// $ADD_PATHS` is what actually bounds a triage commit.
+/// `git add -A -- $ADD_PATHS` is what bounds a triage commit.
 #[test]
 fn safe_push_the_agent_can_never_stage_source() {
     let add_paths = agent_add_paths();
@@ -1463,8 +1415,8 @@ fn safe_push_the_agent_can_never_stage_source() {
 }
 
 /// Every file the agent's push would stage is one its pattern accepts: an untracked file beside a
-/// store's objects (its lock, on 2026-10-01) would refuse the next push. Run against the data
-/// tree where there is one; `--untracked-files=all` lists what `git add -A` would stage.
+/// store's objects (its lock) would refuse the next push; `--untracked-files=all` lists what
+/// `git add -A` would stage.
 #[test]
 fn safe_push_every_file_it_would_stage_is_one_it_accepts() {
     let Some(instance) = this_box::instance() else {
@@ -1523,10 +1475,8 @@ fn safe_push_carries_a_request_record_and_never_its_write_in_progress() {
     }
 }
 
-/// The memory's and the digest's words never leave the box through the push: an object is
-/// immutable once pushed, and forgetting and the sweep must delete the words. Their texts are
-/// staged by no path and refused by the pattern, a lock file beside each history included, while
-/// the histories' objects ride.
+/// The memory's and the digest's words never leave the box through the push, since a pushed
+/// object is immutable and forgetting must delete them, while the histories' objects ride.
 #[test]
 fn safe_push_never_carries_the_memorys_or_the_digests_words() {
     let add_paths = agent_add_paths();
@@ -1582,10 +1532,8 @@ fn safe_push_never_carries_a_key() {
     }
 }
 
-/// The topics never leave the box through the push: a topic's name is words, and a pushed
-/// object can never be erased. Neither store, nor the asks whose refusals may quote one, is
-/// staged, and the pattern refuses every file of each, its objects, its lock and its
-/// `.gitattributes` included.
+/// The topics, and the asks whose refusals may quote one, never leave the box through the push:
+/// a topic's name is words, and a pushed object can never be erased.
 #[test]
 fn safe_push_never_carries_a_topic() {
     let script = safe_push_script();
@@ -1731,10 +1679,8 @@ fn safe_push_commits_a_store_s_gitignore_only_as_the_store_writes_it() {
     }
 }
 
-/// The cache tier never leaves the box through the push: a plugin's store, cursor and ledger
-/// are a replica of an outside truth, rebuilt by syncing again (`[cache]`, `cache/` under the
-/// data root by default). No staged path reaches it, the data repository's extra paths
-/// included, and the pattern refuses every file it holds.
+/// The cache tier, a replica of an outside truth rebuilt by syncing again, never leaves the box
+/// through the push: no staged path reaches it and the pattern refuses every file it holds.
 #[test]
 fn safe_push_never_carries_the_cache_tier() {
     let script = safe_push_script();
@@ -1806,7 +1752,6 @@ struct PushFixture {
     root: Scratch,
 }
 
-/// What the fixture's verification answers.
 #[derive(Clone, Copy)]
 enum Verification {
     Fails,
@@ -2019,7 +1964,7 @@ fn safe_push_with_its_own_writes_pending_verifies_before_committing() {
 }
 
 /// A store that has written nothing names nothing git could stage, which `git add` would refuse
-/// as fatal (`digests/` and `requests/` on 2026-10-06); the push says it skipped each such path
+/// as fatal; the push says it skipped each such path
 /// and commits and pushes the rest.
 #[test]
 fn safe_push_skips_a_store_that_names_nothing_and_commits_the_rest() {
@@ -2186,8 +2131,8 @@ fn safe_push_verifies_the_data_and_builds_nothing() {
     assert_eq!(fixture.last_commit(), format!("A\t{object}\n"));
 }
 
-/// A flag the push does not know is refused, never taken as a commit message: `--code` was
-/// once a mode, and a data commit titled `--code` would hide that it is gone.
+/// A flag the push does not know is refused, never taken as a commit message: a data commit
+/// titled `--code` would hide that the mode is gone.
 #[test]
 fn safe_push_refuses_an_unknown_flag() {
     let fixture = PushFixture::new("push-unknown-flag", Verification::Passes);
@@ -2202,7 +2147,6 @@ fn safe_push_refuses_an_unknown_flag() {
 }
 
 /// The push's own text runs no code gate: no `cargo`, no dev shell, no suite and no code mode.
-/// The test above is the run; this is the reason a later edit fails here by name.
 #[test]
 fn safe_push_names_no_code_gate() {
     let script = commands(&safe_push_script());
@@ -2308,10 +2252,8 @@ fn safe_push_the_data_extras_are_data_and_match_their_pattern() {
     }
 }
 
-// ----------------------------------------------------------------------------
 // The web's two static checks, the innerHTML door and the cast ceiling, have one definition
 // in scripts/web-static.sh, which the deploy build and the fast loop both call by file.
-// ----------------------------------------------------------------------------
 
 /// `scripts/web-static.sh`'s own source, pinned statically as `safe-push.sh` is.
 fn web_static_script() -> String {
@@ -2334,7 +2276,7 @@ fn wiring_web_static_sh_exists_and_is_executable() {
     }
 }
 
-/// The ceiling lives in exactly one file, so no edit lowers one copy and leaves another. Its
+/// The ceiling lives in exactly one file, so no edit lowers one copy and leaves another; its
 /// value is not pinned, since lowering it is what the script asks for.
 #[test]
 fn wiring_the_cast_ceiling_is_declared_in_web_static_sh_only() {
@@ -2648,14 +2590,9 @@ fn wiring_serve_web_and_mail_idle_both_register_a_serving_root() {
     );
 }
 
-// ----------------------------------------------------------------------------
-// This box's deployment, and the box-local tier it never pushes. The leak guard's own tests are
-// `guards/leak.rs`.
-// ----------------------------------------------------------------------------
-
 /// The box-local tier is never pushed: the data repository tracks none of it, so the
-/// person's prose, the term lists and the mail's private ledger travel only in the vault. The
-/// instance file it does push cannot hold the prose, because `[persona]` refuses its keys.
+/// person's prose, the term lists and the mail's private ledger travel only in the vault, and
+/// the instance file it does push cannot hold the prose, because `[persona]` refuses its keys.
 #[test]
 fn the_data_repository_tracks_nothing_of_the_box_local_tier() {
     let Some(instance) = this_box::instance() else {
@@ -2726,8 +2663,7 @@ fn no_source_reads_the_machines_zone() {
 
 /// No source cuts the day off an instant it reads as now or as an event's `at`: that is UTC's
 /// day, the next one every evening in New York, so a day of an instant is the owner's
-/// (`Zone::day`). A written day (`created`, a source's `date`) is a day by construction and
-/// reads as written. The calendar plugin's window takes UTC's day with a day of slack either
+/// (`Zone::day`), and the calendar plugin, skipped, takes UTC's day with a day of slack either
 /// side, so the owner's day is always inside it.
 #[test]
 fn no_source_cuts_utcs_day_off_an_instant() {

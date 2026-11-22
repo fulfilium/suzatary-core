@@ -17,7 +17,6 @@ use suzatary_conversations::secretary::store::ConversationState;
 use super::call::Operator;
 use suzatary_lines::secretary::held_replica::Sealing;
 
-/// The conversation a question goes into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Conversation {
     /// A topic begun for it on the box's own store.
@@ -38,7 +37,6 @@ impl FromStr for Conversation {
     }
 }
 
-/// A question asked and answered.
 #[derive(Debug)]
 pub struct Asked {
     pub conversation: ConversationId,
@@ -51,12 +49,8 @@ pub struct Asked {
 /// How long a round may take before the question is left to the box.
 const ROUND: Duration = Duration::from_mins(15);
 
-/// Say `text` into conversation `id` as `operator`, then wait for the round to end.
-///
-/// The stream is followed before the question is said, so no frame of its round is missed.
-///
-/// # Errors
-/// A route's refusal, a stream that closes early, or a round longer than 15 minutes.
+/// Say `text` into conversation `id` as `operator`, then wait for the round to end; the stream is
+/// followed before the question is said, so no frame of its round is missed.
 pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Result<Asked> {
     let id = id.clone();
     let frames = followed(operator, &id);
@@ -128,11 +122,10 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
     }
 }
 
-/// The secretary's words in reply to the line `line`, once the claims read it settled: the model's
-/// turns of the round that covered it, as a replica of the lines reads them (the first exchange of
-/// a session streams no delta, so the stream cannot say). Position is not the reply: an earlier
-/// round's closing reply can stand after this line. None while the line is not held yet or still
-/// owed; a stopped question is answered with nothing.
+/// The secretary's words in reply to `line` once the claims read it settled: the model's turns of
+/// the round that covered it, read off the lines since a session's first exchange streams no delta
+/// (position is not the reply: an earlier round's can stand after it); None while the line is not
+/// held yet or still owed, and nothing for a stopped question.
 fn answered(
     operator: &Operator,
     id: &ConversationId,

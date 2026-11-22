@@ -45,7 +45,6 @@ enum Verb {
     },
 }
 
-/// Where a tap's fire goes.
 pub enum Firing {
     /// The instance declares no `[coding]`: a tap is refused in words.
     Undeclared,
@@ -60,7 +59,6 @@ pub enum Firing {
 }
 
 impl Firing {
-    /// This instance's routine at the real endpoint, or none.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         instance
@@ -112,7 +110,6 @@ fn failed_fire(failed: &FireError) -> Performed {
     }
 }
 
-/// What a tapped coding session is started through, and where its lines land.
 pub struct Coder {
     pub firing: Firing,
     /// The conversations a session's lines are written into: the server's own handle.
@@ -152,9 +149,6 @@ impl Coder {
 
 /// One poll: nothing is fetched while no session waits; otherwise the `claude/`
 /// branches are read once and every session they speak for moves.
-///
-/// # Errors
-/// The mirror's or the store's own failures.
 pub fn poll(
     conversations: &ConversationStores,
     mirrors: &Mirrors,
@@ -177,7 +171,6 @@ pub fn poll(
     .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
 }
 
-/// Every session still waiting on a branch.
 fn waiting(conversations: &ConversationStores) -> anyhow::Result<Vec<Advanced>> {
     suzatary_topics::secretary::coding::waiting(conversations.conversations())
         .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
@@ -192,9 +185,6 @@ fn seen(mirrors: &Mirrors, repo: &RepoName) -> anyhow::Result<Vec<suzatary_inbox
 
 /// What `suzatary coding poll --explain` prints. It moves nothing; it fetches the mirror as a
 /// poll would, and reads the branches even while no session waits.
-///
-/// # Errors
-/// The mirror's or the store's own failures.
 pub fn explain(
     conversations: &ConversationStores,
     mirrors: &Mirrors,
@@ -273,10 +263,6 @@ pub fn spawn_polling(
     }
 }
 
-/// `suzatary coding poll`.
-///
-/// # Errors
-/// No `[coding]` in the instance, or the poll's own failures.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let Verb::Poll {

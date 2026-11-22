@@ -13,7 +13,6 @@ struct Cli {
     /// The instance file; defaults to `SUZATARY_INSTANCE`, then `instance.toml` here.
     #[arg(long, global = true, value_name = "PATH")]
     instance: Option<std::path::PathBuf>,
-    /// What to do.
     #[command(subcommand)]
     verb: Verb,
 }

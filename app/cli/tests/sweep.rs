@@ -60,7 +60,6 @@ fn store(root: &std::path::Path) -> EventStore {
     )
 }
 
-/// An open todo sourced from a thread.
 fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
     let event = build_todo(
         &NewTodo {
@@ -90,7 +89,6 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
         .expect("appends");
 }
 
-/// An open todo with no source at all.
 fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
     let event = build_todo(
         &NewTodo {
@@ -137,8 +135,7 @@ fn propose_completion_script(todo: &str, hash: &str) -> FakeModel {
     ])
 }
 
-/// An open todo whose thread later carries settling mail gets one `Complete` proposal carrying
-/// its `mail:<hash>`.
+/// The one `Complete` proposal carries the settling mail's `mail:<hash>`.
 #[test]
 fn an_open_todo_with_later_mail_gets_one_completed_proposal() {
     let root = common::scratch("sweep-completes");
@@ -249,7 +246,7 @@ fn a_sweep_the_model_cannot_answer_fails_the_verb() {
     assert!(failed.to_string().contains("did not run"), "{failed}");
 }
 
-/// A todo with no later mail never reaches the model: no conversation, no proposal.
+/// A todo with no later mail never reaches the model.
 #[test]
 fn an_open_todo_with_no_later_mail_gets_no_proposal() {
     let root = common::scratch("sweep-quiet");
@@ -283,8 +280,6 @@ fn an_open_todo_with_no_later_mail_gets_no_proposal() {
     );
 }
 
-/// A scripted `complete` of a todo the round reads as already resolved is refused, and the chain
-/// does not move.
 #[test]
 fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     let root = common::scratch("sweep-resolved");
@@ -342,7 +337,6 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     assert!(refused, "{:?}", swept.stored.turns);
 }
 
-/// A scripted `todo_add` is refused by the round rather than dispatched, and no todo is added.
 #[test]
 fn a_todo_add_call_is_refused_by_the_verb_set() {
     let root = common::scratch("sweep-verbset");
@@ -475,8 +469,7 @@ fn completing_an_open_todo_with_no_candidates_is_refused_and_proposes_nothing() 
     );
 }
 
-/// Sweep, then a tap through `POST …/proposals/<n>/tap` on a real server: the one settled todo
-/// completes and the other is untouched.
+/// The one settled todo completes and the other is untouched.
 #[test]
 fn a_swept_completion_is_applied_through_the_real_tap_route() {
     let root = common::scratch("sweep-tap");

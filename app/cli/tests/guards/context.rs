@@ -1,9 +1,6 @@
-//! The context budget (`context.toml`). Its goal is that no unit is over `budget.use` or
-//! `budget.develop`; the table names each unit still over and by how much. The test refuses a
-//! unit's USE over its budget or its ratchet and a plan that no longer matches the code; a reading
-//! set grown past what the commits since the merge base declare is the gate's history half
-//! (`scripts/context.sh growth`), since its answer reads the commits. It prints every unit's figures and their change against
-//! `origin/master`, so each gate's log shows what a change costs to read.
+//! The context budget (`context.toml`): the test refuses a unit's USE over its budget or its
+//! ratchet and a plan that no longer matches the code; a reading set grown past what the commits
+//! declare is the gate's history half (`scripts/context.sh growth`), since it reads the commits.
 
 use super::repo;
 

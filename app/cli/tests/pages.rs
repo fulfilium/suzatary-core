@@ -1,8 +1,7 @@
 //! `prodrome pages` against the readings it draws, through the real binary: the list page's rows
 //! are `todos open`'s and each todo's page is `todo show`'s at the same instant, a reference to a
 //! todo of the store leads to its page and any other stays text, and every word a page holds is
-//! the store's or the application's. And the workflow `prodrome init --public` writes runs that
-//! verb, holding no secret and asking only what Pages needs.
+//! the store's or the application's.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -100,8 +99,8 @@ fn append(dir: &Path, event: TodoEvent) -> prodrome_core::event::Hash {
         .expect("appends")
 }
 
-/// The store the steps write at `dir`. A concurrent pair is one record appended here and one in a
-/// copy of the store taken before it, which this store then adopts.
+/// The store the steps write, a concurrent pair as one record appended here and one in a copy of
+/// the store taken before it, which this store then adopts.
 fn written(root: &Path, steps: &[(usize, &str, Step)]) -> std::path::PathBuf {
     let dir = root.join("store");
     std::fs::create_dir_all(&dir).expect("a directory");
@@ -512,8 +511,7 @@ fn git(root: &Path, args: &[&str]) {
 
 /// The workflow's text read as the template lays it out: two spaces a level, each item of a
 /// sequence a `- ` at its key's depth plus two, a literal block after `key: |`, and comments only
-/// on lines of their own or after a value. That the text is GitHub's syntax is
-/// `gate_workflows_pass_actionlint`'s to say, over the template the verb writes.
+/// on lines of their own or after a value.
 struct Outline(Vec<String>);
 
 fn depth(line: &str) -> usize {
@@ -555,7 +553,6 @@ impl Outline {
         )
     }
 
-    /// The block under `key`.
     fn under(&self, key: &str) -> Self {
         self.after(&format!("{key}:"))
     }

@@ -23,7 +23,6 @@ fn template() -> PathBuf {
     repo().join("templates").join("user")
 }
 
-/// Every file under `dir`, relative to it.
 fn files(dir: &Path, under: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).expect("reads").flatten() {
         let path = entry.path();

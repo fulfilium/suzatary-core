@@ -1,6 +1,5 @@
-//! `add_topics`, called as the secretary calls it, over real topic stores: a round of the owner's
-//! words alone may make a topic, and a round that has read mail may only use one in use, so mail
-//! never names a topic.
+//! `add_topics` over real topic stores: a round of the owner's words alone may make a topic, and
+//! one that has read mail may only use one in use, so mail never names a topic.
 
 use crate::common;
 
@@ -18,7 +17,6 @@ fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_base::refusal::Ref
     call_in(fakes, &DEFAULT, "add_topics", args)
 }
 
-/// `verb` called with `args` in a round of conversation `id`.
 fn call_in(
     fakes: &Fakes,
     id: &ConversationId,
@@ -126,9 +124,8 @@ fn answered(text: &str) -> Turn {
     }
 }
 
-/// In a round of the owner's words a topic is made, and near twins and a fourth topic are
-/// refused; once the model holds mail, a new topic is refused and one in use is put on, on the
-/// round being answered even when the owner writes again before the answer.
+/// Near twins and a fourth topic are refused, and once the model holds mail a topic in use goes
+/// on the round being answered even when the owner writes again before the answer.
 #[test]
 fn mail_can_choose_a_topic_in_use_and_never_make_one() {
     let fakes = Fakes::new("add-topics");

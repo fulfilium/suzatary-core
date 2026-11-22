@@ -1,5 +1,5 @@
 //! What a reader sees: every test is a GET as this box's own node over the shared six-todo chain
-//! unless its own header says otherwise; who may act is `writes.rs`'s and `objects.rs`'s.
+//! unless its own header says otherwise.
 
 use crate::common;
 
@@ -23,8 +23,7 @@ fn chain(base: &str) -> serde_json::Value {
     common::body_json(&mut response)
 }
 
-/// Every literal rehashes to its own name, so the wire carries the bytes the store holds, as a
-/// browser checks before it believes anything about an object.
+/// The wire carries the bytes the store holds, as a browser checks before it believes an object.
 #[test]
 fn every_literal_rehashes_to_its_own_name() {
     let body = chain(&base());
@@ -44,8 +43,7 @@ fn every_literal_rehashes_to_its_own_name() {
     }
 }
 
-/// Every object's parents come before it, in the linearisation's order, and a link names them
-/// once, as `parents`.
+/// In the linearisation's order, and a link names them once, as `parents`.
 #[test]
 fn parents_come_before_the_object() {
     let body = chain(&base());
@@ -61,8 +59,7 @@ fn parents_come_before_the_object() {
     }
 }
 
-/// The payload carries this deployment's `untrusted`, sorted, so the browser folds the same
-/// objects under the same policy offline.
+/// Sorted, so the browser folds the same objects under the same policy offline.
 #[test]
 fn the_payload_carries_the_deployments_trust_policy() {
     let body = chain(&base());
@@ -89,9 +86,8 @@ fn fold(base: &str, params: &str) -> serde_json::Value {
     common::body_json(&mut response)
 }
 
-/// `limit` answers the lowest fulfillments, ascending, the query the Android widget asks: rows
-/// are ordered by value and not by id, a resolved todo is never among them, and the whole fold
-/// is unchanged for a caller that names no limit.
+/// The Android widget's query: rows ordered by value not id, no resolved todo, and the whole fold
+/// unchanged for a caller that names no limit.
 #[test]
 fn a_limited_fold_is_the_lowest_fulfillments_ascending_and_open() {
     let base = base();
@@ -127,8 +123,7 @@ fn a_limited_fold_is_the_lowest_fulfillments_ascending_and_open() {
     }
 }
 
-/// An untrusted completion is claimed but not bound, on the wire: `ada` authors, and `triage`
-/// (untrusted) claims a completion the trusted fold refuses to bind.
+/// `triage` (untrusted) claims a completion of `ada`'s todo that the trusted fold refuses to bind.
 #[test]
 fn an_untrusted_completion_is_claimed_but_not_bound() {
     let root = common::scratch("reads-untrusted-completion");
@@ -191,8 +186,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
     assert_eq!(entry["claimed"], "completed");
 }
 
-/// The stream is chronological, and every `Authored` carries its diff, over a chain with two
-/// `Authored` records.
+/// The stream is chronological, and every `Authored` carries its diff.
 #[test]
 #[expect(
     clippy::too_many_lines,

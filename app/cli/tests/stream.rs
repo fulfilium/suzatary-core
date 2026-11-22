@@ -1,5 +1,4 @@
-//! The live stream, `GET /api/secretary/conversations/<id>/stream`, over a real server with
-//! `v4` committed to `ada@example.com` (see `common`'s header on peer identities). Only a
+//! The live stream, `GET /api/secretary/conversations/<id>/stream`, over a real server: only a
 //! `resume` streams deltas (`SessionModel::open` carries no `on_delta`), so the delta scenes
 //! read an established session's second round.
 
@@ -35,7 +34,7 @@ fn say(base: &str, id: &str, text: &str) {
 
 /// Subscribe synchronously: `.call()` returns once the headers arrive, which for
 /// `Sse::into_response()` is after `Workers::subscribe` ran, so a later `say` cannot race the
-/// subscription. The body is read on a background thread, over a channel.
+/// subscription.
 fn subscribe(url: &str) -> mpsc::Receiver<String> {
     let response = common::agent()
         .get(url)
@@ -65,11 +64,9 @@ fn next(rx: &mpsc::Receiver<String>) -> serde_json::Value {
     serde_json::from_str(&line).unwrap_or_else(|failed| panic!("{line} is not JSON: {failed}"))
 }
 
-/// Subscribe, then say "first" and read that round's frames to its last.
-///
-/// The transcript reads idle as soon as a round appends its answer, before the worker
-/// broadcasts the round's `turn` and `state`, so a subscriber that waited on the transcript
-/// instead could connect between the two and read the first round's tail as the second's.
+/// Subscribe, then say "first" and read that round's frames to its last: the transcript reads
+/// idle before the worker broadcasts the round's `turn` and `state`, so a subscriber that waited
+/// on it could read the first round's tail as the second's.
 fn first_round(base: &str, id: &str) -> mpsc::Receiver<String> {
     let rx = subscribe(&format!("{base}/api/secretary/conversations/{id}/stream"));
     assert_eq!(
@@ -90,8 +87,7 @@ fn first_round(base: &str, id: &str) -> mpsc::Receiver<String> {
     rx
 }
 
-/// A subscriber connected before the say sees the round frame by frame,
-/// in order, with the exact shape `wire::Frame` declares.
+/// In order, with the exact shape `wire::Frame` declares.
 #[test]
 fn a_connected_subscriber_sees_the_round_frame_by_frame() {
     let (base, _workers) = writer(
@@ -124,7 +120,6 @@ fn a_connected_subscriber_sees_the_round_frame_by_frame() {
         serde_json::json!({"kind": "state", "state": "idle"})
     );
 
-    // And the folded payload agrees: `state` reads `idle` and neither person turn is `queued`.
     let payload = common::settled(&base, &id);
     assert_eq!(payload["state"], "idle");
     let turns = payload["turns"].as_array().expect("turns");
@@ -137,8 +132,6 @@ fn a_connected_subscriber_sees_the_round_frame_by_frame() {
     );
 }
 
-/// A subscriber connecting mid-turn receives the accumulated partial as
-/// one `delta`, whole, before anything live.
 #[test]
 fn a_late_subscriber_receives_the_accumulated_partial_first() {
     let mid = Gate::new();
@@ -187,9 +180,8 @@ fn a_late_subscriber_receives_the_accumulated_partial_first() {
     );
 }
 
-/// A `working` frame broadcasts before the verb's own turn: the model asks for `context` in its
-/// first round (a `working` frame is no `Delta`, so `open` shows it), between `thinking` and
-/// `idle`.
+/// The model asks for `context` in its first round, because a `working` frame is no `Delta`
+/// and so `open` shows it.
 #[test]
 fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
     let (base, _workers) = writer(
@@ -219,8 +211,7 @@ fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
         serde_json::json!({"kind": "working", "verb": "context"}),
         "the working frame lands BEFORE the verb's own turn is on the transcript"
     );
-    // The second ask's reply arrives as one `delta`, since no fragments were configured; this
-    // scene is about ordering, not fragmentation.
+    // The second ask's reply arrives as one `delta`, since no fragments were configured.
     assert_eq!(
         next(&rx),
         serde_json::json!({"kind": "delta", "text": "{\"say\": \"All set.\"}"})
@@ -231,7 +222,6 @@ fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
         serde_json::json!({"kind": "state", "state": "idle"})
     );
 
-    // And the folded payload agrees: the verb ran, and its answer is on the transcript.
     let payload = common::settled(&base, &id);
     let turns = payload["turns"].as_array().expect("turns");
     assert!(
@@ -294,8 +284,7 @@ fn a_closed_block_streams_by_its_sha_and_renders_by_it_alone() {
     );
 }
 
-/// While a round streams, a closed block renders by its sha, and a sha no
-/// answer holds is a 404: the page cannot make the box render text.
+/// A sha no answer holds is a 404: the page cannot make the box render text.
 #[test]
 fn a_streaming_block_renders_by_its_sha() {
     let mid = Gate::new();
@@ -338,9 +327,8 @@ fn a_streaming_block_renders_by_its_sha() {
     common::settled(&base, &id);
 }
 
-/// A question said while the last answer streams is answered by a round of its own, and the page
-/// sees the first answer land as a turn before the second answer's first delta, so the two never
-/// run together in one streaming bubble.
+/// The page sees the first answer land as a turn before the second answer's first delta, so
+/// the two never run together in one streaming bubble.
 #[test]
 fn a_question_said_while_the_answer_streams_gets_a_turn_of_its_own() {
     let mid = Gate::new();

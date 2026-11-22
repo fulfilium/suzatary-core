@@ -1,8 +1,5 @@
-//! A fake Google for the sign-in with Google and the Calendar API: its consent page, its token
-//! endpoint and the three Calendar API routes the box asks, over plain http on loopback. It
-//! checks what Google checks (the redirect the consent named, the S256 challenge, a code used
-//! once) and records what it was sent. The cargo tests and the browser suite's fixture binary
-//! (`suzatary-dev fake-google`) run this one file.
+//! A fake Google on loopback that checks what Google checks (the redirect the consent named, the
+//! S256 challenge, a code used once); the cargo tests and `suzatary-dev fake-google` share it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -10,10 +7,8 @@ use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
-/// The client the fake knows.
 pub const CLIENT_ID: &str = "1234-fake.apps.googleusercontent.com";
 
-/// That client's secret.
 pub const CLIENT_SECRET: &str = "GOCSPX-fake-client-secret";
 
 /// The access token every refresh mints.
@@ -41,15 +36,13 @@ struct Issued {
     scope: String,
 }
 
-/// What the fake holds and saw.
 #[derive(Debug, Default)]
 struct Held {
     /// Who signs in on the consent page.
     account: String,
     /// Whether the consent page signs in the account its `login_hint` names instead.
     hinted: bool,
-    /// Whether the Gmail API refuses to read the mailbox, as an account with Gmail turned off
-    /// does.
+    /// Whether the Gmail API refuses the mailbox, as for an account with Gmail turned off.
     mailless: bool,
     codes: BTreeMap<String, Issued>,
     used: BTreeSet<String>,
@@ -65,7 +58,6 @@ struct Held {
     inserted: Vec<serde_json::Value>,
 }
 
-/// A running fake.
 #[derive(Clone)]
 pub struct FakeGoogle {
     /// Its base URL, `http://127.0.0.1:<port>`.
@@ -75,9 +67,6 @@ pub struct FakeGoogle {
 
 impl FakeGoogle {
     /// Serve on `port` (0 for any) in the background, signing `account` in.
-    ///
-    /// # Panics
-    /// When the port cannot be bound.
     #[must_use]
     pub fn start(port: u16, account: &str) -> Self {
         let listener = TcpListener::bind(("127.0.0.1", port)).expect("binds a loopback port");
@@ -137,14 +126,12 @@ impl FakeGoogle {
         self.held().exchanges
     }
 
-    /// Every event inserted, as posted.
     #[must_use]
     pub fn inserted(&self) -> Vec<serde_json::Value> {
         self.held().inserted.clone()
     }
 }
 
-/// One request, read.
 struct Request {
     method: String,
     path: String,
@@ -394,8 +381,6 @@ fn granted(stream: TcpStream, issued: &Issued, held: &mut Held) {
     );
 }
 
-/// The Calendar API: the account's calendars, each answering `held.events` events whatever it
-/// was asked for, and an insert into its own calendar, recorded.
 /// The Gmail API's profile of the account signed in, for its access token alone.
 fn profile(stream: TcpStream, request: &Request, held: &Held) {
     if request.authorization.as_deref() != Some(&format!("Bearer {ACCESS}")) {

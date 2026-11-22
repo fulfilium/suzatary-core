@@ -383,7 +383,6 @@ fn paired(running: &common::Running, code: &str) {
         .expect("kept");
 }
 
-/// A code typed by `key`: its status and the box's words.
 fn typed(base: &str, key: &Secret, code: &str) -> (u16, serde_json::Value) {
     let mut response = common::act_signed(
         &format!("{base}/api/act/pair"),
@@ -645,7 +644,6 @@ fn ntfy() -> suzatary_connect::settings::Settables {
     )
 }
 
-/// Settings declaring an ntfy channel, its topic settable.
 fn ntfy_settings(settings: common::SettingsFixture) -> common::SettingsFixture {
     common::SettingsFixture {
         live: suzatary_server::serve::Live {
@@ -695,8 +693,6 @@ impl Replaying {
         format!("{}{path}", self.running.base)
     }
 
-    /// `body` posted to `path` by the phone, as a fresh request: its status and its body as the
-    /// box sent it.
     fn fresh(&self, path: &str, body: &serde_json::Value) -> (u16, String) {
         let mut answer = common::act_signed(&self.url(path), body, &self.phone);
         assert!(
@@ -741,7 +737,6 @@ impl Replaying {
         serde_json::from_str(&first.1).expect("a JSON body")
     }
 
-    /// Open a conversation titled `title`, its id.
     fn open(&self, title: &str) -> String {
         common::opened(&self.running.base, title)
     }
@@ -861,7 +856,6 @@ struct Sent {
 }
 
 impl Sent {
-    /// `body` posted to `path`, signed by `key`, its status and answer.
     fn send(
         &mut self,
         r: &Replaying,
@@ -1194,7 +1188,6 @@ fn a_request_outside_the_window_or_unstamped_is_refused() {
 }
 
 /// How long the door's reading takes as a chain grows: cold, after one new write, and unmoved.
-/// A measurement, run by name with `--ignored --nocapture`.
 #[test]
 #[ignore = "a measurement, not a law"]
 fn the_door_s_reading_by_chain_size() {

@@ -3,11 +3,9 @@
 //! The law: a request asks the secret store nothing the last filing answered, however many
 //! requests come, and a filing asks each question once more.
 //!
-//! The measurement, ignored: the overview over the disk stores at the live Inbox's size, about
-//! 760 proposals, its secret store answering each question through a real `gpg --decrypt`, as
-//! `pass` does under `secretspec`. It prints how long each part took
-//! (`suzatary_lines::timings`), for a cold first request and for requests over a box where nothing
-//! changed, and how many questions the secret store was asked.
+//! The measurement, ignored: the overview over disk stores of 760 proposals, its secret store
+//! answering through a real `gpg --decrypt` as `pass` does, prints each part's time
+//! (`suzatary_lines::timings`), cold and warm, and how many questions the store was asked.
 //!
 //! `cargo test --release -p suzatary --features fixture --test all overview_cost -- --ignored
 //! --nocapture`
@@ -21,7 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use suzatary_connect::settings::Settables;
 use suzatary_inbox::secretary::acts::Act;
 
-/// How many proposals the Inbox holds, as the live one did when the overview was measured.
+/// How many proposals the Inbox holds: the live one's size.
 const PROPOSALS: usize = 760;
 
 /// A secret store that decrypts one file with `gpg` for every question, as `pass` decrypts the
@@ -240,7 +238,6 @@ fn declared() -> Settables {
     )
 }
 
-/// A calendar plugin reading two links.
 fn calendar() -> suzatary_services::plugin::Manifest {
     toml::from_str(
         "name = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\

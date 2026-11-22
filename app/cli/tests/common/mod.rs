@@ -1,5 +1,5 @@
-//! The shared test harness: fake capabilities, a real server per test over a real socket, and a
-//! six-todo fixture chain. The gate caches a whois answer per loopback address process-wide.
+//! The shared test harness: fakes, a real server per test over a real socket and a six-todo
+//! chain; the gate caches a whois answer per loopback address process-wide.
 
 pub mod fake_google;
 
@@ -71,7 +71,6 @@ pub fn login(text: &str) -> Login {
     Login::from_whois(text)
 }
 
-/// A roster name.
 #[must_use]
 pub fn actor(name: &str) -> Actor {
     Actor::new(name).expect("a roster name")
@@ -296,7 +295,7 @@ pub fn scratch(name: &str) -> PathBuf {
 
 /// Six todos from `CAST`: `urgent` (a Decay near its deadline, markup in its body), `flat`,
 /// `checklist` (links `flat`), `resolved` (completed), `high`, and `agents` (by `triage`, sourced
-/// from a message). `born` is before every `Authored`, since an `at` tie breaks by print.
+/// from a message), with `born` before every `Authored` since an `at` tie breaks by print.
 #[must_use]
 #[expect(
     clippy::too_many_lines,
@@ -429,13 +428,11 @@ pub struct FakeWhois {
 }
 
 impl FakeWhois {
-    /// An empty table.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// This address resolves to this login.
     #[must_use]
     pub fn naming(mut self, address: IpAddr, who: Login) -> Self {
         self.named.insert(address, who);
@@ -472,7 +469,6 @@ impl Whois for ThisBoxAt {
     }
 }
 
-/// A listener on a port of `ip` nothing else holds, and where it is.
 /// `router` served on `listener` until the test binary exits.
 fn served(listener: std::net::TcpListener, gated: serve::Gated) {
     let service = gated.service();
@@ -555,7 +551,6 @@ impl Default for FakeClock {
 }
 
 impl FakeClock {
-    /// A clock starting at `at`.
     #[must_use]
     pub fn new(at: Datetime) -> Self {
         Self {
@@ -593,7 +588,6 @@ pub struct FakeRender {
 }
 
 impl FakeRender {
-    /// A renderer with nothing compiled.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -646,7 +640,6 @@ pub const BREAKS_THE_COMPILE: &str = "BREAKS_THE_COMPILE";
 pub struct FakeAnswers;
 
 impl FakeAnswers {
-    /// The echoing renderer.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -672,15 +665,11 @@ impl Answers for FakeAnswers {
 /// prove one was never asked.
 #[derive(Default)]
 pub struct FakeMailbox {
-    /// The accounts `accounts` lists.
     pub accounts: Vec<String>,
     /// The rows every `inbox` and `search` answers.
     pub rows: Vec<MailRow>,
-    /// Messages by id.
     pub messages: HashMap<String, MailMessage>,
-    /// Threads by id.
     pub threads: HashMap<String, Vec<MailMessage>>,
-    /// Attachment listings by message id.
     pub attachment_lists: HashMap<String, Vec<AttachmentMeta>>,
     /// Attachment reads by message id and attachment name.
     pub attachment_reads: HashMap<(String, String), FileRead>,
@@ -692,41 +681,35 @@ pub struct FakeMailbox {
 }
 
 impl FakeMailbox {
-    /// An empty mailbox.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// This mailbox, listing these accounts.
     #[must_use]
     pub fn with_accounts(mut self, accounts: Vec<String>) -> Self {
         self.accounts = accounts;
         self
     }
 
-    /// This mailbox, plus one message.
     #[must_use]
     pub fn with_message(mut self, id: impl Into<String>, message: MailMessage) -> Self {
         self.messages.insert(id.into(), message);
         self
     }
 
-    /// This mailbox, plus one message's attachment listing.
     #[must_use]
     pub fn with_attachments(mut self, id: impl Into<String>, listed: Vec<AttachmentMeta>) -> Self {
         self.attachment_lists.insert(id.into(), listed);
         self
     }
 
-    /// This mailbox, plus one message's file.
     #[must_use]
     pub fn with_message_file(mut self, id: impl Into<String>, raw: Vec<u8>) -> Self {
         self.message_files.insert(id.into(), raw);
         self
     }
 
-    /// This mailbox, plus what reading one attachment answers.
     #[must_use]
     pub fn with_attachment_read(
         mut self,
@@ -738,7 +721,6 @@ impl FakeMailbox {
         self
     }
 
-    /// This mailbox, plus one attachment's bytes.
     #[must_use]
     pub fn with_attachment_file(
         self,
@@ -915,7 +897,6 @@ struct GateState {
 }
 
 impl Gate {
-    /// A fresh, unentered gate.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1194,8 +1175,7 @@ impl Model for FakeModel {
     }
 }
 
-/// `open` and `resume` pop the same scripted queue `turn` reads.
-/// Always `Some`: the harness's model always holds a session.
+/// `open` and `resume` pop the same scripted queue `turn` reads, and always hold a session.
 impl Sessions for FakeModel {
     fn pick(&self) -> suzatary_conversations::secretary::model::Pick<'_> {
         suzatary_conversations::secretary::model::Pick::Held(self)
@@ -1294,7 +1274,6 @@ pub struct FakeCorpus {
     messages: Vec<FakeMessage>,
 }
 
-/// One message `FakeCorpus` knows about.
 #[derive(Debug, Clone)]
 pub struct FakeMessage {
     /// The canonical hash `show` is asked by.
@@ -1303,22 +1282,18 @@ pub struct FakeMessage {
     pub thread: String,
     /// The `from:` a `search` matches on.
     pub sender: String,
-    /// The subject line.
     pub subject: String,
-    /// The body.
     pub body: String,
     /// Shaped exactly as a real row's `timestamp`.
     pub timestamp: String,
 }
 
 impl FakeCorpus {
-    /// An empty corpus.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// This corpus, plus one more message.
     #[must_use]
     pub fn with(mut self, message: FakeMessage) -> Self {
         self.messages.push(message);
@@ -1454,7 +1429,6 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// A recorder that has sent nothing.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1480,7 +1454,6 @@ pub struct ActRecorder {
 }
 
 impl ActRecorder {
-    /// A recorder that has begun nothing.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1573,7 +1546,6 @@ pub struct SecretRecorder {
 }
 
 impl SecretRecorder {
-    /// A recorder that has set nothing.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1695,7 +1667,6 @@ impl suzatary_connect::settings::Declares for Undeclared {
 pub struct DeclaredStore {
     /// What declares its names, which the server's `declares` is.
     pub declarations: suzatary_io::secrets::Declarations,
-    /// What it set and cleared.
     pub recorded: SecretRecorder,
 }
 
@@ -1771,7 +1742,6 @@ pub struct EditsRecorder {
 }
 
 impl EditsRecorder {
-    /// A recorder that has recorded nothing.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1865,13 +1835,10 @@ impl suzatary_connect::settings::Configuration for EditsRecorder {
 pub struct SettingsFixture {
     /// The settable names, the channels, the accounts and the plugins the server starts with.
     pub live: serve::Live,
-    /// The Claude models the server runs.
     pub models: Arc<serve::models::Models>,
-    /// Where a secret write goes.
     pub secrets: Arc<dyn suzatary_connect::settings::Writes + Send + Sync>,
     /// What declares the settable names to the store a secret write goes to.
     pub declares: Arc<dyn suzatary_connect::settings::Declares + Send + Sync>,
-    /// Where an instance-file edit goes.
     pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     /// Where a removed account's sign-ins are kept, `None` for none.
     pub grants: Option<suzatary_io::oauth::TokenStore>,
@@ -1996,7 +1963,6 @@ impl suzatary_server::secretary::routes::Post for FailsFirst {
 pub struct ScriptedOauth(suzatary_io::http::Scripted);
 
 impl ScriptedOauth {
-    /// An endpoint answering these, in order.
     #[must_use]
     pub fn new(
         answers: Vec<
@@ -2055,9 +2021,6 @@ impl suzatary_io::http::Http for ScriptedOauth {
 pub const ROUND_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Poll conversation `id` until `until` holds of it, for at most [`ROUND_WAIT`].
-///
-/// # Panics
-/// If `until` does not hold in time, naming the last reading's state.
 pub fn poll_conversation(
     base: &str,
     id: &str,
@@ -2119,9 +2082,6 @@ pub fn told(read: &serde_json::Value) -> String {
 
 /// A new conversation opened as a tab opens one: its opening line sealed as the poster's,
 /// signed by the owner's [`phone`] and handed to the lines with its key beside it; its id.
-///
-/// # Panics
-/// If the lines name no genesis within five seconds, or the box does not take the line.
 #[must_use]
 pub fn opened(base: &str, title: &str) -> String {
     opening(
@@ -2136,9 +2096,6 @@ pub fn opened(base: &str, title: &str) -> String {
 }
 
 /// A topic begun on the box's own store, as `secretary ask new` begins one; its id.
-///
-/// # Panics
-/// If the store refuses it.
 #[must_use]
 pub fn topic(
     conversations: suzatary_lines::secretary::conversations::Conversations<'_>,
@@ -2156,9 +2113,6 @@ pub fn topic(
 }
 
 /// A conversation begun by `first`, an opening or a setup, as a tab begins one; its id.
-///
-/// # Panics
-/// As [`opened`].
 #[must_use]
 pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Entry) -> String {
     use suzatary_lines::secretary::line_event::LineEvent;
@@ -2170,9 +2124,6 @@ pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Ent
 
 /// Conversation `id` renamed `title` as a tab renames it: a `Titled` line by the poster over the
 /// conversation's heads, handed to the lines with its key beside it.
-///
-/// # Panics
-/// If the box serves no line of `id`, or does not take the rename.
 pub fn renamed(base: &str, id: &str, title: &str) {
     use suzatary_conversations::secretary::store::{Entry, Namer, Title};
     let by = poster(base);
@@ -2192,10 +2143,7 @@ pub fn renamed(base: &str, id: &str, title: &str) {
 }
 
 /// `text` said in conversation `id` as a tab says it: a person's turn stamped as the poster on a
-/// device, over the conversation's heads, handed to the lines. Its line's name.
-///
-/// # Panics
-/// If the box serves no line of `id`, or does not take the turn.
+/// device, over the conversation's heads, handed to the lines: its line's name.
 pub fn say(base: &str, id: &str, text: &str) -> prodrome_core::event::Hash {
     say_with(base, id, text, Vec::new(), Vec::new())
 }
@@ -2316,9 +2264,6 @@ pub fn refused_line(base: &str, sealed: &Sealed) -> String {
 
 /// Conversation `id`'s answer stopped as a tab stops it: a `Stopped` line by the poster over the
 /// conversation's heads, handed to the lines.
-///
-/// # Panics
-/// If the box serves no line of `id`, or does not take the stop.
 pub fn stop(base: &str, id: &str) -> prodrome_core::event::Hash {
     use suzatary_conversations::secretary::store::Entry;
     let by = poster(base);
@@ -2349,9 +2294,6 @@ pub fn again_line(
 
 /// The question whose line is `question` asked again `how` as a tab asks it: an [`again_line`]
 /// over the conversation's heads the box serves, handed to the lines.
-///
-/// # Panics
-/// If the box serves no line of `id`, or does not take the line.
 pub fn asked_again(
     base: &str,
     id: &str,
@@ -2403,10 +2345,7 @@ fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) 
 
 /// The question whose line is `question` edited to `text` as a tab edits it: an edit's `Again`
 /// over the heads the box serves, and the new question resting on it alone at its instant, both
-/// handed to the lines. The new question's name.
-///
-/// # Panics
-/// If the box does not take either line.
+/// handed to the lines: the new question's name.
 pub fn edited(
     base: &str,
     id: &str,
@@ -2528,9 +2467,6 @@ impl suzatary_base::capability::Entropy for Drawing {
 }
 
 /// `text` said in conversation `id` as a tab says it, read once its round has ended.
-///
-/// # Panics
-/// If the box does not take the turn, or the round does not end in time.
 pub fn said(base: &str, id: &str, text: &str) -> serde_json::Value {
     let _ = say(base, id, text);
     settled(base, id)
@@ -2555,41 +2491,25 @@ pub fn answered(body: serde_json::Value) -> suzatary_mail::mail::oauth::Answered
 pub struct Fakes {
     /// The scratch root every store here lives under.
     pub root: PathBuf,
-    /// The chain store.
     pub chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
-    /// Who each peer is.
     pub whois: FakeWhois,
-    /// The recorded pushes.
     pub notify: FakeNotify,
     /// The mail the routes read.
     pub mailbox: FakeMailbox,
-    /// The markup renderer.
     pub render: FakeRender,
-    /// The answer-block renderer.
     pub answers: FakeAnswers,
-    /// The clock.
     pub clock: FakeClock,
-    /// The briefings store.
     pub briefings: BriefingFiles,
-    /// The push-device store.
     pub devices: Devices,
-    /// The watches on expected mail.
     pub watches: suzatary_io::watches::Watches,
     /// The mail corpus the verbs read.
     pub corpus: FakeCorpus,
-    /// The repository's gates.
     pub repository: FakeRepository,
-    /// The manuals.
     pub manuals: FakeManuals,
-    /// The scripted model.
     pub model: FakeModel,
-    /// The web the `web` verb reads.
     pub web: FakeWeb,
-    /// The Drive the `drive_*` verbs read.
     pub drive: FakeDriveAccess,
-    /// The Microsoft accounts' Junk.
     pub junk: FakeJunk,
-    /// The owner's uploads.
     pub files: FakeFiles,
     /// The upload index, over the upload store the server's upload route writes.
     pub upload_index: suzatary_io::upload_index::UploadIndexFiles,
@@ -2600,7 +2520,6 @@ pub struct Fakes {
         suzatary_held::held_value::HeldFile,
         suzatary_held::secretary::attached::Attached,
     >,
-    /// The secretary's conversation store.
     pub conversations: Conversations,
     /// Every answer block an erasure emptied from the render cache, by source.
     pub forgot: Arc<suzatary_stores::stores::conversations::Forgot>,
@@ -2751,7 +2670,6 @@ impl Fakes {
         }
     }
 
-    /// A bundle whose peers resolve through `whois`.
     #[must_use]
     pub fn whois(mut self, whois: FakeWhois) -> Self {
         self.whois = whois;
@@ -2768,7 +2686,6 @@ impl Fakes {
         self
     }
 
-    /// A bundle whose mail is `mailbox`.
     #[must_use]
     pub fn mailbox(mut self, mailbox: FakeMailbox) -> Self {
         self.mailbox = mailbox;
@@ -2789,28 +2706,24 @@ impl Fakes {
         self
     }
 
-    /// A bundle whose model answers a script.
     #[must_use]
     pub fn model(mut self, model: FakeModel) -> Self {
         self.model = model;
         self
     }
 
-    /// A bundle reading these repositories.
     #[must_use]
     pub fn repos(mut self, repos: Arc<suzatary_io::repos::Mirrors>) -> Self {
         self.repos = repos;
         self
     }
 
-    /// A bundle whose Microsoft accounts' Junk is `junk`.
     #[must_use]
     pub fn junk(mut self, junk: FakeJunk) -> Self {
         self.junk = junk;
         self
     }
 
-    /// A bundle whose Drive is `drive`.
     #[must_use]
     pub fn drive(mut self, drive: &FakeDrive) -> Self {
         self.drive.drive = Some(drive.proton());
@@ -2835,7 +2748,6 @@ impl Fakes {
 }
 
 impl Fakes {
-    /// The server's record over these fakes.
     #[must_use]
     /// The memory, both halves and the system's salt.
     pub fn memories(&self) -> suzatary_digest::secretary::memories::Memories<'_> {
@@ -2952,7 +2864,6 @@ impl suzatary_services::web::Web for FakeWeb {
 pub struct FakeDriveAccess {
     /// Drive folders read without asking.
     pub allow: Vec<suzatary_base::drive_path::DrivePath>,
-    /// The Drive, when a scene gives one.
     pub drive: Option<suzatary_io::drive::ProtonDrive>,
 }
 
@@ -3001,7 +2912,6 @@ impl suzatary_services::drive::Port for NoDrive {
 /// The owner's uploads and the files kept for the model, held in memory.
 #[derive(Default)]
 pub struct FakeFiles {
-    /// Uploads by id.
     pub uploads: HashMap<suzatary_held::attachment::AttachmentId, suzatary_held::upload::Upload>,
     /// Every file a verb kept for the model, in order.
     pub kept: Mutex<Vec<Vec<u8>>>,
@@ -3132,7 +3042,6 @@ pub struct Server {
 /// Where a test server asks Google and keeps what a sign-in with Google keeps: Google's own and
 /// a store holding nothing, so nothing is ever asked, unless a scene gives it a fake.
 pub struct Googled {
-    /// The endpoints.
     pub endpoints: suzatary_google::google::Endpoints,
     /// The store a client and a grant are read from.
     pub store: Arc<dyn suzatary_io::secrets::Resolves + Send + Sync>,
@@ -3251,7 +3160,6 @@ pub struct Running {
 }
 
 impl Running {
-    /// The port the server listens on.
     #[must_use]
     pub fn port(&self) -> u16 {
         self.base
@@ -3444,13 +3352,12 @@ impl Server {
         }
     }
 
-    /// With this routine behind a tapped coding session; a test points it at
-    /// loopback, never the real one.
     /// Where the server finds each chain's store, so a plan beside one is found.
     pub fn mounting(self, mounts: suzatary_cli::instance::Mounts) -> Self {
         Self { mounts, ..self }
     }
 
+    /// A test points the coding routine at loopback, never the real one.
     pub fn firing(self, firing: suzatary_cli::commands::coding::Firing) -> Self {
         Self {
             firing: Some(firing),
@@ -3695,13 +3602,12 @@ fn drive_nowhere() -> suzatary_io::drive::ProtonDrive {
     )
 }
 
-/// The chosen performer, over the server's own worker table and, where it
 /// The same conversations' store opened again, for a second holder of it.
 pub fn again(conversations: &Conversations) -> Conversations {
     conversations.reopened()
 }
 
-/// writes decisions, the same chain `caps` serves.
+/// The chosen performer, over the server's own worker table and the chain `caps` serves.
 fn performer(
     chosen: Performer,
     caps: &'static Fakes,
@@ -3825,7 +3731,6 @@ pub fn agent() -> &'static ureq::Agent {
     })
 }
 
-/// A plain read.
 #[must_use]
 pub fn get(url: &str) -> ureq::http::Response<ureq::Body> {
     agent().get(url).call().expect("the request completes")
@@ -4029,12 +3934,10 @@ pub fn get_signed(
         .expect("the request completes")
 }
 
-/// The body of a response, as JSON.
 pub fn body_json(response: &mut ureq::http::Response<ureq::Body>) -> serde_json::Value {
     response.body_mut().read_json().expect("a JSON body")
 }
 
-/// The status code, as a plain number.
 #[must_use]
 pub fn status(response: &ureq::http::Response<ureq::Body>) -> u16 {
     response.status().as_u16()
@@ -4043,9 +3946,7 @@ pub fn status(response: &ureq::http::Response<ureq::Body>) -> u16 {
 /// Each account's Junk folder as a value; no accounts by default.
 #[derive(Default)]
 pub struct FakeJunk {
-    /// The churn list.
     pub churn: junk::ChurnList,
-    /// Each account's folder.
     pub folders: Vec<(String, JunkFolder)>,
     /// Every header read, as `(account, since)`.
     pub asked: std::sync::Mutex<Vec<(String, chrono::NaiveDate)>>,
@@ -4134,9 +4035,6 @@ pub struct FakeDrive {
 
 impl FakeDrive {
     /// Write the script and its fixtures under a scratch directory.
-    ///
-    /// # Panics
-    /// If the scratch directory cannot be written.
     #[must_use]
     pub fn new(tag: &str) -> Self {
         let dir = scratch(&format!("{tag}-drive"));
@@ -4204,9 +4102,6 @@ impl FakeDrive {
     }
 
     /// The same Drive with `bytes` kept privately as `name`, as a private upload leaves it.
-    ///
-    /// # Panics
-    /// If the scratch directory cannot be written.
     #[must_use]
     pub fn holding_private(self, name: &str, bytes: &[u8]) -> Self {
         std::fs::create_dir_all(self.dir.join("files/private")).expect("a fixture dir");
@@ -4236,9 +4131,6 @@ impl FakeDrive {
     }
 
     /// Every call was one of the two reads, and no download is left behind.
-    ///
-    /// # Panics
-    /// When a call was anything else, or a scratch directory survived.
     pub fn only_reads_ran(&self) {
         for call in self.calls() {
             assert!(

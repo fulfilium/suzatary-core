@@ -48,10 +48,8 @@ use suzatary_digest::secretary::reserve::Reserve;
 use suzatary_google::google::Held;
 use suzatary_services::usage::Allowance;
 
-/// Who names a peer.
-///
-/// The fixture arm is compiled out of the shipped build; it exists because a headless browser
-/// always arrives from loopback, which no daemon names.
+/// Who names a peer; the fixture arm, compiled out of the shipped build, exists because a
+/// headless browser always arrives from loopback, which no daemon names.
 pub enum Peers {
     Daemon(Tailscaled),
     /// Every address is this login; test only.
@@ -70,10 +68,8 @@ impl Whois for Peers {
     }
 }
 
-/// Which model answers a conversation.
-///
-/// The scripted arm is compiled out of the shipped build. Verbs are dispatched on this side of
-/// the trait, so any arm can only answer text.
+/// Which model answers a conversation; verbs are dispatched on this side of the trait, so any
+/// arm can only answer text.
 pub enum Brain {
     Cli(Box<Recorded>),
     /// A file of scripted replies; test only.
@@ -279,9 +275,6 @@ impl Door {
     }
 
     /// `call`, unless a limit stands, its result joined into the register ([`answered_by`]).
-    ///
-    /// # Errors
-    /// [`ModelError::Limited`] while a limit stands, with no call made; `call`'s own.
     pub fn ask<T>(&self, call: impl FnOnce() -> Result<T, ModelError>) -> Result<T, ModelError> {
         if let Some(limited) = self.limited() {
             return Err(ModelError::Limited(limited));
@@ -464,10 +457,8 @@ pub fn drive_vault(instance: &Instance) -> DriveVault {
 
 pub type Junk = OutlookJunk<SignedIn>;
 
-/// The roster's Microsoft accounts' Junk, with `[mail.junk]`'s churn.
-///
-/// `SUZATARY_JUNK_SEED` names a seed the reader rereads per digest, and the token is
-/// minted silently from the box's grant store or not at all.
+/// The roster's Microsoft accounts' Junk, with `[mail.junk]`'s churn; `SUZATARY_JUNK_SEED` names a
+/// seed reread per digest, and the token is minted silently from the grant store or not at all.
 #[must_use]
 pub fn junk(instance: &Instance) -> Junk {
     OutlookJunk::new(
@@ -661,10 +652,6 @@ impl CompactorModel {
 impl CompactorModel {
     /// `text` under `system` on the plain path, only while the subscription has room above the
     /// reserve.
-    ///
-    /// # Errors
-    /// [`ModelError::Unreachable`] at the reserve, [`ModelError::Limited`] while a limit stands,
-    /// or the CLI's own failure.
     pub fn ask(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
         if !subscription_has_room(&five_hour(&self.allowance), self.reserve) {
             return Err(ModelError::Unreachable(

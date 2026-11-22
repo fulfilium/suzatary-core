@@ -1,6 +1,4 @@
 //! The secretary reviewing the triage agent's cards end to end, with only the model scripted.
-//!
-//! No server or peer: the box starts a review, so no request, gate or `Tap` is involved.
 
 use crate::common;
 
@@ -20,8 +18,7 @@ use suzatary_secretary::secretary::review::{Noticed, Pass, Reviewed, pass, revie
 use suzatary_store::store::Reads as _;
 use suzatary_topics::secretary::filed::TriageCards;
 
-/// The review of the cards standing run to its end; a scripted model is under no limit, so it
-/// always starts.
+/// A scripted model is under no limit, so the review always starts.
 fn review(
     caps: &suzatary_secretary::secretary::Secretary<'_>,
     deployment: &suzatary_connect::deployment::Deployment,
@@ -38,8 +35,7 @@ fn review(
     }
 }
 
-/// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
-/// a store the review does not read, since the review reads cards from the inbox alone.
+/// Three cards, two adds and a completion, whose lines go to a store the review does not read.
 fn three_cards(caps: &Fakes) -> [ProposalRef; 3] {
     let lines = suzatary_stores::stores::conversations::InMemory::default();
     let cards = TriageCards::new(lines.conversations(), &caps.inbox);
@@ -85,7 +81,6 @@ fn an_add(id: &str) -> Act {
     }
 }
 
-/// The fixture deployment, which `context` and the chain lookup read.
 fn deployment() -> suzatary_connect::deployment::Deployment {
     common::deployment(
         [common::login("ada@example.com")],
@@ -108,7 +103,6 @@ fn script(duplicate: &ProposalRef) -> FakeModel {
     FakeModel::saying_owned([replies, format!(r#"{{"say": "{SAID}"}}"#)])
 }
 
-/// Whether a card still waits for the owner.
 fn open(caps: &Fakes, card: &ProposalRef) -> bool {
     inbox::fold(&caps.inbox)
         .expect("the inbox reads")
@@ -117,8 +111,7 @@ fn open(caps: &Fakes, card: &ProposalRef) -> bool {
         .is_some_and(|object| object.reading.performs())
 }
 
-/// THE TRUST BOUNDARY: the review withdraws one card and holds the rest, and no card it reads
-/// reaches the chain, since only the owner's tap performs one.
+/// THE TRUST BOUNDARY: no card the review reads reaches the chain; only the owner's tap does.
 #[test]
 fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
     let caps = Fakes::new("review-round");
@@ -166,9 +159,8 @@ fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
     assert_eq!(held[0].why.get().map(String::as_str), Some(SAID));
 }
 
-/// Law: the brief offers back each card the secretary withdrew that day, once, as a restore card
-/// whose tap applies the withdrawn card's changes; a withdrawal older than a day is not offered,
-/// and the withdrawn card itself never stands again.
+/// Law: each withdrawal comes back as a restore card whose tap applies its changes, none older than
+/// a day, and the withdrawn card itself never stands again.
 #[test]
 fn the_brief_offers_the_day_s_withdrawals_back_once() {
     use suzatary_inbox::secretary::acts::Act as BoxAct;
@@ -304,9 +296,8 @@ fn a_review_round_holds_no_write_verb() {
     );
 }
 
-/// THE BOUND ON THE NOTICE: with no card standing, the review pass reads no object of the lines
-/// (a write would read their heads) and asks no model, so it names no conversation that stopped
-/// reading; the day's sweep names it in its one run, and pages for that set once.
+/// THE BOUND ON THE NOTICE: an idle review reads no line (a write would read their heads) and asks
+/// no model, so only the day's sweep names an unreadable conversation, and pages for it once.
 #[test]
 fn with_no_card_standing_the_review_reads_no_line_and_the_sweep_names_the_unreadable() {
     let caps = Fakes::new("review-quiet");
@@ -383,7 +374,6 @@ fn unreadable(caps: &Fakes) -> suzatary_base::conversation_id::ConversationId {
     bad
 }
 
-/// How many notes in today's review name `id`.
 fn named(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> usize {
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
     let round = conversations::read(caps.conversations.conversations(), &today_of(today))
@@ -397,8 +387,7 @@ fn named(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> u
         .count()
 }
 
-/// A second review of cards still held asks no model and writes no second line, so a pass with
-/// nothing new costs no round.
+/// A second review of cards still held asks no model, so a pass with nothing new costs no round.
 #[test]
 fn holding_the_same_card_again_is_not_a_second_line() {
     let caps = Fakes::new("review-twice");
@@ -442,8 +431,7 @@ fn holding_the_same_card_again_is_not_a_second_line() {
     );
 }
 
-/// While the model is under a limit, the review and the sweep do not start: they ask the model
-/// nothing and write no line, so a limit fills no conversation with failed rounds.
+/// A limited model starts no review or sweep, so a limit fills no conversation with failed rounds.
 #[test]
 fn a_limited_model_starts_no_box_round_and_writes_nothing() {
     let caps = Fakes::new("review-limited");
@@ -619,7 +607,6 @@ fn the_reviews_round_is_pinned() {
     common::pinned("review", &common::scene(&caps, &done.stored.id));
 }
 
-/// Day `day`'s review conversation.
 fn today_of(day: chrono::NaiveDate) -> suzatary_base::conversation_id::ConversationId {
     suzatary_base::conversation_id::ConversationId::daily(
         suzatary_base::conversation_id::Daily::Review,

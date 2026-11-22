@@ -1,7 +1,5 @@
-//! `suzatary todo`: author, read and record todos on the chain, trusted.
-//!
-//! `confirm` is human-only like sending, with no MCP twin: an agent that can confirm its
-//! own writes has confirmed nothing.
+//! `suzatary todo`; `confirm` is human-only like sending, with no MCP twin: an agent that can
+//! confirm its own writes has confirmed nothing.
 
 use std::path::Path;
 
@@ -25,10 +23,8 @@ use suzatary_plan::wait::Audience;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;
 
-/// Which `todo` act, and its own arguments.
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Which act.
     #[command(subcommand)]
     action: Action,
     /// The chain this act touches; absent is the instance file's first. A todo lives in one
@@ -37,7 +33,6 @@ pub struct Args {
     chain: Option<String>,
 }
 
-/// EVERY `todo` act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// One todo as the chain holds it: its block, its fields, its authorship, and its name in
@@ -55,7 +50,6 @@ pub enum Action {
     Act(Box<Act>),
 }
 
-/// The `todo` acts on an instance's chain.
 #[derive(Debug, Subcommand)]
 pub enum Act {
     /// Confirm a triage-authored todo: re-append its content, trusted.
@@ -152,7 +146,6 @@ pub enum Act {
     Redo(UndoRedo),
 }
 
-/// Every spelling of a price that `todo add` and `todo update` take.
 #[derive(Debug, clap::Args)]
 pub struct PriceFlags {
     /// A flat fulfillment as a whole percentage. LOW is urgent.
@@ -180,7 +173,6 @@ pub struct PriceFlags {
     /// is done.
     #[arg(long, value_name = "DAYS", group = "cycle", requires = "Ends")]
     periodic_days: Option<u32>,
-    /// Where a cycle starts and ends: both or neither, and only beside a cycle.
     #[command(flatten)]
     ends: Option<Ends>,
 }
@@ -198,7 +190,6 @@ pub struct Ends {
 }
 
 impl PriceFlags {
-    /// The one price these flags name, or `None` for none.
     fn price(self) -> anyhow::Result<Option<todo::Price>> {
         let deadline = match self.deadline {
             None => None,
@@ -242,8 +233,7 @@ impl PriceFlags {
     }
 }
 
-/// What `undo` and `redo` take: the todo and who is asking. The note is computed from what is
-/// undone or redone.
+/// What `undo` and `redo` take; the note is computed from what is undone or redone.
 #[derive(Debug, clap::Args)]
 pub struct UndoRedo {
     /// The todo. It must be an id the chain already mentions.
@@ -253,7 +243,6 @@ pub struct UndoRedo {
     actor: Option<String>,
 }
 
-/// What the four lifecycle verbs take.
 #[derive(Debug, clap::Args)]
 pub struct Lifecycle {
     /// The todo. It must be an id the chain already mentions.
@@ -266,7 +255,6 @@ pub struct Lifecycle {
     actor: Option<String>,
 }
 
-/// `suzatary todo <act>`.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     match args.action {
         Action::Show { id, store, at } => {
@@ -289,7 +277,6 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     }
 }
 
-/// One act on the instance's chain `chain`, else its first.
 fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
     let chain = instance.chain(chain)?;
@@ -366,7 +353,6 @@ fn act_on(path: &Path, chain: Option<&str>, act: Act) -> anyhow::Result<()> {
     }
 }
 
-/// `suzatary todo confirm <id>`: re-append a provisional record as a trusted actor.
 fn confirm(
     chain: &ChainDir,
     keys: &Signers,
@@ -410,7 +396,6 @@ fn confirm(
     Ok(())
 }
 
-/// What `suzatary todo add` was told.
 struct Authoring {
     id: String,
     /// Typst markup, admitted by the builder's door.
@@ -635,8 +620,6 @@ fn appended(
     Ok(())
 }
 
-/// One todo whole at `at`: its state, its price, every content candidate as its block, and its
-/// history.
 fn show(
     (read, name): &(Read, ChainName),
     at: prodrome_core::literal::Datetime,
@@ -685,14 +668,12 @@ struct Printed<T> {
     shown: T,
 }
 
-/// What `todo show` was asked for.
 enum Named {
     /// An id in a chain of this deployment, `--chain`'s or a local reference's.
     Here(Option<String>, String),
     Global(GlobalTodo),
 }
 
-/// `id` parsed once: a bare id in `chain`, or a reference to a todo.
 fn shown_as(id: &str, chain: Option<&str>) -> anyhow::Result<Named> {
     if !id.contains(':') {
         return Ok(Named::Here(chain.map(str::to_owned), id.to_owned()));
@@ -724,8 +705,7 @@ type Build =
         &str,
     ) -> Result<suzatary_record::record::TodoEvent, prodrome_core::literal::ProdromeError>;
 
-/// `suzatary todo done|cancel|reopen|tend <id>`: a trusted lifecycle event, binding at once.
-/// An id no event mentions is refused as a typo.
+/// A trusted lifecycle event, binding at once; an id no event mentions is refused as a typo.
 fn lifecycle(
     chain: &ChainDir,
     keys: &Signers,
@@ -782,7 +762,6 @@ impl Turn {
     }
 }
 
-/// `suzatary todo undo|redo <id>`: appends the inverse of the last event, or redoes an undo.
 fn undo_redo(
     chain: &ChainDir,
     keys: &Signers,

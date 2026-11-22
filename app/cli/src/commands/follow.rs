@@ -7,7 +7,6 @@ use anyhow::bail;
 
 use crate::instance::Instance;
 
-/// What `suzatary follow` was told.
 #[derive(Debug, clap::Args)]
 pub struct Args {
     #[command(subcommand)]
@@ -23,10 +22,6 @@ enum Action {
     },
 }
 
-/// `suzatary follow`.
-///
-/// # Errors
-/// A name the instance does not follow, or any store whose fetch was refused, all named.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     match &args.action {

@@ -1,10 +1,6 @@
 //! What suzatary-core's runners build from a publication or a gate commit, pinned from the
-//! workflow's source: the deploy's builds pushed to the binary cache (`publication.yml`), run only
-//! as master's copy of the workflow, on a push to master or a dispatch naming the commit, with
-//! nothing of the tree run but Nix's evaluation and its sandboxed builds, a tripwire over the tree
-//! (`scripts/public-source.sh`), measured against the cache's budget before they are pushed, and
-//! nothing built from the deployment's own names. It is the one workflow, and no script is
-//! another, that writes to the cache.
+//! workflow's source: `publication.yml` is the one writer of the binary cache, run only as
+//! master's copy, running nothing of the tree but Nix's evaluation and its sandboxed builds.
 
 use super::{Scratch, repo};
 use std::collections::BTreeSet;
@@ -38,11 +34,9 @@ fn section<'a>(text: &'a str, start: &str) -> &'a str {
     &text[from..from + start.len() + to]
 }
 
-/// The publication cache runs on a push to master and on a dispatch, in the public repository
-/// alone, only on master's ref and only when the owner started it, never on a pull request or a
-/// gate branch, and every run is named by the commit it builds. Its two jobs keep the token from
-/// the tree: `build` enters no environment and names no secret, and `push`, which enters the
-/// environment `cachix`, needs `build` and hands the token to its last step alone.
+/// The publication cache runs only on master's ref when the owner started it, never on a pull
+/// request or a gate branch, and keeps the token from the tree: `build` names no secret, and
+/// `push`, in the environment `cachix`, hands the token to its last step alone.
 #[test]
 fn publication_cache_holds_its_token_on_master_alone() {
     let text = workflow("publication.yml");
@@ -98,12 +92,9 @@ fn publication_cache_holds_its_token_on_master_alone() {
     );
 }
 
-/// The build job reads the input only through the environment and refuses it unless it is a full
-/// commit id; the tree it names is checked out apart, at `tree`, and nothing of it runs but Nix's
-/// evaluation and its sandboxed builds: master's own check runs over it, every build is of
-/// `./tree` without its flake configuration or a lock file written, and nothing runs `nix run`,
-/// `nix develop` or `nix shell`. The gate's store is restored, never saved. The push job checks
-/// out master alone and reads nothing the build job made until master's cachix is built.
+/// The build job takes its input only as a full commit id through the environment and runs
+/// nothing of that tree but Nix's evaluation and sandboxed builds (never `nix run`, `nix develop`
+/// or `nix shell`), and the push job reads nothing the build made until master's cachix is built.
 #[test]
 fn publication_cache_runs_only_masters_code_over_the_tree() {
     let text = workflow("publication.yml");
@@ -282,10 +273,8 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// What a push adds is measured by `scripts/cache-unserved.sh` in the build job and again in the
-/// push job, over what was imported, both against 1 GB and the same two caches; either fails
-/// before the push, so the push never runs. The push sends the second measure's list with
-/// master's cachix.
+/// What a push adds is measured by `scripts/cache-unserved.sh` in both jobs against 1 GB and the
+/// same two caches, either failing before the push runs, and the push sends the second list.
 #[test]
 fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
     let text = workflow("publication.yml");
@@ -315,11 +304,9 @@ fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
     );
 }
 
-/// Two stub caches behind a stub `curl` that answers a narinfo's status as the caches do, 200
-/// when held and 404 when not, or fails a set number of times first; a stub `sleep` that logs its
-/// pause and returns; and a stub `nix path-info --size` over a table of sizes. Every question is
-/// logged in `asked` as `<cache> <hash>`, every pause in `slept`. The stub `curl` fails every
-/// question asked without the script's timeouts.
+/// Two stub caches behind a stub `curl` answering a narinfo 200 when held and 404 when not, or
+/// failing a set number of times first, and failing any question asked without the script's
+/// timeouts; questions are logged in `asked` as `<cache> <hash>` and pauses in `slept`.
 struct StubCaches {
     scratch: Scratch,
 }
@@ -405,12 +392,10 @@ impl StubCaches {
         .expect("the replaced ask");
     }
 
-    /// The file `name` the run `out` wrote.
     fn wrote(&self, out: &str, name: &str) -> String {
         std::fs::read_to_string(self.scratch.join(out).join(name)).expect("the run wrote it")
     }
 
-    /// How many times `cache` was asked about `path`.
     fn asked(&self, cache: &str, path: &str) -> usize {
         let line = format!("{cache} {}", &path["/nix/store/".len()..][..32]);
         std::fs::read_to_string(self.scratch.join("asked"))
@@ -420,7 +405,6 @@ impl StubCaches {
             .count()
     }
 
-    /// The pauses slept, in order.
     fn slept(&self) -> String {
         std::fs::read_to_string(self.scratch.join("slept")).unwrap_or_default()
     }
@@ -476,10 +460,8 @@ fn lines(items: impl Iterator<Item = impl std::fmt::Display>) -> String {
     })
 }
 
-/// `scripts/cache-unserved.sh` over stub caches, as two publication runs whose trees share a
-/// path meet them. The build job's measure lists what neither cache serves; a path the other run
-/// pushes before this run's push is skipped by the push job's measure, and the rest is pushed. A
-/// list naming a path upstream serves, or adding more than the limit, fails, naming why.
+/// Two publication runs sharing a path: the push measure skips what the other run pushed after
+/// the build measure, and a list naming a path upstream serves or over the limit fails, naming why.
 #[test]
 fn cache_unserved_skips_what_another_run_pushed_and_refuses_the_rest() {
     let path = |c: char, name: &str| format!("/nix/store/{}-{name}", c.to_string().repeat(32));
@@ -565,9 +547,8 @@ fn numbered(n: usize, name: &str) -> String {
     format!("/nix/store/{n:032}-{name}")
 }
 
-/// The publication run of 2026-11-21: among hundreds of questions, one about a path upstream
-/// serves failed once. The failed question is asked again, its "yes" makes the path served, and
-/// the list names only what both caches said they do not hold.
+/// Among hundreds of questions, one that fails once is asked again, and the list names only what
+/// both caches said they do not hold.
 #[test]
 fn cache_unserved_asks_again_when_one_question_among_hundreds_fails() {
     let paths: Vec<String> = (0..400).map(|n| numbered(n, "dependency")).collect();
@@ -701,10 +682,8 @@ fn cache_unserved_refuses_answers_it_cannot_read() {
     }
 }
 
-/// `scripts/core-settings.sh` sets one ruleset under which only a repository administrator moves
-/// master: an `update` rule on `refs/heads/master`, active, whose one bypass is the administrator
-/// role. So no workflow, whatever it asks for, can move master to run code of its own in the
-/// publication run.
+/// `scripts/core-settings.sh`'s one ruleset lets only a repository administrator move master, so
+/// no workflow, whatever it asks for, can move master to run code of its own in the publication.
 #[test]
 fn core_settings_lets_only_an_administrator_move_master() {
     let settings =
@@ -734,10 +713,9 @@ fn core_settings_lets_only_an_administrator_move_master() {
     );
 }
 
-/// No workflow but publication.yml names the Cachix's token or pushes to a binary cache, and no
-/// script or Nix file of the box does either: the token's one other reader,
-/// `scripts/core-settings.sh`, hands it to GitHub and pushes nothing. So the box, which holds
-/// the private tree and the owner's data, has no path to the public cache.
+/// No workflow but publication.yml, and no script or Nix file of the box but
+/// `scripts/core-settings.sh`, which hands it to GitHub, names the Cachix token or pushes to a
+/// binary cache, so the box, holding the private tree, has no path to the cache.
 #[test]
 fn publication_yml_alone_writes_to_the_cachix() {
     let pushes = [

@@ -25,7 +25,6 @@ fn cited(text: &str) -> Vec<String> {
     ids
 }
 
-/// The documents whose citations are checked: the four at the root and every `.md` under `docs/`.
 fn documents() -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = ["CLAUDE.md", "AGENTS.md", "OPERATOR.md", "SECURITY.md"]
         .map(|name| repo().join(name))

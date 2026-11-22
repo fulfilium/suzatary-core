@@ -12,7 +12,6 @@ fn repo() -> PathBuf {
         .to_path_buf()
 }
 
-/// The tree's release, `app/release.toml`'s version.
 fn declared() -> Option<String> {
     let text = std::fs::read_to_string(repo().join("app/release.toml")).ok()?;
     suzatary_release::release::Released::parse(&text)
@@ -82,8 +81,6 @@ fn versions_are_strictly_descending() {
     }
 }
 
-/// Dates do not go forwards as the file goes down, and each one is a real
-/// `YYYY-MM-DD`.
 #[test]
 fn dates_are_non_increasing_and_look_like_dates() {
     let Some(text) = changelog() else {
@@ -126,10 +123,9 @@ fn the_newest_release_matches_the_declared_version() {
     );
 }
 
-/// The tree's release file reads, and its data lines are the cut's print under the header the
-/// file holds, which a cut keeps as it is: a binary of an older revision cuts this tree without
-/// moving its header's words. A CLI test, not the core's: no library crate reads the release
-/// file, so a release moves no library's inputs.
+/// The release file's data lines are the cut's print under a header the cut keeps, so a binary of
+/// an older revision cuts this tree without moving the header's words. No library crate reads the
+/// release file, so a release moves no library's inputs.
 #[test]
 fn the_tree_s_release_reads_and_prints_as_itself() {
     let path = repo().join("app/release.toml");

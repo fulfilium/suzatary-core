@@ -56,7 +56,8 @@ reading = 3139063
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
 # 2026-11-21: `cli` written as `scripts/context.sh record` would write it, by hand, on the tree merged with 2.1.197 for the server's move (#583: 82,011 on that tree before it, 59,350 after), since `record` refuses while `lines` stands above its USE ratchet there, as on origin/master.
-cli = 59350
+# 2026-11-22: `cli` lowered as `scripts/context.sh record` writes it, by hand on this pull request's head merged with 2.1.216 (comments cut, `commentdiet`); `reading` is left to the train.
+cli = 49260
 # 2026-11-22: `inbox` and `secretary` lowered as `scripts/context.sh record` would, by hand on this pull request's head merged with 2.1.211 (comments cut, `commentdiet`), since `record` refuses while `io` stands above its USE ratchet there, as on origin/master.
 inbox = 29095
 # 2026-11-18: `io` and `lines` set by hand to the figures of #543's head (the claim's surface the round and the server call, and the lock-file runs); accepted at the review of #543. Stage 4 cuts `lines` back under its old line.

@@ -22,7 +22,6 @@ fn write(dir: &std::path::Path, day: &str, text: &str) {
     std::fs::write(dir.join(format!("{day}.typ")), text).expect("writes");
 }
 
-/// A good date returns its source beside the date.
 #[test]
 fn a_good_date_returns_its_source() {
     let (base, dir) = start();
@@ -35,7 +34,7 @@ fn a_good_date_returns_its_source() {
     assert_eq!(body["day"]["source"], "= Morning\n\nHello there.");
 }
 
-/// A day the secretary briefed is its brief, block by block, whatever the saved files say.
+/// A day the secretary briefed reads as its brief, whatever the saved files say.
 #[test]
 fn a_day_the_secretary_briefed_is_its_brief_block_by_block() {
     use suzatary_base::conversation_id::DEFAULT;

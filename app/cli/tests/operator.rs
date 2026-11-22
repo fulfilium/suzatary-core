@@ -31,9 +31,8 @@ fn running(tag: &str, model: FakeModel) -> (Arc<Fakes>, common::Running) {
     (fakes, running)
 }
 
-/// A question in a fresh topic is sealed at the terminal and lands as the owner's own line,
-/// stamped as asked at the box's terminal and signed by the root key, so both tell it from a
-/// device's.
+/// The question is stamped as asked at the box's terminal and signed by the root key, so both
+/// tell it from a device's.
 #[test]
 fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     let (fakes, running) = running(
@@ -86,9 +85,8 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     );
 }
 
-/// A question that lands while an earlier round is answering, after that round last took what was
-/// owed, is answered by a round of its own, and `ask` returns that round's words: never the earlier
-/// round's reply, which lands after the question and so may be read after it.
+/// `ask` returns its own round's words, never the earlier round's reply, which lands after the
+/// question and so may be read after it.
 #[test]
 fn a_question_said_while_a_round_answers_gets_its_own_reply() {
     let gate = common::Gate::new();
@@ -153,8 +151,7 @@ fn a_question_said_while_a_round_answers_gets_its_own_reply() {
     assert_eq!(second.answer, "The garden invoice is paid.");
 }
 
-/// The operator's tap on a card that sends mail is refused with the reason, and the transport is
-/// never asked; the card waits for the owner's tap.
+/// The transport is never asked, and the card waits for the owner's tap.
 #[test]
 fn an_operators_tap_on_a_card_that_sends_is_refused() {
     let (fakes, running) = running(

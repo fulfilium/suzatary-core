@@ -1,7 +1,6 @@
-//! A held value over a real server. Its reveal (`POST /api/held/reveal`) gives a trusted device of
-//! an actor the value, once; an untrusted device, a viewer and a replay get nothing, and the box
-//! keeps the value in no request record or kept answer. A proposed email names it by its
-//! placeholder, and only the owner's tap writes the value into the message on the wire.
+//! A held value over a real server: its reveal gives a trusted device of an actor the value once,
+//! an untrusted device, a viewer and a replay nothing, no request record or kept answer holds it,
+//! and only the owner's tap writes it into a proposed email on the wire.
 
 use crate::common;
 

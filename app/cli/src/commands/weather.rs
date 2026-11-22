@@ -1,12 +1,10 @@
-//! `suzatary weather`: the one line the briefing reads.
-//!
-//! A warning about an untrusted feed rides on that stdout line, not stderr, where nobody sees it.
+//! `suzatary weather`: the one line the briefing reads, which carries any warning about an
+//! untrusted feed, since nobody sees stderr.
 
 use std::path::Path;
 
 use crate::instance;
 
-/// `suzatary weather`.
 pub fn run(path: &Path) -> anyhow::Result<()> {
     let instance = instance::Instance::open(path)?;
     println!(

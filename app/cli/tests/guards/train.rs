@@ -15,11 +15,8 @@ struct Train {
     scratch: Scratch,
 }
 
-/// The stub `gh`: `pr view` answers from `prs/<n>` and `prs/<n>.body`. `api`, `workflow run` and
-/// `run list` play GitHub's Actions over the gate branches pushed to `core.git`, logging each call
-/// to `github.log`. A gate run runs the stub gate's tree half once in `runner-<sha>`, a checkout of
-/// that commit alone, as gate.yml's jobs do. `GH_RUN` and `GH_CACHE` choose how the gate run and the
-/// publication run end; each case below is one way a real run has ended.
+/// The stub `gh`: `pr view` answers from `prs/<n>`, and `api`, `workflow run` and `run list` play
+/// GitHub's Actions over the gate branches pushed to `core.git`, as gate.yml's jobs do.
 const GH: &str = r#"#!/bin/sh
 exec 9>&-
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -113,16 +110,9 @@ case "$1 $2" in
 esac
 "#;
 
-/// The stub merge gate. A half is red where the tree holds the file its case below names, and a
-/// red run names its one step, `stub`, as the real gate's summary does. Each run records its
-/// environment, arguments and directory beside `<TRAIN_PROBES>`. `GATE_HOLD` (a tree half),
-/// `GATE_HOLD_LIVE` (a live half) and `GATE_HOLD_ARGS` (the run whose arguments are exactly these,
-/// held on `GATE_HOLD_AT`) hold a half on a fifo until the test lets it go on, its pid in `<fifo>.pid`.
-/// `GATE_RED_TREE` makes a tree half red whatever its tree, and a file `nothing-needs-attention`
-/// beside `SUZATARY_INSTANCE` makes a live half red, as a scene that finds no row to open.
-/// `GATE_LEAVE=group` leaves a sleeper in the gate's group, its output elsewhere, and
-/// `GATE_LEAVE=outside` one in a session of its own that holds the gate's stderr; each pid is a line
-/// of `<TRAIN_PROBES>.left`.
+/// The stub merge gate: a half is red where the tree holds the file its case names, a red run names
+/// its one step `stub` as the real gate's summary does, and each `GATE_*` variable holds a half on
+/// a fifo, reddens it or leaves a process behind.
 const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
@@ -162,9 +152,9 @@ printf 'stub             FAILED (1)\n==> the failing steps'"'"' last lines\n--- 
 exit 1
 "#;
 
-/// The stub public-tree script: `<out> <rev>` writes `<rev>`'s tree without its `private/`,
-/// and `--check --strict <dir>` exits 1, naming the file, where a file of it says `leak`. With
-/// `PUBLIC_UNCHECKED` set the check exits 2, the real one's "could not run whole".
+/// The stub public-tree script: `<out> <rev>` writes `<rev>`'s tree without `private/`, and
+/// `--check` exits 1 on a file saying `leak`, or 2 (the real one's "could not run whole") with
+/// `PUBLIC_UNCHECKED`.
 const PUBLIC: &str = r#"#!/bin/sh
 if [ "$1" = --check ]; then
   echo "${SUZATARY_BIN:-}" >>"$TRAIN_PROBES.matcher"
@@ -177,9 +167,8 @@ fi
 mkdir -p "$1" && git archive "$2" | tar -x -C "$1" && rm -rf "$1/private"
 "#;
 
-/// The stub growth check, run in the gate's worktree: within, unless `GROWTH=refused` (a refusal on
-/// stdout, exit 1) or `GROWTH=broken` (a check that compared nothing, exit 2). Each run is a line of
-/// `<TRAIN_PROBES>.growth`.
+/// The stub growth check: within, unless `GROWTH=refused` (exit 1) or `GROWTH=broken` (a check that
+/// compared nothing, exit 2).
 const GROWTH: &str = r#"#!/bin/sh
 echo "$(git rev-parse HEAD)" >>"$TRAIN_PROBES.growth"
 case "$GROWTH" in
@@ -211,8 +200,7 @@ impl Train {
         run_git(&author, &["commit", "-q", "-m", "seed"]);
         run_git(&author, &["push", "-q", "origin", "master"]);
         run_git(root, &["clone", "-q", "origin.git", "work"]);
-        // The repository deployments run, populated once before the train published anything,
-        // holding every path these tests land (empty), so a publication holds no new path
+        // Core holds every path these tests land from the start, so a publication holds no new path
         // unless a test means it to.
         run_git(root, &["init", "-q", "--bare", "-b", "master", "core.git"]);
         let blob = run_git(&author, &["hash-object", "-w", "/dev/null"]);
@@ -271,9 +259,8 @@ impl Train {
 
         let bin = root.join("bin");
         std::fs::create_dir_all(root.join("prs")).expect("prs dir");
-        // The tree half is green unless the tree holds `broken`, the live half unless it
-        // holds `broken-live`; every run is counted by its flag. A red half ends with the
-        // real gate's last section.
+        // A half is red where the tree holds `broken` (tree) or `broken-live` (live), and ends with
+        // the real gate's last section.
         for (stub, body) in [
             ("gh", GH),
             ("gate", GATE),
@@ -293,8 +280,8 @@ impl Train {
         self.scratch.join("work")
     }
 
-    /// Pull request `n`: `files` written on a branch from origin's master, pushed as
-    /// `refs/pull/<n>/head`, and its title and head given to the stub `gh`.
+    /// Pull request `n`: `files` on a branch from origin's master, pushed as `refs/pull/<n>/head`
+    /// and named to the stub `gh`.
     fn pr(&self, n: u32, title: &str, files: &[(&str, &str)]) {
         run_git(&self.author(), &["fetch", "-q", "origin"]);
         self.pr_from(n, "origin/master", title, files);
@@ -337,7 +324,6 @@ impl Train {
         .expect("the stub's answer writes");
     }
 
-    /// Pull request `n`'s head on origin.
     fn head(&self, n: u32) -> String {
         run_git(
             &self.scratch.join("origin.git"),
@@ -345,7 +331,6 @@ impl Train {
         )
     }
 
-    /// Master moves on origin by one commit writing `files`.
     fn master_moves(&self, files: &[(&str, &str)]) {
         let author = self.author();
         run_git(&author, &["fetch", "-q", "origin"]);
@@ -361,8 +346,8 @@ impl Train {
         run_git(&author, &["push", "-q", "origin", "master"]);
     }
 
-    /// Master moves to `files` as the release `version`: its commit carries the `Release:`
-    /// trailer the train reads the last release from.
+    /// Master moves to `files` in a commit carrying the `Release:` trailer the train reads the last
+    /// release from.
     fn master_releases(&self, files: &[(&str, &str)], version: &str) {
         let author = self.author();
         run_git(&author, &["fetch", "-q", "origin"]);
@@ -394,7 +379,6 @@ impl Train {
         run_git(&author, &["push", "-q", "origin", "master"]);
     }
 
-    /// Origin's master.
     fn origin_master(&self) -> String {
         run_git(&self.scratch.join("origin.git"), &["rev-parse", "master"])
     }
@@ -404,7 +388,6 @@ impl Train {
         self.train_with(args, &[])
     }
 
-    /// `train` with `env` set too.
     fn train_with(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
         self.command(args, env).output().expect("train.sh runs")
     }
@@ -452,7 +435,6 @@ impl Train {
         self.at_a_terminal_with(args, &[])
     }
 
-    /// `at_a_terminal` with `env` set too.
     fn at_a_terminal_with(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
         let train = self.command(args, env);
         let line = std::iter::once(train.get_program())
@@ -738,10 +720,8 @@ fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
 /// The stub of `scripts/context.sh`: the reading set of a tree is the bytes of its `.txt` files.
 const CONTEXT: &str = "#!/bin/sh\n[ \"$1 $2\" = \"record --merged\" ] || exit 64\nn=$(cat ./*.txt 2>/dev/null | wc -c)\nsed -i \"s/^reading = .*/reading = $n/\" context.toml\n";
 
-/// Two pull requests that each grow the reading set ride one train, since neither writes
-/// `context.toml`'s `reading`: the build sets it from the merged tree, by the tree's own
-/// `scripts/context.sh`, and its commit says the figure written, the figure before and each
-/// declared growth with its pull request, which the merge carries as a trailer.
+/// Two PRs that each grow the reading set ride one train, since the build sets `reading` from the
+/// merged tree and its commit carries each declared growth.
 #[test]
 fn train_build_sets_the_reading_set_from_the_merged_tree() {
     let t = Train::new("reading");
@@ -785,9 +765,8 @@ fn train_build_sets_the_reading_set_from_the_merged_tree() {
     );
 }
 
-/// A stacked PR merges before the PR it carries, whatever their numbers: its merge brings the
-/// base's commits, the base is `in`, and the todos both complete ride on that merge, each once.
-/// The stack numbered upward and downward builds one tree, and so does a second build.
+/// A stacked PR merges before the PR it carries whatever their numbers, so a stack numbered either
+/// way builds one tree, and what both complete rides on that merge once.
 #[test]
 fn train_build_merges_a_stack_by_ancestry_and_carries_what_it_completes() {
     let mut trees = Vec::new();
@@ -840,8 +819,6 @@ fn train_build_merges_a_stack_by_ancestry_and_carries_what_it_completes() {
     assert_eq!(trees[0], trees[1], "the numbers move no tree");
 }
 
-/// PRs neither of which carries the other merge in the order of their heads' names, never of
-/// their numbers.
 #[test]
 fn train_build_orders_prs_by_their_heads_not_their_numbers() {
     let t = Train::new("by-head");
@@ -872,8 +849,7 @@ fn train_build_orders_prs_by_their_heads_not_their_numbers() {
     );
 }
 
-/// A `refs/pull/<n>/head` that is not the head GitHub names for the PR refuses the build, naming
-/// both commits; once the ref has caught up, the same build goes ahead.
+/// The refusal names both commits, and once the ref has caught up the same build goes ahead.
 #[test]
 fn train_build_refuses_a_pull_ref_behind_the_pr() {
     let t = Train::new("stale-head");
@@ -896,9 +872,8 @@ fn train_build_refuses_a_pull_ref_behind_the_pr() {
     assert_eq!(t.merges(), vec!["Merge #1: the first".to_owned()]);
 }
 
-/// A gate judges the train's commit in a worktree of its own: the operator switching the
-/// checkout to a red branch while a half runs reaches neither half, the verdicts are the
-/// train's, and the worktree is gone after, as it is after a train killed outright.
+/// A gate judges the train's commit in a worktree of its own, so the operator switching the
+/// checkout mid-run reaches neither half, and the worktree is gone after.
 #[test]
 fn train_gate_reads_only_the_tree_it_gates() {
     let t = Train::new("worktree");
@@ -989,9 +964,9 @@ fn train_gate_reads_only_the_tree_it_gates() {
     assert_eq!(worktrees(), 1, "the leftover worktree is cleared");
 }
 
-/// A gate runs only inside the `.#triage` shell, and refuses a variable its steps read that the
-/// caller exported and the shell does not set, naming each; one the shell sets is its own. The
-/// gate is handed the data tree and none of what the train reads for itself.
+/// A gate runs only inside the `.#triage` shell, refuses each variable its steps read that the
+/// caller exported and the shell does not set, and is handed the data tree and nothing the train
+/// reads for itself.
 #[test]
 fn train_gate_refuses_an_environment_beside_the_triage_shell() {
     let t = Train::new("environment");
@@ -1219,7 +1194,6 @@ fn train_bisect_names_the_merge_that_broke_the_train() {
         0,
         "a red tree half keeps the live half from starting"
     );
-    // The PRs in the order the train merged them, by their heads.
     let order: Vec<String> = t
         .merges()
         .iter()
@@ -1332,10 +1306,8 @@ fn holding(t: &Train, name: &str) -> (PathBuf, std::io::BufReader<std::fs::File>
     (hold, std::io::BufReader::new(said))
 }
 
-/// The output of `child`, a train run in `t`, which must end within two minutes; one that does not
-/// is killed and fails the test, so a half that was never stopped fails it rather than hangs it.
-/// The failure says what was still alive and, where the train writes to `train.stderr` in the
-/// scratch, its last lines.
+/// The output of `child`, which must end within two minutes or is killed and fails the test naming
+/// what was still alive, so a half never stopped fails rather than hangs it.
 fn ends_within_two_minutes(t: &Train, child: std::process::Child) -> Output {
     let pid = child.id();
     let (said, ended) = std::sync::mpsc::channel();
@@ -1562,10 +1534,8 @@ fn train_stopped_by_term_stops_the_half_it_runs() {
     assert!(again.status.success(), "gate: {}", text(&again.stderr));
 }
 
-/// A gate step that leaves a process behind does not keep its half from ending: a sleeper left in
-/// the gate's group is stopped once the gate ends, as the shell's `group_wait` stopped it, and one
-/// that left the group but holds the gate's stderr no longer holds the train, whose reading of the
-/// half's output ends with the group. Each run reports and exits.
+/// A sleeper left in the gate's group is stopped once the gate ends, and one that left the group
+/// but holds the gate's stderr does not hold the train.
 #[test]
 fn train_gate_ends_whatever_its_steps_leave_behind() {
     for leave in ["group", "outside"] {
@@ -1604,11 +1574,8 @@ fn train_gate_ends_whatever_its_steps_leave_behind() {
     }
 }
 
-/// `build` ends only once nothing it started holds the lock, so a `gate` started the moment it
-/// ended is never refused. After a fetch, a merge or a commit git runs `git maintenance run --auto
-/// --detach`, which goes on in the background. Here its `gc` task runs (every fetch keeps a pack,
-/// and two are too many), and its `pre-auto-gc` hook takes a second, as a large repository's
-/// maintenance does.
+/// `build` ends only once nothing it started holds the lock, though after a fetch, a merge or a
+/// commit git runs `git maintenance run --auto --detach` in the background.
 #[test]
 fn train_gate_right_after_build_is_never_refused() {
     let t = Train::new("build-then-gate");
@@ -1640,9 +1607,8 @@ fn train_gate_right_after_build_is_never_refused() {
 }
 
 impl Train {
-    /// Core as a GitHub repository, `github.com/test/core`, which git reaches in `core.git`, so
-    /// the train derives the repository the stub `gh` answers for; and every ref pushed to core
-    /// from now on logged, `<ref> <new sha>` a line, a deletion's sha all zeros.
+    /// Core as `github.com/test/core`, reached in `core.git`, with every ref pushed to it from now
+    /// on logged as `<ref> <new sha>`, a deletion's sha all zeros.
     fn on_github(&self) {
         let url = "https://github.com/test/core.git";
         self.git(&["remote", "set-url", "core", url]);
@@ -1676,7 +1642,6 @@ impl Train {
             .collect()
     }
 
-    /// The arguments of each run of the stub gate.
     fn gate_args(&self) -> Vec<String> {
         std::fs::read_to_string(self.probes_file().with_extension("args"))
             .unwrap_or_default()
@@ -1698,13 +1663,9 @@ fn publication_id(sha: &str) -> u64 {
     u64::from_str_radix(&format!("f{}", &sha[..11]), 16).expect("a commit's hex digits")
 }
 
-/// `gate --remote github`: the box runs its steps of the tree half that build nothing first, then
-/// the train commit's public tree goes to core, committed on core's master by the publications'
-/// author with a `Gate:` trailer, pushed to `gate/<train sha>` and to no other ref. The box waits
-/// for the publication run of that commit, and only then runs the steps that build the public
-/// tree, and then the live half, whose deploy-build builds it too. The runner gates that commit
-/// alone, its success is the half's green, and the branch is deleted once the run is read. The
-/// train lands.
+/// The box runs the tree half's steps that build nothing, pushes the public tree to
+/// `gate/<train sha>` alone with a `Gate:` trailer, waits for its publication run, then runs the
+/// building steps and the live half, and deletes the branch once the run is read.
 #[test]
 fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green() {
     let t = Train::new("github");
@@ -1801,8 +1762,8 @@ fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green
     assert_eq!(t.origin_master(), train);
 }
 
-/// A run whose gate failed is the tree half's red, with the gate's failing lines, read off the
-/// job's log, and the land is refused; the branch is deleted all the same.
+/// The red carries the gate's failing lines off the job's log, the land is refused, and the branch
+/// is deleted all the same.
 #[test]
 fn train_gate_github_red_run_is_the_halfs_red() {
     let t = Train::new("github-red");
@@ -1876,10 +1837,9 @@ fn train_gate_github_red_checks_job_reports_its_failing_lines() {
     assert_eq!(t.origin_master(), seed, "nothing landed");
 }
 
-/// A publication run that failed, ran past the wait, or that GitHub would not start leaves the
-/// public tree's builds to the box, which says which, with the run's address and what the build
-/// costs, and builds it after the wait, never beside it; the gate is green all the same, since
-/// the builds are the same either way. A run still going when the box stops waiting is cancelled.
+/// A publication run that failed, timed out or never started leaves the public tree's builds to the
+/// box, after the wait and never beside it, and a run still going is cancelled. The gate is green
+/// all the same, since the builds are the same either way.
 #[test]
 fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
     let cost = "the box builds the public tree itself, about 45 minutes of release build";
@@ -1939,8 +1899,8 @@ fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
     }
 }
 
-/// A dispatch that started the run but whose answer never came (gh killed by its 60 s bound) is
-/// no failure to start: the train looks for the run and takes its builds from the cache.
+/// A dispatch whose answer never came (gh killed by its 60 s bound) may have started the run, so
+/// the train looks for it and takes its builds from the cache.
 #[test]
 fn train_gate_github_looks_for_the_run_of_an_unanswered_dispatch() {
     let t = Train::new("github-cache-unanswered");
@@ -1964,8 +1924,7 @@ fn train_gate_github_looks_for_the_run_of_an_unanswered_dispatch() {
     );
 }
 
-/// A public tree its leak guard refuses never leaves the box: nothing is pushed, no step runs, and
-/// the tree half says nothing of the tree.
+/// Nothing is pushed, no step runs, and the tree half says nothing of the tree.
 #[test]
 fn train_gate_github_whose_public_tree_leaks_pushes_nothing() {
     let t = Train::new("github-leak");
@@ -1985,12 +1944,8 @@ fn train_gate_github_whose_public_tree_leaks_pushes_nothing() {
 }
 
 /// A gate branch is a publication (GitHub serves a deleted branch's commit by its name, and forks
-/// share objects), so it holds no admission a person did not make: a pull request that adds a
-/// file with its own line in the admitted files, a `.gitleaksignore` fingerprint and a change of
-/// the secret rules reaches no gate branch, from `gate` or from `check`, and the box's steps do
-/// not run for it. `check` reaches `push-gate` with no `publishable` before it, so `push-gate`
-/// holds it on its own. A new plain-text path passes both checks wherever it goes, so it is
-/// pushed.
+/// share objects), so an admission a person did not make reaches no gate branch from `gate` or from
+/// `check` (whose `push-gate` holds it alone), while a new plain-text path is pushed.
 #[test]
 fn train_gate_github_pushes_no_admission_a_person_did_not_make() {
     let t = Train::new("github-admission");
@@ -2044,8 +1999,7 @@ fn train_gate_github_pushes_no_admission_a_person_did_not_make() {
     assert_eq!(t.core_pushes().len(), 2, "pushed, then deleted");
 }
 
-/// A leak guard that could not run gives the tree half no verdict: it is no leak and no red tree,
-/// nothing is pushed, and the live half still runs.
+/// It is no leak and no red tree: nothing is pushed, and the live half still runs.
 #[test]
 fn train_gate_github_whose_check_could_not_run_has_no_verdict() {
     let t = Train::new("github-unchecked");
@@ -2180,8 +2134,8 @@ fn train_gate_github_killed_deletes_its_branch() {
     }
 }
 
-/// A land publishes the landed commit's public tree to core's master as one commit naming its
-/// source, on the commit before it; publishing it again is that same row, so nothing moves.
+/// A land publishes the landed tree to core's master as one commit naming its source, and
+/// publishing it again moves nothing.
 #[test]
 fn train_land_publishes_the_landed_tree_once() {
     let t = Train::new("publish");
@@ -2244,8 +2198,6 @@ fn train_land_publishes_the_landed_tree_once() {
     );
 }
 
-/// A public tree its leak guard refuses is not published, while master stays landed, and land
-/// says both.
 #[test]
 fn train_land_whose_public_tree_leaks_lands_and_publishes_nothing() {
     let t = Train::new("publish-leak");
@@ -2274,9 +2226,9 @@ fn train_land_whose_public_tree_leaks_lands_and_publishes_nothing() {
     );
 }
 
-/// A land that could not reach core loses nothing: the next publish walks every landed commit
-/// after the newest published, oldest first, one core commit each. (Where core publishes
-/// nothing yet, the first publish is the one commit named, never the whole history.)
+/// A land that could not reach core loses nothing: the next publish walks every landed commit after
+/// the newest published, oldest first, and where core holds nothing yet it publishes the one commit
+/// named.
 #[test]
 fn train_publish_catches_up_every_landed_commit_in_order() {
     let t = Train::new("publish-catch-up");
@@ -2320,9 +2272,7 @@ fn train_publish_catches_up_every_landed_commit_in_order() {
 }
 
 /// A landed commit whose tree can never pass blocks every row after it, naming its file and line
-/// and never the term; `publish --skip <sha>` passes over it, only once its own check fails, and
-/// the next row names it in a `Skipped:` trailer beside its own `Source:`. Publishing it after
-/// is refused as skipped.
+/// and never the term, until `publish --skip <sha>`, which a `Skipped:` trailer records.
 #[test]
 fn train_publish_skips_a_commit_only_when_it_fails() {
     let t = Train::new("publish-skip");
@@ -2386,10 +2336,9 @@ fn train_publish_skips_a_commit_only_when_it_fails() {
     );
 }
 
-/// An admission no publication has held is held as a new path is: a line of the admitted files
-/// (the file's path is known, but a person has not looked at these bytes of it), a fingerprint
-/// of `.gitleaksignore`, a change to the secret rules. A land publishes nothing until `--admit`
-/// names it at a terminal; a row that leaves the admissions as they were is published.
+/// An admission no publication has held (an admitted-files line, whose bytes nobody has looked at,
+/// a `.gitleaksignore` fingerprint, a secret-rules change) is held like a new path until `--admit`
+/// names it at a terminal.
 #[test]
 #[allow(clippy::too_many_lines)]
 fn train_publish_holds_a_new_admitted_line_until_a_person_admits_it() {
@@ -2505,10 +2454,8 @@ fn train_publish_holds_a_new_admitted_line_until_a_person_admits_it() {
     }
 }
 
-/// A path no publication has held is held: a land, unattended, publishes nothing holding it and
-/// names it, with every later row's; `--admit` is refused away from a terminal, and for a path
-/// no row holds; at one, each row that first holds a path is published with an `Admitted:`
-/// trailer, and the path is known from then on.
+/// `--admit` is refused away from a terminal and for a path no row holds, and at one each row that
+/// first holds a path is published with an `Admitted:` trailer.
 #[test]
 fn train_publish_holds_a_new_path_until_a_person_admits_it() {
     let t = Train::new("publish-admit");
@@ -2644,10 +2591,9 @@ fn train_publish_admits_more_held_paths_than_a_pipe_holds() {
     assert_eq!(t.core(&["show", &format!("master:{}", paths[0])]), "x");
 }
 
-/// The release fixture's instance file: `{data}` and `{key}` are filled in. The roadmap is mounted
-/// at its clone's absolute path, as a deployment mounts a public store, and its public names are
-/// invented: `ada` writes there as `adalogin`, and `bea` has no public name. Its upkeep chain is a
-/// third chain, `ops`, so a filer that spelled the roadmap's name would miss it.
+/// The release fixture's instance file, `{data}` and `{key}` filled in: `ada` writes the roadmap as
+/// `adalogin`, `bea` has no public name, and the upkeep chain is a third, `ops`, so a filer that
+/// spelled the roadmap's name would miss it.
 const RELEASE_INSTANCE: &str = r#"repo = "{data}"
 [signatures]
 root = "{key}"
@@ -2699,17 +2645,12 @@ subdir = "someone"
 sync = "gmail"
 "#;
 
-/// The plan beside the fixture's roadmap: `alpha` ships 1.1, `calendarlinks` 1.2 and `suzatarytwo`
-/// 2.0, all from 1.
 const PLAN: &str = "base = 1\n\n[[release]]\ntodo = \"alpha\"\nmajor = 1\nminor = 1\n\n\
                     [[release]]\ntodo = \"calendarlinks\"\nmajor = 1\nminor = 2\n\n\
                     [[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n";
 
-/// The deployment a release reads, under `data`: the roadmap, a public store in a clone of its
-/// own origin (`roadmap.git`), holding `suzatarytwo` composing three items, one done, with the plan
-/// beside it and its pictures drawn; the upkeep chain `ops` holding the private todo `opsonly`; the
-/// box-local lists door 1 and door 2 read; and the instance naming them all, as
-/// `SUZATARY_INSTANCE` names the box's.
+/// The deployment a release reads, under `data`: the roadmap store in a clone of `roadmap.git` with
+/// its plan, the upkeep chain `ops`, the lists doors 1 and 2 read, and the instance naming them.
 fn a_release_deployment(data: &Path) -> PathBuf {
     use prodrome_core::fpl;
     use suzatary_record::record::{EventStore, GENESIS, MarkupSource, mk_authored};
@@ -2808,7 +2749,6 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     path
 }
 
-/// The name of the `Genesis` the store at `store` holds.
 fn genesis_of(store: &Path) -> String {
     std::fs::read_dir(store.join("objects"))
         .expect("the objects")
@@ -2843,8 +2783,6 @@ fn drawing(data: &Path) -> PathBuf {
 /// The stub of `nix flake lock` a land moves the pin with: `<clone> <rev>` pins `rev`.
 const PIN: &str = "#!/bin/sh\nprintf '{\\n  \"nodes\": {\\n    \"suzatary\": {\\n      \"locked\": {\\n        \"rev\": \"%s\"\\n      }\\n    }\\n  }\\n}\\n' \"$2\" >\"$1/flake.lock\"\n";
 
-/// What a train run needs to read and write the fixture's roadmap and upkeep chain, and to move
-/// the roadmap's pin.
 fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
     let data = instance.parent().expect("the instance's directory");
     for dir in ["home", "run"] {
@@ -2873,12 +2811,8 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
     ]
 }
 
-/// THE VERSION IS NO COMPILED INPUT: what a release cut writes (the changelog and
-/// `app/release.toml`, pinned by `train_releases_what_the_roadmap_reads_and_records_it_there`) is
-/// included by no crate's source, and no crate has a build script that could read it, so a
-/// train's release moves no crate's inputs and no gate key. The binary reads its release at run
-/// time, from the file the flake installs beside it (`suzatary_cli::stamp`), and its plan from
-/// beside the roadmap store.
+/// THE VERSION IS NO COMPILED INPUT: what a release cut writes is included by no crate's source or
+/// build script, so a release moves no crate's input and no gate key.
 #[test]
 fn a_release_cut_changes_no_file_a_crate_compiles() {
     let app = repo().join("app");
@@ -2910,7 +2844,6 @@ fn a_release_cut_changes_no_file_a_crate_compiles() {
     }
 }
 
-/// A tree at `version`.
 fn release_files(version: &str) -> Vec<(&'static str, String)> {
     vec![
         (
@@ -2975,13 +2908,9 @@ fn published_roadmap(data: &Path, name: &str) -> PathBuf {
     out
 }
 
-/// The todos a PR names complete are recorded done where each is found when it lands, and the
-/// train's release is the version the roadmap then reads: cut at build from the roadmap commit
-/// its `Tasks:` trailer names, checked at land against the roadmap's head, pushed with its tag in
-/// one push, published, and then recorded in ONE roadmap commit holding exactly the `Completes:`
-/// todos done, the pin moved to core's publication and the pictures drawn, pushed after door 2.
-/// A private todo is completed on the upkeep chain and named nowhere public. Recording again
-/// writes nothing.
+/// The release, cut at build from the roadmap commit `Tasks:` names, is pushed with its tag,
+/// published, then recorded in ONE roadmap commit after door 2, which completes the `Completes:`
+/// todos (a private one on the upkeep chain, named nowhere public) once.
 #[test]
 fn train_releases_what_the_roadmap_reads_and_records_it_there() {
     let t = Train::new("release");
@@ -3067,9 +2996,8 @@ fn train_releases_what_the_roadmap_reads_and_records_it_there() {
     assert_eq!(completions(&data, "events-ops", "opsonly").len(), 1);
 }
 
-/// What a visitor reads after the land of `train`, the fixture's release 1.2.0 completing
-/// `calendarlinks` (and the private `opsonly`): one roadmap commit naming it, holding exactly one
-/// new object and the pin at core's publication, and the private todo done on the upkeep chain.
+/// What a visitor reads after the land of release 1.2.0: one roadmap commit with one new object and
+/// the pin at core's publication, and `opsonly` done on the upkeep chain.
 fn recorded_once(t: &Train, data: &Path, train: &str) {
     let core = t.core(&["rev-parse", "master"]);
     assert_eq!(shipped(data, train), 1, "one roadmap commit records it");
@@ -3121,9 +3049,8 @@ fn recorded_once(t: &Train, data: &Path, train: &str) {
     );
 }
 
-/// A cut is a function of the code tree and the roadmap commit it names: what the box's clone
-/// holds and its origin does not (an edit not pushed yet) moves nothing, and a cut from the same
-/// commit by the binary alone, with no deployment, is the same release.
+/// A cut is a function of the code tree and the roadmap commit it names: an unpushed edit in the
+/// clone moves nothing, and the binary alone cuts the same release.
 #[test]
 fn train_cut_reads_the_roadmap_commit_it_names() {
     let t = Train::new("release-tasks");
@@ -3205,8 +3132,8 @@ fn train_cut_reads_the_roadmap_commit_it_names() {
     );
 }
 
-/// A release completed between build and land is the next train's: the roadmap's head reads above
-/// the cut, so the land goes ahead, and the tag is the cut.
+/// A release completed between build and land is the next train's: the land goes ahead, and the tag
+/// is the cut.
 #[test]
 fn train_land_takes_a_roadmap_that_moved_above_the_cut() {
     let t = Train::new("release-moved");
@@ -3355,8 +3282,7 @@ fn train_build_refuses_a_cut_origin_already_tagged() {
     );
 }
 
-/// `record <rev>` records only what landed: a release commit off origin/master's first-parent
-/// chain is refused, and writes nothing.
+/// A release commit off origin/master's first-parent chain is refused and writes nothing.
 #[test]
 fn train_record_refuses_what_never_landed() {
     let t = Train::new("release-offchain");
@@ -3403,9 +3329,8 @@ fn train_record_refuses_what_never_landed() {
     );
 }
 
-/// The count reads origin's newest release alone, and a land cut short before its roadmap commit
-/// (its completions refused) is repaired by the next command: a local tag moves nothing, and the
-/// next build records what the land did not, once.
+/// The count reads origin's newest release alone, and the next build records once what a land cut
+/// short before its roadmap commit did not.
 #[test]
 fn train_reads_origin_first_and_repairs_a_failed_record() {
     let t = Train::new("release-sync");
@@ -3456,8 +3381,8 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
     );
     assert_eq!(shipped(&data, &train), 0, "the record failed");
 
-    // No local v1.2.0, a stale local v1.7.0, and the record no longer failing: the next build
-    // counts from origin's tag and records the land's release first.
+    // No local v1.2.0 and a stale local v1.7.0: the next build counts from origin's tag and records
+    // the land's release first.
     std::fs::remove_file(&flag).expect("the flag goes");
     t.git(&["tag", "-d", "v1.2.0"]);
     t.git(&["tag", "-f", "v1.7.0", "origin/master"]);
@@ -3473,9 +3398,8 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
     );
 }
 
-/// A land whose roadmap commit was made and not pushed (its origin refusing) leaves the commit in
-/// the clone; the next command finds it by its `Shipped:` trailer and pushes it, writing nothing
-/// again: each todo is completed once, and one commit records the release.
+/// The next command finds an unpushed roadmap commit by its `Shipped:` trailer and pushes it, so
+/// each todo is completed once.
 #[test]
 fn train_repairs_a_roadmap_commit_its_land_did_not_push() {
     let t = Train::new("release-unpushed");
@@ -3533,9 +3457,8 @@ fn train_repairs_a_roadmap_commit_its_land_did_not_push() {
     );
 }
 
-/// The roadmap's push refuses a range door 2 refuses: a commit in the clone holding a term the
-/// lists name stays in the clone, origin unchanged, and the push names where, never the word. One
-/// upkeep todo says where, and the pushes after it, refused the same, file nothing more.
+/// A commit holding a term the lists name stays in the clone and the push names where, never the
+/// word, filing one upkeep todo however many pushes it refuses.
 #[test]
 fn roadmap_push_refuses_a_range_door_2_refuses() {
     let t = Train::new("roadmap-push-refused");
@@ -3600,8 +3523,8 @@ fn roadmap_push_refuses_a_range_door_2_refuses() {
     );
 }
 
-/// The public store's `.gitignore` as it was before the mark of the last hold, committed and
-/// pushed, so a migration changes it and a push commits it.
+/// The public store's `.gitignore` as before the mark of the last hold, committed and pushed, so a
+/// migration changes it.
 fn before_the_mark(roadmap: &Path) {
     write(roadmap, ".gitignore", "/.heads\n/.lock\n/_site\n");
     run_git(
@@ -3625,12 +3548,9 @@ fn owed_record(roadmap: &Path) -> PathBuf {
     ))
 }
 
-/// A push that joins origin's commits records the clone's heads after the merge, so a reader
-/// that has read the store reads the merged objects, and a record left owed is done by the next
-/// pass, even one with nothing to push; the push commits the store's `.gitignore` as
-/// `suzatary migrate-ignores` brought it (whose `--check` ends non-zero until it is), and a
-/// `.gitignore` in another form, which the verb leaves alone and ends non-zero over, commits
-/// nothing.
+/// A push that joins origin's commits records the clone's heads after the merge, a record left owed
+/// is done by the next pass, and the push commits the store's `.gitignore` only in the form
+/// `suzatary migrate-ignores` writes.
 #[test]
 fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     let t = Train::new("roadmap-push-join");
@@ -3730,8 +3650,8 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     );
 }
 
-/// A pass with nothing new costs nothing: a clone holding no new object and no commit its origin
-/// lacks returns at once, reaching no remote (its origin here is gone) and drawing nothing.
+/// A clone holding no new object and no commit its origin lacks returns at once, reaching no remote
+/// and drawing nothing.
 #[test]
 fn roadmap_push_with_nothing_new_reaches_no_remote() {
     let t = Train::new("roadmap-push-quiet");
@@ -3760,9 +3680,8 @@ fn roadmap_push_with_nothing_new_reaches_no_remote() {
     );
 }
 
-/// An event written to a public store names only a public name: at the mount, `ada` writes under
-/// the public name its entry gives, and `bea`, which has none, is refused before the store holds
-/// anything, the refusal naming the actor and the chain.
+/// At the mount `ada` writes under its public name, and `bea`, which has none, is refused before
+/// the store holds anything, naming the actor and the chain.
 #[test]
 fn a_write_by_an_actor_with_no_public_name_is_refused_at_the_mount() {
     let t = Train::new("roadmap-names");
@@ -3796,7 +3715,6 @@ fn a_write_by_an_actor_with_no_public_name_is_refused_at_the_mount() {
     );
 }
 
-/// A train whose merges are each green and whose release commit alone is red names the release.
 #[test]
 fn train_bisect_names_a_red_release() {
     let t = Train::new("release-bisect");
@@ -3830,7 +3748,6 @@ fn train_bisect_names_a_red_release() {
     );
 }
 
-/// A PR whose `Completes:` line names something that is not a todo id rides no train.
 #[test]
 fn train_build_skips_a_pr_completing_what_is_no_todo() {
     let t = Train::new("release-bad-id");
@@ -3848,9 +3765,8 @@ fn train_build_skips_a_pr_completing_what_is_no_todo() {
     assert_eq!(t.merges(), vec!["Merge #2: the second".to_owned()]);
 }
 
-/// A joined merge keeps what its PR completes (git reads trailers from the last paragraph
-/// alone), a description written with CRLF reads the same, and a PR naming a todo the chain
-/// does not hold is skipped alone.
+/// A joined merge keeps what its PR completes (git reads trailers from the last paragraph alone),
+/// and a CRLF description reads the same.
 #[test]
 fn train_build_keeps_completes_through_a_join_and_skips_only_an_unknown_todo() {
     let t = Train::new("release-joined");
@@ -3937,8 +3853,7 @@ impl Train {
     }
 }
 
-/// A full gate that fails where a selective one passed the same tree is a finding, and nothing
-/// lands over it, and no gate after it reads it otherwise.
+/// Nothing lands over it, and no gate after it reads it otherwise.
 #[test]
 fn train_full_red_beside_a_selective_green_is_a_finding() {
     let t = Train::new("full-finding");
@@ -3983,11 +3898,9 @@ fn on_the_deployment(name: &str) -> (Train, PathBuf, Vec<(&'static str, String)>
     (t, data, env)
 }
 
-/// A LIVE VERDICT IS OF THE TREE AND THE STORES IT READ: the live half's row names a digest of the
-/// stores taken before the run (and nothing of them); a land reads the live half at its newest
-/// row, so the stores moving after a green gate change nothing, and a red at stores the next green
-/// moved past is no finding: the land goes through and prints it, and prints a red set aside at
-/// such stores too.
+/// A LIVE VERDICT IS OF THE TREE AND THE STORES IT READ: the live row names a digest of the stores
+/// taken before the run, and a red at stores the next green moved past is no finding, which the
+/// land prints.
 #[test]
 fn train_land_reads_the_live_half_at_its_newest_row() {
     let (t, data, env) = on_the_deployment("data");
@@ -4049,9 +3962,8 @@ fn train_land_reads_the_live_half_at_its_newest_row() {
     );
 }
 
-/// A RED CAN BE SET ASIDE ON THE RECORD: by a person at a terminal, naming an open or completed
-/// roadmap task and some words; it names the one red row it sets aside, a land over it prints it,
-/// and without it a red beside a green is a finding that lands nothing.
+/// A RED CAN BE SET ASIDE ON THE RECORD: by a person at a terminal naming a roadmap task, one red
+/// row at a time; without it a red beside a green is a finding that lands nothing.
 #[test]
 fn train_sets_a_red_aside_at_a_terminal_for_a_roadmap_task() {
     let (t, data, env) = on_the_deployment("set-aside");
@@ -4145,11 +4057,9 @@ fn train_sets_a_red_aside_at_a_terminal_for_a_roadmap_task() {
     );
 }
 
-/// THE TRAIN'S APP IS THE ONE THE GATE BUILT: `scripts/app-bin.sh` takes a named commit's
-/// (`SUZATARY_APP_REV`) from that commit's public tree (`scripts/public-tree.sh --store`), the
-/// store path the merge gate's deploy-build and publication.yml build, never from `git+file` of
-/// the private repository, and only from the store or a binary cache (`--max-jobs 0`): the box
-/// never compiles a commit's app to read its release. `--deployed` is the app deploy.sh linked.
+/// THE TRAIN'S APP IS THE ONE THE GATE BUILT: `scripts/app-bin.sh` takes a named commit's app from
+/// its public tree's store path, only from the store or a binary cache (`--max-jobs 0`), never from
+/// `git+file` of the private repository.
 #[test]
 fn app_bin_builds_a_named_commit_from_its_public_tree() {
     let scratch = Scratch::new("app-bin-public");
@@ -4281,9 +4191,8 @@ fn train_nightly_gates_master_whole_and_files_nothing_when_green() {
     assert!(Train::nightly_todos(&data).is_empty());
 }
 
-/// THE GROWTH CHECK REFUSES A TRAIN, AND ONLY A REFUSAL DOES: a refused declaration stops the
-/// gate before either half, writes no row and names what it refused; a check that compared
-/// nothing says so with its cause, and the halves go on.
+/// THE GROWTH CHECK REFUSES A TRAIN, AND ONLY A REFUSAL DOES: a refusal stops the gate before
+/// either half with no row, and a check that compared nothing says why and lets the halves go on.
 #[test]
 fn train_gate_is_refused_by_an_undeclared_growth_and_goes_on_when_none_was_checked() {
     let t = Train::new("growth");
@@ -4451,9 +4360,8 @@ fn train_nightly_files_nothing_without_an_upkeep_chain() {
     }
 }
 
-/// The nightly gate waits for a running train and runs once its lock is free, where a train
-/// refuses to start beside another and names what holds the lock: the witness that the lock is a
-/// real one.
+/// The nightly waits for a running train's lock, where a train refuses to start beside another: the
+/// witness that the lock is real.
 #[test]
 fn train_nightly_waits_for_a_running_train() {
     let t = Train::new("nightly-waits");
@@ -4582,9 +4490,8 @@ impl Train {
     }
 }
 
-/// `check <pr>` needs no lock and leaves the checkout as it is: the PR's head merged on master is
-/// checked on GitHub's runners as a public tree on `gate/pr<n>-<head>`, deleted once read, and
-/// its green is a comment on the PR. It records no verdict, so no train may land on it.
+/// `check <pr>` needs no lock, leaves the checkout as it is, and records no verdict, so no train
+/// may land on its green.
 #[test]
 fn train_check_posts_the_runners_green_on_the_pr() {
     let t = Train::new("check-green");
@@ -4642,8 +4549,7 @@ fn train_check_posts_the_runners_red_with_its_failing_lines() {
     );
 }
 
-/// A merge whose public tree its leak guard refuses never leaves the box: nothing is pushed, and
-/// the comment says so without the guard's hits, which name what leaked.
+/// The comment leaves out the guard's hits, which name what leaked.
 #[test]
 fn train_check_of_a_leaking_tree_pushes_nothing_and_posts_no_hit() {
     let t = Train::new("check-leak");

@@ -17,11 +17,9 @@ pub struct Env {
 }
 
 impl Env {
-    /// Read `HOME`, the XDG variables and [`crate::instance::CODE_ENV`]; an empty one is unset.
-    ///
-    /// # Errors
-    /// `HOME` or `XDG_RUNTIME_DIR` unset: without the one every box path is under `/`, and
-    /// without the other a Drive download would land in a directory every user shares.
+    /// Read `HOME`, the XDG variables and [`crate::instance::CODE_ENV`], an empty one unset; an
+    /// unset `HOME` or `XDG_RUNTIME_DIR` is refused, since without the one every box path is under
+    /// `/`, and without the other a Drive download would land in a directory every user shares.
     pub fn read() -> anyhow::Result<Self> {
         let var = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
         let required = |name: &'static str| {

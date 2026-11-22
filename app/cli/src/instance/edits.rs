@@ -8,9 +8,6 @@ use suzatary_connect::settings::EditError;
 /// The lock every edit of the instance file holds from read to write, across processes
 /// (`suzatary instance set` takes it too): an `flock` on a sidecar, never on the file itself,
 /// which every write renames a new file over.
-///
-/// # Errors
-/// The lock file cannot be made or locked.
 pub fn editing(path: &Path) -> Result<suzatary_io::durable::Held, EditError> {
     let mut sidecar = path.as_os_str().to_owned();
     sidecar.push(".lock");
@@ -18,9 +15,7 @@ pub fn editing(path: &Path) -> Result<suzatary_io::durable::Held, EditError> {
         .map_err(|failed| EditError::Io(format!("locking the instance file: {failed}")))
 }
 
-/// Edits to the instance file that keep every other byte of it.
-///
-/// Through `toml_edit`, not the serde `File`, whose round trip drops the operator's comments.
+/// Edits through `toml_edit`, not the serde `File`, whose round trip drops the operator's comments.
 pub struct InstanceEdits {
     path: PathBuf,
 }

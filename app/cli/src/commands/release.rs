@@ -1,8 +1,6 @@
-//! `suzatary release` — the version the roadmap store reads, and the release a train cuts.
-//!
-//! A cut and a check read a store by path (`--store`, a roadmap commit written out), so each is
-//! a function of the code tree and that commit. The other readings and acts take the plan store
-//! the instance mounts. `scripts/train.sh` writes a tree and a tag only from what this verb prints.
+//! `suzatary release`: a cut and a check read a store by path (`--store`), so each is a function
+//! of the code tree and that commit, and `scripts/train.sh` writes a tree and a tag only from what
+//! this verb prints.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,15 +25,12 @@ use crate::instance::{ChainDir, Instance, project};
 use suzatary_signatures::believed::Believed;
 use suzatary_store::store::Reads as _;
 
-/// Which reading or act.
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Which.
     #[command(subcommand)]
     action: Action,
 }
 
-/// Every `release` reading and act.
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// The `major.minor` the store reads now (the last completed release's), and each release
@@ -135,10 +130,6 @@ pub enum Action {
     },
 }
 
-/// `suzatary release <action>`.
-///
-/// # Errors
-/// The instance, the store, the plan or the tree.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let now = SystemClock.now();
     match &args.action {
@@ -281,7 +272,6 @@ fn completed(nodes: &[Node], untrusted: &Untrusted, todo: &TodoId) -> bool {
         .any(|event| matches!(event, TodoEvent::Completed(e) if e.todo == *todo))
 }
 
-/// The mount whose store holds the plan, and the plan.
 fn mounted(instance: &Instance) -> anyhow::Result<(&ChainDir, Plan)> {
     let project = instance.mounts().project()?.ok_or_else(|| {
         anyhow::anyhow!(
@@ -441,8 +431,7 @@ fn writer(
     Ok((writer, actor))
 }
 
-/// `suzatary release items <release> --add … --remove …`: one trusted revision of the release's
-/// spec, read and written under the plan store's write lock.
+/// One trusted revision of the release's spec, read and written under the plan store's write lock.
 fn items(
     instance: &Instance,
     now: Datetime,
@@ -491,8 +480,8 @@ fn items(
     Ok(())
 }
 
-/// `suzatary release complete`: each todo found and not done, recorded done where it is found.
-/// Every todo is placed before anything is written, so one found nowhere writes nothing.
+/// Each todo found and not done, recorded done where it is found; every todo is placed before
+/// anything is written, so one found nowhere writes nothing.
 fn complete(
     instance: &Instance,
     now: Datetime,
@@ -625,7 +614,6 @@ fn write(path: &Path, text: &str) -> anyhow::Result<()> {
     std::fs::write(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
-/// What `release cut` was asked.
 struct Asked<'a> {
     completes: &'a [String],
     actor: &'a str,
