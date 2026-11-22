@@ -9,7 +9,6 @@ use suzatary_store::store::{Doc, Gets, StoreError};
 use crate::durable::Mode;
 use crate::present::Present as _;
 
-/// Documents, each at the path its key names.
 #[derive(Clone)]
 pub struct Docs<K: 'static, T: 'static> {
     store: &'static str,

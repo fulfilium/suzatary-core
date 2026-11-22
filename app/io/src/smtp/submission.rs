@@ -27,12 +27,10 @@ pub(super) struct Server {
     pub timeout: Duration,
 }
 
-/// Submit `mime` for `envelope` to `server`, authenticated as `user`.
-///
 /// # Errors
-/// [`SendError::Transport`] naming the [`Step`] that failed or was refused, with the server's
-/// reply; a connection lost after DATA's go-ahead is [`SendError::Unanswered`], since the Bridge
-/// may have taken it. Errors name the step, never the line sent, so no password leaks.
+/// [`SendError::Transport`] naming the [`Step`] that failed, with the server's reply; a connection
+/// lost after DATA's go-ahead is [`SendError::Unanswered`], since the Bridge may have taken it;
+/// errors name the step, never the line sent, so no password leaks.
 pub(super) fn submit(
     server: Server,
     user: &str,
@@ -385,9 +383,7 @@ mod tests {
         Ok(reader.get_mut().flush()?)
     }
 
-    /// Where the fake Bridge ends the conversation: nowhere, with a reply
-    /// saying no at a step, or by closing the connection where that step's
-    /// reply was due.
+    /// Where the fake Bridge ends the conversation.
     #[derive(Debug, Clone, Copy)]
     enum Stop {
         Nowhere,
@@ -395,8 +391,7 @@ mod tests {
         Drop(Step),
     }
 
-    /// The reply due at `step`: `ok`, or what `ending` says instead. `true`
-    /// when the conversation ends here.
+    /// `true` when the conversation ends here.
     fn answer<S: Read + Write>(
         reader: &mut BufReader<S>,
         ending: Stop,

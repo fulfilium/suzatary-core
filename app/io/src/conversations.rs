@@ -15,7 +15,6 @@ use crate::runs::Locks;
 use crate::text_keys::{self, TextKeys};
 use crate::texts::SystemEntropy;
 
-/// The lines and their keys, at their two directories.
 pub struct ConversationStores {
     /// The lines, pushed; a line no key opens may be kept as its husk.
     pub lines: objects::Objects<LineEvent>,

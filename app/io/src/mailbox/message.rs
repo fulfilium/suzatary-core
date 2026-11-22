@@ -17,7 +17,6 @@ pub struct NotmuchMessage {
     /// Whether the query matched it, rather than its thread bringing it along.
     #[serde(rename = "match")]
     pub matched: bool,
-    /// The first file holding it.
     #[serde(rename = "filename", deserialize_with = "first_file")]
     pub file: PathBuf,
     pub tags: Vec<String>,
@@ -38,11 +37,8 @@ fn first_file<'de, D: serde::Deserializer<'de>>(de: D) -> Result<PathBuf, D::Err
 #[derive(Debug, Deserialize)]
 struct Node(Option<NotmuchMessage>, Vec<Node>);
 
-/// The messages a `notmuch show` matched, in its order, parsed from its whole answer: a list of
-/// threads, each a list of nodes.
-///
-/// One message that does not parse (no id, no file) refuses the whole answer, not that one row:
-/// notmuch mints an id for every message it indexes, so such an answer is not its show format.
+/// The messages a `notmuch show` matched, in its order; one message without an id or a file
+/// refuses the whole answer, since notmuch mints an id for every message it indexes.
 pub fn matched(raw: &[u8]) -> Result<Vec<NotmuchMessage>, MailError> {
     fn walk(nodes: Vec<Node>, out: &mut Vec<NotmuchMessage>) {
         for Node(message, replies) in nodes {
@@ -69,9 +65,7 @@ pub fn matched(raw: &[u8]) -> Result<Vec<NotmuchMessage>, MailError> {
 /// notmuch's answer as text: exactly, when it is UTF-8, or with each byte that is not replaced
 /// by U+FFFD, so a body or a header that is not UTF-8 still reads.
 pub enum Text<'a> {
-    /// It was UTF-8.
     Exact(&'a str),
-    /// It was not, and lost bytes to the replacement.
     Replaced(String),
 }
 

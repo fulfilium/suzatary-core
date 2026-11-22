@@ -2,13 +2,9 @@
 
 use std::io;
 
-/// An io answer read for presence.
 pub trait Present<T> {
     /// `Ok(None)` for a path that is not there; every other failure stays the error it was, so
     /// an unreadable file or directory is never read as an empty one.
-    ///
-    /// # Errors
-    /// Every failure but [`io::ErrorKind::NotFound`].
     fn present(self) -> io::Result<Option<T>>;
 }
 

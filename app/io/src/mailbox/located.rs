@@ -15,7 +15,6 @@ use suzatary_store::store::{Doc as _, Gets as _};
 use crate::docs::{DocCodec, Docs, shard};
 use crate::present::Present as _;
 
-/// The locators under one directory.
 #[derive(Debug, Clone)]
 pub struct Located {
     dir: PathBuf,
@@ -40,9 +39,6 @@ impl Located {
 
     /// Record that the message whose canonical hash is `hash` was listed as `native`; a hash
     /// already recorded as `native` is not written again.
-    ///
-    /// # Errors
-    /// The file could not be read or written.
     pub fn record(&self, hash: &str, native: &str) -> Result<(), MailError> {
         let hash = hash.to_owned();
         let held = self
@@ -58,9 +54,6 @@ impl Located {
     }
 
     /// The notmuch id recorded for the one hash `prefix` begins.
-    ///
-    /// # Errors
-    /// The directory or a file could not be read.
     pub fn resolve(&self, prefix: &HashPrefix) -> Result<Resolved<String>, MailError> {
         let shard = self.dir.join(shard(prefix.as_str()));
         let Some(entries) = std::fs::read_dir(&shard).present().map_err(|failed| {

@@ -28,7 +28,6 @@ const REMOTE: Duration = Duration::from_mins(5);
 
 const MAX_LINES: usize = 400;
 
-/// Where the repositories come from.
 pub enum Source {
     /// GitHub, with the token.
     GitHub,
@@ -197,7 +196,6 @@ impl Mirrors {
         Ok(index)
     }
 
-    /// The tree an index holds.
     fn tree_of(dir: &Path, index: &Index) -> Result<String, RepoFailure> {
         Ok(succeed(
             &Self::git(None)
@@ -212,7 +210,6 @@ impl Mirrors {
     }
 }
 
-/// How a patch is applied to a commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Apply {
     /// Its context must match the commit exactly, as a publish needs.
@@ -350,7 +347,6 @@ fn file_stat(line: &str) -> Option<FileStat> {
     })
 }
 
-/// A finished publish.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Published {
     pub commit: CommitId,
@@ -404,7 +400,7 @@ pub struct PullRequest {
     pub url: String,
 }
 
-/// The commit author: the box's git identity.
+/// The box's git identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Author {
     /// `user.name`.
@@ -433,7 +429,6 @@ impl Author {
 const CHECK_TIMEOUT: Duration = Duration::from_mins(10);
 
 impl Mirrors {
-    /// What the instance file declares about `repo`.
     #[must_use]
     pub fn target(&self, repo: &RepoName) -> Option<RepoTarget> {
         self.declared.target(repo).cloned()
@@ -1406,7 +1401,6 @@ mod tests {
         assert!(!temp.path().join("mirrors/bmabsout/present.git").exists());
     }
 
-    /// `NoToken` fails the test if the token is asked for.
     #[test]
     fn an_undeclared_repository_is_refused_before_any_network() {
         let temp = suzatary_testkit::scratch("repos");

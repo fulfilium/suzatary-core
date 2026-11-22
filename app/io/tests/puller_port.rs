@@ -1,8 +1,6 @@
-//! Mail-in's conformance suite over the four real pullers, each behind a fake far end: a
-//! scripted IMAP server under the `imap` crate's own client for Microsoft, and shell scripts
-//! answering mbsync's and lieer's command lines over a directory that stands for the server,
-//! lieer's on the Google grant minting its token from a scripted token endpoint. What lands is
-//! read back from the maildir on disk.
+//! Mail-in's conformance suite over the four real pullers, each behind a fake far end (a scripted
+//! IMAP server, or shell scripts answering mbsync's and lieer's command lines), read back from the
+//! maildir on disk.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{Read, Write};
@@ -94,8 +92,6 @@ echo synced"#,
     )
 }
 
-// --- mbsync, from the Bridge ----------------------------------------------------
-
 /// mbsync's command line, `-c <config> <channel>`, reading the far end and the maildir leaf
 /// from the config; anything else exits 99.
 struct Bridge(tempfile::TempDir, PathBuf);
@@ -162,8 +158,6 @@ fn mbsync_keeps_every_law_behind_a_fake_bridge() {
     assert_eq!(check(&Bridge::new(), since(), &arrivals()), Ok(()));
 }
 
-// --- lieer, from Gmail ---------------------------------------------------------
-
 /// lieer's command lines in the account's maildir: `sync` runs `first`, then copies the far end
 /// into `mail/cur`, and `init --no-auth <account>` begins the repository; anything else exits 99.
 fn gmi(dir: &Path, first: &str) -> PathBuf {
@@ -224,8 +218,6 @@ impl Rig for Gmail {
 fn lieer_keeps_every_law_behind_a_fake_gmail() {
     assert_eq!(check(&Gmail::new(), since(), &arrivals()), Ok(()));
 }
-
-// --- lieer, on the box's Google grant -------------------------------------------
 
 /// A secret store holding the box's Google client and Ada's grant.
 struct Kept;
@@ -317,8 +309,6 @@ impl Rig for Signed {
 fn lieer_on_the_google_grant_keeps_every_law_behind_a_fake_gmail() {
     assert_eq!(check(&Signed::new(), since(), &arrivals()), Ok(()));
 }
-
-// --- Microsoft, over IMAP -------------------------------------------------------
 
 /// The one message the fake server's Sent folder holds.
 const SENT: &[u8] = b"Message-ID: <sent@example.test>\r\nSubject: Re: the lease\r\n\r\nThanks.\r\n";

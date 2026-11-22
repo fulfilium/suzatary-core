@@ -9,7 +9,6 @@ pub struct Said {
     pub message: String,
 }
 
-/// One stream event, tagged by its own `type`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamEvent {
@@ -33,13 +32,11 @@ pub enum StreamEvent {
     Other,
 }
 
-/// A started message, read for its usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct Started {
     pub usage: Prompted,
 }
 
-/// What a prompt cost.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct Prompted {
     pub input_tokens: u64,
@@ -47,14 +44,12 @@ pub struct Prompted {
     pub cache_read_input_tokens: Option<u64>,
 }
 
-/// What a reply has cost so far.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct Delivered {
     /// Its tokens, cumulative.
     pub output_tokens: u64,
 }
 
-/// A piece of a content block.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Delta {
@@ -66,7 +61,6 @@ pub enum Delta {
 }
 
 impl StreamEvent {
-    /// The reply's text this event adds, if any.
     #[must_use]
     pub fn text(&self) -> Option<&str> {
         match self {

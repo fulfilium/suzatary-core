@@ -1,7 +1,6 @@
 //! Every store's bytes on disk, pinned: a scripted sequence written through each store leaves
 //! exactly the pinned files, and reading a copy writes nothing. `tests/stores/` is never
-//! regenerated (a difference is a migration); prodromes that write `Change`s are pinned in
-//! `tests/stores-changes/`.
+//! regenerated: a difference is a migration.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -48,28 +47,22 @@ fn golden() -> PathBuf {
 /// The prodromes whose appends write `Change`s, pinned apart from their legacy bytes.
 const CHANGES: [&str; 1] = ["events/"];
 
-/// The inbox at the proposal schema, pinned in `tests/stores-changes/` only.
 pub(crate) const INBOX: &str = "inbox";
 
-/// The conversations' lines at their schema, and the keys of their words, pinned in
-/// `tests/stores-changes/` only.
 pub(crate) const LINES: &str = "secretary-lines";
 const LINE_KEYS: &str = "secretary-lines-keys";
 
-/// The memory's history at its schema, and its texts, pinned in `tests/stores-changes/` only.
 pub(crate) const MEMORY: &str = "memory";
 const MEMORY_TEXTS: &str = "secretary-memory-texts";
 pub(crate) const DIGESTS: &str = "digests";
 const DIGEST_TEXTS: &str = "secretary-digest-texts";
 
-/// The calendar plugin's store, a cache-tier store, pinned in `tests/stores-changes/` only.
 const CALENDAR: &str = "cache/plugins/ics/store";
 
-/// The recorded decisions and the two topic stores, pinned in `tests/stores-changes/` only.
 pub(crate) const DECISIONS: &str = "decisions";
 pub(crate) const TOPICS: &str = "secretary-topics";
 pub(crate) const TOPIC_ALIASES: &str = "secretary-topic-aliases";
-/// The box's refusals of what a tab posted, pinned in `tests/stores-changes/` only.
+/// The box's refusals of what a tab posted.
 pub(crate) const ASKS: &str = "secretary-asks";
 
 /// Every store pinned in `tests/stores-changes/` only.
@@ -87,11 +80,9 @@ const CHANGED: [&str; 11] = [
     ASKS,
 ];
 
-/// The triage's bookkeeping in its keyed form, pushed and box-local, pinned in
-/// `tests/stores-changes/` only.
+/// The triage's bookkeeping in its keyed form, pushed and box-local.
 const MAIL_STATE: [&str; 2] = ["state.json", "local"];
 
-/// The dedup key every scripted write and read names messages by.
 fn dedup_key() -> DedupKey {
     DedupKey::of(&suzatary_base::capability::Secret::new("5a".repeat(32))).expect("a key")
 }
@@ -104,8 +95,7 @@ fn ledger(root: &Path) -> suzatary_io::state::Ledger {
     )
 }
 
-/// One salt for every text, so the texts' names can be pinned; the store's own salts are the
-/// system's.
+/// One salt for every text, so the texts' names can be pinned.
 struct Pinned;
 
 impl suzatary_base::capability::Entropy for Pinned {
@@ -126,10 +116,8 @@ impl suzatary_base::capability::Entropy for Counted {
     }
 }
 
-/// The lines' store as the box keeps it.
 pub(crate) type Lines = Objects<LineEvent>;
 
-/// The lines and their keys under `root`.
 pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io::text_keys::TextKeys) {
     (
         Objects::open(root.join(LINES)),
@@ -186,7 +174,6 @@ fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     files
 }
 
-/// The files that differ, one line each.
 fn differences(found: &BTreeMap<String, Vec<u8>>, pinned: &BTreeMap<String, Vec<u8>>) -> String {
     let mut lines = Vec::new();
     for (name, bytes) in found {

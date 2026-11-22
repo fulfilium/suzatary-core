@@ -17,7 +17,6 @@ use suzatary_triage::mail::verbs;
 use crate::mailbox::Notmuch;
 use crate::sync::Syncer;
 
-/// The corpus operations, run against this box.
 pub struct Operator {
     sync_status: PathBuf,
     pulse: crate::pulse::Pulse,
@@ -105,8 +104,7 @@ impl Operator {
             .map_err(|failed| CorpusError::Refused(failed.to_string()))
     }
 
-    /// Ring each open watch the corpus now matches. A failure goes to stderr and fails nothing:
-    /// the next sync asks again.
+    /// A failure goes to stderr and fails nothing: the next sync asks again.
     fn ring(&self) {
         let own: Vec<&str> = self
             .syncer
@@ -180,7 +178,7 @@ impl Corpus for Operator {
             .map_err(|failed| CorpusError::Refused(failed.to_string()))
     }
 
-    /// One message in full; a miss or an ambiguous prefix is an answer the agent reads.
+    /// A miss or an ambiguous prefix is an answer the agent reads.
     fn show(&self, id: &str) -> Result<verbs::Show, CorpusError> {
         self.mail
             .full_message(id)

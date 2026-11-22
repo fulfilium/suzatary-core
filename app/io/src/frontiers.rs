@@ -12,7 +12,6 @@ use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
 
-/// The frontiers under `root`.
 #[must_use]
 pub fn open(root: PathBuf) -> Frontiers {
     let rings = root.clone();

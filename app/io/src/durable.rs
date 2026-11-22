@@ -32,20 +32,16 @@ impl Mode {
     }
 }
 
-/// Make `path` hold exactly `bytes`, durably, creating its directory.
-///
-/// # Errors
-/// A failure before the rename leaves the target as it was and no temporary; a failed directory
-/// sync after it leaves the new bytes in place, not yet known to survive a power cut.
+/// Make `path` hold exactly `bytes`, durably, creating its directory: a failure before the rename
+/// leaves the target as it was and no temporary, and a failed directory sync after it leaves the
+/// new bytes in place, not yet known to survive a power cut.
 pub fn replace(path: &Path, bytes: &[u8], mode: Mode) -> io::Result<()> {
     commit(&[(path, bytes)], Staging::Beside, mode).map_err(|failed| failed.error)
 }
 
-/// Make each path hold its bytes, durably, as one group commit: see `commit` below.
-///
-/// # Errors
-/// The file it failed at. A failure before the renames leaves every target as it was; one after
-/// leaves the files before it renamed into place, not yet known to survive a power cut.
+/// Make each path hold its bytes as one group commit: a failure before the renames leaves every
+/// target as it was, and one after leaves the files before it renamed into place, not yet known to
+/// survive a power cut.
 pub fn replace_all(files: &[(&Path, &[u8])], mode: Mode) -> Result<(), Failed> {
     commit(files, Staging::Beside, mode)
 }
@@ -56,7 +52,6 @@ pub fn deliver(path: &Path, staging: &Path, bytes: &[u8], mode: Mode) -> io::Res
     commit(&[(path, bytes)], Staging::In(staging), mode).map_err(|failed| failed.error)
 }
 
-/// A durable write that failed, and the file or directory it failed at.
 #[derive(Debug, thiserror::Error)]
 #[error("{}: {error}", path.display())]
 pub struct Failed {
@@ -64,7 +59,6 @@ pub struct Failed {
     pub error: io::Error,
 }
 
-/// Where a commit stages its files.
 #[derive(Clone, Copy)]
 enum Staging<'a> {
     /// Beside each target.
@@ -73,17 +67,13 @@ enum Staging<'a> {
     In(&'a Path),
 }
 
-/// The group commit. Every directory a file is renamed into or out of is made and opened first,
-/// before any byte is staged; then each file is staged; then the bytes are made durable, by an
-/// fsync of the file when there is one and otherwise by one sync of each filesystem the
-/// directories are on, through one of their handles; then each file is renamed into place, and
-/// each directory synced. A rename can reach the disk before the bytes it names, so no rename
-/// comes before that sync.
+/// Every directory is made and opened before any byte is staged, the bytes are synced (each file,
+/// or each filesystem through a directory's handle), and only then is each file renamed and each
+/// directory synced: a rename can reach the disk before the bytes it names.
 ///
-/// It needs Linux 5.8 or later: from 5.8, a sync of the filesystem through a handle reports every
-/// write-back error the filesystem met since that handle was opened; before it, the call answers
-/// Ok whatever was lost. Every staged file is written after the handles are opened, so a
-/// write-back error of any of them fails the commit, as an fsync of each file would have.
+/// It needs Linux 5.8 or later, where a sync of the filesystem through a handle reports every
+/// write-back error since that handle was opened, so staging after the opens makes it as strict as
+/// an fsync of each file.
 fn commit<'p>(files: &[(&'p Path, &[u8])], staging: Staging<'p>, mode: Mode) -> Result<(), Failed> {
     let at = |path: &Path| {
         let path = path.to_path_buf();
@@ -167,9 +157,6 @@ const STAGED: &str = ".writing";
 /// Remove every staged file a stopped commit left in `dir`; answers how many. Only a writer that
 /// excludes every other writer of `dir` may call it, since it cannot tell a stopped commit's file
 /// from a running one's.
-///
-/// # Errors
-/// A directory that cannot be listed, or a file that cannot be removed.
 pub fn remove_staged(dir: &Path) -> io::Result<usize> {
     let Some(entries) = std::fs::read_dir(dir).present()? else {
         return Ok(0);
@@ -197,12 +184,8 @@ pub fn remove(path: &Path) -> io::Result<bool> {
     remove_all(&[path]).map(|removed| removed == 1)
 }
 
-/// Make every path absent, durably, each directory synced once after every removal from it;
-/// answers how many files were there.
-///
-/// # Errors
-/// A failed removal or sync; the removals before it are made and not yet known to survive a
-/// power cut.
+/// Make every path absent, each directory synced once after every removal from it; answers how
+/// many files were there, and a failure leaves the removals before it not yet durable.
 pub fn remove_all(paths: &[&Path]) -> io::Result<usize> {
     let mut dirs = std::collections::BTreeSet::new();
     let mut removed = 0;
@@ -273,7 +256,6 @@ pub struct Syncs {
     pub filesystems: usize,
 }
 
-/// [`Syncs`] so far on this thread.
 #[must_use]
 pub fn syncs() -> Syncs {
     Syncs {
@@ -336,8 +318,6 @@ mod tests {
         names
     }
 
-    /// Removal leaves nothing, removing again succeeds, and a directory that was never made
-    /// is already absent.
     #[test]
     fn a_removal_is_idempotent_and_absence_is_success() {
         let dir = suzatary_testkit::scratch("durable");

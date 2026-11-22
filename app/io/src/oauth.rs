@@ -66,14 +66,12 @@ struct StoredFile {
     grants: BTreeMap<String, StoredGrant>,
 }
 
-/// One account's stored refresh grant for protocol `P`.
 struct Stored<'a, P: Protocol> {
     store: &'a TokenStore,
     account: &'a MailAccount,
     protocol: PhantomData<P>,
 }
 
-/// Why a stored grant minted nothing.
 enum Unminted {
     NeedsLogin(NeedsLogin),
     Failed(OauthError),
@@ -128,7 +126,6 @@ enum Writing {
     Rotated,
 }
 
-/// Where the grants live: one directory, one `<slug>.json` file per account.
 #[derive(Clone)]
 pub struct TokenStore {
     dir: PathBuf,
@@ -144,7 +141,6 @@ impl std::fmt::Debug for TokenStore {
 }
 
 impl TokenStore {
-    /// A store rooted at `dir`; nothing is read until a grant is asked for.
     #[must_use]
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self::with_http(dir, Arc::new(Ureq::new()))
@@ -185,9 +181,8 @@ impl TokenStore {
             .transpose()
     }
 
-    /// Store `refresh` under `P::SLOT`, leaving every other slot as it was. A `Rotated` token
-    /// replaces one the file holds and never makes the file, so a refresh that ends after the
-    /// account's sign-in was revoked writes nothing back.
+    /// Every other slot in the file is left as it was; a `Rotated` token never makes the file, so a
+    /// refresh that ends after the account's sign-in was revoked writes nothing back.
     fn write_grant<P: Protocol>(
         &self,
         account: &MailAccount,
@@ -241,13 +236,8 @@ impl TokenStore {
         .map_err(|error| unreadable(error.to_string()))
     }
 
-    /// A fresh access token for `P` from its own stored grant, or the login it needs.
-    ///
-    /// Silent only: it holds no `Consent`, so it can never start a sign-in.
-    ///
-    /// # Errors
-    /// [`OauthError`] for an unreadable grant file, a transport failure, a
-    /// refusal no sign-in fixes, or an account with no tenant.
+    /// A fresh access token for `P` from its own stored grant, or the login it needs; it holds
+    /// no `Consent`, so it can never start a sign-in.
     pub fn access<P: Protocol>(
         &self,
         account: &MailAccount,
@@ -265,10 +255,6 @@ impl TokenStore {
     }
 
     /// Request a device code; `Pending::finish` is the blocking rest.
-    ///
-    /// # Errors
-    /// [`OauthError::NotMicrosoft`] for an account with no Microsoft
-    /// strategy, or the endpoint's own refusal to issue a code.
     pub fn begin_device_flow<P: Protocol>(
         &self,
         consent: &Consent,
@@ -295,10 +281,6 @@ impl TokenStore {
         ))
     }
 
-    /// Run the device-code flow for this protocol and store the grant.
-    ///
-    /// # Errors
-    /// Any error of `begin_device_flow` or `Pending::finish`.
     pub fn authorise<P: Protocol>(
         &self,
         consent: &Consent,
@@ -312,9 +294,6 @@ impl TokenStore {
     }
 
     /// Delete every grant this account holds, reading and sending alike.
-    ///
-    /// # Errors
-    /// [`OauthError::Unreadable`] when the file is there and could not be deleted.
     pub fn revoke(&self, account: &MailAccount) -> Result<bool, OauthError> {
         let unreadable = |error: std::io::Error| OauthError::Unreadable {
             step: "stored grant",
@@ -325,9 +304,6 @@ impl TokenStore {
     }
 
     /// Which protocols this account holds a grant for, sorted, read offline.
-    ///
-    /// # Errors
-    /// [`OauthError::Unreadable`] for a grant file that will not read.
     pub fn granted(&self, account: &MailAccount) -> Result<Vec<&'static str>, OauthError> {
         let Some(stored) = self.read_grants(account)? else {
             return Ok(Vec::new());
@@ -355,12 +331,8 @@ pub struct Pending<P: Protocol> {
 }
 
 impl<P: Protocol> Pending<P> {
-    /// Poll until the flow grants, expires, or is refused, storing the grant when it lands.
-    ///
-    /// # Errors
-    /// The endpoint's own refusal, an unreadable answer, or the code
-    /// expiring before it was used (`OauthError::Refused { code:
-    /// "expired_token", .. }`).
+    /// Poll until the flow grants, expires, or is refused, storing the grant when it lands; an
+    /// expired code is `OauthError::Refused { code: "expired_token", .. }`.
     pub fn finish(self, wait: &dyn Fn(Duration)) -> Result<(), OauthError> {
         let mut interval = self.code.interval_seconds;
         let mut elapsed = 0u64;

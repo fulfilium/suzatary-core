@@ -3,9 +3,7 @@
 //! through one cache of readings shared by the three ([`memoised`]), and a device's replica of
 //! each ([`Held`]).
 //!
-//! The machine runs each script over its own replicas; after every step its host check gives
-//! each actor's store on disk what that actor's replica holds, by RECEIVING the objects as a
-//! store takes another's files, and then checks:
+//! After every step each actor's store on disk RECEIVES what its replica holds, and the check is:
 //!
 //! - each store's kept graph is what a handle that opens the store now reads;
 //! - a store that took every object its replica holds reads as that replica;
@@ -57,7 +55,6 @@ fn registers<E: Store>(store: &Objects<E>) -> Result<Registers<E>, StoreError> {
     Ok(Registers::of(&fold(&store.nodes()?)))
 }
 
-/// Three stores of one prodrome on disk, opened by `open`, and the cache they share.
 struct Layers<E: Store> {
     roots: [PathBuf; 3],
     stores: [Objects<E>; 3],
@@ -115,7 +112,6 @@ impl<E: Store<Vocabulary: Default>> Layers<E> {
         Ok(())
     }
 
-    /// `who`'s reading through the shared cache.
     fn cached(&self, who: Who) -> Result<Registers<E>, StoreError> {
         memoised(
             &self.cache,
@@ -125,8 +121,8 @@ impl<E: Store<Vocabulary: Default>> Layers<E> {
         )
     }
 
-    /// The host check of `run_with`: `who`'s store mirrors its replica, and every invariant of
-    /// the module's head holds for it, and for every pair of stores once the last actor's has.
+    /// Every invariant of the module's head, for `who` and for every pair of stores once the
+    /// last actor's has mirrored.
     fn check(&self, who: Who, replica: &Replicated<E>) -> Result<(), Broken> {
         self.mirror(who, replica)?;
         let kept = self.store(who);
@@ -220,8 +216,6 @@ impl<E: Store<Vocabulary: Default>> Layers<E> {
     }
 }
 
-/// `script` over the machine's replicas under `policy`, the claimed reading the application's,
-/// with three stores `open` opens mirroring them, every invariant checked after every step.
 fn holds<E: Store<Vocabulary: Default>, P: Policy<E> + Clone>(
     open: fn(PathBuf) -> Objects<E>,
     policy: &P,

@@ -8,8 +8,7 @@ use suzatary_held::message_part::Attachment;
 use suzatary_held::message_part::MailHeader;
 use suzatary_mail::mail::{StoredMessage, StoredPart};
 
-/// `raw`, the file of the message `id`, as a forward records it: its digest, the held values in
-/// its text and its attachments.
+/// `raw`, the file of the message `id`, as a forward records it.
 #[must_use]
 pub fn stored(id: &str, raw: &[u8]) -> StoredMessage {
     StoredMessage {

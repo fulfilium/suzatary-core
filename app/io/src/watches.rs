@@ -6,7 +6,6 @@ use suzatary_triage::mail::watch::{Line, WatchId};
 
 use crate::lines::{Codec, Layout, Lines};
 
-/// The watches, one log per watch.
 pub type Watches = Lines<WatchId, Line>;
 
 impl Watches {

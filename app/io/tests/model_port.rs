@@ -9,8 +9,6 @@ use suzatary_conversations::secretary::model::laws::{Case, Rig, check};
 use suzatary_conversations::secretary::model::{Conversation, ToolCall, Turn};
 use suzatary_io::model::{ClaudeCli, Fence};
 
-/// Each model gets its own script and the file it writes what it heard to; the rig keeps the
-/// last, to say what it heard.
 struct Scripts {
     dir: tempfile::TempDir,
     made: Mutex<(usize, Option<PathBuf>)>,

@@ -28,7 +28,6 @@ const FRAGMENTS_KEPT: usize = 4096;
 
 const PAGES_KEPT: usize = 256;
 
-/// Typst's HTML export over one cache directory and one compiler.
 pub struct Typst {
     fragments: Rendered,
     pages: Rendered,
@@ -91,7 +90,6 @@ impl Typst {
         Ok(Html::from_render(output))
     }
 
-    /// One answer block to typst's HTML.
     fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
         self.rendered(&ANSWER.call(block).map_err(|e| unprintable(&e))?)
     }
@@ -110,9 +108,6 @@ impl Typst {
 }
 
 /// `called` compiled and past the tripwire, kept nowhere.
-///
-/// # Errors
-/// Typst's refusal or the tripwire's.
 pub fn drawn(compiler: &dyn Compiler, called: &Called) -> Result<String, RenderError> {
     let document = compiler
         .compile(called.job())

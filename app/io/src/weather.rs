@@ -17,9 +17,6 @@ fn url(city: &str) -> String {
 }
 
 /// Today's forecast for `city`.
-///
-/// # Errors
-/// [`WeatherError::Unreachable`] when the feed does not answer 2xx JSON.
 pub fn fetch(
     http: &dyn Http,
     city: &str,

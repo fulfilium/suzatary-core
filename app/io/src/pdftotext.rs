@@ -29,9 +29,6 @@ impl Pdftotext {
     }
 
     /// A PDF's text, laid out as it reads on the page, and whether it holds a form, or why not.
-    ///
-    /// # Errors
-    /// A sentence when `pdftotext` or `pdfinfo` cannot run, times out or refuses the bytes.
     pub fn read(&self, bytes: &[u8]) -> Result<Layer, String> {
         self.layer(bytes).map_err(|failed| match failed {
             Unlayered::File(why) | Unlayered::Box(why) => why,

@@ -53,7 +53,6 @@ fn projects(projects: &Path, cwd: &str) -> Result<Vec<PathBuf>, String> {
         .collect())
 }
 
-/// A missing directory lists nothing.
 fn listed(dir: &Path) -> Result<Vec<PathBuf>, String> {
     match std::fs::read_dir(dir) {
         Ok(entries) => entries

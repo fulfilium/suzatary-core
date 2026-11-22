@@ -1,7 +1,6 @@
-//! Static secrets: the environment first, then `secretspec get`. A lookup answers a value
-//! (`Ok(Some)`), nothing holds the name (`Ok(None)`), or the store could not say
-//! ([`SecretError`]); a locked GPG agent is never read as "not configured". A value is only ever
-//! a [`Secret`], and only its name is ever printed.
+//! Static secrets: the environment first, then `secretspec get`. A lookup answers a value, nothing
+//! (`Ok(None)`), or that the store could not say; a locked GPG agent is never read as "not
+//! configured", a value is only ever a [`Secret`], and only its name is ever printed.
 
 use std::collections::BTreeSet;
 use std::env;
@@ -64,7 +63,6 @@ pub struct Secretspec {
 #[derive(Debug, Clone)]
 enum Spec {
     File(PathBuf),
-    /// Written on the first call.
     Declared(Declarations),
 }
 
@@ -134,10 +132,9 @@ impl Secretspec {
         }))
     }
 
-    /// `secretspec check --json`'s report. It exits non-zero when a required name is missing and
-    /// still reports, so a report that parses is read whatever the exit; with none, the exit
-    /// says why, as `get`'s does. It may take as long as `get` was given for each of the `names`
-    /// it answers, since it decrypts each: a slow store must not read as locked.
+    /// `secretspec check --json`'s report, read whatever the exit, since it exits non-zero when a
+    /// required name is missing and still reports. It may take `get`'s timeout once per name,
+    /// since it decrypts each: a slow store must not read as locked.
     fn checked(&self, reason: &str, names: usize) -> Result<Report, SecretError> {
         const EVERY: &str = "every declared name";
         let spec = self.configured(EVERY)?;
@@ -289,7 +286,6 @@ impl Secretspec {
     }
 }
 
-/// A non-empty value, trimmed.
 fn given(env_value: Option<&str>) -> Option<&str> {
     env_value.map(str::trim).filter(|value| !value.is_empty())
 }
@@ -318,8 +314,7 @@ enum Status {
 }
 
 impl Report {
-    /// The report from the first line that opens it: some providers print a banner first, as
-    /// `get`'s last-line reading allows for.
+    /// The report from the first line that opens it: some providers print a banner first.
     fn in_(stdout: &[u8]) -> Option<Self> {
         let at = stdout
             .iter()
@@ -350,7 +345,6 @@ pub enum SecretError {
     Spawn { name: String },
     #[error("the secret store has no spec file to read {name} by")]
     NoSpec { name: String },
-    /// The file declaring the instance's names could not be written.
     #[error("the secret store's names could not be declared for {name}: {why}")]
     Undeclared { name: String, why: String },
     /// Killed at the timeout: a locked store waits for a passphrase nobody will type.
@@ -372,7 +366,6 @@ pub enum SecretError {
     Stopped { name: String },
 }
 
-/// How a refused call ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Exit {
     Code(i32),
@@ -561,14 +554,12 @@ impl Verb<'_> {
 }
 
 /// What a refusal's stderr said, as a log may quote it. The value a `set` wrote, its trimmed
-/// whole and each of its lines are first put out of the stderr, wherever each occurs as a
-/// substring, by a stand-in of its length; then the reduction, which never looks at the value
-/// again, keeps the line and character counts, the name asked for, the words of [`WORDS`] and
-/// the errno after `os error`, and makes everything else `…`. So a stderr that echoes the value
-/// reads as one that echoes the stand-in, and one that does not contain the value, whole or a
-/// line of it, reads the same whatever the value. A value or line of one or two characters is
-/// put out of every word that contains it. The counts can tell an echoed value's length; for
-/// `get`, `check` and `delete` no value is known, so a store that echoed another secret would
+/// whole and each of its lines are first replaced wherever they occur by a stand-in of their
+/// length; then a reduction that never looks at the value again makes everything but the line and
+/// character counts, the name asked for, the words of [`WORDS`] and the errno after `os error`
+/// `…`, so a stderr that does not contain the value reads the same whatever the value. A value or line of one or two characters
+/// is put out of every word that contains it, and the counts can tell an echoed value's length.
+/// For `get`, `check` and `delete` no value is known, so a store that echoed another secret would
 /// show it only if that secret were itself a word of the list. Its one constructor is that
 /// reduction, so no log site of the shipped build can quote the stderr itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -824,10 +815,8 @@ impl Declared {
         Ok(declared)
     }
 
-    /// Declare exactly `names`: the file is written before any store reads it.
-    ///
-    /// # Errors
-    /// [`DeclareError`], the names declared before kept.
+    /// Declare exactly `names`: the file is written before any store reads it, and on an error
+    /// the names declared before are kept.
     pub fn declare(&self, names: &Settables) -> Result<(), DeclareError> {
         let own = match &self.base {
             Base::Absent => return Ok(()),
@@ -924,7 +913,6 @@ fn write_once(dir: &Path, file: &Path, text: &str) -> Result<(), DeclareError> {
         .map_err(|persisting| failed(persisting.error))
 }
 
-/// Why a deployment's names could not be declared to the store.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DeclareError {
     #[error("the secret store's own file {path} did not read: {said}")]
@@ -1058,7 +1046,6 @@ mod tests {
         assert_eq!(state(&found), SecretState::Failed);
     }
 
-    /// The store asked name by name.
     struct EachName<'a>(&'a Secretspec);
 
     impl suzatary_connect::secrets::Secrets for EachName<'_> {

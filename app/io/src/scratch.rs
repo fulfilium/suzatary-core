@@ -8,7 +8,6 @@ use std::path::Path;
 
 use tempfile::TempDir;
 
-/// One job's directory, gone when this is dropped.
 #[derive(Debug)]
 pub struct Scratch(TempDir);
 
@@ -19,7 +18,6 @@ impl Scratch {
         builder(prefix).tempdir_in(root).map(Self)
     }
 
-    /// A fresh directory under the system's temporary directory.
     pub fn temporary(prefix: &str) -> io::Result<Self> {
         builder(prefix).tempdir().map(Self)
     }

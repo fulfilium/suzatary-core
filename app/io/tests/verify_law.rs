@@ -1,11 +1,7 @@
 //! The in-memory store's `verify` is the store on disk's over the same objects.
 //!
-//! An inbox history is drawn with the Prodrome's law kit and written as files into a store on
-//! disk. The objects the in-memory store can take (a healthy history, or one holding a write
-//! below what it rests on) are given to it too, and both stores report the same findings. A
-//! missing dependency and a broken seal cannot be given to it: `MemoryStore` verifies on receipt
-//! and refuses them, and `findings_of` over the same prints, which is what it reads, reports what
-//! the store on disk reports.
+//! A missing dependency and a broken seal cannot be given to `MemoryStore`, which verifies on
+//! receipt and refuses them, so `findings_of` over the same prints stands in for it.
 
 use std::collections::BTreeSet;
 
@@ -26,7 +22,6 @@ use suzatary_stores::stores::{Faulty, InMemory};
 
 use crate::script_law::{STEPS, an_inbox_write};
 
-/// What a drawn history holds beside its writes.
 #[derive(Debug, Clone)]
 enum Fault {
     None,
@@ -93,7 +88,6 @@ fn with_below(
     (objects, below)
 }
 
-/// The store on disk at a fresh directory, its objects the files `prints` names.
 fn on_disk(prints: &[(Hash, Vec<u8>)]) -> (suzatary_testkit::TempDir, Objects<InboxEvent>) {
     let dir = suzatary_testkit::scratch("verify-law");
     let objects = dir.path().join("inbox/objects");

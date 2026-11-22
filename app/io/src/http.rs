@@ -33,7 +33,6 @@ pub struct Req {
     pub limit: u64,
 }
 
-/// One answer, whatever its status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resp {
     pub status: u16,
@@ -184,7 +183,6 @@ impl Resp {
     }
 }
 
-/// `ureq` over rustls.
 #[derive(Debug, Clone)]
 pub struct Ureq {
     agent: ureq::Agent,
@@ -210,9 +208,6 @@ impl Ureq {
 
     /// An agent that follows redirects and trusts the certificates in `pem` alone: a server
     /// this machine runs with a certificate no public root signs, such as a test fixture's.
-    ///
-    /// # Errors
-    /// `pem` holding no certificate, in words.
     pub fn trusting(pem: &[u8]) -> Result<Self, String> {
         let certificates = ureq::tls::parse_pem(pem)
             .filter_map(|item| match item {

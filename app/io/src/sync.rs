@@ -26,7 +26,6 @@ pub fn lock(state_dir: &Path) -> PathBuf {
     state_dir.join("sync.lock")
 }
 
-/// The syncer, bound to one deployment.
 pub struct Syncer {
     accounts: Roster,
     mail_root: PathBuf,
@@ -50,7 +49,6 @@ impl std::fmt::Debug for Syncer {
 }
 
 impl Syncer {
-    /// Build one out of what the instance file said.
     #[must_use]
     pub fn new(
         accounts: Roster,
@@ -72,7 +70,6 @@ impl Syncer {
         }
     }
 
-    /// The notmuch config every index call carries as `NOTMUCH_CONFIG`.
     #[must_use]
     pub fn with_config(mut self, config: impl Into<PathBuf>) -> Self {
         self.config = Some(config.into());
@@ -166,10 +163,7 @@ impl Syncer {
         }
     }
 
-    /// `notmuch new`, as a sync runs it, for files written outside a sync; what it said.
-    ///
-    /// # Errors
-    /// What notmuch said when it failed, or why it could not be run.
+    /// `notmuch new`, as a sync runs it, for files written outside a sync.
     pub fn index(&self) -> Result<String, String> {
         said(&self.notmuch(&["new"]))
     }

@@ -25,7 +25,6 @@ pub type State = Docs<(), TriageState>;
 pub type Local = Docs<(), LocalState>;
 
 impl State {
-    /// The document at `path`.
     #[must_use]
     pub fn open(path: PathBuf) -> Self {
         Docs::new("triage state", move |()| path.clone(), &PUSHED)
@@ -33,7 +32,6 @@ impl State {
 }
 
 impl Local {
-    /// The document at `path`.
     #[must_use]
     pub fn open(path: PathBuf) -> Self {
         Docs::new("the mail's box-local state", move |()| path.clone(), &LOCAL).private()
@@ -68,7 +66,7 @@ fn unkeyed() -> String {
     format!("{DEDUP_KEY} does not resolve: `suzatary device init` mints it")
 }
 
-/// Both documents and the key that joins them. Cloning shares the key.
+/// Cloning shares the key.
 #[derive(Clone)]
 pub struct Ledger {
     pushed: State,
@@ -86,7 +84,6 @@ impl std::fmt::Debug for Ledger {
 }
 
 impl Ledger {
-    /// The documents at `pushed` and `local`, the key `key` gives.
     #[must_use]
     pub fn new(
         pushed: PathBuf,
@@ -108,7 +105,6 @@ impl Ledger {
         }
     }
 
-    /// The documents, the key resolved through `secrets` by [`DEDUP_KEY`].
     #[must_use]
     pub fn resolving(
         pushed: PathBuf,
@@ -132,19 +128,12 @@ impl Ledger {
         Ok((self.key.1)()?.map(|key| self.key.0.get_or_init(|| key).clone()))
     }
 
-    /// The key.
-    ///
-    /// # Errors
-    /// A key that does not resolve.
     pub fn read_key(&self) -> Result<DedupKey, String> {
         self.held_key()?.ok_or_else(unkeyed)
     }
 
     /// Both documents, read fresh (other processes write them), and the key; `None` on a device
-    /// that holds no key, for a reader that can draw without triage's record.
-    ///
-    /// # Errors
-    /// A document that does not read, or a store that could not say.
+    /// that holds no key.
     pub fn read_if_keyed(&self) -> Result<Option<Known>, String> {
         let pushed = self.pushed.get(&()).map_err(|e| e.to_string())?;
         let local = self.local.get(&()).map_err(|e| e.to_string())?;
@@ -155,19 +144,12 @@ impl Ledger {
         }))
     }
 
-    /// Both documents and the key.
-    ///
-    /// # Errors
-    /// A document that does not read, or a key that does not resolve.
     pub fn read(&self) -> Result<Known, String> {
         self.read_if_keyed()?.ok_or_else(unkeyed)
     }
 
     /// Write both, the box-local one first: a crash between them leaves a message the pushed
     /// file has not recorded, which is triaged again, never a decision with no hash behind it.
-    ///
-    /// # Errors
-    /// A document that does not write.
     pub fn write(&self, known: &Known) -> Result<(), String> {
         let local = self.local.path(&());
         if let Some(tier) = local.parent() {

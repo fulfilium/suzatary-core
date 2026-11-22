@@ -20,7 +20,6 @@ use suzatary_inbox::secretary::sign_in::SignInUrl;
 
 pub use screen::Screen;
 
-/// The subcommand that mints a long-lived subscription token.
 pub const SUBCOMMAND: &str = "setup-token";
 
 /// Wide enough that the sign-in URL is drawn on one line, never wrapped.

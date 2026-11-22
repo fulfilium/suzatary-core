@@ -11,14 +11,13 @@ use suzatary_store::store::{Doc, Gets, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 
-/// The keys of one store's locked texts, by name, in one directory.
 #[derive(Debug)]
 pub struct TextKeys {
     docs: Docs<KeyName, TextKey>,
     dir: PathBuf,
 }
 
-/// The keys under `dir`, made on the first put.
+/// Made on the first put.
 #[must_use]
 pub fn open(dir: PathBuf) -> TextKeys {
     let under = dir.clone();

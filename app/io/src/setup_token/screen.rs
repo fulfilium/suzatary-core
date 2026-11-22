@@ -18,7 +18,6 @@ const HOSTS: [&str; 4] = [
 /// How the CLI says it did not take a code, lowercased.
 const REFUSED: [&str; 5] = ["error", "invalid", "expired", "try again", "not accepted"];
 
-/// Everything drawn, its escapes removed.
 #[derive(Debug, Clone, Default)]
 pub struct Screen {
     text: String,
@@ -45,7 +44,6 @@ impl Screen {
         })
     }
 
-    /// The token, once the CLI has printed it.
     #[must_use]
     pub fn token(&self) -> Option<&str> {
         let at = self.text.find(TOKEN_PREFIX)?;

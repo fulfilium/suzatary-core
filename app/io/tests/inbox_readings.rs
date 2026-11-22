@@ -1,10 +1,5 @@
-//! Every proposal's reading, pinned: what the frozen proposal store reads as, proposal by
-//! proposal, so a change to how the inbox is stored or folded shows here first.
-//!
-//! `fixtures/inbox-proposals/` holds objects written once, taking one proposal through each
-//! response, and never regenerated, and `readings.txt` beside them (`pinned`, below):
-//! per proposal, its reading and what follows from it, its value, its responses and what a tap
-//! would do, all at [`now`], priced through [`life`].
+//! Every proposal's reading, pinned, so a change to how the inbox is stored or folded shows here
+//! first: `fixtures/inbox-proposals/` holds objects written once and never regenerated.
 
 use std::path::{Path, PathBuf};
 

@@ -113,14 +113,12 @@ fn finish_text(joined: &str) -> String {
     BLANK_RUN.replace_all(&combined, "\n\n").trim().to_owned()
 }
 
-/// HTML mail, walked into readable text. A comment's content is dropped; a tag's name is read
-/// up to its first whitespace, `!` or `/`, so `<!DOCTYPE …>` is the inert empty name.
+/// HTML mail, walked into readable text; a tag's name ends at whitespace, `!` or `/`, so
+/// `<!DOCTYPE …>` is the inert empty name.
 ///
 /// The leak guard reads drawn markup through this (`door::drawing`), so the text keeps every
-/// word a browser draws, and two blocks' words never join into one. `mail-parser`'s own
-/// `html_to_text` is not used: it breaks lines only at `<br>` and `</p>`, so `<li>Ada</li><li>x`
-/// reads `Adax`; it drops everything after a comment closed by `--->`; and it skips a `<style>`
-/// or `<script>` only when the tag has no attributes.
+/// word a browser draws and two blocks' words never join; `mail-parser`'s `html_to_text` joins
+/// `<li>` items, drops all after a comment closed by `--->` and keeps an attributed `<style>`.
 #[must_use]
 pub fn html_to_text(html: &str) -> String {
     let mut out = String::new();
@@ -253,8 +251,7 @@ mod tests {
         assert_eq!(unescape_entities(unresolved), unresolved);
     }
 
-    /// Every named entity decodes, not only the six a hand-written table knew; the longest name
-    /// included.
+    /// Every named entity decodes, the longest name included.
     #[test]
     fn a_named_entity_beyond_the_six_decodes() {
         assert_eq!(

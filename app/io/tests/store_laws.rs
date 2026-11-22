@@ -40,7 +40,6 @@ fn pins(store: &str) -> PathBuf {
         .join(store)
 }
 
-/// Every file under `from`, copied under `to`.
 fn copy(from: &Path, to: &Path) {
     for entry in std::fs::read_dir(from).expect("a directory") {
         let path = entry.expect("an entry").path();
@@ -54,7 +53,6 @@ fn copy(from: &Path, to: &Path) {
     }
 }
 
-/// The laws, for the store `pinned` names, each copy of it opened by `open`; answers its row.
 fn laws<E: Store>(pinned: &str, open: impl Fn(PathBuf) -> Objects<E>) -> Kind {
     let dir = suzatary_testkit::scratch("store-laws");
     let source_at = dir.path().join("source");
@@ -125,8 +123,7 @@ fn laws<E: Store>(pinned: &str, open: impl Fn(PathBuf) -> Objects<E>) -> Kind {
     E::KIND
 }
 
-/// `append_each` over the pinned events, replayed twice so the second pass is all twins, answers
-/// and writes to disk what one `append` per event does, over the same genesis.
+/// Replayed twice so the second pass is all twins.
 fn appends_each_as_one_by_one<E: Store>(
     pinned: &str,
     open: impl Fn(PathBuf) -> Objects<E>,

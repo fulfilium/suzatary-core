@@ -17,7 +17,6 @@ use crate::blobs::Blobs;
 use crate::docs::{DocCodec, Docs};
 use crate::pdftotext::Pdftotext;
 
-/// Where the owner's uploads live.
 #[derive(Debug, Clone)]
 pub struct AttachmentStore {
     files: Blobs,
@@ -25,10 +24,8 @@ pub struct AttachmentStore {
     pdftotext: Pdftotext,
 }
 
-/// An upload as the store holds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stored {
-    /// On the box, with its bytes.
     Here {
         attachment: Attachment,
         bytes: Vec<u8>,
@@ -36,7 +33,6 @@ pub enum Stored {
     /// In the owner's Drive; the box holds only where.
     Private {
         attachment: Attachment,
-        /// Where it is kept, and its redacted text.
         copy: PrivateCopy,
     },
 }
@@ -54,16 +50,12 @@ impl Stored {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Place {
-    /// Its bytes are on the box.
     Here,
-    /// It is in the owner's Drive, and the box holds a note of where.
     Private,
 }
 
-/// Why an upload was not kept.
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
-    /// The bytes are not a file this app accepts.
     #[error(transparent)]
     Refused(#[from] AttachmentError),
     /// A PDF a model would not be handed as itself, so it is not kept either.
@@ -181,7 +173,6 @@ impl AttachmentStore {
         Ok(Some(Stored::Here { attachment, bytes }))
     }
 
-    /// Where the store keeps the upload, `None` when it holds none.
     pub fn place(&self, id: &AttachmentId) -> Result<Option<Place>, StoreError> {
         if self.notes.get(id)?.is_some() {
             return Ok(Some(Place::Private));
@@ -204,7 +195,6 @@ impl AttachmentStore {
         self.pdftotext.read(pdf)
     }
 
-    /// The file's size, before its bytes are read.
     pub fn size(&self, id: &AttachmentId) -> Result<u64, StoreError> {
         self.files.size(id)
     }
@@ -342,7 +332,6 @@ mod tests {
         ));
     }
 
-    /// A Drive that keeps what it is handed, in memory.
     #[derive(Default)]
     struct FakeVault(std::sync::Mutex<Vec<(String, Vec<u8>)>>);
 

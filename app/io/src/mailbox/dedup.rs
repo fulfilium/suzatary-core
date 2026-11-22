@@ -11,7 +11,6 @@ use mail_parser::{HeaderName, HeaderValue, Message, MessageParser};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 
-/// One of the five headers hashed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashHeader {
     /// `Date:`, as its calendar day.
@@ -73,8 +72,7 @@ fn normalize_subject(decoded: &str) -> String {
 }
 
 /// Every address across every occurrence of an address header, lower-cased, trimmed,
-/// de-duplicated and sorted, display names dropped. UTF-8 byte order is scalar-value order, so
-/// a `BTreeSet` sorts as Python's `sorted()` does.
+/// de-duplicated and sorted, display names dropped; a `BTreeSet` sorts as Python's `sorted()`.
 fn normalize_addresses<'a>(occurrences: impl Iterator<Item = &'a HeaderValue<'a>>) -> String {
     let mut addrs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for value in occurrences {

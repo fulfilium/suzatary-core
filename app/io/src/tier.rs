@@ -5,9 +5,6 @@ use std::path::Path;
 const IGNORED: &str = "*\n";
 
 /// Make `dir` a tier: the directory, and its `.gitignore` written once.
-///
-/// # Errors
-/// The directory or the file could not be written.
 pub fn ignored(dir: &Path) -> std::io::Result<()> {
     let path = dir.join(".gitignore");
     if path.exists() {

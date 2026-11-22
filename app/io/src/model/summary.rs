@@ -7,7 +7,6 @@ use suzatary_conversations::secretary::model::SessionId;
 
 use super::stream::{Block, Ended, Event, System, Unreadable, Usage};
 
-/// A run, summarised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Summary {
     pub session_id: SessionId,
@@ -59,9 +58,6 @@ impl Outcome {
 /// The `result` object `claude -p` prints, summarised, from its one object (`--output-format
 /// json`) or from the last of its stream (`stream-json --verbose`), with the calls the stream
 /// names; `None` for text that holds no result (an unauthenticated CLI's prose, an empty run).
-///
-/// # Errors
-/// [`Unreadable`] when the last `result` line is not the shape this box reads.
 pub fn summary_of(text: &str) -> Result<Option<Summary>, Unreadable> {
     let read: Vec<Result<Event, Unreadable>> = match Event::read(text.trim()) {
         Some(one) => vec![one],

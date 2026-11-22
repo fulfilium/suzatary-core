@@ -93,7 +93,6 @@ fn passes<'a>(key: &OsStr, pass: impl Iterator<Item = &'a str>) -> bool {
 /// ```
 #[derive(Clone)]
 pub struct Cmd {
-    /// The executable, looked up on `PATH` when it has no slash.
     pub program: OsString,
     /// Its argv after the program; never a shell string.
     pub args: Vec<OsString>,
@@ -122,7 +121,6 @@ pub struct Ran {
 /// The stderr bytes kept, from the end, since a check a model proposed may write without end.
 pub const STDERR_KEPT: usize = 64 << 10;
 
-/// Why a child did not run to an exit status.
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
     #[error("{program} could not be run: {source}")]
@@ -130,10 +128,8 @@ pub enum RunError {
         program: String,
         source: std::io::Error,
     },
-    /// It outlived its timeout and was killed.
     #[error("{program} did not finish within {after:?}")]
     TimedOut { program: String, after: Duration },
-    /// The caller stopped it.
     #[error("{program} was stopped")]
     Halted { program: String },
     #[error("{program}: {source}")]
@@ -180,7 +176,6 @@ impl Cmd {
         self
     }
 
-    /// Pass these names (or `PREFIX*`) from this process's environment too.
     #[must_use]
     pub fn pass(mut self, names: &[&str]) -> Self {
         self.pass
@@ -282,20 +277,17 @@ impl Ran {
         self.status.success()
     }
 
-    /// Stdout, decoded lossily.
     #[must_use]
     pub fn out(&self) -> String {
         String::from_utf8_lossy(&self.stdout).into_owned()
     }
 
-    /// Stderr, decoded lossily.
     #[must_use]
     pub fn err(&self) -> String {
         String::from_utf8_lossy(&self.stderr).into_owned()
     }
 }
 
-/// Run `cmd` and require it to exit zero.
 pub fn succeed(cmd: &Cmd) -> Result<Ran, RunError> {
     zero(cmd, run(cmd)?)
 }
@@ -313,7 +305,7 @@ pub fn zero(cmd: &Cmd, ran: Ran) -> Result<Ran, RunError> {
     }
 }
 
-/// Run `cmd` to its exit. A non-zero exit is an `Ok` [`Ran`].
+/// A non-zero exit is an `Ok` [`Ran`].
 pub fn run(cmd: &Cmd) -> Result<Ran, RunError> {
     drive(cmd, None, &|| false)
 }

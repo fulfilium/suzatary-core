@@ -230,7 +230,6 @@ impl WritePort for ProtonDrive {
 pub struct ReadOnly(ProtonDrive);
 
 impl ReadOnly {
-    /// As [`ProtonDrive::read`].
     pub fn read(&self, file: &DrivePath) -> Result<FileRead, DriveFailure> {
         self.0.read(file)
     }

@@ -17,9 +17,8 @@ use crate::oauth::TokenStore;
 use crate::run::Cmd;
 use crate::sync::{read_sync_state, said, state_file, tail, write_sync_state};
 
-/// lieer's program, looked up on `PATH`.
+/// Looked up on `PATH`, as is [`MBSYNC`].
 pub const LIEER: &str = "gmi";
-/// mbsync's program, looked up on `PATH`.
 pub const MBSYNC: &str = "mbsync";
 
 /// A Microsoft account: every folder it declares ([`declared`]), each pulled on its own so one

@@ -50,9 +50,6 @@ impl<D: Log<String, Device>> Channels<D> {
     }
 
     /// The channels whose secrets resolve through `secrets`.
-    ///
-    /// # Errors
-    /// [`SecretError`] when the store could not say whether a channel is set.
     pub fn configured(
         secrets: &dyn Resolves,
         reason: &str,

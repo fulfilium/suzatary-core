@@ -11,7 +11,6 @@ use suzatary_signatures::devices::Device;
 
 use crate::lines::{Codec, Layout, Lines};
 
-/// The phones, one log per actor.
 pub type Devices = Lines<String, Device>;
 
 impl Devices {
@@ -65,7 +64,6 @@ const CODEC: Codec<Device> = Codec {
     },
 };
 
-/// An actor name made safe for a file name.
 fn safe_actor(actor: &str) -> String {
     let mapped: String = actor
         .chars()

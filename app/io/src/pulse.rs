@@ -13,7 +13,6 @@ use crate::docs::{DocCodec, Docs};
 /// The outcome's file name, beside the heartbeat.
 pub const OUTCOME: &str = "triage-outcome";
 
-/// The two files.
 #[derive(Debug, Clone)]
 pub struct Pulse {
     heartbeat: Docs<(), String>,
@@ -48,11 +47,9 @@ impl Pulse {
         }
     }
 
-    /// Record one more pass; an ok moves the heartbeat too. An outcome file that does not read
-    /// starts the run of failures again, so one bad write cannot stop later passes being recorded.
-    ///
-    /// # Errors
-    /// A file that cannot be written; a heartbeat already moved stays moved.
+    /// An ok moves the heartbeat too. An outcome file that does not read starts the run of failures
+    /// again, so one bad write cannot stop later passes being recorded; a heartbeat already moved
+    /// stays moved on a failed write.
     pub fn record(&self, pass: Pass, now: chrono::NaiveDateTime) -> Result<Recorded, StoreError> {
         let at = stamp(now);
         let outcome = self.last_outcome().then(pass, at.clone());

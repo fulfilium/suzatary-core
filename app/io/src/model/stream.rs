@@ -8,13 +8,10 @@ use suzatary_conversations::secretary::model::{SessionId, TokenUsage};
 
 use super::stream_event::StreamEvent;
 
-/// One line, tagged by its `type`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
-    /// The session's start, or a status.
     System(System),
-    /// A whole assistant message.
     Assistant {
         message: Message,
     },
@@ -32,16 +29,12 @@ pub enum Event {
     Other,
 }
 
-/// A `system` line, tagged by its `subtype`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "subtype", rename_all = "snake_case")]
 pub enum System {
-    /// The session began.
     Init {
-        /// The tools it was offered, by name.
         tools: Vec<String>,
     },
-    /// A status or any other notice.
     #[serde(other)]
     Other,
 }
@@ -52,12 +45,10 @@ pub struct Message {
     pub content: Vec<Block>,
 }
 
-/// One block of an assistant message.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Block {
     ToolUse {
-        /// The name it called, as the model said it.
         name: String,
     },
     /// Text or thinking.
@@ -65,7 +56,6 @@ pub enum Block {
     Other,
 }
 
-/// The final `result` line.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Ended {
     /// How it ended (`success`, `error_max_turns`, …), verbatim.
@@ -76,15 +66,13 @@ pub struct Ended {
     pub duration_ms: u64,
     /// The reply's text; an error that ended the run before a reply has none.
     pub result: Option<String>,
-    /// What it cost; `None` where the line did not say.
     pub usage: Option<Usage>,
     /// The calls a permission refused; an absent list is none refused.
     #[serde(default)]
     pub permission_denials: Vec<Denial>,
 }
 
-/// A `rate_limit_event`'s `rate_limit_info`, read for whether the request was refused and when
-/// the window resets.
+/// A `rate_limit_event`'s `rate_limit_info`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct RateLimitInfo {
     pub status: LimitStatus,
@@ -93,31 +81,23 @@ pub struct RateLimitInfo {
     pub resets_at: Option<i64>,
 }
 
-/// A `rate_limit_info`'s `status`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LimitStatus {
-    /// The window refused the request.
     Rejected,
     /// It let it through, with or without a warning.
     #[serde(other)]
     Allowed,
 }
 
-/// Token counts off a `result` line's `usage` object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct Usage {
-    /// Fresh prompt tokens.
     pub input_tokens: u64,
-    /// Prompt tokens written to the cache.
     pub cache_creation_input_tokens: u64,
-    /// Prompt tokens read from the cache.
     pub cache_read_input_tokens: u64,
-    /// Reply tokens.
     pub output_tokens: u64,
 }
 
-/// One refused call.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Denial {
     pub tool_name: String,
@@ -184,10 +164,6 @@ pub fn delta_of(line: &str) -> Option<String> {
     }
 }
 
-/// The final `result` line, or `None` for every other line.
-///
-/// # Errors
-/// [`Unreadable`] for a `result` line of another shape.
 pub fn result_of(line: &str) -> Result<Option<Ended>, Unreadable> {
     match Event::read(line).transpose()? {
         Some(Event::Result(ended)) => Ok(Some(ended)),
@@ -206,9 +182,7 @@ pub fn result_of(line: &str) -> Result<Option<Ended>, Unreadable> {
 mod tests {
     use super::*;
 
-    /// Every line of a real `claude --output-format stream-json` run reads as an event, none
-    /// dropped for a shape this box misread: one text delta, none from thinking or a
-    /// signature, and one result line carrying the session, the text and the usage.
+    /// Every line of a real `claude --output-format stream-json` run reads as an event.
     #[test]
     fn a_recorded_run_reads_line_by_line() {
         let lines: Vec<&str> = include_str!("../../tests/fixtures/claude-stream-json.jsonl")
@@ -238,8 +212,8 @@ mod tests {
         assert!(ended.usage.as_ref().expect("usage").output_tokens > 0);
     }
 
-    /// A result missing what every result carries is a result this box cannot read, never no
-    /// result and never one of zero turns; and its error quotes none of the line.
+    /// A result missing a field is unreadable, never no result, and its error quotes none of the
+    /// line.
     #[test]
     fn a_result_missing_its_counts_is_unreadable_and_quotes_nothing() {
         let line = r#"{"type":"result","subtype":"success","is_error":false,"num_turns":"PRIVATE-7731","session_id":"00000000-0000-4000-8000-000000000001"}"#;

@@ -25,7 +25,6 @@ pub struct Fetcher {
 }
 
 impl Fetcher {
-    /// A fetcher with this timeout per request.
     #[must_use]
     pub fn new(timeout: Duration) -> Self {
         Self {
@@ -34,11 +33,7 @@ impl Fetcher {
         }
     }
 
-    /// Perform one request.
-    ///
-    /// # Errors
-    /// [`WebFailure::Refused`] when the name resolves to a private address,
-    /// [`WebFailure::Unreachable`] for everything else the network does.
+    /// [`WebFailure::Refused`] when the name resolves to a private address.
     pub fn perform(&self, request: &WebRequest) -> Result<WebAnswer, WebFailure> {
         match request {
             WebRequest::Fetch { url } => self.page(url.as_str()),
@@ -130,7 +125,6 @@ fn failure(error: &HttpError) -> WebFailure {
     }
 }
 
-/// Text cut to [`MAX_TEXT`] characters, saying so when cut.
 fn capped(text: &str) -> String {
     if text.chars().count() <= MAX_TEXT {
         return text.to_owned();
@@ -170,8 +164,8 @@ struct Hit {
     snippet: String,
 }
 
-/// The results on a `DuckDuckGo` HTML page: each `result__a` anchor, its
-/// target unwrapped from `DuckDuckGo`'s redirect, and the snippet after it.
+/// Each `result__a` anchor of a `DuckDuckGo` HTML page, its target unwrapped from `DuckDuckGo`'s
+/// redirect, and the snippet after it.
 fn results(page: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
     for block in page.split("class=\"result__a\"").skip(1) {

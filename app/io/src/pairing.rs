@@ -32,9 +32,6 @@ impl Kept for Pairings {
 }
 
 /// A fresh code and the key of its hash, from the system's generator.
-///
-/// # Errors
-/// The generator failing.
 pub fn fresh() -> Result<(Code, Salt), String> {
     let random = || -> Result<[u8; 32], String> {
         ring::rand::generate(&ring::rand::SystemRandom::new())

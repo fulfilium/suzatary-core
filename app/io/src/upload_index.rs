@@ -17,7 +17,6 @@ use crate::attachments::{AttachmentStore, Place, Stored};
 use crate::docs::{DocCodec, Docs};
 use crate::present::Present as _;
 
-/// The index over one upload store.
 #[derive(Debug, Clone)]
 pub struct UploadIndexFiles {
     store: AttachmentStore,
@@ -34,7 +33,6 @@ struct Entry {
 }
 
 impl UploadIndexFiles {
-    /// The index of `store`, its entries under `dir`.
     #[must_use]
     pub fn new(dir: PathBuf, store: AttachmentStore) -> Self {
         let root = dir.clone();

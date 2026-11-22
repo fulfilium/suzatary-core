@@ -41,8 +41,8 @@ pub const REASON: &str = "the secretary answers a conversation";
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_mins(5);
 
-/// Pinned to an hour because the CLI's five-minute default expires between
-/// rounds of a five-minute timer.
+/// Pinned to an hour because the CLI's five-minute default expires between rounds of a
+/// five-minute timer.
 const CACHE_TTL_VAR: &str = "CLAUDE_CODE_PROMPT_CACHE_TTL";
 
 /// Where the CLI reads its user configuration: settings, a user-level `CLAUDE.md`, credentials.
@@ -64,7 +64,6 @@ impl Fence {
         &self.0
     }
 
-    /// Whether the file is there to be read, so a call may be fenced by it.
     #[must_use]
     pub fn stands(&self) -> bool {
         self.0.is_file()
@@ -77,7 +76,6 @@ impl Fence {
 pub struct TokenSource(Arc<dyn Fn() -> Result<Option<Secret>, SecretError> + Send + Sync>);
 
 impl TokenSource {
-    /// `ask`, called before every run of the CLI.
     #[must_use]
     pub fn new(
         ask: impl Fn() -> Result<Option<Secret>, SecretError> + Send + Sync + 'static,
@@ -113,7 +111,6 @@ impl std::fmt::Debug for TokenSource {
     }
 }
 
-/// The `claude` CLI, as this box runs it.
 #[derive(Debug, Clone)]
 pub struct ClaudeCli {
     binary: String,
@@ -156,14 +153,13 @@ impl ClaudeCli {
         self
     }
 
-    /// Where its runs keep sessions.
     #[must_use]
     pub fn sessions(&self) -> sessions::CliSessions {
         sessions::CliSessions::new(self.config.clone())
     }
 
-    /// The setup token `token` answers before each call; a store that cannot answer refuses
-    /// the call, so a locked store never runs the model under credentials nobody chose.
+    /// A store that cannot answer refuses the call, so a locked store never runs the model under
+    /// credentials nobody chose.
     #[must_use]
     pub fn with_token(mut self, token: TokenSource) -> Self {
         self.token = token;
@@ -182,24 +178,21 @@ impl ClaudeCli {
         self
     }
 
-    /// Where the photos a turn names are read from; without one a turn with a
-    /// photo is refused rather than sent without it.
+    /// Without one a turn with a photo is refused rather than sent without it.
     #[must_use]
     pub fn with_uploads(mut self, store: AttachmentStore) -> Self {
         self.stores.uploads = Some(store);
         self
     }
 
-    /// Where the files a verb handed over are read from; without one such a
-    /// turn is refused rather than sent without them.
+    /// Without one a turn with a verb's files is refused rather than sent without them.
     #[must_use]
     pub fn with_files(mut self, store: Blobs) -> Self {
         self.stores.files = Some(store);
         self
     }
 
-    /// The token this call runs under, once the store has answered and the fence stands;
-    /// every mode asks here before anything is spawned.
+    /// Every mode asks here, for the token and the fence, before anything is spawned.
     fn ready(&self) -> Result<Option<Secret>, ModelError> {
         let token = self
             .token
@@ -223,8 +216,7 @@ impl ClaudeCli {
         Ok((stdin_of(prompt, Blocks::of(&self.stores, turns)?), token))
     }
 
-    /// The prompt goes down stdin: a day's conversation outgrows one argv
-    /// string's 128 KB.
+    /// The prompt goes down stdin: a day's conversation outgrows one argv string's 128 KB.
     fn command(&self, mode: Mode<'_>, stdin: Stdin, token: Option<&Secret>) -> Cmd {
         let mut cmd = Cmd::new(&self.binary)
             .args(argv(&self.model, &self.fence, mode))
@@ -262,8 +254,7 @@ impl ClaudeCli {
         }
     }
 
-    /// `cmd` run to its end and its result line read, or why it failed: what its stdout said
-    /// first, since the CLI prints a limit there and not on stderr.
+    /// A failure reads stdout first, since the CLI prints a limit there and not on stderr.
     fn ended(&self, cmd: &Cmd) -> Result<Ended, ModelError> {
         let ran = run(cmd).map_err(|e| self.failure(e))?;
         let out = ran.out();
@@ -308,12 +299,8 @@ impl Model for ClaudeCli {
 }
 
 impl ClaudeCli {
-    /// `text` down stdin under `system`, with no session and none of the secretary's framing;
-    /// run it from an empty directory and configuration, so no `CLAUDE.md` is found.
-    ///
-    /// # Errors
-    /// [`ModelError`] when the CLI could not be run, failed, printed no result or one this box
-    /// cannot read, or ended with no reply.
+    /// `text` under `system` with no session and none of the secretary's framing, run from an
+    /// empty directory and configuration, so no `CLAUDE.md` is found.
     pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
@@ -322,9 +309,6 @@ impl ClaudeCli {
 
     /// The tokens of the prompt that [`ClaudeCli::plain`] sends for `text` under `system`, as
     /// the model's tokenizer counted them: fresh, written to the cache and read from it.
-    ///
-    /// # Errors
-    /// As [`ClaudeCli::plain`], and [`ModelError::Failed`] when the result carries no usage.
     pub fn prompt_tokens(&self, system: &ForModel, text: ForModel) -> Result<u64, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
@@ -417,9 +401,6 @@ impl SessionModel for ClaudeCli {
 }
 
 impl ClaudeCli {
-    /// One sessioned exchange, streamed line by line into `on_delta`.
-    ///
-    /// # Errors
     /// [`ModelError::Lost`] only when a failed run's stderr names the session or says "No
     /// conversation found"; a bad flag or a network failure also fails.
     fn exchange(
@@ -517,7 +498,6 @@ pub enum Mode<'a> {
         session_id: &'a SessionId,
         system: &'a ForModel,
     },
-    /// [`SessionModel::resume`]: continue one.
     Resume {
         session_id: &'a SessionId,
         system: &'a ForModel,
@@ -527,7 +507,6 @@ pub enum Mode<'a> {
 }
 
 impl Mode<'_> {
-    /// The system prompt it carries.
     #[must_use]
     pub fn system(&self) -> &ForModel {
         match self {
@@ -539,9 +518,8 @@ impl Mode<'_> {
     }
 }
 
-/// The exact argv for `mode`. Every mode carries the fence (no tools, no MCP
-/// server, the deny-all settings) and nothing that could widen it
-/// (`--allowedTools`, `--permission-mode`, `--mcp-config`).
+/// Every mode carries the fence (no tools, no MCP server, the deny-all settings) and nothing
+/// that could widen it (`--allowedTools`, `--permission-mode`, `--mcp-config`).
 #[must_use]
 pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
     let mut built = vec!["-p".to_owned(), "--model".to_owned(), model.to_owned()];
@@ -574,8 +552,7 @@ pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
             .extend(["--no-session-persistence", "--disable-slash-commands"].map(str::to_owned)),
         Mode::Open { .. } | Mode::Resume { .. } => {}
     }
-    // The per-machine sections move out of the system prompt so its cached
-    // prefix is the same from round to round; a plain call names its own.
+    // The per-machine sections move out so the cached prefix is the same from round to round.
     if !matches!(mode, Mode::Plain { .. }) {
         built.push("--exclude-dynamic-system-prompt-sections".to_owned());
     }
@@ -600,8 +577,8 @@ pub struct Stdin {
     pub payload: String,
 }
 
-/// Plain text when there are no blocks; otherwise one stream-json user
-/// message, the blocks followed by the text.
+/// Plain text when there are no blocks; otherwise one stream-json user message, the blocks
+/// followed by the text.
 #[must_use]
 pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
     if blocks.is_empty() {
@@ -627,9 +604,7 @@ mod tests {
 
     use suzatary_held::attachment::Attachment;
 
-    /// A CLI that met a limit exits 1 with nothing on stderr and says why on stdout; each shape
-    /// it prints reaches the caller as its class, on the stateless, plain and session paths
-    /// alike, and never as "exited 1" with no reason.
+    /// A CLI that met a limit exits 1 with nothing on stderr and says why on stdout.
     #[test]
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
         use suzatary_conversations::secretary::model::Halt;
@@ -793,7 +768,6 @@ mod tests {
         );
     }
 
-    /// The deny-all this repository ships, which the instance names by default.
     fn shipped() -> Fence {
         Fence::at(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1002,8 +976,6 @@ mod tests {
         );
     }
 
-    /// The token is asked for per call: a store locked when the server started and unlocked
-    /// since answers the next turn, with no restart; `plain` asks the same.
     #[test]
     fn an_unlocked_store_counts_at_the_next_call() {
         let unlocked = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1085,9 +1057,6 @@ mod tests {
         }
     }
 
-    /// What the compactor sends is the prompt as the whole system prompt and the ask's text as
-    /// it stands down stdin: no speaker label, no verb list, no answer envelope, no tool, no
-    /// session, the fence kept, from the directory it was given.
     #[test]
     fn a_plain_call_sends_the_prompt_and_the_text_and_nothing_else() {
         use suzatary_digest::secretary::compact_ask::{Ask, PROMPT};

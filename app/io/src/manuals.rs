@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use suzatary_base::capability::{Manual, Manuals};
 use suzatary_base::persona::Persona;
 
-/// The repository's manuals.
 #[derive(Debug)]
 pub struct Handbook {
     repo: PathBuf,

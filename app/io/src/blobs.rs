@@ -8,7 +8,6 @@ use suzatary_store::store::{Doc as _, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 
-/// Files by their digest.
 pub type Blobs = Docs<AttachmentId, Vec<u8>>;
 
 impl Blobs {

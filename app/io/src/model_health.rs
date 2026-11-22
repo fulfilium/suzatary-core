@@ -27,11 +27,7 @@ impl Answered {
         }
     }
 
-    /// Join one call of `entry` at `at`, `outcome` what it came to and `words` why it failed, and
-    /// ring when its reading moved between answering and not.
-    ///
-    /// # Errors
-    /// The register's own, when it cannot be read or written.
+    /// Join one call of `entry`, and ring when its reading moved between answering and not.
     pub fn record(
         &self,
         entry: &str,

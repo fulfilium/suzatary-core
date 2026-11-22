@@ -1,5 +1,5 @@
-//! The undocumented endpoint Claude Code's `/usage` reads: what the subscription's allowance
-//! stands at, per window, which the compactor reads before it spends any of it.
+//! The undocumented endpoint Claude Code's `/usage` reads: the subscription's allowance per
+//! window, which the compactor reads before it spends any of it.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,8 +14,7 @@ use suzatary_services::usage::{Allowance as AllowanceSum, Reported, Window};
 use crate::http::{Http, Req, Ureq};
 use crate::secrets::{Resolves, Secretspec};
 
-/// Where Claude Code's own `/usage` asks; undocumented, and the OAuth token is in
-/// scope for it.
+/// Undocumented; the OAuth token is in scope for it.
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 
 #[derive(Debug)]
@@ -30,7 +29,6 @@ enum Answered {
     },
 }
 
-/// The most of a refusal's words the page is given.
 const WORDS_CAP: usize = 300;
 
 /// The error's `type` and `message` when the body is the API's error shape, else the body.
@@ -125,8 +123,7 @@ fn reported_of(answer: &Value, as_of: DateTime<Utc>) -> HashMap<Window, Reported
     found
 }
 
-/// One window's reading as stored on disk, kept apart from [`Reported`] so the core
-/// type does not become the file's schema by accident.
+/// Kept apart from [`Reported`] so the core type does not become the file's schema by accident.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredReported {
     utilization: f64,
@@ -187,10 +184,8 @@ fn write_remembered(path: &Path, last_reported: &HashMap<Window, Reported>) {
     let _ = crate::durable::replace(path, text.as_bytes(), crate::durable::Mode::Private);
 }
 
-/// The allowance endpoint.
-///
-/// The endpoint is asked at most hourly. The last successful reading is kept in memory and on
-/// disk, so a 429 reports `RateLimited` alongside it.
+/// The allowance endpoint, asked at most hourly; the last successful reading is kept on disk, so
+/// a 429 reports `RateLimited` alongside it.
 pub struct Allowance {
     secrets: Box<dyn Resolves + Send + Sync>,
     reason: &'static str,
@@ -199,8 +194,6 @@ pub struct Allowance {
     cache: Mutex<Cached>,
 }
 
-/// The read schedule, the last successful answer per window, and whether the
-/// endpoint is currently refusing.
 #[derive(Debug, Default)]
 struct Cached {
     last_reported: HashMap<Window, Reported>,
@@ -223,7 +216,6 @@ impl Allowance {
         )
     }
 
-    /// [`Allowance::new`] over an injected transport, secrets and remembered path.
     #[must_use]
     pub fn over(
         secrets: Box<dyn Resolves + Send + Sync>,
@@ -245,8 +237,7 @@ impl Allowance {
     }
 }
 
-/// A change in whether the endpoint is answering, handed back for the binary to log
-/// once per change because this crate does not log.
+/// Handed back for the binary to log once per change, because this crate does not log.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Transition {
     /// The first 429 after a success, or the first read ever.
@@ -254,7 +245,6 @@ pub enum Transition {
         /// The endpoint's own `retry-after`, in seconds.
         retry_after_seconds: u64,
     },
-    /// The first success after being throttled.
     StoppedThrottling,
 }
 
@@ -265,7 +255,6 @@ impl Allowance {
         self.read_allowance().0
     }
 
-    /// The same, plus the [`Transition`] this call caused, if any.
     #[must_use]
     pub fn read_allowance(&self) -> (Vec<(Window, AllowanceSum)>, Option<Transition>) {
         let now = Utc::now();

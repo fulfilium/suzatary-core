@@ -56,7 +56,6 @@ enum Asked {
     Refused,
 }
 
-/// The box's GitHub tokens.
 pub struct GithubTokens {
     dir: PathBuf,
     secrets: Box<dyn Resolves + Send + Sync>,
@@ -74,7 +73,6 @@ impl GithubTokens {
         }
     }
 
-    /// Asks GitHub through `http`.
     #[must_use]
     pub fn with_http(self, http: Box<dyn Http>) -> Self {
         Self { http, ..self }

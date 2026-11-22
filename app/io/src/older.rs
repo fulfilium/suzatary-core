@@ -1,16 +1,14 @@
 //! Searching each account's mail server for mail older than the routine sync's window: the
 //! interpreter of `suzatary_triage::mail::older_mail::OlderMail`.
 //!
-//! - A Microsoft account is `EXAMINE`d over IMAP and pulled into `<subdir>/older-inbox`, with a
-//!   state file of its own beside the routine pull's.
+//! - A Microsoft account is `EXAMINE`d over IMAP into `<subdir>/older-inbox`, with a state file
+//!   of its own beside the routine pull's.
 //! - A Gmail or Google account is searched through the Gmail API into `<subdir>/older-all-mail`,
-//!   each message named by its Gmail id as lieer names its own, so one lieer already holds is
-//!   never fetched again.
-//! - A Proton account is not searched: mbsync reaches the Bridge, which offers no server search.
+//!   each file named by its Gmail id as lieer names its own, so one lieer holds is never fetched.
+//! - A Proton account is not searched: the Bridge offers no server search.
 //!
 //! Every leaf lands read and outside the `+inbox` tagging, so nothing pulled enters the triage
-//! queue. The pull runs under the sync's hold, and the index is updated once, after every
-//! account.
+//! queue; the pull runs under the sync's hold, and the index runs once, after every account.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -36,18 +34,11 @@ use crate::tokens::{Bearer, unix_now};
 /// What a Gmail account's search covers: every label but Spam and Trash, as the API searches.
 pub const GMAIL_FOLDER: &str = "All Mail";
 
-/// The index the pulled leaves join.
 pub trait Index: Send + std::marker::Sync {
     /// Index every file written since the last run.
-    ///
-    /// # Errors
-    /// What the index said.
     fn index(&self) -> Result<(), String>;
 
     /// The rows the index holds for these Message-IDs, newest first; none for none.
-    ///
-    /// # Errors
-    /// What the index said.
     fn rows(&self, ids: &[String]) -> Result<Vec<Summary>, String>;
 }
 
@@ -88,10 +79,6 @@ fn rows_of(mail: &crate::mailbox::Notmuch, ids: &[String]) -> Result<Vec<Summary
 
 /// Mints an access token for a Google account's Gmail API from the grant the box keeps.
 pub trait GoogleTokens {
-    /// A token for `account`, or why there is none.
-    ///
-    /// # Errors
-    /// The grant is missing or refused, or Google did not answer.
     fn token(
         &self,
         account: &suzatary_mail::mail::address::EmailAddress,
@@ -341,7 +328,6 @@ impl<C: Connect, H: Http, I: Index> Servers<C, H, I> {
         })
     }
 
-    /// One account's answer: its rows read back from the index, or why there are none.
     fn answered(&self, landed: Landed, indexed: &Result<(), String>) -> Outcome {
         if let Err(why) = indexed
             && landed.count() > 0
@@ -592,7 +578,6 @@ mod tests {
         }
     }
 
-    /// Opens a fresh [`Imap`] per account, sharing its log with the test.
     struct Fake {
         log: Arc<Mutex<Vec<String>>>,
         messages: BTreeMap<u32, String>,
@@ -719,9 +704,8 @@ mod tests {
         .expect("a routine state");
     }
 
-    /// An IMAP account: the server is examined and searched with the translated criteria,
-    /// what the routine pull holds is skipped, the rest lands read in `older-inbox`, the index
-    /// runs once, and each pulled message is answered by its Message-ID.
+    /// What the routine pull holds is skipped, the rest lands read in `older-inbox`, and the
+    /// index runs once.
     #[test]
     fn an_imap_search_pulls_what_the_box_never_fetched() {
         let root = scratch("imap");
@@ -778,7 +762,6 @@ mod tests {
         );
     }
 
-    /// A second search over the same range fetches nothing and runs no index.
     #[test]
     fn a_second_search_fetches_nothing_again() {
         let root = scratch("again");
@@ -804,7 +787,7 @@ mod tests {
         );
     }
 
-    /// The cap, end to end: thirty matches, twenty-five pulled, five counted on the server.
+    /// Thirty matches, twenty-five pulled, five counted on the server.
     #[test]
     fn an_imap_search_pulls_at_most_the_cap() {
         let root = scratch("cap");
@@ -837,8 +820,8 @@ mod tests {
         );
     }
 
-    /// A non-ASCII term is not put to an IMAP server, and the answer says so; a Proton account
-    /// is not searched, and the answer says why. Neither opens a session.
+    /// A non-ASCII term is not put to an IMAP server, and a Proton account is not searched;
+    /// neither opens a session.
     #[test]
     fn what_cannot_be_asked_is_not_searched_and_says_why() {
         let root = scratch("unsearched");
@@ -863,8 +846,7 @@ mod tests {
         assert!(said.contains(&format!("{PROTON}: not searched")), "{said}");
     }
 
-    /// Two searches at once, as two rounds would ask them: the sync's hold puts one after the
-    /// other, so each message is fetched once and lands once.
+    /// The sync's hold puts one search after the other, so each message lands once.
     #[test]
     fn two_searches_at_once_fetch_each_message_once() {
         let root = scratch("twice");
@@ -919,8 +901,6 @@ mod tests {
         }
     }
 
-    /// Offline: neither server answers, so neither account is searched, each says why, nothing
-    /// lands and no index runs.
     #[test]
     fn offline_nothing_is_searched_and_each_account_says_why() {
         let root = scratch("offline");
@@ -987,8 +967,6 @@ mod tests {
         })
     }
 
-    /// A Gmail account: the API is asked with the translated `q`, the message lieer already
-    /// holds is skipped, and the other lands read under its Gmail id.
     #[test]
     fn a_gmail_search_pulls_what_lieer_does_not_hold() {
         let root = scratch("gmail");
@@ -1027,8 +1005,7 @@ mod tests {
         assert!(sent.iter().all(|url| !url.contains("/a1")), "{sent:?}");
     }
 
-    /// A Google account is searched with the token the box mints from its own grant: no token
-    /// endpoint is asked, and lieer's file, which holds no grant, is never read.
+    /// No token endpoint is asked, and lieer's file, which holds no grant, is never read.
     #[test]
     fn a_google_account_is_searched_on_the_boxs_own_token() {
         let root = scratch("google");
@@ -1093,9 +1070,8 @@ mod tests {
         )
     }
 
-    /// With the real notmuch: a message older than the window is found on the server, pulled,
-    /// indexed and shown by the id the answer gave; and when the same message later lands in
-    /// the routine sync's Inbox too, the index still holds it once.
+    /// With the real notmuch; when the same message later lands in the routine sync's Inbox too,
+    /// the index still holds it once.
     #[test]
     fn a_pulled_message_is_indexed_once_and_shown() {
         if crate::run::run(&crate::run::Cmd::new("notmuch").arg("--version")).is_err() {

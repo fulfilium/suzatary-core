@@ -10,7 +10,6 @@ use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::for_model::ForModel;
 
-/// The whole conversation as a system and a user piece.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prompt {
     /// The rules the secretary works under, from the conversation.

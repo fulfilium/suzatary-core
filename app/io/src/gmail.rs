@@ -65,7 +65,6 @@ struct RawLieer {
 }
 
 impl Lieer {
-    /// The grant in `text`, lieer's credentials file.
     pub fn parse(text: &str) -> Result<Self, GrantError> {
         let raw: RawLieer = serde_json::from_str(text)
             .map_err(|error| GrantError::Credentials(error.to_string()))?;

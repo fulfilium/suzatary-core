@@ -18,7 +18,6 @@ use suzatary_base::capability::{Login, Peer, Whois, WhoisError};
 /// Long enough for a slow netmap read, short enough that a wedged daemon does not hang a request.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-/// [`Whois`], against tailscaled's local API over its unix socket.
 #[derive(Debug)]
 pub struct Tailscaled {
     socket: PathBuf,
@@ -26,7 +25,6 @@ pub struct Tailscaled {
 }
 
 impl Tailscaled {
-    /// Talk to the daemon over `socket`.
     #[must_use]
     pub fn new(socket: impl Into<PathBuf>) -> Self {
         Self {

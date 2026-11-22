@@ -9,10 +9,9 @@ use suzatary_base::tripwire::suspicious;
 
 use crate::present::Present as _;
 
-/// What a renderer has computed (the Prodrome's design §6.2): (function, source) keys to HTML,
-/// in a [`Table`] and, optionally, one file per key in a cache directory. Neither is a source of
-/// truth. A key whose two replicas hold two values is a [`Finding`]: memory keeps both and answers
-/// neither, the file is deleted, and the source is compiled again.
+/// What a renderer has computed (the Prodrome's design §6.2), in memory and optionally on disk,
+/// neither a source of truth: a key whose two replicas hold two values is a [`Finding`], memory
+/// keeps both and answers neither, the file is deleted, and the source is compiled again.
 #[derive(Debug)]
 pub struct Rendered {
     table: Table<String>,
@@ -48,7 +47,6 @@ impl Rendered {
         }
     }
 
-    /// A tabulation in memory alone.
     #[must_use]
     pub fn in_memory(capacity: usize) -> Rendered {
         Rendered {
@@ -82,10 +80,6 @@ impl Rendered {
         Ok(Some(html))
     }
 
-    /// `html` kept under `key`, in memory and on disk.
-    ///
-    /// # Errors
-    /// A [`Finding`] when the key already held another value.
     pub fn remember(&self, key: Key, html: &str) -> Result<(), Finding> {
         // An unreadable file is left for `recall` to report: neither joined nor written over.
         let file = self
@@ -114,11 +108,8 @@ impl Rendered {
         kept
     }
 
-    /// Forget what `key` keeps, in memory and on disk (synced), and every function's folder that
-    /// is not current: an older build may have written the same words under its own name since.
-    ///
-    /// # Errors
-    /// A removal or its sync failing: the file may still be there.
+    /// Also forgets every function's folder that is not current, since an older build may have
+    /// written the same words under its own name; on an error the file may still be there.
     pub fn forget(&self, key: &Key) -> std::io::Result<()> {
         self.table.forget(key);
         let Some(disk) = &self.disk else {

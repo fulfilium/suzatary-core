@@ -7,7 +7,6 @@ use suzatary_topics::secretary::topics::stores::TopicStores;
 
 use crate::objects::Objects;
 
-/// The memberships and the aliases, opened together.
 #[derive(Debug)]
 pub struct Topics {
     /// `secretary-topics/` by default.
@@ -17,7 +16,7 @@ pub struct Topics {
 }
 
 impl Topics {
-    /// Both stores, at their directories. Nothing is read until something asks.
+    /// Nothing is read until something asks.
     #[must_use]
     pub fn open(
         memberships: impl Into<std::path::PathBuf>,
@@ -30,15 +29,11 @@ impl Topics {
     }
 
     /// Both begun, so a tab's first write has a prodrome to rest on.
-    ///
-    /// # Errors
-    /// Either store unreadable or not begun.
     pub fn begin(&self) -> Result<(), StoreError> {
         self.memberships.begin()?;
         self.aliases.begin()
     }
 
-    /// The record a reader or a writer holds.
     #[must_use]
     pub fn stores(&self) -> TopicStores<'_> {
         TopicStores {

@@ -1,10 +1,8 @@
 //! Stores written before change identity, read by this build.
 //!
-//! `tests/fixtures/legacy/` is the e2e fixture's chains and replica (`suzatary-dev
-//! fixture-chain --propose --reviewed --settings`) and one store with two content conflicts and
-//! a state conflict, all written by the core that sealed every append on the tips. They are never
-//! regenerated: `legacy/readings.txt` is what that core read out of them, and every line of it
-//! that is not a conflict must read the same forever.
+//! `tests/fixtures/legacy/` was written by the core that sealed every append on the tips and is
+//! never regenerated: every line of `legacy/readings.txt` that is not a conflict must read the
+//! same forever.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -19,7 +17,6 @@ use suzatary_record::record::{EventStore, Record};
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
 
-/// The chains and the agent's replica.
 const CHAINS: [&str; 4] = ["events", "events-suzatary", "events-triage", "conflicted"];
 
 fn legacy() -> PathBuf {
@@ -131,7 +128,6 @@ fn walkdir(root: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// Every object file under `root`, with its bytes.
 fn objects(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     walkdir(root)
         .into_iter()
@@ -208,7 +204,6 @@ fn writes_on_a_legacy_chain() {
     assert_eq!(shown, pinned, "the objects two writes add, in order");
     assert!(store.verify().is_empty(), "{:?}", store.verify());
 
-    // Every other todo reads as it did.
     let untouched = reading("events", &chain(&root), &policy(), at);
     let pinned = std::fs::read_to_string(legacy().join("readings.txt")).expect("the pin");
     for line in untouched.lines().filter(|line| {

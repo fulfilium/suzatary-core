@@ -48,7 +48,6 @@ use suzatary_mail::mail::{
 use suzatary_triage::mail::known::Known;
 use suzatary_triage::mail::verbs;
 
-/// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].
 pub struct Notmuch {
     binary: PathBuf,
     /// The root each account's `subdir` is relative to.
@@ -108,7 +107,6 @@ impl Notmuch {
         self
     }
 
-    /// The notmuch config every call carries as `NOTMUCH_CONFIG`.
     #[must_use]
     pub fn with_config(mut self, config: impl Into<PathBuf>) -> Self {
         self.config = Some(config.into());
@@ -248,7 +246,6 @@ impl Notmuch {
         self.located.resolve(prefix)
     }
 
-    /// By notmuch id, or by a listed hash's prefix.
     fn shown_by(&self, id: &str) -> Result<Lookup, MailError> {
         let shown = |found: Option<Shown>| found.map_or(Lookup::Absent, Lookup::Shown);
         if let Some(found) = self.show_by_native_id(id)? {
@@ -264,7 +261,6 @@ impl Notmuch {
         })
     }
 
-    /// [`Self::shown_by`], an ambiguous prefix a query error.
     fn resolve_show(&self, id: &str) -> Result<Option<Shown>, MailError> {
         match self.shown_by(id)? {
             Lookup::Shown(shown) => Ok(Some(shown)),
@@ -517,8 +513,7 @@ fn full(
     }
 }
 
-/// One content hash and every place it was seen: the first appearance read, whose locator and
-/// folder its row shows, and the others.
+/// One content hash and every place it was seen; its row shows the first appearance read.
 struct CanonicalMessage {
     hash: String,
     sender: String,
@@ -616,7 +611,6 @@ fn parse_id_array(raw: &[u8]) -> Result<Vec<String>, MailError> {
     }
 }
 
-/// What a notmuch id or a hash prefix finds.
 enum Lookup {
     Shown(Shown),
     /// Also when a listed hash matches and notmuch no longer holds its message.
@@ -625,8 +619,7 @@ enum Lookup {
     Ambiguous(Ambiguous),
 }
 
-/// One `notmuch show` message, shared by the message and thread paths so a thread costs one
-/// call.
+/// One `notmuch show` message, shared by the message and thread paths so a thread costs one call.
 struct Shown {
     id: String,
     /// Printed only in the agent's `show` answer.

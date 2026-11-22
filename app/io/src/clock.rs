@@ -5,7 +5,6 @@
 
 use suzatary_base::capability::{Clock, Datetime};
 
-/// The box's own wall clock.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemClock;
 

@@ -1,20 +1,9 @@
 //! Law 68, the Prodrome's script law (`prodrome_core::laws::script`), over every store this
-//! application keeps whose schema is not the conversations' lines: the todo chain, the
-//! decisions, the inbox, the memory, the topics and their aliases, the digests and the asks.
+//! application keeps whose schema is not the conversations' lines.
 //!
-//! Each store's strategy of writes draws what the application writes, through the schema's own
-//! constructors: a todo authored, revised and settled; a decision decided, revised and
-//! withdrawn; a proposal asked and every response to it; a fact remembered, consolidated and
-//! forgotten; a topic put on a target, taken off and aliased; a node summarized, found unfit,
-//! asked about and retracted; a refusal of a post. Each actor writes under its own name at one
-//! of four minutes, over three entities, so writes collide in one tick and arrive after readings
-//! at later minutes.
-//!
-//! Each store's claimed reading is read under its own policy: the chain's `Untrusted{triage}`
-//! and the digests' owners. The normal run draws [`CASES`] scripts of at most [`STEPS`] steps for
-//! each store, with faults and without. The nightly run, `cargo test -p suzatary-secretary --test all
-//! script_law::a_long_run -- --ignored --nocapture`, draws 1024 scripts of twice as many steps
-//! for each store and prints scripts and steps per second.
+//! Each actor writes at one of four minutes over three entities, so writes collide in one tick.
+//! The nightly run is `cargo test -p suzatary-secretary --test all
+//! script_law::a_long_run -- --ignored --nocapture`.
 
 use std::collections::BTreeSet;
 
@@ -59,28 +48,21 @@ use suzatary_topics::secretary::topics::topic::Topic;
 
 use suzatary_inbox::drawn::{a_response, asked};
 
-/// The longest script the normal run draws.
 pub(crate) const STEPS: usize = 24;
 
-/// The scripts the normal run draws for each store, with faults and without.
 const CASES: u32 = 16;
 
-/// The minute `minute` of one morning: four of them, so writes collide in one tick.
 fn at(minute: u32) -> Datetime {
     Datetime::new(2026, 10, 1, 9, minute, 0, 0).expect("an instant")
 }
 
-/// One of three entities, by position.
 fn one_of<T: Clone + std::fmt::Debug + 'static>(of: &[T]) -> impl Strategy<Value = T> {
     prop::sample::select(of.to_vec())
 }
 
-/// The minute a write is dated: one of four.
 fn a_minute() -> impl Strategy<Value = Datetime> {
     (0..4u32).prop_map(at)
 }
-
-// --- the todo chain ----------------------------------------------------------------------------
 
 const TODOS: [&str; 3] = ["alpha", "beta", "gamma"];
 
@@ -93,8 +75,7 @@ fn a_spec() -> impl Strategy<Value = Term> {
     ]
 }
 
-/// A todo authored (as a todo or as a decision awaiting a tap), its spec revised, or a lifecycle
-/// event: what the box, the phone and the triage write to a chain.
+/// What the box, the phone and the triage write to a chain.
 pub(crate) fn a_todo_write(who: Who) -> impl Strategy<Value = TodoEvent> {
     let actor = who.name();
     prop_oneof![
@@ -134,8 +115,6 @@ pub(crate) fn a_todo_write(who: Who) -> impl Strategy<Value = TodoEvent> {
     ]
 }
 
-// --- the decisions -----------------------------------------------------------------------------
-
 const DECISIONS: [&str; 3] = ["onewriter", "twochains", "nopdf"];
 
 fn decision(name: &str) -> DecisionId {
@@ -172,8 +151,6 @@ pub(crate) fn a_decision_write(who: Who) -> impl Strategy<Value = DecisionEvent>
         })
 }
 
-// --- the inbox ---------------------------------------------------------------------------------
-
 const PROPOSALS: [&str; 3] = ["p0", "p1", "p2"];
 
 /// A proposal asked, or a response to it: the responses are the inbox schema's own strategy.
@@ -189,8 +166,6 @@ pub(crate) fn an_inbox_write(who: Who) -> impl Strategy<Value = InboxEvent> {
         said,
     })
 }
-
-// --- the memory --------------------------------------------------------------------------------
 
 fn words(n: u64) -> TextName {
     TextName::new(format!("{n:064x}")).expect("a text name")
@@ -233,8 +208,6 @@ pub(crate) fn a_memory_write(who: Who) -> impl Strategy<Value = MemoryEvent> {
     )
 }
 
-// --- the topics and their aliases ------------------------------------------------------------
-
 const TOPICS: [&str; 3] = ["tax", "travel", "garden"];
 
 fn topic(n: usize) -> Topic {
@@ -275,8 +248,6 @@ pub(crate) fn an_alias_write(who: Who) -> impl Strategy<Value = AliasEvent> {
     )
 }
 
-// --- the digests -------------------------------------------------------------------------------
-
 fn node(n: u8) -> Hash {
     Hash::new(format!("{n:064x}")).expect("a name")
 }
@@ -315,8 +286,6 @@ pub(crate) fn a_digest_write(who: Who) -> impl Strategy<Value = DigestEvent> {
     )
 }
 
-// --- the asks ----------------------------------------------------------------------------------
-
 /// The box's refusal of an object posted to a store a tab writes, final or outdated.
 pub(crate) fn an_ask_write(who: Who) -> impl Strategy<Value = AskEvent> {
     (
@@ -341,8 +310,6 @@ pub(crate) fn an_ask_write(who: Who) -> impl Strategy<Value = AskEvent> {
         })
 }
 
-// --- the runs ----------------------------------------------------------------------------------
-
 fn runs<E: Schema, P: Policy<E> + Clone>(
     vocabulary: &E::Vocabulary,
     policy: &P,
@@ -361,8 +328,8 @@ fn owners() -> BTreeSet<Actor> {
     [Who::Ada.actor()].into()
 }
 
-/// Each store's two laws, its claimed reading under its own policy: every invariant after every
-/// step of a script with faults, and of an honest one, which also verifies clean.
+/// Each store's two laws under its own policy: every invariant after every step of a script with
+/// faults, and of an honest one, which also verifies clean.
 macro_rules! script_laws {
     ($($store:ident: $vocabulary:expr, $policy:expr, $writes:expr;)*) => {
         $(mod $store {
@@ -389,9 +356,7 @@ macro_rules! script_laws {
             }
         })*
 
-        /// Law 68 over 1024 scripts of `2 * STEPS` steps with faults for each store, for the
-        /// nightly run; prints each store's rate, and panics at the first broken invariant with
-        /// its shrunk script.
+        /// Law 68 over 1024 scripts of `2 * STEPS` steps with faults for each store.
         #[test]
         #[ignore = "the nightly run calls it"]
         fn a_long_run_of_every_store_keeps_every_invariant() {

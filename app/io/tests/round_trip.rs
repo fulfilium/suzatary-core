@@ -1,14 +1,10 @@
 //! An object is named by its bytes, so every whole object a store holds must reprint as it was
 //! stored: a printer that printed one otherwise would give it another name. A file that does not
 //! hash to its name is no whole (a husk, or a tampered file), and `verify` checks it. A proposal
-//! is named by its act as first asked, so no id names two acts. An id is not re-derived from a
-//! migrated act: a proposal carried into the literal form keeps the id its act's JSON hashed to,
-//! since a conversation's lines name it.
+//! is named by its act as first asked, so no id names two acts; a migrated act keeps the id its
+//! act's JSON hashed to, since a conversation's lines name it.
 //!
-//! The frozen trees were written by older printers: `fixtures/inbox-proposals` was written once
-//! and carried by two migrations since, its readings unmoved, and `stores-changes/` holds one
-//! store of each schema. `SUZATARY_ROUND_TRIP` names a data directory, a box's or a fixture's, to
-//! check the same way.
+//! `SUZATARY_ROUND_TRIP` names a data directory, a box's or a fixture's, to check the same way.
 
 use std::path::Path;
 
@@ -28,10 +24,8 @@ use suzatary_topics::secretary::topics::reading::{AliasEvent, MembershipEvent};
 
 use crate::stores;
 
-/// The check of one store's schema.
 type Check = fn(&Path) -> Read;
 
-/// Each store directory a data tree may hold, with the check of its schema.
 const STORES: [(&str, Check); 10] = [
     ("events", faults::<TodoEvent>),
     ("events-suzatary", faults::<TodoEvent>),
@@ -45,7 +39,6 @@ const STORES: [(&str, Check); 10] = [
     (stores::ASKS, faults::<AskEvent>),
 ];
 
-/// How many wholes a store held, and one line for each fault.
 struct Read {
     wholes: usize,
     faults: Vec<String>,

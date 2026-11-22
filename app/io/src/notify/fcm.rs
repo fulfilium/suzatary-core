@@ -14,12 +14,10 @@ const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 
 const DEFAULT_TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
 
-/// A parsed FCM v1 service-account key.
 #[derive(Debug, Clone)]
 pub struct ServiceAccount {
     /// The Firebase project the `messages:send` URL names.
     pub project_id: String,
-    /// The JWT's `iss`.
     pub client_email: String,
     /// The RSA key that signs the JWT.
     pub private_key_pem: Secret,
@@ -41,7 +39,6 @@ fn default_token_uri() -> String {
 }
 
 impl ServiceAccount {
-    /// A key file's JSON, or `None`.
     #[must_use]
     pub fn from_json(text: &str) -> Option<Self> {
         let raw: RawServiceAccount = serde_json::from_str(text).ok()?;
@@ -53,7 +50,6 @@ impl ServiceAccount {
         })
     }
 
-    /// The base64 of a key file's JSON, or `None`.
     #[must_use]
     pub fn from_base64(raw: &str) -> Option<Self> {
         use base64::Engine as _;
@@ -65,10 +61,7 @@ impl ServiceAccount {
     }
 }
 
-/// `FCM_SERVICE_ACCOUNT_B64`, parsed, or `None` when it is unset or does not parse.
-///
-/// # Errors
-/// [`SecretError`] when the store could not answer.
+/// `FCM_SERVICE_ACCOUNT_B64`, or `None` when it is unset or does not parse.
 pub fn credentials(
     secrets: &dyn Resolves,
     reason: &str,
@@ -117,7 +110,6 @@ fn default_expires_in() -> u64 {
     3600
 }
 
-/// Google's push service: one data message per registered phone.
 pub const API: &str = "https://fcm.googleapis.com";
 
 fn message(token: &str, push: &Printed) -> serde_json::Value {
@@ -130,7 +122,6 @@ fn message(token: &str, push: &Printed) -> serde_json::Value {
     })
 }
 
-/// What one device's send came to.
 pub(super) enum Sent {
     Accepted,
     /// FCM says the device token is gone for good.
@@ -169,7 +160,6 @@ impl Grant for ServiceAccount {
     }
 }
 
-/// A service account and the bearer it last bought.
 pub(super) struct Sender(Bearer<ServiceAccount>);
 
 impl Sender {

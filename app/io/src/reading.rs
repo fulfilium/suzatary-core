@@ -12,7 +12,6 @@ use suzatary_store::store::Only;
 
 use crate::objects::Objects;
 
-/// One chain, read.
 pub type Reading = Only<Objects<TodoEvent>>;
 
 /// The chain at `root`, read under its own `policy`.

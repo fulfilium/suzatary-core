@@ -1,6 +1,5 @@
-//! Microsoft's mailbox over IMAP and a maildir to land it in: [`Outlook`] and [`Folder`]
-//! interpret `suzatary_mail::mail::imap`'s `Session` and [`Maildir`]. They keep the core's
-//! promises: UIDs sorted, reads peeked, folders quoted once.
+//! Microsoft's mailbox over IMAP and a maildir to land it in, keeping the core's promises: UIDs
+//! sorted, reads peeked, folders quoted once.
 //!
 //! The stream is this workspace's own rustls, not the crate's `rustls-tls`, which pins an older
 //! rustls: one crypto stack to keep patched.
@@ -85,7 +84,6 @@ pub struct Outlook<S: Read + Write = TlsStream> {
 }
 
 impl<S: Read + Write> Outlook<S> {
-    /// An authenticated session, nothing selected yet.
     #[must_use]
     pub fn over(session: imap::Session<S>) -> Self {
         Self { session }
@@ -100,8 +98,7 @@ impl<S: Read + Write> Outlook<S> {
 }
 
 impl Outlook {
-    /// Connect to `host:port` over TLS and authenticate `email` with XOAUTH2. No error ever
-    /// carries the bearer token.
+    /// No error ever carries the bearer token.
     pub fn connect(
         host: &str,
         port: u16,
@@ -141,7 +138,6 @@ impl Outlook {
     }
 }
 
-/// TCP, TLS and XOAUTH2 to `host:port` as `email`, no mailbox selected yet.
 pub(crate) fn authenticated(
     host: &str,
     port: u16,

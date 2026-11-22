@@ -17,14 +17,9 @@ use suzatary_todo::template::{Job, Library};
 
 /// Compiling a job: a template called with a value, or a lone text.
 pub trait Compiler: Sync + Send {
-    /// Typst's whole HTML document for `job`, or what typst said was wrong with it.
-    ///
-    /// # Errors
-    /// What typst refused, or why the compile did not finish.
     fn compile(&self, job: &Job) -> Result<String, Rejected>;
 }
 
-/// The closed world, compiled here and now.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InProcess;
 
@@ -40,10 +35,6 @@ impl Typeset for InProcess {
     }
 }
 
-/// `job` compiled: typst's whole HTML document, or its errors.
-///
-/// # Errors
-/// What typst refused.
 pub fn compile(job: &Job) -> Result<String, Rejected> {
     let mut project = match job.library {
         Library::Closed => Project::restricted(),

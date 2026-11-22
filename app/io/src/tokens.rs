@@ -8,7 +8,6 @@ use crate::http::Http;
 /// A token is renewed this many seconds before it expires, not in flight.
 pub const SLACK_SECONDS: u64 = 60;
 
-/// A freshly minted token and how many seconds it lives.
 #[derive(Debug, Clone)]
 pub struct Fresh<T> {
     pub token: T,
@@ -21,11 +20,9 @@ pub trait Grant {
     type Token: Clone;
     type Error;
 
-    /// Mint one now.
     fn mint(&self, http: &dyn Http, now: u64) -> Result<Fresh<Self::Token>, Self::Error>;
 }
 
-/// One grant and the token it last minted.
 pub struct Bearer<G: Grant> {
     grant: G,
     held: Mutex<Option<(G::Token, u64)>>,

@@ -37,14 +37,12 @@ pub const SMTP_PORT: u16 = 587;
 /// A wedged server fails the send rather than hanging the caller.
 const MS_TIMEOUT: Duration = Duration::from_mins(1);
 
-/// Microsoft's submission endpoint, sending `out` as `email`, authenticated by `token`.
-///
 /// Driven step by step over `SmtpConnection` rather than `send_raw`, because only the failed
 /// step says whether the message may have gone.
 ///
 /// # Errors
-/// `WrongIdentity` when `out`'s sender is not `email`, before any connection; otherwise `Transport` naming the failed step, or `Unanswered` when the
-/// connection failed after the message was handed over.
+/// `WrongIdentity` before any connection; otherwise `Transport` naming the failed step, or
+/// `Unanswered` when the connection failed after the message was handed over.
 pub struct Microsoft<'a> {
     /// The account, which `From` must be.
     pub email: &'a str,
@@ -85,7 +83,6 @@ fn identity(out: &Outgoing, email: &str) -> Result<(), SendError> {
     }
 }
 
-/// The connection, its greeting and EHLO, then STARTTLS and the EHLO over it.
 fn open(
     server: impl std::net::ToSocketAddrs,
     tls: &TlsParameters,
@@ -182,16 +179,13 @@ const PROTON_TIMEOUT: Duration = Duration::from_secs(30);
 /// A fixed string, because secretspec's audit log is searched for exactly this text.
 const PROTON_REASON: &str = "suzatary send: proton smtp";
 
-/// The local Proton Bridge, sending `out` authenticated as `smtp_user`.
-///
 /// The Bridge's self-signed certificate is pinned rather than trusted through a root store,
 /// because webpki refuses a CA certificate as an end entity.
 /// `smtp_user` is kept apart from `out`'s sender, which may be any address the account holds.
 ///
 /// # Errors
-/// `Refused` for an envelope the RFC 5321 grammar refuses, before anything is opened;
-/// `Transport` at `Credentials` for an unreadable certificate or unresolved password, or at the step the Bridge failed;
-/// `Unanswered` when the connection failed after the message was handed over.
+/// `Refused` before anything is opened; `Transport` at `Credentials` or at the step the Bridge
+/// failed; `Unanswered` when the connection failed after the message was handed over.
 pub struct Bridge<'a> {
     /// Where it listens: [`BRIDGE`] on the box.
     pub address: SocketAddr,
@@ -317,7 +311,8 @@ fn gmail_send_raw(http: &dyn Http, token: &Secret, raw: &str) -> Result<(), Send
 /// Send `out` via the Gmail API, borrowing lieer's grant from `maildir`.
 ///
 /// # Errors
-/// `Transport` at `Credentials`, `Auth`, `Connect` or `Message` (a 4xx); `Unanswered` for a POST lost on the way or a 5xx.
+/// `Transport` at `Credentials`, `Auth`, `Connect` or `Message` (a 4xx); `Unanswered` for a POST
+/// lost on the way or a 5xx.
 pub struct Gmail<'a> {
     /// The account's lieer maildir, which holds its grant.
     pub maildir: &'a Path,
@@ -336,9 +331,6 @@ impl Transport for Gmail<'_> {
 }
 
 /// Send `out` via the Gmail API with a `token` the box minted from a Google sign-in.
-///
-/// # Errors
-/// As [`Gmail`]'s, but for the credentials, which the caller read.
 pub struct GoogleApi<'a> {
     /// An access token holding `gmail.modify`.
     pub token: &'a Secret,
@@ -476,8 +468,6 @@ mod tests {
         );
     }
 
-    /// Where the fake ends: nowhere, with a refusal at a step, or by closing where its reply
-    /// was due.
     #[derive(Debug, Clone, Copy)]
     enum Stop {
         Nowhere,
@@ -487,8 +477,7 @@ mod tests {
 
     type Fail = Box<dyn std::error::Error + Send + Sync>;
 
-    /// The reply due at `step`, or what `ending` says instead; `true` when the
-    /// conversation ends here.
+    /// `true` when the conversation ends here.
     fn answer(
         stream: &mut std::net::TcpStream,
         ending: Stop,

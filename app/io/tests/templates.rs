@@ -19,7 +19,6 @@ fn compiles(template: &dyn Checked, world: &BTreeMap<String, String>) -> bool {
     })
 }
 
-/// The world of `template`'s examples.
 fn world(template: &dyn Checked) -> BTreeMap<String, String> {
     template
         .examples()

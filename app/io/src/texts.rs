@@ -20,7 +20,6 @@ pub struct Texts<T: 'static> {
 }
 
 impl<T: Words + 'static> Texts<T> {
-    /// The texts under `dir`, made on the first write.
     #[must_use]
     pub fn open(dir: PathBuf) -> Self {
         let under = dir.clone();
