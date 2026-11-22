@@ -8,7 +8,7 @@ import ui from "../app/ui"
 import registers from "../app/registers"
 import time from "../app/time"
 import { boxFolds, ensureFold, held as replicaHeld, signingHere, watchOthers, watchReplica } from "../prodrome/sync"
-import { awaitingTrust, losses, stranded, stuckBehind, unsentTodos } from "../prodrome/replica"
+import { awaitingTrust, losses, stranded, stuckBehind, unsentActs, unsentTodos } from "../prodrome/replica"
 import onscreen, { store } from "../app/store"
 import signer from "../prodrome/signer"
 import storesync from "../prodrome/storesync"
@@ -149,6 +149,7 @@ export namespace local {
     const { held: blocked, reasons } = stuckBehind(r)
     return {
       todos: Object.fromEntries(unsentTodos(r)),
+      acts: unsentActs(r),
       refused: reasons.map(one => one.reason),
       blocked,
       stranded: stranded(r).length,

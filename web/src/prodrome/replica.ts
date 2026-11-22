@@ -8,6 +8,7 @@
 import type { Frontier as Named, ReceiptPayload, RefusedObject, SinceRead, SkeletonNode, StoredObject } from "../wire/generated/wire";
 import heads from "./heads";
 import lo from "../algebra/lo";
+import time from "../app/time";
 
 /**
  * What a replica can hold: an object with its literal, or a skeleton's node, which names what it rests on and carries
@@ -547,6 +548,27 @@ export function unsentTodos(replica: Replica): Map<string, Unsent> {
     todos.set(todo, worse(todos.get(todo) ?? now, now));
   }
   return todos;
+}
+
+// The change moving the chains' replicas into the worker replaces this scan and `unsentTodos` with the core's answer.
+/** An unsynced act: its todo, its object's name, and its event's instant, naive UTC to the microsecond. */
+export type OwnAct = { readonly todo: string; readonly name: string; readonly at: string };
+
+/**
+ * The same scan, with the instant every event prints right after its todo. A print that names neither, or an instant no
+ * calendar holds, is no act here, so one unreadable print never fails the whole reading the page parses.
+ */
+const ACT = /\btodo='([a-z0-9_-]+)', at=datetime\((\d+), (\d+), (\d+), (\d+), (\d+), (\d+)(?:, (\d+))?\)/;
+
+export function unsentActs(replica: Replica): OwnAct[] {
+  const two = (n: string): string => n.padStart(2, "0");
+  return unsynced(replica).flatMap((object) => {
+    const m = ACT.exec(object.literal);
+    if (m === null) return [];
+    const [, todo = "", y = "", mo = "", d = "", h = "", mi = "", s = "", us = "0"] = m;
+    const at = `${y.padStart(4, "0")}-${two(mo)}-${two(d)}T${two(h)}:${two(mi)}:${two(s)}.${us.padStart(6, "0")}`;
+    return time.ms(at) === null ? [] : [{ todo, name: object.hash, at }];
+  });
 }
 
 /**

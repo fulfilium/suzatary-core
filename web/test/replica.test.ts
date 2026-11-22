@@ -6,12 +6,6 @@
  * what a receipt teaches, and what a refusal holds back are all decisions over
  * SETS OF NAMES. The effectful half (`sync.ts`) is behaviour, and `web/e2e/` is
  * where that is checked against a real server.
- *
- * This replaced `queue.test.ts`, and the two are worth comparing: that file
- * tested a queue of WISHES — enqueue, dequeue-on-applied, mark-failed, a cap, a
- * nonce to settle by. None of those exist. An object is a FACT this replica
- * already holds, so the only questions left are which ones the box has and
- * which ones it will not take.
  */
 
 import { test } from "node:test";
@@ -37,6 +31,7 @@ import {
   toPush,
   unsignedWrites,
   unsynced,
+  unsentActs,
   unsentTodos,
   wentBack,
 } from "../src/prodrome/replica";
@@ -307,6 +302,16 @@ test("a refused act, and every act resting on it, says refused; one refused for 
   assert.deepEqual([...unsentTodos(refused)].sort(), [["alpha", "Refused"], ["beta", "Refused"]]);
   const waiting = replica({ objects, synced: [A], refused: [{ hash: C, reason: "not trusted yet", kind: "trust" }] });
   assert.deepEqual([...unsentTodos(waiting)].sort(), [["alpha", "Sending"], ["beta", "AwaitingTrust"]]);
+});
+
+test("an unsent act reads its todo, its name and its instant to the microsecond; a taken one, a merge and a day no calendar holds are none", () => {
+  const stamped: StoredObject = { hash: C, literal: `Sealed(prev='${B}', event=Reopened(todo='beta', at=datetime(2026, 9, 7, 12, 0, 5, 1234), actor='ada', note=''))` };
+  const unreal: StoredObject = { hash: name("e"), literal: `Sealed(prev='${C}', event=Completed(todo='beta', at=datetime(2026, 2, 30, 12, 0, 0), actor='ada', note=''))` };
+  const held = replica({ objects: [sealed(A, "", "alpha"), sealed(B, A, "alpha"), stamped, woven(D, [B, C]), unreal], synced: [A] });
+  assert.deepEqual(unsentActs(held), [
+    { todo: "alpha", name: B, at: "2026-09-07T12:00:00.000000" },
+    { todo: "beta", name: C, at: "2026-09-07T12:00:05.001234" },
+  ]);
 });
 
 test("a merge names no todo, so it marks no card", () => {

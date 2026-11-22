@@ -70,7 +70,7 @@ fn todo_msg() -> impl Strategy<Value = todo::Msg> {
         }
     });
     let unsent = (0usize..3, 0u32..2).prop_map(|(refused, waiting)| {
-        json!({"todos": {}, "refused": (0..refused).map(|i| format!("no {i}")).collect::<Vec<_>>(), "blocked": refused,
+        json!({"todos": {}, "acts": [], "refused": (0..refused).map(|i| format!("no {i}")).collect::<Vec<_>>(), "blocked": refused,
             "stranded": 0, "losses": ["h1"], "waiting": waiting})
     });
     prop_oneof![

@@ -47,9 +47,12 @@
 # back whole, and a refused own line's print let go), so its lines rise by 40,000; views 3,716,279
 # (+4,340: the composer's edit mode, its kept files and the drawn lines it seals over, less the
 # routes' edit and regenerate acts), within its lines.
-views_bg.wasm x86_64-linux 3720000
+# undoflicker, merged with 2.1.215: views 3,726,097 (+7,208 over master's 3,718,889: each
+# unsent act's todo, name and instant read into the todos page, the acts it keeps until a reading
+# holds them, and the owed todos a tree question carries), so both views lines rise by 10,000.
+views_bg.wasm x86_64-linux 3730000
 prodrome_bg.wasm x86_64-linux 5070000
 typst_bg.wasm x86_64-linux 22020000
-views_bg.wasm aarch64-linux 3730000
+views_bg.wasm aarch64-linux 3740000
 prodrome_bg.wasm aarch64-linux 5080000
 typst_bg.wasm aarch64-linux 22090000

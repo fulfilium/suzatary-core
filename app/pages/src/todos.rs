@@ -24,7 +24,7 @@ use viewtree::{Node, Program, view};
 use crate::authoring::{author, sealed};
 use crate::chrome::{self, Chrome, Masthead, Shape, Width, chip, empty, mark, percent, pie};
 use crate::form::{self, Markup, PriceMsg, Pricing};
-use crate::held::{Folded, Unsent, Unsents};
+use crate::held::{Folded, Own, Unsent, Unsents};
 use crate::needsyou::Route;
 use crate::places::{Place as To, Question};
 use crate::runtime::{
@@ -446,6 +446,9 @@ struct Asked {
     of: Of,
     members: Vec<Placed>,
     by: Grouping,
+    /// The todos owed an act when this was asked: a tree drawn from it keeps their cards open, so
+    /// a reading that settles an act keeps the line in sight until the tree it prices is drawn.
+    owed: BTreeSet<String>,
 }
 
 /// A term's price: its value (`None` for `∅`), or why it does not link (`questions.Priced`).
@@ -624,8 +627,9 @@ pub struct Model {
     now: i64,
     fold: Option<Folded>,
     unsent: Unsents,
-    /// Todos whose act left `unsent` since the fold last moved, kept until it holds the act.
-    held_over: BTreeSet<String>,
+    /// This tab's acts that left `unsent` and that no reading drawn since holds: each keeps its
+    /// todo's line on the list until a reading drawn holds it, or no longer names it.
+    owed: Vec<Own>,
     waiting: usize,
     route: Route,
     shared: String,
@@ -749,7 +753,7 @@ impl Model {
             now: f.now,
             fold: None,
             unsent: Unsents::default(),
-            held_over: BTreeSet::new(),
+            owed: Vec::new(),
             waiting: 0,
             route: Route::default(),
             shared: String::new(),
@@ -850,16 +854,23 @@ impl Model {
         }
     }
 
-    /// The rows with content that are not decisions and pass the filter or hold an unsent act.
-    fn members(&self) -> Vec<Placed> {
+    /// Each todo this tab wrote an act on that the box has not taken or the reading drawn does not
+    /// hold: its line stays on the list until neither is so.
+    fn owed_todos(&self) -> BTreeSet<String> {
+        self.unsent
+            .todos
+            .keys()
+            .chain(self.owed.iter().map(|a| &a.todo))
+            .cloned()
+            .collect()
+    }
+
+    /// The rows with content that are not decisions and pass the filter or are `owed`.
+    fn members(&self, owed: &BTreeSet<String>) -> Vec<Placed> {
         let now = self.at_ms();
         self.entries()
             .iter()
-            .filter(|e| {
-                self.filter.takes(e, now)
-                    || self.unsent.todos.contains_key(&e.todo)
-                    || self.held_over.contains(&e.todo)
-            })
+            .filter(|e| self.filter.takes(e, now) || owed.contains(&e.todo))
             .filter_map(|e| {
                 let a = e.authored.as_ref().filter(|a| kind(a) != "decision")?;
                 let specs = match &self.basis {
@@ -882,10 +893,12 @@ impl Model {
     }
 
     fn question(&self) -> Asked {
+        let owed = self.owed_todos();
         Asked {
             of: self.of(),
-            members: self.members(),
+            members: self.members(&owed),
             by: self.by,
+            owed,
         }
     }
 
@@ -921,9 +934,12 @@ impl Model {
             return Vec::new();
         }
         let q = self.question();
-        let drawn = matches!(&self.grown, Drawn::Tree(_, _, d) if **d == q);
-        let asked = matches!(&self.wants, Wants::Asking(_, a) if *a == q);
-        if drawn || asked {
+        // The tree drawn answers the question again, so an ask still out for another is stale.
+        if matches!(&self.grown, Drawn::Tree(_, _, d) if **d == q) {
+            self.wants = Wants::Nothing;
+            return Vec::new();
+        }
+        if matches!(&self.wants, Wants::Asking(_, a) if *a == q) {
             return Vec::new();
         }
         let n = self.asked.wrapping_add(1);
@@ -962,16 +978,17 @@ impl Model {
         }
     }
 
-    /// A card holding a line whose act is on its way stays open, unless the viewer set it.
+    /// A card holding a line that was owed an act when its tree was asked stays open, unless the
+    /// viewer set it.
     fn shown_folds(&self) -> BTreeMap<String, bool> {
         let mut out = BTreeMap::new();
-        if let Drawn::Tree(t, ..) = &self.grown {
-            let sending = |t: &Tree<Line>| {
+        if let Drawn::Tree(t, _, q) = &self.grown {
+            let owed = |t: &Tree<Line>| {
                 t.nodes()
                     .iter()
-                    .any(|n| todo_of(&n.place).is_some_and(|id| self.unsent.todos.contains_key(id)))
+                    .any(|n| todo_of(&n.place).is_some_and(|id| q.owed.contains(id)))
             };
-            for t in std::iter::once(t).chain(&t.children).filter(|t| sending(t)) {
+            for t in std::iter::once(t).chain(&t.children).filter(|t| owed(t)) {
                 out.insert(key(&t.node.place), true);
             }
         }
@@ -1317,8 +1334,14 @@ impl Model {
                             != v.as_ref().map(|f| f.at.clone());
                         self.fold = v;
                         self.problem = None;
+                        // An act stays owed while the reading drawn names it and does not yet hold it; a
+                        // fold that unloads names nothing.
+                        self.owed.retain(|a| {
+                            self.fold
+                                .as_ref()
+                                .is_some_and(|f| f.names(a) && !f.holds(a))
+                        });
                         if moved {
-                            self.held_over.clear();
                             return self.reread();
                         }
                     }
@@ -1329,12 +1352,13 @@ impl Model {
             }
             Hold::Unsent => {
                 if let Reading::Val { v } = read::<Unsents>(reading) {
+                    let fold = self.fold.as_ref();
                     let left = self
                         .unsent
-                        .todos
-                        .keys()
-                        .filter(|t| !v.todos.contains_key(*t));
-                    self.held_over.extend(left.cloned());
+                        .acts
+                        .iter()
+                        .filter(|a| !v.acts.contains(a) && !fold.is_some_and(|f| f.holds(a)));
+                    self.owed.extend(left.cloned());
                     self.unsent = v;
                     return self.reread();
                 }

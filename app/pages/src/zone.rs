@@ -76,6 +76,25 @@ pub(crate) fn shift(day: &str, n: i64) -> String {
     )
 }
 
+/// A written instant, naive UTC, read once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
+pub(crate) struct Instant(NaiveDateTime);
+
+impl Instant {
+    /// `None` for a string that names no instant.
+    #[must_use]
+    pub(crate) fn of(at: &str) -> Option<Instant> {
+        parsed(at).map(Instant)
+    }
+}
+
+impl<'de> Deserialize<'de> for Instant {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Instant, D::Error> {
+        let at = String::deserialize(d)?;
+        Instant::of(&at).ok_or_else(|| serde::de::Error::custom(format!("not an instant: {at}")))
+    }
+}
+
 #[must_use]
 pub(crate) fn ms(at: &str) -> Option<i64> {
     parsed(at).map(|t| t.and_utc().timestamp_millis())

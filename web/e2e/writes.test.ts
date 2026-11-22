@@ -8,14 +8,6 @@
  * the DOM says the act happened, and `/api/fold` — fetched by the page, through
  * the same gate — agrees.
  *
- * WHAT CHANGED IN STAGE 3, and it is the whole point of the first scene. The
- * card used to come off the list OPTIMISTICALLY, on a guess about what the
- * server would answer, and go back on a refusal. There is no guess now: the act
- * is an object this browser sealed and holds, and the list is a fold of the
- * objects it holds, by the same core the box folds with. So the card is off the
- * list because the chain THIS REPLICA holds says so — which is why the scene
- * can still hold the network open and check the box has heard nothing.
- *
  * This file drives `E2E_BASE_WRITE`, a fixture server with a chain of its own
  * (`scripts/web-e2e.sh`), because these scenes MOVE the tip and every other
  * file reads a chain that must not move under it.
@@ -80,11 +72,7 @@ app.scene("Done marks only its line as sending, raises no banner, and the line l
   // The replica has to be holding the chain before it can seal onto it.
   await untilReplica(app.page);
 
-  // PROVEN RATHER THAN TIMED. The post is held at the network, so the box has
-  // not seen it; a card already off the list is off it because THIS BROWSER
-  // folded its own objects, and the box's fold still says open. Racing a poll
-  // against a five-millisecond round trip would be a test that means nothing
-  // when it passes.
+  // The post is held at the network, so a card off the list is off because this browser folded its own objects.
   // The Done button arrives with `GET /api/me`'s answer, not with the line.
   await openInPlace(app.page, todos.high.id);
   await app.page.waitFor(`document.querySelector('.rowopen[data-todo="${todos.high.id}"] .act-done') !== null`, {
@@ -101,9 +89,7 @@ app.scene("Done marks only its line as sending, raises no banner, and the line l
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".tree .row.pending").length`), 1, "only its own row is marked");
   await release();
 
-  // And the box's own fold, which is the only opinion that counts about the
-  // chain. The tip moved, so /events said so; this asks the route rather than
-  // trusting what this browser already believes.
+  // The box's own fold, asked by its route.
   await app.page.waitFor(
     `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${todos.high.id}" && e.state === "completed"))`,
     { timeout: 15000 },
@@ -238,15 +224,9 @@ app.scene("a recurring todo offers Did it instead of Done, and stays open once t
 
 // --- editandtick (docs/APP.md §4 items 2-3) -----------------------------------
 //
-// The first two scenes author a FRESH todo, the same guarantee the add sheet
-// scene above already relies on: a fresh id cannot collide with anything
-// another file in this suite is doing to the fixture chain. The subtodo
-// scene is different — the add sheet has no field for a checklist, so it
-// reaches for `pack-bags`, the one fixture todo that carries one. That is
-// safe even after `sync.test.ts` (which sorts before this file, and
-// completes `pack-bags` for real): `authoring::update_todo` edits CONTENT,
-// which is independent of the lifecycle, so a resolved todo's checklist is
-// exactly as tappable as an open one's.
+// The first two scenes author a fresh todo, whose id no other file's collides with. The subtodo scene takes
+// `pack-bags`, the one fixture todo with a checklist: `authoring::update_todo` edits content, which the lifecycle
+// does not gate, so `sync.test.ts` completing it first changes nothing here.
 
 app.scene("editing a body changes the line and the chain follows", async () => {
   await app.open(WRITE_BASE);
@@ -367,8 +347,7 @@ app.scene("ticking a subtodo moves the chip", async () => {
 
 // --- Defer, as a curve (docs/APP.md §4 item 4, project chain `deferascurve`) --
 //
-// Both scenes author a FRESH todo, the same reasoning `editandtick`'s scenes
-// above give: a fresh id cannot collide with anything else in this suite.
+// Both scenes author a fresh todo, as `editandtick`'s do.
 
 app.scene("deferring a todo takes it to the bottom of the list, fully fulfilled until the day", async () => {
   await app.open(WRITE_BASE);
@@ -435,13 +414,8 @@ app.scene("a deferral to a date not after today is refused in the box's own word
 
 // --- Undo and redo ------------------------------------------------------------
 //
-// The chain never rewrites, so undoing is an append, not a rollback — which is
-// why this scene checks the SAME instrument every write scene does: the fold
-// the box keeps, not just the DOM. `WRITE_BASE` is shared by every file that
-// needs a WRITER login, each on the SAME chain, and `sync.test.ts` already
-// spends `book-flight`, `pack-bags` and `file-permit` completing them for real
-// — so a scene here needs a todo NONE of them claims. `email-harrow` is the
-// one fixture todo nothing else touches.
+// An undo is an append, so the scene checks the box's fold as well as the DOM. `email-harrow` is the one fixture
+// todo no other file on the shared `WRITE_BASE` chain touches.
 
 /** Author a todo through the sheet, the way the scene above does, and return
  * its id (the body's slug) once the box's fold holds it, so a scene that asks
@@ -464,53 +438,69 @@ async function addTodo(body: string, category: string): Promise<string> {
   return id;
 }
 
+/** How far behind the box's clock this scene sets the tab's. A phone's clock runs behind the box's by some amount, and an
+ * undo is the one act the box stamps, so for that long every reading the tab draws holds the undo's object and does
+ * not yet believe it: the window in which a line could leave, made long enough to see every time. */
+const BEHIND_MS = 2000;
+
 app.scene("the toast's Undo button reopens what was just completed, and U redoes it", async () => {
-  await app.open(WRITE_BASE);
-  assert.equal(await stateOf(todos.agents.id), "open");
-  await untilReplica(app.page);
+  const id = todos.agents.id;
+  const behind = await app.page.beforeEveryDocument(`{ const now = Date.now; Date.now = () => now() - ${BEHIND_MS}; }`);
+  try {
+    await app.open(WRITE_BASE);
+    assert.equal(await stateOf(id), "open");
+    await untilReplica(app.page);
+    const open = await app.page.evaluate<string>(`document.querySelector('${row(id)}').dataset.worth`);
 
-  await doneFromList(app.page, todos.agents.id);
-  // The act takes the line off the OPEN list once the box has it, so the toast's own button — not the list's cursor —
-  // is what this scene undoes through.
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${todos.agents.id}" && e.state === "completed"))`,
-    { timeout: 15000 },
-  );
-  await app.page.waitFor(`document.querySelector('${row(todos.agents.id)}') === null`, { timeout: 15000 });
+    await doneFromList(app.page, id);
+    // The act takes the line off the OPEN list once the box has it, so the toast's own button — not the list's cursor —
+    // is what this scene undoes through.
+    await app.page.waitFor(
+      `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "completed"))`,
+      { timeout: 15000 },
+    );
+    await app.page.waitFor(`document.querySelector('${row(id)}') === null`, { timeout: 15000 });
+    await app.page.waitFor(`document.querySelector("#toast .toastact") !== null`, { timeout: 4000 });
 
-  await app.page.waitFor(`document.querySelector("#toast .toastact") !== null`, { timeout: 4000 });
-  await app.page.click("#toast .toastact");
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${todos.agents.id}" && e.state === "open"))`,
-    { timeout: 15000 },
-  );
+    // The line at every frame and every change to the list from the tap on: absent, or drawn at its worth.
+    await app.page.evaluate(`(() => {
+      const seen = (window.__line = []);
+      const look = () => seen.push(document.querySelector('${row(id)}')?.dataset.worth ?? null);
+      window.__lineWatch = new MutationObserver(look);
+      window.__lineWatch.observe(document.getElementById("view"), { subtree: true, childList: true, attributes: true });
+      const frame = () => { look(); if (window.__lineWatch !== null) requestAnimationFrame(frame); };
+      requestAnimationFrame(frame);
+    })()`);
+    await app.page.click("#toast .toastact");
+    await app.page.waitFor(
+      `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "open"))`,
+      { timeout: 15000 },
+    );
+    // Settled once a reading that believes the undo is drawn: it prices the line open again.
+    await app.page.waitFor(`document.querySelector('${row(id)}')?.dataset.worth === ${JSON.stringify(open)}`, { timeout: 15000 });
+    const seen = await app.page.evaluate<(string | null)[]>(`(window.__lineWatch.disconnect(), (window.__lineWatch = null), window.__line)`);
+    const back = seen.findIndex((worth) => worth !== null);
+    assert.ok(back !== -1, "the line came back");
+    assert.ok(!seen.slice(back).includes(null), `once back, the line never left the list before the reading that holds the undo: ${JSON.stringify(seen)}`);
 
-  // Open again: focus its settled line (a pending one can leave the list until the next reading) and redo with U.
-  await app.page.waitFor(
-    `(() => { const m = document.querySelector('${row(todos.agents.id)}:not(.pending) .rowmain'); m?.focus(); return m !== null && document.activeElement === m; })()`,
-    { timeout: 8000 },
-  );
-  await app.page.press("U");
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${todos.agents.id}" && e.state === "completed"))`,
-    { timeout: 15000 },
-  );
+    await app.page.waitFor(
+      `(() => { const m = document.querySelector('${row(id)} .rowmain'); m?.focus(); return m !== null && document.activeElement === m; })()`,
+    );
+    await app.page.press("U");
+    await app.page.waitFor(
+      `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "completed"))`,
+      { timeout: 15000 },
+    );
+  } finally {
+    await behind();
+  }
 });
 
 // --- the one-line field beside an act ----------------------------------
 
 /**
- * A LINE ON DONE REACHES BOTH RECORDS. `app/cli/tests/acts.rs` already pins
- * the two halves of this over HTTP directly — an event's `note` field, and
- * `heard_from_objects` turning a sealed one into a `Turn::Act` on adoption —
- * what only a browser can check is that the field beside the button is the
- * thing that gets there: typed on the todo page, travelling through
- * `core.lifecycle`'s own `note` argument and `POST /api/objects`, never a
- * second path the page invented.
- *
- * A FRESH TODO, for the same reason `addTodo` exists above: this
- * chain is shared with `sync.test.ts` and this file's own undo scene, and a
- * todo none of them claims is one this scene authors itself.
+ * `app/cli/tests/acts.rs` pins both halves over HTTP; this checks that the field beside the button is what reaches
+ * them, through `core.lifecycle`'s `note` and `POST /api/objects`. On a fresh todo, as `addTodo` makes one.
  */
 app.scene("Done with a line lands on the sealed event and the default conversation", async () => {
   await app.open(WRITE_BASE);
@@ -531,10 +521,7 @@ app.scene("Done with a line lands on the sealed event and the default conversati
   const completed = stream.find((link) => link.kind === "Completed");
   assert.equal(completed?.note, "the meeting moved to October", "the sealed event carries the line");
 
-  // THE DEFAULT CONVERSATION HEARS IT TOO — adoption (`POST /api/objects`) is
-  // the only moment `complete`/`cancel`/`reopen` ever reach the box at all
-  // (§5), so the act turn can only land once the box has actually taken the
-  // object, not when this page believes it sealed one.
+  // The default conversation hears it once the box adopts the object (§5).
   await app.page.waitFor(
     `${DEFAULT}.then((b) => b.turns.some((t) => t.who === "act" && t.text === "${owner.name} completed it: the meeting moved to October"))`,
     { timeout: 15000 },
