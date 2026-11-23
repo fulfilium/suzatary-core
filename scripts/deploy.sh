@@ -33,8 +33,11 @@
 # it cannot catch (SIGKILL) leaves them stopped: `systemctl --user start` the units its "paused"
 # line names.
 #
+# A bound is the seconds a wait slept between its looks, plus the limit of a look that ran it out.
+#
 # Environment (seconds unless named):
 #   SUZATARY_APP_URL                 where /api/about answers; default: `app_url` in suzatary-web's instance
+#   SUZATARY_DEPLOY_INTERVAL         between two looks of a wait (5; the restarted units' 3)
 #   SUZATARY_DEPLOY_ROOTS_TIMEOUT    the roots run (600); the build itself has no timeout
 #   SUZATARY_DEPLOY_UNITS_TIMEOUT    the restarted units to run the new app (600)
 #   SUZATARY_DEPLOY_RUNS_TIMEOUT     the runs under way of another app to end before the move (1800)
@@ -53,6 +56,8 @@ roots_timeout="${SUZATARY_DEPLOY_ROOTS_TIMEOUT:-600}"
 units_timeout="${SUZATARY_DEPLOY_UNITS_TIMEOUT:-600}"
 runs_timeout="${SUZATARY_DEPLOY_RUNS_TIMEOUT:-1800}"
 revert_timeout="${SUZATARY_DEPLOY_REVERT_TIMEOUT:-600}"
+interval="${SUZATARY_DEPLOY_INTERVAL:-5}"
+units_interval="${SUZATARY_DEPLOY_INTERVAL:-3}"
 
 trap 'exit 143' TERM
 trap 'exit 129' HUP
@@ -63,6 +68,13 @@ die() {
   exit 1
 }
 say() { printf 'deploy: %s\n' "$*" >&2; }
+# again <bound> <interval>: false once the wait's `slept` reached <bound>; else sleeps <interval>
+# and adds it to `slept`, which each wait declares, at 0, as its own.
+again() {
+  ((slept < $1)) || return 1
+  sleep "$2"
+  slept=$((slept + $2))
+}
 usage() {
   echo "usage: scripts/deploy.sh <rev> [--instance <file>] [--flake <file>] [--ref <branch>]   (rev: a full 40-character commit id)" >&2
   exit 64
@@ -312,26 +324,25 @@ read_roots() {
 busy() { [[ "$active" == activating || "$active" == deactivating || "$active" == reloading ]]; }
 # A start while the unit is active is coalesced into a run that read some other lock.
 idle() {
-  local deadline=$((SECONDS + roots_timeout))
+  local slept=0
   read_roots
   while busy; do
-    ((SECONDS < deadline)) || die "a suzatary-roots run was still under way after ${roots_timeout}s ($1)."
     say "a suzatary-roots run is under way; waiting for it ($1)"
-    sleep 5
+    again "$roots_timeout" "$interval" \
+      || die "a suzatary-roots run was still under way after ${roots_timeout}s ($1)."
     read_roots
   done
 }
 
 # await_run <epoch-us>: false when no run started at or after it finished in time.
 await_run() {
-  local deadline=$((SECONDS + roots_timeout))
+  local slept=0
   while :; do
     read_roots
     if ((started_us >= $1)) && ! busy; then
       return 0
     fi
-    ((SECONDS < deadline)) || return 1
-    sleep 5
+    again "$roots_timeout" "$interval" || return 1
   done
 }
 
@@ -360,7 +371,7 @@ record() {
 # drained <when> <what then>: once no run of another app is under way, within the bound; else the
 # deploy ends, saying what happens then.
 drained() {
-  local listed unit others deadline=$((SECONDS + runs_timeout))
+  local listed unit others slept=0
   while :; do
     listed="$(systemctl --user list-units --type=service --state=activating,active,deactivating \
       --plain --no-legend 'suzatary-*.service')" \
@@ -376,10 +387,9 @@ drained() {
       fi
     done <<<"$listed"
     ((${#others[@]} == 0)) && return 0
-    ((SECONDS < deadline)) \
-      || die "${others[0]} still ran after ${runs_timeout}s $1: let it end (journalctl --user -u ${others[0]}) or stop it (systemctl --user stop ${others[0]}), then run scripts/deploy.sh $rev again. $2"
     say "waiting for ${others[*]}, a run of another app, to end $1"
-    sleep 5
+    again "$runs_timeout" "$interval" \
+      || die "${others[0]} still ran after ${runs_timeout}s $1: let it end (journalctl --user -u ${others[0]}) or stop it (systemctl --user stop ${others[0]}), then run scripts/deploy.sh $rev again. $2"
   done
 }
 # Wait first, so nothing is stopped for a wait that cannot end; stop; then look once more, since
@@ -594,14 +604,16 @@ done
 ((${#refused[@]} == 0)) \
   || die "${rev:0:12} is built and linked, but ${refused[*]} would not restart, so it does not run ${rev:0:12}; see journalctl --user -u ${refused[0]}."
 say "waiting for $about"
-deadline=$((SECONDS + units_timeout))
+# One wait: the links below share the about-check's bound.
+slept=0
 code=000
 while :; do
-  code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$about")" || true
+  # curl's 28: the look ran out its --max-time.
+  code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$about")" \
+    || { (($? != 28)) || slept=$((slept + 5)); }
   [[ "$code" == 200 ]] && break
-  ((SECONDS < deadline)) \
+  again "$units_timeout" "$units_interval" \
     || die "$about did not answer 200 within ${units_timeout}s after the restart (last: $code); see journalctl --user -u suzatary-web; $(go_back)."
-  sleep 3
 done
 
 # The timers and the watcher start again before any push.
@@ -614,9 +626,8 @@ resume || late=yes
 # Each unit's wrapper roots the app it runs as <unit>-app (nix/services.nix `resolveApp`).
 for unit in "${restarted[@]}" "${watcher[@]}"; do
   until [[ "$(readlink -f "$roots/${unit%.service}-app" || true)" == "$app" ]]; do
-    ((SECONDS < deadline)) \
+    again "$units_timeout" "$units_interval" \
       || die "$unit restarted but runs $(readlink -f "$roots/${unit%.service}-app" || echo nothing), not $app, the app the lock names; see journalctl --user -u $unit."
-    sleep 3
   done
 done
 

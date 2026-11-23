@@ -3,7 +3,7 @@
 //! `gh` that answers their titles and plays GitHub, and a stub gate whose halves' verdicts
 //! are functions of the tree.
 
-use super::process::{children, runs};
+use super::process::{children, runs, until};
 use super::{Scratch, repo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -1476,10 +1476,10 @@ fn stopped_by_term(
     assert_eq!(line, "up\n", "the half runs");
     let gate = std::fs::read_to_string(hold.with_extension("pid")).expect("the held gate's pid");
     let gate = gate.trim().to_owned();
-    assert!(
-        within_two_minutes(|| !children(&gate).is_empty()),
-        "the held gate waits on its fifo"
-    );
+    let gate_pid: u32 = gate.parse().expect("a pid");
+    until("the held gate waits on its fifo", &[gate_pid], || {
+        !children(&gate).is_empty()
+    });
     let half: Vec<String> = std::iter::once(gate.clone())
         .chain(children(&gate))
         .collect();
@@ -2092,15 +2092,15 @@ fn train_gate_github_killed_deletes_its_branch() {
         }
         let gating = ignoring.spawn().expect("train.sh starts");
         let branch = format!("refs/heads/gate/{train}");
-        assert!(
-            within_two_minutes(|| {
+        until(
+            &format!("{signal}: the train pushes its branch and waits on the run"),
+            &[gating.id()],
+            || {
                 t.core(&["for-each-ref", "--format=%(refname)", "refs/heads/gate/"]) == branch
                     && t.github_calls()
                         .iter()
                         .any(|call| call.contains("/actions/runs/") && !call.contains("head_sha"))
-            }),
-            "{signal}: the train pushed its branch and waits on the run: {:?}",
-            t.github_calls()
+            },
         );
         run(
             Command::new("kill")
@@ -4459,20 +4459,18 @@ impl Train {
     fn check_beside_a_train(&self, n: u32) -> Output {
         let lock = self.work().join(".git/train/lock");
         std::fs::create_dir_all(lock.parent().expect("its directory")).expect("the train's state");
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&lock)
-            .expect("the lock file opens");
-        let mut holder = Command::new("flock")
-            .arg(&lock)
-            .args(["sleep", "120"])
+        // An open file is not yet a taken lock: the holder says when it holds it.
+        let taken = self.scratch.join("lock-taken");
+        let mut holder = Command::new("bash")
+            .args([
+                "-c",
+                r#"exec 9>>"$1" && flock 9 && : >"$2" && exec sleep infinity"#,
+                "holder",
+            ])
+            .args([&lock, &taken])
             .spawn()
-            .expect("flock runs");
-        assert!(
-            within_two_minutes(|| !holders(&lock).is_empty()),
-            "the lock is held"
-        );
+            .expect("a holder of the lock");
+        until("the lock is held", &[holder.id()], || taken.exists());
         let (head, status) = (
             self.git(&["rev-parse", "HEAD"]),
             self.git(&["status", "--porcelain"]),
@@ -4480,6 +4478,7 @@ impl Train {
         let out = self.train(&["check", &n.to_string()]);
         let _ = holder.kill();
         let _ = holder.wait();
+        std::fs::remove_file(&taken).expect("the holder's word");
         assert_eq!(
             self.git(&["rev-parse", "HEAD"]),
             head,

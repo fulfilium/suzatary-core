@@ -10,6 +10,22 @@ pub fn runs(pid: &str) -> bool {
     })
 }
 
+/// Polls `done` until it holds, however long that takes, so a loaded machine only makes it later;
+/// fails naming `what` once a process of `alive` has ended without it, since then it cannot come.
+///
+/// # Panics
+///
+/// When a process of `alive` ended and `done` still does not hold.
+pub fn until(what: &str, alive: &[u32], done: impl Fn() -> bool) {
+    while !done() {
+        if let Some(pid) = alive.iter().find(|pid| !runs(&pid.to_string())) {
+            assert!(done(), "never: {what}: {pid} ended first");
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 /// The children of the process `pid`, by pid.
 ///
 /// # Panics

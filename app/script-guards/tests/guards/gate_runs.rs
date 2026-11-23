@@ -3,7 +3,7 @@
 //! machine from one heavy step to the next, and lets one gate at a time into a checkout.
 
 use super::gate_list::{Step, heavies, heavy_order, steps, togethers};
-use super::process::{children, runs};
+use super::process::{children, runs, until};
 use super::scratch::{Scratch, on_path, repo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -201,14 +201,9 @@ fn merge_gate_a_second_gate_in_one_checkout_does_not_start() {
         .expect("the first gate starts");
     let first_pid = first.id();
     // The first gate holds its lock from before its first step until it ends.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    while !started.exists() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the first gate never ran a step"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    until("the first gate runs a step", &[first_pid], || {
+        started.exists()
+    });
 
     let second = Command::new(gate.scratch.join("scripts/merge-gate.sh"))
         .arg("--no-live")
@@ -817,19 +812,12 @@ fn merge_gate_two_worktrees_share_the_heavy_lock() {
             .spawn()
             .expect("a gate starts")
     };
-    let wait_for = |what: &str, done: &dyn Fn() -> bool| {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-        while !done() {
-            assert!(std::time::Instant::now() < deadline, "never: {what}");
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-    };
     let read = |path: &Path| std::fs::read_to_string(path).unwrap_or_default();
 
     let first_probes = gate.scratch.join("probes-first");
     let mut first = spawn(&gate.scratch, &first_probes, std::process::Stdio::null());
     let holding = tree_heavy_order().remove(0);
-    wait_for("the first gate's heavy step runs", &|| {
+    until("the first gate's heavy step runs", &[first.id()], || {
         read(&first_probes).lines().any(|l| l == holding)
     });
 
@@ -840,9 +828,11 @@ fn merge_gate_two_worktrees_share_the_heavy_lock() {
         &second_probes,
         std::fs::File::create(&second_err).expect("its log").into(),
     );
-    wait_for("the second gate's heavy step waits", &|| {
-        read(&second_err).contains(&format!("waits for the heavy step {holding}"))
-    });
+    until(
+        "the second gate's heavy step waits",
+        &[first.id(), second.id()],
+        || read(&second_err).contains(&format!("waits for the heavy step {holding}")),
+    );
     let ran: Vec<String> = read(&second_probes).lines().map(str::to_owned).collect();
     assert!(
         !ran.iter().any(|step| heavy.split(' ').any(|h| h == step)),
@@ -899,17 +889,17 @@ fn merge_gate_stopped_by_term_stops_its_lanes() {
             .stderr(std::process::Stdio::null());
         let mut running = cmd.spawn().expect("the gate runs");
         let pid = hold.with_extension("pid");
-        let waiting = (0..1200)
-            .find_map(|_| {
-                let read = std::fs::read_to_string(&pid)
-                    .ok()
-                    .filter(|p| p.ends_with('\n'));
-                read.filter(|p| !children(p.trim()).is_empty()).or_else(|| {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    None
-                })
-            })
-            .unwrap_or_else(|| panic!("{step}: the held step runs"));
+        let pid_of_waiting = || {
+            std::fs::read_to_string(&pid)
+                .ok()
+                .filter(|p| p.ends_with('\n') && !children(p.trim()).is_empty())
+        };
+        until(
+            &format!("{step}: the held step runs"),
+            &[running.id()],
+            || pid_of_waiting().is_some(),
+        );
+        let waiting = pid_of_waiting().expect("the held step waits on its fifo");
         let step_pid = waiting.trim().to_owned();
         let parts: Vec<String> = std::iter::once(step_pid.clone())
             .chain(children(&step_pid))

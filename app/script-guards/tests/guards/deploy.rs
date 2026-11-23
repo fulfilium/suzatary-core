@@ -4,7 +4,9 @@
 //! links `<tree>-<output>`, never touching a real store or its roots): the roots unit's last
 //! run (when it started, whether it is still running, how it ended), what a `start` of it and
 //! the path unit on the lock do, what the web serves after a restart. Every call is logged in
-//! order, so a test reads what the script did and when.
+//! order, so a test reads what the script did and when. Every interval between two looks is one
+//! second and the stub `sleep` returns at once, so a bound a test sets is the number of looks a
+//! wait takes after its first, and no load on the machine makes a wait end sooner or later.
 
 use super::{Scratch, repo};
 use std::path::{Path, PathBuf};
@@ -488,6 +490,8 @@ impl Box_ {
             .env("XDG_RUNTIME_DIR", self.scratch.join("run"))
             .env("XDG_CACHE_HOME", self.scratch.join("cache"))
             .env("DEPLOY_GIT", real_git())
+            .env("SUZATARY_DEPLOY_INTERVAL", "1")
+            .env("SUZATARY_DEPLOY_CACHE_POLL", "1")
             .env_remove("SUZATARY_APP_URL")
             .envs(env.iter().copied())
             .output()
@@ -869,7 +873,6 @@ fn deploy_refuses_a_run_whose_builds_are_not_its_own() {
 fn deploy_never_restarts_onto_a_stale_success_and_reverts_the_lock() {
     let deployed = Box_::new("stale");
     deployed.set("next-result", "failed");
-    // A short wait, so a revert whose run never comes fails quickly.
     let out = deployed.deploy(&[&deployed.new], &[("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "5")]);
     assert!(!out.status.success());
     assert!(
@@ -903,7 +906,6 @@ fn deploy_never_restarts_onto_a_stale_success_and_reverts_the_lock() {
 #[test]
 fn deploy_without_a_run_after_the_move_times_out_reverts_and_restarts_nothing() {
     let deployed = Box_::new("no-run");
-    // No run comes for the revert either, so its own wait is short too.
     let out = deployed.deploy(
         &[&deployed.new],
         &[
@@ -960,7 +962,6 @@ fn deploy_refuses_before_moving_anything() {
         let out = deployed.deploy(args, &[]);
         assert_eq!(out.status.code(), Some(64), "{args:?}");
     }
-    // A short wait, so a refusal that failed to refuse ends quickly in a timeout.
     let short = [("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "1")];
     for (rev, says) in [
         (
@@ -1047,10 +1048,11 @@ fn deploy_moves_nothing_while_a_run_of_another_app_runs() {
             )
             .expect("the run's root");
         }
+        // A run listed twice ends at the third look, the last the bound allows.
         let out = deployed.deploy(
             &[&deployed.new],
             &[
-                ("SUZATARY_DEPLOY_RUNS_TIMEOUT", "1"),
+                ("SUZATARY_DEPLOY_RUNS_TIMEOUT", "2"),
                 ("SUZATARY_DEPLOY_REVERT_TIMEOUT", "1"),
             ],
         );
@@ -1059,7 +1061,7 @@ fn deploy_moves_nothing_while_a_run_of_another_app_runs() {
             assert!(!out.status.success(), "{case}");
             if case == "never-ends" {
                 assert!(
-                    stderr.contains(&format!("{run} still ran after 1s"))
+                    stderr.contains(&format!("{run} still ran after 2s"))
                         && stderr.contains("Nothing moved"),
                     "{case}: {stderr}"
                 );
@@ -1371,7 +1373,6 @@ fn deploy_checks_the_linked_app_before_restarting_the_web() {
         .join("store")
         .join(format!("app-{}", deployed.side));
     deployed.set("links", &other.display().to_string());
-    // A short wait, so a revert whose run never comes fails quickly.
     let out = deployed.deploy(&[&deployed.new], &[("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "5")]);
     assert!(!out.status.success());
     assert!(
@@ -1390,13 +1391,12 @@ fn deploy_checks_the_linked_app_before_restarting_the_web() {
 }
 
 /// A run still building the new rev when the deploy gives up would link it when it ends; the
-/// revert stops it, then a run of its own relinks the previous app. Only the forward wait is
-/// short: the relink keeps its own bound, so a loaded machine still sees it through.
+/// revert stops it, then a run of its own relinks the previous app, under its own bound.
 #[test]
 fn deploy_reverted_mid_build_stops_the_run_and_relinks_the_previous_app() {
     let deployed = Box_::new("in-flight");
     deployed.set("next-result", "success");
-    // The path unit begins the long build on the commit's first read, whatever the load.
+    // The path unit begins the long build on the commit's first read.
     deployed.set("path-unit", "");
     deployed.set("long-run", &deployed.core(&deployed.new));
     let out = deployed.deploy(&[&deployed.new], &[("SUZATARY_DEPLOY_ROOTS_TIMEOUT", "1")]);
@@ -1455,7 +1455,6 @@ fn deploy_fails_when_the_web_runs_another_app() {
         .join("store")
         .join(format!("app-{}", deployed.old));
     deployed.set("web-app", &running.display().to_string());
-    // A short wait for the units, so the web's stale root ends it quickly.
     let out = deployed.deploy(&[&deployed.new], &[("SUZATARY_DEPLOY_UNITS_TIMEOUT", "1")]);
     assert!(!out.status.success());
     assert!(
@@ -1548,16 +1547,25 @@ fn deploy_refuses_a_run_with_an_output_it_did_not_build() {
 fn deploy_refuses_while_another_runs() {
     let deployed = Box_::new("concurrent");
     let held = deployed.user().join(".git").join("suzatary-deploy.lock");
-    let mut holder = Command::new("flock")
-        .arg(&held)
-        .args(["sleep", "30"])
+    let taken = deployed.scratch.join("taken");
+    // An open file is not yet a taken lock: the holder says when it holds it.
+    let mut holder = Command::new("bash")
+        .args([
+            "-c",
+            r#"exec 9>"$1" && flock 9 && : >"$2" && exec sleep infinity"#,
+            "holder",
+        ])
+        .args([&held, &taken])
         .spawn()
-        .expect("flock holds the deploy lock");
-    while !held.exists() {
+        .expect("a holder of the deploy lock");
+    while !taken.exists() {
+        let ended = holder.try_wait().expect("the holder's state");
+        assert!(
+            ended.is_none(),
+            "the holder ended without the lock: {ended:?}"
+        );
         std::thread::yield_now();
     }
-    // flock creates the file before it takes the lock; give it the lock.
-    std::thread::sleep(std::time::Duration::from_millis(300));
     let out = deployed.deploy(&[&deployed.new], &[]);
     let _ = holder.kill();
     let _ = holder.wait();
@@ -2131,35 +2139,34 @@ struct PublicationRun {
     case: &'static str,
     /// The run's status in turn, one per question; none when no run appears.
     answers: Option<&'static str>,
-    /// The deploy's deadlines, in seconds, for a run to appear and to end.
+    /// The deploy's bounds for a run to appear and to end.
     appear: &'static str,
     end: &'static str,
     says: &'static str,
 }
 
-/// The stub `sleep` returns at once, so a case that ends at a deadline asks the stub `gh` until
-/// the deadline passes on the wall clock: those deadlines are short, and the cases that end on the
-/// run's answer keep long ones they never reach.
+/// Each bound is the number of questions after the first, and each is the least its case's
+/// answers need: one question fewer would end the wait before the last answer.
 const PUBLICATION_RUNS: [PublicationRun; 4] = [
     PublicationRun {
         case: "cache-success",
         answers: Some("queued \nin_progress \ncompleted success"),
-        appear: "30",
-        end: "40",
+        appear: "0",
+        end: "2",
         says: "succeeded: its builds come from the binary cache",
     },
     PublicationRun {
         case: "cache-failure",
         answers: Some("in_progress \ncompleted failure"),
-        appear: "30",
-        end: "40",
+        appear: "0",
+        end: "1",
         says: "ended failure (https://github.test/runs/7): building it here",
     },
     PublicationRun {
         case: "cache-silence",
         answers: None,
         appear: "1",
-        end: "40",
+        end: "1",
         says: "appeared within 1s: building it here",
     },
     PublicationRun {

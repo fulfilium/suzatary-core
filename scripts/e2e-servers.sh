@@ -31,9 +31,10 @@ ready_within=300
 # Waits until `READY NAME` succeeds while NAME runs (a gone server's port answers for another), at
 # most $ready_within s. An end on `Address already in use` gets a fresh port by `RESTART NAME`, 4
 # tries in all; any other end fails at once. READY must return within seconds: a taken port may
-# accept a probe and never answer.
+# accept a probe and never answer. `slept` counts its seconds in tenths: 2 a look, 100 a probe
+# cut short.
 up() { # name ready [restart]
-  local name=$1 ready=$2 restart=${3:-} try=1 tries=4 started=$SECONDS
+  local name=$1 ready=$2 restart=${3:-} try=1 tries=4 started=$SECONDS slept=0
   until "$ready" "$name" && running "$(cat "$work/$name.pid")"; do
     if ! running "$(cat "$work/$name.pid")"; then
       if [[ -n "$restart" ]] && ((try < tries)) && since_launch "$name" | grep -q 'Address already in use'; then
@@ -44,18 +45,21 @@ up() { # name ready [restart]
       fi
       down "$name" "ended before it was ready, after a wait of $((SECONDS - started)) s"
     fi
-    if ((SECONDS - started > ready_within)); then
+    if ((slept >= ready_within * 10)); then
       down "$name" "was not ready in $((SECONDS - started)) s and still runs"
     fi
     sleep 0.2
+    slept=$((slept + 2))
   done
 }
 
 # GETs URL into NAME.body and its status and time, or curl's words, into NAME.answer; true on 200.
 probe() { # name url [curl flags…]
-  local answer
-  answer="$(curl -sS --max-time 10 "${@:3}" -o "$work/$1.body" -w '%{http_code} in %{time_total} s' "$2" 2>&1)"
+  local answer code=0
+  answer="$(curl -sS --max-time 10 "${@:3}" -o "$work/$1.body" -w '%{http_code} in %{time_total} s' "$2" 2>&1)" \
+    || code=$?
   echo "$answer" >"$work/$1.answer"
+  ((code != 28)) || slept=$((${slept:-0} + 100))
   [[ "$answer" == "200 in "* ]]
 }
 

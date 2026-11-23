@@ -7,7 +7,7 @@
 # the commit it builds. Prints one of: `success <url>`; `failed <url> <conclusion>`; `running
 # <url> <status>` (still running after <timeout> s); `none` (no run within <appear> s); `unasked`
 # (ten calls in a row failed, or one after <timeout> s). The newest matching run counts. Always
-# exits 0.
+# exits 0. Its seconds are those slept, <poll> a question, and the 60 of one `timeout` cut short.
 set -euo pipefail
 
 if [[ "$#" -ne 7 ]]; then
@@ -18,7 +18,7 @@ gh="$1" repo="$2" event="$3" commit="$4" appear="$5" timeout="$6" poll="$7"
 # The commit is spliced into the jq filter, so it is a commit id and nothing else.
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "publication-run: \"$commit\" is no commit id" >&2; exit 64; }
 
-misses=0
+misses=0 slept=0
 while :; do
   if answer="$(timeout 60 "$gh" run list --repo "$repo" --workflow publication.yml --event "$event" \
     --limit 50 --json displayTitle,url,status,conclusion \
@@ -26,17 +26,19 @@ while :; do
     misses=0
     read -r url status conclusion <<<"$answer" || true
     case "${status:-}" in
-      "") ((SECONDS < appear)) || { echo none; exit 0; } ;;
+      "") ((slept < appear)) || { echo none; exit 0; } ;;
       completed)
         if [[ "$conclusion" == success ]]; then echo "success $url"; else echo "failed $url $conclusion"; fi
         exit 0
         ;;
-      *) ((SECONDS < timeout)) || { echo "running $url $status"; exit 0; } ;;
+      *) ((slept < timeout)) || { echo "running $url $status"; exit 0; } ;;
     esac
   else
+    (($? != 124)) || slept=$((slept + 60))
     misses=$((misses + 1))
-    ((misses < 10 && SECONDS < timeout)) || { echo unasked; exit 0; }
+    ((misses < 10 && slept < timeout)) || { echo unasked; exit 0; }
   fi
   status=""
   sleep "$poll"
+  slept=$((slept + poll))
 done
