@@ -208,7 +208,7 @@ fn plans(plan: &Plan, tree: &Tree, reading: &Reading) -> (Vec<String>, Reading) 
 }
 
 /// The files of `read`, and every document they cite.
-fn with_cited(read: &[(&str, &str)], plan: &Plan, tree: &Tree) -> Reading {
+pub(super) fn with_cited(read: &[(&str, &str)], plan: &Plan, tree: &Tree) -> Reading {
     let tokens = |path: &str, text: &str| plan.tokens.ratio.tokens(Kind::of(path), text);
     let mut reading = Reading::default();
     for (path, text) in read {

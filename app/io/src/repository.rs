@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use suzatary_services::repository::{Repository, RepositoryError};
 
-use crate::present::Present as _;
 use crate::run::{Cmd, run};
+use suzatary_os::present::Present as _;
 
 /// The data tree the box's writes land in.
 #[derive(Debug, Clone)]

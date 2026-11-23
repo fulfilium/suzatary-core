@@ -207,6 +207,8 @@ pub struct Held {
     _file: File,
 }
 
+impl suzatary_store::store::WriteLock for Held {}
+
 /// Wait for, then take, the lock on `path`, creating it empty when absent and never truncating
 /// it.
 pub fn hold(path: &Path) -> io::Result<Held> {

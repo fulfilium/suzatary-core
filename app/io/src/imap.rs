@@ -13,10 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::present::Present as _;
 use suzatary_base::capability::ImapToken;
 use suzatary_mail::mail::idle::Wake;
 use suzatary_mail::mail::imap::{ImapError, Maildir, Selected};
+use suzatary_os::present::Present as _;
 
 /// The SASL `XOAUTH2` initial response, unencoded: `Client::authenticate` base64-encodes it.
 #[must_use]
@@ -316,11 +316,11 @@ impl Maildir for Folder {
         let landed = self.path.join(leaf).join(name);
         // Synced before the caller records the UID as fetched: a power cut never loses a
         // message the state says it holds.
-        crate::durable::deliver(
+        suzatary_os::durable::deliver(
             &landed,
             &self.path.join("tmp"),
             raw,
-            crate::durable::Mode::Private,
+            suzatary_os::durable::Mode::Private,
         )
         .map_err(|error| ImapError::Maildir {
             what: "written",

@@ -10,7 +10,7 @@ use suzatary_signatures::signatures::{Answer, Requested, WINDOW_SECONDS};
 use suzatary_store::store::{Doc, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 /// The records under one directory and the answers under another, each at `<name>.json`.
 #[derive(Clone)]

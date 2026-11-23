@@ -16,7 +16,7 @@ use suzatary_services::drive::{
 };
 
 use crate::run::{Cmd, RunError, succeed};
-use crate::scratch::Scratch;
+use suzatary_os::scratch::Scratch;
 
 /// Bytes of stdout.
 const MAX_LISTING: usize = 4 * 1024 * 1024;

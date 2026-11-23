@@ -153,7 +153,7 @@ A total function returns a value for every input that its type allows. Do not us
 `expect`, `unreachable!` or `panic!` for a state that the types allow. If you need one, change
 the types so that the state cannot occur.
 
-- Rust: `Present::present` (`app/io/src/present.rs`) returns `Ok(None)` for a missing file. It
+- Rust: `Present::present` (`app/os/src/present.rs`) returns `Ok(None)` for a missing file. It
   does not return an error that the caller must catch.
 - Rust: `Turn::Erased` is a turn whose words are gone. A reader matches on it and does not
   unwrap a missing value.

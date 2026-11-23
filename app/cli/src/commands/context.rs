@@ -42,7 +42,7 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
 /// instant.
 fn calibrate(root: &Path, plan: &Plan, model: &str) -> anyhow::Result<()> {
     let tree = Tree::checkout(root)?;
-    let scratch = suzatary_io::scratch::Scratch::temporary("suzatary-context-")?;
+    let scratch = suzatary_os::scratch::Scratch::temporary("suzatary-context-")?;
     let cli = ClaudeCli::new(
         model,
         Fence::at(root.join(".claude/secretary-settings.json")),

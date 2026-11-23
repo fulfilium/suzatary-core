@@ -10,8 +10,8 @@ use std::time::SystemTime;
 
 use prodrome_core::store::Doors;
 
-use crate::present::Present as _;
 use crate::repository::{Checkout, Stamp};
+use suzatary_os::present::Present as _;
 
 /// A handle's watch, by its store's doors.
 pub(crate) enum Outside {

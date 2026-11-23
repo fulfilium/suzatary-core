@@ -94,10 +94,10 @@ fn texts(objects: &[std::path::PathBuf]) -> anyhow::Result<()> {
         }
         let mut beside = path.clone().into_os_string();
         beside.push(".texts");
-        suzatary_io::durable::replace(
+        suzatary_os::durable::replace(
             Path::new(&beside),
             texts.as_bytes(),
-            suzatary_io::durable::Mode::Readable,
+            suzatary_os::durable::Mode::Readable,
         )
         .with_context(|| format!("writing {}", Path::new(&beside).display()))?;
         if reading.undrawn.is_some() {
@@ -157,6 +157,6 @@ fn unless_there(path: &Path, text: &str) -> anyhow::Result<()> {
     if path.exists() {
         return Ok(());
     }
-    suzatary_io::durable::replace(path, text.as_bytes(), suzatary_io::durable::Mode::Readable)
+    suzatary_os::durable::replace(path, text.as_bytes(), suzatary_os::durable::Mode::Readable)
         .with_context(|| format!("writing {}", path.display()))
 }

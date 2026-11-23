@@ -1,11 +1,10 @@
-//! The context budget: how many tokens an agent reads to use and to develop each unit of the
-//! repository, against the budgets of `context.toml`. `train context` (`scripts/context.sh`),
-//! the CLI's `suzatary context` and the guard `app/cli/tests/guards/context.rs` run it; it reads
-//! files and git alone, so the train measures a tree without building the application.
+//! The context budget: the tokens an agent reads to use and to develop each unit, against
+//! `context.toml`. It reads files and git alone, so the train measures a tree without building it.
 
 pub mod finding;
 pub mod interface;
 pub mod measure;
+mod order;
 pub mod plan;
 pub mod tokens;
 pub mod tree;
@@ -31,12 +30,15 @@ pub enum Act {
     /// List the files a unit's USE and DEVELOP read (the reading set's with none), largest first.
     Files(Option<String>),
     Record(Recording),
-    /// The growth check (`growth`).
     Growth,
     /// Measure the external library `name`'s USE from a checkout of its pinned revision.
     External {
         name: String,
         checkout: PathBuf,
+    },
+    Order {
+        unit: String,
+        cut: Option<PathBuf>,
     },
 }
 
@@ -120,6 +122,22 @@ pub fn run(repo: &Path, act: &Act) -> anyhow::Result<()> {
         }
         Act::Record(recording) => record(root, &plan, *recording),
         Act::External { name, checkout } => external(root, &plan, name, checkout),
+        Act::Order { unit, cut } => {
+            let cut = match cut {
+                Some(path) => Some(order::Cut::parse(
+                    &std::fs::read_to_string(path)
+                        .with_context(|| format!("reading {}", path.display()))?,
+                )?),
+                None => None,
+            };
+            let tree = Tree::checkout(root)?;
+            let report = measure(&plan, &tree);
+            print!(
+                "{}",
+                order::order(&plan, &tree, &report, unit, cut.as_ref())?
+            );
+            Ok(())
+        }
     }
 }
 

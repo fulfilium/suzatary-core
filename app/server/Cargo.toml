@@ -37,6 +37,7 @@ suzatary-api.workspace = true
 suzatary-release.workspace = true
 suzatary-triage.workspace = true
 suzatary-io.workspace = true
+suzatary-os.workspace = true
 tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true

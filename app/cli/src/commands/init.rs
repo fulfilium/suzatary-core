@@ -137,7 +137,7 @@ fn written(
     begin_chains(&data)?;
     // The box-local tier, begun before anything is written to it, ignoring itself.
     let tier = data.join(crate::instance::Local::DIR);
-    suzatary_io::tier::ignored(&tier).with_context(|| format!("beginning {}", tier.display()))?;
+    suzatary_os::tier::ignored(&tier).with_context(|| format!("beginning {}", tier.display()))?;
     let read = Instance::read(path, env)?;
     read.secretary
         .topics

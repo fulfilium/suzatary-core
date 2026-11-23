@@ -375,6 +375,6 @@ fn list(instance: &Instance) -> anyhow::Result<()> {
 }
 
 /// The adoption lock, so a repair and a starting writer do not interleave.
-fn chain_lock(chain: &ChainDir) -> anyhow::Result<suzatary_io::durable::Held> {
+fn chain_lock(chain: &ChainDir) -> anyhow::Result<suzatary_os::durable::Held> {
     crate::instance::adoption_lock(&chain.events)
 }

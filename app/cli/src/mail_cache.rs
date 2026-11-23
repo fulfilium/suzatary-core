@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
-use suzatary_io::present::Present as _;
 use suzatary_io::run::{Cmd, succeed};
 use suzatary_mail::mail::account::MailAccount;
 use suzatary_mail::mail::cache::{Forgot, Forgotten};
 use suzatary_mail::mail::removal::Removal;
+use suzatary_os::present::Present as _;
 
 /// How long telling the index may take before the delete answers that it will at the next sync.
 const REINDEX: std::time::Duration = std::time::Duration::from_secs(120);
@@ -94,7 +94,7 @@ impl MailCache {
 
 impl suzatary_mail::mail::cache::Forget for MailCache {
     fn forget(&self, account: &MailAccount, removal: Removal) -> Forgotten {
-        let _held = match suzatary_io::durable::hold(&self.lock) {
+        let _held = match suzatary_os::durable::hold(&self.lock) {
             Ok(held) => held,
             Err(held) => {
                 return Forgotten::failed(removal, &format!("the sync's hold: {held}"));

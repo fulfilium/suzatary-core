@@ -1,0 +1,27 @@
+[package]
+name = "suzatary-os"
+description = "Suzatary's files: bytes replaced whole, cross-process locks, scratch directories and the box-local tier"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_os"
+path = "src/lib.rs"
+
+[dependencies]
+# A held lock is a store's write lock (`durable::Held`).
+suzatary-store.workspace = true
+thiserror.workspace = true
+# One sync of a filesystem for a batch's bytes (`durable::replace_all`), safely.
+rustix = { version = "1", features = ["fs"] }
+# `durable`'s temporaries and `scratch`'s directories: unpredictable names, created exclusively,
+# private.
+tempfile = "3"
+
+[dev-dependencies]
+suzatary-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true

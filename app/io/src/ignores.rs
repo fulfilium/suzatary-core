@@ -6,8 +6,8 @@
 use std::io;
 use std::path::Path;
 
-use crate::durable;
-use crate::present::Present as _;
+use suzatary_os::durable;
+use suzatary_os::present::Present as _;
 
 /// In the order a store the Prodrome begins writes them.
 const LOCAL: [&str; 2] = ["/.heads", "/.writes"];

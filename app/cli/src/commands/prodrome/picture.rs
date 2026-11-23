@@ -215,7 +215,7 @@ pub(crate) fn run(args: &Drawing) -> anyhow::Result<()> {
 fn write_beside(store: &Path, files: &[(&str, &str)]) -> anyhow::Result<()> {
     for (path, text) in files {
         let at = store.join(path);
-        suzatary_io::durable::replace(&at, text.as_bytes(), suzatary_io::durable::Mode::Readable)
+        suzatary_os::durable::replace(&at, text.as_bytes(), suzatary_os::durable::Mode::Readable)
             .with_context(|| format!("writing {}", at.display()))?;
     }
     Ok(())

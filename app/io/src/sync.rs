@@ -13,11 +13,11 @@ use suzatary_mail::outcome::Outcome;
 use suzatary_triage::mail::verbs::Backfilled;
 
 use crate::oauth::TokenStore;
-use crate::present::Present as _;
 use crate::pullers::{
     Google, Granted, LIEER, Lieer, MBSYNC, Mbsync, Microsoft, Open as _, pull_into,
 };
 use crate::run::{Cmd, succeed};
+use suzatary_os::present::Present as _;
 
 /// The file whose hold a sync and a removed account's mail delete both take, in the sync's own
 /// state directory.
@@ -86,7 +86,7 @@ impl Syncer {
     #[must_use]
     pub fn sync(&self, today: chrono::NaiveDate) -> SyncReport {
         // A sync that could not take the hold still syncs, and its report says so.
-        let held = crate::durable::hold(&lock(&self.state_dir));
+        let held = suzatary_os::durable::hold(&lock(&self.state_dir));
         let unheld = held
             .as_ref()
             .err()
@@ -234,10 +234,10 @@ pub(crate) fn read_sync_state(path: &Path) -> Result<SyncState, ImapError> {
 pub(crate) fn write_sync_state(path: &Path, state: &SyncState) -> Result<(), ImapError> {
     let failed = |why: String| ImapError::State { what: "write", why };
     let text = serde_json::to_string_pretty(state).map_err(|e| failed(e.to_string()))?;
-    crate::durable::replace(
+    suzatary_os::durable::replace(
         path,
         (text + "\n").as_bytes(),
-        crate::durable::Mode::Private,
+        suzatary_os::durable::Mode::Private,
     )
     .map_err(|e| failed(format!("{}: {e}", path.display())))
 }

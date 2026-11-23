@@ -4195,6 +4195,7 @@ dependencies = [
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
+ "suzatary-os",
  "suzatary-plan",
  "suzatary-plugin",
  "suzatary-record",
@@ -4506,6 +4507,7 @@ dependencies = [
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
+ "suzatary-os",
  "suzatary-record",
  "suzatary-secretary",
  "suzatary-services",
@@ -4597,6 +4599,17 @@ dependencies = [
  "thiserror",
  "ts-rs",
  "zeroize",
+]
+
+[[package]]
+name = "suzatary-os"
+version = "0.0.0"
+dependencies = [
+ "rustix",
+ "suzatary-store",
+ "suzatary-testkit",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -4793,6 +4806,7 @@ dependencies = [
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
+ "suzatary-os",
  "suzatary-record",
  "suzatary-release",
  "suzatary-secretary",

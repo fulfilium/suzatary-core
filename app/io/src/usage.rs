@@ -181,7 +181,8 @@ fn write_remembered(path: &Path, last_reported: &HashMap<Window, Reported>) {
     {
         return;
     }
-    let _ = crate::durable::replace(path, text.as_bytes(), crate::durable::Mode::Private);
+    let _ =
+        suzatary_os::durable::replace(path, text.as_bytes(), suzatary_os::durable::Mode::Private);
 }
 
 /// The allowance endpoint, asked at most hourly; the last successful reading is kept on disk, so

@@ -153,7 +153,7 @@ impl Ledger {
     pub fn write(&self, known: &Known) -> Result<(), String> {
         let local = self.local.path(&());
         if let Some(tier) = local.parent() {
-            crate::tier::ignored(tier).map_err(|e| format!("{}: {e}", tier.display()))?;
+            suzatary_os::tier::ignored(tier).map_err(|e| format!("{}: {e}", tier.display()))?;
         }
         self.local
             .set(&(), &known.local)

@@ -42,7 +42,7 @@ impl Charter {
     pub(crate) fn write(self, store: &Path) -> anyhow::Result<()> {
         let path = store.join(FILE);
         let text = format!("public = {}\n", self == Charter::Public);
-        suzatary_io::durable::replace(&path, text.as_bytes(), suzatary_io::durable::Mode::Readable)
+        suzatary_os::durable::replace(&path, text.as_bytes(), suzatary_os::durable::Mode::Readable)
             .with_context(|| format!("writing {}", path.display()))
     }
 }

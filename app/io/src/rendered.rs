@@ -7,7 +7,7 @@ use prodrome_core::memo::{Finding, Key};
 use suzatary_base::table::Table;
 use suzatary_base::tripwire::suspicious;
 
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 /// What a renderer has computed (the Prodrome's design §6.2), in memory and optionally on disk,
 /// neither a source of truth: a key whose two replicas hold two values is a [`Finding`], memory
@@ -115,7 +115,7 @@ impl Rendered {
         let Some(disk) = &self.disk else {
             return Ok(());
         };
-        crate::durable::remove(&disk.file(key))?;
+        suzatary_os::durable::remove(&disk.file(key))?;
         sweep(disk)?;
         std::fs::File::open(&disk.dir)
             .present()?
@@ -179,7 +179,8 @@ fn trim(dir: &Path, kept: usize) {
 
 /// Replaced whole, since a reader may read while a warm writes; a failure costs only a compile.
 fn write(file: &Path, html: &str) {
-    let _ = crate::durable::replace(file, html.as_bytes(), crate::durable::Mode::Readable);
+    let _ =
+        suzatary_os::durable::replace(file, html.as_bytes(), suzatary_os::durable::Mode::Readable);
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ name = "suzatary_io"
 path = "src/lib.rs"
 
 [dependencies]
+suzatary-os.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
@@ -69,15 +70,13 @@ rustls-pki-types = "1"
 # because lettre cannot take a verifier of our own.
 lettre.workspace = true
 # A pseudo-terminal for `claude setup-token` (`setup_token`), and a child's whole process
-# group killed on a timeout or a halt (`run`), and one sync of a filesystem for a batch's bytes
-# (`durable::replace_all`), safely: the one rustix already linked.
-rustix = { version = "1", features = ["fs", "process", "pty", "termios"] }
+# group killed on a timeout or a halt (`run`), safely: the one rustix already linked.
+rustix = { version = "1", features = ["process", "pty", "termios"] }
 # Authored markup compiled in the closed world (`typeset`): the Prodrome's restricted project.
 prodrome-typst-wasm.workspace = true
 # The faces a drawing is set in (`typeset::bundled_fonts`).
 typst-assets.workspace = true
-# `durable`'s temporaries and `scratch`'s directories: unpredictable names,
-# created exclusively, private.
+# The secret file `secrets` writes: an unpredictable name, created exclusively, private.
 tempfile = "3"
 # `secrets::Declarations` reads the code root's `secretspec.toml` and writes the file that
 # extends it with the names an instance derives.

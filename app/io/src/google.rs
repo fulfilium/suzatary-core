@@ -447,10 +447,10 @@ pub fn hand_to_lieer(
         suzatary_google::google::Scope::Mail.urls().to_vec().into(),
     );
     std::fs::create_dir_all(maildir).map_err(|failed| failed.to_string())?;
-    crate::durable::replace(
+    suzatary_os::durable::replace(
         &maildir.join(LIEER_CREDENTIALS),
         serde_json::Value::Object(file).to_string().as_bytes(),
-        crate::durable::Mode::Private,
+        suzatary_os::durable::Mode::Private,
     )
     .map_err(|failed| format!("writing lieer's token: {failed}"))
 }

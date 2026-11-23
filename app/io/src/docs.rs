@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use suzatary_store::store::{Doc, Gets, StoreError};
 
-use crate::durable::Mode;
-use crate::present::Present as _;
+use suzatary_os::durable::Mode;
+use suzatary_os::present::Present as _;
 
 #[derive(Clone)]
 pub struct Docs<K: 'static, T: 'static> {
@@ -65,7 +65,7 @@ impl<T: Sync + 'static> Locked<T> {
         &self,
         step: impl FnOnce(Option<&T>) -> Option<T>,
     ) -> Result<Option<T>, StoreError> {
-        let _held = crate::durable::hold(&self.lock).map_err(|failed| {
+        let _held = suzatary_os::durable::hold(&self.lock).map_err(|failed| {
             StoreError::unwritable(
                 self.docs.store,
                 format!("{}: {failed}", self.lock.display()),
@@ -200,7 +200,7 @@ where
         self.remove_all(&[key])
     }
 
-    /// One [`crate::durable::replace_all`]: the batch's bytes synced together, then each
+    /// One [`suzatary_os::durable::replace_all`]: the batch's bytes synced together, then each
     /// directory once.
     fn set_all(&self, values: &[(&K, &T)]) -> Result<(), StoreError> {
         let paths: Vec<std::path::PathBuf> = values.iter().map(|(key, _)| self.path(key)).collect();
@@ -217,15 +217,15 @@ where
             .copied()
             .zip(bytes.iter().map(Vec::as_slice))
             .collect();
-        crate::durable::replace_all(&files, self.mode)
+        suzatary_os::durable::replace_all(&files, self.mode)
             .map_err(|failed| self.unwritable(&[&failed.path], &failed.error))
     }
 
-    /// One [`crate::durable::remove_all`]: each directory synced once.
+    /// One [`suzatary_os::durable::remove_all`]: each directory synced once.
     fn remove_all(&self, keys: &[&K]) -> Result<(), StoreError> {
         let paths: Vec<std::path::PathBuf> = keys.iter().map(|key| self.path(key)).collect();
         let named: Vec<&std::path::Path> = paths.iter().map(std::path::PathBuf::as_path).collect();
-        crate::durable::remove_all(&named)
+        suzatary_os::durable::remove_all(&named)
             .map(|_| ())
             .map_err(|failed| self.unwritable(&named, &failed))
     }

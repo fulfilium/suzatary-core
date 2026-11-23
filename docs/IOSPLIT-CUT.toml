@@ -1,0 +1,29 @@
+# The cut of `io` that docs/IOSPLIT-PLAN-2026-11-22.md proposes, bottom first; each layer becomes
+# the crate `suzatary-<name>`. Check a stage with `scripts/context.sh order io docs/IOSPLIT-CUT.toml`.
+[[layer]]
+name = "io-access"
+modules = ["run", "tool", "http", "tokens", "api_error", "secrets", "github_tokens", "routine", "repository"]
+
+[[layer]]
+name = "io-local"
+modules = ["clock", "whois", "manuals", "docs", "frontiers", "epochs", "pairing", "health_file", "model_health", "source_health", "requests", "text_keys", "texts", "pulse", "tapped", "blobs", "upload_index", "state", "pdftotext", "attachments"]
+
+[[layer]]
+name = "io-typeset"
+modules = ["typeset", "render", "rendered", "unrendered"]
+
+[[layer]]
+name = "io-chains"
+modules = ["lines", "devices", "runs", "conversations", "objects", "outside", "topics", "reading", "plugin_store", "calendar", "ignores", "watches"]
+
+[[layer]]
+name = "io-mail"
+modules = ["imap", "smtp", "gmail", "oauth", "junk", "older", "mail_sync", "mailbox", "corpus", "sync", "pullers", "google"]
+
+[[layer]]
+name = "io-model"
+modules = ["model", "prompt", "blocks", "setup_token", "usage"]
+
+[[layer]]
+name = "io-sources"
+modules = ["drive", "repos", "weather", "web", "notify", "briefings"]

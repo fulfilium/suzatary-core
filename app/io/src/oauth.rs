@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::http::{Http, Req, Ureq};
-use crate::present::Present as _;
 use crate::tokens::{Bearer, Fresh, Grant, unix_now};
 use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Secret;
@@ -23,6 +22,7 @@ use suzatary_mail::mail::oauth::{
     Silent, Smtp, device_request, poll_request, read_device_code, read_poll, read_silent,
     refresh_request,
 };
+use suzatary_os::present::Present as _;
 
 /// Long enough for a slow tenant, short enough that a hung endpoint cannot stall the caller.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -159,13 +159,13 @@ impl TokenStore {
     }
 
     /// Held across every rewrite of the account's file.
-    fn hold(&self, account: &MailAccount) -> Result<crate::durable::Held, OauthError> {
-        crate::durable::hold(&self.dir.join(format!("{}.lock", account.slug()))).map_err(|error| {
-            OauthError::Unreadable {
+    fn hold(&self, account: &MailAccount) -> Result<suzatary_os::durable::Held, OauthError> {
+        suzatary_os::durable::hold(&self.dir.join(format!("{}.lock", account.slug()))).map_err(
+            |error| OauthError::Unreadable {
                 step: "stored grant",
                 why: error.to_string(),
-            }
-        })
+            },
+        )
     }
 
     /// `None` when never written; a file that will not parse is an error, never "no grant".
@@ -228,10 +228,10 @@ impl TokenStore {
 
         let json =
             serde_json::to_string_pretty(&stored).map_err(|error| unreadable(error.to_string()))?;
-        crate::durable::replace(
+        suzatary_os::durable::replace(
             &self.path(account),
             json.as_bytes(),
-            crate::durable::Mode::Private,
+            suzatary_os::durable::Mode::Private,
         )
         .map_err(|error| unreadable(error.to_string()))
     }
@@ -300,7 +300,7 @@ impl TokenStore {
             why: error.to_string(),
         };
         let _held = self.hold(account)?;
-        crate::durable::remove(&self.path(account)).map_err(unreadable)
+        suzatary_os::durable::remove(&self.path(account)).map_err(unreadable)
     }
 
     /// Which protocols this account holds a grant for, sorted, read offline.

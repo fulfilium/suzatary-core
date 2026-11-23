@@ -11,7 +11,7 @@ use suzatary_memory::secretary::salted_text::{Text, TextName, Words};
 use suzatary_store::store::{Doc, Gets, Lists, StoreError};
 
 use crate::docs::{DocCodec, Docs};
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 #[derive(Debug, Clone)]
 pub struct Texts<T: 'static> {

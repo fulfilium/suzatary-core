@@ -18,8 +18,8 @@ use suzatary_services::repositories::{InBranch, MAX_FILE_BYTES, RepoFailure, Rep
 
 use crate::http::{Http, Req, Ureq};
 use crate::run::{Cmd, Ran, RunError, run, succeed};
-use crate::scratch::Scratch;
 use crate::secrets::Resolves;
+use suzatary_os::scratch::Scratch;
 
 /// How long a listing or a fetch stays fresh.
 const FRESH: Duration = Duration::from_mins(2);

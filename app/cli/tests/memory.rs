@@ -126,7 +126,7 @@ fn his_clean_round_remembers_at_once() {
 /// Every file under `root` whose bytes hold `words`; the server may delete a listed file beside
 /// the walk, so only `NotFound` reads as absent.
 fn holding(root: &std::path::Path, words: &str) -> Vec<String> {
-    use suzatary_io::present::Present as _;
+    use suzatary_os::present::Present as _;
     fn walk(dir: &std::path::Path, root: &std::path::Path, words: &[u8], out: &mut Vec<String>) {
         for entry in std::fs::read_dir(dir).expect("a directory") {
             let path = entry.expect("an entry").path();

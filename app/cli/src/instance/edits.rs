@@ -8,10 +8,10 @@ use suzatary_connect::settings::EditError;
 /// The lock every edit of the instance file holds from read to write, across processes
 /// (`suzatary instance set` takes it too): an `flock` on a sidecar, never on the file itself,
 /// which every write renames a new file over.
-pub fn editing(path: &Path) -> Result<suzatary_io::durable::Held, EditError> {
+pub fn editing(path: &Path) -> Result<suzatary_os::durable::Held, EditError> {
     let mut sidecar = path.as_os_str().to_owned();
     sidecar.push(".lock");
-    suzatary_io::durable::hold(Path::new(&sidecar))
+    suzatary_os::durable::hold(Path::new(&sidecar))
         .map_err(|failed| EditError::Io(format!("locking the instance file: {failed}")))
 }
 
@@ -36,7 +36,7 @@ impl InstanceEdits {
         &self,
         edit: impl FnOnce(&Path, &str) -> Result<String, EditError>,
     ) -> Result<(), EditError> {
-        use suzatary_io::durable;
+        use suzatary_os::durable;
         let _held = editing(&self.path)?;
         let text = self.read_text()?;
         let edited = edit(&self.path, &text)?;

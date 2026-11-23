@@ -57,7 +57,7 @@ impl Doc<KeyName, TextKey> for TextKeys {
 
     /// Every key is written under the lines' lock, so its holder excludes every other writer.
     fn tidy(&self) -> Result<(), StoreError> {
-        crate::durable::remove_staged(&self.dir)
+        suzatary_os::durable::remove_staged(&self.dir)
             .map(|_| ())
             .map_err(|failed| {
                 StoreError::unwritable("keys", format!("{}: {failed}", self.dir.display()))

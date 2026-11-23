@@ -7,7 +7,7 @@ use prodrome_core::declared::{Declaration, Declared};
 use suzatary_store::store::StoreError;
 
 use crate::objects::Objects;
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 /// Where one plugin's store lives: `objects/` and its locks, and `schema`, the text of the
 /// declaration its objects were learned at.
@@ -32,7 +32,7 @@ pub enum How {
 pub struct Begun {
     how: How,
     store: Objects<Declared>,
-    _held: crate::durable::Held,
+    _held: suzatary_os::durable::Held,
 }
 
 impl Begun {
@@ -86,7 +86,7 @@ impl PluginStore {
     /// # Errors
     /// The hold not taken, or what [`PluginStore::read`] refuses.
     pub fn read_held(&self) -> Result<Option<Begun>, StoreError> {
-        let held = crate::durable::hold(&self.hold()).map_err(|why| {
+        let held = suzatary_os::durable::hold(&self.hold()).map_err(|why| {
             StoreError::not_appended("plugin", format!("{}: {why}", self.root.display()))
         })?;
         Ok(self.read()?.map(|store| Begun {
@@ -116,7 +116,7 @@ impl PluginStore {
         let unwritable = |why: std::io::Error| {
             StoreError::not_appended("plugin", format!("{}: {why}", self.root.display()))
         };
-        let held = crate::durable::hold(&self.hold()).map_err(unwritable)?;
+        let held = suzatary_os::durable::hold(&self.hold()).map_err(unwritable)?;
         if self.schema()?.as_deref() == Some(schema.text()) {
             return Ok(Begun {
                 how: How::Kept,
@@ -127,10 +127,10 @@ impl PluginStore {
         std::fs::remove_dir_all(&self.root)
             .present()
             .map_err(unwritable)?;
-        crate::durable::replace(
+        suzatary_os::durable::replace(
             &self.root.join(SCHEMA),
             schema.text().as_bytes(),
-            crate::durable::Mode::Readable,
+            suzatary_os::durable::Mode::Readable,
         )
         .map_err(unwritable)?;
         Ok(Begun {

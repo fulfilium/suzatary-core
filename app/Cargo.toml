@@ -8,7 +8,7 @@
 # program, which depends on no member, so `-p` builds it alone.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
+members = ["base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -54,6 +54,7 @@ suzatary-cards = { path = "cards" }
 suzatary-secretary = { path = "secretary" }
 suzatary-api = { path = "api" }
 suzatary-server = { path = "server" }
+suzatary-os = { path = "os" }
 suzatary-io = { path = "io" }
 suzatary-tooling = { path = "tooling" }
 suzatary-plugin = { path = "plugin" }

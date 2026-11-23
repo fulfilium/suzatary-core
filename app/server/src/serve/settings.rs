@@ -2,7 +2,7 @@
 //! secret's value.
 
 use std::collections::BTreeMap;
-use suzatary_io::present::Present as _;
+use suzatary_os::present::Present as _;
 
 use axum::Json;
 use prodrome_core::store::Replica as _;

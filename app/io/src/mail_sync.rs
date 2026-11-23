@@ -9,8 +9,8 @@ use suzatary_base::capability::Datetime;
 use suzatary_mail::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_mail::mail::sync_report::SyncReport;
 
-use crate::present::Present as _;
 use crate::run::{Cmd, Ran, RunError, run};
+use suzatary_os::present::Present as _;
 
 /// The systemd user unit the timer starts: a sync, then triage when there is something new.
 pub const TRIAGE_UNIT: &str = "suzatary-triage.service";

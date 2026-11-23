@@ -4,8 +4,8 @@
 
 use std::path::PathBuf;
 
-use crate::present::Present as _;
 use chrono::NaiveDate;
+use suzatary_os::present::Present as _;
 use suzatary_secretary::secretary::briefings::{BriefingError, Briefings};
 
 /// A `NaiveDate` always prints as exactly this many characters, none of them `/`, which is what

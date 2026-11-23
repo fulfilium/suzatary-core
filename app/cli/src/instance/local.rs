@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use suzatary_io::present::Present as _;
+use suzatary_os::present::Present as _;
 
 /// The box-local tier, `<data>/local`: files no push carries and the vault does. Each file's
 /// name is spelled only here, so the box, the scripts and the guards agree.

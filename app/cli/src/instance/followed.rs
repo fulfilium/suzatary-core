@@ -310,7 +310,7 @@ impl Followed {
     /// until a fetch confirms it again, and the next fetch puts the tree back first.
     pub fn fetch(&self, now: Datetime) -> anyhow::Result<()> {
         let at = prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(now));
-        let _held = suzatary_io::durable::hold(&self.record("lock"))?;
+        let _held = suzatary_os::durable::hold(&self.record("lock"))?;
         match self.fetched() {
             Ok(commit) => {
                 std::fs::write(self.confirmed(), format!("{at} {commit}\n"))?;

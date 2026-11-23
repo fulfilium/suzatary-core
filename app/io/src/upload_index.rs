@@ -15,7 +15,7 @@ use suzatary_store::store::{Doc as _, Gets as _, StoreError};
 
 use crate::attachments::{AttachmentStore, Place, Stored};
 use crate::docs::{DocCodec, Docs};
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 #[derive(Debug, Clone)]
 pub struct UploadIndexFiles {

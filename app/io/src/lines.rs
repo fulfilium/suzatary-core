@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use suzatary_base::refusal::Refusal;
 use suzatary_store::store::{Decide, Edit, Log, StoreError};
 
-use crate::durable::{self, Held};
-use crate::present::Present as _;
+use suzatary_os::durable::{self, Held};
+use suzatary_os::present::Present as _;
 
 #[derive(Debug, Clone)]
 pub struct Lines<K: 'static, E: 'static> {

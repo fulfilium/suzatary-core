@@ -17,7 +17,7 @@ pub(crate) const USAGE: &str = "usage: train table read <commit> [--half tree|li
        train nightly
        train check <pr>
        train locked <verb> -- <command>...
-       train context [--repo <dir>] [files [<unit>] | record [--merged] | growth | external <name> <dir>]";
+       train context [--repo <dir>] [files [<unit>] | record [--merged] | growth | external <name> <dir> | order <unit> [<cut>]]";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -163,6 +163,14 @@ impl Command {
             ["external", name, checkout] => Act::External {
                 name: (*name).to_owned(),
                 checkout: checkout.into(),
+            },
+            ["order", unit] => Act::Order {
+                unit: (*unit).to_owned(),
+                cut: None,
+            },
+            ["order", unit, cut] => Act::Order {
+                unit: (*unit).to_owned(),
+                cut: Some(cut.into()),
             },
             _ => return Err(usage("unknown arguments")),
         };

@@ -147,10 +147,10 @@ impl Corpus for Operator {
         let answer = serde_json::to_string(&report).map_err(|failed| {
             CorpusError::Refused(format!("the sync report did not serialise: {failed}"))
         })?;
-        crate::durable::replace(
+        suzatary_os::durable::replace(
             &self.sync_status,
             answer.as_bytes(),
-            crate::durable::Mode::Private,
+            suzatary_os::durable::Mode::Private,
         )
         .map_err(|failed| {
             CorpusError::Refused(format!(

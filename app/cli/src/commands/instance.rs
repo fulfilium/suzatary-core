@@ -283,7 +283,7 @@ pub fn set(path: &Path, key: &Key, value: &str, env: &Env) -> anyhow::Result<()>
         .with_context(|| format!("{key} = {value:?} leaves a file the box would not read"))?;
     Instance::of(path, file, env)
         .with_context(|| format!("{key} = {value:?} leaves a file the box would not start"))?;
-    suzatary_io::durable::replace(path, written.as_bytes(), suzatary_io::durable::Mode::Kept)
+    suzatary_os::durable::replace(path, written.as_bytes(), suzatary_os::durable::Mode::Kept)
         .with_context(|| format!("writing {}", path.display()))
 }
 

@@ -13,7 +13,7 @@ use suzatary_mail::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs, shard};
-use crate::present::Present as _;
+use suzatary_os::present::Present as _;
 
 #[derive(Debug, Clone)]
 pub struct Located {

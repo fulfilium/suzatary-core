@@ -15,8 +15,8 @@ pub mod text;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use crate::present::Present as _;
 use crate::run::{Cmd, succeed};
+use suzatary_os::present::Present as _;
 
 /// What notmuch reads of its environment beyond [`crate::run::BASE`].
 const NOTMUCH: &[&str] = &["NOTMUCH_*"];

@@ -399,7 +399,7 @@ impl Scanner {
     /// as a refusal naming its site. `Err` says why gitleaks did not run.
     fn secrets(&self, events: &[&Reading]) -> Result<Vec<Option<Shut>>, String> {
         let failed = |why: &dyn std::fmt::Display| format!("gitleaks did not run ({why})");
-        let scratch = suzatary_io::scratch::Scratch::temporary("door").map_err(|e| failed(&e))?;
+        let scratch = suzatary_os::scratch::Scratch::temporary("door").map_err(|e| failed(&e))?;
         let template = scratch.path().join("template");
         std::fs::write(
             &template,

@@ -618,8 +618,8 @@ fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
 }
 
 /// The cross-process file lock adoption is taken under: any writer that starts may be first.
-pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_io::durable::Held> {
-    suzatary_io::durable::hold(&events.join("adopt.lock"))
+pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_os::durable::Held> {
+    suzatary_os::durable::hold(&events.join("adopt.lock"))
         .with_context(|| format!("locking {}/adopt.lock", events.display()))
 }
 

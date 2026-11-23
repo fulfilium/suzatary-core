@@ -1,7 +1,7 @@
 //! What `suzatary secretary migrate-scrub --apply` costs, counted.
 //!
 //! The ignored measurement migrates [`SLOTS`] stale slots once and prints reseals per second, the
-//! keys' syncs (through `suzatary_io::durable`; the lines' are not counted), scrubs and decryptions
+//! keys' syncs (through `suzatary_os::durable`; the lines' are not counted), scrubs and decryptions
 //! per stale slot, and the lines' lock time, tried every millisecond, from counters, never a clock.
 //!
 //! `cargo test --release -p suzatary --features fixture --test all migrate_cost -- --ignored
@@ -100,7 +100,7 @@ fn migrate_cost() {
     let stores = instance.conversation_stores();
     let at = prodrome_core::literal::Datetime::new(2026, 11, 20, 10, 0, 0, 0).expect("an instant");
     let (syncs, scrubs, opens) = (
-        suzatary_io::durable::syncs(),
+        suzatary_os::durable::syncs(),
         suzatary_held::redact::scrubs(),
         suzatary_memory::secretary::locked_text::opens(),
     );
@@ -118,7 +118,7 @@ fn migrate_cost() {
     });
     let took = started.elapsed();
     let done = done.expect("ran");
-    let after = suzatary_io::durable::syncs();
+    let after = suzatary_os::durable::syncs();
     let stale = done.census.stale;
     assert!(stale >= SLOTS / 2, "the store is stale: {:?}", done.census);
     let per = |n: usize| n as f64 / stale as f64;

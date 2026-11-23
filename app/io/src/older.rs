@@ -376,7 +376,7 @@ impl<C: Connect + std::marker::Sync, H: Http, I: Index> OlderMail for Servers<C,
         range: Range,
     ) -> Vec<AccountOlder> {
         // The sync's hold, so a removed account's mail deleted meanwhile is not pulled back.
-        let held = crate::durable::hold(&crate::sync::lock(&self.state_dir));
+        let held = suzatary_os::durable::hold(&crate::sync::lock(&self.state_dir));
         let landed: Vec<(String, Result<Landed, Unsearched>)> = accounts
             .iter()
             .map(|account| {

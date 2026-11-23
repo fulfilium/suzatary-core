@@ -20,10 +20,10 @@ use suzatary_store::store::{
 };
 use suzatary_stores::stores::{Kind, Store};
 
-use crate::durable;
 use crate::outside::Outside;
 use crate::repository::Checkout;
 use suzatary_lines::parts;
+use suzatary_os::durable;
 
 /// A prodrome's objects, behind the memo and its hold.
 pub struct Objects<E: Schema> {
@@ -296,8 +296,6 @@ impl<E: Store> Objects<E> {
         Ok(Box::new(held))
     }
 }
-
-impl WriteLock for durable::Held {}
 
 impl<E: Store> Reads<E> for Objects<E> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
