@@ -3,4 +3,4 @@
 # behind; `limit` adds the allowance for each merged pull request and what they declare.
 prodrome_bg.wasm aarch64-linux 5136929 5152929
 typst_bg.wasm aarch64-linux 22087320 22103320
-views_bg.wasm aarch64-linux 3762815 3858815
+views_bg.wasm aarch64-linux 3846986 3862986
