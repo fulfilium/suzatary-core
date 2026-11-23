@@ -202,7 +202,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
     assert_eq!(asks(&first.model), 1);
 
     let second = Arc::new(
-        Fakes::over(root, suzatary_io::objects::Objects::chain(chain))
+        Fakes::over(root, suzatary_io_chains::objects::Objects::chain(chain))
             .whois(whois())
             .model(FakeModel::saying(["{\"say\": \"the new one\"}"])),
     );

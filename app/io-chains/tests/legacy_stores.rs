@@ -1,8 +1,8 @@
 //! Stores written before change identity, read by this build.
 //!
-//! `tests/fixtures/legacy/` was written by the core that sealed every append on the tips and is
-//! never regenerated: every line of `legacy/readings.txt` that is not a conflict must read the
-//! same forever.
+//! `app/io/tests/fixtures/legacy/` was written by the core that sealed every append on the tips
+//! and is never regenerated: every line of `legacy/readings.txt` that is not a conflict must read
+//! the same forever.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::payload::Payload;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_record::record::{EventStore, Record};
 use suzatary_store::store::Prodrome;
 use suzatary_store::store::Reads as _;
@@ -20,7 +20,7 @@ use suzatary_store::store::Reads as _;
 const CHAINS: [&str; 4] = ["events", "events-suzatary", "events-triage", "conflicted"];
 
 fn legacy() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/legacy")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/fixtures/legacy")
 }
 
 fn policy() -> Untrusted {

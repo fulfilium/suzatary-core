@@ -1031,7 +1031,7 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io-chains\", \"io-model\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
         ("stores", "suzatary-stores", ""),
@@ -1042,6 +1042,8 @@ fn units_fixture(gate: &Gate) {
         ),
         ("io-local", "suzatary-io-local", ""),
         ("io-typeset", "suzatary-io-typeset", ""),
+        ("io-chains", "suzatary-io-chains", ""),
+        ("io-model", "suzatary-io-model", ""),
         (
             "io",
             "suzatary-io",
@@ -1099,7 +1101,7 @@ fn units_fixture(gate: &Gate) {
 /// A unit step runs only the units whose inputs moved: a member and the members that depend on
 /// it, read off cargo metadata; a test file whose imports reach the changed module; a scene
 /// alone when only its own file moved, and every scene when the app's modules moved, since each
-/// drives the whole bundle. `--full` runs every step whole and reads no pass.
+/// drives the whole bundle.
 #[test]
 fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     if !on_path("esbuild") || !on_path("cargo") || !on_path("node") {
@@ -1121,8 +1123,15 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     assert!(gate.run(&[]).0);
     assert_eq!(
         gate.units_ran()["test"],
-        set(&["suzatary-io", "suzatary"]),
-        "the member and the member that depends on it, never the stores, the secretary or the wasm module"
+        set(&[
+            "suzatary-io",
+            "suzatary-io-chains",
+            "suzatary-io-model",
+            "suzatary"
+        ]),
+        "the member, the member that depends on it and the members whose declared reads are \
+         inside it (io-chains and io-model read io's fixtures), never the stores, the secretary or \
+         the wasm module"
     );
     assert!(!gate.units_ran().contains_key("web-test"));
 
@@ -1185,6 +1194,21 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
         set(&["*"]),
         "both scenes import the harness"
     );
+}
+
+/// `--full` runs every step whole and reads no pass, and keeps the passes it makes.
+#[test]
+fn merge_gate_full_runs_every_step_whole_and_reads_no_pass() {
+    if !on_path("esbuild") || !on_path("cargo") || !on_path("node") {
+        eprintln!(
+            "merge_gate_full_runs_every_step_whole_and_reads_no_pass: no esbuild, cargo or node"
+        );
+        return;
+    }
+    let gate = Gate::new();
+    units_fixture(&gate);
+    let set = |list: &[&str]| names(list);
+    assert!(gate.run(&[]).0);
 
     let every: BTreeSet<String> = steps()
         .into_iter()

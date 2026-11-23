@@ -3001,7 +3001,11 @@ fn a_release_deployment(data: &Path) -> PathBuf {
     )
     .expect("appends");
     write(&roadmap, "charter.toml", "public = true\n");
-    write(&roadmap, ".gitignore", suzatary_io::ignores::PUBLIC_CHARTER);
+    write(
+        &roadmap,
+        ".gitignore",
+        suzatary_io_chains::ignores::PUBLIC_CHARTER,
+    );
     write(&roadmap, "flake.lock", &pinned("0".repeat(40).as_str()));
     write(
         &roadmap,
@@ -3960,7 +3964,7 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     assert_eq!(recorded.count(), held, "the merged object is in the record");
     assert_eq!(
         roadmap_origin(&data, &["show", "master:.gitignore"]),
-        suzatary_io::ignores::PUBLIC_CHARTER.trim_end(),
+        suzatary_io_chains::ignores::PUBLIC_CHARTER.trim_end(),
     );
 
     let owed = owed_record(&roadmap);

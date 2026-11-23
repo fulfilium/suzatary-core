@@ -68,10 +68,11 @@ pub(crate) fn fresh_instance(name: &str) -> Instance {
 /// A round of the scripted model over the served app proposing one email in `instance`'s stores.
 fn proposed(instance: &Instance) -> ConversationId {
     let first = instance.chains.first();
-    let chain = suzatary_io::objects::Objects::chain(suzatary_record::record::EventStore::new(
-        first.events.clone(),
-        first.policy.untrusted.clone(),
-    ));
+    let chain =
+        suzatary_io_chains::objects::Objects::chain(suzatary_record::record::EventStore::new(
+            first.events.clone(),
+            first.policy.untrusted.clone(),
+        ));
     let ada = common::login("ada@example.test");
     let fakes = common::Fakes::over(instance.data().to_path_buf(), chain)
         .whois(common::FakeWhois::new().naming(common::v4(), ada.clone()))
@@ -105,7 +106,7 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     let instance = fresh_instance("dismiss");
     let id = proposed(&instance);
     let conversations = instance.conversation_stores();
-    let inbox = suzatary_io::objects::Objects::open(instance.secretary.inbox.clone());
+    let inbox = suzatary_io_chains::objects::Objects::open(instance.secretary.inbox.clone());
     let dismiss = || {
         suzatary_cli::commands::secretary::dismiss(
             &instance,
@@ -1384,7 +1385,7 @@ fn owed_compare_reads_a_copy_and_changes_nothing() {
         suzatary_base::capability::Datetime::new(2026, 11, 18, 9, minute, 0, 0).expect("an instant")
     };
     {
-        let stores = suzatary_io::conversations::ConversationStores::open(
+        let stores = suzatary_io_chains::conversations::ConversationStores::open(
             dir.join("lines"),
             dir.join("keys"),
             dir.join("runs"),

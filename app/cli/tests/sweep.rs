@@ -546,7 +546,7 @@ fn a_swept_completion_is_applied_through_the_real_tap_route() {
 
     // A fresh store over the same directory, so this reads the object store rather than the
     // server's handle.
-    let chain_reader = suzatary_io::objects::Objects::chain(store(&root));
+    let chain_reader = suzatary_io_chains::objects::Objects::chain(store(&root));
     let objects = chain_reader.objects().expect("the chain reads");
     let completed_flightcheckin: Vec<_> = objects
         .iter()

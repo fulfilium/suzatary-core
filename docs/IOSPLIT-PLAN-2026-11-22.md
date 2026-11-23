@@ -191,12 +191,13 @@ from the cut.
 | 2 | `io-access` | 8, and `api_error.rs` deleted; `impl From<RunError> for RepoFailure` moves into `run.rs`; `run::end_group` (`setup_token`), `tool::on_path` (tests of `attachments`, `upload_index`), `http::header` (tests of `gmail`, `google`) and `repository::Stamp` with `Checkout::stamp` and `is_repository` (`outside`) become `pub` | stage 1 |
 | 3 | `io-local` | 20; `docs::shard`, `Docs::sharded`, `Pdftotext::layer` and `Unlayered` (`mailbox`) become `pub`, and the PDFs tests make move to `suzatary_testkit::pdf` | stage 2 |
 | 4 | `io-typeset` | 5, and `tests/templates.rs` | stage 2 |
-| 5 | `io-chains` | 12 | stage 3, and the changes in flight to `objects.rs`, `plugin_store.rs`, `ignores.rs` and the calendar |
+| 5 | `io-chains` | 12, and io's eight store tests, which reach the fixture trees they read in `app/io/tests`; none becomes `pub` | stage 3 (the changes in flight to `objects.rs`, `plugin_store.rs`, `ignores.rs` and the calendar landed by 2.1.232) |
 | 6 | `io-mail` | 21 | stage 5, and the change in flight to `google.rs` |
-| 7 | `io-model` | 11 | stage 3 |
+| 7 | `io-model` | 11, and `tests/model_port.rs`; `model::stream`'s test reaches its fixture in `app/io/tests`; none becomes `pub` | stage 3 |
 | 8 | `io-sources` | 8 | stages 6 and 7; it empties `io`, which this pull request deletes |
 
-Stages 2, 3 and 4 go together in one pull request. Stages 5 to 8 each follow the changes they wait for.
+Stages 2, 3 and 4 go together in one pull request, and so do stages 5 and 7. Stages 6 and 8 each
+follow the changes they wait for.
 
 **Stage 1, measured** (this branch at its head, against the merge base):
 
@@ -239,6 +240,36 @@ A clean workspace build, one run each in the `.#triage` shell on 4 cores, took 9
 877 s after; `cargo test --workspace --no-run` on top of it took 329 s and 360 s, linking 116 and
 120 test executables. The four new ones are the three crates' unit tests and `templates`, and
 two of them link Typst, which `io`'s one binary linked once.
+
+**Stages 5 and 7, measured** (one pull request, at its head against the merge base, 2.1.232; the
+cut still held there, and every module moved with its layer):
+
+| | before | after |
+|---|---|---|
+| `io` USE / DEVELOP / tests | 31,982 / 733.6k / 181.5k | 18,545 / 546.2k / 76.5k |
+| `io-chains` USE / DEVELOP / tests | — | 5,658 / 431.6k / 81.6k |
+| `io-model` USE / DEVELOP / tests | — | 7,946 / 334.2k / 23.7k |
+| `cli` USE / DEVELOP / tests | 49.6k / 952.1k / 811.9k | 49.7k / 952.5k / 812.2k |
+| `server` USE / DEVELOP / tests | 13.8k / 760.8k / 70.1k | 13.8k / 761.0k / 70.1k |
+| `plugin` USE / DEVELOP / tests | 3.0k / 258.8k / 6.9k | 3.0k / 258.8k / 6.9k |
+
+`io` is under the 25k budget to use. `cli` and `server` read both new crates and pay their
+manifests and roots (0.4k and 0.2k); `plugin` reads neither. An edit in a moved module reads 432k
+(`io-chains`) or 334k (`io-model`) instead of 734k. No test edge crossed the cut: the store
+tests that name `objects` and the lower crates moved whole. Every fixture tree the moved tests
+read stays whole in `app/io/tests` (`fixtures`, `stores`, `stores-changes`, `stores-unkinded`),
+where they reach it by `../io/tests` and the gate's `crate_reads` declares it: some of those
+files are admitted by path in `scripts/public-admitted.sha256`, and a moved admission cannot be
+gated on the hosted runners today, so they move when an admission follows its bytes, before
+stage 8 empties `io`. The gate reads a member whose directory holds a declared read as read
+whole, so `io-chains`' and `io-model`'s tests run on a change to `io`, as they did while they
+were `io`'s.
+
+A clean workspace build, one run each in the `.#triage` shell on 4 cores with a fresh target
+directory, took 900 s before and 899 s after; `cargo test --workspace --no-run --features
+suzatary/fixture` on top of it took 332 s and 335 s, linking 77 and 81 test executables (counted
+in `target/debug/deps`, so not comparable with the count above). The four new ones are each new
+crate's unit tests and its `all` target; neither links Typst.
 
 ## 6. What argues against it
 

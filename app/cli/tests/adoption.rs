@@ -209,7 +209,7 @@ fn device_init_repairs_a_box_adopted_before_custody() {
     let instance = trusting_everyone(&instance);
     let own = Secret::new(OWN).expect("a seed");
     {
-        let chain = suzatary_io::objects::Objects::chain(EventStore::new(
+        let chain = suzatary_io_chains::objects::Objects::chain(EventStore::new(
             root.join("events"),
             prodrome_core::policy::Untrusted::none(),
         ));

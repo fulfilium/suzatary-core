@@ -7,7 +7,7 @@ use std::sync::{Mutex, PoisonError};
 
 use suzatary_conversations::secretary::model::laws::{Case, Rig, check};
 use suzatary_conversations::secretary::model::{Conversation, ToolCall, Turn};
-use suzatary_io::model::{ClaudeCli, Fence};
+use suzatary_io_model::model::{ClaudeCli, Fence};
 
 struct Scripts {
     dir: tempfile::TempDir,

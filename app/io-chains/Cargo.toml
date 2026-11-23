@@ -1,0 +1,63 @@
+[package]
+name = "suzatary-io-chains"
+description = "Suzatary's chains on disk: a chain's object store, the conversations' lines, devices, topics, the plugins' stores, the ignore lists and the watches"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_io_chains"
+path = "src/lib.rs"
+
+[dependencies]
+suzatary-os.workspace = true
+suzatary-io-access.workspace = true
+suzatary-io-local.workspace = true
+suzatary-base.workspace = true
+suzatary-record.workspace = true
+suzatary-store.workspace = true
+suzatary-signatures.workspace = true
+suzatary-todo.workspace = true
+suzatary-triage.workspace = true
+suzatary-google.workspace = true
+suzatary-conversations.workspace = true
+suzatary-lines.workspace = true
+suzatary-topics.workspace = true
+suzatary-digest.workspace = true
+suzatary-stores.workspace = true
+prodrome_core.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+# A watch that cannot read its store says so once in the log (`outside`).
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+suzatary-held.workspace = true
+suzatary-memory.workspace = true
+suzatary-mail.workspace = true
+suzatary-health.workspace = true
+suzatary-connect.workspace = true
+suzatary-inbox.workspace = true
+proptest.workspace = true
+# Inert effects a test fills a record from (a render cache that keeps nothing).
+suzatary-stores = { workspace = true, features = ["nothing"] }
+# Programs a test makes and runs, never executing a file its process wrote.
+suzatary-testkit = { path = "../testkit" }
+# A test's private scratch directory.
+tempfile = "3"
+# The Prodrome's law kit: law 68's script machine over each store's schema (`tests/script_law.rs`).
+prodrome_core = { workspace = true, features = ["laws"] }
+
+# ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
+# module of `tests/all.rs`, so the suite links the application once, not per file.
+[[test]]
+name = "all"
+path = "tests/all.rs"

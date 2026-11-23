@@ -205,7 +205,7 @@ fn a_retraction_reopens_a_stored_session() {
         Fakes::new("session-retracted").model(FakeModel::saying(["{\"say\": \"afresh\"}"]));
     let ada = prodrome_core::event::Actor::new("ada").expect("an actor");
     caps.owners = [ada.clone()].into();
-    caps.digests = suzatary_io::objects::Objects::digests(
+    caps.digests = suzatary_io_chains::objects::Objects::digests(
         caps.root.join("digests-owned"),
         caps.owners.clone(),
     );

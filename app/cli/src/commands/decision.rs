@@ -9,7 +9,7 @@ use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Clock;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_todo::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 

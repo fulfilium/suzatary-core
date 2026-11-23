@@ -5,7 +5,7 @@
 
 use std::path::Path;
 use suzatary_digest::secretary::compacting::Compacting;
-use suzatary_io::model::TOKEN;
+use suzatary_io_model::model::TOKEN;
 
 use suzatary_base::capability::Clock;
 use suzatary_io_local::clock::SystemClock;
@@ -13,7 +13,7 @@ use suzatary_mail::mail::account::Sync;
 
 use crate::instance;
 use suzatary_connect::secrets::SecretState;
-use suzatary_io::model::name_of;
+use suzatary_io_model::model::name_of;
 use suzatary_signatures::signatures::Signers;
 
 /// What `suzatary doctor` was told; the default reads the deployment.

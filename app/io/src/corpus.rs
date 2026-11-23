@@ -28,7 +28,7 @@ pub struct Operator {
     clock: suzatary_io_local::clock::SystemClock,
     /// The owner's zone, whose day the sync window counts back from.
     zone: suzatary_base::zone::Zone,
-    watches: crate::watches::Watches,
+    watches: suzatary_io_chains::watches::Watches,
 }
 
 impl std::fmt::Debug for Operator {
@@ -48,7 +48,7 @@ impl Operator {
         heartbeat: impl Into<PathBuf>,
         sync_status: impl Into<PathBuf>,
         zone: suzatary_base::zone::Zone,
-        watches: crate::watches::Watches,
+        watches: suzatary_io_chains::watches::Watches,
     ) -> Self {
         let heartbeat = heartbeat.into();
         Self {
@@ -303,7 +303,7 @@ mod tests {
             root.join("triage-heartbeat"),
             root.join("last-sync.json"),
             suzatary_base::zone::Zone::UTC,
-            crate::watches::Watches::open(root.join("local/watches")),
+            suzatary_io_chains::watches::Watches::open(root.join("local/watches")),
         )
     }
 

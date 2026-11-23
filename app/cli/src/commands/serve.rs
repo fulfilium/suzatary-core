@@ -14,7 +14,7 @@ use suzatary_base::refusal::shown;
 use suzatary_digest::secretary::compact::Compact;
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_google::google::Endpoints;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::model_health::Answered;
 use suzatary_io_local::requests::Requests;
 use suzatary_server::gate::{self, Door};

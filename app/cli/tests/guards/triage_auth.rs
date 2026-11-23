@@ -71,7 +71,7 @@ fn the_token_init_sets_is_the_credential_the_triage_agent_runs_under() {
 }
 
 /// The triage agent's `claude` is started by the wrapper, not the binary, so the wrapper
-/// exports every switch [`suzatary_io::model::QUIET`] names, and copies no memory directory.
+/// exports every switch [`suzatary_io_model::model::QUIET`] names, and copies no memory directory.
 #[test]
 fn the_triage_agent_runs_quiet_and_reads_no_main_session_memory() {
     let wrapper = std::fs::read_to_string(repo().join("scripts/hourly-triage.sh"))
@@ -82,7 +82,7 @@ fn the_triage_agent_runs_quiet_and_reads_no_main_session_memory() {
         .take_while(|line| !line.contains("claude -p \"$PROMPT\""))
         .collect::<Vec<_>>()
         .join(" ");
-    for (name, value) in suzatary_io::model::QUIET {
+    for (name, value) in suzatary_io_model::model::QUIET {
         assert!(
             exported.contains(&format!("{name}={value}")),
             "hourly-triage.sh does not export {name}={value}"

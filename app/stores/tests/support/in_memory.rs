@@ -190,7 +190,7 @@ impl<E: Store, H: Health> Prodrome<E> for InMemory<E, H> {
         self.store.append(event).map_err(Self::refused)
     }
 
-    /// A stranger's, as the store on disk takes them (`suzatary_io::objects::Objects::accept`).
+    /// A stranger's, as the store on disk takes them (`suzatary_io_chains::objects::Objects::accept`).
     fn accept(&self, objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {
         let prints: std::collections::BTreeMap<&Hash, &String> =
             objects.iter().map(|(name, print)| (name, print)).collect();

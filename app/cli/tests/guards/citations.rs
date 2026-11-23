@@ -4,7 +4,7 @@
 
 use super::repo;
 use std::path::PathBuf;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_todo::decisions::{DecisionId, Decisions};
 
 /// The ids `text` cites: each backticked id after a `→` that opens a parenthesis or follows

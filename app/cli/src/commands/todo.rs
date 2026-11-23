@@ -427,7 +427,8 @@ fn writer(
     chain: &ChainDir,
     signers: &Signers,
     actor: &str,
-) -> anyhow::Result<Signing<suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>>> {
+) -> anyhow::Result<Signing<suzatary_io_chains::objects::Objects<suzatary_record::record::TodoEvent>>>
+{
     on_the_roster(chain, actor)?;
     let actor = Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(Instance::writer_of(

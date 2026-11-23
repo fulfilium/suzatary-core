@@ -100,7 +100,7 @@ fn remote() -> Destination {
 }
 
 fn destinations() -> Vec<Destination> {
-    let quiet: Vec<String> = suzatary_io::model::QUIET
+    let quiet: Vec<String> = suzatary_io_model::model::QUIET
         .iter()
         .map(|(name, value)| format!("`{name}={value}`"))
         .collect();

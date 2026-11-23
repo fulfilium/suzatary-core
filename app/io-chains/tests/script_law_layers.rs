@@ -29,7 +29,7 @@ use proptest::test_runner::Config;
 
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_digest::secretary::digest_policy::Owners;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::Held;
 use suzatary_store::replica::objects::Object;

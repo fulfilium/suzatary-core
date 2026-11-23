@@ -397,7 +397,7 @@ pub fn learn(
     let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
     // Held until the learning ends, so no sync at another schema empties the store under it.
-    let begun = crate::plugin_store::PluginStore::at(root)
+    let begun = suzatary_io_chains::plugin_store::PluginStore::at(root)
         .begin(&schema)
         .map_err(|failed| failed.to_string())?;
     let store = begun.store();
@@ -634,14 +634,14 @@ mod tests {
             ),
         )
         .expect("an event of the schema before");
-        let begun = crate::plugin_store::PluginStore::at(&root)
+        let begun = suzatary_io_chains::plugin_store::PluginStore::at(&root)
             .begin(&before)
             .expect("begins");
         suzatary_store::store::learn(begun.store(), vec![kept]).expect("learns");
         drop(begun);
         let holding = || suzatary_testkit::files_holding(dir.path(), &address).len();
         assert_eq!(holding(), 1, "the store before holds the address");
-        crate::plugin_store::PluginStore::at(&root)
+        suzatary_io_chains::plugin_store::PluginStore::at(&root)
             .settle(&Declaration::admit(schema).expect("the calendar's schema"))
             .expect("settles");
         assert_eq!(

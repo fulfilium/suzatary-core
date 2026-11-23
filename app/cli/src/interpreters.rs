@@ -17,9 +17,6 @@ use suzatary_io::drive::ProtonDrive;
 use suzatary_io::junk::OutlookJunk;
 use suzatary_io::junk::SignedIn;
 use suzatary_io::mail_sync::Timer;
-use suzatary_io::model::ClaudeCli;
-use suzatary_io::model::Fence;
-use suzatary_io::model::TokenSource;
 use suzatary_io::older::Notmuched;
 use suzatary_io::older::Servers;
 use suzatary_io::repos::Mirrors;
@@ -30,6 +27,9 @@ use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::model_health::Answered;
 use suzatary_io_local::upload_index::UploadIndexFiles;
+use suzatary_io_model::model::ClaudeCli;
+use suzatary_io_model::model::Fence;
+use suzatary_io_model::model::TokenSource;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
@@ -293,7 +293,7 @@ impl suzatary_connect::settings::Verify for Verifying {
         name: &Settable,
         value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
-        if name.name() != suzatary_io::model::TOKEN {
+        if name.name() != suzatary_io_model::model::TOKEN {
             return Ok(());
         }
         match self {
@@ -312,7 +312,7 @@ impl suzatary_connect::settings::Verify for Verifying {
             Verifying::Fixture { instance, answered } => {
                 answered_by(
                     answered,
-                    &suzatary_io::model::name_of(instance.secretary.model.as_str()),
+                    &suzatary_io_model::model::name_of(instance.secretary.model.as_str()),
                     None,
                 );
                 Ok(())
@@ -596,7 +596,7 @@ impl SessionModel for Recorded {
     }
 }
 
-fn five_hour(allowance: &suzatary_io::usage::Allowance) -> Allowance {
+fn five_hour(allowance: &suzatary_io_model::usage::Allowance) -> Allowance {
     allowance
         .allowance()
         .into_iter()
@@ -613,7 +613,7 @@ pub struct CompactorModel {
     asked: ClaudeCli,
     door: Door,
     name: ModelName,
-    allowance: suzatary_io::usage::Allowance,
+    allowance: suzatary_io_model::usage::Allowance,
     reserve: Reserve,
 }
 
@@ -641,7 +641,7 @@ impl CompactorModel {
             ),
             asked,
             name,
-            allowance: suzatary_io::usage::Allowance::new(
+            allowance: suzatary_io_model::usage::Allowance::new(
                 instance.secrets(),
                 "the compactor: whether the subscription has room above the reserve",
                 &instance.paths.usage_cache,

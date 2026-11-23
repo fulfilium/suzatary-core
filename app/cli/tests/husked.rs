@@ -12,7 +12,7 @@ use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
-use suzatary_io::conversations::ConversationStores;
+use suzatary_io_chains::conversations::ConversationStores;
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::line_shape::split;

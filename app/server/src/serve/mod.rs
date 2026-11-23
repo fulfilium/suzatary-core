@@ -14,7 +14,7 @@ use suzatary_health::health;
 use suzatary_health::health::{Reading, Register};
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::attachments::AttachmentStore;
 use suzatary_io_local::requests::Requests;
 use suzatary_lines::parts::{Parts, part, scoped};
@@ -603,7 +603,7 @@ impl State {
         };
         let next = live::Live {
             settables: Settables::of_deployment(
-                suzatary_io::model::TOKEN,
+                suzatary_io_model::model::TOKEN,
                 declared.channels.iter().copied(),
                 self.deployment.coding.as_ref(),
                 (&declared.plugins, &declared.accounts),

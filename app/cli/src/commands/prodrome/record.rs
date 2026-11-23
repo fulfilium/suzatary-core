@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use prodrome_core::schema::Schema;
-use suzatary_io::objects::Objects;
-use suzatary_io::plugin_store::PluginStore;
+use suzatary_io_chains::objects::Objects;
+use suzatary_io_chains::plugin_store::PluginStore;
 use suzatary_store::store::Reads as _;
 use suzatary_stores::stores::Kind;
 

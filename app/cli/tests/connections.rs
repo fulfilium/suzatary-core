@@ -942,7 +942,7 @@ fn serving_pushing(tag: &str, origin: Option<&'static str>) -> Box {
             }
             server.effects(|effects| effects).settings_names(
                 suzatary_connect::settings::Settables::of_deployment(
-                    suzatary_io::model::TOKEN,
+                    suzatary_io_model::model::TOKEN,
                     std::iter::empty(),
                     None,
                     (&[], &[]),

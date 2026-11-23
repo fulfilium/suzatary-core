@@ -133,7 +133,7 @@ fn every_store(root: &Path) -> Read {
 
 #[test]
 fn the_frozen_stores_reprint_as_stored() {
-    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests");
     let proposals = inbox(&tests.join("fixtures/inbox-proposals"));
     let stores = every_store(&tests.join("stores-changes"));
     assert!(proposals.wholes > 0, "the frozen inbox is empty");

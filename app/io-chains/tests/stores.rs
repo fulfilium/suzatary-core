@@ -20,8 +20,8 @@ use suzatary_digest::secretary::memories::Memories;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_io::objects::Objects;
-use suzatary_io::plugin_store::PluginStore;
+use suzatary_io_chains::objects::Objects;
+use suzatary_io_chains::plugin_store::PluginStore;
 use suzatary_io_local::attachments::AttachmentStore;
 use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::pdftotext::Pdftotext;
@@ -41,7 +41,7 @@ const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
 const SCAN: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 4, 5, 6];
 
 fn golden() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores")
 }
 
 /// The prodromes whose appends write `Change`s, pinned apart from their legacy bytes.
@@ -65,7 +65,7 @@ pub(crate) const TOPIC_ALIASES: &str = "secretary-topic-aliases";
 /// The box's refusals of what a tab posted.
 pub(crate) const ASKS: &str = "secretary-asks";
 
-/// Every store pinned in `tests/stores-changes/` only.
+/// Every store pinned in `app/io/tests/stores-changes/` only.
 const CHANGED: [&str; 11] = [
     DIGESTS,
     INBOX,
@@ -125,12 +125,13 @@ pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io_local::text_keys::Tex
     )
 }
 
-/// What the scripted writes leave: `tests/stores/`, its prodromes from `tests/stores-changes/`.
+/// What the scripted writes leave: `app/io/tests/stores/`, its prodromes from
+/// `app/io/tests/stores-changes/`.
 fn pinned() -> BTreeMap<String, Vec<u8>> {
     let mut files = tree(&golden());
     files.retain(|name, _| !CHANGES.iter().any(|dir| name.starts_with(dir)));
     files.extend(tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-changes"),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-changes"),
     ));
     files
 }
@@ -519,7 +520,7 @@ fn devices(root: &Path) {
             self.0
         }
     }
-    let store = suzatary_io::devices::Devices::open(root.join("devices"));
+    let store = suzatary_io_chains::devices::Devices::open(root.join("devices"));
     let register = |actor: &str, platform: &str, token: &str, minute: u32| {
         suzatary_signatures::devices::register_device(
             &store,
@@ -623,7 +624,8 @@ fn decisions(root: &Path) {
 fn topics(root: &Path) {
     use suzatary_topics::secretary::topics::reading::Topics;
     use suzatary_topics::secretary::topics::topic::Topic;
-    let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
+    let topics =
+        suzatary_io_chains::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
     rooted(&topics.memberships, "topics");
     rooted(&topics.aliases, "topic-aliases");
     let round = || "round:default/0".parse().expect("a target");
@@ -788,7 +790,7 @@ fn conversations_read(store: suzatary_lines::secretary::conversations::Conversat
 /// A copy of every pinned store under `root`; answers where the changed stores' pins are.
 fn copy_pins(root: &Path) -> PathBuf {
     copy(&golden(), root);
-    let changed = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-changes");
+    let changed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-changes");
     for store in CHANGED {
         copy(&changed.join(store), &root.join(store));
     }
@@ -820,10 +822,11 @@ fn reading_a_copy_of_every_store_writes_nothing() {
         .expect("a store");
     let triage = suzatary_io_local::state::State::open(root.join("state.json"));
     let triage_local = suzatary_io_local::state::Local::open(root.join("local/mail.json"));
-    let devices = suzatary_io::devices::Devices::open(root.join("devices"));
+    let devices = suzatary_io_chains::devices::Devices::open(root.join("devices"));
     let uploads = AttachmentStore::new(root.join("secretary/attachments"), Pdftotext::new("."));
     let kept = Blobs::open(root.join("secretary/files"));
-    let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
+    let topics =
+        suzatary_io_chains::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
     let asks = Objects::open(root.join(ASKS));
     let database = Database {
         chains: [(
@@ -1207,12 +1210,12 @@ fn lines_for_a_tab() {
 fn lines_written_before_kinds_were_stored_read_whole() {
     let dir = suzatary_testkit::scratch("stores");
     copy(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-unkinded"),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-unkinded"),
         dir.path(),
     );
     copy(
         &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/stores-changes")
+            .join("../io/tests/stores-changes")
             .join(LINE_KEYS),
         &dir.path().join(LINE_KEYS),
     );

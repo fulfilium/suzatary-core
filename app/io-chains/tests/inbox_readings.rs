@@ -1,5 +1,6 @@
 //! Every proposal's reading, pinned, so a change to how the inbox is stored or folded shows here
-//! first: `fixtures/inbox-proposals/` holds objects written once and never regenerated.
+//! first: `app/io/tests/fixtures/inbox-proposals/` holds objects written once and never
+//! regenerated.
 
 use std::path::{Path, PathBuf};
 
@@ -12,7 +13,7 @@ use suzatary_inbox::secretary::inbox::{Fold, Object};
 use suzatary_inbox::secretary::inbox_event::Said;
 use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_inbox::secretary::tapped::Tapped;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_signatures::chain_set::ChainSet;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;
@@ -25,7 +26,7 @@ fn now() -> Datetime {
 }
 
 fn store() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inbox-proposals")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/fixtures/inbox-proposals")
 }
 
 /// The chains the readings are priced through: `life`, whose `reply` (which one frozen proposal

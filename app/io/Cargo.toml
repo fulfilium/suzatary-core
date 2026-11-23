@@ -15,11 +15,10 @@ path = "src/lib.rs"
 suzatary-os.workspace = true
 suzatary-io-access.workspace = true
 suzatary-io-local.workspace = true
+suzatary-io-chains.workspace = true
 suzatary-base.workspace = true
-suzatary-record.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
-suzatary-todo.workspace = true
 suzatary-held.workspace = true
 suzatary-memory.workspace = true
 suzatary-mail.workspace = true
@@ -28,14 +27,9 @@ suzatary-triage.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true
 suzatary-connect.workspace = true
-suzatary-conversations.workspace = true
-suzatary-lines.workspace = true
-suzatary-topics.workspace = true
-suzatary-digest.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
-suzatary-stores.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
@@ -66,25 +60,15 @@ rustls-pki-types = "1"
 # SMTP + XOAUTH2 + STARTTLS, for Microsoft. The Bridge's SMTP is spoken by hand,
 # because lettre cannot take a verifier of our own.
 lettre.workspace = true
-# A pseudo-terminal for `claude setup-token` (`setup_token`), safely: the one rustix already
-# linked.
-rustix = { version = "1", features = ["pty", "termios"] }
-# A watch that cannot read its store says so once in the log (`outside`).
-tracing.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
-# Inert effects a test fills a record from (a render cache that keeps nothing).
-suzatary-stores = { workspace = true, features = ["nothing"] }
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 # A test's private scratch directory.
 tempfile = "3"
-# The Prodrome's law kit: law 68's script machine over each store's schema (`tests/script_law.rs`).
-prodrome_core = { workspace = true, features = ["laws"] }
 
 # ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
 # module of `tests/all.rs`, so the suite links the application once, not per file.

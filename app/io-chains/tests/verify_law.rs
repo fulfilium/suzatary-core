@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use suzatary_inbox::secretary::responded::{Done, Responded, Tried};
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_signatures::signatures::findings_of;
 use suzatary_store::store::{Prodrome as _, Reads as _};
 use suzatary_stores::stores::{Faulty, InMemory};

@@ -252,7 +252,7 @@ TRIAGE_MODEL=claude-sonnet-5
 # --no-session-persistence: a transcript would hold the mail the pass read. Never set
 # `cleanupPeriodDays`: under ~/.claude it would prune the owner's own sessions.
 export CLAUDE_CODE_PROMPT_CACHE_TTL=1h
-# `suzatary_io::model::QUIET`; a guard test keeps the two lists one.
+# `suzatary_io_model::model::QUIET`; a guard test keeps the two lists one.
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 \
   DISABLE_ERROR_REPORTING=1 DISABLE_GROWTHBOOK=1 DISABLE_AUTOUPDATER=1 \
   DISABLE_BUG_COMMAND=1 DISABLE_FEEDBACK_COMMAND=1 \

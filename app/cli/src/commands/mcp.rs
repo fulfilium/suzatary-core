@@ -139,7 +139,7 @@ pub async fn serve(
 
 /// The agent's interpreters over the chain it reads, read-only for the triage agent.
 pub struct Interpreters {
-    pub(crate) chain: suzatary_io::reading::Reading,
+    pub(crate) chain: suzatary_io_chains::reading::Reading,
     pub(crate) grounds: Grounds,
     pub(crate) remembering: crate::wiring::Recalling,
     /// `[agent] memory_bytes`.

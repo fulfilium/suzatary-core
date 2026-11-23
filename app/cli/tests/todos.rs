@@ -201,7 +201,7 @@ pub(crate) fn signing(
 pub(crate) fn objects(
     root: &Path,
 ) -> Vec<prodrome_core::event::Envelope<suzatary_record::record::TodoEvent>> {
-    suzatary_io::objects::Objects::chain(EventStore::new(
+    suzatary_io_chains::objects::Objects::chain(EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::none(),
     ))

@@ -10,7 +10,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_google::calendar::{
     Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
 };
-use suzatary_io::plugin_store::PluginStore;
+use suzatary_io_chains::plugin_store::PluginStore;
 use suzatary_store::store::learn;
 
 fn occurrence(uid: &str, start: &str, title: &str, status: Status) -> Occurrence {

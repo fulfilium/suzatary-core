@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
 use suzatary_held::for_model::ForModel;
-use suzatary_io::model::{ClaudeCli, Fence};
+use suzatary_io_model::model::{ClaudeCli, Fence};
 use suzatary_tooling::context::plan::{FILE, Plan};
 use suzatary_tooling::context::tokens::{Kind, Ratios};
 use suzatary_tooling::context::tree::Tree;

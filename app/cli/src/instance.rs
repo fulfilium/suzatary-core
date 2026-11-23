@@ -2,8 +2,8 @@
 //! the model crates and `suzatary-io` never see a path. It holds nothing secret.
 
 use suzatary_base::persona::Persona;
-use suzatary_io::objects::Objects;
 use suzatary_io_access::secrets::Declarations;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_typeset::render::Typst;
 use suzatary_record::record::TodoEvent;
 use suzatary_server::portal::Portal;
@@ -160,7 +160,7 @@ impl Instance {
 
     /// The conversations; an erasure empties the answers' cache and the sessions.
     #[must_use]
-    pub fn conversation_stores(&self) -> suzatary_io::conversations::ConversationStores {
+    pub fn conversation_stores(&self) -> suzatary_io_chains::conversations::ConversationStores {
         self.secretary.conversation_stores(
             self.data(),
             std::sync::Arc::new(self.answers()),
@@ -535,7 +535,7 @@ impl Instance {
         };
         let mail = file.mail.rooted(&data);
         let settables = Settables::of_deployment(
-            suzatary_io::model::TOKEN,
+            suzatary_io_model::model::TOKEN,
             NonEmpty::listed(notify.as_ref()).iter().copied(),
             coding.as_ref(),
             (&plugins.manifests, mail.accounts.accounts()),

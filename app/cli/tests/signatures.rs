@@ -637,7 +637,7 @@ fn replaying_model() -> common::FakeModel {
 /// The secret names a deployment with an ntfy channel may set.
 fn ntfy() -> suzatary_connect::settings::Settables {
     suzatary_connect::settings::Settables::derive(
-        suzatary_io::model::TOKEN,
+        suzatary_io_model::model::TOKEN,
         [suzatary_connect::connect::Channel::Ntfy],
         None,
         &[],

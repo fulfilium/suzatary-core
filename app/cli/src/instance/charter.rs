@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::Context as _;
 
-pub(crate) const FILE: &str = suzatary_io::ignores::CHARTER;
+pub(crate) const FILE: &str = suzatary_io_chains::ignores::CHARTER;
 
 /// A store with no charter is private.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

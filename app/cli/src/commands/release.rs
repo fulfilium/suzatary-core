@@ -414,7 +414,7 @@ fn writer(
     actor: Option<&str>,
 ) -> anyhow::Result<(
     suzatary_store::store::Signing<
-        suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
+        suzatary_io_chains::objects::Objects<suzatary_record::record::TodoEvent>,
     >,
     String,
 )> {

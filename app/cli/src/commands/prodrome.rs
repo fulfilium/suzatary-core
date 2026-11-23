@@ -126,8 +126,8 @@ fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
     unless_there(
         &dir.join(".gitignore"),
         match charter {
-            Charter::Public => suzatary_io::ignores::PUBLIC_CHARTER,
-            Charter::Private => suzatary_io::ignores::PRIVATE_CHARTER,
+            Charter::Public => suzatary_io_chains::ignores::PUBLIC_CHARTER,
+            Charter::Private => suzatary_io_chains::ignores::PRIVATE_CHARTER,
         },
     )?;
     unless_there(&dir.join(".gitattributes"), ATTRIBUTES)?;

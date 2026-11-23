@@ -1,5 +1,5 @@
 //! The laws every prodrome keeps whatever its schema, checked for every prodrome row of
-//! `suzatary_stores::stores::Kind` over the objects its pins hold (`tests/stores-changes/`):
+//! `suzatary_stores::stores::Kind` over the objects its pins hold (`app/io/tests/stores-changes/`):
 //!
 //! - a store begun holds one `Genesis`, labelled as its row says;
 //! - each object reads back by its name as its canonical print, and a name it does not hold
@@ -21,7 +21,7 @@ use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said as Inboxed};
 use suzatary_inbox::secretary::responded::{Responded, Tried};
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::{FactId, Kind as FactKind, Origin};
 use suzatary_memory::secretary::memory_event::{MemoryEvent, forgotten, remembered};
@@ -36,7 +36,7 @@ use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
 fn pins(store: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/stores-changes")
+        .join("../io/tests/stores-changes")
         .join(store)
 }
 
@@ -197,7 +197,7 @@ fn every_prodrome_keeps_the_store_laws() {
         laws::<suzatary_stores::asks::AskEvent>("secretary-asks", Objects::open),
         laws::<Declared>("cache/plugins/ics/store", |root| {
             let pinned =
-                suzatary_io::plugin_store::PluginStore::at(pins("cache/plugins/ics/store"))
+                suzatary_io_chains::plugin_store::PluginStore::at(pins("cache/plugins/ics/store"))
                     .read()
                     .expect("reads")
                     .expect("a store");

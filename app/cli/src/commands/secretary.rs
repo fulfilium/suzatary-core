@@ -17,12 +17,12 @@ use suzatary_conversations::secretary::store::{Entry, Kind, Line, Lines};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::{Filled, HeldFile};
-use suzatary_io::conversations::ConversationStores;
 use suzatary_io::drive::ReadOnly;
 use suzatary_io::google::{Grants, Inserted};
 use suzatary_io::oauth::{Pending, TokenStore};
-use suzatary_io::objects::Objects;
 use suzatary_io::repos::{Author, Mirrors, Stopped};
+use suzatary_io_chains::conversations::ConversationStores;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::state::Ledger;
@@ -2723,7 +2723,7 @@ mod sign_in_completion {
     /// (`append_completion`, then `transcript::push`), then a round the owner opens to remember.
     fn after<E: std::fmt::Display>(finished: Result<Result<(), E>, ()>) -> Stored {
         let dir = suzatary_testkit::scratch("secretary");
-        let conversations = suzatary_io::conversations::ConversationStores::open(
+        let conversations = suzatary_io_chains::conversations::ConversationStores::open(
             dir.path().join("lines"),
             dir.path().join("lines-keys"),
             dir.path().join("lines-runs"),

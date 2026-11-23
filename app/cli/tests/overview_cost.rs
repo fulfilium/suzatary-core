@@ -231,7 +231,7 @@ fn measure_the_overview_over_the_disk_stores_at_the_live_size() {
 /// Every name a deployment with each channel and a calendar of two links declares.
 fn declared() -> Settables {
     Settables::derive(
-        suzatary_io::model::TOKEN,
+        suzatary_io_model::model::TOKEN,
         suzatary_connect::connect::Channel::ALL,
         None,
         &[calendar()],
@@ -289,7 +289,7 @@ fn an_overview_asks_the_secret_store_nothing_the_last_filing_answered() {
     let name = names
         .names()
         .into_iter()
-        .find(|name| *name != suzatary_io::model::TOKEN)
+        .find(|name| *name != suzatary_io_model::model::TOKEN)
         .expect("a channel's name")
         .to_owned();
     common::asked(

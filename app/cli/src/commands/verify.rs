@@ -13,7 +13,7 @@ use super::store_of;
 use crate::instance::Instance;
 use crate::interpreters::{file_store, upload_store};
 use prodrome_core::event::Hash;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::texts::Texts;
 use suzatary_lines::first_read;
 use suzatary_lines::secretary::prune;
@@ -67,7 +67,7 @@ fn every_store(instance: &Instance) -> anyhow::Result<()> {
     let asks = Objects::open(instance.asks());
     let triage = suzatary_io_local::state::State::open(instance.mail.state.clone());
     let triage_local = suzatary_io_local::state::Local::open(instance.local.mail());
-    let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
+    let devices = suzatary_io_chains::devices::Devices::open(instance.paths.devices.clone());
     let uploads = upload_store(instance);
     let kept = file_store(instance);
     let chains: BTreeMap<ChainName, &dyn Prodrome<_>> = stores

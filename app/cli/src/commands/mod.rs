@@ -46,7 +46,7 @@ pub mod verify;
 pub mod weather;
 
 use anyhow::Context;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::objects::Objects;
 use suzatary_record::record::EventStore;
 
 use crate::instance::{ChainDir, Instance};
@@ -118,8 +118,8 @@ pub fn plan_read(instance: &Instance) -> suzatary_signatures::chain_set::Read {
 }
 
 /// One chain as the triage agent reads it: under its own policy, and never written.
-pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io::reading::Reading {
-    suzatary_io::reading::chain(chain.events.clone(), chain.policy.untrusted.clone())
+pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io_chains::reading::Reading {
+    suzatary_io_chains::reading::chain(chain.events.clone(), chain.policy.untrusted.clone())
 }
 
 /// Run one of the repository's operator scripts; `vault` is human-only and on no agent trait.

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use suzatary_io::conversations::ConversationStores;
+use suzatary_io_chains::conversations::ConversationStores;
 
 use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
@@ -440,8 +440,8 @@ impl Default for Topics {
 
 impl Topics {
     #[must_use]
-    pub fn open(&self) -> suzatary_io::topics::Topics {
-        suzatary_io::topics::Topics::open(self.memberships.clone(), self.aliases.clone())
+    pub fn open(&self) -> suzatary_io_chains::topics::Topics {
+        suzatary_io_chains::topics::Topics::open(self.memberships.clone(), self.aliases.clone())
     }
 }
 

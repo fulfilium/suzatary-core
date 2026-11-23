@@ -2,7 +2,7 @@
 //! application keeps whose schema is not the conversations' lines.
 //!
 //! Each actor writes at one of four minutes over three entities, so writes collide in one tick.
-//! The nightly run is `cargo test -p suzatary-secretary --test all
+//! The nightly run is `cargo test -p suzatary-io-chains --test all
 //! script_law::a_long_run -- --ignored --nocapture`.
 
 use std::collections::BTreeSet;

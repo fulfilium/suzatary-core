@@ -220,7 +220,7 @@ impl Kind {
             Kind::Plugin
             // The lines: in the data repository, but written many times an answer. Every handle
             // of a store opened as alone watches `objects/` and the mark, and the box's the git
-            // checkout too (`suzatary_io::outside`), so a door is read before the next hold; one
+            // checkout too (`suzatary_io_chains::outside`), so a door is read before the next hold; one
             // the watch misses is recorded by the data push, where `verify` finds it.
             | Kind::Lines => Doors::Alone,
         }

@@ -1,10 +1,10 @@
 //! `suzatary migrate-ignores`: each store's `.gitignore` brought to its present form
-//! (`suzatary_io::ignores`).
+//! (`suzatary_io_chains::ignores`).
 
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
-use suzatary_io::ignores::{self, Lacks};
+use suzatary_io_chains::ignores::{self, Lacks};
 
 use super::store_at::StoreAt;
 

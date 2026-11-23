@@ -424,7 +424,7 @@ fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<(
     };
     suzatary_io_local::model_health::beside(&read.mail.heartbeat)
         .record(
-            &suzatary_io::model::name_of(read.secretary.model.as_str()),
+            &suzatary_io_model::model::name_of(read.secretary.model.as_str()),
             at,
             outcome,
             words,
@@ -585,7 +585,7 @@ fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<(
         .context("reading the calendar plugin's schema")?;
     let schema = prodrome_core::declared::Declaration::admit(&text)
         .map_err(|refused| anyhow::anyhow!("the calendar's schema: {refused}"))?;
-    suzatary_io::plugin_store::PluginStore::at(read.plugins.store(&name)).begin(&schema)?;
+    suzatary_io_chains::plugin_store::PluginStore::at(read.plugins.store(&name)).begin(&schema)?;
     let run = |hour| -> anyhow::Result<LastRun> {
         Ok(LastRun {
             at: chrono::NaiveDate::from_ymd_opt(2026, 10, 8)

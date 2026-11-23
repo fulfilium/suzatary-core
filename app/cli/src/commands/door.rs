@@ -43,7 +43,7 @@ pub enum Opened {
     /// A command at the box's terminal, where `assistant` is the main session.
     AtTerminal,
     /// The server and the secretary's commands, where `assistant` is the in-app secretary: its
-    /// model runs with no tools (`suzatary_io::model`), so it writes through no terminal.
+    /// model runs with no tools (`suzatary_io_model::model`), so it writes through no terminal.
     ByTheBox,
 }
 

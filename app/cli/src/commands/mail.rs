@@ -94,7 +94,7 @@ pub fn sync(path: &Path) -> anyhow::Result<()> {
 fn deliver_rings(instance: &Instance) {
     use suzatary_base::capability::Clock as _;
     use suzatary_triage::mail::watch;
-    let watches = suzatary_io::watches::Watches::open(instance.local.watches());
+    let watches = suzatary_io_chains::watches::Watches::open(instance.local.watches());
     let now = || prodrome_core::fpl::instant_of(suzatary_io_local::clock::SystemClock.now());
     let owed = match watch::owed(&watches, now()) {
         Ok(owed) => owed,

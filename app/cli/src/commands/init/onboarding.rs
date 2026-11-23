@@ -418,7 +418,7 @@ pub fn model_steps(reach: &Reach) -> Vec<Step> {
                   app asks you to connect the model, from your phone",
         },
         Step {
-            command: reach.secret(suzatary_io::model::TOKEN),
+            command: reach.secret(suzatary_io_model::model::TOKEN),
             why: "typed at the prompt, never on the command line",
         },
     ]

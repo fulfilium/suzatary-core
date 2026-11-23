@@ -19,7 +19,7 @@ impl Models {
     /// The name the chat's calls are recorded under in the model health.
     #[must_use]
     pub fn recorded(&self) -> String {
-        suzatary_io::model::name_of(self.chat.as_str())
+        suzatary_io_model::model::name_of(self.chat.as_str())
     }
 
     #[must_use]
@@ -42,7 +42,7 @@ impl Models {
                 detail: format!("They run {} through the claude CLI.", self.chat.as_str()),
                 calls: Calls::Recorded {
                     key: self.recorded(),
-                    credential: suzatary_io::model::TOKEN.to_owned(),
+                    credential: suzatary_io_model::model::TOKEN.to_owned(),
                 },
             },
             ModelJob {

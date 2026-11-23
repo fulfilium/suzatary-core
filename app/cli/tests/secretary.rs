@@ -265,7 +265,7 @@ fn a_proposal_without_a_why_or_a_source_is_refused_to_the_model() {
 /// A deployment that declares a channel's secret, `NTFY_TOPIC`.
 fn declared_secret() -> suzatary_connect::settings::Settables {
     suzatary_connect::settings::Settables::derive(
-        suzatary_io::model::TOKEN,
+        suzatary_io_model::model::TOKEN,
         [suzatary_connect::connect::Channel::Ntfy],
         None,
         &[],

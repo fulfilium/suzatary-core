@@ -71,11 +71,15 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
         accounts: vec![account(sync)],
         ..suzatary_connect::connect::Declared::default()
     };
-    let settables =
-        suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[])
-            .join(suzatary_connect::settings::Settables::google(
-                &declared.accounts,
-            ));
+    let settables = suzatary_connect::settings::Settables::derive(
+        suzatary_io_model::model::TOKEN,
+        [],
+        None,
+        &[],
+    )
+    .join(suzatary_connect::settings::Settables::google(
+        &declared.accounts,
+    ));
     let empty = SettingsFixture::empty();
     let accounts = suzatary_mail::mail::account::Roster::new(declared.accounts.clone())
         .expect("one account is a roster");
@@ -777,7 +781,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         (0, read.len()),
         "learned once"
     );
-    let days = suzatary_io::calendar::Clocked::new([root], suzatary_base::zone::Zone::UTC)
+    let days = suzatary_io_chains::calendar::Clocked::new([root], suzatary_base::zone::Zone::UTC)
         .days(
             chrono::NaiveDate::from_ymd_opt(2026, 10, 19).expect("a day"),
             1,

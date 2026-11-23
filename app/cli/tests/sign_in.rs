@@ -112,7 +112,7 @@ fn with_no_model_answering_the_sign_in_keeps_the_subscription_token() {
     );
     assert_eq!(
         secrets.calls(),
-        vec![(suzatary_io::model::TOKEN.to_owned(), TOKEN.to_owned())]
+        vec![(suzatary_io_model::model::TOKEN.to_owned(), TOKEN.to_owned())]
     );
     for answer in [&started, &finished] {
         let raw = answer.to_string();
@@ -154,7 +154,7 @@ fn a_token_whose_test_call_fails_is_not_kept() {
     let secrets = Arc::new(SecretRecorder::new());
     let verify = VerifyRecorder {
         asked: Mutex::new(Vec::new()),
-        refuses: Some(suzatary_io::model::TOKEN.to_owned()),
+        refuses: Some(suzatary_io_model::model::TOKEN.to_owned()),
     };
     let base = unanswered("signin-unverified", &secrets, verify);
     tap(&base, 0, &serde_json::json!({}));

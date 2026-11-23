@@ -1,21 +1,20 @@
 # suzatary-io
 
-The interpreters: each capability trait of the model crates, run against the world (chains on
-disk, IMAP and SMTP, the `claude` CLI, notmuch). It makes no decisions and writes no log: a
+The interpreters: each capability trait of the model crates, run against the world (IMAP and
+SMTP, notmuch, Drive, GitHub, the weather and push). It makes no decisions and writes no log: a
 refusal comes back as a typed value. Below it are `suzatary-os` (files), `suzatary-io-access`
-(processes, HTTP and secrets) and `suzatary-io-local` (the box's own stores); Typst on the box
-is `suzatary-io-typeset`, beside it.
+(processes, HTTP and secrets), `suzatary-io-local` (the box's own stores) and
+`suzatary-io-chains` (the chains on disk); beside it are `suzatary-io-typeset` (Typst on the box)
+and `suzatary-io-model` (the `claude` CLI).
 
 ## Use
 
-- `objects::Objects` is a chain's object store on disk; `reading` reads a chain under a policy.
-- `model::ClaudeCli` is the model port, fenced by a settings file (`model::Fence`).
 - `smtp` is the only path that sends mail, and only the binary's `send` and the tap reach it.
 
 ## Depends on
 
-`suzatary-os`, `suzatary-io-access`, `suzatary-io-local`, the model crates below `suzatary-api`
-and the Prodrome.
+`suzatary-os`, `suzatary-io-access`, `suzatary-io-local`, `suzatary-io-chains`, the model crates
+below `suzatary-api` and the Prodrome.
 
 ## Develop
 

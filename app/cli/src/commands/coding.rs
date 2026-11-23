@@ -17,9 +17,9 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::RoutineId;
 use suzatary_inbox::coding::{Fired, Task};
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
-use suzatary_io::conversations::ConversationStores;
 use suzatary_io_access::routine::{Endpoint, FireError};
 use suzatary_io_access::secrets::Resolves;
+use suzatary_io_chains::conversations::ConversationStores;
 use suzatary_topics::secretary::coding::Advanced;
 
 use crate::instance::Instance;

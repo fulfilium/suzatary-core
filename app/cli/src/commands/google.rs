@@ -124,7 +124,7 @@ pub fn read_calendars(
 fn settle(root: &std::path::Path) -> Result<(), String> {
     let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
-    suzatary_io::plugin_store::PluginStore::at(root)
+    suzatary_io_chains::plugin_store::PluginStore::at(root)
         .settle(&schema)
         .map_err(|failed| failed.to_string())
 }

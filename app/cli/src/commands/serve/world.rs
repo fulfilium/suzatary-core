@@ -1,7 +1,7 @@
 //! The interpreters `suzatary serve` holds, and the one place they become records.
 
-use suzatary_io::devices::Devices;
 use suzatary_io::notify::Configured;
+use suzatary_io_chains::devices::Devices;
 use suzatary_server::server::Server;
 
 use crate::instance::Instance;

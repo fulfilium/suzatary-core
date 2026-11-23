@@ -446,6 +446,8 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         "io-access",
         "io-local",
         "io-typeset",
+        "io-chains",
+        "io-model",
         "io",
         "cli",
         "plugin",

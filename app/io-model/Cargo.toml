@@ -1,0 +1,49 @@
+[package]
+name = "suzatary-io-model"
+description = "Suzatary's model port: the `claude` CLI fenced by a settings file, its prompts and stream, the setup token's sign-in and the usage it reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lib]
+name = "suzatary_io_model"
+path = "src/lib.rs"
+
+[dependencies]
+suzatary-os.workspace = true
+suzatary-io-access.workspace = true
+suzatary-io-local.workspace = true
+suzatary-base.workspace = true
+suzatary-held.workspace = true
+suzatary-health.workspace = true
+suzatary-services.workspace = true
+suzatary-conversations.workspace = true
+suzatary-inbox.workspace = true
+prodrome_core.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+# A pseudo-terminal for `claude setup-token` (`setup_token`), safely: the one rustix already
+# linked.
+rustix = { version = "1", features = ["pty", "termios"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+suzatary-digest.workspace = true
+proptest.workspace = true
+# Programs a test makes and runs, never executing a file its process wrote.
+suzatary-testkit = { path = "../testkit" }
+# A test's private scratch directory.
+tempfile = "3"
+
+# ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
+# module of `tests/all.rs`, so the suite links the application once, not per file.
+[[test]]
+name = "all"
+path = "tests/all.rs"

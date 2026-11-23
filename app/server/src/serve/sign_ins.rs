@@ -11,7 +11,7 @@ use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::responded::{Performed, Tried};
 use suzatary_inbox::secretary::sign_in::{Sessions, SignInUrl};
 use suzatary_inbox::secretary::stamp::stamp;
-use suzatary_io::setup_token::SignIn;
+use suzatary_io_model::setup_token::SignIn;
 
 /// How long a sign-in stays open: its Connect card's expiry, after which it may be tapped again.
 pub(crate) const LASTS: Duration = Duration::from_mins(15);

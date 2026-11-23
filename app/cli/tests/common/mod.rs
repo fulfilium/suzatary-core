@@ -29,8 +29,8 @@ use suzatary_inbox::secretary::acts;
 use suzatary_inbox::secretary::proposer;
 use suzatary_inbox::secretary::responded;
 use suzatary_io::briefings::BriefingFiles;
-use suzatary_io::conversations::ConversationStores as Conversations;
-use suzatary_io::devices::Devices;
+use suzatary_io_chains::conversations::ConversationStores as Conversations;
+use suzatary_io_chains::devices::Devices;
 use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::SyncReport;
@@ -1686,7 +1686,12 @@ impl DeclaredStore {
         let declarations = suzatary_io_access::secrets::Declarations::new(
             base,
             dir.join("state"),
-            suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
+            suzatary_connect::settings::Settables::derive(
+                suzatary_io_model::model::TOKEN,
+                [],
+                None,
+                &[],
+            ),
         );
         Self {
             declarations,
@@ -1868,7 +1873,7 @@ impl SettingsFixture {
         Self {
             live: serve::Live {
                 settables: suzatary_connect::settings::Settables::derive(
-                    suzatary_io::model::TOKEN,
+                    suzatary_io_model::model::TOKEN,
                     std::iter::empty(),
                     None,
                     &[],
@@ -2492,7 +2497,7 @@ pub fn answered(body: serde_json::Value) -> suzatary_mail::mail::oauth::Answered
 pub struct Fakes {
     /// The scratch root every store here lives under.
     pub root: PathBuf,
-    pub chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
+    pub chain: suzatary_io_chains::objects::Objects<suzatary_record::record::TodoEvent>,
     pub whois: FakeWhois,
     pub notify: FakeNotify,
     /// The mail the routes read.
@@ -2502,7 +2507,7 @@ pub struct Fakes {
     pub clock: FakeClock,
     pub briefings: BriefingFiles,
     pub devices: Devices,
-    pub watches: suzatary_io::watches::Watches,
+    pub watches: suzatary_io_chains::watches::Watches,
     /// The mail corpus the verbs read.
     pub corpus: FakeCorpus,
     pub repository: FakeRepository,
@@ -2526,27 +2531,28 @@ pub struct Fakes {
     pub forgot: Arc<suzatary_stores::stores::conversations::Forgot>,
     /// The secretary's memory, its history beside the conversations.
     pub memory:
-        suzatary_io::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
+        suzatary_io_chains::objects::Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
     /// The recorded decisions, beside the memory.
-    pub decisions: suzatary_io::objects::Objects<suzatary_todo::decisions::DecisionEvent>,
+    pub decisions: suzatary_io_chains::objects::Objects<suzatary_todo::decisions::DecisionEvent>,
     /// The memory's texts, beside its history.
     pub memory_texts: suzatary_io_local::texts::Texts<suzatary_memory::secretary::memory::Fact>,
     /// The digest's history, beside the memory.
     pub digests:
-        suzatary_io::objects::Objects<suzatary_digest::secretary::digest_event::DigestEvent>,
+        suzatary_io_chains::objects::Objects<suzatary_digest::secretary::digest_event::DigestEvent>,
     /// The digest's summaries' words, beside its history.
     pub digest_texts:
         suzatary_io_local::texts::Texts<suzatary_digest::secretary::digest_line::Line>,
     /// Whose retraction or erasure the digest believes: none here.
     pub owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     /// The topic stores, begun, as a box's server begins them.
-    pub topics: suzatary_io::topics::Topics,
+    pub topics: suzatary_io_chains::topics::Topics,
     /// The inbox store, real so a submit holds the server's `flock`.
-    pub inbox: suzatary_io::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent>,
+    pub inbox:
+        suzatary_io_chains::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     /// The owner's repositories, none by default.
     pub repos: Arc<suzatary_io::repos::Mirrors>,
     /// The calendar, a cache-tier store under the root; empty unless a test learns into it.
-    pub calendar: suzatary_io::calendar::Clocked,
+    pub calendar: suzatary_io_chains::calendar::Clocked,
     /// The tables a Connect card is checked against; none declared.
     pub configuration: Arc<dyn suzatary_connect::settings::Configuration>,
     /// Where each declared secret stands: nothing set, unless a scene reads its own store.
@@ -2560,14 +2566,14 @@ impl Fakes {
     pub fn new(tag: &str) -> Self {
         let root = scratch(tag);
         let events = six_todo_chain(&root);
-        Self::over(root, suzatary_io::objects::Objects::chain(events))
+        Self::over(root, suzatary_io_chains::objects::Objects::chain(events))
     }
 
     /// Fakes over a caller-built chain, their other directories named apart from `tag`.
     #[must_use]
     pub fn with_store(tag: &str, events: EventStore) -> Self {
         let root = scratch(&format!("{tag}-aux"));
-        Self::over(root, suzatary_io::objects::Objects::chain(events))
+        Self::over(root, suzatary_io_chains::objects::Objects::chain(events))
     }
 
     /// Fakes over `chain`, every directory it needs under `root`, laid out
@@ -2575,7 +2581,7 @@ impl Fakes {
     #[must_use]
     pub fn over(
         root: PathBuf,
-        chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
+        chain: suzatary_io_chains::objects::Objects<suzatary_record::record::TodoEvent>,
     ) -> Self {
         // Every deployment signs: the chain adopted the cast's root and trusts the owner's phone.
         suzatary_signatures::signatures::adopt(&chain, &cast_keys(), &self::chain())
@@ -2588,7 +2594,7 @@ impl Fakes {
         )
         .expect("the phone is trusted at the terminal");
         let forgot = Arc::new(suzatary_stores::stores::conversations::Forgot::default());
-        let topics = suzatary_io::topics::Topics::open(
+        let topics = suzatary_io_chains::topics::Topics::open(
             root.join("secretary-topics"),
             root.join("secretary-topic-aliases"),
         );
@@ -2615,13 +2621,13 @@ impl Fakes {
             clock: FakeClock::default(),
             briefings: BriefingFiles::new(root.join("briefings")),
             devices: Devices::open(root.join("devices")),
-            watches: suzatary_io::watches::Watches::open(root.join("watches")),
+            watches: suzatary_io_chains::watches::Watches::open(root.join("watches")),
             corpus: FakeCorpus::new(),
             repository: FakeRepository,
             manuals: FakeManuals,
             model: FakeModel::default(),
             web: FakeWeb::default(),
-            inbox: suzatary_io::objects::Objects::open(root.join("inbox")),
+            inbox: suzatary_io_chains::objects::Objects::open(root.join("inbox")),
             repos: Arc::new(suzatary_io::repos::Mirrors::new(
                 root.join("mirrors"),
                 suzatary_io::repos::Source::Local {
@@ -2641,12 +2647,12 @@ impl Fakes {
             ),
             conversations,
             forgot,
-            memory: suzatary_io::objects::Objects::open(root.join("memory")),
-            decisions: suzatary_io::objects::Objects::open(root.join("decisions")),
+            memory: suzatary_io_chains::objects::Objects::open(root.join("memory")),
+            decisions: suzatary_io_chains::objects::Objects::open(root.join("decisions")),
             memory_texts: suzatary_io_local::texts::Texts::open(
                 root.join("secretary-memory-texts"),
             ),
-            digests: suzatary_io::objects::Objects::digests(
+            digests: suzatary_io_chains::objects::Objects::digests(
                 root.join("digests"),
                 std::collections::BTreeSet::new(),
             ),
@@ -2655,7 +2661,7 @@ impl Fakes {
             ),
             owners: std::collections::BTreeSet::new(),
             secrets: Arc::new(suzatary_base::capability::Nothing),
-            calendar: suzatary_io::calendar::Clocked::new(
+            calendar: suzatary_io_chains::calendar::Clocked::new(
                 [root.join("cache/plugins/ics/store")],
                 suzatary_base::zone::Zone::UTC,
             ),
@@ -3003,7 +3009,7 @@ enum Performer {
     /// `Acting::Recording`: a tap completes in the call that begins it, so a
     /// scene is deterministic.
     #[cfg(feature = "fixture")]
-    Recording(Box<suzatary_io::conversations::ConversationStores>),
+    Recording(Box<suzatary_io_chains::conversations::ConversationStores>),
     /// Every act recorded as [`Performer::Recorded`] does, but a Connect card's, which begins a
     /// sign-in through the server's own table, running the `claude` its [`Reaching`] names.
     SigningIn,
@@ -3014,7 +3020,7 @@ enum Performer {
         /// The one Microsoft address its roster declares, or `None` for the roster the server's
         /// instance file declares as it reads at the tap.
         account: Option<String>,
-        conversations: Box<suzatary_io::conversations::ConversationStores>,
+        conversations: Box<suzatary_io_chains::conversations::ConversationStores>,
         oauth: ScriptedOauth,
     },
 }
@@ -3311,7 +3317,7 @@ impl Server {
     #[cfg(feature = "fixture")]
     pub fn recording_acts(
         self,
-        conversations: suzatary_io::conversations::ConversationStores,
+        conversations: suzatary_io_chains::conversations::ConversationStores,
     ) -> Self {
         Self {
             performer: Performer::Recording(Box::new(conversations)),
@@ -3325,7 +3331,7 @@ impl Server {
         self,
         tag: &str,
         account: &str,
-        conversations: suzatary_io::conversations::ConversationStores,
+        conversations: suzatary_io_chains::conversations::ConversationStores,
         oauth: ScriptedOauth,
     ) -> Self {
         Self {
@@ -3344,7 +3350,7 @@ impl Server {
     pub fn real_acts_over_instance(
         self,
         tag: &str,
-        conversations: suzatary_io::conversations::ConversationStores,
+        conversations: suzatary_io_chains::conversations::ConversationStores,
         oauth: ScriptedOauth,
     ) -> Self {
         Self {
@@ -3495,7 +3501,7 @@ impl Server {
             door,
             serve::Signed {
                 requests: Arc::new(requests.clone()),
-                asks: Arc::new(suzatary_io::objects::Objects::open(
+                asks: Arc::new(suzatary_io_chains::objects::Objects::open(
                     held.root.join("secretary-asks"),
                 )),
                 pairings: pairings.clone(),

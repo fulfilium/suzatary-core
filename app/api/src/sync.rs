@@ -471,7 +471,7 @@ where
             .iter()
             .map(|name| (name, &read.parsed[name]))
             .collect();
-        // Every store a tab writes opens with no untrusted actor (`suzatary_io::objects`).
+        // Every store a tab writes opens with no untrusted actor (`suzatary_io_chains::objects`).
         let found = part("found", || found(history, &taking, &Untrusted::none()));
         if found.is_empty() {
             return door.received(judged);

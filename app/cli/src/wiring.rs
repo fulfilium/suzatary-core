@@ -6,13 +6,13 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use suzatary_io::briefings::BriefingFiles;
-use suzatary_io::calendar::Clocked;
 use suzatary_io::corpus::Operator;
 use suzatary_io::mailbox::Notmuch;
 use suzatary_io::mailbox::located::Located;
 use suzatary_io::sync::Syncer;
-use suzatary_io::watches::Watches;
 use suzatary_io_access::repository::Checkout;
+use suzatary_io_chains::calendar::Clocked;
+use suzatary_io_chains::watches::Watches;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::manuals::Handbook;
 use suzatary_io_local::pdftotext::Pdftotext;
@@ -31,8 +31,8 @@ use suzatary_digest::secretary::digests::{Digests, ReadDigests};
 use suzatary_digest::secretary::memories::{Memories, ReadMemories};
 use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
-use suzatary_io::conversations::ConversationStores;
-use suzatary_io::objects::Objects;
+use suzatary_io_chains::conversations::ConversationStores;
+use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::texts::Texts;
 use suzatary_io_typeset::unrendered::Unrendered;
 use suzatary_mail::mail::account::Roster;
@@ -342,7 +342,7 @@ pub struct Opened {
     pub(crate) remembering: Remembering,
     pub(crate) decisions: Objects<DecisionEvent>,
     /// The topics, box-local and never pushed.
-    pub(crate) topics: suzatary_io::topics::Topics,
+    pub(crate) topics: suzatary_io_chains::topics::Topics,
     pub(crate) briefings: BriefingFiles,
     pub(crate) weather: Forecast,
     pub(crate) calendar: Clocked,
