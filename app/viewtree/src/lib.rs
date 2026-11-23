@@ -9,6 +9,7 @@ pub mod node;
 pub mod paint;
 pub mod patch;
 pub mod program;
+pub mod tiles;
 
 pub use node::{Attr, Key, Kids, Listener, Node, On, Picked, Printed, Rows, Tag};
 pub use paint::Painter;

@@ -119,9 +119,9 @@ Two readers of `wide` were not about layout:
 
 ```rust
 pub struct Viewport { pub w: Px, pub h: Px }
-pub fn arrange<P: Page>(tree: &Tree<P>, at: Viewport) -> Arranged
+pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arranged
 pub struct Arranged { pub tiles: Vec<Placed>, pub dividers: Vec<Divider>, pub rows: Vec<Row> }
-pub struct Placed { pub id: Id, pub rect: Rect, pub scroll: Scroller, pub opens: Opens }
+pub struct Placed { pub id: Id, pub rect: Rect, pub page: Rect, pub scroll: Scroller, pub opens: Opens }
 pub enum Scroller { Document, Tile }
 ```
 
@@ -159,12 +159,16 @@ Every other leaf is drawn or behind.
    what they have above their least. A node drawn in part gives all of its length to the children
    that are drawn. If the viewport is smaller than the focused leaf's least size, the leaf is drawn
    at the viewport's size, so a 320 px phone still gets a page.
+5. A `Fits` node that leaves a child behind draws a crumb row, so its walk is tried again with the
+   row's height taken before anything is added. Every drawn tile therefore has at least its least
+   width and height, but a focused leaf drawn alone.
 
 The drawn region is a rectangle, and what is behind lies at its edges, never between two drawn
 tiles. That is a law of §3.
 
 **The crumb row is one function, and the bar is the root's crumb row.** `rows` holds one row for
-each node that has children behind it. Each row names those children, nearest first: `‹ Todos`
+each node that has children behind it. A row holds a crumb for every child of its node, in the node's
+order, each marked `Before`, `Drawn` or `After`, and the host draws the ones behind as `‹ Todos`
 before the region and `Secretary ›` after it for a node across, and `˄ Inbox` and `Mail ˅` for a
 node down. A row is drawn at the top edge of the part of the region that its node covers. Each
 crumb is a 44 px target, and a tap focuses that child. The root's row is the bar. On a phone it
@@ -180,7 +184,7 @@ A todo over the list is a node of two leaves drawn as one tile, and its crumb ro
 page's own Back row: `‹ Todos` stands where `todo.rs` draws its Back today, so a phone screen
 gains no height.
 
-When the region is a single tile and the viewport is narrow, that tile scrolls the document
+When the region is a single tile, on any viewport, that tile scrolls the document
 (`Scroller::Document`), so a phone's browser hides its address bar as it does today. Tiles drawn
 side by side each scroll themselves, as `.detailpane` and `.panelscroll` do today. The host
 already reads the scroll box through `box()` at every effect, so a tile whose scroller changes
@@ -204,16 +208,18 @@ list (share One), a todo (Two) and the secretary (One, pinned), focused on the t
 - **Three lists one above the other, on a portrait tablet of 800 by 1280 px.** The person made
   them with `Below` (§3): a node down holding the inbox, the mail and the todos, focused on the
   mail. Below the mail, the todos fit: 320 + 24 + 320 = 664 px of height. Above, the inbox fits
-  too: 1,008 px of 1,280. All three are drawn, 800 px wide and about 410 px tall each. On a phone
-  held in landscape, 740 by 360 px, only the mail is drawn, and its row reads `˄ Inbox · Todos ˅`.
+  too: 1,008 px of 1,280. All three are drawn, 800 px wide and 396 px tall each (1,280 less the bar
+  and two dividers). On a phone held in landscape, 740 by 360 px, only the mail is drawn, 272 px tall
+  under its row and over the bar, and its row reads `˄ Inbox · Todos ˅`.
   The longer-side rule of dwindle (§11) would have made this shape on its own on a portrait
   tablet. Here it exists only because the person asked for it.
 - **A split down inside a split across, at 900 by 800 px.** The workspace is a node across
   holding the list and a node down, and the node down holds a todo over a message. The focus is
   on the todo. At the node down, the message below fits (664 px of 800), so it is added whole and
   the region is 640 by 664 px. At the node across, the list before needs 320 + 24 + 640 = 984 px,
-  more than 900, so it is behind. The todo is drawn over the message, and the row reads `‹ Todos`.
-  At 1,440 px the list fits as well and all three are drawn.
+  more than 900, so it is behind. The todo is drawn over the message, 344 px each, and the row reads
+  `‹ Todos`. At 1,440 px the list fits as well and all three are drawn: the list 472 px wide and the
+  node down 944 px, at shares One and Two.
 
 ## 3. The acts
 
@@ -222,11 +228,11 @@ pub enum Act<P> {
     Open(P),       // by the one rule below
     Below(P),      // the focused tile becomes a node down: the one act that makes one
     Close,         // the focused tile
-    Focus(Path),   // a child of any node: a crumb, a direction, or a destination in the bar
+    Focus(Id),     // the leaf a crumb, a tile or a workspace names
     Move(Dir),     // swap the focused tile's page with its neighbour's
     Resize(Share), // the focused child's share
 }
-pub fn act<P: Page>(tree: Tree<P>, act: Act<P>) -> Tree<P>   // total
+pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P>   // total
 ```
 
 **Open has one rule.** It decides only where the page goes in the tree. Whether the page is
@@ -239,16 +245,21 @@ drawn beside or over is then `arrange`'s answer for the viewport.
    node, and those tiles close. A pinned child stays, and the page goes before it. A todo picked
    in the list replaces the todo beside it, and the secretary after both stays.
 3. If nothing unpinned stood after the focused tile, the page is inserted right after it, with
-   share One if it is a list and Two otherwise, and it takes the focus.
+   the share its page declares (`Page::share`: One for a list, Two otherwise), and it takes the
+   focus.
 4. A pinned page (the secretary) opens at the end of the focused workspace's node, or replaces
    the pinned child already there. That is rule 2 applied from the workspace's last child.
+5. From a pinned leaf, a free page replaces the free child right before it, or is inserted before
+   it, so a link in the secretary opens beside it and the secretary stays at the end.
 
-The focused tile's node is the nearest `Fits` node above it. If the nearest node is `Never` (the
-root, or a tab node), rule 3 first wraps the focused tile in a new node across. This is the
+The focused tile's node is its parent. If the parent is the root or another `Never` node (a tab
+node), rule 3 first wraps the focused tile in a new node across. This is the
 behaviour of Miller columns (the Finder's column view). Each page opens to the right of the page
 it was opened from and replaces whatever stood there. "Beside where it fits, over where it does
 not" is then a property of `arrange`, not a second rule. A workspace holds at most four tiles
-(§6). An open that would make a fifth opens here, and Back returns to the page it replaced.
+(§6). An open that would make a fifth opens here, and Back returns to the page it replaced; from a
+pinned leaf, such an open does nothing. Rule 2 gives the page the share of the first child it
+replaces.
 
 **Back, Close and the crumb to the left are not one act.** The crumb is `Focus`. It moves the
 focus and keeps the tile it left alive, which is what lets the reader return to their place.
@@ -279,6 +290,15 @@ pinned leaves anywhere), acts and viewports:
   today's Back row. Today's phone is this trivial case, so the migration can be staged.
 - The address round-trips: `parse(print(t)) == t`, and `parse` is total over strings (§5).
 - Close of a workspace's last tile is the identity. A workspace always holds a page.
+- Every act keeps the tree **well formed**, and `Tiles::new` and `parse` answer only such trees
+  (`Tiles::check`, the error `Unfit`): the root keeps the home's axis, fit and number of
+  workspaces; every node below the root has two children or more; a workspace holds at most four
+  tiles; and a workspace holds at most one pinned leaf, as its **end**, the last leaf reached
+  through the last child of each node. So an open of a pinned page replaces a pinned end, or the
+  end of a full workspace, or is added after the workspace's last child; `Below` of a pinned page
+  opens it the same way; `Below` from a pinned leaf puts the page above it; and `Move` does nothing
+  when either child it would swap holds a pinned leaf.
+- Every drawn tile has its least size, but a focused leaf drawn alone (§2, rule 5).
 
 ## 4. Resizing with a finger and with a mouse
 
@@ -312,14 +332,14 @@ briefing or a push, keeps its meaning.
 ```
 address := route [ "~" node ]
 node    := axis fit "(" part ("," part)* ")"
-part    := [share] [pin] [focus] tree
+part    := [share] [focus] tree
 tree    := "*" | leaf | node | ""
 axis    := "|" (across) | "-" (down)
 fit     := "" (fits) | "!" (never)
 share   := "1" | "2" | "3"         (absent: One)
-pin     := "^"
 focus   := "'"                     (this node's focused child, off the path to "*")
-leaf    := the route's hash, without "#", encoded as a URI component
+leaf    := the route's hash, without "#", every byte but a letter, a digit, "_" and "." as %XX,
+           and a leading digit too
 ```
 
 - **`*` marks the focused leaf**, whose route is the address's head. It appears exactly once. On
@@ -336,13 +356,21 @@ leaf    := the route's hash, without "#", encoded as a URI component
   On a phone it draws the todo with `‹ Todos` in its crumb row, where today's pushed todo page
   draws its Back. On a desktop it draws the list beside the todo, which is what `#/todo/x` draws
   at 62rem today.
-- **The 1440 px tree of §2** prints as `#/todo/x~!|(|(%2F,2*,^secretary%2Fbeside),,,,,,,)`. The
+- **The 1440 px tree of §2** prints as `#/todo/x~|!(|(%2F,2*,secretary%2Fbeside),,,,,,,)`. A pin
+  is the page's own declaration, so the address carries no pin mark. The
   secretary beside a page has one constant address, `#/secretary/beside`, because what it is about
   is derived from the focused tile.
 - **A tile's own link is its leaf's bare hash.** "Copy link" on a page copies its route alone, so a
   link a person shares carries one page, not their other workspaces.
-- **`parse` is total**, as `parseRoute` is: it reads a malformed tree as the head route alone, and a
-  malformed head as today's `unknown`.
+- **`parse` is total**, as `parseRoute` is: it reads a malformed tree, or one that is not well formed
+  (§3), as the whole string's route, or else as the head route alone, and a malformed head as
+  today's `unknown`. It stops reading the moment a workspace would hold a fifth leaf, counting two
+  leaves for each node it enters, so a string of thousands of nested nodes reads in a few steps.
+- **A page that prints as nothing** is written `:`, which no escaped address holds, so it never reads
+  as a root child's home.
+- **`parse` mints every id fresh.** A host keeps a live tile across an address change itself, in
+  stage d: it matches the new tree's leaves to the live tiles by page, within each workspace and in
+  order, and gives each matched leaf the live tile's program (§6).
 
 **Back is the address history on every screen.** The history is a log of whole trees, and
 `routelog` stays that log, holding addresses. An open pushes an entry, and so does a focus that
@@ -363,7 +391,9 @@ Today one page program runs at a time, plus the panel's conversation on a wide s
 tiles, two rules decide what runs, and both read the tree alone:
 
 - **Behind a `Fits` node that collapsed, a tile is kept and fed.** That is the stack a phone
-  returns to with Back.
+  returns to with Back. A tile is kept by its leaf's `Id`. An act keeps every id it does not
+  remove; an address read by `parse` mints new ones, so after Back or a reload the host matches the
+  new leaves to the live tiles by page (§5) before it mounts anything.
 - **Behind a `Never` node, nothing runs.** The workspaces not on screen, and the unfocused tabs of
   a tab node, are addresses in the tree. Focusing one mounts its tiles again, as navigating to a
   page does today.
@@ -472,6 +502,9 @@ pub trait Page: Clone + Eq {
     fn pin(&self) -> Pin;            // whether it stays when its neighbours are replaced
     fn print(&self) -> String;       // the leaf's address
     fn parse(s: &str) -> Option<Self>;
+    fn share(&self) -> Share;        // the share an open gives it where it inserts it (§3)
+    fn opens(&self) -> Shape;        // the shape of what it opens, which decides `Opens`
+    fn home(&self) -> Self;          // the page a bare address of it is opened from (§5)
 }
 
 /// A flowing page takes its whole rectangle and reads well from `least` wide. A paged one is
@@ -479,12 +512,15 @@ pub trait Page: Clone + Eq {
 pub enum Shape { Flows { least: Px }, Paged { least: Px, ratio: Ratio } }
 pub enum Pin { Free, Pinned }
 
-pub enum Tree<P>;  pub struct Node<P>;  pub struct Leaf<P>;  pub struct Id;
+pub struct Tiles<P>;   // the root node, the declared home, and the counter that mints ids
+impl<P: Page> Tiles<P> { pub fn new(home: Node<P>) -> Result<Tiles<P>, Unfit>; pub fn check(&self) -> Result<(), Unfit>; }
+pub struct Row { pub rect: Rect, pub node: Vec<usize>, pub axis: Axis, pub shown: Vec<Crumb>, pub more: Vec<Crumb> }
+pub enum Tree<L>;  pub struct Node<L>;  pub struct Leaf<P>;  pub struct Id;
 pub enum Axis;     pub enum Fit;        pub enum Share;
-pub enum Act<P>;   pub fn act(tree: Tree<P>, act: Act<P>) -> Tree<P>;
-pub fn arrange<P: Page>(tree: &Tree<P>, at: Viewport) -> Arranged;
-pub fn print<P: Page>(tree: &Tree<P>) -> String;
-pub fn parse<P: Page>(s: &str, root: &Tree<P>) -> Tree<P>;   // `root`: the declared defaults
+pub enum Act<P>;   pub fn act(tiles: Tiles<P>, act: Act<P>) -> Tiles<P>;
+pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arranged;
+pub fn print<P: Page>(tiles: &Tiles<P>) -> String;
+pub fn parse<P: Page>(s: &str, tiles: &Tiles<P>) -> Tiles<P>;   // the home and the ids of `tiles`
 
 /// The tree as a `viewtree::Program`: its model is the tree and the viewport, its view the
 /// dividers, the crumb rows (the bar among them) and one foreign part per drawn tile, keyed by
