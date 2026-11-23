@@ -35,6 +35,34 @@ export const pageThread = (events: readonly TraceEvent[]): { readonly main: stri
   return { main, complete };
 };
 
+/** The categories a trace needs for `tasksOf`: each task of every thread with its processor time, and the page's marks. */
+export const TASKS = ["disabled-by-default-devtools.timeline", "blink.user_timing"] as const;
+
+/** One task of the page's thread: when it began, on the page's clock, and how long it held the thread, on the clock
+ * (`ms`) and on the processor (`cpuMs`, the time the thread itself ran, which another process running on its core does
+ * not stretch). */
+export type Task = { readonly at: number; readonly ms: number; readonly cpuMs: number };
+
+/** The top-level tasks of the thread that made the mark `mark`, placed on its document's clock by the latest such mark
+ * (its `startTime` against its trace time). A task the browser did not time on the processor (it leaves out `tdur` for
+ * the shortest) counts its time on the clock, which bounds its processor time from above. */
+export const tasksOf = (events: readonly TraceEvent[], mark: string): readonly Task[] => {
+  const m = events.filter((e) => e.name === mark && e.cat.includes("user_timing")).at(-1);
+  const start = m?.args?.data?.["startTime"];
+  if (m === undefined || typeof start !== "number") throw new Error(`the trace holds no mark ${mark} with its startTime`);
+  const offset = m.ts / 1000 - start;
+  const runs = events.filter((e) => e.ph === "X" && e.name === "RunTask" && threadKey(e) === threadKey(m)).sort((a, b) => a.ts - b.ts);
+  const tasks: Task[] = [];
+  let end = -Infinity;
+  for (const e of runs) {
+    if (e.ts < end) continue;
+    const dur = e.dur ?? 0;
+    end = e.ts + dur;
+    tasks.push({ at: e.ts / 1000 - offset, ms: dur / 1000, cpuMs: (e.tdur ?? dur) / 1000 });
+  }
+  return tasks;
+};
+
 /** One layout of the page's thread: when (µs, the trace's clock), how long (µs, and on the processor), and how many
  * layout objects it found dirty of all the tree held. An object a `content-visibility` element skips is in neither. */
 export type Layout = { readonly at: number; readonly us: number; readonly cpuUs: number; readonly dirty: number; readonly total: number };
