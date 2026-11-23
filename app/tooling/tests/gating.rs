@@ -8,8 +8,8 @@ use rustix::process::Signal;
 use suzatary_tooling::bisect::{Search, Stuck};
 use suzatary_tooling::gate_branch::GateBranch;
 use suzatary_tooling::gating::{
-    self, Alarm, Dispatch, Done, Effect, Exit, Gating, Job, Msg, OnRed, Piece, Plan, Push, Runs,
-    Step, Steps,
+    self, Alarm, Dispatch, Done, Effect, Exit, Gating, Job, Msg, OnRed, Piece, Plan, Publication,
+    Push, Runs, Step, Steps, Went,
 };
 use suzatary_tooling::oid::Oid;
 use suzatary_tooling::outcome::Check;
@@ -43,7 +43,7 @@ fn plans() -> Vec<Plan> {
         Plan {
             tree: vec![
                 Step {
-                    piece: Piece::Gate(Steps::All),
+                    piece: Piece::Gate(Steps::All, Went::Nowhere),
                     after: None,
                 },
                 Step {
@@ -76,7 +76,7 @@ fn end_of(half: Half, job: &Job, pick: u8, lost: bool) -> Msg {
         return gating::unread(half, job);
     }
     match job {
-        Job::Gate(_) => Msg::Ended(
+        Job::Gate(..) => Msg::Ended(
             half,
             Exit::Gated(
                 [
@@ -114,7 +114,14 @@ fn end_of(half: Half, job: &Job, pick: u8, lost: bool) -> Msg {
                 [Dispatch::Started, Dispatch::Unanswered, Dispatch::Failed][usize::from(pick % 3)],
             ),
         ),
-        Job::Publication(_) => Msg::Ended(half, Exit::Published("ended".into())),
+        Job::Publication(_) => Msg::Ended(
+            half,
+            Exit::Published(match pick % 4 {
+                0 => Publication::Unfilled("ended cancelled".into()),
+                1 => Publication::Failed("failed".into()),
+                _ => Publication::Filled("succeeded".into()),
+            }),
+        ),
         Job::Ask(Ask::Find(_)) => polled(Answer::Run((!lost && !pick.is_multiple_of(4)).then(run))),
         Job::Ask(Ask::Status(_)) => polled(Answer::Status(match pick % 4 {
             0 => None,
@@ -274,7 +281,7 @@ fn other(half: Half) -> Half {
 }
 
 fn is_gate(job: Option<&Job>) -> bool {
-    matches!(job, Some(Job::Gate(_)))
+    matches!(job, Some(Job::Gate(..)))
 }
 
 /// Law 2: after a stop, every running group is signalled in the stop's own step, nothing is
@@ -318,7 +325,7 @@ fn law_2_a_stop_signals_every_group_first_and_writes_nothing() {
                 match effect {
                     Effect::SignalGroup(half, Signal::TERM) => signalled[slot(*half)] = true,
                     Effect::Unlock => unlocked = true,
-                    Effect::Start(_, Job::Gate(_)) | Effect::RemoveWorktree => {
+                    Effect::Start(_, Job::Gate(..)) | Effect::RemoveWorktree => {
                         prop_assert!(!unlocked, "the worktree after the unlock: {fx:?}");
                     }
                     _ => {}
@@ -472,7 +479,7 @@ fn the_runners_run_and_the_early_live_steps() {
     assert!(
         fx.contains(&Effect::Start(
             Half::Live,
-            Job::Gate(gating::Steps::Named(gating::LIVE_EARLY))
+            Job::Gate(gating::Steps::Named(gating::LIVE_EARLY), Went::Pushed)
         )),
         "{fx:?}"
     );
@@ -495,6 +502,7 @@ fn the_runners_run_and_the_early_live_steps() {
         Gating::Done(Done::Ran([Ended::Unjudged, Ended::Judged(Outcome::Red)]))
     );
 
+    let filled = Publication::Filled("succeeded".into());
     for (how, red, row) in [
         ("success", false, Some(Outcome::Green)),
         ("cancelled", false, None),
@@ -502,7 +510,7 @@ fn the_runners_run_and_the_early_live_steps() {
         ("failure", true, Some(Outcome::Red)),
     ] {
         let (g, _) = to_watch(false);
-        let (g, _) = step(g, Msg::Ended(Half::Tree, Exit::Published("ended".into())));
+        let (g, _) = step(g, Msg::Ended(Half::Tree, Exit::Published(filled.clone())));
         let (g, _) = step(
             g,
             Msg::Ended(Half::Tree, Exit::Gated(Ended::Judged(Outcome::Green))),
@@ -548,6 +556,63 @@ fn the_runners_run_and_the_early_live_steps() {
         );
         assert!(matches!(g, Gating::Done(_)), "{how}");
     }
+}
+
+/// Law 5: a gate on GitHub's runners never hands their work to the box. Its box builds of the
+/// public tree (`BOX_AFTER`, `LIVE_AFTER`) start only after a publication run that filled the
+/// binary cache, its early live steps only after the push, and once the check or the push
+/// refused the tree, or the publication run could not be started or did not fill the cache,
+/// nothing starts again: the run stops, saying so. A stop keeps the red a half found before it,
+/// and a publication run whose builds failed is the tree's red.
+#[test]
+fn law_5_a_remote_run_stops_where_the_box_would_build_in_the_runners_place() {
+    proptest!(ProptestConfig::with_cases(CASES), |((plan, lost, choices) in runs())| {
+        let trace = drive(plan, lost, &choices);
+        let mut went = Went::Nowhere;
+        let mut halted = false;
+        let (mut red, mut written, mut signalled) = ([false; 2], [false; 2], [false; 2]);
+        for (msg, _, fx) in &trace.steps {
+            let stopping = matches!(
+                msg,
+                Msg::Ended(_, Exit::Checked(Err(_)) | Exit::Pushed(Err(_)) | Exit::Dispatched(Dispatch::Failed)
+                    | Exit::Published(Publication::Unfilled(_) | Publication::Failed(_)))
+            );
+            if let Msg::Ended(half, Exit::Gated(Ended::Judged(Outcome::Red)) | Exit::Published(Publication::Failed(_))) = msg
+                && !halted && !signalled[slot(*half)]
+            {
+                red[slot(*half)] = true;
+            }
+            match msg {
+                Msg::Ended(_, Exit::Pushed(Ok(_))) => went = went.max(Went::Pushed),
+                Msg::Ended(_, Exit::Published(Publication::Filled(_))) => went = Went::Cached,
+                _ => {}
+            }
+            for effect in fx {
+                match effect {
+                    Effect::Write(half, Outcome::Red) => written[slot(*half)] = true,
+                    Effect::SignalGroup(half, _) => signalled[slot(*half)] = true,
+                    _ => {}
+                }
+                if let Effect::Start(_, job) = effect {
+                    prop_assert!(!halted && !stopping, "a start after the run stopped: {msg:?} {fx:?}");
+                    if let Job::Gate(Steps::Named(steps), needs) = job {
+                        let builds = [gating::BOX_AFTER, gating::LIVE_AFTER].contains(steps);
+                        prop_assert!(!builds || *needs == Went::Cached, "{fx:?}");
+                        prop_assert!(went >= *needs, "a gate before its tree went far enough: {fx:?}");
+                    }
+                }
+            }
+            halted |= stopping;
+            if fx.iter().any(|e| matches!(e, Effect::Say(said) if said.ends_with(gating::HALTED))) {
+                halted = true;
+            }
+        }
+        if let (true, Done::Ran(_)) = (halted, &trace.done) {
+            for half in Half::BOTH {
+                prop_assert!(!red[slot(half)] || written[slot(half)], "a stop dropped the {half:?} half's red");
+            }
+        }
+    });
 }
 
 /// Law 4: with red monotone over prefixes, the search finds the least red prefix in at most

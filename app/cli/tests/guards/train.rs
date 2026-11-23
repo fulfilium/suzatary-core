@@ -31,6 +31,14 @@ if [ "$1 $2" = "workflow run" ]; then
   [ "$GH_CACHE" != unanswered ] || exit 124
   exit 0
 fi
+if [ "$1 $2" = "run view" ]; then
+  sha="${5#pub-}"
+  case "$(cat "$here/dispatched/$sha" 2>/dev/null)" in
+    failure) echo failure ;;
+    *) echo success ;;
+  esac
+  exit 0
+fi
 if [ "$1 $2" = "run list" ]; then
   [ "$6 $8" = "publication.yml workflow_dispatch" ] || exit 64
   sha="$(echo "$*" | sed -n 's/.*Publication cache \([0-9a-f]\{40\}\).*/\1/p')"
@@ -38,7 +46,7 @@ if [ "$1 $2" = "run list" ]; then
   [ "$GH_CACHE" != down ] || { echo "error connecting to api.github.com" >&2; exit 1; }
   [ -e "$here/dispatched/$sha" ] || exit 0
   case "$(cat "$here/dispatched/$sha")" in
-    failure) echo "https://github.test/runs/pub-$sha completed failure" ;;
+    failure | failure-push) echo "https://github.test/runs/pub-$sha completed failure" ;;
     running) echo "https://github.test/runs/pub-$sha in_progress " ;;
     *) echo "https://github.test/runs/pub-$sha completed success" ;;
   esac
@@ -116,6 +124,7 @@ esac
 const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
+[ -z "$SUZATARY_GATE_BUILDS" ] || echo "$* $SUZATARY_GATE_BUILDS" >>"$TRAIN_PROBES.cached"
 case "$GATE_LEAVE" in
   group) sleep 600 >/dev/null 2>&1 & echo $! >>"$TRAIN_PROBES.left" ;;
   outside) setsid sleep 600 & echo $! >>"$TRAIN_PROBES.left" ;;
@@ -284,18 +293,28 @@ impl Train {
     /// and named to the stub `gh`.
     fn pr(&self, n: u32, title: &str, files: &[(&str, &str)]) {
         run_git(&self.author(), &["fetch", "-q", "origin"]);
-        self.pr_from(n, "origin/master", title, files);
+        self.pr_from(n, "origin/master", title, &[], files);
+    }
+
+    /// Pull request `n` from origin's master: `removed` deleted, then `files` written.
+    fn pr_removing(&self, n: u32, title: &str, removed: &[&str], files: &[(&str, &str)]) {
+        run_git(&self.author(), &["fetch", "-q", "origin"]);
+        self.pr_from(n, "origin/master", title, removed, files);
     }
 
     /// Pull request `n`, stacked: its branch starts from pull request `on`'s.
     fn stacked(&self, n: u32, on: u32, title: &str, files: &[(&str, &str)]) {
-        self.pr_from(n, &format!("pr{on}"), title, files);
+        self.pr_from(n, &format!("pr{on}"), title, &[], files);
     }
 
-    /// Pull request `n`: `files` written on a branch from `from`, pushed and named.
-    fn pr_from(&self, n: u32, from: &str, title: &str, files: &[(&str, &str)]) {
+    /// Pull request `n`: `removed` deleted and `files` written on a branch from `from`, pushed and
+    /// named.
+    fn pr_from(&self, n: u32, from: &str, title: &str, removed: &[&str], files: &[(&str, &str)]) {
         let author = self.author();
         run_git(&author, &["checkout", "-q", "-B", &format!("pr{n}"), from]);
+        for path in removed {
+            run_git(&author, &["rm", "-q", path]);
+        }
         for (path, content) in files {
             write(&author, path, content);
         }
@@ -2129,55 +2148,71 @@ fn train_gate_github_red_checks_job_reports_its_failing_lines() {
     assert_eq!(t.origin_master(), seed, "nothing landed");
 }
 
-/// A publication run that failed, timed out or never started leaves the public tree's builds to the
-/// box, after the wait and never beside it, and a run still going is cancelled. The gate is green
-/// all the same, since the builds are the same either way.
+/// A publication run that failed, timed out or never started fills no binary cache, so the gate
+/// stops and says so: the box builds nothing of the public tree in the runners' place (no box step
+/// after the wait runs, and no `nix` or `cargo` but the train's own tool's build), the branch is
+/// closed and a run still going is cancelled. A run whose builds failed is the tree's red; the
+/// others say nothing of the tree.
 #[test]
-fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
-    let cost = "the box builds the public tree itself, about 45 minutes of release build";
-    for (how, said) in [
+fn train_gate_github_stops_when_the_publication_run_filled_no_cache() {
+    for (how, said, verdict) in [
         (
             "failure",
-            ["ended failure (https://github.test/runs/pub-", cost],
+            "failed in its build step (https://github.test/runs/pub-",
+            "tree half: failed",
+        ),
+        (
+            "failure-push",
+            "ended failure (https://github.test/runs/pub-",
+            "tree half: unknown",
         ),
         (
             "running",
-            [
-                "was still in_progress after 0s (https://github.test/runs/pub-",
-                cost,
-            ],
+            "was still in_progress after 0s (https://github.test/runs/pub-",
+            "tree half: unknown",
         ),
-        ("down", ["could not start the publication run", cost]),
+        (
+            "down",
+            "could not start the publication run",
+            "tree half: unknown",
+        ),
     ] {
         let t = Train::new(&format!("github-cache-{how}"));
         t.on_github();
         t.pr(1, "the first", &[("a.txt", "a\n")]);
         assert!(t.train(&["build", "1"]).status.success());
 
-        let out = t.train_with(
-            &["gate", "--remote", "github"],
-            &[("GH_CACHE", how), ("SUZATARY_TRAIN_CACHE_TIMEOUT", "0")],
-        );
+        let mut env = t.recording_builds();
+        env.extend([
+            ("GH_CACHE", how.into()),
+            ("SUZATARY_TRAIN_CACHE_TIMEOUT", "0".into()),
+        ]);
+        let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let out = t.train_with(&["gate", "--remote", "github"], &env);
         let stderr = text(&out.stderr);
-        assert!(out.status.success(), "{how}: {stderr}");
-        for said in said {
+        assert!(!out.status.success(), "{how}: {stderr}");
+        for said in [said, HALTED, verdict] {
             assert!(stderr.contains(said), "{how}: {said}: {stderr}");
         }
         let args = t.gate_args();
-        let asked = args.iter().position(|a| a.starts_with("dispatch master "));
-        let built = args
-            .iter()
-            .position(|a| a.ends_with("--no-live --steps public-tree,deployed-shape"));
         assert!(
-            asked.is_some() && asked < built,
-            "{how}: the box builds once the wait ended: {args:?}"
+            args.iter().any(|a| a.starts_with("dispatch master ")),
+            "{args:?}"
         );
+        assert!(
+            !args
+                .iter()
+                .any(|a| a.contains("--steps public-tree") || a.contains("--steps web-live")),
+            "{how}: no box build: {args:?}"
+        );
+        t.built_only_the_tool();
         let pushed = t
             .core_pushes()
             .first()
             .and_then(|line| line.split(' ').nth(1))
             .expect("the gate commit")
             .to_owned();
+        assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "", "{how}");
         let cancelled = t
             .github_calls()
             .iter()
@@ -2291,7 +2326,239 @@ fn train_gate_github_pushes_no_admission_a_person_did_not_make() {
     assert_eq!(t.core_pushes().len(), 2, "pushed, then deleted");
 }
 
-/// It is no leak and no red tree: nothing is pushed, and the live half still runs.
+/// What a remote gate says where it stops rather than build on the box in the runners' place.
+const HALTED: &str = "the box builds nothing in the runners' place";
+
+const MANIFEST: &str = "scripts/public-admitted.sha256";
+const BLOB: &str = "the admitted bytes\n";
+const IGNORE: &str = ".gitleaksignore";
+const FINDING_OLD: &str = "t/a/tests/blob.bin:private-key:1\n";
+const FINDING_NEW: &str = "t/b/tests/blob.bin:private-key:1\n";
+const OTHER: &str = "other bytes\n";
+
+/// The admitted files' manifest of `files`, `<sha256>  <path>` as `sha256sum` prints it.
+fn manifest(files: &[(&str, &str)]) -> String {
+    use sha2::Digest as _;
+    files
+        .iter()
+        .fold("# admitted\n".to_owned(), |text, (path, bytes)| {
+            format!(
+                "{text}{}  {path}\n",
+                hex::encode(sha2::Sha256::digest(bytes))
+            )
+        })
+}
+
+impl Train {
+    /// `nix` and `cargo` on PATH before the real ones, each call recorded: `nix` builds nothing and
+    /// fails, `cargo` runs the real one (which builds the train's own tool). The environment to
+    /// pass to `train_with`.
+    fn recording_builds(&self) -> Vec<(&'static str, String)> {
+        let bin = self.scratch.join("recorded");
+        let log = self.scratch.join("builds");
+        // The `cargo` on PATH, as `train.sh` would call it: `$CARGO` may name the binary behind a
+        // wrapper, whose other flags would build the shared tool again under the other tests.
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let cargo = std::env::split_paths(&path)
+            .map(|dir| dir.join("cargo"))
+            .find(|cargo| cargo.is_file())
+            .expect("cargo is on PATH");
+        let record = |name: &str, then: &str| {
+            let body = format!(
+                "#!/bin/sh\necho \"{name} $*\" >>'{}'\n{then}\n",
+                log.display()
+            );
+            let _ = suzatary_testkit::fake_program(&bin, name, &body);
+        };
+        record("nix", "exit 1");
+        record("cargo", &format!("exec '{}' \"$@\"", cargo.display()));
+        let mut dirs = vec![bin];
+        dirs.extend(std::env::split_paths(&path));
+        let path = std::env::join_paths(dirs).expect("a PATH");
+        vec![("PATH", path.to_string_lossy().into_owned())]
+    }
+
+    /// No `nix` ran, and every `cargo` built the train's tool alone.
+    fn built_only_the_tool(&self) {
+        let builds = std::fs::read_to_string(self.scratch.join("builds")).unwrap_or_default();
+        assert!(
+            builds
+                .lines()
+                .all(|line| line.starts_with("cargo build --quiet --locked -p suzatary-tooling ")),
+            "a build beside the train's tool: {builds}"
+        );
+    }
+
+    /// The gate branches pushed to core.
+    fn gate_pushes(&self) -> usize {
+        self.core_pushes()
+            .iter()
+            .filter(|line| line.starts_with("refs/heads/gate/"))
+            .count()
+    }
+
+    /// A train on GitHub whose landing published `t/a/tests/blob.bin`, its manifest line and a
+    /// fingerprint of it, which a person admitted at a terminal.
+    fn admitted_blob(name: &str) -> Train {
+        let t = Train::new(name);
+        t.on_github();
+        let files = [("t/a/tests/blob.bin", BLOB)];
+        let listed = manifest(&files);
+        let written = [files[0], (MANIFEST, &listed), (IGNORE, FINDING_OLD)];
+        t.pr(1, "an admitted file", &written);
+        assert!(t.train(&["build", "1"]).status.success());
+        assert!(t.train(&["gate"]).status.success(), "on the box, by name");
+        assert!(!t.train(&["land"]).status.success(), "three new paths");
+        let admitted = t.at_a_terminal(&[
+            "publish",
+            "--admit",
+            "t/a/tests/blob.bin",
+            "--admit",
+            MANIFEST,
+            "--admit",
+            IGNORE,
+        ]);
+        assert!(admitted.status.success(), "{}", text(&admitted.stdout));
+        t
+    }
+}
+
+/// AN ADMISSION FOLLOWS ITS BYTES: a tree that moves an admitted file (the same bytes at a new
+/// path in its directory, its manifest line and its fingerprint moved with it) holds no new
+/// admission, so it goes to GitHub's runners, and the gate and the landing each name the move;
+/// core's row says it in a `Moved:` trailer.
+#[test]
+fn train_gate_github_and_land_carry_a_moved_admitted_file() {
+    let t = Train::admitted_blob("admission-moved");
+    let to = [("t/b/tests/blob.bin", BLOB)];
+    let files = [to[0], (MANIFEST, &manifest(&to)), (IGNORE, FINDING_NEW)];
+    t.pr_removing(
+        2,
+        "the admitted file moves",
+        &["t/a/tests/blob.bin"],
+        &files,
+    );
+    assert!(t.train(&["build", "2"]).status.success());
+    let env = t.recording_builds();
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let gated = t.train_with(&["gate", "--remote", "github"], &env);
+    let stderr = text(&gated.stderr);
+    assert!(gated.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("moved: t/a/tests/blob.bin -> t/b/tests/blob.bin (in "),
+        "{stderr}"
+    );
+    assert_eq!(t.gate_pushes(), 2, "pushed, then deleted");
+    t.built_only_the_tool();
+    let cached =
+        std::fs::read_to_string(t.probes_file().with_extension("cached")).unwrap_or_default();
+    assert_eq!(
+        cached.lines().collect::<Vec<_>>(),
+        [
+            "--no-live --steps public-tree,deployed-shape cache",
+            "--only-live --steps web-live,deploy-build,push-dry,public-check cache"
+        ],
+        "the box's builds of the public tree come from the cache alone"
+    );
+
+    let landed = t.train(&["land"]);
+    let stderr = text(&landed.stderr);
+    assert!(
+        landed.status.success(),
+        "no person is asked again: {stderr}"
+    );
+    assert!(
+        stderr.contains("moved: t/a/tests/blob.bin -> t/b/tests/blob.bin (in "),
+        "{stderr}"
+    );
+    assert_eq!(
+        t.core(&["show", "master:t/b/tests/blob.bin"]),
+        BLOB.trim_end()
+    );
+    let trailer = |key: &str| {
+        t.core(&[
+            "log",
+            "-1",
+            &format!("--format=%(trailers:key={key},valueonly)"),
+            "master",
+        ])
+    };
+    assert_eq!(trailer("Moved"), "t/a/tests/blob.bin -> t/b/tests/blob.bin");
+    assert_eq!(trailer("Admitted"), "");
+}
+
+/// A pull request beside the admitted file: its number, the paths it deletes, the files it writes
+/// (each listed in the manifest it writes) and the path held.
+type Held<'a> = (u32, &'a [&'a str], &'a [(&'a str, &'a str)], &'a str);
+
+/// What still waits for a person: bytes no row admitted, an admitted file's bytes changed, a copy
+/// of admitted bytes beside the original (a second place, not a move), and a rename that also
+/// edits. Each is held from the gate branch, and the remote gate stops there: nothing pushed,
+/// the live half unrun, no build but the train's tool.
+#[test]
+fn train_gate_github_holds_admitted_bytes_changed_copied_or_new() {
+    let t = Train::admitted_blob("admission-held");
+    let env = t.recording_builds();
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let live = t.probes("--only-live");
+    let cases: [Held; 4] = [
+        (
+            2,
+            &[],
+            &[("t/a/tests/blob.bin", BLOB), ("t/other.bin", OTHER)],
+            "t/other.bin",
+        ),
+        (
+            3,
+            &[],
+            &[("t/a/tests/blob.bin", OTHER)],
+            "t/a/tests/blob.bin",
+        ),
+        (
+            4,
+            &[],
+            &[("t/a/tests/blob.bin", BLOB), ("t/c/tests/copy.bin", BLOB)],
+            "t/c/tests/copy.bin",
+        ),
+        (
+            5,
+            &["t/a/tests/blob.bin"],
+            &[("t/b/tests/edited.bin", OTHER)],
+            "t/b/tests/edited.bin",
+        ),
+    ];
+    for (n, removed, files, held) in cases {
+        let listed = manifest(files);
+        let written: Vec<(&str, &str)> = files
+            .iter()
+            .copied()
+            .chain([(MANIFEST, listed.as_str())])
+            .collect();
+        t.pr_removing(n, held, removed, &written);
+        assert!(t.train(&["build", &n.to_string()]).status.success());
+        let out = t.train_with(&["gate", "--remote", "github"], &env);
+        let stderr = text(&out.stderr);
+        assert!(!out.status.success(), "{held}: {stderr}");
+        assert!(
+            stderr.contains(&format!("held: {held} (in ")),
+            "{held}: {stderr}"
+        );
+        assert!(
+            stderr.contains(HALTED) && !stderr.contains("moved:"),
+            "{held}: {stderr}"
+        );
+        assert_eq!(t.gate_pushes(), 0, "{held}: nothing pushed");
+        assert_eq!(
+            t.probes("--only-live"),
+            live,
+            "{held}: the live half did not run"
+        );
+    }
+    t.built_only_the_tool();
+}
+
+/// It is no leak and no red tree: nothing is pushed, and the gate stops there, the live half
+/// unrun, so nothing is built on the box in the runners' place.
 #[test]
 fn train_gate_github_whose_check_could_not_run_has_no_verdict() {
     let t = Train::new("github-unchecked");
@@ -2307,12 +2574,33 @@ fn train_gate_github_whose_check_could_not_run_has_no_verdict() {
     assert!(
         stderr.contains("the leak guard could not run")
             && stderr.contains("tree half: unknown")
+            && stderr.contains("live half: unknown")
+            && stderr.contains(HALTED)
             && !stderr.contains("red on the box")
             && !stderr.contains("did not pass"),
         "{stderr}"
     );
     assert_eq!(t.core_pushes(), Vec::<String>::new(), "nothing pushed");
-    assert!(t.probes("--only-live") > 0, "the live half ran");
+    assert_eq!(t.probes("--only-live"), 0, "the live half did not run");
+}
+
+/// `bisect --remote github` of a red live half is refused before its first probe: the live half
+/// alone pushes nothing, so no publication run fills the cache, and the probe's builds would be
+/// the box's own.
+#[test]
+fn train_bisect_github_of_the_live_half_alone_is_refused() {
+    let t = Train::new("bisect-github-live");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    t.pr(2, "the second", &[("broken-live", "x\n")]);
+    assert!(t.train(&["build", "1", "2"]).status.success());
+    assert!(!t.train(&["gate"]).status.success(), "the live half is red");
+    let live = t.probes("--only-live");
+    let out = t.train(&["bisect", "--remote", "github"]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(stderr.contains("ask for it on the box by name"), "{stderr}");
+    assert_eq!(t.probes("--only-live"), live, "no probe ran on the box");
 }
 
 /// Every tool `train.sh` names in `needs` is in the `.#triage` shell itself, asked of the shell

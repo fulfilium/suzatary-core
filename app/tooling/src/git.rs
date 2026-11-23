@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// `git <args>`, ready for an environment or a directory before [`process::out`] runs it.
+/// `git <args>`, ready for an environment or a directory before `process::out` runs it.
 pub fn cmd<S: AsRef<OsStr>>(args: &[S]) -> Command {
     let mut cmd = Command::new("git");
     cmd.args(args);

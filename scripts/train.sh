@@ -18,7 +18,11 @@
 #                    for the reason an open or completed roadmap task gives; a land prints it
 #
 # `--remote github` runs the tree half on core's runners (only a public tree the tool finds
-# publishable leaves the box: its leak guard passed, and it holds no admission core lacks); the box keeps the steps that read this repository and the live half. Run inside
+# publishable leaves the box: its leak guard passed, and it holds no admission core lacks; admitted
+# bytes moved to a new path are no new one, and it says `moved: <old> -> <new>`); the box keeps the
+# steps that read this repository and the live half. Where the tree cannot go out, or its
+# publication run did not fill the binary cache, the gate stops and the box builds nothing: a gate
+# on the box is `gate` without `--remote`, asked for by name. Run inside
 # `nix develop .#triage`, from a clean checkout; it never touches the data repository.
 #
 # Verdicts go to .git/train/gates/, keyed by half and tree, the live half's also by a digest of the

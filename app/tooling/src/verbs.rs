@@ -304,7 +304,12 @@ impl Train {
                 Reading::Unjudged | Reading::Finding => silent.push(half.name()),
             }
         }
-        let status = self.shell(&report)?;
+        // A night with no red and a half that said nothing did not pass: the report would say so.
+        let status = if report.len() > 2 || silent.is_empty() {
+            self.shell(&report)?
+        } else {
+            0
+        };
         if !silent.is_empty() {
             return Err(said(format!(
                 "the {} half gave no verdict on origin/master {}; the logs are in {}/.",

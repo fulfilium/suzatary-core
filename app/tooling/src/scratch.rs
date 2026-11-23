@@ -6,12 +6,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 /// A directory made empty and new under the system's temporary directory, removed when dropped.
 #[derive(Debug)]
-pub struct Scratch(PathBuf);
+pub(crate) struct Scratch(PathBuf);
 
 static MADE: AtomicU32 = AtomicU32::new(0);
 
 impl Scratch {
-    pub fn new() -> Result<Scratch, Error> {
+    pub(crate) fn new() -> Result<Scratch, Error> {
         let path = std::env::temp_dir().join(format!(
             "train-{}-{}-{}",
             std::process::id(),
@@ -26,7 +26,7 @@ impl Scratch {
     }
 
     #[must_use]
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.0
     }
 }

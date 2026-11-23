@@ -4,7 +4,7 @@
 use crate::data::{Beside, Data};
 use crate::gate_branch::GateBranch;
 use crate::gating::{self, Alarm, Dispatch, Done, Effect, Exit, Gating, Job, Msg, OnRed};
-use crate::gating::{Plan, Push, Runs, Steps};
+use crate::gating::{Plan, Publication, Push, Runs, Steps, Went};
 use crate::lock::{Holder, Lock};
 use crate::oid::Oid;
 use crate::outcome::Check;
@@ -35,6 +35,9 @@ pub(crate) const TRAIN_READS: [&str; 14] = [
     HOLDER,
     SCRIPTS,
 ];
+/// Where a gate's builds of the public tree come from (merge-gate.sh): `cache` alone, or, unset,
+/// built where no cache holds them.
+const GATE_BUILDS: &str = "SUZATARY_GATE_BUILDS";
 /// The directory of the `train.sh` that ran the tool, whose scripts the train runs.
 const SCRIPTS: &str = "SUZATARY_SCRIPTS";
 /// Set in what the train runs under its lock, so `train.sh` knows it holds it.
@@ -222,9 +225,16 @@ impl Train {
         remote: Option<&str>,
         on_red: OnRed,
     ) -> Result<Plan, Error> {
-        let Some(prefix) = remote.filter(|_| halves.contains(&Half::Tree)) else {
+        let Some(prefix) = remote else {
             return Ok(Plan::local(commit.clone(), halves, on_red));
         };
+        if !halves.contains(&Half::Tree) {
+            return Err(said(
+                "the live half alone pushes nothing to GitHub, so no publication run fills the \
+                 binary cache and its builds would be the box's own: ask for it on the box by \
+                 name, without --remote github.",
+            ));
+        }
         let push = Push {
             branch: GateBranch::parse(&format!("{prefix}{commit}"))?,
             subject: format!("Gate {}", commit.short()),
@@ -385,24 +395,26 @@ impl Train {
     }
 
     fn start(&mut self, half: Half, job: Job, commit: &Oid) -> Result<Option<Child>, Error> {
-        let tool = |args: &[&str]| -> Result<Command, Error> {
-            let exe = std::env::current_exe().map_err(|e| Error::Unrun(e.to_string()))?;
-            let mut cmd = Command::new(exe);
+        // The running binary itself, which `/proc/self/exe` names even after a build into the
+        // same target replaced its file (cargo links a binary again on every build, even a fresh
+        // one), where `current_exe` would name a path that is gone.
+        let tool = |args: &[&str]| {
+            let mut cmd = Command::new("/proc/self/exe");
             cmd.args(args);
-            Ok(cmd)
+            cmd
         };
         let (cmd, capture) = match &job {
-            Job::Gate(steps) if !self.worktree_open(commit) => {
+            Job::Gate(..) if !self.worktree_open(commit) => {
                 eprintln!("train: no worktree could be made at {}", commit.short());
                 let (key, status, out) = (Key::Job(half, job), Status::Unread, String::new());
                 self.sup.post(Event::Exited { key, status, out });
                 return Ok(None);
             }
-            Job::Gate(steps) => (
-                self.merge_gate(half, *steps),
+            Job::Gate(steps, went) => (
+                self.merge_gate(half, *steps, *went),
                 Capture::Tee(self.log(half, commit)?),
             ),
-            Job::Check => (tool(&["publishable", &commit.to_string()])?, Capture::Out),
+            Job::Check => (tool(&["publishable", &commit.to_string()]), Capture::Out),
             Job::Push(Push {
                 branch,
                 subject,
@@ -410,7 +422,7 @@ impl Train {
             }) => {
                 let (commit, branch) = (commit.to_string(), branch.to_string());
                 let args = ["push-gate", &commit, &branch, subject, trailer];
-                (tool(&args)?, Capture::Out)
+                (tool(&args), Capture::Out)
             }
             Job::Dispatch(pushed) => {
                 let mut cmd = self.gh();
@@ -434,7 +446,7 @@ impl Train {
             Job::Ask(ask) => (self.ask(ask)?, Capture::Out),
         };
         let child = self.sup.start(Key::Job(half, job.clone()), cmd, capture);
-        if let (Job::Gate(_), Some(Child::Group(pid))) = (&job, child) {
+        if let (Job::Gate(..), Some(Child::Group(pid))) = (&job, child) {
             let (name, group) = (half.name(), pid.as_raw_nonzero());
             eprintln!("train: the {name} half runs as process group {group}");
         }
@@ -442,7 +454,7 @@ impl Train {
     }
 
     /// The merge gate in the worktree, as `half`, with none of what the train reads for itself.
-    fn merge_gate(&self, half: Half, steps: Steps) -> Command {
+    fn merge_gate(&self, half: Half, steps: Steps, went: Went) -> Command {
         let worktree = self.state.join("worktree");
         let gate = self.seams.gate.clone();
         let mut cmd = Command::new(gate.unwrap_or_else(|| worktree.join("scripts/merge-gate.sh")));
@@ -458,6 +470,10 @@ impl Train {
         if let Steps::Named(steps) = steps {
             cmd.args(["--steps", steps]);
         }
+        match went {
+            Went::Cached => cmd.env(GATE_BUILDS, "cache"),
+            Went::Nowhere | Went::Pushed => cmd.env_remove(GATE_BUILDS),
+        };
         for name in TRAIN_READS {
             cmd.env_remove(name);
         }
@@ -550,7 +566,7 @@ impl Train {
         let ok = status == Status::Read(0);
         let lines = || out.lines().filter(|line| !line.is_empty());
         let exit = match job {
-            Job::Gate(_) => Exit::Gated(Ended::of(status)),
+            Job::Gate(..) => Exit::Gated(Ended::of(status)),
             Job::Check => Exit::Checked(Check::of(status)),
             Job::Push(_) => Exit::Pushed(
                 Check::of(status).and_then(|()| Oid::parse(out.trim()).map_err(|_| Check::Unrun)),
@@ -600,21 +616,25 @@ impl Train {
     }
 
     /// `publication-run.sh`'s word, in the train's words.
-    fn published(&self, pushed: &Oid, out: &str) -> String {
+    fn published(&self, pushed: &Oid, out: &str) -> Publication {
         let short = pushed.short();
-        let builds = gating::BOX_BUILDS;
         let of = format!("the publication run of {short}");
         match out.split_whitespace().collect::<Vec<_>>()[..] {
-            ["success", ..] => {
-                format!("{of} succeeded: the box's builds come from the binary cache")
-            }
-            ["failed", url, how, ..] => format!("{of} ended {how} ({url}): {builds}"),
+            ["success", ..] => Publication::Filled(format!(
+                "{of} succeeded: the box's builds come from the binary cache"
+            )),
+            ["unbuilt", url, ..] => Publication::Failed(format!(
+                "{of} failed in its build step ({url}): the runners could not build the public tree"
+            )),
+            ["failed", url, how, ..] => Publication::Unfilled(format!("{of} ended {how} ({url})")),
             ["running", url, how, ..] => {
                 let after = self.seams.cache_timeout;
-                format!("{of} was still {how} after {after}s ({url}): {builds}")
+                Publication::Unfilled(format!("{of} was still {how} after {after}s ({url})"))
             }
-            ["none", ..] => format!("no publication run of {short} appeared within 600s: {builds}"),
-            _ => format!("could not ask GitHub for {of} (gh's words above): {builds}"),
+            ["none", ..] => Publication::Unfilled(format!(
+                "no publication run of {short} appeared within 600s"
+            )),
+            _ => Publication::Unfilled(format!("could not ask GitHub for {of} (gh's words above)")),
         }
     }
 

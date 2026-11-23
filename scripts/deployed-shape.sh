@@ -5,11 +5,22 @@
 # chain through door 1 with the package's own gitleaks (none on PATH), stores a calendar's
 # link with `secretspec` beside the read-only tree, and runs the followed stores' unit command.
 #
-#   nix develop .#triage -c scripts/deployed-shape.sh
+#   nix develop .#triage -c scripts/deployed-shape.sh [--cached]
+#
+# --cached: what it builds comes from a binary cache (`--max-jobs 0`), never a build here; one no
+# cache holds exits 75, no verdict (a gate on GitHub's runners, whose publication run filled it).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
+# shellcheck source=scripts/nix-out.sh
+. "$root/scripts/nix-out.sh"
+fetched=()
+case "${1:-}" in
+  "") ;;
+  --cached) fetched=(--max-jobs 0) ;;
+  *) echo "usage: scripts/deployed-shape.sh [--cached]" >&2; exit 64 ;;
+esac
 
 # Under /tmp, not a dev shell's private TMPDIR, so an unprivileged user can reach it.
 scratch="$(mktemp -d /tmp/deployed-shape.XXXXXX)"
@@ -36,13 +47,16 @@ nix-store --realise "$tree" --add-root "$scratch/tree" --indirect >/dev/null
 echo "deployed-shape: HEAD's tree is $tree" >&2
 
 # The deploy's own binary, which the gate's public-tree step built.
-suzatary="$(nix build "$tree#suzatary" --out-link "$scratch/bin" --print-out-paths)/bin/suzatary"
+suzatary="$(nix build "$tree#suzatary" --out-link "$scratch/bin" "${fetched[@]}" --print-out-paths ||
+  missed "$tree#suzatary")/bin/suzatary"
 
 # The runtimeDeps of nix/services.nix that the typesetter and the push reach; nothing of this
 # shell's PATH.
-mapfile -t packages < <(nix build --no-link --print-out-paths --inputs-from . \
-  nixpkgs#bash nixpkgs#coreutils nixpkgs#gnugrep nixpkgs#gawk nixpkgs#gnused \
+tools=(nixpkgs#bash nixpkgs#coreutils nixpkgs#gnugrep nixpkgs#gawk nixpkgs#gnused
   nixpkgs#gnutar nixpkgs#gzip nixpkgs#git nixpkgs#nix nixpkgs#util-linux)
+built="$(nix build --no-link --print-out-paths --inputs-from . "${fetched[@]}" "${tools[@]}" ||
+  missed --inputs-from . "${tools[@]}")"
+mapfile -t packages <<<"$built"
 path=""
 for package in "${packages[@]}"; do
   [[ ! -d "$package/bin" ]] || path="${path:+$path:}$package/bin"
@@ -153,7 +167,8 @@ case "$declared" in
 esac
 grep -q PLUGIN_ICS_WORK "$declared" ||
   { echo "deployed-shape: $declared does not declare the calendar's link" >&2; exit 1; }
-secretspec_bin="$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#secretspec)/bin"
+secretspec_bin="$(nix build --no-link --print-out-paths --inputs-from . "${fetched[@]}" nixpkgs#secretspec ||
+  missed --inputs-from . nixpkgs#secretspec)/bin"
 "${units[@]}" mkdir -p "$scratch/secrets-home"
 store=("${units[@]}" "PATH=$path:$secretspec_bin" "HOME=$scratch/secrets-home"
   "XDG_CONFIG_HOME=$scratch/secrets-home/.config" "SECRETSPEC_PROVIDER=dotenv://$scratch/secrets.env")

@@ -25,6 +25,8 @@ seams = []
 rustix = { version = "1", features = ["event", "process"] }
 # HUP, INT and TERM received as messages, whatever disposition the train inherited.
 signal-hook = "0.4"
+# The SHA-256 of a file's bytes, which an admission names (`admission::Digest`).
+sha2.workspace = true
 thiserror.workspace = true
 # The context budget (`context`): context.toml read and edited, Rust and Cargo manifests read.
 anyhow.workspace = true

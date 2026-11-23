@@ -15,14 +15,27 @@ pub const BOX_BEFORE: &str = "fmt,changelog";
 pub const BOX_AFTER: &str = "public-tree,deployed-shape";
 pub const LIVE_EARLY: &str = "live,live-all,live-guards";
 pub const LIVE_AFTER: &str = "web-live,deploy-build,push-dry,public-check";
-pub(crate) const BOX_BUILDS: &str = "the box builds the public tree itself, about 45 minutes of release \
-                          build beside the app it serves";
+/// What a stopped remote run says after its reason.
+pub const HALTED: &str = "so the gate stops here and the box builds nothing in the runners' \
+                          place: gate again with --remote github once that is mended, or ask for \
+                          a gate on the box by name: scripts/train.sh gate";
 
 /// Which of a half's gate steps one run of `merge-gate.sh` runs.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Steps {
     All,
     Named(&'static str),
+}
+
+/// How far a run's tree has gone toward GitHub's runners; it only climbs. A gate piece needing
+/// more than the run reached stops the run.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Went {
+    Nowhere,
+    /// On a gate branch of core.
+    Pushed,
+    /// Its publication run filled the binary cache, so the box fetches its builds.
+    Cached,
 }
 
 /// A gate branch and the words of its commit (`push-gate`'s arguments).
@@ -38,8 +51,8 @@ pub struct Push {
 pub enum Piece {
     /// The one check before a push (`train publishable`).
     Check,
-    /// `merge-gate.sh` in the worktree.
-    Gate(Steps),
+    /// `merge-gate.sh` in the worktree, once the run has gone as far as named.
+    Gate(Steps, Went),
     Push(Push),
     /// Master's publication run of the pushed commit, which fills the binary cache.
     Dispatch,
@@ -105,8 +118,8 @@ impl Plan {
         };
         Plan {
             commit,
-            tree: gate(Half::Tree, now(Piece::Gate(Steps::All))),
-            live: gate(Half::Live, after(Piece::Gate(Steps::All), 0)),
+            tree: gate(Half::Tree, now(Piece::Gate(Steps::All, Went::Nowhere))),
+            live: gate(Half::Live, after(Piece::Gate(Steps::All, Went::Nowhere), 0)),
             on_red,
             polls: 1,
         }
@@ -119,11 +132,11 @@ impl Plan {
     pub fn remote(commit: Oid, push: Push, live: bool, on_red: OnRed, polls: u32) -> Plan {
         let mut tree = vec![
             now(Piece::Check),
-            now(Piece::Gate(Steps::Named(BOX_BEFORE))),
+            now(Piece::Gate(Steps::Named(BOX_BEFORE), Went::Nowhere)),
             now(Piece::Push(push)),
             now(Piece::Dispatch),
             after(Piece::Publication, 0),
-            after(Piece::Gate(Steps::Named(BOX_AFTER)), 0),
+            after(Piece::Gate(Steps::Named(BOX_AFTER), Went::Cached), 0),
         ];
         if on_red == OnRed::GoOn {
             tree.push(after(Piece::Unlock, 1));
@@ -131,8 +144,8 @@ impl Plan {
         tree.push(now(Piece::Watch));
         let live = if live {
             vec![
-                after(Piece::Gate(Steps::Named(LIVE_EARLY)), 3),
-                after(Piece::Gate(Steps::Named(LIVE_AFTER)), 5),
+                after(Piece::Gate(Steps::Named(LIVE_EARLY), Went::Pushed), 3),
+                after(Piece::Gate(Steps::Named(LIVE_AFTER), Went::Cached), 5),
             ]
         } else {
             Vec::new()
@@ -170,7 +183,7 @@ impl Plan {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Job {
     Check,
-    Gate(Steps),
+    Gate(Steps, Went),
     Push(Push),
     Dispatch(Oid),
     Publication(Oid),
@@ -184,8 +197,16 @@ pub enum Exit {
     Checked(Result<(), Check>),
     Pushed(Result<Oid, Check>),
     Dispatched(Dispatch),
-    /// The publication run's end, in words: nothing waits on what it says.
-    Published(String),
+    Published(Publication),
+}
+
+/// How the publication run of a pushed commit ended, in words: it filled the binary cache, its
+/// builds of the tree failed (the tree's red), or it said nothing of the tree.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Publication {
+    Filled(String),
+    Failed(String),
+    Unfilled(String),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -208,14 +229,14 @@ pub enum Alarm {
 #[must_use]
 pub fn unread(half: Half, job: &Job) -> Msg {
     let exit = match job {
-        Job::Gate(_) => Exit::Gated(Ended::Unjudged),
+        Job::Gate(..) => Exit::Gated(Ended::Unjudged),
         Job::Check => Exit::Checked(Err(Check::Unrun)),
         Job::Push(_) => Exit::Pushed(Err(Check::Unrun)),
         Job::Dispatch(_) => Exit::Dispatched(Dispatch::Failed),
-        Job::Publication(pushed) => Exit::Published(format!(
-            "could not ask GitHub for the publication run of {}: {BOX_BUILDS}",
+        Job::Publication(pushed) => Exit::Published(Publication::Unfilled(format!(
+            "could not ask GitHub for the publication run of {}",
             pushed.short()
-        )),
+        ))),
         Job::Ask(ask) => {
             return Msg::Polled(match ask {
                 Ask::Find(_) => Answer::Run(None),
@@ -283,19 +304,13 @@ enum Pushed {
     Open(Oid, GateBranch),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Cache {
-    Asked,
-    NotAsked,
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Run {
     plan: Plan,
     at: [At; 2],
     fold: [Ended; 2],
     pushed: Pushed,
-    cache: Cache,
+    went: Went,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -336,6 +351,7 @@ fn worse(a: Ended, b: Ended) -> Ended {
 }
 
 const GREEN: Ended = Ended::Judged(Outcome::Green);
+const RED: Ended = Ended::Judged(Outcome::Red);
 
 impl Gating {
     /// A run of `plan`, and the effects that start it.
@@ -353,7 +369,7 @@ impl Gating {
             plan,
             fold: [GREEN; 2],
             pushed: Pushed::Nothing,
-            cache: Cache::NotAsked,
+            went: Went::Nowhere,
         };
         settle(Gating::Going(run), Vec::new())
     }
@@ -485,7 +501,7 @@ impl Run {
 
     /// The half's job is gone after a signal: nothing it found is written.
     fn stopped(&mut self, half: Half, at: usize, fx: &mut Vec<Effect>) {
-        if let Piece::Gate(_) = self.piece(half, at) {
+        if let Piece::Gate(..) = self.piece(half, at) {
             fx.push(Effect::RemoveWorktree);
         }
         self.end(half, Ended::Unjudged, fx);
@@ -494,23 +510,25 @@ impl Run {
     fn finish(&mut self, half: Half, at: usize, exit: Exit, fx: &mut Vec<Effect>) {
         let short = self.short();
         let piece = self.piece(half, at).clone();
-        if let Piece::Gate(_) = piece {
+        if let Piece::Gate(..) = piece {
             fx.push(Effect::RemoveWorktree);
         }
-        let kept = |fx: &mut Vec<Effect>, check, then: &str| {
-            fx.push(Effect::Say(format!(
-                "nothing went to core, so the tree half says nothing of {short}{then}"
-            )));
-            Ended::Refused(check)
+        let kept = |check| {
+            let why = match check {
+                Check::Leak => "its public tree did not pass its leak guard (above)",
+                Check::Held => "its public tree holds an admission core's master does not (above)",
+                Check::Unrun => "the check before the push could not run (above)",
+            };
+            format!("nothing of {short} went to GitHub's runners: {why}")
         };
         let ended = match (exit, &piece) {
             (Exit::Gated(ended), _) => ended,
             (Exit::Checked(Err(check)), _) => {
-                kept(fx, check, "; the live half's public-check judges it")
+                return self.halt(half, Ended::Refused(check), &kept(check), fx);
             }
             (Exit::Pushed(Err(check)), _) => {
                 self.refused(check);
-                kept(fx, check, "")
+                return self.halt(half, Ended::Refused(check), &kept(check), fx);
             }
             (Exit::Pushed(Ok(pushed)), Piece::Push(push)) => {
                 fx.push(Effect::Say(format!(
@@ -519,33 +537,57 @@ impl Run {
                     pushed.short()
                 )));
                 self.pushed = Pushed::Open(pushed, push.branch.clone());
+                self.went = self.went.max(Went::Pushed);
                 GREEN
             }
             // A push's end comes only for a push piece (`Supervisor` starts one job per piece).
-            (Exit::Checked(Ok(())) | Exit::Pushed(Ok(_)), _) => GREEN,
-            (Exit::Dispatched(dispatch), _) => {
-                self.cache = Cache::Asked;
-                match dispatch {
-                    Dispatch::Started => {}
-                    Dispatch::Unanswered => fx.push(Effect::Say(format!(
-                        "the dispatch of the publication run of {short} got no answer within \
-                         60s: looking for the run all the same"
-                    ))),
-                    Dispatch::Failed => {
-                        self.cache = Cache::NotAsked;
-                        fx.push(Effect::Say(format!(
-                            "could not start the publication run of {short} (above): {BOX_BUILDS}"
-                        )));
-                    }
-                }
+            (
+                Exit::Checked(Ok(())) | Exit::Pushed(Ok(_)) | Exit::Dispatched(Dispatch::Started),
+                _,
+            ) => GREEN,
+            (Exit::Dispatched(Dispatch::Unanswered), _) => {
+                fx.push(Effect::Say(format!(
+                    "the dispatch of the publication run of {short} got no answer within 60s: \
+                     looking for the run all the same"
+                )));
                 GREEN
             }
-            (Exit::Published(said), _) => {
+            (Exit::Dispatched(Dispatch::Failed), _) => {
+                let why = format!("could not start the publication run of {short} (above)");
+                return self.halt(half, Ended::Unjudged, &why, fx);
+            }
+            (Exit::Published(Publication::Filled(said)), _) => {
                 fx.push(Effect::Say(said));
+                self.went = Went::Cached;
                 GREEN
+            }
+            (Exit::Published(Publication::Failed(why)), _) => {
+                return self.halt(half, RED, &why, fx);
+            }
+            (Exit::Published(Publication::Unfilled(why)), _) => {
+                return self.halt(half, Ended::Unjudged, &why, fx);
             }
         };
         self.piece_ended(half, at, ended, fx);
+    }
+
+    /// The run stops where the runners cannot take the tree, or the box's builds of it would be
+    /// its own: `half` ends as `ended`, and every other piece is stopped before it builds. A red
+    /// either half already found (the nightly goes on past one) is still its row.
+    fn halt(&mut self, half: Half, ended: Ended, why: &str, fx: &mut Vec<Effect>) {
+        fx.push(Effect::Say(format!("{why}, {HALTED}")));
+        self.end(half, worse(self.fold[ix(half)], ended), fx);
+        let other = other(half);
+        if self.fold[ix(other)] == RED {
+            match self.at(other).clone() {
+                At::Pending(_) | At::Polling(..) => self.end(other, RED, fx),
+                At::Running(_) | At::Asking(..) | At::Stopping(_) => {
+                    fx.push(Effect::Write(other, Outcome::Red));
+                }
+                At::Ended(_) => {}
+            }
+        }
+        self.stop_all(fx);
     }
 
     fn piece_ended(&mut self, half: Half, at: usize, ended: Ended, fx: &mut Vec<Effect>) {
@@ -661,22 +703,35 @@ impl Run {
             Pushed::Open(pushed, _) => Some(pushed.clone()),
             Pushed::Nothing | Pushed::Started(_) => None,
         };
-        let job = match (piece, pushed, self.cache) {
+        let job = match (piece, pushed) {
             (Piece::Check, ..) => Job::Check,
-            (Piece::Gate(steps), ..) => Job::Gate(steps),
+            (Piece::Gate(_, needs), ..) if self.went < needs => {
+                let short = self.short();
+                let why = match needs {
+                    Went::Nowhere | Went::Pushed => {
+                        format!("nothing of {short} went to GitHub's runners")
+                    }
+                    Went::Cached => {
+                        format!("no publication run filled the binary cache with {short}")
+                    }
+                };
+                self.halt(half, Ended::Unjudged, &why, fx);
+                return;
+            }
+            (Piece::Gate(steps, needs), ..) => Job::Gate(steps, needs),
             (Piece::Push(push), ..) => {
                 self.pushed = Pushed::Started(push.branch.clone());
                 Job::Push(push)
             }
-            (Piece::Dispatch, Some(pushed), _) => Job::Dispatch(pushed),
-            (Piece::Publication, Some(pushed), Cache::Asked) => {
+            (Piece::Dispatch, Some(pushed)) => Job::Dispatch(pushed),
+            (Piece::Publication, Some(pushed)) => {
                 fx.push(Effect::Say(format!(
                     "waiting for the publication run of {} before the box builds the public tree",
                     pushed.short()
                 )));
                 Job::Publication(pushed)
             }
-            (Piece::Watch, Some(_), _) => {
+            (Piece::Watch, Some(_)) => {
                 *self.at(half) = At::Polling(at, Watch::START);
                 fx.push(Effect::Wake(Alarm::Poll));
                 return;
@@ -688,12 +743,12 @@ impl Run {
             }
             // A watch with nothing pushed has no run to watch: the half says nothing of the tree,
             // rather than a fold that ends green with no run read.
-            (Piece::Watch, None, _) => {
+            (Piece::Watch, None) => {
                 self.piece_ended(half, at, Ended::Unjudged, fx);
                 return;
             }
-            // Nothing pushed, or no publication run asked for: the piece has nothing to do.
-            (Piece::Dispatch | Piece::Publication, ..) => {
+            // Nothing pushed: the piece has nothing to do.
+            (Piece::Dispatch | Piece::Publication, None) => {
                 *self.at(half) = At::Pending(at + 1);
                 return;
             }

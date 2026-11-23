@@ -9,19 +9,19 @@ use std::path::{Path, PathBuf};
 /// `File`'s own, which std opens close-on-exec and nothing here hands to a command, so no child
 /// holds the lock: it is free the moment this process ends, whatever the children left running.
 #[derive(Debug)]
-pub struct Lock {
+pub(crate) struct Lock {
     _held: File,
 }
 
 /// The train's state directory and the verb that takes its lock, for `lock.holder`.
-pub struct Holder<'a> {
+pub(crate) struct Holder<'a> {
     pub state: &'a Path,
     pub verb: &'a str,
 }
 
 impl Holder<'_> {
     /// The lock, or the words of the train that holds it.
-    pub fn take(&self) -> Result<Lock, Error> {
+    pub(crate) fn take(&self) -> Result<Lock, Error> {
         let file = self.file()?;
         match file.try_lock() {
             Ok(()) => self.held(file),
@@ -36,7 +36,7 @@ impl Holder<'_> {
     }
 
     /// The lock once the train that holds it lets it go.
-    pub fn wait(&self) -> Result<Lock, Error> {
+    pub(crate) fn wait(&self) -> Result<Lock, Error> {
         let file = self.file()?;
         file.lock().map_err(|source| self.io(source))?;
         self.held(file)

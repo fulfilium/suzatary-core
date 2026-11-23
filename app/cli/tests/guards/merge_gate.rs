@@ -668,7 +668,7 @@ fn merge_gate_live_half_builds_what_the_deploy_builds() {
     let (gate, deploy) = (read("scripts/merge-gate.sh"), read("scripts/deploy.sh"));
     assert!(
         gate.contains("tree=\"$(scripts/public-tree.sh --store HEAD)\"")
-            && gate.contains("scripts/app-builds.sh \"$tree\""),
+            && gate.contains("scripts/app-builds.sh \"${cached[@]}\" \"$tree\""),
         "the public tree's own store path, built with app-builds.sh"
     );
     assert!(
@@ -689,7 +689,7 @@ fn merge_gate_live_half_builds_what_the_deploy_builds() {
     }
     assert!(
         gate.contains(
-            "SUZATARY_DEPLOY_BIN=\"$(nix build \"$tree#suzatary\" --no-link --print-out-paths)/bin/suzatary\""
+            "SUZATARY_DEPLOY_BIN=\"$(nix build \"$tree#suzatary\" --no-link \"${fetched[@]}\" --print-out-paths ||"
         ) && gate.contains("unset SUZATARY_DEPLOY_BIN"),
         "the build names the binary it built, and nothing before it succeeds"
     );

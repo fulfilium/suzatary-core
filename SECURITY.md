@@ -119,6 +119,19 @@ checks read, or in a file listed by its path and SHA-256 in
   branch that holds one: GitHub serves a deleted branch's commit by its name,
   so a gate branch is a publication too. The Prodrome's scan reads every
   commit of a range and takes `--admit` the same way.
+- **An admission follows its bytes.** A line is a person's word about bytes;
+  the path says where they stand today. Bytes core's master holds admitted
+  at a path the new tree no longer holds them at, standing at a new path with
+  its line in the same area (among the test trees, the directories named
+  `tests`, `test`, `e2e` or `fixtures`, of one top-level directory; else in
+  the same directory), are a move: no new admission, and the gate and the land
+  print `moved: <old> -> <new>`; a `.gitleaksignore`
+  fingerprint the master held for the old path follows the file when it is the
+  same but for the path. An admission stands only while master holds it, so a
+  line put back where an older row had it is new. A copy beside the original,
+  two new places for one left, a move out of its area (a test fixture into a
+  shipped directory such as `web/static/`, or into `.github/`), other bytes,
+  and any other fingerprint wait for a person.
 
 **What "at a terminal" stops.** `--admit` refuses a standard input that is not
 a terminal (`[[ -t 0 ]]`), which stops cron, CI and an unattended `train.sh

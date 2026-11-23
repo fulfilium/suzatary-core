@@ -323,7 +323,13 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   byte is plain text both checks read or is admitted by digest at a terminal
   (→ `publishedplaintext`). `memory/` is published, so the same guards read it.
   `train.sh publish --admit` runs only at a terminal (`-t 0`), so cron and
-  `land` cannot admit a file, though a shell can (SECURITY.md).
+  `land` cannot admit a file, though a shell can (SECURITY.md). **An admission
+  is a person's word about BYTES; its path says where they stand today**: the
+  same bytes at a new path in their area (the test trees of their top-level
+  directory, or else their directory), gone from the old, need no second word (their fingerprint follows them), and the gate and the
+  land print `moved: <old> -> <new>`; a copy or any other bytes wait for a
+  person. To move an admitted file, move it, its line and its fingerprint,
+  nothing more.
 
 ## Operations
 

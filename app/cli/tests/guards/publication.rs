@@ -760,3 +760,23 @@ fn publication_yml_alone_writes_to_the_cachix() {
         ]
     );
 }
+
+/// The train reads a failed publication run as the tree's red only where the build job's build
+/// step failed (`scripts/publication-run.sh`'s `unbuilt`), naming that step: the build job holds
+/// a step of that name.
+#[test]
+fn publication_run_names_the_build_step_publication_yml_has() {
+    let script = std::fs::read_to_string(repo().join("scripts/publication-run.sh"))
+        .expect("publication-run.sh reads");
+    let step = script
+        .lines()
+        .find_map(|line| line.strip_prefix("build_step=\""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .expect("publication-run.sh names the build step");
+    let text = workflow("publication.yml");
+    let build = section(&text, "\n  build:");
+    assert!(
+        build.contains(&format!("- name: {step}\n")),
+        "publication.yml's build job has no step {step:?}"
+    );
+}

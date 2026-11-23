@@ -13,6 +13,8 @@ mod credential;
 mod deploy;
 #[path = "guards/e2e_servers.rs"]
 mod e2e_servers;
+#[path = "guards/gate_cache.rs"]
+mod gate_cache;
 #[path = "support/gate_list.rs"]
 #[expect(dead_code, reason = "the CLI's guards read a step's lane and command")]
 mod gate_list;

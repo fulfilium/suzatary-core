@@ -1,7 +1,8 @@
 //! The program that reads a public tree for leaks.
 
 use crate::Error;
-use crate::admission::Admission;
+use crate::admission::{Admission, Vouch};
+use crate::repo_path::RepoPath;
 use crate::{git, process};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -73,7 +74,10 @@ impl Matcher {
             // A change to the secret rules changes what passes, so their bytes are admitted as a
             // line is.
             let blob = git::hash_object(&rules)?;
-            admissions.insert(Admission::parse(&format!("{RULES}\trules {blob}"))?);
+            admissions.insert(Admission {
+                path: RepoPath::parse(RULES)?,
+                vouch: Vouch::Rules(blob.to_string()),
+            });
         }
         Ok(admissions)
     }

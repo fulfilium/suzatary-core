@@ -45,7 +45,13 @@ says what was decided, who decided it, when, and why. `CLAUDE.md` names a rule's
    `scripts/web-test.sh` or `scripts/web-e2e.sh <scene>`.
 4. Before you push, run `scripts/check-commits.sh origin/master..HEAD`.
 5. To check the public tree, run `scripts/public-tree.sh <out>`, then
-   `scripts/public-tree.sh --check <out>`.
+   `scripts/public-tree.sh --check <out>`. An admission in
+   `scripts/public-admitted.sha256` is a person's word about bytes, and its path says where
+   they stand today. To move an admitted file, move the file within its area (among the test
+   trees of its top-level directory, or else within its own directory) and
+   replace the path in its manifest line and in its `.gitleaksignore` fingerprint, if it has one,
+   in the same change, and change nothing else of it: the train reads that as a move, not a new
+   admission.
 
 The merge gate runs `cargo fmt --check`, Clippy at `pedantic` with `-D warnings`, the tests and
 the browser suite. Every crate is `#![forbid(unsafe_code)]`. A public Rust item with no doc

@@ -24,6 +24,7 @@ pub mod land_order;
 pub mod leak_check;
 pub mod lock;
 pub mod matcher;
+pub mod moved;
 pub mod oid;
 pub mod outcome;
 pub mod plan;

@@ -3,7 +3,7 @@
 
 use crate::admitted::{Admitted, Terminal};
 use crate::core_rows::{CORE_MASTER, Core};
-use crate::fresh::{Fresh, Push};
+use crate::fresh::{Compared, Fresh, Push};
 use crate::gate_branch::GateBranch;
 use crate::instant::Instant;
 use crate::known::Known;
@@ -82,12 +82,12 @@ pub fn publish(
     if let Some(stray) = admits.iter().find(|admit| {
         !steps
             .iter()
-            .any(|(_, fresh)| fresh.iter().any(|f| f.path() == admit.path()))
+            .any(|(_, compared)| compared.fresh.iter().any(|f| f.path() == admit.path()))
     }) {
         return Err(Refusal::AdmitNotHeld(stray.path().clone()).into());
     }
     let mut parent = core.tip().cloned();
-    for (step, fresh) in &steps {
+    for (step, compared) in &steps {
         let (source, skipped) = match step {
             Source::Skip(skip) => {
                 eprintln!(
@@ -99,7 +99,7 @@ pub fn publish(
             Source::Row { source, skipped } => (source, skipped),
         };
         let checked = guard.script.check(source, &guard.matcher);
-        let tree = match publishable(checked, Push::Row, fresh, &admits) {
+        let tree = match publishable(checked, Push::Row, &compared.fresh, &admits) {
             Publishable::Publishable(tree) => tree,
             Publishable::Leak => {
                 eprintln!(
@@ -119,23 +119,20 @@ pub fn publish(
                 return Ok(1);
             }
         };
-        let row = push_row(&tree, parent.as_ref(), skipped, fresh)?;
+        say_moved(compared, source);
+        let row = push_row(&tree, parent.as_ref(), skipped, compared)?;
         parent = Some(row);
     }
     Ok(0)
 }
 
-/// Each step of `plan` with what its public tree holds that no earlier row or step holds.
-fn listed(
-    guard: &Guard,
-    core: &Core,
-    plan: Vec<Source>,
-) -> Result<Vec<(Source, Vec<Fresh>)>, Error> {
+/// Each step of `plan` beside every earlier row and step.
+fn listed(guard: &Guard, core: &Core, plan: Vec<Source>) -> Result<Vec<(Source, Compared)>, Error> {
     let mut known = Known::read(core, &guard.matcher)?;
     let mut steps = Vec::new();
     for step in plan {
-        let fresh = match &step {
-            Source::Skip(_) => Vec::new(),
+        let compared = match &step {
+            Source::Skip(_) => Compared::default(),
             Source::Row { source, .. } => {
                 let written = guard.script.write(source).map_err(|why| {
                     Error::Unrun(format!("{why}, to list the paths it would hold"))
@@ -143,27 +140,28 @@ fn listed(
                 known.fresh(&written, &guard.matcher)?
             }
         };
-        steps.push((step, fresh));
+        steps.push((step, compared));
     }
     Ok(steps)
 }
 
-/// One row: `tree` committed on `parent`, dated as its source, naming its skips and admissions,
-/// pushed to core's master.
+/// One row: `tree` committed on `parent`, dated as its source, naming its skips, admissions and
+/// moves, pushed to core's master.
 fn push_row(
     tree: &PublicTree,
     parent: Option<&Oid>,
     skipped: &[Oid],
-    fresh: &[Fresh],
+    compared: &Compared,
 ) -> Result<Oid, Error> {
     let source = tree.source();
     // One paragraph, so git reads every line as a trailer.
     let mut trailers = vec![format!("Source: {source}")];
     trailers.extend(skipped.iter().map(|skip| format!("Skipped: {skip}")));
-    let mut admitted: Vec<&RepoPath> = fresh.iter().map(Fresh::path).collect();
+    let mut admitted: Vec<&RepoPath> = compared.fresh.iter().map(Fresh::path).collect();
     admitted.sort();
     admitted.dedup();
     trailers.extend(admitted.iter().map(|path| format!("Admitted: {path}")));
+    trailers.extend(compared.moved.iter().map(|moved| format!("Moved: {moved}")));
     let when = process::out(&mut git::cmd(&[
         "log",
         "-1",
@@ -198,12 +196,29 @@ fn push_row(
     Ok(row)
 }
 
-/// Every step's held paths, so one look admits them all, and the command that admits them.
-fn held(source: &Oid, steps: &[(Source, Vec<Fresh>)], admits: &[Admitted]) {
+/// Each admitted file `compared` moved, one line each, for the person reading the log.
+fn say_moved(compared: &Compared, source: &Oid) {
+    for moved in &compared.moved {
+        eprintln!("moved: {moved} (in {})", source.short());
+    }
+}
+
+/// Every step's held paths, so one look admits them all, and the command that admits them; beside
+/// them, the moves of the steps not yet published.
+fn held(source: &Oid, steps: &[(Source, Compared)], admits: &[Admitted]) {
+    let unpublished = steps.iter().skip_while(|(step, _)| match step {
+        Source::Row { source: at, .. } => at != source,
+        Source::Skip(_) => true,
+    });
+    for (step, compared) in unpublished {
+        if let Source::Row { source, .. } = step {
+            say_moved(compared, source);
+        }
+    }
     let every: Vec<(&Oid, RepoPath)> = steps
         .iter()
-        .filter_map(|(step, fresh)| match step {
-            Source::Row { source, .. } => Some((source, fresh)),
+        .filter_map(|(step, compared)| match step {
+            Source::Row { source, .. } => Some((source, &compared.fresh)),
             Source::Skip(_) => None,
         })
         .flat_map(|(at, fresh)| {
@@ -238,9 +253,10 @@ pub fn gate_check(guard: &Guard, commit: &str) -> Result<(Publishable<PublicTree
         Ok(written) => written,
         Err(why) => return Ok((Publishable::CouldNotRun(why), core)),
     };
-    let fresh = known.fresh(&written, &guard.matcher)?;
+    let compared = known.fresh(&written, &guard.matcher)?;
     let checked = guard.script.guard(written, &guard.matcher);
-    let verdict = publishable(checked, Push::GateBranch, &fresh, &[]);
+    let verdict = publishable(checked, Push::GateBranch, &compared.fresh, &[]);
+    say_moved(&compared, &commit);
     if let Publishable::Held(held) = &verdict {
         for path in held {
             eprintln!("held: {path} (in {})", commit.short());

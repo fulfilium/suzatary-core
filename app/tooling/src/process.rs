@@ -20,12 +20,12 @@ fn failed(cmd: &Command, why: String) -> Error {
 }
 
 /// The command's output whatever its status; only a program that did not start is an error.
-pub fn output(cmd: &mut Command) -> Result<Output, Error> {
+pub(crate) fn output(cmd: &mut Command) -> Result<Output, Error> {
     cmd.output().map_err(|e| failed(cmd, e.to_string()))
 }
 
 /// The command's stdout without its last newline; a failure names the command and its words.
-pub fn out(cmd: &mut Command) -> Result<String, Error> {
+pub(crate) fn out(cmd: &mut Command) -> Result<String, Error> {
     let out = output(cmd)?;
     if !out.status.success() {
         let said = String::from_utf8_lossy(&out.stderr).trim().to_owned();
@@ -44,7 +44,7 @@ pub fn out(cmd: &mut Command) -> Result<String, Error> {
 }
 
 /// Whether the command exits 0, its stdout dropped and its stderr where `stderr` sends it.
-pub fn succeeds(cmd: &mut Command, stderr: Stdio) -> Result<bool, Error> {
+pub(crate) fn succeeds(cmd: &mut Command, stderr: Stdio) -> Result<bool, Error> {
     cmd.stdout(Stdio::null())
         .stderr(stderr)
         .status()

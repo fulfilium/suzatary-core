@@ -31,3 +31,16 @@ root_environment() {
   rm -rf "$dir" && mkdir -p "$dir" &&
     { ((${#paths[@]} == 0)) || nix-store --add-root "$dir/path" --realise "${paths[@]}" >/dev/null; }
 }
+
+# missed <build argument>...: where the caller fetches alone (its `fetched` set, by --cached) and a
+# `nix build --max-jobs 0` of those arguments failed, exits 75 (no verdict) when no binary cache
+# holds what they name, since the tree is not judged by what a cache lacks; else returns 1, the
+# build's own red.
+missed() {
+  local said
+  ((${#fetched[@]})) || return 1
+  said="$(nix build "$@" --dry-run 2>&1)" || return 1
+  [[ "$said" == *'will be built'* ]] || return 1
+  echo "nix: no binary cache holds $*, and this machine builds nothing for a gate on GitHub's runners: no verdict. Let the commit's publication run fill the cache (gh workflow run publication.yml), then gate again." >&2
+  exit 75
+}

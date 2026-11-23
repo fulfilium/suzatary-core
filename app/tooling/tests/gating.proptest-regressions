@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ebaf7f1b72c92ce99d35b2471c61746b07a8c79f63015886e23fbefc602df82d # shrinks to (plan, lost, choices) = (Plan { commit: Oid("0000000000000000000000000000000000000001"), tree: [Step { piece: Check, after: None }, Step { piece: Gate(Named("fmt,changelog")), after: None }, Step { piece: Push(Push { branch: GateBranch("gate/0000000000000000000000000000000000000001"), subject: "Gate", trailer: "Gate: x" }), after: None }, Step { piece: Dispatch, after: None }, Step { piece: Publication, after: Some(0) }, Step { piece: Gate(Named("public-tree,deployed-shape")), after: Some(0) }, Step { piece: Watch, after: None }], live: [Step { piece: Gate(Named("live,live-all,live-guards")), after: Some(3) }, Step { piece: Gate(Named("web-live,deploy-build,push-dry,public-check")), after: Some(5) }], on_red: Stop, polls: 4 }, false, [(0, 30), (0, 3), (0, 140)])

@@ -1,5 +1,5 @@
 //! Publication's laws: the rows a publish makes (law 5), the outcomes of the one check before a
-//! push, and the edges a publish parses. Law 8 is `admitted.rs`'s `compile_fail` doc tests.
+//! push, the moves of admitted bytes, and the edges a publish parses. Law 8 is `admitted.rs`'s `compile_fail` doc tests.
 
 use proptest::prelude::*;
 use std::collections::BTreeSet;

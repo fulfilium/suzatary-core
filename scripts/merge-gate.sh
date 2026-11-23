@@ -71,6 +71,15 @@ case "${SUZATARY_GATE_SERIAL:-}" in
   *) echo "merge-gate.sh: SUZATARY_GATE_SERIAL is 1 or unset, not $SUZATARY_GATE_SERIAL" >&2; exit 64 ;;
 esac
 unset SUZATARY_GATE_SERIAL
+# `cache`, as the train sets it for the box's steps of a gate on GitHub's runners: the public
+# tree's builds come from the binary cache its publication run filled, and one no cache holds is
+# an error, never a build on the box. Unset after reading, as above.
+case "${SUZATARY_GATE_BUILDS:-}" in
+  "") cached=() fetched=() ;;
+  cache) cached=(--cached) fetched=(--max-jobs 0) ;;
+  *) echo "merge-gate.sh: SUZATARY_GATE_BUILDS is cache or unset, not $SUZATARY_GATE_BUILDS" >&2; exit 64 ;;
+esac
+unset SUZATARY_GATE_BUILDS
 # The wasm build the web steps read (gate.yml's lanes set it).
 case "${SUZATARY_WASM:=optimised}" in
   optimised | development) ;;
@@ -309,11 +318,17 @@ run_step() {
   code=$? took=$((SECONDS - start))
   [[ -z "${s_heavy[i]:-}" ]] || exec 7>&-
   [[ -z "${SUZATARY_GATE_EVIDENCE:-}" ]] || evidence "$name" "$code"
-  printf '%-16s %s  %4ds%s\n' "$name" "$([ "$code" -eq 0 ] && echo ok || echo "FAILED ($code)")" "$took" "$of" >"$logs/$name.row"
+  # Under the train's `cache`, a 75 is a build no cache held (nix-out.sh's `missed`): no verdict.
+  if ((code == 75 && ${#cached[@]})); then
+    printf '%-16s missed (75)  %4ds%s\n' "$name" "$took" "$of" >"$logs/$name.row"
+    : >"$logs/$name.missed"
+  else
+    printf '%-16s %s  %4ds%s\n' "$name" "$([ "$code" -eq 0 ] && echo ok || echo "FAILED ($code)")" "$took" "$of" >"$logs/$name.row"
+  fi
   [[ -z "${s_turn[i]:-}" ]] || flock -u "${s_turn[i]}"
   if [ "$code" -eq 0 ]; then
     [[ -z "${todo_kept[i]:-}" ]] || passes "$i" >"$logs/$name.pass"
-  else
+  elif [[ ! -e "$logs/$name.missed" ]]; then
     : >"$logs/$name.failed"
   fi
   {
@@ -539,8 +554,9 @@ public_tree() {
   local tree
   unset SUZATARY_DEPLOY_BIN SUZATARY_DEPLOY_TREE
   tree="$(scripts/public-tree.sh --store HEAD)" &&
-    scripts/app-builds.sh "$tree" "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/public-" &&
-    SUZATARY_DEPLOY_BIN="$(nix build "$tree#suzatary" --no-link --print-out-paths)/bin/suzatary" &&
+    scripts/app-builds.sh "${cached[@]}" "$tree" "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/public-" &&
+    SUZATARY_DEPLOY_BIN="$(nix build "$tree#suzatary" --no-link "${fetched[@]}" --print-out-paths ||
+      missed "$tree#suzatary")/bin/suzatary" &&
     SUZATARY_DEPLOY_TREE="$tree" &&
     export SUZATARY_DEPLOY_BIN SUZATARY_DEPLOY_TREE
 }
@@ -555,7 +571,9 @@ nix_module() {
 step tree nix-module      all runners     nix_module
 step tree release-free    $rust nothing   scripts/release-free.sh
 # Unkept: it reads the store and the daemon and writes under the cache.
-step tree deployed-shape  unkept runners  scripts/deployed-shape.sh
+# shellcheck disable=SC2329
+deployed_shape() { scripts/deployed-shape.sh "${cached[@]}"; }
+step tree deployed-shape  unkept runners  deployed_shape
 lane=history
 # Unkept: its answer is a function of origin/master, not of the tree; without it, it passes.
 # shellcheck disable=SC2329
@@ -633,8 +651,9 @@ live_scenes=(pages)
 public_fixture() {
   local tree
   tree="$(scripts/public-tree.sh --store HEAD)" &&
-    SUZATARY_FIXTURE="$(nix build "$tree#suzatary-fixture" --print-out-paths \
-      --out-link "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/public-fixture")" &&
+    SUZATARY_FIXTURE="$(nix build "$tree#suzatary-fixture" "${fetched[@]}" --print-out-paths \
+      --out-link "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/public-fixture" ||
+      missed "$tree#suzatary-fixture")" &&
     export SUZATARY_FIXTURE
 }
 # shellcheck disable=SC1091,SC2329
@@ -806,7 +825,7 @@ fi
 # Set after the snapshot, so it is in no key.
 ((!full)) || export SUZATARY_GUARD_FULL=1
 
-failures=()
+failures=() missed=()
 for half in "${halves[@]}"; do run_half "$half"; done
 # A pass is kept only if the checkout is still the tree its key named.
 if [[ -n "$head" ]]; then
@@ -831,6 +850,7 @@ for i in "${!s_name[@]}"; do
   else
     cat "$logs/${s_name[i]}.row" >&2 2>/dev/null || printf '%-16s FAILED (no row)\n' "${s_name[i]}" >&2
     [[ -e "$logs/${s_name[i]}.row" && ! -e "$logs/${s_name[i]}.failed" ]] || failures+=("${s_name[i]}")
+    [[ ! -e "$logs/${s_name[i]}.missed" ]] || missed+=("${s_name[i]}")
   fi
 done
 case "${halves[*]}" in
@@ -851,4 +871,10 @@ if ((${#failures[@]})); then
 fi
 scripts/size.sh >&2 || echo "size: not measured" >&2
 df -h --output=avail "$root" | tail -1 | sed 's/^ */free after the gate: /' >&2
-exit $((${#failures[@]} ? 1 : 0))
+if ((${#failures[@]})); then
+  exit 1
+elif ((${#missed[@]})); then
+  echo "merge-gate.sh: ${missed[*]}: no binary cache held what the publication run should have filled, and this machine builds nothing for a gate on GitHub's runners: no verdict. Let the commit's publication run fill the cache, then gate again." >&2
+  exit 75
+fi
+exit 0

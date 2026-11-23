@@ -1,7 +1,15 @@
 //! What a public tree holds that no published row holds.
 
 use crate::admitted::Admitted;
+use crate::moved::Moved;
 use crate::repo_path::RepoPath;
+
+/// A public tree beside core's rows: what no person has looked at, and the admitted bytes moved.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub(crate) struct Compared {
+    pub(crate) fresh: Vec<Fresh>,
+    pub(crate) moved: Vec<Moved>,
+}
 
 /// One thing a tree holds that core's rows never held, at the path a person would look at.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
